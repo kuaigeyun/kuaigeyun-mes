@@ -42,6 +42,8 @@ const useProTableSearch = () => {
   }
 }
 import { UniImport } from '../uni-import'
+import { useConfigStore } from '../../stores/configStore'
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
 
 /**
  * 从 columns 自动生成导入配置
@@ -497,7 +499,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showDeleteButton = false,
   onDelete,
   deleteButtonText = '删除',
-  defaultPageSize = 20,
+  defaultPageSize: defaultPageSizeProp,
   showQuickJumper = true,
   viewTypes = ['table', 'card', 'kanban', 'stats'],
   defaultViewType = 'table',
@@ -506,13 +508,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   kanbanViewConfig,
   statsViewConfig,
   touchViewConfig,
-  loadingDelay = 0,
+  loadingDelay: loadingDelayProp,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   ...restProps
 }: UniTableProps<T>) {
   const { message } = App.useApp()
   const { token } = theme.useToken()
+  const { getConfig } = useConfigStore()
+  const { getPreference, updatePreferences } = useUserPreferenceStore()
+
+  // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
+  // 分页大小优先级：Props > User Preference > Config Store > Default(20)
+  const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
+  
+  // 表格密度优先级：User Preference > Default('large')
+  const defaultSize = getPreference('ui.default_table_density', 'large') as 'large' | 'middle' | 'small'
+
+  const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 200)
 
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<
@@ -1335,10 +1348,29 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               bordered={false}
               cardBordered={true}
               {...(loadingDelay > 0 && { loading: showDelayedLoading })}
+              size={defaultSize}
+              onSizeChange={(size) => {
+                // 更新用户偏好中的默认表格密度
+                updatePreferences({ 'ui.default_table_density': size })
+              }}
+              // 支持列设置持久化
+              columnsState={{
+                persistenceKey: (restProps as any).headerTitle ? `ui.tables.${(restProps as any).headerTitle}.columns` : undefined,
+                persistenceType: 'localStorage',
+                onChange: (map) => {
+                   // 这里的 map 是 Record<string, ColumnsState>
+                   // ProTable 内部会自动处理 localStorage 持久化
+                   // 如果我们需要同步到后端，可以在这里调用 API
+                   // 目前仅通过 persistenceKey 实现本地持久化
+                   // TODO: 考虑通过 syncTablePreference 同步到后端
+                }
+              }}
               options={{
                 density: true,
-                setting: true,
-                reload: true,
+                setting: {
+                  listsHeight: 400,
+                },
+                reload: () => actionRef.current?.reload(),
                 fullScreen: true,
                 ...((restProps.options || (restProps.toolbar as any)?.options || {}) as any),
               }}

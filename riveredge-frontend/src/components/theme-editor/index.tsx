@@ -564,19 +564,28 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const hasToken = !!getToken();
 
       if (hasToken) {
-        // 用户已登录，保存到用户偏好设置
-        // 需要先获取现有的用户偏好设置，然后合并更新
+        // 用户已登录，保存到用户偏好设置（与偏好设置页结构一致，便于同步展示）
         try {
           const currentPreference = await getUserPreference().catch(() => null);
           const currentPreferences = currentPreference?.preferences || {};
 
-          // 合并更新：保留现有的偏好设置，只更新标签栏持久化和颜色模式
+          // 构建与偏好设置页一致的 theme_config，便于顶栏个性化主题与偏好设置双向同步
+          const themeConfigForPreference = {
+            colorPrimary: colorPrimaryValue,
+            borderRadius: values.borderRadius ?? 6,
+            fontSize: values.fontSize ?? 14,
+            compact: !!values.compact,
+            siderBgColor: siderBgColorValue || '',
+            headerBgColor: headerBgColorValue || '',
+            tabsBgColor: tabsBgColorValue || '',
+          };
+
+          // 合并更新：保留现有偏好，同步主题相关与 theme_config
           const updatedPreferences: Record<string, any> = {
             ...currentPreferences,
             tabs_persistence: tabsPersistenceValue,
+            theme_config: themeConfigForPreference,
           };
-
-          // 添加颜色模式配置（如果存在）
           if (values.colorMode) {
             updatedPreferences.theme = values.colorMode;
           }

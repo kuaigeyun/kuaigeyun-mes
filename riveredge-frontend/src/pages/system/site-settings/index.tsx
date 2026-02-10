@@ -6,18 +6,21 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { App, Card, Form, Input, Switch, Button, Upload, message, Space, Divider, Select, Row, Col } from 'antd';
+import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
-import { theme } from 'antd';
 import type { UploadFile, UploadProps } from 'antd';
 import {
   getSiteSetting,
   updateSiteSetting,
-  SiteSetting,
-  UpdateSiteSettingData,
 } from '../../../services/siteSetting';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
+import { 
+  getDataDictionaryByCode, 
+  getDictionaryItemList, 
+  DictionaryItem 
+} from '../../../services/dataDictionary';
+import { getLanguageList } from '../../../services/language';
 import ImageCropper from '../../../components/image-cropper';
 
 /**
@@ -28,12 +31,13 @@ const SiteSettingsPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [siteSetting, setSiteSetting] = useState<SiteSetting | null>(null);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
+  const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>([]);
+  const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>([]);
 
   /**
    * 判断字符串是否是UUID格式
@@ -81,12 +85,62 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
+  // 语言选项
+  const [languageOptions, setLanguageOptions] = useState<any[]>([]);
+
   /**
-   * 加载站点设置
+   * 加载站点设置和字典数据
    */
   useEffect(() => {
     loadSiteSetting();
+    loadDictionaryData();
   }, []);
+
+  /**
+   * 加载字典数据
+   */
+  const loadDictionaryData = async () => {
+    try {
+      // 加载语言列表
+      try {
+        const langResponse = await getLanguageList({ is_active: true });
+        if (langResponse && langResponse.items) {
+          const options = langResponse.items.map(lang => ({
+             label: lang.native_name || lang.name,
+             value: lang.code,
+             key: lang.uuid
+          }));
+          setLanguageOptions(options);
+        }
+      } catch (e) {
+        console.warn('加载语言列表失败', e);
+      }
+
+      // 加载货币字典
+      try {
+        const currencyDict = await getDataDictionaryByCode('CURRENCY');
+        if (currencyDict && currencyDict.uuid) {
+          const items = await getDictionaryItemList(currencyDict.uuid, true);
+          setCurrencyOptions(items);
+        }
+      } catch (e) {
+        console.warn('加载货币字典失败', e);
+      }
+
+      // 加载时区字典
+      try {
+        const timezoneDict = await getDataDictionaryByCode('TIMEZONE');
+        if (timezoneDict && timezoneDict.uuid) {
+          const items = await getDictionaryItemList(timezoneDict.uuid, true);
+          setTimezoneOptions(items);
+        }
+      } catch (e) {
+        console.warn('加载时区字典失败', e);
+      }
+    } catch (error) {
+      console.error('加载字典数据失败', error);
+    }
+  };
 
   /**
    * 规范化颜色值为字符串格式（用于表单初始化）
@@ -137,7 +191,6 @@ const SiteSettingsPage: React.FC = () => {
     try {
       setLoading(true);
       const setting = await getSiteSetting();
-      setSiteSetting(setting);
 
       // 设置表单初始值
       // 兼容旧版本：如果存在 theme_color，优先使用；否则使用 theme_config
@@ -155,6 +208,13 @@ const SiteSettingsPage: React.FC = () => {
       form.setFieldsValue({
         site_name: setting.settings?.site_name || '',
         site_logo: siteLogoValue,
+        organization_name: setting.settings?.organization_name || '',
+        organization_address: setting.settings?.organization_address || '',
+        contact_info: setting.settings?.contact_info || '',
+        default_currency: setting.settings?.default_currency || 'CNY',
+        date_format: setting.settings?.date_format || 'YYYY-MM-DD',
+        default_language: setting.settings?.default_language || 'zh-CN',
+        timezone: setting.settings?.timezone || 'Asia/Shanghai',
         theme_color: normalizedThemeColor,
         theme_borderRadius: themeConfig.borderRadius || 6,
         theme_fontSize: themeConfig.fontSize || 14,
@@ -347,20 +407,6 @@ const SiteSettingsPage: React.FC = () => {
 
   const basicInfoContent = (
     <Row gutter={[24, 16]}>
-      <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item
-          name="site_name"
-          label="站点名称"
-          tooltip="未配置时将使用框架名称（RiverEdge SaaS）"
-        >
-          <Input placeholder="请输入站点名称（可选，未配置时使用框架名称）" />
-        </Form.Item>
-      </Col>
-      <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="organization_name" label="组织名称">
-          <Input placeholder="请输入组织名称" />
-        </Form.Item>
-      </Col>
       <Col xs={24} sm={24} md={24} lg={24}>
         <Form.Item
           name="site_logo"
@@ -404,6 +450,20 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
+        <Form.Item
+          name="site_name"
+          label="站点名称"
+          tooltip="未配置时将使用框架名称（RiverEdge SaaS）"
+        >
+          <Input placeholder="请输入站点名称（可选，未配置时使用框架名称）" />
+        </Form.Item>
+      </Col>
+      <Col xs={24} sm={24} md={12} lg={12}>
+        <Form.Item name="organization_name" label="组织名称">
+          <Input placeholder="请输入组织名称" />
+        </Form.Item>
+      </Col>
+      <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="organization_address" label="组织地址">
           <Input placeholder="请输入组织地址" />
         </Form.Item>
@@ -415,12 +475,21 @@ const SiteSettingsPage: React.FC = () => {
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="default_currency" label="默认货币">
-          <Select placeholder="请选择默认货币">
-            <Select.Option value="CNY">人民币 (CNY)</Select.Option>
-            <Select.Option value="USD">美元 (USD)</Select.Option>
-            <Select.Option value="EUR">欧元 (EUR)</Select.Option>
-            <Select.Option value="JPY">日元 (JPY)</Select.Option>
-            <Select.Option value="GBP">英镑 (GBP)</Select.Option>
+          <Select placeholder="请选择默认货币" loading={loading} allowClear>
+            {currencyOptions.map((item) => (
+              <Select.Option key={item.uuid} value={item.value}>
+                {item.label}
+              </Select.Option>
+            ))}
+            {currencyOptions.length === 0 && (
+              <>
+                <Select.Option value="CNY">人民币 (CNY)</Select.Option>
+                <Select.Option value="USD">美元 (USD)</Select.Option>
+                <Select.Option value="EUR">欧元 (EUR)</Select.Option>
+                <Select.Option value="JPY">日元 (JPY)</Select.Option>
+                <Select.Option value="GBP">英镑 (GBP)</Select.Option>
+              </>
+            )}
           </Select>
         </Form.Item>
       </Col>
@@ -436,25 +505,45 @@ const SiteSettingsPage: React.FC = () => {
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="default_language" label="默认语言">
-          <Select placeholder="请选择默认语言">
-            <Select.Option value="zh-CN">中文 (简体)</Select.Option>
-            <Select.Option value="zh-TW">中文 (繁体)</Select.Option>
-            <Select.Option value="en-US">English (US)</Select.Option>
-            <Select.Option value="ja-JP">日本語</Select.Option>
-            <Select.Option value="ko-KR">한국어</Select.Option>
+          <Select placeholder="请选择默认语言" loading={loading} allowClear>
+            {languageOptions.map((item) => (
+              <Select.Option key={item.key} value={item.value}>
+                {item.label}
+              </Select.Option>
+            ))}
+            {languageOptions.length === 0 && (
+              <>
+                <Select.Option value="zh-CN">中文 (简体)</Select.Option>
+                <Select.Option value="en-US">English (US)</Select.Option>
+              </>
+            )}
           </Select>
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="timezone" label="时区设置">
-          <Select placeholder="请选择时区">
-            <Select.Option value="Asia/Shanghai">东八区 (UTC+8)</Select.Option>
-            <Select.Option value="Asia/Tokyo">东京 (UTC+9)</Select.Option>
-            <Select.Option value="Asia/Seoul">首尔 (UTC+9)</Select.Option>
-            <Select.Option value="America/New_York">纽约 (UTC-5)</Select.Option>
-            <Select.Option value="Europe/London">伦敦 (UTC+0)</Select.Option>
-            <Select.Option value="Europe/Paris">巴黎 (UTC+1)</Select.Option>
+          <Select placeholder="请选择时区" loading={loading} allowClear>
+            {timezoneOptions.map((item) => (
+              <Select.Option key={item.uuid} value={item.value}>
+                {item.label}
+              </Select.Option>
+            ))}
+            {timezoneOptions.length === 0 && (
+              <>
+                <Select.Option value="Asia/Shanghai">东八区 (UTC+8)</Select.Option>
+                <Select.Option value="Asia/Tokyo">东京 (UTC+9)</Select.Option>
+                <Select.Option value="Asia/Seoul">首尔 (UTC+9)</Select.Option>
+                <Select.Option value="America/New_York">纽约 (UTC-5)</Select.Option>
+                <Select.Option value="Europe/London">伦敦 (UTC+0)</Select.Option>
+                <Select.Option value="Europe/Paris">巴黎 (UTC+1)</Select.Option>
+              </>
+            )}
           </Select>
+        </Form.Item>
+      </Col>
+      <Col xs={24} sm={24} md={24} lg={24}>
+        <Form.Item name="copyright" label="版权信息">
+          <Input placeholder="请输入版权信息" />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={24} lg={24}>
@@ -480,16 +569,7 @@ const SiteSettingsPage: React.FC = () => {
     </Row>
   );
 
-  const otherSettingsContent = (
-    <>
-      <Form.Item
-        name="copyright"
-        label="版权信息"
-      >
-        <Input placeholder="请输入版权信息" />
-      </Form.Item>
-    </>
-  );
+
 
   return (
     <Form
@@ -511,7 +591,6 @@ const SiteSettingsPage: React.FC = () => {
         tabs={[
           { key: 'basic', label: '基本信息', children: basicInfoContent },
           { key: 'function', label: '功能设置', children: functionSettingsContent },
-          { key: 'other', label: '其他设置', children: otherSettingsContent },
         ]}
       />
 

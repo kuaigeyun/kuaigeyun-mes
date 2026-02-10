@@ -386,27 +386,55 @@ class SalesOrderService:
         submitted_by: int
     ) -> SalesOrderResponse:
         """
-        提交销售订单
-        
-        Args:
-            tenant_id: 租户ID
-            sales_order_id: 销售订单ID
-            submitted_by: 提交人ID
-            
-        Returns:
-            SalesOrderResponse: 提交后的销售订单响应
+        提交销售订单到审批流程
         """
+        # 1. 获取订单详情
+        sales_order = await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        
+        # 2. 检查是否有配置高级审批流程
+        from core.models.approval_process import ApprovalProcess
+        process = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code="sales_order_approval", # 约定的代码
+            is_active=True,
+            deleted_at__isnull=True
+        ).first()
+
+        if process:
+            # 触发高级审批流程
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.schemas.approval_instance import ApprovalInstanceCreate
+            
+            await ApprovalInstanceService.create_approval_instance(
+                tenant_id=tenant_id,
+                user_id=submitted_by,
+                data=ApprovalInstanceCreate(
+                    process_uuid=str(process.uuid),
+                    title=f"销售订单审批: {sales_order.order_code}",
+                    content=f"客户: {sales_order.customer_name}, 金额: {sales_order.total_amount}",
+                    data={
+                        "entity_type": "sales_order",
+                        "entity_id": sales_order.id,
+                        "entity_uuid": str(sales_order.uuid)
+                    }
+                )
+            )
+            # 更新订单状态为待审核
+            from apps.kuaizhizao.models.demand import Demand
+            await Demand.filter(id=sales_order_id).update(status=DemandStatus.PENDING_REVIEW)
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        
+        # 3. 回退到旧的简单审核逻辑 (demand_service 内部逻辑)
         demand = await self.demand_service.submit_demand(
             tenant_id=tenant_id,
             demand_id=sales_order_id,
             submitted_by=submitted_by
         )
         
-        # 2. 检查是否需要审核
+        # 检查是否需要简单审核
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
         if not audit_required:
             logger.info(f"销售订单 {sales_order_id} 无需审核，自动通过")
-            # 自动审核通过（以提交人作为审核人）
             demand = await self.demand_service.approve_demand(
                 tenant_id=tenant_id,
                 demand_id=sales_order_id,

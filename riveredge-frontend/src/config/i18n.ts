@@ -34,6 +34,10 @@ i18n
     interpolation: {
       escapeValue: false, // React 已经转义了
     },
+
+    // 适配扁平化 key 结构
+    keySeparator: false,
+    nsSeparator: false,
     
     // 资源（本地静态文件作为后备）
     resources: {

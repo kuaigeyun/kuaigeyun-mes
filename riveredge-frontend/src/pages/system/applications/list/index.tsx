@@ -8,7 +8,7 @@
 import React, { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Switch, Card, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Switch, Card, Dropdown } from 'antd';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
@@ -26,8 +26,6 @@ import {
   TeamOutlined,
   BarChartOutlined,
   ApiOutlined,
-  CloudOutlined,
-  SearchOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import {
@@ -313,7 +311,8 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 渲染应用卡片
    */
-  const renderApplicationCard = (application: Application, index: number) => {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const renderApplicationCard = (application: Application, _index: number) => {
     const menuItems = [
       {
         key: 'view',
@@ -481,12 +480,21 @@ const ApplicationListPage: React.FC = () => {
           title={
             <div style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 16, color: '#262626' }}>
+                <span style={{ fontWeight: 600, fontSize: 16, color: '#262626', display: 'flex', alignItems: 'center' }}>
                   {application.name}
                   {application.is_custom_name && (
                     <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 'normal', color: '#faad14' }} title="已自定义名称">
                       (已修改)
                     </span>
+                  )}
+                  {application.code === 'master-data' && (
+                     <Tag color="geekblue" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>BASE</Tag>
+                  )}
+                  {(application.code === 'kuaimes' || application.code === 'kuaizhizao') && (
+                     <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>LITE</Tag>
+                  )}
+                  {(application.code === 'bi' || application.code === 'kuaireport') && (
+                     <Tag color="cyan" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>BI</Tag>
                   )}
                 </span>
                 <Space size={4}>
@@ -591,7 +599,7 @@ const ApplicationListPage: React.FC = () => {
           headerTitle="应用中心"
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             try {
               // 构建查询参数
               const apiParams: any = {

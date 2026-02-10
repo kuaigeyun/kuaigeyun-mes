@@ -91,3 +91,25 @@ export async function deleteMessageConfig(messageConfigUuid: string): Promise<vo
   });
 }
 
+export interface TestMessageConfigData {
+  type: string;
+  config: Record<string, any>;
+  target: string;
+}
+
+export interface TestMessageConfigResponse {
+  success: boolean;
+  message: string;
+  error_detail?: string;
+}
+
+/**
+ * 测试消息配置连接
+ */
+export async function testMessageConfig(data: TestMessageConfigData): Promise<TestMessageConfigResponse> {
+  return apiRequest<TestMessageConfigResponse>('/core/message-configs/test-connection', {
+    method: 'POST',
+    data,
+  });
+}
+

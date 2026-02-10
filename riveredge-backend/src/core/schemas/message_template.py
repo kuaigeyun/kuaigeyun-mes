@@ -61,11 +61,12 @@ class MessageTemplateResponse(MessageTemplateBase):
 class SendMessageRequest(BaseModel):
     """发送消息请求 Schema"""
     template_uuid: Optional[UUID] = Field(None, description="模板UUID（可选）")
+    template_code: Optional[str] = Field(None, max_length=50, description="模板代码（可选）")
     config_uuid: Optional[UUID] = Field(None, description="配置UUID（可选，使用默认配置）")
     type: str = Field(..., max_length=20, description="消息类型")
     recipient: str = Field(..., max_length=200, description="接收者")
     subject: Optional[str] = Field(None, max_length=200, description="主题")
-    content: str = Field(..., description="消息内容")
+    content: Optional[str] = Field(None, description="消息内容（如果使用了模板，则可选）")
     variables: Optional[Dict[str, Any]] = Field(None, description="模板变量值（JSON格式）")
 
 

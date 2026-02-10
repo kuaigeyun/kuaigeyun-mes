@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getApprovalProcessList,
   getApprovalProcessByUuid,
@@ -22,13 +23,13 @@ import {
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
 
-const { TextArea } = Input;
 
 /**
  * 审批流程管理列表页面组件
  */
 const ApprovalProcessListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -38,12 +39,8 @@ const ApprovalProcessListPage: React.FC = () => {
   const [currentApprovalProcessUuid, setCurrentApprovalProcessUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [nodesJson, setNodesJson] = useState<string>('{"nodes": [], "edges": []}');
-  const [configJson, setConfigJson] = useState<string>('{}');
-  
-  // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [detailData, setDetailData] = useState<ApprovalProcess | null>(null);
+  const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   /**
@@ -52,8 +49,6 @@ const ApprovalProcessListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentApprovalProcessUuid(null);
-    setNodesJson('{"nodes": [], "edges": []}');
-    setConfigJson('{}');
     setFormInitialValues({
       is_active: true,
     });
@@ -70,8 +65,6 @@ const ApprovalProcessListPage: React.FC = () => {
       
       // 获取审批流程详情
       const detail = await getApprovalProcessByUuid(record.uuid);
-      setNodesJson(JSON.stringify(detail.nodes, null, 2));
-      setConfigJson(JSON.stringify(detail.config, null, 2));
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -104,7 +97,7 @@ const ApprovalProcessListPage: React.FC = () => {
    * 处理设计流程（跳转到设计器）
    */
   const handleDesign = (record: ApprovalProcess) => {
-    window.open(`/system/approval-processes/designer?uuid=${record.uuid}`, '_blank');
+    navigate(`/system/approval-processes/designer?uuid=${record.uuid}`);
   };
 
   /**
@@ -146,29 +139,15 @@ const ApprovalProcessListPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 解析 JSON 配置
-      let nodes: Record<string, any>;
-      let config: Record<string, any>;
-      
-      try {
-        nodes = JSON.parse(nodesJson);
-      } catch (e) {
-        messageApi.error('节点配置 JSON 格式错误');
-        throw new Error('节点配置 JSON 格式错误');
-      }
-      
-      try {
-        config = JSON.parse(configJson);
-      } catch (e) {
-        messageApi.error('流程配置 JSON 格式错误');
-        throw new Error('流程配置 JSON 格式错误');
-      }
-      
       const data: CreateApprovalProcessData | UpdateApprovalProcessData = {
         ...values,
-        nodes,
-        config,
       };
+      
+      // 如果是新建，提供默认的工作流骨架
+      if (!isEdit) {
+        (data as CreateApprovalProcessData).nodes = { nodes: [], edges: [] };
+        (data as CreateApprovalProcessData).config = {};
+      }
       
       if (isEdit && currentApprovalProcessUuid) {
         await updateApprovalProcess(currentApprovalProcessUuid, data as UpdateApprovalProcessData);
@@ -292,8 +271,8 @@ const ApprovalProcessListPage: React.FC = () => {
         headerTitle="审批流程管理"
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, ...rest } = params;
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { current = 1, pageSize = 20 } = params;
           const skip = (current - 1) * pageSize;
           const limit = pageSize;
           
@@ -335,12 +314,10 @@ const ApprovalProcessListPage: React.FC = () => {
         ]}
         search={{
           labelWidth: 'auto',
-          showAdvancedSearch: true,
         }}
       />
       </ListPageTemplate>
 
-      {/* 创建/编辑 Modal */}
       <FormModalTemplate
         title={isEdit ? '编辑审批流程' : '新建审批流程'}
         open={modalVisible}
@@ -352,59 +329,45 @@ const ApprovalProcessListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={720}
       >
-          <ProFormText
-            name="name"
-            label="流程名称"
-            rules={[{ required: true, message: '请输入流程名称' }]}
-            disabled={isEdit}
-          />
-          <ProFormText
-            name="code"
-            label="流程代码"
-            rules={[
-              { required: true, message: '请输入流程代码' },
-              { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '流程代码只能包含字母、数字和下划线，且必须以字母开头' },
-            ]}
-            disabled={isEdit}
-            tooltip="流程代码用于程序识别，创建后不可修改"
-          />
-          <ProFormTextArea
-            name="description"
-            label="流程描述"
-            fieldProps={{
-              rows: 3,
-            }}
-          />
-          <ProForm.Item
-            name="nodes"
-            label="节点配置（JSON）"
-            rules={[{ required: true, message: '请输入节点配置' }]}
-          >
-            <TextArea
-              rows={8}
-              value={nodesJson}
-              onChange={(e) => setNodesJson(e.target.value)}
-              placeholder='{"nodes": [], "edges": []}'
-            />
-          </ProForm.Item>
-          <ProForm.Item
-            name="config"
-            label="流程配置（JSON）"
-            rules={[{ required: true, message: '请输入流程配置' }]}
-          >
-            <TextArea
-              rows={6}
-              value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              placeholder='{}'
-            />
-          </ProForm.Item>
-          <ProFormSwitch
-            name="is_active"
-            label="启用状态"
-          />
+        <ProFormText
+          name="name"
+          label="流程名称"
+          placeholder="请输入流程名称"
+          rules={[{ required: true, message: '请输入流程名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="code"
+          label="流程代码"
+          placeholder="请输入唯一代码"
+          rules={[
+            { required: true, message: '请输入流程代码' },
+            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '以字母开头，仅限字母数字下划线' },
+          ]}
+          disabled={isEdit}
+          tooltip="创建后不可修改"
+          colProps={{ span: 12 }}
+        />
+      
+        <ProFormTextArea
+          name="description"
+          label="流程描述"
+          placeholder="请输入流程描述..."
+          fieldProps={{
+            rows: 3,
+          }}
+          colProps={{ span: 24 }}
+        />
+      
+        <ProFormSwitch
+          name="is_active"
+          label="是否立即启用"
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+          colProps={{ span: 24 }}
+        />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
@@ -431,7 +394,7 @@ const ApprovalProcessListPage: React.FC = () => {
               {
                 title: '启用状态',
                 dataIndex: 'is_active',
-                render: (value) => (
+                render: (value: any) => (
                   <Tag color={value ? 'success' : 'default'}>
                     {value ? '启用' : '禁用'}
                   </Tag>
@@ -440,7 +403,7 @@ const ApprovalProcessListPage: React.FC = () => {
               {
                 title: '节点配置',
                 dataIndex: 'nodes',
-                render: (value) => (
+                render: (value: any) => (
                   <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
                     {JSON.stringify(value, null, 2)}
                   </pre>
@@ -449,7 +412,7 @@ const ApprovalProcessListPage: React.FC = () => {
               {
                 title: '流程配置',
                 dataIndex: 'config',
-                render: (value) => (
+                render: (value: any) => (
                   <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
                     {JSON.stringify(value, null, 2)}
                   </pre>

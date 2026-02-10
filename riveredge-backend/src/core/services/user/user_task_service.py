@@ -13,6 +13,7 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
 from core.models.approval_instance import ApprovalInstance
+from core.models.approval_task import ApprovalTask
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.schemas.approval_instance import ApprovalInstanceAction
 from core.schemas.user_task import (
@@ -55,64 +56,56 @@ class UserTaskService:
         Returns:
             UserTaskListResponse: 用户任务列表
         """
-        # 构建查询条件
-        if task_type == "pending":
-            # 待处理任务：当前审批人是当前用户，且状态为 pending
-            query = Q(
-                tenant_id=tenant_id,
-                current_approver_id=user_id,
-                status="pending"
-            )
-        elif task_type == "submitted":
-            # 我提交的任务：提交人是当前用户
-            query = Q(
-                tenant_id=tenant_id,
-                submitter_id=user_id
-            )
-        else:
-            # 默认：待处理任务
-            query = Q(
-                tenant_id=tenant_id,
-                current_approver_id=user_id,
-                status="pending"
-            )
-        
-        # 状态过滤
-        if status:
-            query &= Q(status=status)
-        
-        # 优化分页查询：先查询总数，再查询数据
-        total = await ApprovalInstance.filter(query).count()
-        
-        # 限制分页大小，避免过大查询
-        if page_size > 100:
-            page_size = 100
-        
-        # 查询列表（按创建时间倒序，预加载关联数据）
         offset = (page - 1) * page_size
-        tasks = await ApprovalInstance.filter(query).prefetch_related("process").order_by("-created_at").offset(offset).limit(page_size)
         
-        # 转换为响应格式
         items = []
-        for task in tasks:
-            # 需要获取 process.uuid
-            task_dict = {
-                "uuid": task.uuid,
-                "tenant_id": task.tenant_id,
-                "process_uuid": task.process.uuid if task.process else None,
-                "title": task.title,
-                "content": task.content,
-                "data": task.data,
-                "submitter_id": task.submitter_id,
-                "current_approver_id": task.current_approver_id,
-                "status": task.status,
-                "current_node": task.current_node,
-                "submitted_at": task.submitted_at,
-                "completed_at": task.completed_at,
-                "created_at": task.created_at,
-                "updated_at": task.updated_at,
-            }
-            items.append(UserTaskResponse.model_validate(task_dict))
+        if task_type == "submitted":
+            # 查询我提交的任务（基于实例）
+            query = Q(tenant_id=tenant_id, submitter_id=user_id)
+            if status:
+                query &= Q(status=status)
+            total = await ApprovalInstance.filter(query).count()
+            instances = await ApprovalInstance.filter(query).prefetch_related("process").order_by("-created_at").offset(offset).limit(page_size)
+            for inst in instances:
+                items.append(UserTaskResponse(
+                    uuid=inst.uuid,
+                    tenant_id=inst.tenant_id,
+                    process_uuid=inst.process.uuid if inst.process else None,
+                    title=inst.title,
+                    content=inst.content,
+                    data=inst.data,
+                    submitter_id=inst.submitter_id,
+                    current_approver_id=inst.current_approver_id,
+                    status=inst.status,
+                    current_node=inst.current_node,
+                    submitted_at=inst.submitted_at,
+                    completed_at=inst.completed_at,
+                    created_at=inst.created_at,
+                    updated_at=inst.updated_at
+                ))
+        else:
+            # 查询我的待办任务（基于任务表）
+            query = Q(tenant_id=tenant_id, approver_id=user_id, status="pending")
+            total = await ApprovalTask.filter(query).count()
+            tasks = await ApprovalTask.filter(query).prefetch_related("approval_instance__process").order_by("-created_at").offset(offset).limit(page_size)
+            for task in tasks:
+                inst = task.approval_instance
+                items.append(UserTaskResponse(
+                    uuid=task.uuid, # 注意：待办任务返回的是任务自身的 UUID
+                    tenant_id=task.tenant_id,
+                    process_uuid=inst.process.uuid if inst.process else None,
+                    title=inst.title,
+                    content=inst.content,
+                    data=inst.data,
+                    submitter_id=inst.submitter_id,
+                    current_approver_id=user_id,
+                    status=task.status,
+                    current_node=task.node_id,
+                    submitted_at=inst.submitted_at,
+                    completed_at=inst.completed_at,
+                    created_at=task.created_at,
+                    updated_at=task.updated_at
+                ))
         
         return UserTaskListResponse(
             items=items,
@@ -195,53 +188,46 @@ class UserTaskService:
             NotFoundError: 当任务不存在时抛出
             ValidationError: 当操作无效时抛出
         """
-        try:
-            task = await ApprovalInstance.filter(
-                uuid=task_uuid,
-                tenant_id=tenant_id
-            ).prefetch_related("process").first()
-            
-            if not task:
-                raise DoesNotExist()
-        except DoesNotExist:
-            raise NotFoundError("任务不存在")
+        # 先尝试按任务 UUID 查找
+        task = await ApprovalTask.filter(uuid=task_uuid, tenant_id=tenant_id, approver_id=user_id).prefetch_related("approval_instance__process").first()
         
-        # 调用审批流程服务来处理审批操作，确保逻辑一致并触发消息通知
+        if task:
+            # 使用高级任务处理逻辑
+            instance = await ApprovalInstanceService.perform_task_action(
+                tenant_id=tenant_id,
+                task_uuid=task_uuid,
+                user_id=user_id,
+                action_data=ApprovalInstanceAction(
+                    action=data.action,
+                    comment=data.comment
+                )
+            )
+            # 返回对应实例的状态（包装成 UserTaskResponse）
+            return UserTaskResponse(
+                uuid=instance.uuid,
+                tenant_id=instance.tenant_id,
+                process_uuid=instance.process.uuid if instance.process else None,
+                title=instance.title,
+                content=instance.content,
+                status=instance.status,
+                submitter_id=instance.submitter_id,
+                submitted_at=instance.submitted_at,
+                created_at=instance.created_at,
+                updated_at=instance.updated_at
+            )
+            
+        # 回退到旧逻辑（按实例 UUID 查找）
         approval_action = ApprovalInstanceAction(
             action=data.action,
-            comment=data.comment,
-            transfer_to_user_id=None  # 用户任务暂不支持转交
+            comment=data.comment
         )
-        
-        # 调用审批流程服务执行审批操作（会自动触发消息通知）
-        updated_task = await ApprovalInstanceService.perform_approval_action(
+        updated_inst = await ApprovalInstanceService.perform_approval_action(
             tenant_id=tenant_id,
             uuid=task_uuid,
             user_id=user_id,
             action=approval_action
         )
-        
-        # 重新获取任务以获取最新状态
-        await updated_task.fetch_related("process")
-        
-        # 转换为响应格式
-        task_dict = {
-            "uuid": updated_task.uuid,
-            "tenant_id": updated_task.tenant_id,
-            "process_uuid": updated_task.process.uuid if updated_task.process else None,
-            "title": updated_task.title,
-            "content": updated_task.content,
-            "data": updated_task.data,
-            "submitter_id": updated_task.submitter_id,
-            "current_approver_id": updated_task.current_approver_id,
-            "status": updated_task.status,
-            "current_node": updated_task.current_node,
-            "submitted_at": updated_task.submitted_at,
-            "completed_at": updated_task.completed_at,
-            "created_at": updated_task.created_at,
-            "updated_at": updated_task.updated_at,
-        }
-        return UserTaskResponse.model_validate(task_dict)
+        return UserTaskResponse.model_validate(updated_inst)
     
     @staticmethod
     async def get_user_task_stats(
@@ -258,42 +244,35 @@ class UserTaskService:
         Returns:
             UserTaskStatsResponse: 用户任务统计
         """
-        # 待处理任务（当前审批人是当前用户，且状态为 pending）
-        pending_query = Q(
+        # 待处理任务（基于任务表）
+        pending = await ApprovalTask.filter(
             tenant_id=tenant_id,
-            current_approver_id=user_id,
+            approver_id=user_id,
             status="pending"
-        )
-        pending = await ApprovalInstance.filter(pending_query).count()
+        ).count()
         
-        # 我提交的任务
-        submitted_query = Q(
+        # 我提交的任务（基于实例表）
+        submitted = await ApprovalInstance.filter(
             tenant_id=tenant_id,
             submitter_id=user_id
-        )
-        submitted = await ApprovalInstance.filter(submitted_query).count()
+        ).count()
         
         # 已通过任务（我提交的）
-        approved_query = Q(
+        approved = await ApprovalInstance.filter(
             tenant_id=tenant_id,
             submitter_id=user_id,
             status="approved"
-        )
-        approved = await ApprovalInstance.filter(approved_query).count()
+        ).count()
         
         # 已拒绝任务（我提交的）
-        rejected_query = Q(
+        rejected = await ApprovalInstance.filter(
             tenant_id=tenant_id,
             submitter_id=user_id,
             status="rejected"
-        )
-        rejected = await ApprovalInstance.filter(rejected_query).count()
-        
-        # 总任务数（待处理 + 我提交的）
-        total = pending + submitted
+        ).count()
         
         return UserTaskStatsResponse(
-            total=total,
+            total=pending + submitted,
             pending=pending,
             approved=approved,
             rejected=rejected,

@@ -34,6 +34,7 @@ dependencies = [
     "openai>=1.0.0",  # OpenAI SDK（大语言模型支持）
     "qrcode[pil]>=7.4.0",  # 二维码生成库（支持PIL图片生成）
     "pyzbar>=0.1.9",  # 二维码解析库（可选，用于从图片解析二维码）
+    "aiosmtplib>=3.0.1", # 异步 SMTP 客户端
 ]
 
 [project.optional-dependencies]

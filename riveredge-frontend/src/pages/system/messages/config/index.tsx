@@ -6,12 +6,25 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormDependency, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Input } from 'antd';
+import { 
+  EditOutlined, 
+  DeleteOutlined, 
+  EyeOutlined, 
+  PlusOutlined,
+  MailOutlined, 
+  MessageOutlined, 
+  GlobalOutlined, 
+  SettingOutlined, 
+  SafetyCertificateOutlined,
+  ThunderboltOutlined,
+  AppstoreOutlined,
+  CheckCircleOutlined
+} from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -21,10 +34,9 @@ import {
   MessageConfig,
   CreateMessageConfigData,
   UpdateMessageConfigData,
+  testMessageConfig,
 } from '../../../../services/messageConfig';
-import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
-const { TextArea } = Input;
 
 /**
  * 消息配置管理列表页面组件
@@ -32,7 +44,7 @@ const { TextArea } = Input;
 const MessageConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息配置）
@@ -40,8 +52,6 @@ const MessageConfigListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentMessageConfigUuid, setCurrentMessageConfigUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [messageType, setMessageType] = useState<'email' | 'sms' | 'internal' | 'push'>('email');
-  const [configJson, setConfigJson] = useState<string>('{}');
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -54,8 +64,6 @@ const MessageConfigListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentMessageConfigUuid(null);
-    setMessageType('email');
-    setConfigJson('{}');
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
@@ -72,12 +80,8 @@ const MessageConfigListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentMessageConfigUuid(record.uuid);
-      setMessageType(record.type);
-      setModalVisible(true);
-      
       // 获取消息配置详情
       const detail = await getMessageConfigByUuid(record.uuid);
-      setConfigJson(JSON.stringify(detail.config, null, 2));
       formRef.current?.setFieldsValue({
         name: detail.name,
         code: detail.code,
@@ -85,6 +89,7 @@ const MessageConfigListPage: React.FC = () => {
         type: detail.type,
         is_active: detail.is_active,
         is_default: detail.is_default,
+        ...detail.config, // 将配置项展开到表单字段中
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取消息配置详情失败');
@@ -174,14 +179,10 @@ const MessageConfigListPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 解析配置 JSON
-      let config: Record<string, any> = {};
-      try {
-        config = JSON.parse(configJson);
-      } catch (e) {
-        messageApi.error('配置 JSON 格式不正确');
-        return;
-      }
+      // 提取技术配置字段
+      const config: Record<string, any> = {};
+      const { name, code, type, description, is_active, is_default, ...technicalConfig } = values;
+      Object.assign(config, technicalConfig);
       
       if (isEdit && currentMessageConfigUuid) {
         await updateMessageConfig(currentMessageConfigUuid, {
@@ -208,10 +209,88 @@ const MessageConfigListPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      if (error?.name === 'ValidationError') {
+         // Form validation failed, handled by ProForm
+      } else {
+        messageApi.error(error.message || '操作失败');
+      }
       throw error;
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理配置测试
+   */
+  const handleTest = async () => {
+    try {
+      const values = await formRef.current?.validateFields();
+      if (!values) return;
+
+      const { name: _n, code: _c, type, description: _d, is_active: _a, is_default: _def, ...config } = values;
+      
+      let testTarget = '';
+      Modal.confirm({
+        title: '消息配置测试',
+        icon: null,
+        content: (
+          <div style={{ marginTop: 16 }}>
+            <p>请输入用于接收测试消息的{type === 'email' ? '邮箱' : '手机号'}：</p>
+            <Input 
+              placeholder={type === 'email' ? 'your-email@example.com' : '接收者手机号'} 
+              onChange={(e) => { testTarget = e.target.value; }}
+            />
+          </div>
+        ),
+        onOk: async () => {
+          if (!testTarget) {
+            messageApi.warning('请输入测试目标地址');
+            return Promise.reject();
+          }
+          
+          const hide = messageApi.loading('正在发送测试消息...', 0);
+          try {
+            const result = await testMessageConfig({
+              type,
+              config,
+              target: testTarget,
+            });
+            hide();
+            if (result.success) {
+              messageApi.success(result.message);
+            } else {
+              Modal.error({
+                title: '测试失败',
+                content: (
+                  <div>
+                    <p>{result.message}</p>
+                    {result.error_detail && (
+                      <pre style={{ 
+                        marginTop: 8, 
+                        padding: 8, 
+                        background: '#fff2f0', 
+                        border: '1px solid #ffccc7',
+                        borderRadius: 4,
+                        fontSize: 12,
+                        maxHeight: 200,
+                        overflow: 'auto'
+                      }}>
+                        {result.error_detail}
+                      </pre>
+                    )}
+                  </div>
+                ),
+              });
+            }
+          } catch (error: any) {
+            hide();
+            messageApi.error(`发起测试请求失败: ${error.message}`);
+          }
+        },
+      });
+    } catch (e) {
+      messageApi.warning('请先完善配置信息再进行测试');
     }
   };
 
@@ -402,7 +481,7 @@ const MessageConfigListPage: React.FC = () => {
         <UniTable<MessageConfig>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -476,94 +555,214 @@ const MessageConfigListPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={720}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="配置名称"
-            rules={[{ required: true, message: '请输入配置名称' }]}
-            placeholder="请输入配置名称"
-          />
-          <ProFormText
-            name="code"
-            label="配置代码"
-            rules={[
-              { required: true, message: '请输入配置代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '配置代码只能包含小写字母、数字和下划线' },
-            ]}
-            placeholder="请输入配置代码（唯一标识，如：email_default）"
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="type"
-            label="消息类型"
-            rules={[{ required: true, message: '请选择消息类型' }]}
-            options={[
-              { label: '邮件', value: 'email' },
-              { label: '短信', value: 'sms' },
-              { label: '站内信', value: 'internal' },
-              { label: '推送通知', value: 'push' },
-            ]}
-            fieldProps={{
-              onChange: (value) => {
-                setMessageType(value);
-                // 根据类型设置默认配置
-                const defaultConfigs: Record<string, Record<string, any>> = {
-                  email: {
-                    smtp_host: 'smtp.example.com',
-                    smtp_port: 587,
-                    smtp_username: '',
-                    smtp_password: '',
-                    smtp_use_tls: true,
-                    from_email: '',
-                    from_name: 'RiverEdge',
-                  },
-                  sms: {
-                    provider: 'aliyun',
-                    access_key_id: '',
-                    access_key_secret: '',
-                    sign_name: 'RiverEdge',
-                    region: 'cn-hangzhou',
-                  },
-                  internal: {},
-                  push: {},
-                };
-                setConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
-              },
+        <div style={{ padding: '0 4px' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: 20,
+            padding: '8px 12px',
+            background: 'rgba(22, 119, 255, 0.04)',
+            borderRadius: 8,
+            border: '1px solid rgba(22, 119, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AppstoreOutlined style={{ color: '#1677ff' }} />
+              <span style={{ fontWeight: 600, color: '#1f1f1f' }}>基础信息</span>
+            </div>
+            <Button 
+              size="small" 
+              type="primary"
+              ghost
+              icon={<ThunderboltOutlined />}
+              onClick={handleTest}
+            >
+              连接测试
+            </Button>
+          </div>
+
+          <ProFormGroup grid colProps={{ span: 24 }}>
+            <ProFormText
+              name="name"
+              label="配置名称"
+              rules={[{ required: true, message: '请输入配置名称' }]}
+              placeholder="例如：公司企业邮箱"
+              colProps={{ md: 12, xs: 24 }}
+              fieldProps={{ prefix: <SettingOutlined style={{ color: '#bfbfbf' }} /> }}
+            />
+            <ProFormText
+              name="code"
+              label="配置代码"
+              rules={[
+                { required: true, message: '请输入配置代码' },
+                { pattern: /^[A-Z0-9_]+$/, message: '建议使用大写字母、数字和下划线' },
+              ]}
+              placeholder="例如：EMAIL_OFFICE"
+              disabled={isEdit}
+              colProps={{ md: 12, xs: 24 }}
+              fieldProps={{ prefix: <GlobalOutlined style={{ color: '#bfbfbf' }} /> }}
+            />
+            
+            <SafeProFormSelect
+              name="type"
+              label="消息类型"
+              rules={[{ required: true, message: '请选择消息类型' }]}
+              options={[
+                { label: '邮件 (Email)', value: 'email' },
+                { label: '短信 (SMS)', value: 'sms' },
+                { label: '站内信 (Internal)', value: 'internal' },
+                { label: '推送通知 (Push)', value: 'push' },
+              ]}
+              disabled={isEdit}
+              colProps={{ md: 12, xs: 24 }}
+            />
+
+            <ProFormSwitch 
+              name="is_active" 
+              label="启用状态" 
+              colProps={{ md: 6, xs: 12 }} 
+            />
+            <ProFormSwitch 
+              name="is_default" 
+              label="默认配置" 
+              colProps={{ md: 6, xs: 12 }} 
+            />
+          </ProFormGroup>
+
+          <ProFormDependency name={['type']}>
+            {({ type }) => {
+              if (type === 'email') {
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      marginBottom: 16,
+                      color: '#1f1f1f',
+                      fontWeight: 600 
+                    }}>
+                      <MailOutlined style={{ color: '#1677ff' }} />
+                      <span>SMTP 邮件服务器配置</span>
+                    </div>
+                    <ProFormGroup grid>
+                      <ProFormText
+                        name="smtp_host"
+                        label="SMTP 域名"
+                        rules={[{ required: true }]}
+                        placeholder="例如：smtp.exmail.qq.com"
+                        colProps={{ md: 18, xs: 24 }}
+                      />
+                      <ProFormDigit
+                        name="smtp_port"
+                        label="端口"
+                        rules={[{ required: true }]}
+                        placeholder="例如：465"
+                        colProps={{ md: 6, xs: 24 }}
+                      />
+                      <ProFormText
+                        name="smtp_username"
+                        label="邮箱账号"
+                        rules={[{ required: true, type: 'email' }]}
+                        placeholder="your-account@example.com"
+                        colProps={{ md: 12, xs: 24 }}
+                      />
+                      <ProFormText.Password
+                        name="smtp_password"
+                        label="授权码/密码"
+                        rules={[{ required: true }]}
+                        placeholder="请输入邮箱授权码"
+                        colProps={{ md: 12, xs: 24 }}
+                      />
+                      <ProFormText
+                        name="from_name"
+                        label="发件人显示名称"
+                        placeholder="RiverEdge 系统"
+                        colProps={{ md: 12, xs: 24 }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', height: 60 }}>
+                        <ProFormSwitch
+                          name="smtp_use_tls"
+                          label="SSL/TLS 加密"
+                          initialValue={true}
+                        />
+                      </div>
+                    </ProFormGroup>
+                  </div>
+                );
+              }
+              if (type === 'sms') {
+                return (
+                  <div style={{ marginTop: 24 }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 8, 
+                      marginBottom: 16,
+                      color: '#1f1f1f',
+                      fontWeight: 600 
+                    }}>
+                      <MessageOutlined style={{ color: '#1677ff' }} />
+                      <span>短信服务配置</span>
+                    </div>
+                    <ProFormGroup grid>
+                      <SafeProFormSelect
+                        name="provider"
+                        label="服务商"
+                        initialValue="aliyun"
+                        options={[
+                          { label: '阿里云', value: 'aliyun' },
+                          { label: '腾讯云', value: 'tencent' },
+                        ]}
+                        colProps={{ span: 24 }}
+                      />
+                      <ProFormText
+                        name="access_key_id"
+                        label="AccessKey ID"
+                        rules={[{ required: true }]}
+                        placeholder="请输入云服务商 AccessKey"
+                        colProps={{ md: 12, xs: 24 }}
+                        fieldProps={{ prefix: <SafetyCertificateOutlined style={{ color: '#bfbfbf' }} /> }}
+                      />
+                      <ProFormText.Password
+                        name="access_key_secret"
+                        label="AccessKey Secret"
+                        rules={[{ required: true }]}
+                        placeholder="请输入 AccessKey Secret"
+                        colProps={{ md: 12, xs: 24 }}
+                      />
+                      <ProFormText
+                        name="sign_name"
+                        label="短信签名"
+                        placeholder="例如：华为"
+                        colProps={{ md: 12, xs: 24 }}
+                        fieldProps={{ prefix: <CheckCircleOutlined style={{ color: '#bfbfbf' }} /> }}
+                      />
+                      <ProFormText
+                        name="region"
+                        label="地域 (Region)"
+                        placeholder="例如：cn-hangzhou"
+                        colProps={{ md: 12, xs: 24 }}
+                      />
+                    </ProFormGroup>
+                  </div>
+                );
+              }
+              return null;
             }}
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label="配置描述"
-            placeholder="请输入配置描述"
-          />
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              配置信息（JSON）
-            </label>
-            <TextArea
-              value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              rows={10}
-              placeholder='请输入配置信息（JSON 格式），例如：{"smtp_host": "smtp.example.com", "smtp_port": 587, "smtp_username": "user@example.com", "smtp_password": "password"}'
-              style={{ fontFamily: CODE_FONT_FAMILY }}
+          </ProFormDependency>
+
+          <div style={{ marginTop: 24 }}>
+            <ProFormTextArea
+              name="description"
+              label="配置描述"
+              placeholder="请输入对此配置的用途说明或备注"
+              fieldProps={{ rows: 2 }}
             />
           </div>
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-          <ProFormSwitch
-            name="is_default"
-            label="是否默认配置"
-          />
-        </ProForm>
+        </div>
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
@@ -573,7 +772,7 @@ const MessageConfigListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
+        dataSource={detailData || undefined}
         columns={detailColumns}
         column={1}
       />

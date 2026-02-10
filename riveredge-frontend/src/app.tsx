@@ -17,6 +17,8 @@ import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
 import { getSiteSetting } from './services/siteSetting';
+import { useConfigStore } from './stores/configStore';
+import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { useTouchScreen } from './hooks/useTouchScreen';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
@@ -97,20 +99,26 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return !!token && !currentUser && initializedRef.current;
   }, [currentUser, isPublicPath]);
 
-  const { data: userData, isLoading } = useQuery({
+  const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
     enabled: shouldFetchUser,
     retry: false,
-    onSuccess: (data) => {
-      if (data) {
-        setCurrentUser(data);
-        // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name（如果后端返回）
-        // 注意：如果后端没有返回 tenant_name，需要根据 tenant_id 查询租户信息
-        setUserInfo(data);
-      }
-    },
-    onError: (error) => {
+  });
+
+  // 处理用户信息加载成功
+  useEffect(() => {
+    if (userData) {
+      setCurrentUser(userData);
+      // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name（如果后端返回）
+      // 注意：如果后端没有返回 tenant_name，需要根据 tenant_id 查询租户信息
+      setUserInfo(userData);
+    }
+  }, [userData, setCurrentUser]);
+
+  // 处理用户信息加载失败
+  useEffect(() => {
+    if (isError) {
       // 如果有 token，尝试从 localStorage 恢复用户信息
       const token = getToken();
       const savedUserInfo = getUserInfo();
@@ -147,16 +155,67 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         clearAuth();
         setCurrentUser(undefined);
       }
-    },
-  });
+    }
+  }, [isError, error, setCurrentUser]);
 
   useEffect(() => {
     setLoading(isLoading);
   }, [isLoading, setLoading]);
 
-  // TOKEN 过期检测：定期检查 TOKEN 是否过期
+  // 引入 useConfigStore
+  const { fetchConfigs, getConfig, initialized: configInitialized } = useConfigStore();
+
+  // 初始化系统配置
+  useEffect(() => {
+    if (currentUser && !configInitialized) {
+      fetchConfigs();
+    }
+  }, [currentUser, configInitialized, fetchConfigs]);
+
+  // 用户不活动检测状态
+  const ACTIVITY_STORAGE_KEY = 'riveredge_last_activity';
+  // 初始化最后活动时间：优先从 localStorage 获取，实现跨标签页同步
+  const getStoredActivity = () => {
+    const stored = localStorage.getItem(ACTIVITY_STORAGE_KEY);
+    return stored ? parseInt(stored, 10) : Date.now();
+  };
+  const lastActivityRef = React.useRef(getStoredActivity());
+  
+  // 更新最后活动时间
+  const updateActivity = React.useCallback(() => {
+    const now = Date.now();
+    // 简单的节流：每 5 秒更新一次 localStorage，避免频繁写入性能损耗
+    if (now - lastActivityRef.current > 5000) {
+      lastActivityRef.current = now;
+      localStorage.setItem(ACTIVITY_STORAGE_KEY, String(now));
+    }
+  }, []);
+
+  // 监听用户活动
+  useEffect(() => {
+    if (isPublicPath) return;
+
+    // 初始化时更新一次
+    updateActivity();
+
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+    window.addEventListener('touchstart', updateActivity);
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      window.removeEventListener('touchstart', updateActivity);
+    };
+  }, [isPublicPath, updateActivity]);
+
+  // TOKEN 过期与不活动检测
   React.useEffect(() => {
-    // 如果是公开页面，不需要检测 TOKEN
+    // 如果是公开页面，不需要检测
     if (isPublicPath) {
       return;
     }
@@ -166,11 +225,51 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       return;
     }
 
+    // 获取配置参数（默认值作为后备）
+    const checkInterval = getConfig('security.token_check_interval', 60) * 1000;
+    const inactivityTimeout = getConfig('security.inactivity_timeout', 1800) * 1000; // 默认30分钟
+
     // 检查 TOKEN 是否过期
-    if (isTokenExpired(token)) {
-      console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
+    const checkAuthStatus = () => {
+      const currentToken = getToken();
+      if (!currentToken) {
+        return false;
+      }
+
+      // 1. 检查 Token 过期
+      if (isTokenExpired(currentToken)) {
+        console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
+        handleLogout();
+        return false;
+      }
+
+      // 2. 检查用户不活动超时 (0表示禁用)
+      if (inactivityTimeout > 0) {
+        // 读取跨标签页的最后活动时间（获取所有标签页中最新的活动时间）
+        const storedActivityStr = localStorage.getItem(ACTIVITY_STORAGE_KEY);
+        const lastActivityTime = storedActivityStr ? parseInt(storedActivityStr, 10) : lastActivityRef.current;
+        
+        const inactiveTime = Date.now() - lastActivityTime;
+        if (inactiveTime > inactivityTimeout) {
+          console.warn(`⚠️ 用户已不活动 ${inactiveTime / 1000} 秒，超过阈值 ${inactivityTimeout / 1000} 秒，自动退出`);
+          message.warning('由于长时间未操作，您已自动退出登录');
+          handleLogout();
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    // 统一处理退出逻辑
+    const handleLogout = () => {
       clearAuth();
       setCurrentUser(undefined);
+      
+      // 清除定时器
+      if (checkTimerRef.current) {
+        clearInterval(checkTimerRef.current);
+      }
 
       // 跳转到登录页
       if (location.pathname.startsWith('/infra')) {
@@ -178,37 +277,30 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       } else {
         window.location.href = '/login';
       }
+    };
+
+    // 立即执行一次检查
+    if (!checkAuthStatus()) {
       return;
     }
 
-    // 设置定时器，每分钟检查一次 TOKEN 是否过期
-    const checkInterval = setInterval(() => {
-      const currentToken = getToken();
-      if (!currentToken) {
-        clearInterval(checkInterval);
-        return;
-      }
-
-      if (isTokenExpired(currentToken)) {
-        console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
-        clearAuth();
-        setCurrentUser(undefined);
-        clearInterval(checkInterval);
-
-        // 跳转到登录页
-        if (location.pathname.startsWith('/infra')) {
-          window.location.href = '/infra/login';
-        } else {
-          window.location.href = '/login';
+    // 设置定时器
+    const checkTimerRef = { current: null as NodeJS.Timeout | null };
+    checkTimerRef.current = setInterval(() => {
+      if (!checkAuthStatus()) {
+        if (checkTimerRef.current) {
+          clearInterval(checkTimerRef.current);
         }
       }
-    }, 60000); // 每60秒检查一次
+    }, checkInterval);
 
     // 清理定时器
     return () => {
-      clearInterval(checkInterval);
+      if (checkTimerRef.current) {
+        clearInterval(checkTimerRef.current);
+      }
     };
-  }, [isPublicPath, location.pathname, setCurrentUser]);
+  }, [isPublicPath, location.pathname, setCurrentUser, getConfig]);
 
   // 检查是否有 token（这是判断是否登录的唯一标准）
   const token = getToken();
@@ -297,7 +389,7 @@ export default function App() {
     return null;
   };
 
-  const [siteThemeConfig, setSiteThemeConfig] = useState<{
+  const [_siteThemeConfig, setSiteThemeConfig] = useState<{
     colorPrimary?: string;
     borderRadius?: number;
     fontSize?: number;
@@ -519,6 +611,9 @@ export default function App() {
     const token = getToken();
 
     if (token) {
+      // 尽早触发 Store 的偏好拉取，避免依赖 BasicLayout 挂载导致默认偏好加载不上
+      useUserPreferenceStore.getState().fetchPreferences().catch(() => {});
+
       // 并行加载用户偏好设置和站点主题配置
       // ⚠️ 关键修复：静默处理 401 错误，避免清除有效 token
       Promise.all([
@@ -544,8 +639,12 @@ export default function App() {
           const userTheme = preference.preferences.theme;
           // 如果用户偏好是 'auto'，默认使用浅色而不是跟随系统
           const actualTheme = userTheme === 'auto' ? 'light' : userTheme;
-          // 使用站点主题配置（可能包含自定义主题色等）
-          applyThemeConfig(actualTheme, siteTheme);
+          // 合并站点主题与用户偏好中的 theme_config（偏好设置页/主题配置）
+          const userThemeConfig = preference.preferences.theme_config;
+          const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
+            ? { ...(siteTheme || {}), ...userThemeConfig }
+            : siteTheme;
+          applyThemeConfig(actualTheme, effectiveTheme);
         } else {
           // 首次登录或未做偏好设置：检查本地缓存
           const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
@@ -627,19 +726,21 @@ export default function App() {
     }
   }, [userPreference?.preferences?.theme]); // 移除 siteThemeConfig 依赖，避免重复触发
 
-  // 监听用户偏好更新事件
   useEffect(() => {
-    const handlePreferenceUpdate = async (event: CustomEvent) => {
+    const handlePreferenceUpdate = async (_event: CustomEvent) => {
       // 重新加载用户偏好设置
       try {
         const preference = await getUserPreference();
         setUserPreference(preference);
 
-        // 应用新的主题偏好（使用最新的 siteThemeConfig）
+        // 应用新的主题偏好：合并站点主题与用户偏好中的 theme_config
         const userTheme = preference?.preferences?.theme || 'light';
-        // 使用函数式更新，确保获取最新的 siteThemeConfig
+        const userThemeConfig = preference?.preferences?.theme_config;
         setSiteThemeConfig((currentSiteTheme) => {
-          applyThemeConfig(userTheme, currentSiteTheme);
+          const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
+            ? { ...currentSiteTheme, ...userThemeConfig }
+            : currentSiteTheme;
+          applyThemeConfig(userTheme, effectiveTheme);
           return currentSiteTheme;
         });
       } catch (error) {
@@ -674,11 +775,11 @@ export default function App() {
       }
     };
 
-    window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as EventListener);
-    window.addEventListener('siteThemeUpdated', handleSiteThemeUpdate as EventListener);
+    window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
+    window.addEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
     return () => {
-      window.removeEventListener('userPreferenceUpdated', handlePreferenceUpdate as EventListener);
-      window.removeEventListener('siteThemeUpdated', handleSiteThemeUpdate as EventListener);
+      window.removeEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
+      window.removeEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
     };
   }, []); // 移除依赖项，避免重复触发和状态覆盖
 
