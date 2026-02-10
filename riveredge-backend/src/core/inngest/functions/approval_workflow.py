@@ -88,10 +88,12 @@ async def approval_workflow_function(event: Event) -> Dict[str, Any]:
                 "error": "审批流程没有起始节点"
             }
         
-        # 设置当前节点和审批人
+        # 设置当前节点
         approval_instance.current_node = start_node.get("id")
-        approval_instance.current_approver_id = _get_node_approver(start_node, approval_instance)
         await approval_instance.save()
+        
+        # 创建第一个节点的任务 (支持会签/或签)
+        await ApprovalInstanceService._create_node_tasks(tenant_id, approval_instance, start_node)
         
         logger.info(f"审批流程工作流启动: {approval_id}, 当前节点: {start_node.get('id')}")
         
@@ -99,7 +101,7 @@ async def approval_workflow_function(event: Event) -> Dict[str, Any]:
             "success": True,
             "approval_id": approval_id,
             "current_node": start_node.get("id"),
-            "current_approver_id": approval_instance.current_approver_id
+            "tasks_created": True
         }
     except NotFoundError as e:
         logger.error(f"审批流程工作流失败: {approval_id}, 错误: {e}")

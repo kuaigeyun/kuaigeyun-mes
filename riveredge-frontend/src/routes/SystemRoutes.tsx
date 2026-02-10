@@ -58,9 +58,10 @@ import IntegrationConfigsPage from '../pages/system/integration-configs/list';
 import MessageTemplatesPage from '../pages/system/messages/template';
 import MessageConfigsPage from '../pages/system/messages/config';
 import MenusPage from '../pages/system/menus';
-import SystemParametersPage from '../pages/system/system-parameters/list';
+import SystemParametersPage from '../pages/system/system-parameters';
 import FilesPage from '../pages/system/files/list';
 import ApprovalProcessesPage from '../pages/system/approval-processes/list';
+import ApprovalProcessDesignerPage from '../pages/system/approval-processes/designer';
 import ApprovalInstancesPage from '../pages/system/approval-processes/instances';
 import ReportTemplatesPage from '../pages/system/report-templates';
 import ReportDesignPage from '../pages/system/report-templates/design';
@@ -155,6 +156,7 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/system-parameters" element={<SystemParametersPage />} />
       <Route path="/system/files" element={<FilesPage />} />
       <Route path="/system/approval-processes" element={<ApprovalProcessesPage />} />
+      <Route path="/system/approval-processes/designer" element={<ApprovalProcessDesignerPage />} />
       <Route path="/system/approval-instances" element={<ApprovalInstancesPage />} />
       <Route path="/system/report-templates" element={<ReportTemplatesPage />} />
       <Route path="/system/report-templates/:id/design" element={<ReportDesignPage />} />

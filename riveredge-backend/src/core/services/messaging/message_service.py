@@ -44,19 +44,26 @@ class MessageService:
         Raises:
             NotFoundError: 当模板或配置不存在时抛出
         """
-        # 获取消息模板（如果提供了 template_uuid）
+        # 获取消息模板（如果提供了 template_uuid 或 template_code）
         template: Optional[MessageTemplate] = None
         if request.template_uuid:
             template = await MessageTemplateService.get_message_template_by_uuid(
                 tenant_id, str(request.template_uuid)
             )
+        elif request.template_code:
+            template = await MessageTemplateService.get_message_template_by_code(
+                tenant_id, str(request.template_code)
+            )
             
+        if template:
             # 渲染模板
             variables = request.variables or {}
             subject, content = MessageTemplateService.render_template(template, variables)
         else:
             subject = request.subject
             content = request.content
+            if not content:
+                raise ValidationError("消息内容不能为空（未提供模板时）")
         
         # 获取消息配置（如果提供了 config_uuid，否则使用默认配置）
         config: Optional[MessageConfig] = None
@@ -73,7 +80,7 @@ class MessageService:
         # 创建消息发送记录
         message_log = await MessageLog.create(
             tenant_id=tenant_id,
-            template_uuid=str(request.template_uuid) if request.template_uuid else None,
+            template_uuid=str(template.uuid) if template else None,
             config_uuid=str(config.uuid),
             type=request.type,
             recipient=request.recipient,

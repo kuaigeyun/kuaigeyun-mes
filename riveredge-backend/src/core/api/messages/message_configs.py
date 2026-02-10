@@ -11,6 +11,8 @@ from core.schemas.message_config import (
     MessageConfigCreate,
     MessageConfigUpdate,
     MessageConfigResponse,
+    MessageConfigTestRequest,
+    MessageConfigTestResponse,
 )
 from core.services.messaging.message_config_service import MessageConfigService
 from core.api.deps.deps import get_current_tenant
@@ -19,6 +21,19 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/message-configs", tags=["MessageConfigs"])
+
+
+@router.post("/test-connection", response_model=MessageConfigTestResponse)
+async def test_message_config_connection(
+    data: MessageConfigTestRequest,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    测试消息配置连接
+    
+    在保存配置前验证参数是否正确。
+    """
+    return await MessageConfigService.test_connection(tenant_id, data)
 
 
 @router.post("", response_model=MessageConfigResponse, status_code=status.HTTP_201_CREATED)

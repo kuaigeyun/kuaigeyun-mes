@@ -55,3 +55,17 @@ class MessageConfigResponse(MessageConfigBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+class MessageConfigTestRequest(BaseModel):
+    """测试消息配置请求 Schema"""
+    type: str = Field(..., max_length=20, description="消息类型")
+    config: Dict[str, Any] = Field(..., description="配置信息")
+    target: str = Field(..., description="测试目标（如：接收邮箱、接收手机号）")
+
+
+class MessageConfigTestResponse(BaseModel):
+    """测试消息配置响应 Schema"""
+    success: bool = Field(..., description="是否测试成功")
+    message: str = Field(..., description="测试结果说明")
+    error_detail: Optional[str] = Field(None, description="错误详情（如果失败）")
+

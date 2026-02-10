@@ -147,16 +147,16 @@ async def _send_email(
         if not config:
             return {"success": False, "error": "邮件配置不存在"}
         
-        # TODO: 根据配置类型调用相应的邮件发送服务
-        # 目前先使用简单的 HTTP 请求模拟（实际应该调用邮件服务插件）
-        # 例如：SMTP、SendGrid、阿里云邮件等
-        
-        # 临时实现：标记为成功（等待邮件服务插件实现）
-        logger.info(f"发送邮件到 {recipient}: {subject}")
+        # 使用真实的 SMTP 发送逻辑
+        success, message, error = await MessageConfigService._send_test_email(
+            config.config, 
+            recipient
+        )
         
         return {
-            "success": True,
-            "message": "邮件发送成功（模拟）"
+            "success": success,
+            "message": message,
+            "error": error
         }
     except Exception as e:
         logger.error(f"发送邮件失败: {e}")

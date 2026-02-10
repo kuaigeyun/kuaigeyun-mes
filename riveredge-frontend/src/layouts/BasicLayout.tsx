@@ -97,6 +97,8 @@ import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支�
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
 import { getSiteSetting } from '../services/siteSetting';
 import { getFilePreview } from '../services/file';
+import { useUserPreferenceStore } from '../stores/userPreferenceStore';
+import { useConfigStore } from '../stores/configStore';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -151,7 +153,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     },
     enabled: shouldFetchUser,
     retry: false,
-    staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
+    staleTime: useConfigStore.getState().getConfig('security.user_cache_time', 300) * 1000, // 使用配置缓存时间
   });
 
   // 处理查询错误
@@ -479,14 +481,14 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
           },
           {
-            path: '/system/business-config',
-            name: t('menu.system.business-config'),
-            icon: getMenuIcon(t('menu.system.business-config'), '/system/business-config'),
-          },
-          {
             path: '/system/system-parameters',
             name: t('menu.system.system-parameters'),
             icon: getMenuIcon(t('menu.system.system-parameters'), '/system/system-parameters'),
+          },
+          {
+            path: '/system/business-config',
+            name: t('menu.system.business-config'),
+            icon: getMenuIcon(t('menu.system.business-config'), '/system/business-config'),
           },
           {
             path: '/system/data-dictionaries',
@@ -733,7 +735,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const location = useLocation();
   const { token } = theme.useToken(); // 获取主题 token
   const { i18n: i18nInstance, t } = useSafeTranslation(); // 获取 i18n 实例和翻译函数（安全的）
-  const [collapsed, setCollapsed] = useState(false);
+  
+  // 引入用户偏好 Store
+  const { preferences, fetchPreferences, initialized, updatePreferences } = useUserPreferenceStore();
+
+  // 初始化用户偏好
+  useEffect(() => {
+    if (!initialized) {
+      fetchPreferences();
+    }
+  }, [initialized, fetchPreferences]);
+
+  // 侧边栏折叠状态
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  // 监听偏好设置变化，同步侧边栏状态
+  // 使用 useMemo 提取偏好值，避免依赖整个 preferences 对象
+  const sidebarCollapsedPref = useMemo(() => {
+    // 尝试从嵌套结构获取 { ui: { sidebar_collapsed: true } }
+    if (preferences?.ui?.sidebar_collapsed !== undefined) {
+      return preferences.ui.sidebar_collapsed;
+    }
+    // 尝试从扁平结构获取 'ui.sidebar_collapsed'
+    if (preferences?.['ui.sidebar_collapsed'] !== undefined) {
+      return preferences['ui.sidebar_collapsed'];
+    }
+    return undefined;
+  }, [preferences]);
+
+  useEffect(() => {
+    if (sidebarCollapsedPref !== undefined) {
+      setCollapsed(Boolean(sidebarCollapsedPref));
+    }
+  }, [sidebarCollapsedPref]);
+
+  // 处理侧边栏折叠切换
+  const handleSetCollapsed = (payload: boolean) => {
+    setCollapsed(payload);
+    // 更新用户偏好
+    updatePreferences({ 'ui.sidebar_collapsed': payload });
+  };
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
@@ -3958,7 +4000,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <Button
                 type="text"
                 icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
-                onClick={() => setCollapsed(!collapsed)}
+                onClick={() => handleSetCollapsed(!collapsed)}
                 style={{
                   width: '100%',
                   color: siderTextColor,
@@ -3975,7 +4017,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 全屏时：collapsed={true} + siderWidth={0} + menuRender={() => null} 完全隐藏侧边栏
         // 退出全屏时：恢复所有 props，确保 ProLayout 重新计算布局
         collapsed={isFullscreen ? true : collapsed}
-        onCollapse={isFullscreen ? undefined : setCollapsed}
+        onCollapse={isFullscreen ? undefined : handleSetCollapsed}
         location={location}
         siderWidth={isFullscreen ? 0 : undefined}
         // 全屏时：不渲染菜单，确保折叠的侧边栏也不占据空间

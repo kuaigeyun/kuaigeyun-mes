@@ -6,9 +6,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormList, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -29,7 +29,7 @@ import {
 const MessageTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑消息模板）
@@ -68,6 +68,12 @@ const MessageTemplateListPage: React.FC = () => {
       
       // 获取消息模板详情
       const detail = await getMessageTemplateByUuid(record.uuid);
+      
+      // 转换变量为列表格式
+      const variableList = detail.variables 
+        ? Object.entries(detail.variables).map(([key, label]) => ({ key, label }))
+        : [];
+
       formRef.current?.setFieldsValue({
         name: detail.name,
         code: detail.code,
@@ -75,7 +81,7 @@ const MessageTemplateListPage: React.FC = () => {
         type: detail.type,
         subject: detail.subject,
         content: detail.content,
-        variables: detail.variables ? JSON.stringify(detail.variables, null, 2) : '',
+        variableList,
         is_active: detail.is_active,
       });
     } catch (error: any) {
@@ -166,15 +172,15 @@ const MessageTemplateListPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 解析变量 JSON
+      // 将变量列表转换回 JSON 对象
       let variables: Record<string, any> | undefined = undefined;
-      if (values.variables) {
-        try {
-          variables = JSON.parse(values.variables);
-        } catch (e) {
-          messageApi.error('变量 JSON 格式不正确');
-          return;
-        }
+      if (values.variableList && Array.isArray(values.variableList)) {
+        variables = {};
+        values.variableList.forEach((item: any) => {
+          if (item.key) {
+            variables![item.key] = item.label || '';
+          }
+        });
       }
       
       if (isEdit && currentMessageTemplateUuid) {
@@ -399,7 +405,7 @@ const MessageTemplateListPage: React.FC = () => {
         <UniTable<MessageTemplate>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -474,72 +480,95 @@ const MessageTemplateListPage: React.FC = () => {
         isEdit={isEdit}
         loading={formLoading}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
+        <ProFormText
+          name="code"
+          label="模板代码"
+          rules={[
+            { required: true, message: '请输入模板代码' },
+            { pattern: /^[A-Z0-9_]+$/, message: '建议使用大写字母、数字和下划线' },
+          ]}
+          placeholder="例如：MATERIAL_CHANGE_NOTIFY"
+          disabled={isEdit}
+          colProps={{ md: 12, xs: 24 }}
+        />
+        <ProFormText
+          name="name"
+          label="模板名称"
+          rules={[{ required: true, message: '请输入模板名称' }]}
+          placeholder="例如：物料变更通知"
+          colProps={{ md: 12, xs: 24 }}
+        />
+        <SafeProFormSelect
+          name="type"
+          label="消息类型"
+          rules={[{ required: true, message: '请选择消息类型' }]}
+          options={[
+            { label: '邮件', value: 'email' },
+            { label: '短信', value: 'sms' },
+            { label: '站内信', value: 'internal' },
+            { label: '推送通知', value: 'push' },
+          ]}
+          disabled={isEdit}
+          colProps={{ md: 12, xs: 24 }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="启用状态"
+          colProps={{ md: 12, xs: 24 }}
+        />
+        <ProFormText
+          name="subject"
+          label="消息主题"
+          placeholder="请输入邮件或推送消息的主题"
+          colProps={{ span: 24 }}
+        />
+        <ProFormTextArea
+          name="content"
+          label="模板正文"
+          rules={[{ required: true, message: '请输入模板内容' }]}
+          placeholder="支持变量替换，例如：您好 {name}，验证码为 {code}"
+          fieldProps={{
+            rows: 6,
+          }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormList
+          name="variableList"
+          label="变量声明"
+          creatorButtonProps={{
+            creatorButtonText: '添加变量',
+          }}
+          itemRender={({ listDom, action }) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>{listDom}</div>
+              {action}
+            </div>
+          )}
         >
-          <ProFormText
-            name="name"
-            label="模板名称"
-            rules={[{ required: true, message: '请输入模板名称' }]}
-            placeholder="请输入模板名称"
-          />
-          <ProFormText
-            name="code"
-            label="模板代码"
-            rules={[
-              { required: true, message: '请输入模板代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '模板代码只能包含小写字母、数字和下划线' },
-            ]}
-            placeholder="请输入模板代码（唯一标识，如：welcome_email）"
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="type"
-            label="消息类型"
-            rules={[{ required: true, message: '请选择消息类型' }]}
-            options={[
-              { label: '邮件', value: 'email' },
-              { label: '短信', value: 'sms' },
-              { label: '站内信', value: 'internal' },
-              { label: '推送通知', value: 'push' },
-            ]}
-            disabled={isEdit}
-          />
-          <ProFormText
-            name="subject"
-            label="主题"
-            placeholder="请输入主题（邮件、推送通知）"
-          />
-          <ProFormTextArea
-            name="content"
-            label="模板内容"
-            rules={[{ required: true, message: '请输入模板内容' }]}
-            placeholder="请输入模板内容（支持变量，如：{name}、{code}）"
-            fieldProps={{
-              rows: 6,
-            }}
-          />
-          <ProFormTextArea
-            name="variables"
-            label="模板变量定义（JSON）"
-            placeholder='请输入模板变量定义（JSON 格式），例如：{"name": "用户名称", "code": "验证码"}'
-            fieldProps={{
-              rows: 4,
-            }}
-          />
-          <ProFormTextArea
-            name="description"
-            label="模板描述"
-            placeholder="请输入模板描述"
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
+          <ProFormGroup key="group">
+            <ProFormText 
+              name="key" 
+              placeholder="变量名 (如: name)" 
+              rules={[{ required: true, message: '必填' }]}
+            />
+            <ProFormText 
+              name="label" 
+              placeholder="变量描述 (如: 用户姓名)" 
+            />
+          </ProFormGroup>
+        </ProFormList>
+
+        <ProFormTextArea
+          name="description"
+          label="模板描述"
+          placeholder="该模板的详细用途备注"
+          fieldProps={{
+            rows: 2,
+          }}
+          colProps={{ span: 24 }}
+        />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
@@ -549,7 +578,7 @@ const MessageTemplateListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
+        dataSource={detailData || undefined}
         columns={detailColumns}
         column={1}
       />

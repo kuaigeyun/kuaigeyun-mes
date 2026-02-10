@@ -11,7 +11,8 @@ from loguru import logger
 
 from core.inngest.client import inngest_client
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
-from core.models.message_log import MessageLog
+from core.services.messaging.message_service import MessageService
+from core.schemas.message_template import SendMessageRequest
 from infra.domain.tenant_context import get_current_tenant_id
 
 
@@ -132,33 +133,27 @@ async def material_change_notification_workflow(event: Event, **kwargs) -> Dict[
                 "notification_sent": False,
             }
 
-        # 创建站内信记录并触发 message/send（有/无下游引用都发一条，便于用户在消息通知中看到）
-        message_log = await MessageLog.create(
+        # 使用统一的消息服务发送通知，调用模板 MATERIAL_CHANGE_NOTIFY
+        result = await MessageService.send_message(
             tenant_id=tenant_id,
-            type="internal",
-            recipient=recipient_id,
-            subject=subject,
-            content=content,
-            status="pending",
-        )
-
-        await inngest_client.send(
-            Event(
-                name="message/send",
-                data={
-                    "tenant_id": tenant_id,
-                    "message_log_uuid": str(message_log.uuid),
-                    "message_type": "internal",
-                    "recipient": recipient_id,
-                    "subject": subject,
-                    "content": content,
+            request=SendMessageRequest(
+                type="internal",
+                recipient=recipient_id,
+                template_code="MATERIAL_CHANGE_NOTIFY",
+                variables={
+                    "material_name": material_name,
+                    "main_code": main_code,
+                    "affected_summary": "; ".join(summary_parts) if summary_parts else "无关联下游单据",
+                    "action_text": action_text if actions else "无建议操作",
+                    "is_affected": "1" if summary_parts else "0",
                 },
+                content="" # 由于使用了模板，内容字段可选（此处传空字符串满足 Schema 基础验证，或者 Schema 已设为 Optional）
             )
         )
 
         logger.info(
-            f"物料变更通知已创建并发送: material_id={material_id}, recipient={recipient_id}, "
-            f"message_log_uuid={message_log.uuid}"
+            f"物料变更通知已通过模板发送: material_id={material_id}, recipient={recipient_id}, "
+            f"message_log_uuid={result.message_log_uuid}"
         )
         return {
             "success": True,
@@ -166,7 +161,7 @@ async def material_change_notification_workflow(event: Event, **kwargs) -> Dict[
             "material_uuid": material_uuid,
             "affected_summary": summary_parts,
             "actions": actions,
-            "message_log_uuid": str(message_log.uuid),
+            "message_log_uuid": str(result.message_log_uuid),
             "notification_sent": True,
         }
     except Exception as e:

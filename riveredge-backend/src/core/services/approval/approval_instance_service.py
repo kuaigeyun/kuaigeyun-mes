@@ -13,6 +13,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.approval_instance import ApprovalInstance
 from core.models.approval_process import ApprovalProcess
+from core.models.approval_task import ApprovalTask
 from core.schemas.approval_instance import ApprovalInstanceCreate, ApprovalInstanceUpdate, ApprovalInstanceAction
 from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
@@ -222,57 +223,217 @@ class ApprovalInstanceService:
         await approval_instance.save()
     
     @staticmethod
+    async def perform_task_action(
+        tenant_id: int,
+        task_uuid: str,
+        user_id: int,
+        action_data: ApprovalInstanceAction
+    ) -> ApprovalInstance:
+        """
+        执行审批任务操作（同意、拒绝、转交）
+        
+        Args:
+            tenant_id: 组织ID
+            task_uuid: 审批任务UUID
+            user_id: 操作人ID
+            action_data: 审批操作数据
+            
+        Returns:
+            ApprovalInstance: 更新后的审批实例对象
+        """
+        # 获取任务
+        task = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            uuid=task_uuid,
+            approver_id=user_id,
+            status="pending"
+        ).prefetch_related("approval_instance__process").first()
+        
+        if not task:
+            raise NotFoundError("任务不存在或已处理")
+            
+        instance = task.approval_instance
+        if instance.status != "pending":
+            raise ValidationError("审批流程已结束")
+            
+        # 更新任务状态
+        task.status = "approved" if action_data.action == "approve" else "rejected"
+        task.action_at = datetime.now()
+        task.comment = action_data.comment
+        await task.save()
+        
+        # 记录审批历史
+        await ApprovalInstanceService._create_approval_history(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            action=action_data.action,
+            action_by=user_id,
+            comment=action_data.comment,
+            from_node=instance.current_node,
+            to_node=instance.current_node,
+            from_approver_id=user_id,
+            to_approver_id=None
+        )
+        
+        # 检查节点是否完成
+        node_completed, instance_status = await ApprovalInstanceService._check_node_completion(instance, action_data.action)
+        
+        if node_completed:
+            if instance_status == "rejected":
+                # 全盘拒绝
+                instance.status = "rejected"
+                instance.completed_at = datetime.now()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+                
+                # 取消该节点其他待办任务
+                await ApprovalTask.filter(
+                    approval_instance_id=instance.id,
+                    node_id=instance.current_node,
+                    status="pending"
+                ).update(status="cancelled")
+            else:
+                # 节点通过，寻找下一个节点
+                next_node = ApprovalInstanceService._get_next_node(instance.process.nodes, instance.current_node)
+                if next_node:
+                    # 进入下一个节点
+                    instance.current_node = next_node.get("id")
+                    await instance.save()
+                    # 创建新节点的任务
+                    await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
+                else:
+                    # 全部完成
+                    instance.status = "approved"
+                    instance.completed_at = datetime.now()
+                    instance.current_node = None
+                    instance.current_approver_id = None
+                    await instance.save()
+            
+            # 触发业务回调
+            if instance.status in ["approved", "rejected"]:
+                await ApprovalInstanceService._handle_approval_completion(tenant_id, instance)
+
+        return instance
+
+    @staticmethod
+    async def _create_node_tasks(tenant_id: int, instance: ApprovalInstance, node: dict) -> List[ApprovalTask]:
+        """为节点创建审批任务"""
+        approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        tasks = []
+        for approver_id in approvers:
+            task = await ApprovalTask.create(
+                tenant_id=tenant_id,
+                approval_instance=instance,
+                node_id=node.get("id"),
+                approver_id=approver_id,
+                status="pending"
+            )
+            tasks.append(task)
+            
+        # 更新实例的当前主审批人（仅作显示用）
+        if approvers:
+            instance.current_approver_id = approvers[0]
+            await instance.save()
+            
+        return tasks
+
+    @staticmethod
+    async def _resolve_node_approvers(node: dict, instance: ApprovalInstance) -> List[int]:
+        """解析节点审批人"""
+        node_data = node.get("data", {})
+        approver_type = node_data.get("approver_type", "user") # user, role, department, manager
+        
+        if approver_type == "user":
+            user_ids = node_data.get("user_ids", [])
+            if not user_ids and "approver_id" in node_data:
+                user_ids = [node_data["approver_id"]]
+            return user_ids
+            
+        # 默认回退到提交人（演示用）
+        return [instance.submitter_id]
+
+    @staticmethod
+    async def _check_node_completion(instance: ApprovalInstance, last_action: str) -> (bool, str):
+        """
+        检查节点是否完成
+        返回: (是否完成, 建议状态)
+        """
+        node_id = instance.current_node
+        process_nodes = instance.process.nodes or {}
+        
+        # 查找当前节点配置
+        current_node_config = None
+        for node in process_nodes.get("nodes", []):
+            if node.get("id") == node_id:
+                current_node_config = node
+                break
+                
+        if not current_node_config:
+            return True, "approved"
+            
+        approval_type = current_node_config.get("data", {}).get("approval_type", "OR") # AND (会签), OR (或签)
+        
+        # 获取该节点所有任务
+        tasks = await ApprovalTask.filter(approval_instance=instance, node_id=node_id).all()
+        
+        if last_action == "reject":
+            return True, "rejected" # 只要有一个拒绝，立即节点拒绝
+            
+        if approval_type == "OR":
+            # 或签：只要有一个同意，即完成
+            if any(t.status == "approved" for t in tasks):
+                return True, "approved"
+        else:
+            # 会签：所有人都必须同意
+            if all(t.status == "approved" for t in tasks):
+                return True, "approved"
+                
+        return False, "pending"
+
+    @staticmethod
     async def perform_approval_action(
         tenant_id: int,
         uuid: str,
         user_id: int,
         action: ApprovalInstanceAction
     ) -> ApprovalInstance:
-        """
-        执行审批操作（同意、拒绝、取消、转交）
-        
-        Args:
-            tenant_id: 组织ID
-            uuid: 审批实例UUID
-            user_id: 操作人ID
-            action: 审批操作
-            
-        Returns:
-            ApprovalInstance: 更新后的审批实例对象
-            
-        Raises:
-            NotFoundError: 当审批实例不存在时抛出
-            ValidationError: 当操作不合法时抛出
-        """
+        """执行审批操作（兼容旧接口）"""
         approval_instance = await ApprovalInstanceService.get_approval_instance_by_uuid(tenant_id, uuid)
         
-        # 验证操作权限
+        # 兼容逻辑：如果系统已生成任务，则转发到任务处理函数
+        tasks_count = await ApprovalTask.filter(tenant_id=tenant_id, approval_instance_id=approval_instance.id, status="pending").count()
+        if tasks_count > 0:
+            task = await ApprovalTask.filter(tenant_id=tenant_id, approval_instance_id=approval_instance.id, approver_id=user_id, status="pending").first()
+            if task:
+                return await ApprovalInstanceService.perform_task_action(tenant_id, str(task.uuid), user_id, action)
+            raise ValidationError("您没有该审批的任务")
+            
+        # 验证操作权限（仅针对无任务系统的情况）
         if approval_instance.status != "pending":
             raise ValidationError("审批实例已完成，无法操作")
         
         if approval_instance.current_approver_id != user_id:
             raise ValidationError("您不是当前审批人，无法操作")
+            
+        # 记录操作前的状态用于后续通知和历史
+        old_node = approval_instance.current_node
+        old_approver_id = approval_instance.current_approver_id
+        old_status = approval_instance.status
+        old_current_approver_id = approval_instance.current_approver_id
         
         # 获取审批流程
         await approval_instance.fetch_related('process')
         process = approval_instance.process
         
-        # 记录操作前的状态
-        old_node = approval_instance.current_node
-        old_approver_id = approval_instance.current_approver_id
-        
         # 执行操作
         if action.action == "approve":
-            # 判断是否有下一个节点
             next_node = ApprovalInstanceService._get_next_node(process.nodes, approval_instance.current_node)
-            
             if next_node:
-                # 进入下一个节点
                 approval_instance.current_node = next_node.get("id")
                 approval_instance.current_approver_id = ApprovalInstanceService._get_node_approver(next_node, approval_instance)
-                approval_instance.status = "pending"  # 保持待审批状态
+                approval_instance.status = "pending"
             else:
-                # 没有下一个节点，审批完成
                 approval_instance.status = "approved"
                 approval_instance.completed_at = datetime.now()
                 approval_instance.current_node = None
@@ -291,9 +452,6 @@ class ApprovalInstanceService:
             if not action.transfer_to_user_id:
                 raise ValidationError("转交操作必须指定目标用户")
             approval_instance.current_approver_id = action.transfer_to_user_id
-        
-        old_status = approval_instance.status
-        old_current_approver_id = approval_instance.current_approver_id
         
         await approval_instance.save()
         
@@ -676,22 +834,41 @@ class ApprovalInstanceService:
     ) -> None:
         """
         处理审批完成后的业务回调
-        
-        Args:
-            tenant_id: 组织ID
-            approval_instance: 审批实例
         """
         try:
             # 从审批数据中获取业务对象信息
             data = approval_instance.data or {}
+            entity_type = data.get("entity_type")
+            entity_uuid = data.get("entity_uuid")
             
-            # 处理业务对象审批完成回调
-            # 注意：kuaicrm应用已停用，相关审批回调已移除
-            # 未来如需支持其他业务对象的审批回调，可在此添加
-            
-            # TODO: 可以添加其他业务对象的审批回调（如快智造的工单审批等）
+            if not entity_type or not entity_uuid:
+                return
+
+            if entity_type == "sales_order":
+                # 处理销售订单审批回调
+                # 我们通过 UUID 找到需求的 ID（销售订单目前映射到 Demand）
+                from apps.kuaizhizao.models.demand import Demand
+                demand = await Demand.filter(tenant_id=tenant_id, uuid=entity_uuid).first()
+                if demand:
+                    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+                    service = SalesOrderService()
+                    if approval_instance.status == "approved":
+                        await service.approve_sales_order(
+                            tenant_id=tenant_id,
+                            sales_order_id=demand.id,
+                            approved_by=approval_instance.submitter_id # 或者使用最后一位审批人
+                        )
+                    elif approval_instance.status == "rejected":
+                        await service.reject_sales_order(
+                            tenant_id=tenant_id,
+                            sales_order_id=demand.id,
+                            approved_by=approval_instance.submitter_id,
+                            rejection_reason="审批驳回"
+                        )
+                    from loguru import logger
+                    logger.info(f"销售订单 {demand.id} 审批回调处理完成: {approval_instance.status}")
+                    
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
+            from loguru import logger
             logger.error(f"处理审批完成回调失败: {str(e)}")
 

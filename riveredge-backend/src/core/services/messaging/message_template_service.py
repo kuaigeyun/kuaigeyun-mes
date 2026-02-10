@@ -75,7 +75,36 @@ class MessageTemplateService:
         ).first()
         
         if not message_template:
-            raise NotFoundError("消息模板不存在")
+            raise NotFoundError(f"消息模板不存在: {uuid}")
+        
+        return message_template
+
+    @staticmethod
+    async def get_message_template_by_code(
+        tenant_id: int,
+        code: str
+    ) -> MessageTemplate:
+        """
+        根据模板代码获取消息模板
+        
+        Args:
+            tenant_id: 组织ID
+            code: 消息模板代码
+            
+        Returns:
+            MessageTemplate: 消息模板对象
+            
+        Raises:
+            NotFoundError: 当消息模板不存在时抛出
+        """
+        message_template = await MessageTemplate.filter(
+            tenant_id=tenant_id,
+            code=code,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not message_template:
+            raise NotFoundError(f"消息模板不存在: {code}")
         
         return message_template
     

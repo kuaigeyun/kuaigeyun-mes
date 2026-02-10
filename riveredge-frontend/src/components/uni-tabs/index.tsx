@@ -12,6 +12,8 @@ import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { getUserPreference } from '../../services/userPreference';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
+import { useConfigStore } from '../../stores/configStore';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 
 /**
  * 标签项接口
@@ -154,6 +156,25 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   );
 
   /**
+   * 监听语言/菜单变化，自动更新所有标签的标题
+   */
+  useEffect(() => {
+    setTabs((prevTabs) => {
+      // 避免如果不必要的更新
+      let hasChanges = false;
+      const newTabs = prevTabs.map((tab) => {
+        const newLabel = getTabTitle(tab.key);
+        if (newLabel !== tab.label) {
+          hasChanges = true;
+          return { ...tab, label: newLabel };
+        }
+        return tab;
+      });
+      return hasChanges ? newTabs : prevTabs;
+    });
+  }, [t, menuConfig, getTabTitle]);
+
+  /**
    * 添加标签
    */
   const addTab = useCallback(
@@ -214,8 +235,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           }
         }
 
-        // 性能优化：如果标签数量超过限制，自动关闭最旧的标签（保留工作台和固定标签）
-        if (newTabs.length > TAB_CONFIG.MAX_TABS) {
+      // 引入配置
+      const { getConfig } = useConfigStore.getState();
+      const { getPreference } = useUserPreferenceStore.getState();
+      // 最大标签数优先级：User Preference > Config Store > Default(20)
+      const maxTabs = getPreference('ui.max_tabs', getConfig('ui.max_tabs', 20));
+
+      if (newTabs.length > maxTabs) {
           // 找到最旧的标签（除了工作台和固定标签）
           const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== '/system/dashboard/workplace');
           if (closableTabs.length > 0) {
