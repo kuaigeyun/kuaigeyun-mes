@@ -330,6 +330,37 @@ async def approve_bom(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post("/bom/batch-approve", response_model=List[BOMResponse], summary="批量审核BOM")
+async def batch_approve_bom(
+    bom_uuids: List[str] = Body(..., description="BOM UUID列表"),
+    approved: bool = Body(True, description="是否通过审核"),
+    recursive: bool = Body(False, description="是否递归处理子BOM"),
+    is_reverse: bool = Body(False, description="是否反审核（重置为草稿）"),
+    approval_comment: Optional[str] = Body(None, description="审核意见"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    批量审核BOM
+    
+    - **bom_uuids**: BOM UUID列表
+    - **approved**: 是否通过（true=通过，false=拒绝）
+    - **approval_comment**: 审核意见（可选）
+    """
+    try:
+        return await MaterialService.batch_approve_bom(
+            tenant_id=tenant_id,
+            bom_uuids=bom_uuids,
+            approved=approved,
+            approval_comment=approval_comment,
+            approved_by=current_user.id,
+            recursive=recursive,
+            is_reverse=is_reverse
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/bom/{bom_uuid}/copy", response_model=BOMResponse, summary="复制BOM（创建新版本）")
 async def copy_bom(
     bom_uuid: str,
@@ -353,6 +384,31 @@ async def copy_bom(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/{bom_uuid}/revise", response_model=BOMResponse, summary="BOM升版（创建新修订版本）")
+async def revise_bom(
+    bom_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    new_version: Optional[str] = Query(None, description="新修订版本号（可选）")
+):
+    """
+    BOM升版（根据已审核版本创建新的草稿版本）
+    
+    根据工程变更流程，对已审核的BOM进行修改前应先升版。
+    """
+    try:
+        return await MaterialService.revise_bom(
+            tenant_id=tenant_id,
+            bom_uuid=bom_uuid,
+            new_version=new_version
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 
 @router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")

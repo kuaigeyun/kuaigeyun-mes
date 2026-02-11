@@ -1567,6 +1567,10 @@ class MaterialService:
         
         if not bom:
             raise NotFoundError(f"BOM {bom_uuid} 不存在")
+            
+        # 检查BOM状态：已审核的BOM不可编辑
+        if bom.approval_status == 'approved':
+            raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止修改。请先反审核或创建新版本。")
         
         # 如果更新主物料ID，检查主物料是否存在
         if data.material_id and data.material_id != bom.material_id:
@@ -1629,6 +1633,10 @@ class MaterialService:
         
         if not bom:
             raise NotFoundError(f"BOM {bom_uuid} 不存在")
+            
+        # 检查BOM状态：已审核的BOM不可删除
+        if bom.approval_status == 'approved':
+            raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止删除。请先反审核。")
         
         # 软删除
         from tortoise import timezone
@@ -1679,6 +1687,110 @@ class MaterialService:
         return BOMResponse.model_validate(bom)
     
     @staticmethod
+    async def batch_approve_bom(
+        tenant_id: int,
+        bom_uuids: List[str],
+        approved_by: int,
+        approval_comment: Optional[str] = None,
+        approved: bool = True,
+        recursive: bool = False,
+        is_reverse: bool = False
+    ) -> List[BOMResponse]:
+        """
+        批量审核BOM
+        
+        Args:
+            tenant_id: 租户ID
+            bom_uuids: BOM UUID列表
+            approved_by: 审核人ID
+            approval_comment: 审核意见
+            approved: 是否通过（True=通过，False=拒绝）
+            recursive: 是否递归处理子BOM
+            is_reverse: 是否反审核（True=重置为草稿）
+            
+        Returns:
+            List[BOMResponse]: 审核后的BOM对象列表
+        """
+        if not bom_uuids:
+            return []
+            
+        from tortoise import timezone
+        
+        # 查找所有BOM
+        boms = await BOM.filter(
+            tenant_id=tenant_id,
+            uuid__in=bom_uuids,
+            deleted_at__isnull=True
+        ).all()
+        
+        target_ids = set(b.id for b in boms)
+        
+        # 递归查找子BOM
+        if recursive:
+            ids_to_process = list(target_ids)
+            processed_materials = set() # 防止无限循环（虽然有循环检测，但防万一）
+            
+            while ids_to_process:
+                current_batch_ids = ids_to_process
+                ids_to_process = []
+                
+                # 获取当前批次BOM的子物料和版本
+                current_boms = await BOM.filter(id__in=current_batch_ids).all()
+                
+                for b in current_boms:
+                    # key = (material_id, version)
+                    # 查找以该component为父件的BOM（且版本一致）
+                    if b.component_id in processed_materials:
+                        continue
+                    
+                    # 查找子BOM
+                    child_boms = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=b.component_id,
+                        version=b.version, # 假设版本同步
+                        deleted_at__isnull=True
+                    ).all()
+                    
+                    if child_boms:
+                        processed_materials.add(b.component_id)
+                        for child in child_boms:
+                            if child.id not in target_ids:
+                                target_ids.add(child.id)
+                                ids_to_process.append(child.id)
+        
+        # 确定新状态
+        new_status = "approved"
+        if is_reverse:
+            new_status = "draft"
+        elif not approved:
+            new_status = "rejected"
+
+        if target_ids:
+            # Prepare for bulk update
+            update_data = {
+                "approval_status": new_status,
+                "approved_by": approved_by,
+                "approved_at": timezone.now(),
+            }
+            
+            if approval_comment is not None:
+                 update_data["approval_comment"] = approval_comment
+                 
+            await BOM.filter(
+               id__in=list(target_ids)
+            ).update(**update_data)
+            
+            # Re-fetch updated records to return
+            # 只返回最初请求的BOM
+            result = await BOM.filter(
+               uuid__in=bom_uuids,
+               deleted_at__isnull=True
+            ).all()
+            return [BOMResponse.model_validate(b) for b in result]
+        
+        return []
+    
+    @staticmethod
     async def copy_bom(
         tenant_id: int,
         bom_uuid: str,
@@ -1690,63 +1802,99 @@ class MaterialService:
         Args:
             tenant_id: 租户ID
             bom_uuid: 源BOM UUID
-            new_version: 新版本号（可选，如果不提供则自动递增）
+            new_version: 新版本号（可选，如果不提供则自动升版）
             
         Returns:
-            BOMResponse: 新创建的BOM对象
-            
-        Raises:
-            NotFoundError: 当BOM不存在时抛出
+            BOMResponse: 新创建的BOM（第一个条目）
         """
-        source_bom = await BOM.filter(
+        bom = await BOM.filter(
             tenant_id=tenant_id,
-            uuid=bom_uuid,
-            deleted_at__isnull=True
+            uuid=bom_uuid
         ).first()
         
-        if not source_bom:
-            raise NotFoundError(f"BOM {bom_uuid} 不存在")
+        if not bom:
+             raise NotFoundError(f"BOM {bom_uuid} 不存在")
         
-        # 如果没有指定新版本号，自动递增
+        # 1. 自动计算新版本号
         if not new_version:
-            # 查找同一BOM编码的所有版本
-            if source_bom.bom_code:
-                existing_versions = await BOM.filter(
-                    tenant_id=tenant_id,
-                    bom_code=source_bom.bom_code,
-                    deleted_at__isnull=True
-                ).values_list("version", flat=True)
-                
-                # 简单的版本递增逻辑（可以后续优化）
-                try:
-                    current_version = float(source_bom.version)
-                    new_version = str(current_version + 0.1)
-                except:
-                    new_version = f"{source_bom.version}.1"
-            else:
-                new_version = "1.0"
+             # 简单的版本自增逻辑：X.Y -> X.Y+1
+             # 这里假设版本号格式为 numeric.numeric
+             try:
+                major, minor = bom.version.split('.')
+                new_version = f"{major}.{int(minor) + 1}"
+             except ValueError:
+                 # 如果不是标准格式，使用后缀
+                 new_version = f"{bom.version}_rev1"
+                 
+             # 检查新版本号是否已存在
+             exists = await BOM.filter(
+                 tenant_id=tenant_id,
+                 material_id=bom.material_id,
+                 version=new_version,
+                 deleted_at__isnull=True
+             ).exists()
+             
+             if exists:
+                 raise ValidationError(f"新版本 {new_version} 已存在")
         
-        # 创建新的BOM
-        new_bom = await BOM.create(
+        # 2. 查找源BOM的所有组成部分（同一 bom_code / 版本）
+        # 注意：这里我们通过 material_id 和 version 查找整个结构
+        source_boms = await BOM.filter(
             tenant_id=tenant_id,
-            material_id=source_bom.material_id,
-            component_id=source_bom.component_id,
-            quantity=source_bom.quantity,
-            unit=source_bom.unit,
-            version=new_version,
-            bom_code=source_bom.bom_code,
-            effective_date=source_bom.effective_date,
-            expiry_date=source_bom.expiry_date,
-            approval_status="draft",  # 新版本默认为草稿
-            is_alternative=source_bom.is_alternative,
-            alternative_group_id=source_bom.alternative_group_id,
-            priority=source_bom.priority,
-            description=source_bom.description,
-            remark=source_bom.remark,
-            is_active=source_bom.is_active,
-        )
+            material_id=bom.material_id,
+            version=bom.version,
+            deleted_at__isnull=True
+        ).all()
         
-        return BOMResponse.model_validate(new_bom)
+        from tortoise import timezone
+        
+        # 3. 创建新版本BOM列表
+        new_boms = []
+        for source in source_boms:
+             # 创建副本
+             new_bom = BOM(
+                 tenant_id=tenant_id,
+                 material_id=source.material_id,
+                 component_id=source.component_id,
+                 quantity=source.quantity,
+                 unit=source.unit,
+                 waste_rate=source.waste_rate,
+                 is_required=source.is_required,
+                 level=source.level,
+                 path=source.path,
+                 version=new_version,
+                 bom_code=source.bom_code, # 保持相同的 BOM Code
+                 effective_date=timezone.now(), # 生效日期更新为当前
+                 description=source.description,
+                 remark=source.remark,
+                 is_active=True,
+                 approval_status="draft", # 重置为草稿
+                 approved_by=None,
+                 approved_at=None,
+                 approval_comment=None
+             )
+             await new_bom.save()
+             new_boms.append(new_bom)
+             
+        return BOMResponse.model_validate(new_boms[0] if new_boms else bom)
+        
+    @staticmethod
+    async def revise_bom(
+        tenant_id: int,
+        bom_uuid: str,
+        new_version: Optional[str] = None
+    ) -> BOMResponse:
+        """
+        BOM升版（Revise）
+        
+        Args:
+            tenant_id: 租户ID
+            bom_uuid: 源BOM UUID
+            new_version: 新版本号（可选）
+        """
+        return await MaterialService.copy_bom(tenant_id, bom_uuid, new_version)
+
+
     
     @staticmethod
     async def get_bom_by_material(
@@ -2058,75 +2206,111 @@ class MaterialService:
             
             return current_level, new_path
         
-        # 步骤5.5：按「父件+版本」先软删除已有 BOM，避免重复保存时多出一套父物料
+        # 步骤6：创建BOM数据 (Refactored: Clean Replace & Auto-Numbering)
         from tortoise import timezone
         from datetime import datetime
-        parent_ids = set(code_to_material[item.parent_code] for item in data.items)
-        bom_code_reuse = {}  # 父件ID -> 复用已有 BOM 编码（若有）
-        for pid in parent_ids:
-            existing = await BOM.filter(
-                tenant_id=tenant_id,
-                material_id=pid,
-                version=data.version or "1.0",
-                deleted_at__isnull=True,
-            ).all()
-            if existing:
-                bom_code_reuse[pid] = existing[0].bom_code
-            for bom in existing:
-                bom.deleted_at = timezone.now()
-                await bom.save(update_fields=["deleted_at"])
         
-        # 步骤6：创建BOM数据
         bom_list = []
-        bom_code_map = {}  # 父件ID -> BOM编码的映射（新生成或复用）
-        
+        # 按父件ID分组处理
+        parent_items_map = defaultdict(list)
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
-            component_id = code_to_material[item.component_code]
+            parent_items_map[parent_id].append(item)
             
-            # 检查主物料和子物料不能相同
-            if parent_id == component_id:
-                raise ValidationError(
-                    f"主物料和子物料不能相同：{item.parent_code}"
-                )
+        for parent_id, items in parent_items_map.items():
+            # 1. 确定目标版本
+            target_version = data.version or "1.0"
             
-            # 获取或生成BOM编码：优先复用该父件+版本下已软删的 BOM 编码，否则新生成
-            if not data.bom_code:
-                if parent_id not in bom_code_map:
-                    if parent_id in bom_code_reuse:
-                        bom_code_map[parent_id] = bom_code_reuse[parent_id]
-                    else:
-                        parent_material = await Material.get(id=parent_id)
-                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                        bom_code_map[parent_id] = f"BOM-{parent_material.main_code}-{timestamp}"
-                bom_code = bom_code_map[parent_id]
-            else:
-                bom_code = data.bom_code
+            # 2. 确定 BOM 编码 (Auto-Numbering)
+            # 优先使用现有同版本的编码，或者请求中指定的编码
+            bom_code = data.bom_code
             
-            # 层级与路径：直接子件 level 1，path 父/子（与 create_bom_batch 一致）
-            level = 1
-            path = f"{parent_id}/{component_id}"
+            # 如果请求未指定，尝试查找该父件该版本的现有编码
+            if not bom_code:
+                existing_version_bom = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=parent_id,
+                    version=target_version,
+                    deleted_at__isnull=True
+                ).first()
+                if existing_version_bom:
+                    bom_code = existing_version_bom.bom_code
             
-            bom = await BOM.create(
+            # 如果当前版本没有（如新版本），尝试查找该父件的其他版本以继承 BOM 编码
+            # 根据模型定义：同一主物料的不同版本使用相同编码
+            if not bom_code:
+                any_existing_bom = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=parent_id,
+                    deleted_at__isnull=True
+                ).first()
+                if any_existing_bom:
+                    bom_code = any_existing_bom.bom_code
+
+            # 如果仍无编码，生成新编码
+            if not bom_code:
+                try:
+                    parent_material = await Material.get(id=parent_id)
+                    context = {
+                        "date": datetime.now().strftime("%Y%m%d"),
+                        "material_code": parent_material.main_code,
+                        "version": target_version
+                    }
+                    bom_code = await CodeGenerationService.generate_code(
+                        tenant_id=tenant_id,
+                        rule_code="ENGINEERING_BOM_CODE",
+                        context=context
+                    )
+                except Exception as e:
+                    # 降级方案：使用时间戳
+                    logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
+                    # 重新获父物料信息（如果上面try块失败）
+                    parent_material = await Material.get(id=parent_id)
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    bom_code = f"BOM-{parent_material.main_code}-{timestamp}"
+
+            # 3. 全量替换 (Clean Replace)
+            # 软删除当前父件+当前版本的所有现有BOM行
+            # 注意：这会删除旧的结构，用新的结构完全替代
+            await BOM.filter(
                 tenant_id=tenant_id,
                 material_id=parent_id,
-                component_id=component_id,
-                quantity=item.quantity,
-                unit=item.unit,
-                waste_rate=item.waste_rate or Decimal("0.00"),
-                is_required=item.is_required if item.is_required is not None else True,
-                level=level,
-                path=path,
-                version=data.version or "1.0",
-                bom_code=bom_code,
-                effective_date=data.effective_date,
-                description=data.description,
-                remark=item.remark,
-                is_active=True,
-            )
-            bom_list.append(bom)
+                version=target_version,
+                deleted_at__isnull=True
+            ).update(deleted_at=timezone.now())
+
+            # 4. 创建新条目
+            for item in items:
+                component_id = code_to_material[item.component_code]
+                
+                # 检查主物料和子物料不能相同
+                if parent_id == component_id:
+                     # 理论上前面检查过了，这里双重保险或忽略
+                    continue
+
+                level = 1
+                path = f"{parent_id}/{component_id}"
+
+                bom = await BOM.create(
+                    tenant_id=tenant_id,
+                    material_id=parent_id,
+                    component_id=component_id,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                    waste_rate=item.waste_rate or Decimal("0.00"),
+                    is_required=item.is_required if item.is_required is not None else True,
+                    level=level,
+                    path=path,
+                    version=target_version,
+                    bom_code=bom_code,
+                    effective_date=data.effective_date,
+                    description=data.description,
+                    remark=item.remark,
+                    is_active=True,
+                )
+                bom_list.append(bom)
         
-        logger.info(f"批量导入BOM成功，共创建 {len(bom_list)} 条BOM记录")
+        logger.info(f"批量导入BOM成功 (Clean Replace)，共创建 {len(bom_list)} 条BOM记录")
         
         return [BOMResponse.model_validate(bom) for bom in bom_list]
     
@@ -2299,8 +2483,10 @@ class MaterialService:
             "material_code": material.main_code,
             "material_name": material.name,
             "version": version or bom_items[0].version,
+            "approval_status": bom_items[0].approval_status,
             "items": tree
         }
+
     
     @staticmethod
     async def calculate_bom_quantity(

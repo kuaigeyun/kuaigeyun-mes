@@ -110,8 +110,10 @@ function mapBomHierarchyFromApi(raw: Record<string, unknown>): BOMHierarchy {
     materialCode: materialCode ? String(materialCode) : '',
     materialName: materialName ? String(materialName) : '',
     version: raw.version ? String(raw.version) : '1.0',
+    approvalStatus: raw.approval_status as any,
     items: items ? items.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
+
 }
 
 /**
@@ -290,6 +292,22 @@ export const bomApi = {
     const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/approve`, null, { params });
     return mapBomFromApi(raw ?? {});
   },
+
+  /**
+   * 批量审核BOM
+   */
+  batchApprove: async (uuids: string[], approved: boolean, approvalComment?: string, recursive: boolean = false, isReverse: boolean = false): Promise<BOM[]> => {
+    const data = {
+      bom_uuids: uuids,
+      approved,
+      approval_comment: approvalComment,
+      recursive,
+      is_reverse: isReverse,
+    };
+    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-approve', data);
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
+  },
   
   /**
    * 复制BOM（创建新版本）
@@ -302,6 +320,19 @@ export const bomApi = {
     const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/copy`, null, { params });
     return mapBomFromApi(raw ?? {});
   },
+
+  /**
+   * BOM升版（Revise）
+   */
+  revise: async (uuid: string, newVersion?: string): Promise<BOM> => {
+    const params: Record<string, any> = {};
+    if (newVersion) {
+      params.new_version = newVersion;
+    }
+    const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/revise`, null, { params });
+    return mapBomFromApi(raw ?? {});
+  },
+
   
   /**
    * 根据主物料获取BOM列表
