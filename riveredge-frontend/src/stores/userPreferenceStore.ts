@@ -9,8 +9,9 @@ const PREFERENCE_STORAGE_KEY_BASE = 'user-preference-storage';
 /** 按租户+用户生成缓存 key，未登录返回空（不读写其他用户缓存） */
 function getPreferenceStorageKey(): string | null {
   if (typeof window === 'undefined') return null;
-  const tenantId = getTenantId();
   const userInfo = getUserInfo();
+  if (!userInfo) return null;
+  const tenantId = getTenantId() ?? userInfo?.tenant_id ?? userInfo?.tenantId;
   const userId = userInfo?.id ?? userInfo?.user_id ?? userInfo?.uuid;
   if (tenantId == null || userId == null) return null;
   return `${PREFERENCE_STORAGE_KEY_BASE}-${tenantId}-${userId}`;
@@ -102,6 +103,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       clearForLogout: () => {
         set({ preferences: {}, loading: false, initialized: false });
         // 偏好缓存按 key 多存一份，不删；主题相关为全局 key，登出时清除避免下一账户沿用
+        // 注意：不清除 riveredge_saved_tabs，以便同一用户再次登录时能恢复标签
         try {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('riveredge_theme_config');

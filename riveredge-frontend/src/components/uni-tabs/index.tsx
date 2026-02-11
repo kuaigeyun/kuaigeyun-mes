@@ -297,6 +297,43 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, []);
 
   /**
+   * 从本地存储加载并验证标签（供初始化和异步恢复使用）
+   */
+  const loadTabsFromStorage = useCallback((): TabItem[] | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
+      if (!savedTabs) return null;
+      const parsedTabs: TabItem[] = JSON.parse(savedTabs);
+      if (!Array.isArray(parsedTabs) || parsedTabs.length === 0) return null;
+
+      const isInfraPage = location.pathname.startsWith('/infra');
+      const validTabs = parsedTabs.filter((tab) => {
+        if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+        if (isInfraPage) return tab.path.startsWith('/infra');
+        return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
+      });
+
+      if (validTabs.length === 0) return null;
+      const wpPath = isInfraPage ? '/infra/operation' : '/system/dashboard/workplace';
+      const hasDefault = validTabs.some((tab) => tab.key === wpPath);
+      if (!hasDefault) {
+        const title = findMenuTitleWithTranslation(wpPath, menuConfig, t);
+        validTabs.unshift({
+          key: wpPath,
+          path: wpPath,
+          label: title,
+          closable: false,
+          pinned: false,
+        });
+      }
+      return validTabs;
+    } catch {
+      return null;
+    }
+  }, [location.pathname, menuConfig, t]);
+
+  /**
    * 同步用户偏好设置（异步更新，不阻塞 UI）
    */
   useEffect(() => {
@@ -333,17 +370,38 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     };
   }, []);
 
-  // 移除旧的异步恢复逻辑，初始化已由 useState 同步完成
-
+  /** 是否已从异步恢复中加载过标签（避免重复覆盖用户操作） */
+  const didRestoreFromSyncRef = useRef(false);
+  /** 正在从存储恢复，避免保存 effect 在同周期用错误数据覆盖 */
+  const isRestoringRef = useRef(false);
+  /**
+   * 当 tabsPersistence 异步恢复为 true 时（如登出后再次登录），从本地存储恢复标签
+   * 解决 clearForLogout 清除 riveredge_tabs_persistence 导致初始化时 tabs=[] 的问题
+   */
+  useEffect(() => {
+    if (!tabsPersistence || didRestoreFromSyncRef.current) return;
+    const restored = loadTabsFromStorage();
+    if (restored && restored.length > 0) {
+      didRestoreFromSyncRef.current = true;
+      isRestoringRef.current = true;
+      setTabs(restored);
+      const savedActive = typeof window !== 'undefined' ? localStorage.getItem('riveredge_saved_active_key') : null;
+      if (savedActive && restored.some((tab) => tab.key === savedActive)) {
+        setActiveKey(savedActive);
+      }
+    }
+  }, [tabsPersistence, loadTabsFromStorage]);
 
   /**
    * 保存标签到本地存储（当启用持久化且标签变化时）
    * 每次标签变化时自动保存，刷新页面时就能恢复
    */
   useEffect(() => {
-    // 简化：只要有标签就保存（如果启用了持久化）
     if (!tabsPersistence) return;
-
+    if (isRestoringRef.current) {
+      isRestoringRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
       if (activeKey && !activeKey.startsWith('/apps/')) {
