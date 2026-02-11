@@ -12,7 +12,7 @@ import { useLocation, Navigate } from 'react-router-dom';
 import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth, getUserInfo, setUserInfo, isTokenExpired } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, isTokenExpired } from './utils/auth';
 import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
@@ -71,8 +71,10 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
         };
         setCurrentUser(restoredUser);
-        // ⚠️ 关键修复：确保恢复的用户信息也保存到 localStorage
         setUserInfo(restoredUser);
+        if (savedUserInfo.tenant_id != null) {
+          setTenantId(savedUserInfo.tenant_id);
+        }
       }
     }
 
@@ -606,7 +608,9 @@ export default function App() {
     });
   };
 
-  // 初始化时加载用户偏好设置和站点主题配置
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
+  // 初始化时加载用户偏好设置和站点主题配置（挂载时若有 token 则执行）
   useEffect(() => {
     const token = getToken();
 
@@ -720,6 +724,17 @@ export default function App() {
       applyThemeConfig('light', null);
     }
   }, []); // 依赖为空，确保只在挂载时执行
+
+  // 当认证完成（currentUser 就绪）后确保拉取用户偏好，解决首次加载或登录后需刷新才能获取偏好的问题
+  useEffect(() => {
+    const token = getToken();
+    if (!token || !currentUser) return;
+    const { initialized } = useUserPreferenceStore.getState();
+    if (!initialized) {
+      useUserPreferenceStore.getState().rehydrateFromStorage();
+      useUserPreferenceStore.getState().fetchPreferences().catch(() => {});
+    }
+  }, [currentUser]);
 
   // 监听系统主题变化（当用户偏好为 auto 时）
   useEffect(() => {
