@@ -76,9 +76,11 @@ const BOMDesignerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const materialId = searchParams.get('materialId');
   const version = searchParams.get('version');
+  /** 实际加载的版本（来自 hierarchy），保存时使用 */
+  const [resolvedVersion, setResolvedVersion] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -280,7 +282,23 @@ const BOMDesignerPage: React.FC = () => {
 
       // 获取BOM层级结构
       const hierarchy = await bomApi.getHierarchy(materialIdNum, version || undefined);
-      
+      const actualVersion = hierarchy.version || '1.0';
+
+      // 同步实际版本：用于保存时决策
+      setResolvedVersion(actualVersion);
+
+      // URL 无 version 时，写入实际版本以保证刷新、分享链接正确
+      if (!version) {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('version', actualVersion);
+            return next;
+          },
+          { replace: true }
+        );
+      }
+
       // 设置BOM状态
       if (hierarchy.approvalStatus) {
         setBomStatus(hierarchy.approvalStatus);
@@ -509,33 +527,73 @@ const BOMDesignerPage: React.FC = () => {
   }, []);
 
   /**
-   * 保存BOM设计
+   * 保存BOM设计（草稿/新建场景，直接覆盖）
    */
   const handleSave = async () => {
     if (!materialId || !rootMaterial || !mindMapData) return;
+    if (bomStatus === 'approved') {
+      messageApi.warning('已审核的BOM不可直接修改，请使用「另存为新版本」');
+      return;
+    }
 
     try {
       setSaving(true);
-
-      // 转换为批量导入数据
       const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
-
       if (items.length === 0) {
         messageApi.warning('请至少添加一个子物料');
         return;
       }
-
-      // 调用批量导入API
-      await bomApi.batchImport({
-        items,
-        version: version || '1.0',
-      });
-
+      const targetVersion = resolvedVersion ?? '1.0';
+      await bomApi.batchImport({ items, version: targetVersion });
       messageApi.success('BOM设计已保存');
-      // 重新加载数据
       await loadBOMData();
     } catch (error: any) {
       messageApi.error(error.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * 另存为新版本（已审核BOM场景：revise 后 batchImport）
+   */
+  const handleSaveAsNewVersion = async () => {
+    if (!materialId || !rootMaterial || !mindMapData) return;
+    const materialIdNum = parseInt(materialId);
+
+    const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
+    if (items.length === 0) {
+      messageApi.warning('请至少添加一个子物料');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const existingBoms = await bomApi.getByMaterial(materialIdNum, resolvedVersion ?? undefined);
+      if (!existingBoms?.length) {
+        messageApi.error('无法获取当前版本BOM信息，无法升版');
+        return;
+      }
+      const firstBom = existingBoms[0];
+      const newBom = await bomApi.revise(firstBom.uuid);
+      const newVersion = newBom.version;
+
+      await bomApi.batchImport({ items, version: newVersion });
+
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('version', newVersion);
+          return next;
+        },
+        { replace: true }
+      );
+      setResolvedVersion(newVersion);
+
+      messageApi.success(`已另存为新版本：${newVersion}`);
+      await loadBOMData();
+    } catch (error: any) {
+      messageApi.error(error.message || '另存为新版本失败');
     } finally {
       setSaving(false);
     }
@@ -1074,16 +1132,27 @@ const BOMDesignerPage: React.FC = () => {
       style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
         <Space>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={saving}
-            onClick={handleSave}
-            disabled={isReadOnly}
-            title={isReadOnly ? '已审核的BOM不可修改' : '保存'}
-          >
-            保存
-          </Button>
+          {isReadOnly ? (
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              onClick={handleSaveAsNewVersion}
+              title="已审核BOM需另存为新版本"
+            >
+              另存为新版本
+            </Button>
+          ) : (
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              onClick={handleSave}
+              title="保存"
+            >
+              保存
+            </Button>
+          )}
 
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
             返回
@@ -1092,9 +1161,9 @@ const BOMDesignerPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={() => {
               if (selectedNodeId) {
-                handleAddChildNode(selectedNodeId);
+                handleAddChildNodeCallback(selectedNodeId);
               } else {
-                handleAddChildNode('root');
+                handleAddChildNodeCallback('root');
               }
             }}
           >
@@ -1104,14 +1173,14 @@ const BOMDesignerPage: React.FC = () => {
             <Button
               danger
               icon={<DeleteOutlined />}
-              onClick={() => handleDeleteNode(selectedNodeId)}
+              onClick={() => handleDeleteNodeCallback(selectedNodeId)}
             >
               删除节点
             </Button>
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
             <span style={{ marginRight: 8 }}>主物料：{rootMaterial.code} - {rootMaterial.name}</span>
-            {version && <span>版本：{version}</span>}
+            {(resolvedVersion ?? version) && <span>版本：{resolvedVersion ?? version}</span>}
           </div>
         </Space>
       }
@@ -1193,55 +1262,10 @@ const BOMDesignerPage: React.FC = () => {
               <p style={{ color: '#999' }}>暂无BOM数据，请添加子物料</p>
               <Button
                 icon={<PlusOutlined />}
-                onClick={() => handleAddChildNode('root')}
+                onClick={() => handleAddChildNodeCallback('root')}
               >
                 添加子物料
               </Button>
-            </div>
-          )}
-          {/* 画板右下角：BOM 结构预览 */}
-          {mindMapData && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 12,
-                bottom: 12,
-                zIndex: 10,
-                maxWidth: 280,
-                maxHeight: 220,
-                padding: '8px 12px',
-                background: 'rgba(255,255,255,0.92)',
-                borderRadius: 6,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                fontSize: 12,
-                color: '#666',
-                lineHeight: 1.6,
-                overflow: 'auto',
-              }}
-            >
-              <div style={{ fontWeight: 500, marginBottom: 6, color: '#333' }}>BOM 结构预览</div>
-              <div style={{ paddingLeft: 0 }}>
-                <div style={{ marginBottom: 4 }}>
-                  <span style={{ color: '#1890ff' }}>●</span> {(mindMapData as MindMapNode).value}
-                </div>
-                {(mindMapData as MindMapNode).children?.length ? (
-                  <>
-                    {(mindMapData as MindMapNode).children!.slice(0, 20).map((child: MindMapNode) => (
-                      <div key={child.id} style={{ paddingLeft: 12, marginBottom: 2 }}>
-                        <span style={{ color: '#52c41a' }}>└</span> {child.value}
-                        {typeof (child as any).quantity === 'number' && (
-                          <span style={{ color: '#999', marginLeft: 4 }}>×{(child as any).quantity}</span>
-                        )}
-                      </div>
-                    ))}
-                    {(mindMapData as MindMapNode).children!.length > 20 && (
-                      <div style={{ paddingLeft: 12, color: '#999' }}>… 共 {(mindMapData as MindMapNode).children!.length} 项</div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ paddingLeft: 12, color: '#999' }}>暂无子物料</div>
-                )}
-              </div>
             </div>
           )}
         </div>

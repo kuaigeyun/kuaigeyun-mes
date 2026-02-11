@@ -225,7 +225,7 @@ class BOM(BaseModel):
         description: 描述
         remark: 备注
         version: BOM版本号
-        bom_code: BOM编码（同一主物料的不同版本使用相同编码）
+        bom_code: BOM编码（升版时随版本更新，如 BOM-XXX-1.0 -> BOM-XXX-1.1）
         effective_date: 生效日期
         expiry_date: 失效日期
         approval_status: 审核状态
@@ -280,7 +280,7 @@ class BOM(BaseModel):
     
     # 版本控制
     version = fields.CharField(max_length=50, default="1.0", description="BOM版本号")
-    bom_code = fields.CharField(max_length=100, null=True, description="BOM编码（同一主物料的不同版本使用相同编码）")
+    bom_code = fields.CharField(max_length=100, null=True, description="BOM编码（升版时随版本更新）")
     
     # 有效期管理
     effective_date = fields.DatetimeField(null=True, description="生效日期")

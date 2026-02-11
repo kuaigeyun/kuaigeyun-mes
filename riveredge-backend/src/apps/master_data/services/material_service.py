@@ -1837,8 +1837,7 @@ class MaterialService:
              if exists:
                  raise ValidationError(f"新版本 {new_version} 已存在")
         
-        # 2. 查找源BOM的所有组成部分（同一 bom_code / 版本）
-        # 注意：这里我们通过 material_id 和 version 查找整个结构
+        # 2. 查找源BOM的所有组成部分（同一 material_id + version）
         source_boms = await BOM.filter(
             tenant_id=tenant_id,
             material_id=bom.material_id,
@@ -1847,11 +1846,31 @@ class MaterialService:
         ).all()
         
         from tortoise import timezone
+        from datetime import datetime
         
-        # 3. 创建新版本BOM列表
+        # 3. 升版时 BOM 编码随版本更新（如 BOM-EBK0002-1.0 -> BOM-EBK0002-1.1）
+        parent_material = await Material.get(id=bom.material_id)
+        new_bom_code = None
+        try:
+            context = {
+                "date": datetime.now().strftime("%Y%m%d"),
+                "material_code": parent_material.main_code,
+                "version": new_version,
+            }
+            new_bom_code = await CodeGenerationService.generate_code(
+                tenant_id=tenant_id,
+                rule_code="ENGINEERING_BOM_CODE",
+                context=context
+            )
+        except Exception as e:
+            logger.warning(f"BOM编码生成失败，使用降级方案: {e}")
+        if not new_bom_code:
+            # 降级：物料编码 + 新版本号
+            new_bom_code = f"BOM-{parent_material.main_code}-{new_version}"
+        
+        # 4. 创建新版本BOM列表
         new_boms = []
         for source in source_boms:
-             # 创建副本
              new_bom = BOM(
                  tenant_id=tenant_id,
                  material_id=source.material_id,
@@ -1863,7 +1882,7 @@ class MaterialService:
                  level=source.level,
                  path=source.path,
                  version=new_version,
-                 bom_code=source.bom_code, # 保持相同的 BOM Code
+                 bom_code=new_bom_code,  # 升版时 BOM 编码随版本更新
                  effective_date=timezone.now(), # 生效日期更新为当前
                  description=source.description,
                  remark=source.remark,
@@ -2206,6 +2225,22 @@ class MaterialService:
             
             return current_level, new_path
         
+        # 步骤5.5：校验已审核版本不可直接修改
+        target_version = data.version or "1.0"
+        parent_ids = set(code_to_material[item.parent_code] for item in data.items)
+        for pid in parent_ids:
+            approved_exists = await BOM.filter(
+                tenant_id=tenant_id,
+                material_id=pid,
+                version=target_version,
+                approval_status="approved",
+                deleted_at__isnull=True,
+            ).exists()
+            if approved_exists:
+                raise ValidationError(
+                    f"版本 {target_version} 已审核通过，禁止直接修改。请先升版或使用「另存为新版本」。"
+                )
+        
         # 步骤6：创建BOM数据 (Refactored: Clean Replace & Auto-Numbering)
         from tortoise import timezone
         from datetime import datetime
@@ -2218,9 +2253,7 @@ class MaterialService:
             parent_items_map[parent_id].append(item)
             
         for parent_id, items in parent_items_map.items():
-            # 1. 确定目标版本
-            target_version = data.version or "1.0"
-            
+            # 1. 目标版本已在步骤5.5确定
             # 2. 确定 BOM 编码 (Auto-Numbering)
             # 优先使用现有同版本的编码，或者请求中指定的编码
             bom_code = data.bom_code
@@ -2422,7 +2455,7 @@ class MaterialService:
                 # 第一层：使用预加载的 bom_items
                 current_bom_items = [b for b in bom_items if b.material_id == parent_id]
             else:
-                # 后续层级：查询子物料的BOM
+                # 后续层级：查询子物料的BOM（优先请求版本，若无则回退到最新版本以实现「升版后子BOM自动获取」）
                 current_bom_items = await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=parent_id,
@@ -2430,6 +2463,22 @@ class MaterialService:
                     deleted_at__isnull=True,
                     is_active=True
                 ).prefetch_related("component").all()
+                if not current_bom_items and (use_version or version):
+                    # 子BOM在请求版本下不存在时，回退到该物料的最新版本
+                    latest_child = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=parent_id,
+                        deleted_at__isnull=True,
+                        is_active=True
+                    ).order_by("-version").first()
+                    if latest_child:
+                        current_bom_items = await BOM.filter(
+                            tenant_id=tenant_id,
+                            material_id=parent_id,
+                            version=latest_child.version,
+                            deleted_at__isnull=True,
+                            is_active=True
+                        ).prefetch_related("component").all()
             
             for bom in current_bom_items:
                 # 使用预加载的component，避免重复查询
@@ -2452,7 +2501,7 @@ class MaterialService:
                     "children": []
                 }
                 
-                # 递归查找子件：查询子物料是否有自己的BOM
+                # 递归查找子件：查询子物料是否有自己的BOM（优先请求版本，若无则回退最新版本）
                 child_bom_items = await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=bom.component_id,
@@ -2460,6 +2509,21 @@ class MaterialService:
                     deleted_at__isnull=True,
                     is_active=True
                 ).prefetch_related("component").all()
+                if not child_bom_items:
+                    latest_child_bom = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=bom.component_id,
+                        deleted_at__isnull=True,
+                        is_active=True
+                    ).order_by("-version").first()
+                    if latest_child_bom:
+                        child_bom_items = await BOM.filter(
+                            tenant_id=tenant_id,
+                            material_id=bom.component_id,
+                            version=latest_child_bom.version,
+                            deleted_at__isnull=True,
+                            is_active=True
+                        ).prefetch_related("component").all()
                 
                 if child_bom_items:
                     # 递归构建子树
