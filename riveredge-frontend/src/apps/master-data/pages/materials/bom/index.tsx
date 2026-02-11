@@ -8,11 +8,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs, Checkbox } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -84,6 +84,9 @@ const BOMPage: React.FC = () => {
   const [versionHistoryModalVisible, setVersionHistoryModalVisible] = useState(false);
   const [currentMaterialId, setCurrentMaterialId] = useState<number | null>(null);
   const versionFormRef = useRef<ProFormInstance>();
+  
+  // 递归审核选项Ref
+  const recursiveApprovalRef = useRef<boolean>(false);
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionList, setVersionList] = useState<BOM[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<{ version1: string; version2: string } | null>(null);
@@ -487,6 +490,123 @@ const BOMPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+
+  /**
+   * 处理批量审核BOM
+   */
+  /**
+   * 处理批量审核BOM
+   */
+  const handleBatchApprove = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要审核的记录');
+      return;
+    }
+
+    const toProcess: string[] = [];
+    for (const key of selectedRowKeys) {
+      const k = String(key);
+      if (k.startsWith('group:')) {
+        const uuids = groupKeyToUuidsRef.current.get(k);
+        if (uuids?.length) toProcess.push(...uuids);
+      } else {
+        toProcess.push(k);
+      }
+    }
+    const count = toProcess.length;
+    if (count === 0) {
+      messageApi.warning('没有可审核的记录');
+      return;
+    }
+
+    // 重置默认值
+    recursiveApprovalRef.current = false;
+
+    Modal.confirm({
+      title: '批量审核',
+      content: (
+        <div>
+          <p>确定要批量通过选中的 {count} 条BOM记录吗？</p>
+          <div style={{ marginTop: 8 }}>
+             <Checkbox onChange={(e) => recursiveApprovalRef.current = e.target.checked}>
+                同时审核子BOM (递归)
+             </Checkbox>
+          </div>
+        </div>
+      ),
+      okText: '确定通过',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          // 直接调用批量审核API
+          await bomApi.batchApprove(toProcess, true, '批量审核通过', recursiveApprovalRef.current, false);
+          messageApi.success(`已成功审核 ${count} 条记录`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量审核失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理批量反审核BOM
+   */
+  const handleBatchUnapprove = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要操作的记录');
+      return;
+    }
+
+    const toProcess: string[] = [];
+    for (const key of selectedRowKeys) {
+        const k = String(key);
+        if (k.startsWith('group:')) {
+            const uuids = groupKeyToUuidsRef.current.get(k);
+            if (uuids?.length) toProcess.push(...uuids);
+        } else {
+            toProcess.push(k);
+        }
+    }
+    const count = toProcess.length;
+    if (count === 0) {
+        messageApi.warning('没有可操作的记录');
+        return;
+    }
+
+    // 重置默认值
+    recursiveApprovalRef.current = false;
+
+    Modal.confirm({
+      title: '批量反审核',
+      content: (
+          <div>
+            <p>确定要批量反审核选中的 {count} 条BOM记录吗？</p>
+            <p style={{ color: '#ff4d4f' }}>反审核后状态将重置为"草稿"。</p>
+            <div style={{ marginTop: 8 }}>
+                 <Checkbox onChange={(e) => recursiveApprovalRef.current = e.target.checked}>
+                    同时反审核子BOM (递归)
+                 </Checkbox>
+            </div>
+          </div>
+      ),
+      okText: '确定反审核',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await bomApi.batchApprove(toProcess, true, '批量反审核', recursiveApprovalRef.current, true);
+          messageApi.success(`已成功反审核 ${count} 条记录`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量反审核失败');
         }
       },
     });
@@ -920,6 +1040,28 @@ const BOMPage: React.FC = () => {
   };
 
   /**
+   * 处理BOM升版 (Revision)
+   */
+  const handleRevise = async (record: BOM) => {
+    Modal.confirm({
+      title: 'BOM 升版确认',
+      content: `确定要为 ${record.bomCode} (当前版本 ${record.version}) 创建一个新的修订版本吗？系统将自动复制整个 BOM 结构并生成新版本（Draft状态）。`,
+      okText: '确定升版',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const newBom = await bomApi.revise(record.uuid);
+          messageApi.success(`升版成功！新版本: ${newBom.version}`);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '升版失败');
+        }
+      }
+    });
+  };
+
+
+  /**
    * 处理版本创建提交
    */
   const handleVersionCreateSubmit = async (values: BOMVersionCreate) => {
@@ -1155,26 +1297,48 @@ const BOMPage: React.FC = () => {
           if (r.version) p.set('version', r.version);
           navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
         };
+        const isApproved = r.approvalStatus === 'approved';
         const moreItems: MenuProps['items'] = [
           { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
+          { key: 'revise', icon: <BranchesOutlined />, label: '升版 (Revise)', onClick: () => handleRevise(r), disabled: !isApproved },
           { key: 'copy', icon: <CopyOutlined />, label: '复制', onClick: () => handleCopy(r) },
           ...(r.approvalStatus !== 'approved'
             ? [{ key: 'approve', icon: <CheckCircleOutlined />, label: '审核', onClick: () => handleOpenApproval(r) } as MenuProps['items'][0]]
             : []),
-          { key: 'newVersion', icon: <BranchesOutlined />, label: '新版本', onClick: () => handleCreateVersion(r) },
+          { key: 'newVersion', icon: <PlusOutlined />, label: '手工新建版本', onClick: () => handleCreateVersion(r) },
           { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
           { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: '用量计算', onClick: () => handleCalculateQuantity(r) },
         ];
         return (
           <Space wrap size="small">
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
+            <Button 
+                type="link" 
+                size="small" 
+                icon={<EditOutlined />} 
+                onClick={() => handleEdit(r)}
+                disabled={isApproved}
+                title={isApproved ? '已审核的BOM不可直接编辑，请先升版或反审核' : '编辑'}
+            >
+                编辑
+            </Button>
             <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner}>图形化设计</Button>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteGroup(record)}>删除</Button>
+            <Button 
+                type="link" 
+                size="small" 
+                danger 
+                icon={<DeleteOutlined />} 
+                onClick={() => handleDeleteGroup(record)}
+                disabled={isApproved}
+                title={isApproved ? '已审核的BOM不可删除' : '删除'}
+            >
+                删除
+            </Button>
             <Dropdown menu={{ items: moreItems }} trigger={['click']}>
               <Button type="link" size="small" icon={<EllipsisOutlined />}>更多</Button>
             </Dropdown>
           </Space>
         );
+
       },
     },
   ];
@@ -1382,6 +1546,20 @@ const BOMPage: React.FC = () => {
               onClick={handleCreate}
             >
               新建BOM
+            </Button>
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              icon={<CheckCircleOutlined />}
+              onClick={handleBatchApprove}
+            >
+              批量审核
+            </Button>
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              icon={<UndoOutlined />}
+              onClick={handleBatchUnapprove}
+            >
+              批量反审核
             </Button>
             <Button
               danger

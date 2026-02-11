@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Input, Select, InputNumber, Switch } from 'antd';
+import { Button, Space, Form, Input, Select, InputNumber, Switch, Alert } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { MindMap, RCNode } from '@ant-design/graphs';
@@ -82,7 +82,11 @@ const BOMDesignerPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [bomStatus, setBomStatus] = useState<string>('draft');
   const [rootMaterial, setRootMaterial] = useState<Material | null>(null);
+  
+  const isReadOnly = useMemo(() => bomStatus === 'approved', [bomStatus]);
+
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
   /** 单位字典：value(code) -> label(显示名)，用于节点配置中单位下拉显示标签 */
@@ -276,9 +280,17 @@ const BOMDesignerPage: React.FC = () => {
 
       // 获取BOM层级结构
       const hierarchy = await bomApi.getHierarchy(materialIdNum, version || undefined);
+      
+      // 设置BOM状态
+      if (hierarchy.approvalStatus) {
+        setBomStatus(hierarchy.approvalStatus);
+      } else {
+        setBomStatus('draft'); // 默认草稿
+      }
 
       // 转换为 MindMap 数据
       const data = convertToMindMapData(material, hierarchy.items || []);
+
       setMindMapData(data);
       setHistory({ past: [], future: [] }); // Reset history on load
 
@@ -1067,9 +1079,12 @@ const BOMDesignerPage: React.FC = () => {
             icon={<SaveOutlined />}
             loading={saving}
             onClick={handleSave}
+            disabled={isReadOnly}
+            title={isReadOnly ? '已审核的BOM不可修改' : '保存'}
           >
             保存
           </Button>
+
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
             返回
           </Button>

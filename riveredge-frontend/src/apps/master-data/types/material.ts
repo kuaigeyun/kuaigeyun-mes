@@ -479,8 +479,10 @@ export interface BOMHierarchy {
   materialCode: string;
   materialName: string;
   version: string;
+  approvalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
   items: BOMHierarchyItem[];
 }
+
 
 /**
  * BOM用量计算结果类型定义
