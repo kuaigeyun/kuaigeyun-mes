@@ -18,6 +18,7 @@ import type {
   BOMCreate,
   BOMUpdate,
   BOMListParams,
+  BOMBatchCreate,
   BOMBatchImport,
   BOMHierarchy,
   BOMHierarchyItem,
@@ -327,7 +328,7 @@ export const bomApi = {
    * 请求体转为 snake_case 以符合后端 Schema（parent_code, component_code 等）。
    */
   batchImport: async (data: BOMBatchImport): Promise<BOM[]> => {
-    const body = {
+    const payload = {
       items: data.items.map((item) => ({
         parent_code: item.parentCode,
         component_code: item.componentCode,
@@ -342,7 +343,7 @@ export const bomApi = {
       effective_date: data.effectiveDate,
       description: data.description,
     };
-    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', body);
+    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', payload);
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },

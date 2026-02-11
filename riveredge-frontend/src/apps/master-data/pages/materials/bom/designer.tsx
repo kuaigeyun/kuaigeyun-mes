@@ -11,34 +11,54 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button, Space, Form, Input, Select, InputNumber, Switch } from 'antd';
-import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { MindMap, RCNode } from '@ant-design/graphs';
-import type { MindMapData } from '@ant-design/graphs';
 
 const { TextNode } = RCNode;
 
 const DEFAULT_EXPAND_LEVEL = 5;
 
-/** 节点固定宽度（文本在此宽度内换行），与 getVGap/getHGap 匹配使布局更自然 */
-const NODE_WIDTH = 168;
 /** 同级节点垂直间距，加大以缓解二级节点（如定子下硅钢片/漆包线、转子与外壳之间）拥挤 */
-const NODE_V_GAP = 24;
+const NODE_V_GAP = 16;
 /** 层级间水平间距 */
-const NODE_H_GAP = 128;
+const NODE_H_GAP = 60;
 
+import {
+  handleAddChildNode,
+  handleAddSiblingNode,
+  handleDeleteNode,
+  handleNodeSelect,
+  MindMapNode,
+  findNode,
+  updateNode,
+  findParentNode,
+  handleMoveNodeLogic,
+} from './utils';
 import { bomApi, materialApi } from '../../../services/material';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import type { BOM, Material, BOMHierarchy, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+import type { Material, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
 import { CanvasPageTemplate, PAGE_SPACING } from '../../../../../components/layout-templates';
-
-const { TextArea } = Input;
-
 const GRID_STYLE: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
-  backgroundSize: '12px 12px',
-  backgroundColor: '#fafafa',
+  backgroundImage: 'radial-gradient(#dcdcdc 1px, transparent 1px)',
+  backgroundSize: '16px 16px',
+  backgroundColor: '#f5f7fa', // 略微修改颜色证明配置生效
+};
+
+const KBD_STYLE: React.CSSProperties = {
+  fontFamily: 'Consolas, "Lucida Console", "Courier New", monospace',
+  padding: '2px 6px',
+  borderRadius: 4,
+  border: '1px solid #d9d9d9',
+  borderBottom: '2px solid #ccc',
+  backgroundColor: '#fff',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+  margin: '0 4px',
+  fontSize: '12px',
+  color: '#333',
+  fontWeight: 600,
+  lineHeight: '14px',
+  display: 'inline-block',
 };
 
 /** 画布内的 MindMap：仅当 config 引用变化时重渲染，避免选中节点触发整图 setOptions+render */
@@ -48,20 +68,6 @@ const MemoizedMindMap = memo((props: { config: Record<string, unknown> | null })
   return <MindMap {...(config as any)} />;
 });
 MemoizedMindMap.displayName = 'MemoizedMindMap';
-
-// MindMap 树形数据节点类型
-interface MindMapNode {
-  id: string;
-  value: string;
-  material?: Material;
-  quantity?: number;
-  unit?: string;
-  wasteRate?: number;
-  isRequired?: boolean;
-  componentId?: number;
-  children?: MindMapNode[];
-  [key: string]: any;
-}
 
 /**
  * BOM可视化设计器页面组件
@@ -83,15 +89,75 @@ const BOMDesignerPage: React.FC = () => {
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
   // MindMap 数据
-  const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
+  const [mindMapData, setMindMapData] = useState<any>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeConfigForm] = Form.useForm();
+  const materialSelectRef = useRef<any>(null);
 
   // 使用ref保存数据，用于操作
-  const mindMapDataRef = useRef<MindMapData | null>(null);
+  const mindMapDataRef = useRef<any>(null);
   const mindMapInstanceRef = useRef<any>(null);
   const handleNodeSelectRef = useRef<(id: string) => void>(() => { });
   const selectedIdInGraphRef = useRef<string | null>(null); // 与图内选中状态同步，用于 setElementState 时清除上一节点
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  // History state for Undo/Redo
+  const [, setHistory] = useState<{ past: any[]; future: any[] }>({ past: [], future: [] });
+  
+  const [unitMap, setUnitMap] = useState<Record<string, string>>({}); // value -> label
+
+  // Load unit dictionary
+  useEffect(() => {
+    const loadUnitDict = async () => {
+      try {
+        const dict = await getDataDictionaryByCode('MATERIAL_UNIT');
+        if (dict?.uuid) {
+          const items = await getDictionaryItemList(dict.uuid);
+          const map: Record<string, string> = {};
+          items.forEach(item => {
+            map[item.value] = item.label;
+          });
+          setUnitMap(map);
+        }
+      } catch (e) {
+        console.error('Failed to load unit dictionary', e);
+      }
+    };
+    loadUnitDict();
+  }, []);
+
+  const selectedMaterialId = Form.useWatch('materialId', nodeConfigForm);
+  
+  const unitOptions = useMemo(() => {
+    if (!selectedMaterialId) return [];
+    const material = materials.find(m => m.id === selectedMaterialId);
+    if (!material) return [];
+
+    const opts: { label: string; value: string }[] = [];
+    
+    // Base Unit
+    if (material.baseUnit) {
+      opts.push({
+        label: unitMap[material.baseUnit] || material.baseUnit,
+        value: material.baseUnit,
+      });
+    }
+
+    // Auxiliary Units
+    if (material.units?.units) {
+      material.units.units.forEach((u: any) => {
+        // Avoid duplicates if baseUnit is also in units list
+        if (u.unit !== material.baseUnit) {
+          opts.push({
+            label: unitMap[u.unit] || u.unit,
+            value: u.unit,
+          });
+        }
+      });
+    }
+    
+    return opts;
+  }, [selectedMaterialId, materials, unitMap]);
 
   useEffect(() => {
     mindMapDataRef.current = mindMapData;
@@ -104,7 +170,7 @@ const BOMDesignerPage: React.FC = () => {
   const convertToMindMapData = useCallback((
     rootMaterial: Material,
     items: BOMHierarchyItem[]
-  ): MindMapData => {
+  ): any => {
     const convertItem = (item: BOMHierarchyItem, path: number[]): MindMapNode => {
       const material = materials.find(m => m.id === item.componentId) || {
         id: item.componentId,
@@ -151,7 +217,7 @@ const BOMDesignerPage: React.FC = () => {
       try {
         setMaterialsLoading(true);
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
+        setMaterials(result); 
       } catch (error: any) {
         console.error('加载物料列表失败:', error);
       } finally {
@@ -197,7 +263,7 @@ const BOMDesignerPage: React.FC = () => {
       // 如果物料列表中找不到，尝试通过API获取
       if (!material) {
         const allMaterials = await materialApi.list({ limit: 10000, isActive: true });
-        material = allMaterials.find(m => m.id === materialIdNum);
+        material = allMaterials.find((m: Material) => m.id === materialIdNum);
       }
 
       if (!material) {
@@ -214,6 +280,7 @@ const BOMDesignerPage: React.FC = () => {
       // 转换为 MindMap 数据
       const data = convertToMindMapData(material, hierarchy.items || []);
       setMindMapData(data);
+      setHistory({ past: [], future: [] }); // Reset history on load
 
       console.log('BOM设计器 - 加载完成:', {
         rootMaterial: material,
@@ -225,7 +292,7 @@ const BOMDesignerPage: React.FC = () => {
       messageApi.error(error.message || '加载BOM数据失败');
       // 即使加载失败，也显示根节点
       if (rootMaterial) {
-        const data: MindMapData = {
+        const data: any = {
           id: 'root',
           value: `${rootMaterial.code} - ${rootMaterial.name}`,
           material: rootMaterial,
@@ -260,190 +327,116 @@ const BOMDesignerPage: React.FC = () => {
   }, [materialId, version, materials, convertToMindMapData]);
 
   /**
-   * 查找节点（递归）
+   * Wrapper for updating BOM data with History support
    */
-  const findNode = useCallback((data: MindMapData, nodeId: string): MindMapNode | null => {
-    if (data.id === nodeId) {
-      return data as MindMapNode;
-    }
-    if (data.children) {
-      for (const child of data.children) {
-        const found = findNode(child, nodeId);
-        if (found) return found;
-      }
-    }
-    return null;
+  const handleUpdateBOM = useCallback((newData: any) => {
+    setHistory(curr => {
+      const currentData = mindMapDataRef.current;
+      if (!currentData) return curr;
+      return {
+        past: [...curr.past, currentData].slice(-20), // Limit history depth
+        future: []
+      };
+    });
+    setMindMapData(newData);
   }, []);
 
   /**
-   * 更新节点（递归）
+   * Undo action
    */
-  const updateNode = useCallback((data: MindMapData, nodeId: string, updater: (node: MindMapNode) => MindMapNode): MindMapData | null => {
-    if (data.id === nodeId) {
-      return updater(data as MindMapNode);
-    }
-    if (data.children) {
-      const updatedChildren = data.children
-        .map(child => updateNode(child, nodeId, updater))
-        .filter(Boolean) as MindMapNode[];
+  const handleUndo = useCallback(() => {
+    setHistory(curr => {
+      if (curr.past.length === 0) return curr;
+      const previous = curr.past[curr.past.length - 1];
+      const newPast = curr.past.slice(0, curr.past.length - 1);
+      
+      const currentData = mindMapDataRef.current;
+      setMindMapData(previous);
+      
       return {
-        ...data,
-        children: updatedChildren,
+        past: newPast,
+        future: [currentData, ...curr.future]
       };
-    }
-    return data;
+    });
   }, []);
 
   /**
-   * 删除节点（递归）
+   * Redo action
    */
-  const removeNode = useCallback((data: MindMapData, nodeId: string): MindMapData | null => {
-    if (data.id === nodeId) {
-      return null; // 不允许删除根节点
-    }
-    if (data.children) {
-      const filteredChildren = data.children
-        .filter(child => child.id !== nodeId)
-        .map(child => removeNode(child, nodeId))
-        .filter(Boolean) as MindMapNode[];
+  const handleRedo = useCallback(() => {
+    setHistory(curr => {
+      if (curr.future.length === 0) return curr;
+      const next = curr.future[0];
+      const newFuture = curr.future.slice(1);
+      
+      const currentData = mindMapDataRef.current;
+      setMindMapData(next);
+      
       return {
-        ...data,
-        children: filteredChildren,
+        past: [...curr.past, currentData],
+        future: newFuture
       };
-    }
-    return data;
+    });
   }, []);
 
   /**
    * 添加子节点
    */
-  const handleAddChildNode = useCallback((parentNodeId: string) => {
-    if (!mindMapDataRef.current) return;
-
-    const newNode: MindMapNode = {
-      id: `material_new_${Date.now()}`,
-      value: '未选择物料',
-      quantity: 1,
-      unit: '',
-      wasteRate: 0,
-      isRequired: true,
-    };
-
-    const updated = updateNode(mindMapDataRef.current, parentNodeId, (node) => {
-      return {
-        ...node,
-        children: [...(node.children || []), newNode],
-      };
-    });
-
-    if (updated) {
-      setMindMapData(updated);
-      setSelectedNodeId(parentNodeId); // 保持父节点选中，方便连续「添加子节点」时都挂在同一父下，而不都连到刚加的那一个
-      nodeConfigForm.resetFields();
-      nodeConfigForm.setFieldsValue({
-        quantity: 1,
-        wasteRate: 0,
-        isRequired: true,
-      });
-    }
-  }, [updateNode, nodeConfigForm]);
+  const handleAddChildNodeCallback = useCallback((parentNodeId: string) => {
+    handleAddChildNode(
+      parentNodeId,
+      mindMapDataRef,
+      handleUpdateBOM,
+      setSelectedNodeId,
+      mindMapInstanceRef,
+      selectedIdInGraphRef,
+      nodeConfigForm
+    );
+  }, [nodeConfigForm]);
 
   /**
    * 添加同级节点
    */
-  const handleAddSiblingNode = useCallback((siblingNodeId: string) => {
-    if (!mindMapDataRef.current || !selectedNodeId) return;
-
-    // 找到父节点
-    const findParent = (data: MindMapData, targetId: string): MindMapData | null => {
-      if (data.children) {
-        if (data.children.some(child => child.id === targetId)) {
-          return data;
-        }
-        for (const child of data.children) {
-          const parent = findParent(child, targetId);
-          if (parent) return parent;
-        }
-      }
-      return null;
-    };
-
-    const parent = findParent(mindMapDataRef.current, siblingNodeId);
-    if (!parent) {
-      // 如果没有父节点，添加到根节点
-      handleAddChildNode('root');
-      return;
-    }
-
-    const newNode: MindMapNode = {
-      id: `material_new_${Date.now()}`,
-      value: '未选择物料',
-      quantity: 1,
-      unit: '',
-      wasteRate: 0,
-      isRequired: true,
-    };
-
-    const updated = updateNode(mindMapDataRef.current, parent.id, (node) => {
-      return {
-        ...node,
-        children: [...(node.children || []), newNode],
-      };
-    });
-
-    if (updated) {
-      setMindMapData(updated);
-      setSelectedNodeId(parent.id); // 保持父节点选中，连续添加时都在同一父下增加兄弟
-      nodeConfigForm.resetFields();
-      nodeConfigForm.setFieldsValue({
-        quantity: 1,
-        wasteRate: 0,
-        isRequired: true,
-      });
-    }
-  }, [selectedNodeId, updateNode, handleAddChildNode, nodeConfigForm]);
+  const handleAddSiblingNodeCallback = useCallback((siblingNodeId: string) => {
+    handleAddSiblingNode(
+      siblingNodeId,
+      mindMapDataRef,
+      handleUpdateBOM,
+      setSelectedNodeId,
+      mindMapInstanceRef,
+      selectedIdInGraphRef,
+      nodeConfigForm
+    );
+  }, [nodeConfigForm]);
 
   /**
    * 删除节点
    */
-  const handleDeleteNode = useCallback((nodeId: string) => {
-    if (nodeId === 'root') {
-      messageApi.warning('不能删除根节点（主物料）');
-      return;
-    }
-
-    if (!mindMapDataRef.current) return;
-
-    const updated = removeNode(mindMapDataRef.current, nodeId);
-    if (updated) {
-      setMindMapData(updated);
-      setSelectedNodeId(null);
-      messageApi.success('节点已删除');
-    }
-  }, [removeNode, messageApi]);
+  const handleDeleteNodeCallback = useCallback((nodeId: string) => {
+    handleDeleteNode(
+      nodeId,
+      mindMapDataRef,
+      handleUpdateBOM,
+      setSelectedNodeId as any,
+      messageApi
+    );
+  }, [messageApi]);
 
   /**
    * 选择节点
    */
-  const handleNodeSelect = useCallback((nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    if (mindMapDataRef.current) {
-      const node = findNode(mindMapDataRef.current, nodeId);
-      if (node) {
-        nodeConfigForm.setFieldsValue({
-          materialId: node.material?.id || null,
-          quantity: node.quantity || 1,
-          unit: node.unit || '',
-          wasteRate: node.wasteRate || 0,
-          isRequired: node.isRequired !== false,
-        });
-      }
-    }
-  }, [findNode, nodeConfigForm]);
+  const handleNodeSelectCallback = useCallback((nodeId: string) => {
+    handleNodeSelect(
+      nodeId,
+      mindMapDataRef,
+      setSelectedNodeId,
+      nodeConfigForm
+    );
+  }, [nodeConfigForm]);
 
   useEffect(() => {
-    handleNodeSelectRef.current = handleNodeSelect;
-  }, [handleNodeSelect]);
+    handleNodeSelectRef.current = handleNodeSelectCallback;
+  }, [handleNodeSelectCallback]);
 
   /**
    * 保存节点配置
@@ -454,7 +447,7 @@ const BOMDesignerPage: React.FC = () => {
     nodeConfigForm.validateFields().then((values) => {
       const material = materials.find(m => m.id === values.materialId);
 
-      const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node) => {
+      const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
         return {
           ...node,
           value: material ? `${material.code} - ${material.name}` : '未选择物料',
@@ -463,13 +456,13 @@ const BOMDesignerPage: React.FC = () => {
           unit: values.unit,
           wasteRate: values.wasteRate || 0,
           isRequired: values.isRequired !== false,
-          componentId: values.materialId,
+        componentId: values.materialId,
         };
       });
 
       if (updated) {
-        setMindMapData(updated);
-        messageApi.success('节点配置已保存');
+        handleUpdateBOM(updated);
+        messageApi.success('配置已更新');
       }
     });
   };
@@ -477,11 +470,11 @@ const BOMDesignerPage: React.FC = () => {
   /**
    * 将 MindMap 数据转换为 BOM 批量导入格式
    */
-  const convertMindMapToBOMItems = useCallback((data: MindMapData, parentMaterial: Material): any[] => {
+  const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
     const items: any[] = [];
 
     if (data.children) {
-      data.children.forEach((child) => {
+      data.children.forEach((child: MindMapNode) => {
         if (child.material && child.componentId) {
           items.push({
             parentCode: parentMaterial.code,
@@ -513,7 +506,7 @@ const BOMDesignerPage: React.FC = () => {
       setSaving(true);
 
       // 转换为批量导入数据
-      const items = convertMindMapToBOMItems(mindMapData, rootMaterial);
+      const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
 
       if (items.length === 0) {
         messageApi.warning('请至少添加一个子物料');
@@ -548,34 +541,81 @@ const BOMDesignerPage: React.FC = () => {
    */
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // 如果正在输入，不处理快捷键
+      // 如果正在输入，仅允许特定快捷键（如Enter保存）
       const activeElement = document.activeElement;
-      if (
+      const isInputActive =
         activeElement?.tagName === 'INPUT' ||
         activeElement?.tagName === 'TEXTAREA' ||
-        activeElement?.getAttribute('contenteditable') === 'true'
-      ) {
-        return;
-      }
+        activeElement?.getAttribute('contenteditable') === 'true';
 
-      // Enter键：添加同级物料
-      if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+      // F2: Edit (Focus Input)
+      if (event.key === 'F2') {
         event.preventDefault();
-        event.stopPropagation();
-        if (selectedNodeId) {
-          handleAddSiblingNode(selectedNodeId);
+        if (selectedNodeId && selectedNodeId !== 'root') {
+             materialSelectRef.current?.focus();
         }
         return;
       }
+
+      // Esc: Cancel Selection or Exit Edit
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        
+        // If editing, just blur and return focus to canvas
+        if (isInputActive) {
+            (activeElement as HTMLElement).blur();
+            canvasRef.current?.focus();
+            return;
+        }
+
+        // If not editing, clear selection
+        if (selectedNodeId) {
+          setSelectedNodeId(null);
+          // Try to clear graph selection state if possible
+          if (mindMapInstanceRef.current && selectedIdInGraphRef.current) {
+             try {
+                if (mindMapInstanceRef.current.setItemState) {
+                   mindMapInstanceRef.current.setItemState(selectedIdInGraphRef.current, 'selected', false);
+                }
+             } catch(e) {}
+             selectedIdInGraphRef.current = null;
+          }
+          nodeConfigForm.resetFields();
+        }
+        return;
+      }
+
+      if (isInputActive) {
+        if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+             event.preventDefault();
+             handleSaveNodeConfig();
+             // Blur and return focus to canvas immediately
+             (activeElement as HTMLElement).blur();
+             canvasRef.current?.focus();
+        }
+        return;
+      }
+
+      // Enter key handling (Canvas context)
+      if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+        // Since input focus is handled above, this block is for canvas shortcuts
+        event.preventDefault();
+        event.stopPropagation();
+        if (selectedNodeId) {
+          handleAddSiblingNodeCallback(selectedNodeId);
+        }
+        return;
+      }
+
 
       // TAB键：添加子物料
       if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
         if (selectedNodeId) {
-          handleAddChildNode(selectedNodeId);
+          handleAddChildNodeCallback(selectedNodeId);
         } else if (mindMapData) {
-          handleAddChildNode('root');
+          handleAddChildNodeCallback('root');
         }
         return;
       }
@@ -584,7 +624,70 @@ const BOMDesignerPage: React.FC = () => {
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNodeId && selectedNodeId !== 'root') {
         event.preventDefault();
         event.stopPropagation();
-        handleDeleteNode(selectedNodeId);
+        handleDeleteNodeCallback(selectedNodeId);
+        return;
+      }
+
+      // 方向键导航
+      if (selectedNodeId && mindMapDataRef.current) {
+        // ArrowLeft: Go to Parent
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          const parent = findParentNode(mindMapDataRef.current, selectedNodeId);
+          if (parent) {
+            handleNodeSelectCallback(parent.id);
+          }
+          return;
+        }
+
+        // ArrowRight: Go to First Child
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          const current = findNode(mindMapDataRef.current, selectedNodeId);
+          if (current && current.children && current.children.length > 0) {
+            handleNodeSelectCallback(current.children[0].id);
+          }
+          return;
+        }
+
+        // ArrowUp: Previous Sibling
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          const parent = findParentNode(mindMapDataRef.current, selectedNodeId);
+          if (parent && parent.children) {
+            const index = parent.children.findIndex((c: MindMapNode) => c.id === selectedNodeId);
+            if (index > 0) {
+              handleNodeSelectCallback(parent.children[index - 1].id);
+            }
+          }
+          return;
+        }
+
+        // ArrowDown: Next Sibling
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          const parent = findParentNode(mindMapDataRef.current, selectedNodeId);
+          if (parent && parent.children) {
+            const index = parent.children.findIndex((c: MindMapNode) => c.id === selectedNodeId);
+            if (index >= 0 && index < parent.children.length - 1) {
+              handleNodeSelectCallback(parent.children[index + 1].id);
+            }
+          }
+          return;
+        }
+      }
+
+      // Undo: Ctrl+Z
+      if (event.key === 'z' && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Redo: Ctrl+Y
+      if (event.key === 'y' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        handleRedo();
         return;
       }
     };
@@ -593,13 +696,22 @@ const BOMDesignerPage: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedNodeId, handleAddSiblingNode, handleAddChildNode, handleDeleteNode, mindMapData]);
+  }, [selectedNodeId, handleAddSiblingNodeCallback, handleAddChildNodeCallback, handleDeleteNodeCallback, handleNodeSelectCallback, mindMapData, handleUndo, handleRedo]);
+
+  // 新节点自动聚焦选择框
+  useEffect(() => {
+    if (selectedNodeId?.startsWith('material_new_')) {
+      setTimeout(() => {
+        materialSelectRef.current?.focus();
+      }, 200);
+    }
+  }, [selectedNodeId]);
 
   // 获取选中的节点
   const selectedNode = useMemo(() => {
     if (!selectedNodeId || !mindMapData) return null;
-    return findNode(mindMapData, selectedNodeId);
-  }, [selectedNodeId, mindMapData, findNode]);
+    return findNode(mindMapData as MindMapNode, selectedNodeId);
+  }, [selectedNodeId, mindMapData]);
 
   // 节点配置中选中的物料 ID，用于根据物料信息生成单位选项
   const watchedMaterialId = Form.useWatch('materialId', nodeConfigForm);
@@ -625,87 +737,297 @@ const BOMDesignerPage: React.FC = () => {
   // 供 MindMap 使用的纯净树数据（id/value/children），子节点 value 含用量
   const mindMapDataSafe = useMemo(() => {
     if (!mindMapData) return null;
-    const strip = (n: MindMapNode): { id: string; value: string; children?: any[] } => {
+    const strip = (n: MindMapNode): any => {
       const base = typeof n.value === 'string' ? n.value : String(n.id);
       const value = n.id === 'root'
         ? base
         : `${base} × ${n.quantity ?? 1}`;
-      const out: { id: string; value: string; children?: any[] } = { id: n.id, value };
+      const out: any = { 
+        id: n.id, 
+        value,
+        data: { ...n, isSelected: n.id === selectedNodeId } // 显式传递选中状态到数据中
+      };
       if (n.children?.length) {
         out.children = n.children.map(strip);
       }
       return out;
     };
     return strip(mindMapData as MindMapNode);
-  }, [mindMapData]);
+  }, [mindMapData, selectedNodeId]);
 
-  // MindMap 配置：固定节点宽度 + 换行，与间距匹配使布局自然
   const mindMapConfig = useMemo(() => {
     if (!mindMapDataSafe) return null;
     return {
       data: mindMapDataSafe,
       direction: 'right' as const,
-      type: 'boxed' as const,
-      nodeMinWidth: NODE_WIDTH,
-      nodeMaxWidth: NODE_WIDTH,
+      // type: 'boxed', // 移除 fixed 类型以允许更好的自定义
       defaultExpandLevel: DEFAULT_EXPAND_LEVEL,
-      theme: 'dark' as const,
-      labelField: (d: { id?: string; value?: string; data?: { value?: string } }) => {
-        const v = (d as any).value ?? (d.data && (d.data as any).value);
-        return v != null && String(v).trim() !== '' ? String(v) : (d.id ?? '');
-      },
-      node: {
-        style: {
-          component: (data: any) => {
-            const depth = data.depth ?? 0;
-            const color = data.style?.color ?? '#99ADD1';
-            const label = (() => {
-              const v = data.value ?? (data.data && data.data.value);
-              return v != null && String(v).trim() !== '' ? String(v) : (data.id ?? '');
-            })();
-            const font = { fontWeight: depth <= 1 ? 600 : 400, fontSize: depth === 0 ? 20 : 13 };
-            const isSelected = (data.states || []).includes('selected');
-            const props: any = {
-              text: label,
-              color,
-              maxWidth: NODE_WIDTH,
-              font,
-              isSelected,
-              borderWidth: 2,
-              ...(depth === 0
-                ? { type: 'filled' as const, color: '#f1f4f5', style: { color: '#252525' } }
-                : depth === 1
-                  ? { type: 'filled' as const }
-                  : { type: 'outlined' as const }),
-            };
-            return React.createElement(TextNode, props);
-          },
-        },
-      },
+      animate: false,
+      animation: false,
       layout: {
         type: 'mindmap',
         direction: 'H' as const,
         getSide: () => 'right',
         getVGap: () => NODE_V_GAP,
         getHGap: () => NODE_H_GAP,
+        animate: false,
+        animation: false,
+      },
+      behaviors: ['drag-canvas', 'zoom-canvas'],
+      theme: 'light' as const,
+      labelField: 'value',
+      node: {
+        style: {
+          component: (data: any) => {
+            const depth = data.depth ?? 0;
+            const label = data.value || data.id || '';
+            const isRoot = data.id === 'root' || depth === 0;
+            // 通过数据注入和外部状态双重判断选中
+            const isSelected = data.data?.isSelected || data.id === selectedNodeId;
+            // 判断是否处于激活状态（拖拽目标）
+            // 注意：G6更新这种自定义组件状态比较麻烦，这里尝试用 data 注入
+            // G6 的 setItemState 会更新 item 的 state，但 React 组件需要重绘才能感知
+            // Ant Design Graphs 的 RCNode 机制可能会在 state 变化时重新渲染 component
+            // 我们检查 data.data (model.data) 或其他属性
+            // 实际上 G6 3.x/4.x 的 React 节点更新是个难点，如果不生效，我们只能依赖 G6 原生 shape 样式或 refresh
+            // 暂时假设 props 会更新
+             
+            
+            // 自适应宽度计算
+            const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
+            const textWidth = Array.from(String(label)).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+            const nodeWidth = Math.max(textWidth + 50, 140); // 增加固定 padding
+
+            return (
+              <div
+                draggable={!isRoot}
+                onDragStart={(e) => {
+                  if (isRoot) return;
+                  e.stopPropagation();
+                  e.dataTransfer.setData('nodeId', data.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  
+                  // Optional: Set custom drag image
+                  // const img = new Image();
+                  // img.src = '...';
+                  // e.dataTransfer.setDragImage(img, 10, 10);
+                }}
+                onDragOver={(e) => {
+                   e.preventDefault(); // Allow dropping
+                   e.dataTransfer.dropEffect = 'move';
+                }}
+                onDragEnter={(e) => {
+                   e.preventDefault();
+                   // Use direct DOM styling for valid drop targets
+                   if (data.id) {
+                      e.currentTarget.style.boxShadow = '0 0 0 2px rgba(24, 144, 255, 0.8)';
+                      e.currentTarget.style.borderColor = '#1890ff';
+                   }
+                }}
+                onDragLeave={(e) => {
+                   e.preventDefault();
+                   if (data.id) {
+                      // Reset styles based on selection state
+                      e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
+                      e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : '#d9d9d9');
+                   }
+                }}
+                onDrop={(e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   const draggedNodeId = e.dataTransfer.getData('nodeId');
+                   const targetId = data.id;
+                   
+                   // Reset style
+                   e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
+                   e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : '#d9d9d9');
+
+                   if (draggedNodeId && targetId && draggedNodeId !== targetId) {
+                      if (mindMapDataRef.current) {
+                        const newTree = handleMoveNodeLogic(mindMapDataRef.current, draggedNodeId, targetId);
+                        if (newTree) {
+                          handleUpdateBOM(newTree);
+                        } else {
+                           messageApi.warning('无法移动到该位置（可能是因为它是当前节点的子节点）');
+                        }
+                      }
+                   }
+                }}
+                style={{
+                   display: 'flex',
+                   alignItems: 'center',
+                   background: isRoot ? '#722ed1' : '#fff',
+                   border: `1px solid ${isRoot ? '#722ed1' : '#d9d9d9'}`,
+                   borderRadius: 4,
+                   padding: '4px 8px',
+                   minWidth: 'fit-content',
+                   // Add visual cue for selection or active (drop target)
+                   boxShadow: isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : (data.data?.active ? `0 0 0 2px rgba(24, 144, 255, 0.4)` : 'none'),
+                   borderColor: isSelected ? '#722ed1' : (data.data?.active ? '#1890ff' : (isRoot ? '#722ed1' : '#d9d9d9')),
+                }}
+              >
+                {!isRoot && (
+                  <span style={{ marginRight: 6, cursor: 'move', color: '#999', display: 'flex', alignItems: 'center' }}>
+                     <DragOutlined />
+                  </span>
+                )}
+                <span style={{ 
+                    color: isRoot ? '#fff' : '#000', 
+                    fontSize: isRoot ? 16 : 13,
+                    fontWeight: isRoot ? 600 : 400,
+                    whiteSpace: 'nowrap',
+                }}>
+                  {label}
+                </span>
+              </div>
+            );
+            // Replaced RCNode.TextNode with manual DIV to support custom content (drag handle)
+            /*
+            return React.createElement(TextNode, {
+              text: label,
+              width: nodeWidth,
+              height: 36,
+              maxWidth: 800,
+              type: isRoot ? 'filled' : 'outlined',
+              // 根节点紫色
+              color: isRoot ? '#722ed1' : '#1890ff',
+              isSelected,
+              // 显式传入样式
+              style: {
+                fill: isRoot ? '#722ed1' : '#fff',
+                stroke: isRoot ? '#722ed1' : '#d9d9d9',
+                radius: 4,
+                // 确保选中时的效果
+                ...(isSelected ? { stroke: '#722ed1', lineWidth: 3, shadowBlur: 10, shadowColor: 'rgba(114, 46, 209, 0.4)' } : {})
+              },
+              // 文本样式
+              textStyle: {
+                fill: isRoot ? '#fff' : '#000',
+                fontSize: isRoot ? 16 : 13,
+                fontWeight: isRoot ? 600 : 400,
+              }
+            } as any);
+            */
+          },
+        },
       },
       onReady: (graph: any) => {
         mindMapInstanceRef.current = graph;
+
+        // Force enable common behaviors
+        if (graph.addBehaviors) {
+            try {
+              // Ensure default mode has these behaviors
+              graph.addBehaviors(['drag-canvas', 'zoom-canvas'], 'default');
+              graph.setMode('default');
+            } catch (e) {
+              console.warn('Failed to add behaviors', e);
+            }
+        }
+        
+        // 彻底禁用动画
+        if (graph.set) {
+          graph.set('animate', false);
+        }
+
         graph.on('node:click', (e: any) => {
-          const id = e.target?.get?.('id') ?? e.item?.getModel?.()?.id;
+          const id = e.id || e.item?.getID?.() || e.target?.get?.('id');
           if (!id) return;
+          
           const prev = selectedIdInGraphRef.current;
-          const updates: Record<string, string[]> = {};
-          if (prev) updates[prev] = [];
-          updates[id] = ['selected'];
-          graph.setElementState(updates, true).then(() => {
-            selectedIdInGraphRef.current = id;
-            handleNodeSelectRef.current(id);
-          });
+          if (prev && graph.setItemState) {
+            graph.setItemState(prev, 'selected', false);
+          }
+          if (graph.setItemState) {
+            graph.setItemState(id, 'selected', true);
+          }
+          
+          selectedIdInGraphRef.current = id;
+          handleNodeSelectRef.current(id);
+        });
+
+        // 拖拽状态追踪
+        let draggingNodeId: string | null = null;
+        let dropTargetId: string | null = null;
+
+        graph.on('node:dragstart', (e: any) => {
+          if (e.item) {
+             draggingNodeId = e.item.getModel().id;
+          }
+        });
+
+        graph.on('node:dragenter', (e: any) => {
+           if (!draggingNodeId || !e.item) return;
+           const targetId = e.item.getModel().id;
+           if (targetId === draggingNodeId) return;
+           
+           dropTargetId = targetId;
+           // 高亮潜在目标
+           graph.setItemState(e.item, 'active', true);
+        });
+
+        graph.on('node:dragleave', (e: any) => {
+           if (!draggingNodeId || !e.item) return;
+           const targetId = e.item.getModel().id;
+           if (targetId === dropTargetId) {
+              dropTargetId = null;
+           }
+           // 取消高亮
+           graph.setItemState(e.item, 'active', false);
+        });
+
+        // 拖拽结束处理
+        graph.on('node:dragend', (e: any) => {
+          const { item, x, y } = e;
+          if (!item || !item.getModel) return;
+          
+          // 清除所有高亮状态
+          if (dropTargetId) {
+             const targetItem = graph.findById(dropTargetId);
+             if (targetItem) graph.setItemState(targetItem, 'active', false);
+          }
+          
+          // 如果通过 dragenter 找到了明确目标，优先使用
+          let targetId = dropTargetId;
+          
+          // 如果没有通过事件捕获到（比如快速移动），尝试坐标检测兜底
+          if (!targetId) {
+             const nodes = graph.getNodes();
+             for (const node of nodes) {
+                const bbox = node.getBBox();
+                if (node !== item && 
+                    x >= bbox.minX && x <= bbox.maxX && 
+                    y >= bbox.minY && y <= bbox.maxY) {
+                  targetId = node.getModel().id;
+                  break;
+                }
+             }
+          }
+
+          if (targetId && draggingNodeId) {
+            // 执行移动逻辑
+            if (mindMapDataRef.current) {
+              const newTree = handleMoveNodeLogic(mindMapDataRef.current, draggingNodeId, targetId);
+              if (newTree) {
+                handleUpdateBOM(newTree);
+                // 移动成功后不需要refresh，因为数据更新会触发 React 重绘
+                draggingNodeId = null;
+                dropTargetId = null;
+                return;
+              } else {
+                 messageApi.warning('无法移动到该位置（可能是因为它是当前节点的子节点）');
+              }
+            }
+          }
+          
+          // 如果没有有效移动，或移动失败，重置
+          draggingNodeId = null;
+          dropTargetId = null;
+          graph.refresh();
         });
       },
     };
-  }, [mindMapDataSafe]);
+  }, [mindMapDataSafe, selectedNodeId, handleUpdateBOM]); // 增加依赖确保重算配置
 
   if (loading || materialsLoading) {
     return (
@@ -779,7 +1101,15 @@ const BOMDesignerPage: React.FC = () => {
         </Space>
       }
       canvas={
-        <div style={{ width: '100%', height: '100%', position: 'relative', ...GRID_STYLE }}>
+        <div 
+          ref={canvasRef}
+          tabIndex={-1} // Allow div to be focused
+          style={{ width: '100%', height: '100%', position: 'relative', outline: 'none', ...GRID_STYLE }}
+        >
+          {/* 调试标示：如果能看到这个文字和背景色变化，说明代码已更新 */}
+          <div style={{ position: 'absolute', right: 12, top: 12, color: '#722ed1', fontSize: 10, opacity: 0.5, zIndex: 100 }}>
+            Render Mode: High-Performance Optimized
+          </div>
           {/* 画板左上角：常用键盘快捷键 */}
           <div
             style={{
@@ -787,22 +1117,54 @@ const BOMDesignerPage: React.FC = () => {
               left: 12,
               top: 12,
               zIndex: 10,
-              padding: '8px 12px',
-              background: 'rgba(255,255,255,0.92)',
-              borderRadius: 6,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              padding: '12px 16px',
+              background: 'rgba(255,255,255,0.95)',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
               fontSize: 12,
-              color: '#666',
-              lineHeight: 1.8,
+              color: '#333',
+              border: '1px solid rgba(0,0,0,0.05)',
+              backdropFilter: 'blur(4px)',
             }}
           >
-            <div style={{ fontWeight: 500, marginBottom: 4, color: '#333' }}>快捷键</div>
-            <div><kbd style={{ padding: '2px 6px', background: '#f5f5f5', borderRadius: 4 }}>Enter</kbd> 添加同级</div>
-            <div><kbd style={{ padding: '2px 6px', background: '#f5f5f5', borderRadius: 4 }}>Tab</kbd> 添加子级</div>
-            <div><kbd style={{ padding: '2px 6px', background: '#f5f5f5', borderRadius: 4 }}>Delete</kbd> 删除节点</div>
+            <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>操作指南</span>
+              <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>快捷键</span>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 8, columnGap: 16, alignItems: 'center', justifyItems: 'start' }}>
+               <span style={KBD_STYLE}>F2</span>
+               <span>编辑节点物料</span>
+
+               <span style={KBD_STYLE}>Enter</span>
+               <span>保存(编辑时) / 添加同级(画布时)</span>
+
+               <span style={KBD_STYLE}>Tab</span>
+               <span>添加子节点</span>
+
+               <span style={KBD_STYLE}>Esc</span>
+               <span>退出编辑 / 取消选中</span>
+
+               <span>
+                 <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>Z</span>
+               </span>
+               <span>撤销操作</span>
+
+               <span style={{ display: 'flex', gap: 2 }}>
+                 <span style={KBD_STYLE}>↑</span><span style={KBD_STYLE}>↓</span>
+                 <span style={KBD_STYLE}>←</span><span style={KBD_STYLE}>→</span>
+               </span>
+               <span>切换选中节点</span>
+            </div>
+
+            <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px dashed #f0f0f0', color: '#666', fontSize: 11 }}>
+               <div>• 拖拽左侧 <DragOutlined /> 手柄可移动节点</div>
+               <div>• 快捷键需在画布聚焦时生效</div>
+            </div>
           </div>
+
           {mindMapConfig ? (
-            <MemoizedMindMap config={mindMapConfig} />
+            <MindMap key={`bom-mindmap-${mindMapDataSafe?.id || 'empty'}`} {...mindMapConfig} />
           ) : (
             <div style={{
               width: '100%',
@@ -887,7 +1249,10 @@ const BOMDesignerPage: React.FC = () => {
                 label="选择物料"
                 rules={[{ required: true, message: '请选择物料' }]}
               >
+
+
                 <Select
+                  ref={materialSelectRef}
                   placeholder="请选择物料"
                   showSearch
                   loading={materialsLoading}
@@ -903,6 +1268,18 @@ const BOMDesignerPage: React.FC = () => {
                     const mat = materials.find((m) => m.id === id);
                     const base = mat ? ((mat as Record<string, unknown>).base_unit ?? mat.baseUnit) : '';
                     nodeConfigForm.setFieldsValue({ unit: base ?? '' });
+                  }}
+                  onSelect={(val) => {
+                    const mat = materials.find(m => m.id === val);
+                    if (mat) {
+                      const base = (mat as Record<string, unknown>).base_unit ?? mat.baseUnit;
+                      if (base) nodeConfigForm.setFieldsValue({ unit: base });
+                    }
+                    setTimeout(() => {
+                      const qtyInput = document.querySelector('input[id$="_quantity"]');
+                      (qtyInput as HTMLInputElement)?.focus();
+                      (qtyInput as HTMLInputElement)?.select();
+                    }, 50);
                   }}
                 />
               </Form.Item>
@@ -945,11 +1322,37 @@ const BOMDesignerPage: React.FC = () => {
               <Form.Item name="isRequired" label="是否必选" valuePropName="checked">
                 <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
+              
+              {/* Visual Focus Hint */}
+              <div style={{ 
+                margin: '16px 0', 
+                padding: '8px', 
+                background: '#f0f5ff', 
+                border: '1px dashed #adc6ff',
+                borderRadius: 4,
+                fontSize: 12,
+                color: '#2f54eb'
+              }}>
+                提示：编辑完成后请点击保存按钮，或重新点击画布区域以恢复快捷键功能。
+              </div>
+
               <Form.Item>
                 <Space>
                   <Button type="primary" onClick={handleSaveNodeConfig}>保存</Button>
-                  <Button onClick={() => { setSelectedNodeId(null); nodeConfigForm.resetFields(); }}>
-                    取消选择
+                  <Button onClick={() => { 
+                    setSelectedNodeId(null); 
+                    // Clear graph selection
+                    if (mindMapInstanceRef.current && selectedIdInGraphRef.current) {
+                      try {
+                          if (mindMapInstanceRef.current.setItemState) {
+                            mindMapInstanceRef.current.setItemState(selectedIdInGraphRef.current, 'selected', false);
+                          }
+                      } catch(e) {}
+                      selectedIdInGraphRef.current = null;
+                    }
+                    nodeConfigForm.resetFields(); 
+                  }}>
+                    取消选择 (Esc)
                   </Button>
                 </Space>
               </Form.Item>
