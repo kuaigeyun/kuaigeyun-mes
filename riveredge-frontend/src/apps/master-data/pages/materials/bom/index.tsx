@@ -71,9 +71,10 @@ const BOMPage: React.FC = () => {
   
   // 审核Modal状态
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
-  const [approvalBomUuid, setApprovalBomUuid] = useState<string | null>(null);
+  const [approvalGroupKey, setApprovalGroupKey] = useState<string | null>(null);
   const [approvalComment, setApprovalComment] = useState<string>('');
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalRecursive, setApprovalRecursive] = useState(false);
   
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
@@ -85,8 +86,10 @@ const BOMPage: React.FC = () => {
   const [currentMaterialId, setCurrentMaterialId] = useState<number | null>(null);
   const versionFormRef = useRef<ProFormInstance>();
   
-  // 递归审核选项Ref
+  // 递归审核选项Ref（批量操作用）
   const recursiveApprovalRef = useRef<boolean>(false);
+  // 单条反审核的递归选项Ref
+  const recursiveUnapproveRef = useRef<boolean>(false);
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionList, setVersionList] = useState<BOM[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<{ version1: string; version2: string } | null>(null);
@@ -355,26 +358,71 @@ const BOMPage: React.FC = () => {
   };
   
   /**
+   * 处理单条反审核（按组：该 BOM 版本下所有子件行一并反审核，支持可选递归子BOM）
+   */
+  const handleUnapproveGroup = (record: BOMGroupRow) => {
+    const uuids = groupKeyToUuidsRef.current.get(record.groupKey);
+    if (!uuids?.length) {
+      messageApi.error('无法获取该 BOM 记录');
+      return;
+    }
+    recursiveUnapproveRef.current = false;
+    Modal.confirm({
+      title: '反审核确认',
+      content: (
+        <div>
+          <p>确定要反审核 {record.bomCode} 版本 {record.version} 吗？</p>
+          <p style={{ color: '#ff4d4f' }}>反审核后状态将重置为「草稿」，可再次编辑。</p>
+          <div style={{ marginTop: 12 }}>
+            <Checkbox onChange={(e) => { recursiveUnapproveRef.current = e.target.checked; }}>
+              同时反审核子BOM（递归）
+            </Checkbox>
+          </div>
+        </div>
+      ),
+      okText: '确定反审核',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await bomApi.batchApprove(uuids, true, '反审核', recursiveUnapproveRef.current, true);
+          messageApi.success('反审核成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '反审核失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理打开审核Modal
    */
-  const handleOpenApproval = (record: BOM) => {
-    setApprovalBomUuid(record.uuid);
+  const handleOpenApproval = (record: BOMGroupRow) => {
+    setApprovalGroupKey(record.groupKey);
     setApprovalComment('');
+    setApprovalRecursive(false);
     setApprovalModalVisible(true);
   };
-  
+
   /**
-   * 处理审核BOM
+   * 处理审核BOM（支持递归审核子BOM）
    */
   const handleApprove = async (approved: boolean) => {
-    if (!approvalBomUuid) return;
-    
+    if (!approvalGroupKey) return;
+    const uuids = groupKeyToUuidsRef.current.get(approvalGroupKey);
+    if (!uuids?.length) {
+      messageApi.error('无法获取该 BOM 记录');
+      return;
+    }
+
     try {
       setApprovalLoading(true);
-      await bomApi.approve(approvalBomUuid, approved, approvalComment || undefined);
+      await bomApi.batchApprove(uuids, approved, approvalComment || undefined, approvalRecursive, false);
       messageApi.success(approved ? 'BOM审核通过' : 'BOM审核已拒绝');
       setApprovalModalVisible(false);
       setApprovalComment('');
+      setApprovalGroupKey(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '审核失败');
@@ -1283,7 +1331,7 @@ const BOMPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 320,
+      width: 300,
       fixed: 'right',
       render: (_, record: any) => {
         // 子行不显示操作
@@ -1298,43 +1346,82 @@ const BOMPage: React.FC = () => {
           navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
         };
         const isApproved = r.approvalStatus === 'approved';
+        // 更多菜单：按逻辑分组，查看类 → 版本管理 → 其他 → 危险操作
         const moreItems: MenuProps['items'] = [
-          { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
-          { key: 'revise', icon: <BranchesOutlined />, label: '升版 (Revise)', onClick: () => handleRevise(r), disabled: !isApproved },
-          { key: 'copy', icon: <CopyOutlined />, label: '复制', onClick: () => handleCopy(r) },
-          ...(r.approvalStatus !== 'approved'
-            ? [{ key: 'approve', icon: <CheckCircleOutlined />, label: '审核', onClick: () => handleOpenApproval(r) } as MenuProps['items'][0]]
-            : []),
-          { key: 'newVersion', icon: <PlusOutlined />, label: '手工新建版本', onClick: () => handleCreateVersion(r) },
-          { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
-          { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: '用量计算', onClick: () => handleCalculateQuantity(r) },
+          {
+            type: 'group',
+            label: '查看',
+            children: [
+              { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
+              { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: '用量计算', onClick: () => handleCalculateQuantity(r) },
+            ],
+          },
+          {
+            type: 'group',
+            label: '版本管理',
+            children: [
+              { key: 'revise', icon: <BranchesOutlined />, label: '升版', onClick: () => handleRevise(r), disabled: !isApproved },
+              { key: 'newVersion', icon: <PlusOutlined />, label: '手工新建版本', onClick: () => handleCreateVersion(r) },
+              { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
+            ],
+          },
+          {
+            type: 'group',
+            label: '其他',
+            children: [
+              { key: 'copy', icon: <CopyOutlined />, label: '复制', onClick: () => handleCopy(r) },
+            ],
+          },
+          { type: 'divider' },
+          {
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            label: '删除',
+            danger: true,
+            onClick: () => handleDeleteGroup(record),
+            disabled: isApproved,
+          },
         ];
         return (
           <Space wrap size="small">
-            <Button 
-                type="link" 
-                size="small" 
-                icon={<EditOutlined />} 
-                onClick={() => handleEdit(r)}
-                disabled={isApproved}
-                title={isApproved ? '已审核的BOM不可直接编辑，请先升版或反审核' : '编辑'}
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(r)}
+              disabled={isApproved}
+              title={isApproved ? '已审核的BOM不可直接编辑，请先升版或反审核' : '编辑'}
             >
-                编辑
+              编辑
             </Button>
-            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner}>图形化设计</Button>
-            <Button 
-                type="link" 
-                size="small" 
-                danger 
-                icon={<DeleteOutlined />} 
-                onClick={() => handleDeleteGroup(record)}
-                disabled={isApproved}
-                title={isApproved ? '已审核的BOM不可删除' : '删除'}
-            >
-                删除
+            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner} title="图形化设计BOM结构">
+              设计
             </Button>
+            {r.approvalStatus !== 'approved' ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleOpenApproval(record)}
+                title="审核通过"
+              >
+                审核
+              </Button>
+            ) : (
+              <Button
+                type="link"
+                size="small"
+                icon={<UndoOutlined />}
+                onClick={() => handleUnapproveGroup(record)}
+                title="反审核，重置为草稿"
+              >
+                反审核
+              </Button>
+            )}
             <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-              <Button type="link" size="small" icon={<EllipsisOutlined />}>更多</Button>
+              <Button type="link" size="small" icon={<EllipsisOutlined />}>
+                更多
+              </Button>
             </Dropdown>
           </Space>
         );
@@ -2155,6 +2242,7 @@ const BOMPage: React.FC = () => {
         onCancel={() => {
           setApprovalModalVisible(false);
           setApprovalComment('');
+          setApprovalGroupKey(null);
         }}
         footer={[
           <Button
@@ -2184,6 +2272,14 @@ const BOMPage: React.FC = () => {
             placeholder="请输入审核意见"
             maxLength={500}
           />
+          <div style={{ marginTop: 12 }}>
+            <Checkbox
+              checked={approvalRecursive}
+              onChange={(e) => setApprovalRecursive(e.target.checked)}
+            >
+              同时审核子BOM（递归）
+            </Checkbox>
+          </div>
         </div>
       </Modal>
 
