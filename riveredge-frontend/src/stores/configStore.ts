@@ -44,7 +44,7 @@ const DEFAULT_CONFIGS = {
   
   'ui.max_tabs': 20,
   'ui.default_page_size': 20,
-  'ui.table_loading_delay': 200, // 200ms
+  'ui.table_loading_delay': 800, // 800ms，快速请求不显示 loading
   'ui.theme.primary_color': '#1890ff',
   
   'network.timeout': 10000,

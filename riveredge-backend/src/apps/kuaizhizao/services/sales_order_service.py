@@ -567,6 +567,30 @@ class SalesOrderService:
         )
         return self._convert_demand_to_sales_order(demand)
 
+    async def withdraw_sales_order_from_computation(
+        self,
+        tenant_id: int,
+        sales_order_id: int
+    ) -> SalesOrderResponse:
+        """
+        撤回销售订单的需求计算
+
+        将已下推到需求计算的销售订单撤回，清除计算记录及关联。
+        仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+
+        Returns:
+            SalesOrderResponse: 撤回后的销售订单响应
+        """
+        demand = await self.demand_service.withdraw_from_computation(
+            tenant_id=tenant_id,
+            demand_id=sales_order_id
+        )
+        return self._convert_demand_to_sales_order(demand)
+
     async def delete_sales_order(
         self,
         tenant_id: int,

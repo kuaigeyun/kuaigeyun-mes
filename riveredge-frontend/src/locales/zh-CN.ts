@@ -223,6 +223,16 @@ export default {
   'path.system.approval-processes': '审批流程',
   'path.system.approval-processes.designer': '流程设计',
 
+  // 单据状态（对应后端枚举 key，用于 t('documentStatus.draft') 等）
+  'documentStatus.draft': '草稿',
+  'documentStatus.pending_review': '待审核',
+  'documentStatus.audited': '已审核',
+  'documentStatus.rejected': '已驳回',
+  'documentStatus.approved': '已通过',
+  'reviewStatus.pending': '待审核',
+  'reviewStatus.approved': '已审核',
+  'reviewStatus.rejected': '已驳回',
+
   // 通用翻译
   'common.unnamedPage': '未命名页面',
   'common.switchLanguageFailed': '切换语言失败，请重试',

@@ -192,28 +192,43 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             small: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: false, auditRequired: false },
                     production_plan: { enabled: false, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: false },
+                    purchase_order: { enabled: true, auditRequired: false },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: false, auditRequired: false },
                 }
             },
             medium: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: true, auditRequired: false },
                     production_plan: { enabled: true, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             },
             large: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: true },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: true },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             }
         },
@@ -221,28 +236,43 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             small: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: true }, // High value items need delivery audit
                     inventory_check: { enabled: true, auditRequired: false },
                     production_plan: { enabled: true, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: false },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: true },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             },
             medium: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: true },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: true },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: true },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             },
             large: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: true },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: true },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: true },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             }
         },
@@ -250,28 +280,43 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             small: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: true, auditRequired: false }, // Inventory check is crucial for electronics
                     production_plan: { enabled: false, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: false },
+                    purchase_order: { enabled: true, auditRequired: false },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             },
             medium: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             },
             large: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: true },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: true },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             }
         },
@@ -279,28 +324,43 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             small: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: false, auditRequired: false },
                     production_plan: { enabled: true, auditRequired: false }, // Production is core
                     purchase_request: { enabled: false, auditRequired: false }, // Often customer supplied material
+                    purchase_order: { enabled: true, auditRequired: false },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: false, auditRequired: false },
                 }
             },
             medium: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: false },
+                    sales_forecast: { enabled: true, auditRequired: false },
                     sales_delivery: { enabled: true, auditRequired: false },
                     inventory_check: { enabled: true, auditRequired: false },
                     production_plan: { enabled: true, auditRequired: false },
                     purchase_request: { enabled: true, auditRequired: false },
+                    purchase_order: { enabled: true, auditRequired: false },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: false },
                 }
             },
             large: {
                 nodes: {
                     sales_order: { enabled: true, auditRequired: true },
+                    sales_forecast: { enabled: true, auditRequired: true },
                     sales_delivery: { enabled: true, auditRequired: true },
                     inventory_check: { enabled: true, auditRequired: true },
                     production_plan: { enabled: true, auditRequired: true },
                     purchase_request: { enabled: true, auditRequired: true },
+                    purchase_order: { enabled: true, auditRequired: true },
+                    inbound_delivery: { enabled: true, auditRequired: false },
+                    work_order: { enabled: true, auditRequired: false },
+                    quality_inspection: { enabled: true, auditRequired: true },
                 }
             }
         }

@@ -33,10 +33,15 @@ class BusinessConfigService:
         "scale": "small",
         "nodes": {
             "sales_order": {"enabled": True, "auditRequired": False},
+            "sales_forecast": {"enabled": True, "auditRequired": False},
             "sales_delivery": {"enabled": True, "auditRequired": False},
             "inventory_check": {"enabled": False, "auditRequired": False},
             "production_plan": {"enabled": False, "auditRequired": False},
             "purchase_request": {"enabled": True, "auditRequired": False},
+            "purchase_order": {"enabled": True, "auditRequired": False},
+            "inbound_delivery": {"enabled": True, "auditRequired": False},
+            "work_order": {"enabled": True, "auditRequired": False},
+            "quality_inspection": {"enabled": False, "auditRequired": False},
         },
         "modules": {
             "production": True,      # 生产管理（核心模块，不可关闭）
@@ -116,10 +121,15 @@ class BusinessConfigService:
         "scale": "medium",
         "nodes": {
             "sales_order": {"enabled": True, "auditRequired": True},
+            "sales_forecast": {"enabled": True, "auditRequired": True},
             "sales_delivery": {"enabled": True, "auditRequired": True},
             "inventory_check": {"enabled": True, "auditRequired": True},
             "production_plan": {"enabled": True, "auditRequired": True},
             "purchase_request": {"enabled": True, "auditRequired": True},
+            "purchase_order": {"enabled": True, "auditRequired": True},
+            "inbound_delivery": {"enabled": True, "auditRequired": False},
+            "work_order": {"enabled": True, "auditRequired": False},
+            "quality_inspection": {"enabled": True, "auditRequired": True},
         },
         "modules": {
             "production": True,      # 生产管理（核心模块，不可关闭）

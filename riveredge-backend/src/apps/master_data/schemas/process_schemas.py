@@ -465,6 +465,13 @@ class SOPCreate(SOPBase):
     pass
 
 
+class SOPBatchCreateFromRouteRequest(BaseModel):
+    """按工艺路线批量创建 SOP 请求"""
+    process_route_uuid: str = Field(..., description="工艺路线UUID")
+    material_uuids: Optional[List[str]] = Field(None, description="绑定的物料UUID列表（可选）")
+    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组UUID列表（可选）")
+
+
 class SOPUpdate(BaseModel):
     """更新作业程序（SOP） Schema"""
     

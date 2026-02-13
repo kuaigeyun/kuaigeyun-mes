@@ -53,31 +53,37 @@ async def get_material_inventory_info(
     warehouse_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    获取物料的库存信息
+    获取物料的库存信息（用于需求计算可供应量）
 
     Args:
         tenant_id: 租户ID
         material_id: 物料ID
-        warehouse_id: 仓库ID（可选）
+        warehouse_id: 仓库ID（可选，None 时查询所有仓库）
 
     Returns:
         库存信息字典，包含：
-        - available_quantity: 可用数量
-        - total_quantity: 总数量
-        - reserved_quantity: 预留数量
-        - in_transit_quantity: 在途数量
+        - on_hand: 在库实际数量
+        - reserved_quantity: 预留数量（已分配订单/工单）
+        - available_quantity: 可用数量（在库 - 预留）
+        - in_transit_quantity: 在途数量（采购在途 + 生产在制）
+        - total_quantity: 总数量（兼容旧用法，等于 on_hand）
     """
     # TODO: 调用库存管理系统的API获取真实库存数据
+    # 当前为占位实现，待对接 WMS、采购单、工单等
     available_quantity = await get_material_available_quantity(
         tenant_id=tenant_id,
         material_id=material_id,
         warehouse_id=warehouse_id
     )
-    
+    on_hand = available_quantity  # 占位：实际应为在库数量
+    reserved = Decimal("0")
+    in_transit = Decimal("0")
+
     return {
+        "on_hand": float(on_hand),
+        "reserved_quantity": float(reserved),
         "available_quantity": float(available_quantity),
-        "total_quantity": float(available_quantity),
-        "reserved_quantity": 0.0,
-        "in_transit_quantity": 0.0
+        "in_transit_quantity": float(in_transit),
+        "total_quantity": float(on_hand),
     }
 

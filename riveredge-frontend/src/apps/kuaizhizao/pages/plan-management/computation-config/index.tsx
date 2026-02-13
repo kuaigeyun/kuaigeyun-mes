@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Collapse, Row, Col, InputNumber, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Collapse, Row, Col, InputNumber, Input, Switch } from 'antd';
 import { EyeOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -423,6 +423,10 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
     lot_size: 1,
     planning_horizon: 30,
     time_bucket: '周',
+    include_safety_stock: true,
+    include_in_transit: false,
+    include_reserved: false,
+    include_reorder_point: false,
   });
 
   React.useEffect(() => {
@@ -500,6 +504,46 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
                 onChange={(val) => handleChange('reorder_point', val)}
                 min={0}
                 style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>是否考虑安全库存</label>
+              <Switch
+                checked={params.include_safety_stock !== false}
+                onChange={(checked) => handleChange('include_safety_stock', checked)}
+              />
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>是否考虑在途库存</label>
+              <Switch
+                checked={params.include_in_transit === true}
+                onChange={(checked) => handleChange('include_in_transit', checked)}
+              />
+            </div>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>是否考虑预留量</label>
+              <Switch
+                checked={params.include_reserved === true}
+                onChange={(checked) => handleChange('include_reserved', checked)}
+              />
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>是否考虑再订货点</label>
+              <Switch
+                checked={params.include_reorder_point === true}
+                onChange={(checked) => handleChange('include_reorder_point', checked)}
               />
             </div>
           </Col>

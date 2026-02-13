@@ -28,6 +28,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderListResponse, PurchaseOrderItemResponse,
     PurchaseOrderApprove, PurchaseOrderConfirm, PurchaseOrderListParams
 )
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES
 
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
@@ -205,14 +206,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_data = order.__dict__.copy()
             order_data.pop('items', None)
             order_data['items_count'] = items_count
-            # #region agent log
-            try:
-                import json
-                _log = {"hypothesisId": "H3", "location": "purchase_service.list_purchase_orders", "message": "post-fix build list item", "data": {"order_id": order.id, "items_count": items_count}, "timestamp": __import__("time").time()}
-                open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
-            # #endregion
             resp = PurchaseOrderListResponse.model_construct(**order_data)
             resp.items = []
             resp.items_count = items_count
@@ -325,6 +318,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         if order.status != "草稿":
             raise BusinessLogicError("只能提交草稿状态的订单")
+
+        # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
+        from infra.services.business_config_service import BusinessConfigService
+        config_service = BusinessConfigService()
+        audit_required = await config_service.check_audit_required(tenant_id, "purchase_order")
+
+        if not audit_required:
+            # 无需审核，直接设为已审核
+            await order.update_from_dict({
+                'status': DocumentStatus.AUDITED,
+                'review_status': ReviewStatus.APPROVED,
+                'updated_by': submitted_by
+            }).save()
+            return await self.get_purchase_order_by_id(tenant_id, order_id)
 
         # 尝试启动审批流程（采购审批流程增强）
         try:
@@ -493,7 +500,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        if order.status != "已审核":
+        if order.status not in LEGACY_AUDITED_VALUES:
             raise BusinessLogicError("只有已审核的订单才能确认")
 
         await order.update_from_dict({
@@ -562,7 +569,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         # 验证采购单存在且已审核
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in ["已审核", "已确认"]:
+        if order.status not in LEGACY_AUDITED_VALUES + ("已确认",):
             raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
         
         # 获取订单明细

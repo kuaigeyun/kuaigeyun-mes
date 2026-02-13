@@ -248,6 +248,13 @@ export const processRouteApi = {
   },
 
   /**
+   * 获取物料组匹配的工艺路线
+   */
+  getProcessRouteForMaterialGroup: async (materialGroupUuid: string): Promise<ProcessRoute | null> => {
+    return api.get(`/apps/master-data/process/material-groups/${materialGroupUuid}/process-route`);
+  },
+
+  /**
    * 创建子工艺路线
    */
   createSubRoute: async (parentRouteUuid: string, parentOperationUuid: string, data: ProcessRouteCreate): Promise<ProcessRoute> => {
@@ -315,6 +322,17 @@ export const sopApi = {
   },
 
   /**
+   * 按工艺路线批量创建 SOP
+   */
+  batchCreateFromRoute: async (data: {
+    process_route_uuid: string;
+    material_uuids?: string[];
+    material_group_uuids?: string[];
+  }): Promise<SOP[]> => {
+    return api.post('/apps/master-data/process/sop/batch-create-from-route', data);
+  },
+
+  /**
    * 获取SOP列表
    */
   list: async (params?: SOPListParams): Promise<SOP[]> => {
@@ -330,6 +348,18 @@ export const sopApi = {
   ): Promise<SOP | null> => {
     return api.get('/apps/master-data/process/sop/for-material', {
       params: { material_uuid: materialUuid, operation_uuid: operationUuid },
+    });
+  },
+
+  /**
+   * 按工单+工序匹配 SOP（供报工使用，物料+工序 > 物料组+工序 > 仅工序）
+   */
+  getForReporting: async (
+    workOrderId: number,
+    operationId: number
+  ): Promise<SOP | null> => {
+    return api.get('/apps/master-data/process/sop/for-reporting', {
+      params: { work_order_id: workOrderId, operation_id: operationId },
     });
   },
 

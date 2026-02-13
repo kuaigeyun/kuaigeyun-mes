@@ -9,6 +9,7 @@ Author: Luigi Lu
 Date: 2025-01-14
 """
 
+import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -36,8 +37,149 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
 )
+from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+
+
+async def _fetch_config_via_raw_conn(
+    conn: Any,
+    tenant_id: int,
+    material_id: Optional[int],
+    warehouse_id: Optional[int],
+) -> Dict[str, Any]:
+    """在独立连接上查询 ComputationConfig，表不存在时由调用方捕获。"""
+    import json
+    merged: Dict[str, Any] = {}
+    tbl = "apps_kuaizhizao_computation_configs"
+    # 按优先级查询：global, warehouse, material, material_warehouse
+    scopes = [
+        ("global", None, None),
+        ("warehouse", None, warehouse_id),
+        ("material", material_id, None),
+        ("material_warehouse", material_id, warehouse_id),
+    ]
+    for scope, mid, wid in scopes:
+        if scope == "material_warehouse" and (not mid or not wid):
+            continue
+        if scope == "material" and not mid:
+            continue
+        if scope == "warehouse" and not wid:
+            continue
+        if scope == "global":
+            row = await conn.fetchrow(
+                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND is_active=true ORDER BY priority DESC LIMIT 1",
+                tenant_id, scope
+            )
+        elif scope == "material":
+            row = await conn.fetchrow(
+                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND material_id=$3 AND is_active=true ORDER BY priority DESC LIMIT 1",
+                tenant_id, scope, mid
+            )
+        elif scope == "warehouse":
+            row = await conn.fetchrow(
+                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND warehouse_id=$3 AND is_active=true ORDER BY priority DESC LIMIT 1",
+                tenant_id, scope, wid
+            )
+        else:
+            row = await conn.fetchrow(
+                f"SELECT computation_params FROM {tbl} WHERE tenant_id=$1 AND config_scope=$2 AND material_id=$3 AND warehouse_id=$4 AND is_active=true ORDER BY priority DESC LIMIT 1",
+                tenant_id, scope, mid, wid
+            )
+        if row and row.get("computation_params"):
+            params = row["computation_params"]
+            merged.update(params if isinstance(params, dict) else (json.loads(params) if params else {}))
+    return merged
+
+
+async def _get_material_safety_reorder(
+    tenant_id: int,
+    material: Any,
+    material_id: int,
+    computation_params: Dict[str, Any],
+) -> tuple[float, float]:
+    """
+    从物料主数据、ComputationConfig 或计算参数获取安全库存、再订货点。
+    优先级：computation_params > material.defaults > ComputationConfig > 0
+    """
+    safety = 0.0
+    reorder = 0.0
+
+    # 1. 从 ComputationConfig 获取（物料/全局），表不存在时跳过
+    # 使用独立连接查询，表不存在时失败不影响主事务，避免 TransactionManagementError
+    try:
+        from infra.infrastructure.database.database import get_db_connection
+        conn = await get_db_connection()
+        try:
+            config_params = await _fetch_config_via_raw_conn(
+                conn, tenant_id, material_id, warehouse_id=None
+            )
+            if config_params:
+                safety = float(config_params.get("safety_stock", 0))
+                reorder = float(config_params.get("reorder_point", 0))
+        finally:
+            await conn.close()
+    except Exception:
+        pass  # 表不存在或查询失败时跳过，使用 material.defaults / computation_params
+
+    # 2. 从物料 defaults 覆盖
+    if material.defaults:
+        inv = material.defaults.get("inventory") or material.defaults
+        if isinstance(inv, dict):
+            if inv.get("safety_stock") is not None or inv.get("safety_stock_level") is not None:
+                safety = float(inv.get("safety_stock") or inv.get("safety_stock_level") or 0)
+            if inv.get("reorder_point") is not None:
+                reorder = float(inv.get("reorder_point", 0))
+
+    # 3. 从本次计算的 computation_params 覆盖
+    if computation_params:
+        if "safety_stock" in computation_params:
+            safety = float(computation_params.get("safety_stock", safety))
+        if "reorder_point" in computation_params:
+            reorder = float(computation_params.get("reorder_point", reorder))
+
+    return safety, reorder
+
+
+def _compute_supply_and_net(
+    inventory_info: Dict[str, Any],
+    safety_stock: float,
+    reorder_point: float,
+    gross_requirement: float,
+    computation_params: Dict[str, Any],
+) -> tuple[float, float]:
+    """
+    按可配置参数计算可供应量与净需求。
+    公式：可供应量 = 可用库存 + [在途] - [安全库存]
+    净需求 = max(0, 毛需求 - 可供应量)
+    若 include_reorder_point：当可供应量 < 再订货点时，净需求至少补足到再订货点
+    """
+    include_safety = computation_params.get("include_safety_stock", True)
+    include_in_transit = computation_params.get("include_in_transit", False)
+    include_reserved = computation_params.get("include_reserved", False)
+    include_reorder = computation_params.get("include_reorder_point", False)
+
+    # available = 在库 - 预留；include_reserved 为 true 时用 available（考虑预留），否则用 on_hand（在库）
+    if include_reserved:
+        available = float(inventory_info.get("available_quantity", 0))
+    else:
+        available = float(inventory_info.get("on_hand", inventory_info.get("available_quantity", 0)))
+    in_transit = float(inventory_info.get("in_transit_quantity", 0))
+
+    supply = available
+    if include_in_transit:
+        supply += in_transit
+    if include_safety:
+        supply -= safety_stock
+
+    net_base = max(0.0, gross_requirement - supply)
+    if include_reorder and reorder_point > 0 and supply < reorder_point:
+        net_reorder = max(0.0, reorder_point - supply)
+        net_requirement = max(net_base, net_reorder)
+    else:
+        net_requirement = net_base
+
+    return supply, net_requirement
 
 
 class DemandComputationService:
@@ -254,13 +396,6 @@ class DemandComputationService:
         from tortoise.expressions import Q
         from datetime import datetime
         
-        # #region agent log
-        try:
-            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                _f.write('{"location":"demand_computation_service.py:list_computations","message":"before_filter","data":{"tenant_id":%s},"timestamp":%d,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"H1"}\n' % (repr(tenant_id), __import__("time").time() * 1000))
-        except Exception:
-            pass
-        # #endregion
         query = DemandComputation.filter(tenant_id=tenant_id)
         
         if demand_id:
@@ -323,22 +458,31 @@ class DemandComputationService:
         Returns:
             DemandComputationResponse: 计算响应
         """
-        async with in_transaction():
-            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
-            if not computation:
-                raise NotFoundError(f"需求计算不存在: {computation_id}")
-            
-            # 只能执行"进行中"状态的计算
-            if computation.computation_status != "进行中":
-                raise BusinessLogicError(f"只能执行进行中状态的计算，当前状态: {computation.computation_status}")
-            
-            # 更新计算状态为计算中
-            await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                computation_status="计算中",
-                computation_start_time=datetime.now()
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+        # 允许执行：进行中（待执行）或 失败（重试）
+        if computation.computation_status not in ("进行中", "失败"):
+            raise BusinessLogicError(
+                f"只能执行进行中或失败状态的计算，当前状态: {computation.computation_status}"
             )
-            
-            try:
+
+        try:
+            async with in_transaction():
+                # 失败状态重试时，先删除可能存在的旧明细（事务回滚应已清理，此处兜底）
+                if computation.computation_status == "失败":
+                    await DemandComputationItem.filter(
+                        tenant_id=tenant_id,
+                        computation_id=computation_id
+                    ).delete()
+
+                # 更新计算状态为计算中
+                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                    computation_status="计算中",
+                    computation_start_time=datetime.now()
+                )
+
                 # 根据计算类型执行不同的计算逻辑
                 if computation.computation_type == "MRP":
                     await self._execute_mrp_computation(tenant_id, computation)
@@ -346,24 +490,37 @@ class DemandComputationService:
                     await self._execute_lrp_computation(tenant_id, computation)
                 else:
                     raise ValidationError(f"不支持的计算类型: {computation.computation_type}")
-                
-                # 更新计算状态为完成
+
+                # 更新计算状态为完成，清除失败时的错误信息
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
                     computation_status="完成",
-                    computation_end_time=datetime.now()
-                )
-                
-            except Exception as e:
-                logger.error(f"执行需求计算失败: {e}")
-                # 更新计算状态为失败
-                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
-                    computation_status="失败",
                     computation_end_time=datetime.now(),
-                    error_message=str(e)
+                    error_message=None,
                 )
-                raise
-            
+
             return await self.get_computation_by_id(tenant_id, computation_id)
+
+        except Exception as e:
+            logger.error(f"执行需求计算失败: {e}")
+            # 更新为失败状态：使用独立连接避免复用已终止事务的连接导致 TransactionManagementError
+            try:
+                await asyncio.sleep(0)  # 让出控制权，确保连接池有机会回收/重置连接
+                from infra.infrastructure.database.database import get_db_connection
+                conn = await get_db_connection()
+                try:
+                    now = datetime.now()
+                    err_msg = str(e).replace("'", "''")[:2000]  # 转义并截断
+                    await conn.execute(
+                        """UPDATE apps_kuaizhizao_demand_computations
+                           SET computation_status=$1, computation_end_time=$2, error_message=$3
+                           WHERE tenant_id=$4 AND id=$5""",
+                        "失败", now, err_msg, tenant_id, computation_id
+                    )
+                finally:
+                    await conn.close()
+            except Exception as update_err:
+                logger.warning(f"更新失败状态时出错: {update_err}")
+            raise
     
     async def recompute_computation(
         self,
@@ -394,6 +551,7 @@ class DemandComputationService:
                 error_message=None,
                 computation_summary=None,
             )
+        # 在事务外调用 execute，避免嵌套事务导致 TransactionManagementError
         return await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
     
     async def compare_computations(
@@ -534,7 +692,6 @@ class DemandComputationService:
         from apps.master_data.models.material import Material
         
         logger.info(f"执行MRP计算: {computation.computation_code}")
-        
         # 1. 获取需求明细（支持多需求合并）
         demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
         demand_items = []
@@ -549,7 +706,7 @@ class DemandComputationService:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
         
-        # 2. 计算参数
+        # 2. 计算参数（库存相关开关）
         computation_params = computation.computation_params or {}
         include_safety_stock = computation_params.get("include_safety_stock", True)
         
@@ -708,12 +865,30 @@ class DemandComputationService:
             # 获取物料来源配置
             source_config = await get_material_source_config(tenant_id, material_id) or {}
             
-            # 计算毛需求和净需求
+            # 获取库存信息与安全库存/再订货点
+            inventory_info = await get_material_inventory_info(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                warehouse_id=None,
+            )
+            safety_stock, reorder_point = await _get_material_safety_reorder(
+                tenant_id=tenant_id,
+                material=material,
+                material_id=material_id,
+                computation_params=computation_params,
+            )
+            supply_qty, net_requirement = _compute_supply_and_net(
+                inventory_info=inventory_info,
+                safety_stock=safety_stock,
+                reorder_point=reorder_point,
+                gross_requirement=req_info["required_quantity"],
+                computation_params=computation_params,
+            )
+            available_inventory = float(inventory_info.get("available_quantity", 0))
+            in_transit_qty = float(inventory_info.get("in_transit_quantity", 0))
+            reserved_qty = float(inventory_info.get("reserved_quantity", 0))
             gross_requirement = req_info["required_quantity"]
-            available_inventory = 0.0  # TODO: 从库存系统获取
-            safety_stock = 0.0  # TODO: 从物料主数据获取
-            net_requirement = max(0.0, gross_requirement - available_inventory)
-            
+
             # 根据物料来源类型确定建议行动
             suggested_work_order_quantity = Decimal(0)
             suggested_purchase_order_quantity = Decimal(0)
@@ -746,6 +921,7 @@ class DemandComputationService:
                 net_requirement=Decimal(str(net_requirement)),
                 gross_requirement=Decimal(str(gross_requirement)),
                 safety_stock=Decimal(str(safety_stock)) if include_safety_stock else None,
+                reorder_point=Decimal(str(reorder_point)) if computation_params.get("include_reorder_point", False) else None,
                 suggested_work_order_quantity=suggested_work_order_quantity if suggested_work_order_quantity > 0 else None,
                 suggested_purchase_order_quantity=suggested_purchase_order_quantity if suggested_purchase_order_quantity > 0 else None,
                 material_source_type=source_type,
@@ -753,6 +929,7 @@ class DemandComputationService:
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
                 demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
+                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},  # 库存追溯
             )
     
     async def _execute_lrp_computation(
@@ -939,11 +1116,31 @@ class DemandComputationService:
             # 获取物料来源配置
             source_config = await get_material_source_config(tenant_id, material_id) or {}
             
-            # 计算净需求
+            # 获取库存信息与安全库存/再订货点，计算净需求
+            computation_params = computation.computation_params or {}
+            inventory_info = await get_material_inventory_info(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                warehouse_id=None,
+            )
+            safety_stock, reorder_point = await _get_material_safety_reorder(
+                tenant_id=tenant_id,
+                material=material,
+                material_id=material_id,
+                computation_params=computation_params,
+            )
+            _, net_requirement = _compute_supply_and_net(
+                inventory_info=inventory_info,
+                safety_stock=safety_stock,
+                reorder_point=reorder_point,
+                gross_requirement=req_info["required_quantity"],
+                computation_params=computation_params,
+            )
+            available_inventory = float(inventory_info.get("available_quantity", 0))
+            in_transit_qty = float(inventory_info.get("in_transit_quantity", 0))
+            reserved_qty = float(inventory_info.get("reserved_quantity", 0))
             gross_requirement = req_info["required_quantity"]
-            available_inventory = 0.0  # TODO: 从库存系统获取
-            net_requirement = max(0.0, gross_requirement - available_inventory)
-            
+
             # 计算时间安排
             delivery_date = req_info.get("delivery_date")
             production_start_date = None
@@ -1017,6 +1214,7 @@ class DemandComputationService:
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
                 demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
+                detail_results={"in_transit_quantity": in_transit_qty, "reserved_quantity": reserved_qty},  # 库存追溯
             )
     
     async def update_computation(

@@ -83,12 +83,16 @@ async def get_bom_items_by_material_id(
     if not bom_code:
         return []
     
-    # 获取该bom_code下的所有BOM明细
-    items = await BOM.filter(
+    # 获取该bom_code下的所有BOM明细（限定同一主物料，确保子物料完整）
+    items_query = BOM.filter(
         tenant_id=tenant_id,
+        material_id=material_id,
         bom_code=bom_code,
         deleted_at__isnull=True
-    ).prefetch_related("component").order_by("priority", "id").all()
+    )
+    if only_approved:
+        items_query = items_query.filter(approval_status="approved")
+    items = await items_query.prefetch_related("component").order_by("priority", "id").all()
     return items
 
 

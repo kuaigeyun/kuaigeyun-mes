@@ -322,6 +322,11 @@ const MaterialsManagementPage: React.FC = () => {
       // 清除URL参数
       setSearchParams({}, { replace: true })
     }
+    if (materialUuid && action === 'edit') {
+      // 自动打开物料编辑（从BOM设计器等页面快捷跳转）
+      handleEditMaterial({ uuid: materialUuid } as Material)
+      setSearchParams({}, { replace: true })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams])
 

@@ -288,6 +288,33 @@ async def push_sales_order_to_computation(
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售订单到需求计算失败")
 
 
+@router.post("/{sales_order_id}/withdraw-from-computation", response_model=SalesOrderResponse, summary="撤回销售订单的需求计算")
+async def withdraw_sales_order_from_computation(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    撤回销售订单的需求计算
+
+    将已下推到需求计算的销售订单撤回，清除计算记录及关联。
+    仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+    """
+    try:
+        result = await sales_order_service.withdraw_sales_order_from_computation(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"撤回销售订单需求计算失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="撤回销售订单需求计算失败")
+
+
 @router.post("/{sales_order_id}/confirm", response_model=SalesOrderResponse, summary="确认销售订单")
 async def confirm_sales_order(
     sales_order_id: int = Path(..., description="销售订单ID"),

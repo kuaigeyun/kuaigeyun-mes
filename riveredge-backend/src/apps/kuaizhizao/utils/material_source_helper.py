@@ -224,34 +224,35 @@ async def expand_bom_with_source_control(
         logger.debug(f"跳过虚拟件，直接展开下层物料，物料ID: {material_id}, 物料编码: {material.main_code}")
         
         # 获取虚拟件的BOM
-        bom_items = await BOM.filter(
+        phantom_bom_query = BOM.filter(
             tenant_id=tenant_id,
             material_id=material_id,
-            approval_status="approved" if only_approved else None,
             deleted_at__isnull=True
-        ).prefetch_related("component").all()
+        )
+        if only_approved:
+            phantom_bom_query = phantom_bom_query.filter(approval_status="approved")
+        bom_items = await phantom_bom_query.prefetch_related("component").all()
         
         if not bom_items:
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
             return []
         
         # 获取最新版本的bom_code
-        latest_bom = await BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            approval_status="approved" if only_approved else None,
-            deleted_at__isnull=True
-        ).order_by("-version", "-created_at").first()
+        latest_bom = await phantom_bom_query.order_by("-version", "-created_at").first()
         
         if not latest_bom or not latest_bom.bom_code:
             return []
         
-        # 获取该bom_code下的所有BOM明细
-        bom_items = await BOM.filter(
+        # 获取该bom_code下的所有BOM明细（限定同一主物料）
+        bom_items_query = BOM.filter(
             tenant_id=tenant_id,
+            material_id=material_id,
             bom_code=latest_bom.bom_code,
             deleted_at__isnull=True
-        ).prefetch_related("component").order_by("priority", "id").all()
+        )
+        if only_approved:
+            bom_items_query = bom_items_query.filter(approval_status="approved")
+        bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
         
         # 递归展开下层物料
         requirements = []
@@ -300,34 +301,35 @@ async def expand_bom_with_source_control(
         return requirements
     
     # 非虚拟件，正常展开BOM
-    bom_items = await BOM.filter(
+    make_bom_query = BOM.filter(
         tenant_id=tenant_id,
         material_id=material_id,
-        approval_status="approved" if only_approved else None,
         deleted_at__isnull=True
-    ).prefetch_related("component").all()
+    )
+    if only_approved:
+        make_bom_query = make_bom_query.filter(approval_status="approved")
+    bom_items = await make_bom_query.prefetch_related("component").all()
     
     if not bom_items:
         # 没有BOM，返回空列表
         return []
     
     # 获取最新版本的bom_code
-    latest_bom = await BOM.filter(
-        tenant_id=tenant_id,
-        material_id=material_id,
-        approval_status="approved" if only_approved else None,
-        deleted_at__isnull=True
-    ).order_by("-version", "-created_at").first()
+    latest_bom = await make_bom_query.order_by("-version", "-created_at").first()
     
     if not latest_bom or not latest_bom.bom_code:
         return []
     
-    # 获取该bom_code下的所有BOM明细
-    bom_items = await BOM.filter(
+    # 获取该bom_code下的所有BOM明细（限定同一主物料）
+    bom_items_query = BOM.filter(
         tenant_id=tenant_id,
+        material_id=material_id,
         bom_code=latest_bom.bom_code,
         deleted_at__isnull=True
-    ).prefetch_related("component").order_by("priority", "id").all()
+    )
+    if only_approved:
+        bom_items_query = bom_items_query.filter(approval_status="approved")
+    bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
     
     requirements = []
     for bom_item in bom_items:
@@ -373,12 +375,14 @@ async def expand_bom_with_source_control(
             })
             
             # 如果子物料还有BOM，递归展开
-            child_bom_count = await BOM.filter(
+            child_bom_query = BOM.filter(
                 tenant_id=tenant_id,
                 material_id=component.id,
-                approval_status="approved" if only_approved else None,
                 deleted_at__isnull=True
-            ).count()
+            )
+            if only_approved:
+                child_bom_query = child_bom_query.filter(approval_status="approved")
+            child_bom_count = await child_bom_query.count()
             
             if child_bom_count > 0:
                 child_requirements = await expand_bom_with_source_control(
