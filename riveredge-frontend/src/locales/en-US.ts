@@ -222,6 +222,16 @@ export default {
   'path.system.approval-processes': 'Approval Processes',
   'path.system.approval-processes.designer': 'Process Designer',
 
+  // Document status (maps to backend enum keys, use t('documentStatus.draft') etc.)
+  'documentStatus.draft': 'Draft',
+  'documentStatus.pending_review': 'Pending Review',
+  'documentStatus.audited': 'Audited',
+  'documentStatus.rejected': 'Rejected',
+  'documentStatus.approved': 'Approved',
+  'reviewStatus.pending': 'Pending',
+  'reviewStatus.approved': 'Approved',
+  'reviewStatus.rejected': 'Rejected',
+
   // Common translations
   'common.unnamedPage': 'Unnamed Page',
   'common.switchLanguageFailed': 'Failed to switch language, please try again',

@@ -10,8 +10,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, message, Dropdown } from 'antd';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProDescriptions, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, message, Dropdown, Collapse, Switch } from 'antd';
 import { PlayCircleOutlined, EyeOutlined, ReloadOutlined, FileAddOutlined, DownOutlined, ProjectOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -31,6 +31,37 @@ import {
   DemandComputationItem
 } from '../../../services/demand-computation';
 import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand';
+
+const { Panel } = Collapse;
+
+/** 库存参数开关表单（新建计算时使用） */
+const InventoryParamsForm: React.FC<{ value?: Record<string, any>; onChange?: (v: Record<string, any>) => void }> = ({ value, onChange }) => {
+  const params = value || {
+    include_safety_stock: true,
+    include_in_transit: false,
+    include_reserved: false,
+    include_reorder_point: false,
+  };
+  const handleChange = (key: string, val: boolean) => {
+    onChange?.({ ...params, [key]: val });
+  };
+  return (
+    <Collapse ghost>
+      <Panel header="库存计算选项" key="inventory">
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+          <dt style={{ margin: 0 }}>是否考虑安全库存</dt>
+          <dd style={{ margin: 0 }}><Switch checked={params.include_safety_stock !== false} onChange={(c) => handleChange('include_safety_stock', c)} /></dd>
+          <dt style={{ margin: 0 }}>是否考虑在途库存</dt>
+          <dd style={{ margin: 0 }}><Switch checked={params.include_in_transit === true} onChange={(c) => handleChange('include_in_transit', c)} /></dd>
+          <dt style={{ margin: 0 }}>是否考虑预留量</dt>
+          <dd style={{ margin: 0 }}><Switch checked={params.include_reserved === true} onChange={(c) => handleChange('include_reserved', c)} /></dd>
+          <dt style={{ margin: 0 }}>是否考虑再订货点</dt>
+          <dd style={{ margin: 0 }}><Switch checked={params.include_reorder_point === true} onChange={(c) => handleChange('include_reorder_point', c)} /></dd>
+        </dl>
+      </Panel>
+    </Collapse>
+  );
+};
 
 const DemandComputationPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -584,6 +615,18 @@ const DemandComputationPage: React.FC = () => {
             rules={[{ required: true, message: '请至少选择一个需求' }]}
             tooltip="多需求合并时，相同物料的需求数量会自动汇总；有订单需求时自动选择「按订单计算」模式"
           />
+          <ProForm.Item
+            name="computation_params"
+            label="计算参数"
+            initialValue={{
+              include_safety_stock: true,
+              include_in_transit: false,
+              include_reserved: false,
+              include_reorder_point: false,
+            }}
+          >
+            <InventoryParamsForm />
+          </ProForm.Item>
           <ProFormTextArea
             name="notes"
             label="备注"

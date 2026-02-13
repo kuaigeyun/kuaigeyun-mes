@@ -458,9 +458,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   /**
    * 延迟显示 loading 的时间（毫秒）
    * 当请求在 delay 内完成时不显示 loading，避免快速请求时的闪烁
-   * 设为 0 时不延迟，使用 ProTable 默认行为
+   * 设为 0 时不延迟。仅当 showLoading 为 true 时生效
    */
   loadingDelay?: number
+  /**
+   * 是否显示加载动画/骨架屏（默认：false，尽量不使用以提升感知性能）
+   * 为 false 时表格直接展示数据，无 loading 遮罩
+   */
+  showLoading?: boolean
 }
 
 /**
@@ -509,6 +514,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   statsViewConfig,
   touchViewConfig,
   loadingDelay: loadingDelayProp,
+  showLoading = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   ...restProps
@@ -525,7 +531,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 表格密度优先级：User Preference > Default('large')
   const defaultSize = getPreference('ui.default_table_density', 'large') as 'large' | 'middle' | 'small'
 
-  const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 200)
+  const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 800)
 
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<
@@ -723,8 +729,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     sort: Record<string, 'ascend' | 'descend' | null>,
     filter: Record<string, React.ReactText[] | null>
   ) => {
-    // ⭐ 延迟 loading：仅在 loadingDelay 毫秒后才显示
-    if (loadingDelay > 0) {
+    // ⭐ 延迟 loading：仅在 showLoading 且 loadingDelay 毫秒后才显示
+    if (showLoading && loadingDelay > 0) {
       isLoadingRef.current = true
       if (loadingDelayTimerRef.current) {
         clearTimeout(loadingDelayTimerRef.current)
@@ -808,7 +814,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     return result
     } finally {
-      if (loadingDelay > 0) {
+      if (showLoading && loadingDelay > 0) {
         isLoadingRef.current = false
         if (loadingDelayTimerRef.current) {
           clearTimeout(loadingDelayTimerRef.current)
@@ -1341,13 +1347,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               formRef={formRef}
               columns={columns}
               request={handleRequest}
+              debounceTime={300}
               rowKey={rowKey}
               search={false}
               className="uni-table-pro-table"
               style={{ margin: 0, padding: 0 }}
               bordered={false}
               cardBordered={true}
-              {...(loadingDelay > 0 && { loading: showDelayedLoading })}
+              {...(!showLoading ? { loading: false } : loadingDelay > 0 ? { loading: showDelayedLoading } : {})}
               size={defaultSize}
               onSizeChange={(size) => {
                 // 更新用户偏好中的默认表格密度

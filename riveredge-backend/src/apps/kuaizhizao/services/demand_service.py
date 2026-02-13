@@ -451,6 +451,105 @@ class DemandService(AppBaseService[Demand]):
             
             return await self.get_demand_by_id(tenant_id, demand_id)
 
+    async def withdraw_from_computation(
+        self,
+        tenant_id: int,
+        demand_id: int
+    ) -> DemandResponse:
+        """
+        撤回需求计算
+
+        将已下推到需求计算的需求撤回，清除计算记录及关联。仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID
+
+        Returns:
+            DemandResponse: 撤回后的需求响应
+
+        Raises:
+            NotFoundError: 需求不存在
+            BusinessLogicError: 需求状态不允许撤回或已有下游单据
+        """
+        from apps.kuaizhizao.models.demand_computation import DemandComputation
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition", "production_plan")
+
+        async with in_transaction():
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+            if not demand:
+                raise NotFoundError("需求", str(demand_id))
+
+            if demand.status != DemandStatus.AUDITED:
+                raise BusinessLogicError(f"只能撤回已审核状态的需求计算，当前状态: {demand.status}")
+
+            if not demand.pushed_to_computation:
+                return await self.get_demand_by_id(tenant_id, demand_id)
+
+            computation = None
+            if demand.computation_id:
+                computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=demand.computation_id)
+            if not computation:
+                computation = await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).first()
+            if not computation:
+                all_computations = await DemandComputation.filter(tenant_id=tenant_id).all()
+                for c in all_computations:
+                    if c.demand_ids and demand_id in c.demand_ids:
+                        computation = c
+                        break
+
+            if computation:
+                demand_ids_in_comp = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+                if len(demand_ids_in_comp) > 1:
+                    raise BusinessLogicError(
+                        "该需求参与合并计算，无法单独撤回。请在需求计算页面处理合并计算。"
+                    )
+
+                has_downstream = await DocumentRelation.filter(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id=computation.id,
+                    target_type__in=DOWNSTREAM_TYPES
+                ).exists()
+
+                if has_downstream:
+                    raise BusinessLogicError(
+                        "需求计算已下推工单/采购单等，无法撤回。请先处理下游单据。"
+                    )
+
+                await DemandComputationItem.filter(
+                    tenant_id=tenant_id,
+                    computation_id=computation.id
+                ).delete()
+                await DemandComputation.filter(tenant_id=tenant_id, id=computation.id).delete()
+                await DocumentRelation.filter(
+                    tenant_id=tenant_id,
+                    source_type="demand",
+                    source_id=demand_id,
+                    target_type="demand_computation",
+                    target_id=computation.id
+                ).delete()
+                await DocumentRelation.filter(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id=computation.id,
+                    target_type="demand",
+                    target_id=demand_id
+                ).delete()
+
+            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+                pushed_to_computation=False,
+                computation_id=None,
+                computation_code=None,
+                updated_at=datetime.now()
+            )
+
+            logger.info(f"需求 {demand_id} 已撤回需求计算")
+            return await self.get_demand_by_id(tenant_id, demand_id)
+
     async def unapprove_demand(
         self, 
         tenant_id: int, 
@@ -482,10 +581,14 @@ class DemandService(AppBaseService[Demand]):
             # 只能撤销审核已审核或已驳回状态的需求
             if demand.status not in [DemandStatus.AUDITED, DemandStatus.REJECTED]:
                 raise BusinessLogicError(f"只能撤销审核已审核或已驳回状态的需求，当前状态: {demand.status}")
-            
-            # 如果已经下推到运算，不允许撤销审核
+
+            # 若已下推计算，先尝试撤回计算（无下游时自动撤回）
             if demand.pushed_to_computation:
-                raise BusinessLogicError("需求已下推到运算，不允许撤销审核")
+                try:
+                    await self.withdraw_from_computation(tenant_id=tenant_id, demand_id=demand_id)
+                    demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+                except BusinessLogicError:
+                    raise
 
             # 使用状态流转服务记录
             try:
@@ -541,20 +644,25 @@ class DemandService(AppBaseService[Demand]):
         """
         today = datetime.now().strftime("%Y%m%d")
         
-        # 根据需求类型确定前缀
+        # 根据需求类型确定前缀（与 code_rule_pages 中 kuaizhizao-sales-order/forecast 的 rule_code 一致）
         if demand_type == "sales_forecast":
             prefix = f"SF-{today}"
-            code_key = "DEMAND_SALES_FORECAST_CODE"
+            code_key = "SALES_FORECAST_CODE"
         elif demand_type == "sales_order":
             prefix = f"SO-{today}"
-            code_key = "DEMAND_SALES_ORDER_CODE"
+            code_key = "SALES_ORDER_CODE"
         else:
             raise ValidationError(f"无效的需求类型: {demand_type}")
         
-        # 生成编码
-        code = await self.generate_code(tenant_id, code_key, prefix=prefix)
-        
-        return code
+        # 生成编码（规则不存在时使用备用格式）
+        try:
+            code = await self.generate_code(tenant_id, code_key, prefix=prefix)
+            return code
+        except ValidationError as e:
+            logger.warning(f"编码规则 {code_key} 不可用，使用备用格式: {e}")
+            import uuid
+            suffix = uuid.uuid4().hex[:6].upper()
+            return f"{prefix}-{suffix}"
 
     async def add_demand_item(
         self, 

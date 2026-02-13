@@ -19,7 +19,7 @@ from apps.master_data.schemas.process_schemas import (
     ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult,
     ProcessRouteTemplateCreate, ProcessRouteTemplateUpdate, ProcessRouteTemplateResponse,
     ProcessRouteTemplateVersionCreate, ProcessRouteFromTemplateCreate,
-    SOPCreate, SOPUpdate, SOPResponse
+    SOPCreate, SOPUpdate, SOPResponse, SOPBatchCreateFromRouteRequest
 )
 from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeCreate, ProcessRouteChangeUpdate, ProcessRouteChangeResponse,
@@ -590,6 +590,27 @@ async def get_process_route_for_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.get("/material-groups/{material_group_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="获取物料组匹配的工艺路线")
+async def get_process_route_for_material_group(
+    material_group_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取物料组匹配的工艺路线
+    
+    物料组通过 process_route_id 直接绑定工艺路线。
+    
+    - **material_group_uuid**: 物料组UUID
+    
+    返回匹配的工艺路线，如果没有则返回null。
+    """
+    try:
+        return await ProcessService.get_process_route_for_material_group(tenant_id, material_group_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
 # ==================== 子工艺路线管理相关接口 ====================
 
 @router.post("/routes/{parent_route_uuid}/sub-routes", response_model=ProcessRouteResponse, summary="创建子工艺路线")
@@ -792,6 +813,27 @@ async def get_process_route_tree(
 
 
 # ==================== 作业程序（SOP）相关接口 ====================
+# 注意：/sop/batch-create-from-route、/sop/for-material 等具体路径必须定义在 /sop/{sop_uuid} 之前，
+# 否则会被路径参数匹配导致 405 Method Not Allowed
+
+@router.post("/sop/batch-create-from-route", response_model=List[SOPResponse], summary="按工艺路线批量创建 SOP")
+async def batch_create_sops_from_route(
+    data: SOPBatchCreateFromRouteRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    按工艺路线批量创建 SOP 草稿
+    
+    为工艺路线中的每道工序创建一个 SOP，自动绑定物料/物料组。
+    """
+    try:
+        return await ProcessService.batch_create_sops_from_route(tenant_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 @router.post("/sop", response_model=SOPResponse, summary="创建作业程序（SOP）")
 async def create_sop(
@@ -857,10 +899,30 @@ async def get_sop_for_material(
 ):
     """
     按物料匹配 SOP，供开工单时「以 SOP 为依据产生流程单据」使用。
-    匹配规则：具体物料优先于物料组；无匹配时返回 null。
+    匹配规则：具体物料优先于物料组；无匹配时 fallback 仅按工序。
     """
     return await ProcessService.get_sop_for_material(
         tenant_id, material_uuid, operation_uuid=operation_uuid
+    )
+
+
+@router.get(
+    "/sop/for-reporting",
+    response_model=Optional[SOPResponse],
+    summary="按工单+工序匹配 SOP（报工依据）",
+)
+async def get_sop_for_reporting(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    work_order_id: int = Query(..., description="工单ID"),
+    operation_id: int = Query(..., description="工序ID"),
+):
+    """
+    按工单+工序匹配 SOP，供报工使用。
+    匹配规则：物料+工序 > 物料组+工序 > 仅工序。
+    """
+    return await ProcessService.get_sop_for_reporting(
+        tenant_id, work_order_id, operation_id
     )
 
 

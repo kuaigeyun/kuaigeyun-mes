@@ -10,7 +10,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Input, Select, InputNumber, Switch, Alert } from 'antd';
+import { Button, Space, Form, Select, InputNumber, Switch, Tag } from 'antd';
+import { EditOutlined, LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { MindMap, RCNode } from '@ant-design/graphs';
@@ -35,14 +36,33 @@ import {
   findParentNode,
   handleMoveNodeLogic,
 } from './utils';
-import { bomApi, materialApi } from '../../../services/material';
+import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import type { Material, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
+import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
 import { CanvasPageTemplate, PAGE_SPACING } from '../../../../../components/layout-templates';
+import { MaterialForm } from '../../../components/MaterialForm';
 const GRID_STYLE: React.CSSProperties = {
   backgroundImage: 'radial-gradient(#dcdcdc 1px, transparent 1px)',
   backgroundSize: '16px 16px',
   backgroundColor: '#f5f7fa', // 略微修改颜色证明配置生效
+};
+
+/** 物料来源类型显示标签（用于BOM节点配置中展示物料来源） */
+const SOURCE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  Make: { label: '自制件', color: 'blue' },
+  Buy: { label: '采购件', color: 'green' },
+  Phantom: { label: '虚拟件', color: 'default' },
+  Outsource: { label: '委外件', color: 'orange' },
+  Configure: { label: '配置件', color: 'purple' },
+};
+
+/** 物料来源类型对应的节点背景色（用于画板节点颜色提示，偏深色便于区分） */
+const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = {
+  Make: { bg: '#91d5ff', border: '#1890ff' },
+  Buy: { bg: '#b7eb8f', border: '#52c41a' },
+  Phantom: { bg: '#bfbfbf', border: '#8c8c8c' },
+  Outsource: { bg: '#ffd591', border: '#fa8c16' },
+  Configure: { bg: '#d3adf7', border: '#722ed1' },
 };
 
 const KBD_STYLE: React.CSSProperties = {
@@ -111,6 +131,15 @@ const BOMDesignerPage: React.FC = () => {
   const [, setHistory] = useState<{ past: any[]; future: any[] }>({ past: [], future: [] });
   
   const [unitMap, setUnitMap] = useState<Record<string, string>>({}); // value -> label
+
+  /** 操作指南是否展开（默认展开） */
+  const [guideExpanded, setGuideExpanded] = useState(true);
+
+  // 物料编辑弹窗（直接打开，不跳转页面）
+  const [materialEditModalVisible, setMaterialEditModalVisible] = useState(false);
+  const [materialToEdit, setMaterialToEdit] = useState<Material | null>(null);
+  const [materialFormLoading, setMaterialFormLoading] = useState(false);
+  const [materialGroups, setMaterialGroups] = useState<Array<{ id: number; code: string; name: string }>>([]);
 
   // Load unit dictionary
   useEffect(() => {
@@ -251,6 +280,21 @@ const BOMDesignerPage: React.FC = () => {
       }
     };
     loadUnitDictionary();
+  }, []);
+
+  /**
+   * 加载物料分组（用于物料编辑弹窗）
+   */
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const list = await materialGroupApi.list({ limit: 1000 });
+        setMaterialGroups(list.map((g) => ({ id: g.id, code: g.code, name: g.name })));
+      } catch (e) {
+        console.error('加载物料分组失败:', e);
+      }
+    };
+    loadGroups();
   }, []);
 
   /**
@@ -607,6 +651,75 @@ const BOMDesignerPage: React.FC = () => {
   };
 
   /**
+   * 打开物料编辑弹窗（直接在当前页面打开，不跳转）
+   * @param materialOverride 可选，指定要编辑的物料（用于子节点配置中编辑当前选中的物料）
+   */
+  const openMaterialEditModal = useCallback(
+    async (materialOverride?: Material) => {
+      let materialUuid: string | undefined;
+      if (materialOverride) {
+        materialUuid = materialOverride.uuid || (materialOverride as any).uuid;
+      } else if (selectedNodeId && rootMaterial && mindMapData) {
+        if (selectedNodeId === 'root') {
+          materialUuid = rootMaterial.uuid || (rootMaterial as any).uuid;
+        } else {
+          const node = findNode(mindMapData as MindMapNode, selectedNodeId);
+          if (node?.material) {
+            materialUuid = (node.material as Material).uuid || (node.material as any).uuid;
+          } else if (node?.componentId) {
+            const mat = materials.find((m) => m.id === node.componentId);
+            materialUuid = mat?.uuid || (mat as any)?.uuid;
+          }
+        }
+      }
+      if (!materialUuid) {
+        messageApi.warning('无法获取物料信息');
+        return;
+      }
+      try {
+        setMaterialFormLoading(true);
+        const detail = await materialApi.get(materialUuid);
+        setMaterialToEdit(detail);
+        setMaterialEditModalVisible(true);
+      } catch (error: any) {
+        messageApi.error(error.message || '获取物料详情失败');
+      } finally {
+        setMaterialFormLoading(false);
+      }
+    },
+    [selectedNodeId, rootMaterial, mindMapData, materials, messageApi]
+  );
+
+  /**
+   * 物料编辑弹窗提交
+   */
+  const handleMaterialEditSubmit = useCallback(
+    async (values: MaterialCreate | MaterialUpdate) => {
+      if (!materialToEdit) return;
+      try {
+        setMaterialFormLoading(true);
+        await materialApi.update(materialToEdit.uuid, values as MaterialUpdate);
+        messageApi.success('更新成功');
+        setMaterialEditModalVisible(false);
+        setMaterialToEdit(null);
+        // 刷新物料列表和主物料，以便节点显示最新来源等信息
+        const result = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(result);
+        if (rootMaterial && materialToEdit.uuid === (rootMaterial.uuid || (rootMaterial as any).uuid)) {
+          const updated = result.find((m) => m.uuid === materialToEdit.uuid || (m as any).uuid === materialToEdit.uuid);
+          if (updated) setRootMaterial(updated);
+        }
+      } catch (error: any) {
+        messageApi.error(error.message || '更新失败');
+        throw error;
+      } finally {
+        setMaterialFormLoading(false);
+      }
+    },
+    [materialToEdit, rootMaterial, messageApi]
+  );
+
+  /**
    * 键盘事件处理
    */
   useEffect(() => {
@@ -698,6 +811,15 @@ const BOMDesignerPage: React.FC = () => {
         return;
       }
 
+      // Ctrl+E：编辑所选物料（打开物料编辑弹窗）
+      if (event.key === 'e' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+        if (!isInputActive && selectedNodeId) {
+          event.preventDefault();
+          openMaterialEditModal();
+        }
+        return;
+      }
+
       // 方向键导航
       if (selectedNodeId && mindMapDataRef.current) {
         // ArrowLeft: Go to Parent
@@ -766,7 +888,7 @@ const BOMDesignerPage: React.FC = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedNodeId, handleAddSiblingNodeCallback, handleAddChildNodeCallback, handleDeleteNodeCallback, handleNodeSelectCallback, mindMapData, handleUndo, handleRedo]);
+  }, [selectedNodeId, handleAddSiblingNodeCallback, handleAddChildNodeCallback, handleDeleteNodeCallback, handleNodeSelectCallback, mindMapData, handleUndo, handleRedo, openMaterialEditModal]);
 
   // 新节点自动聚焦选择框
   useEffect(() => {
@@ -804,7 +926,7 @@ const BOMDesignerPage: React.FC = () => {
     }));
   }, [selectedMaterial, unitValueToLabel]);
 
-  // 供 MindMap 使用的纯净树数据（id/value/children），子节点 value 含用量
+  // 供 MindMap 使用的纯净树数据（id/value/children），子节点 value 含用量及物料来源
   const mindMapDataSafe = useMemo(() => {
     if (!mindMapData) return null;
     const strip = (n: MindMapNode): any => {
@@ -812,10 +934,12 @@ const BOMDesignerPage: React.FC = () => {
       const value = n.id === 'root'
         ? base
         : `${base} × ${n.quantity ?? 1}`;
+      const material = n.material as Material | undefined;
+      const sourceType = material?.sourceType || (material as any)?.source_type;
       const out: any = { 
         id: n.id, 
         value,
-        data: { ...n, isSelected: n.id === selectedNodeId } // 显式传递选中状态到数据中
+        data: { ...n, isSelected: n.id === selectedNodeId, sourceType }
       };
       if (n.children?.length) {
         out.children = n.children.map(strip);
@@ -854,6 +978,9 @@ const BOMDesignerPage: React.FC = () => {
             const isRoot = data.id === 'root' || depth === 0;
             // 通过数据注入和外部状态双重判断选中
             const isSelected = data.data?.isSelected || data.id === selectedNodeId;
+            // 物料来源对应节点颜色（子节点）
+            const sourceType = data.data?.sourceType;
+            const sourceColors = sourceType ? SOURCE_TYPE_NODE_COLORS[sourceType] : null;
             // 判断是否处于激活状态（拖拽目标）
             // 注意：G6更新这种自定义组件状态比较麻烦，这里尝试用 data 注入
             // G6 的 setItemState 会更新 item 的 state，但 React 组件需要重绘才能感知
@@ -897,9 +1024,9 @@ const BOMDesignerPage: React.FC = () => {
                 onDragLeave={(e) => {
                    e.preventDefault();
                    if (data.id) {
-                      // Reset styles based on selection state
                       e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
-                      e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : '#d9d9d9');
+                      e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9'));
+                      e.currentTarget.style.background = isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff');
                    }
                 }}
                 onDrop={(e) => {
@@ -910,7 +1037,8 @@ const BOMDesignerPage: React.FC = () => {
                    
                    // Reset style
                    e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
-                   e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : '#d9d9d9');
+                   e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9'));
+                   e.currentTarget.style.background = isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff');
 
                    if (draggedNodeId && targetId && draggedNodeId !== targetId) {
                       if (mindMapDataRef.current) {
@@ -926,8 +1054,8 @@ const BOMDesignerPage: React.FC = () => {
                 style={{
                    display: 'flex',
                    alignItems: 'center',
-                   background: isRoot ? '#722ed1' : '#fff',
-                   border: `1px solid ${isRoot ? '#722ed1' : '#d9d9d9'}`,
+                   background: isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff'),
+                   border: `1px solid ${isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9')}`,
                    borderRadius: 4,
                    padding: '4px 8px',
                    minWidth: 'fit-content',
@@ -1128,6 +1256,7 @@ const BOMDesignerPage: React.FC = () => {
   }
 
   return (
+    <>
     <CanvasPageTemplate
       style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
@@ -1194,14 +1323,106 @@ const BOMDesignerPage: React.FC = () => {
           <div style={{ position: 'absolute', right: 12, top: 12, color: '#722ed1', fontSize: 10, opacity: 0.5, zIndex: 100 }}>
             Render Mode: High-Performance Optimized
           </div>
-          {/* 画板左上角：常用键盘快捷键 */}
+          {/* 画板左上角：常用键盘快捷键（可收起/展开） */}
+          {guideExpanded ? (
+            <div
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: 12,
+                zIndex: 10,
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.95)',
+                borderRadius: 8,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                fontSize: 12,
+                color: '#333',
+                border: '1px solid rgba(0,0,0,0.05)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>操作指南</span>
+                <Space>
+                  <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>快捷键</span>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<LeftOutlined />}
+                    onClick={() => setGuideExpanded(false)}
+                    title="收起操作指南"
+                  />
+                </Space>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 8, columnGap: 16, alignItems: 'center', justifyItems: 'start' }}>
+                 <span style={KBD_STYLE}>F2</span>
+                 <span>编辑节点物料</span>
+
+                 <span style={KBD_STYLE}>Enter</span>
+                 <span>保存(编辑时) / 添加同级(画布时)</span>
+
+                 <span style={KBD_STYLE}>Tab</span>
+                 <span>添加子节点</span>
+
+                 <span style={KBD_STYLE}>Esc</span>
+                 <span>退出编辑 / 取消选中</span>
+
+                 <span>
+                   <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>Z</span>
+                 </span>
+                 <span>撤销操作</span>
+
+                 <span style={{ display: 'flex', gap: 2 }}>
+                   <span style={KBD_STYLE}>↑</span><span style={KBD_STYLE}>↓</span>
+                   <span style={KBD_STYLE}>←</span><span style={KBD_STYLE}>→</span>
+                 </span>
+                 <span>切换选中节点</span>
+
+                 <span>
+                   <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>E</span>
+                 </span>
+                 <span>编辑物料</span>
+              </div>
+
+              <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px dashed #f0f0f0', color: '#666', fontSize: 11 }}>
+                 <div>• 拖拽左侧 <DragOutlined /> 手柄可移动节点</div>
+                 <div>• 快捷键需在画布聚焦时生效</div>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="text"
+              icon={<QuestionCircleOutlined style={{ fontSize: 18 }} />}
+              onClick={() => setGuideExpanded(true)}
+              title="展开操作指南"
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: 12,
+                zIndex: 10,
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                border: '1px solid rgba(0,0,0,0.05)',
+              }}
+            />
+          )}
+
+          {/* 画板左下角：物料来源颜色图例 */}
           <div
             style={{
               position: 'absolute',
               left: 12,
-              top: 12,
+              bottom: 12,
               zIndex: 10,
-              padding: '12px 16px',
+              padding: '10px 14px',
               background: 'rgba(255,255,255,0.95)',
               borderRadius: 8,
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -1211,39 +1432,22 @@ const BOMDesignerPage: React.FC = () => {
               backdropFilter: 'blur(4px)',
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>操作指南</span>
-              <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>快捷键</span>
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 8, columnGap: 16, alignItems: 'center', justifyItems: 'start' }}>
-               <span style={KBD_STYLE}>F2</span>
-               <span>编辑节点物料</span>
-
-               <span style={KBD_STYLE}>Enter</span>
-               <span>保存(编辑时) / 添加同级(画布时)</span>
-
-               <span style={KBD_STYLE}>Tab</span>
-               <span>添加子节点</span>
-
-               <span style={KBD_STYLE}>Esc</span>
-               <span>退出编辑 / 取消选中</span>
-
-               <span>
-                 <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>Z</span>
-               </span>
-               <span>撤销操作</span>
-
-               <span style={{ display: 'flex', gap: 2 }}>
-                 <span style={KBD_STYLE}>↑</span><span style={KBD_STYLE}>↓</span>
-                 <span style={KBD_STYLE}>←</span><span style={KBD_STYLE}>→</span>
-               </span>
-               <span>切换选中节点</span>
-            </div>
-
-            <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px dashed #f0f0f0', color: '#666', fontSize: 11 }}>
-               <div>• 拖拽左侧 <DragOutlined /> 手柄可移动节点</div>
-               <div>• 快捷键需在画布聚焦时生效</div>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 12 }}>物料来源</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {Object.entries(SOURCE_TYPE_LABELS).map(([key, { label }]) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 2,
+                      background: SOURCE_TYPE_NODE_COLORS[key]?.bg ?? '#fff',
+                      border: `1px solid ${SOURCE_TYPE_NODE_COLORS[key]?.border ?? '#d9d9d9'}`,
+                    }}
+                  />
+                  <span>{label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1277,6 +1481,26 @@ const BOMDesignerPage: React.FC = () => {
             <div>
               <p><strong>物料编码：</strong>{rootMaterial.code}</p>
               <p><strong>物料名称：</strong>{rootMaterial.name}</p>
+              <p style={{ marginTop: 12 }}>
+                <strong>物料来源：</strong>{' '}
+                <Space>
+                  {(rootMaterial.sourceType || (rootMaterial as any).source_type) ? (
+                    <Tag color={SOURCE_TYPE_LABELS[rootMaterial.sourceType || (rootMaterial as any).source_type]?.color ?? 'default'}>
+                      {SOURCE_TYPE_LABELS[rootMaterial.sourceType || (rootMaterial as any).source_type]?.label ?? (rootMaterial.sourceType || (rootMaterial as any).source_type)}
+                    </Tag>
+                  ) : (
+                    <span style={{ color: '#999' }}>未设置</span>
+                  )}
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => openMaterialEditModal()}
+                  >
+                    编辑物料
+                  </Button>
+                </Space>
+              </p>
               <p style={{ color: '#999', fontSize: 12, marginTop: 16 }}>
                 主物料信息不可修改，如需修改请返回物料管理页面
               </p>
@@ -1322,6 +1546,27 @@ const BOMDesignerPage: React.FC = () => {
                   }}
                 />
               </Form.Item>
+              {selectedMaterial && (
+                <Form.Item label="物料来源">
+                  <Space>
+                    {(selectedMaterial.sourceType || (selectedMaterial as any).source_type) ? (
+                      <Tag color={SOURCE_TYPE_LABELS[selectedMaterial.sourceType || (selectedMaterial as any).source_type]?.color ?? 'default'}>
+                        {SOURCE_TYPE_LABELS[selectedMaterial.sourceType || (selectedMaterial as any).source_type]?.label ?? (selectedMaterial.sourceType || (selectedMaterial as any).source_type)}
+                      </Tag>
+                    ) : (
+                      <span style={{ color: '#faad14' }}>未设置，请在物料管理中配置</span>
+                    )}
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => openMaterialEditModal(selectedMaterial)}
+                    >
+                      编辑物料
+                    </Button>
+                  </Space>
+                </Form.Item>
+              )}
               <Form.Item
                 name="quantity"
                 label="数量"
@@ -1404,6 +1649,53 @@ const BOMDesignerPage: React.FC = () => {
         ),
       }}
     />
+    {/* 物料编辑弹窗（直接打开，不跳转页面） */}
+    <MaterialForm
+      key={materialEditModalVisible && materialToEdit ? materialToEdit.uuid : 'closed'}
+      open={materialEditModalVisible}
+      onClose={() => {
+        setMaterialEditModalVisible(false);
+        setMaterialToEdit(null);
+      }}
+      onFinish={handleMaterialEditSubmit}
+      isEdit={true}
+      material={materialToEdit || undefined}
+      materialGroups={materialGroups}
+      loading={materialFormLoading}
+      initialValues={
+        materialToEdit
+          ? {
+              mainCode:
+                materialToEdit.mainCode ??
+                (materialToEdit as any).main_code ??
+                (materialToEdit as any).code ??
+                '',
+              name: materialToEdit.name ?? '',
+              groupId: materialToEdit.groupId ?? (materialToEdit as any).group_id ?? undefined,
+              materialType:
+                (materialToEdit as any).materialType ??
+                (materialToEdit as any).material_type ??
+                'RAW',
+              specification: materialToEdit.specification ?? (materialToEdit as any).specification,
+              baseUnit:
+                materialToEdit.baseUnit ?? (materialToEdit as any).base_unit ?? 'PC',
+              batchManaged:
+                materialToEdit.batchManaged ?? (materialToEdit as any).batch_managed ?? false,
+              variantManaged:
+                materialToEdit.variantManaged ?? (materialToEdit as any).variant_managed ?? false,
+              variantAttributes:
+                materialToEdit.variantAttributes ??
+                (materialToEdit as any).variant_attributes,
+              description: materialToEdit.description ?? (materialToEdit as any).description,
+              brand: materialToEdit.brand ?? (materialToEdit as any).brand,
+              model: materialToEdit.model ?? (materialToEdit as any).model,
+              isActive:
+                materialToEdit.isActive ?? (materialToEdit as any).is_active ?? true,
+            }
+          : undefined
+      }
+    />
+  </>
   );
 };
 

@@ -75,13 +75,6 @@ async def list_computations(
     
     支持按需求ID、需求编码、计算编码、计算类型、计算状态、业务模式、时间范围筛选。
     """
-    # #region agent log
-    try:
-        with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-            _f.write('{"location":"demand_computation.py:list_computations","message":"api_entry","data":{"tenant_id":%s,"tenant_type":"%s"},"timestamp":%d,"sessionId":"debug-session","hypothesisId":"H2"}\n' % (repr(tenant_id), type(tenant_id).__name__, __import__("time").time() * 1000))
-    except Exception:
-        pass
-    # #endregion
     try:
         return await computation_service.list_computations(
             tenant_id=tenant_id,
@@ -97,13 +90,6 @@ async def list_computations(
             limit=limit
         )
     except Exception as e:
-        # #region agent log
-        try:
-            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                _f.write('{"location":"demand_computation.py:list_computations","message":"api_exception","data":{"exc_type":"%s","exc_msg":"%s"},"timestamp":%d,"sessionId":"debug-session","hypothesisId":"H1,H3,H4,H5"}\n' % (type(e).__name__, str(e).replace('"', "'").replace("\\", "/")[:500], __import__("time").time() * 1000))
-        except Exception:
-            pass
-        # #endregion
         logger.error(f"获取需求计算列表失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求计算列表失败")
 
@@ -154,12 +140,10 @@ async def execute_computation(
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        # #region agent log
         logger.error(f"执行需求计算失败: {e}")
         # 开发阶段在响应中返回异常信息，便于排查（生产环境可改为固定文案）
         err_msg = f"{type(e).__name__}: {str(e)}"
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
-        # #endregion
 
 
 @router.post("/{computation_id}/recompute", response_model=DemandComputationResponse, summary="重新计算")

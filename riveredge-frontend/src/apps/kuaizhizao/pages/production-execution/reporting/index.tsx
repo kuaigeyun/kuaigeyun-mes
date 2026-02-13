@@ -137,6 +137,8 @@ const ReportingPage: React.FC = () => {
         setCurrentOperation(pendingOperation);
         // 检查跳转规则
         await checkJumpRule(pendingOperation, operations);
+        // 加载 SOP（传入 workOrder、operations 因 state 可能尚未更新）
+        await handleSelectOperation(pendingOperation.operation_id, workOrder, operations);
       } else {
         messageApi.warning('该工单所有工序已完成');
       }
@@ -223,25 +225,30 @@ const ReportingPage: React.FC = () => {
 
   /**
    * 处理选择工序
+   * @param operationId 工序ID
+   * @param workOrderOverride 可选，扫码后自动选择时传入工单（此时 currentWorkOrder 可能尚未更新）
+   * @param operationsOverride 可选，扫码后传入工序列表（此时 workOrderOperations 可能尚未更新）
    */
-  const handleSelectOperation = async (operationId: number) => {
-    const operation = workOrderOperations.find((op: any) => op.operation_id === operationId);
+  const handleSelectOperation = async (operationId: number, workOrderOverride?: any, operationsOverride?: any[]) => {
+    const ops = operationsOverride ?? workOrderOperations;
+    const operation = ops.find((op: any) => op.operation_id === operationId);
     if (operation) {
       setCurrentOperation(operation);
-      await checkJumpRule(operation, workOrderOperations);
+      await checkJumpRule(operation, ops);
       
       // 检查是否有子工艺路线（核心功能，新增）
-      const subOps = checkSubOperations(operation, workOrderOperations);
+      const subOps = checkSubOperations(operation, ops);
       setSubOperations(subOps);
       setCurrentSubOperation(null);
       
-      // 加载SOP参数配置（如果工序关联了SOP）（核心功能，优化）
+      // 加载SOP参数配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
+      const workOrderForSop = workOrderOverride ?? currentWorkOrder;
       setLoadingSOP(true);
       try {
-        // 根据工序ID查询关联的SOP
-        const sops = await sopApi.list({ operationId: operation.operation_id, isActive: true });
-        if (sops && sops.length > 0) {
-          const sop = sops[0]; // 取第一个启用的SOP
+        const sop = workOrderForSop
+          ? await sopApi.getForReporting(workOrderForSop.id, operation.operation_id)
+          : null;
+        if (sop) {
           setCurrentSOP(sop);
           if (sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
             setSopFormConfig(sop.formConfig);
@@ -266,17 +273,15 @@ const ReportingPage: React.FC = () => {
             // 自动填充报工数据（根据工艺路线）
             setTimeout(() => {
               const autoFillValues: any = {};
-              
+              const wo = workOrderForSop;
               // 自动填充工时（根据标准工时和工单数量计算）
-              if (operation.standard_time && currentWorkOrder) {
-                // 标准工时 * 工单数量 = 预计总工时
-                const estimatedWorkHours = parseFloat(operation.standard_time.toString()) * parseFloat(currentWorkOrder.quantity.toString());
+              if (operation.standard_time && wo) {
+                const estimatedWorkHours = parseFloat(operation.standard_time.toString()) * parseFloat(wo.quantity.toString());
                 autoFillValues.work_hours = estimatedWorkHours;
               }
-              
               // 按数量报工时，自动填充完成数量（默认等于工单数量）
-              if (operation.reporting_type === 'quantity' && currentWorkOrder) {
-                const remainingQuantity = parseFloat(currentWorkOrder.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
+              if (operation.reporting_type === 'quantity' && wo) {
+                const remainingQuantity = parseFloat(wo.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
                 if (remainingQuantity > 0) {
                   autoFillValues.reported_quantity = remainingQuantity;
                   // 默认合格数量等于完成数量
@@ -2260,31 +2265,26 @@ const SubOperationReportingForm: React.FC<{
   const [subOpSopConfig, setSubOpSopConfig] = useState<any>(null);
   const [loadingSubOpSOP, setLoadingSubOpSOP] = useState(false);
 
-  // 加载子工序的SOP配置
+  // 加载子工序的SOP配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
   useEffect(() => {
     const loadSubOpSOP = async () => {
-      if (!subOperation?.operation_id) return;
+      if (!subOperation?.operation_id || !workOrder?.id) return;
       
       setLoadingSubOpSOP(true);
       try {
-        const sops = await sopApi.list({ operationId: subOperation.operation_id, isActive: true });
-        if (sops && sops.length > 0) {
-          const sop = sops[0];
-          if (sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
-            setSubOpSopConfig(sop.formConfig);
-            const initialParams: Record<string, any> = {};
-            Object.keys(sop.formConfig.properties).forEach((key) => {
-              const field = sop.formConfig.properties[key];
-              if (field.default !== undefined) {
-                initialParams[key] = field.default;
-              }
-            });
-            setTimeout(() => {
-              formRef.current?.setFieldsValue({ sop_params: initialParams });
-            }, 100);
-          } else {
-            setSubOpSopConfig(null);
-          }
+        const sop = await sopApi.getForReporting(workOrder.id, subOperation.operation_id);
+        if (sop && sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
+          setSubOpSopConfig(sop.formConfig);
+          const initialParams: Record<string, any> = {};
+          Object.keys(sop.formConfig.properties).forEach((key) => {
+            const field = sop.formConfig.properties[key];
+            if (field.default !== undefined) {
+              initialParams[key] = field.default;
+            }
+          });
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({ sop_params: initialParams });
+          }, 100);
         } else {
           setSubOpSopConfig(null);
         }
@@ -2297,7 +2297,7 @@ const SubOperationReportingForm: React.FC<{
     };
     
     loadSubOpSOP();
-  }, [subOperation?.operation_id, formRef]);
+  }, [subOperation?.operation_id, workOrder?.id, formRef]);
 
   // 渲染SOP参数收集表单
   const renderSubOpSOPParameters = () => {

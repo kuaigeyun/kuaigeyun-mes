@@ -56,7 +56,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
             existing = await ComputationConfig.get_or_none(
                 tenant_id=tenant_id,
                 config_code=config_data.config_code,
-                deleted_at__isnull=True
             )
             if existing:
                 raise ValidationError(f"配置编码已存在: {config_data.config_code}")
@@ -98,7 +97,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
         config = await ComputationConfig.get_or_none(
             tenant_id=tenant_id,
             id=config_id,
-            deleted_at__isnull=True
         )
         
         if not config:
@@ -137,7 +135,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
         """
         query = ComputationConfig.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
         )
         
         # 应用筛选条件
@@ -189,7 +186,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
             config = await ComputationConfig.get_or_none(
                 tenant_id=tenant_id,
                 id=config_id,
-                deleted_at__isnull=True
             )
             
             if not config:
@@ -221,7 +217,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
         config = await ComputationConfig.get_or_none(
             tenant_id=tenant_id,
             id=config_id,
-            deleted_at__isnull=True
         )
         
         if not config:
@@ -259,7 +254,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
                 material_id=material_id,
                 warehouse_id=warehouse_id,
                 is_active=True,
-                deleted_at__isnull=True
             ).order_by("-priority").first()
             if config:
                 configs.append(config)
@@ -271,7 +265,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
                 config_scope="material",
                 material_id=material_id,
                 is_active=True,
-                deleted_at__isnull=True
             ).order_by("-priority").first()
             if config:
                 configs.append(config)
@@ -283,7 +276,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
                 config_scope="warehouse",
                 warehouse_id=warehouse_id,
                 is_active=True,
-                deleted_at__isnull=True
             ).order_by("-priority").first()
             if config:
                 configs.append(config)
@@ -293,7 +285,6 @@ class ComputationConfigService(AppBaseService[ComputationConfig]):
             tenant_id=tenant_id,
             config_scope="global",
             is_active=True,
-            deleted_at__isnull=True
         ).order_by("-priority").first()
         if config:
             configs.append(config)

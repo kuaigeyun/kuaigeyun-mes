@@ -1078,6 +1078,127 @@ class ProcessService:
         return SOPResponse.model_validate(sop)
     
     @staticmethod
+    async def batch_create_sops_from_route(
+        tenant_id: int,
+        data: "SOPBatchCreateFromRouteRequest"
+    ) -> List[SOPResponse]:
+        """
+        按工艺路线批量创建 SOP 草稿
+        
+        为工艺路线中的每道工序创建一个 SOP，自动绑定物料/物料组。
+        
+        Args:
+            tenant_id: 租户ID
+            data: 批量创建请求（process_route_uuid, material_uuids, material_group_uuids）
+            
+        Returns:
+            List[SOPResponse]: 创建的 SOP 列表
+        """
+        # 获取工艺路线
+        process_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=data.process_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not process_route:
+            raise NotFoundError(f"工艺路线 {data.process_route_uuid} 不存在")
+        
+        # 解析工序序列（保持顺序）
+        operation_list = []
+        seq_data = process_route.operation_sequence
+        
+        if isinstance(seq_data, list):
+            for item in seq_data:
+                if isinstance(item, dict):
+                    op_id = item.get("operation_id") or item.get("operationId")
+                    seq = item.get("sequence", len(operation_list) + 1)
+                    if op_id:
+                        operation_list.append({"operation_id": op_id, "sequence": seq})
+        elif isinstance(seq_data, dict):
+            if "operation_ids" in seq_data or "operationIds" in seq_data:
+                op_ids = seq_data.get("operation_ids") or seq_data.get("operationIds", [])
+                for idx, op_id in enumerate(op_ids, 1):
+                    if op_id:
+                        operation_list.append({"operation_id": op_id, "sequence": idx})
+            elif "sequence" in seq_data or "operations" in seq_data:
+                # 前端格式：{sequence: [uuid...], operations: [{uuid, code, name}...]}
+                op_uuids = seq_data.get("sequence") or []
+                if not op_uuids and seq_data.get("operations"):
+                    op_uuids = [o.get("uuid") for o in seq_data["operations"] if isinstance(o, dict) and o.get("uuid")]
+                if op_uuids:
+                    ops_by_uuid = {
+                        str(op.uuid): op for op in await Operation.filter(
+                            uuid__in=[str(u) for u in op_uuids],
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True
+                        ).all()
+                    }
+                    for idx, op_uuid in enumerate(op_uuids, 1):
+                        op = ops_by_uuid.get(str(op_uuid))
+                        if op:
+                            operation_list.append({"operation_id": op.id, "sequence": idx})
+            else:
+                for key, value in seq_data.items():
+                    if isinstance(value, dict):
+                        op_id = value.get("operation_id") or value.get("operationId") or (int(key) if str(key).isdigit() else None)
+                    else:
+                        op_id = int(key) if str(key).isdigit() else None
+                    if op_id:
+                        seq = value.get("sequence", len(operation_list) + 1) if isinstance(value, dict) else len(operation_list) + 1
+                        operation_list.append({"operation_id": op_id, "sequence": seq})
+        
+        operation_list.sort(key=lambda x: x["sequence"])
+        
+        if not operation_list:
+            raise ValidationError("工艺路线没有工序序列，无法创建 SOP")
+        
+        # 获取工序信息
+        operation_ids = [op["operation_id"] for op in operation_list]
+        operations = await Operation.filter(
+            id__in=operation_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).all()
+        operation_map = {op.id: op for op in operations}
+        
+        route_code = process_route.code or "ROUTE"
+        created_sops = []
+        used_codes = set()
+        
+        for op_data in operation_list:
+            op_id = op_data["operation_id"]
+            if op_id not in operation_map:
+                continue
+            operation = operation_map[op_id]
+            op_code = (operation.code or "").replace(" ", "_").upper() or f"OP{op_id}"
+            
+            # 生成唯一编码
+            base_code = f"{route_code}-{op_code}"
+            code = base_code
+            suffix = 0
+            while code in used_codes or await SOP.filter(tenant_id=tenant_id, code=code, deleted_at__isnull=True).exists():
+                suffix += 1
+                code = f"{base_code}-{suffix}"
+            used_codes.add(code)
+            
+            name = f"{process_route.name or route_code} - {operation.name or op_code}"
+            
+            sop = await SOP.create(
+                tenant_id=tenant_id,
+                code=code,
+                name=name,
+                operation_id=op_id,
+                material_uuids=data.material_uuids,
+                material_group_uuids=data.material_group_uuids,
+                route_uuids=[data.process_route_uuid],
+                is_active=True,
+            )
+            created_sops.append(SOPResponse.model_validate(sop))
+        
+        return created_sops
+    
+    @staticmethod
     async def get_sop_by_uuid(
         tenant_id: int,
         sop_uuid: str
@@ -1304,7 +1425,76 @@ class ProcessService:
             if op:
                 q2 = q2.filter(operation_id=op.id)
         sop2 = await q2.order_by("code").prefetch_related("operation").first()
-        return SOPResponse.model_validate(sop2) if sop2 else None
+        if sop2:
+            return SOPResponse.model_validate(sop2)
+        # 3) fallback：仅按工序匹配（兼容仅关联工序的 SOP）
+        if operation_uuid:
+            op = await Operation.filter(
+                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+            ).first()
+            if op:
+                q3 = SOP.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                    operation_id=op.id,
+                )
+                sop3 = await q3.order_by("code").prefetch_related("operation").first()
+                return SOPResponse.model_validate(sop3) if sop3 else None
+        return None
+
+    @staticmethod
+    async def get_sop_for_reporting(
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+    ) -> Optional[SOPResponse]:
+        """
+        按工单+工序匹配 SOP，供报工使用。
+        逻辑：取工单产品 -> 物料 UUID -> get_sop_for_material（含 fallback 仅工序）。
+        """
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.material import Material
+
+        work_order = await WorkOrder.filter(
+            id=work_order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not work_order:
+            return None
+
+        product_id = work_order.product_id
+        material = await Material.filter(
+            id=product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not material:
+            # 工单产品无对应物料，fallback 仅按工序
+            op = await Operation.filter(
+                tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
+            ).first()
+            if not op:
+                return None
+            q = SOP.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+                operation_id=op.id,
+            )
+            sop = await q.order_by("code").prefetch_related("operation").first()
+            return SOPResponse.model_validate(sop) if sop else None
+
+        material_uuid = str(material.uuid)
+        op = await Operation.filter(
+            tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
+        ).first()
+        operation_uuid = str(op.uuid) if op else None
+
+        return await ProcessService.get_sop_for_material(
+            tenant_id, material_uuid, operation_uuid=operation_uuid
+        )
 
     # ==================== 工艺路线版本管理相关方法 ====================
     
@@ -1817,6 +2007,46 @@ class ProcessService:
         
         # 优先级3：默认工艺路线（如果配置了）
         # TODO: 实现默认工艺路线配置
+        
+        return None
+    
+    @staticmethod
+    async def get_process_route_for_material_group(
+        tenant_id: int,
+        material_group_uuid: str
+    ) -> Optional[ProcessRouteResponse]:
+        """
+        获取物料组匹配的工艺路线
+        
+        物料组通过 process_route_id 直接绑定工艺路线。
+        
+        Args:
+            tenant_id: 租户ID
+            material_group_uuid: 物料组UUID
+            
+        Returns:
+            Optional[ProcessRouteResponse]: 匹配的工艺路线，如果没有则返回None
+        """
+        from apps.master_data.models.material import MaterialGroup
+        
+        material_group = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            uuid=material_group_uuid,
+            deleted_at__isnull=True
+        ).prefetch_related("process_route").first()
+        
+        if not material_group:
+            raise NotFoundError(f"物料组 {material_group_uuid} 不存在")
+        
+        if material_group.process_route_id:
+            process_route = await ProcessRoute.filter(
+                id=material_group.process_route_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True
+            ).first()
+            if process_route:
+                return await ProcessService._to_process_route_response(process_route)
         
         return None
     

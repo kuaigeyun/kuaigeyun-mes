@@ -45,12 +45,21 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
 
+            create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            # 检查业务配置：若无需审核，则创建时直接设为已审核（考虑中小企业实情）
+            from infra.services.business_config_service import BusinessConfigService
+            from apps.kuaizhizao.constants import ReviewStatus
+            config_service = BusinessConfigService()
+            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            if not audit_required:
+                create_data["review_status"] = ReviewStatus.APPROVED
+
             inspection = await IncomingInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
-                **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **create_data
             )
             return IncomingInspectionResponse.model_validate(inspection)
 
@@ -447,12 +456,20 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
+            create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            from infra.services.business_config_service import BusinessConfigService
+            from apps.kuaizhizao.constants import ReviewStatus
+            config_service = BusinessConfigService()
+            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            if not audit_required:
+                create_data["review_status"] = ReviewStatus.APPROVED
+
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
-                **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **create_data
             )
             return ProcessInspectionResponse.model_validate(inspection)
 
@@ -803,12 +820,20 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
+            create_data = inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            from infra.services.business_config_service import BusinessConfigService
+            from apps.kuaizhizao.constants import ReviewStatus
+            config_service = BusinessConfigService()
+            audit_required = await config_service.check_audit_required(tenant_id, "quality_inspection")
+            if not audit_required:
+                create_data["review_status"] = ReviewStatus.APPROVED
+
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
                 created_by_name=user_info["name"],
-                **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **create_data
             )
             return FinishedGoodsInspectionResponse.model_validate(inspection)
 

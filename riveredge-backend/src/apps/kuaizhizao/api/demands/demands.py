@@ -424,3 +424,30 @@ async def push_demand_to_computation(
     except Exception as e:
         logger.error(f"下推需求失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下推需求失败: {str(e)}")
+
+
+@router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="撤回需求计算")
+async def withdraw_demand_from_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    撤回需求计算
+
+    将已下推到需求计算的需求撤回，清除计算记录及关联。
+    仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+    """
+    try:
+        result = await demand_service.withdraw_from_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"撤回需求计算失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"撤回需求计算失败: {str(e)}")

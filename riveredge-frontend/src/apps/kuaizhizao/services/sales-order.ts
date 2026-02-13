@@ -212,6 +212,16 @@ export async function withdrawSalesOrder(id: number): Promise<SalesOrder> {
 }
 
 /**
+ * 撤回销售订单的需求计算
+ * 仅当需求计算尚未下推工单/采购单等下游单据时允许撤回
+ */
+export async function withdrawSalesOrderFromComputation(id: number): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/withdraw-from-computation`, {
+    method: 'POST',
+  });
+}
+
+/**
  * 删除销售订单
  */
 export async function deleteSalesOrder(id: number): Promise<void> {

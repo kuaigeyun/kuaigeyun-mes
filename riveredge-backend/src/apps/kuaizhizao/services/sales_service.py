@@ -190,12 +190,24 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             if forecast.status != "草稿":
                 raise BusinessLogicError(f"只有草稿状态的销售预测才能提交，当前状态：{forecast.status}")
             
-            # 更新状态为待审核
-            await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-                status="待审核",
-                review_status="待审核",
-                updated_by=submitted_by
-            )
+            # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
+            from infra.services.business_config_service import BusinessConfigService
+            from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+            config_service = BusinessConfigService()
+            audit_required = await config_service.check_audit_required(tenant_id, "sales_forecast")
+
+            if not audit_required:
+                await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+                    status=DocumentStatus.AUDITED,
+                    review_status=ReviewStatus.APPROVED,
+                    updated_by=submitted_by
+                )
+            else:
+                await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+                    status="待审核",
+                    review_status="待审核",
+                    updated_by=submitted_by
+                )
             
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
@@ -447,9 +459,12 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         from apps.kuaizhizao.services.planning_service import ProductionPlanningService
         from apps.kuaizhizao.schemas.planning import MRPComputationRequest
         
-        # 验证销售预测存在且已审核
+        # 验证销售预测存在且已审核（兼容枚举与存量中文值）
+        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
         forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-        if forecast.review_status != "通过" or forecast.status != "已审核":
+        review_approved = forecast.review_status in ("通过", "APPROVED", "已审核")
+        status_audited = forecast.status in LEGACY_AUDITED_VALUES
+        if not review_approved or not status_audited:
             raise BusinessLogicError("只有已审核通过的销售预测才能下推到MRP运算")
         
         # 创建MRP运算请求

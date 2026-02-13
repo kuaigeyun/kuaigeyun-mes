@@ -29,6 +29,7 @@ import DefectTypesPage from './pages/process/defect-types';
 import OperationsPage from './pages/process/operations';
 import ProcessRoutesPage from './pages/process/routes';
 import SOPPage from './pages/process/sop';
+import SOPCreatePage from './pages/process/sop/create';
 import ESOPDesignerPage from './pages/process/sop/designer';
 import SOPExecutionPage from './pages/process/sop/execution';
 
@@ -67,6 +68,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/engineering-bom" element={<BOMPage />} />
       <Route path="process/engineering-bom/designer" element={<BOMDesignerPage />} />
       <Route path="process/sop" element={<SOPPage />} />
+      <Route path="process/sop/create" element={<SOPCreatePage />} />
       <Route path="process/sop/designer" element={<ESOPDesignerPage />} />
       <Route path="process/sop/execution" element={<SOPExecutionPage />} />
 

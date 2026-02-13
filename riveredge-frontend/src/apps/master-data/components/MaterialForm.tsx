@@ -13,8 +13,9 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency } from '@ant-design/pro-components';
 import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit, MaterialCodeMapping } from '../types/material';
 import type { Customer } from '../types/supply-chain';
@@ -2605,7 +2606,12 @@ const MaterialSourceTab = forwardRef<
   MaterialSourceTabProps
 >(
   ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, onValidate, onCheckCompleteness }, ref) => {
+    const navigate = useNavigate();
     const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
+
+    const handleGotoProcessRoutes = () => {
+      navigate('/apps/master-data/process/routes');
+    };
 
     const sourceTypeOptions = SOURCE_TYPE_OPTIONS;
 
@@ -2714,7 +2720,21 @@ const MaterialSourceTab = forwardRef<
                 <Col span={12}>
                   <ProFormSelect
                     name="defaults.defaultProcessRouteUuid"
-                    label="默认工艺路线"
+                    label={
+                      <Space>
+                        <span>默认工艺路线</span>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<LinkOutlined />}
+                          onClick={handleGotoProcessRoutes}
+                          title="跳转到工艺路线管理页面"
+                          style={{ padding: 0, height: 'auto' }}
+                        >
+                          工艺路线
+                        </Button>
+                      </Space>
+                    }
                     placeholder="请选择默认工艺路线"
                     options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
                     fieldProps={{

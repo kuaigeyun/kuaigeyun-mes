@@ -24,6 +24,7 @@ import {
   approveSalesOrder,
   unapproveSalesOrder,
   pushSalesOrderToComputation,
+  withdrawSalesOrderFromComputation,
   bulkDeleteSalesOrders,
   SalesOrder,
   SalesOrderItem,
@@ -605,6 +606,26 @@ const SalesOrdersPage: React.FC = () => {
     });
   };
 
+  /**
+   * 处理撤回需求计算
+   * 仅当需求计算尚未下推工单/采购单等下游单据时允许撤回
+   */
+  const handleWithdrawFromComputation = async (id: number) => {
+    modalApi.confirm({
+      title: '撤回需求计算',
+      content: '确定要撤回此销售订单的需求计算吗？撤回后仍为已审核状态，可重新下推。',
+      onOk: async () => {
+        try {
+          await withdrawSalesOrderFromComputation(id);
+          messageApi.success('撤回成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || error.message || '撤回失败');
+        }
+      },
+    });
+  };
+
 
 
   /**
@@ -793,9 +814,14 @@ const SalesOrdersPage: React.FC = () => {
               审核
             </Button>
           )}
-          {(record.review_status === ReviewStatus.APPROVED) && (
+          {(record.review_status === ReviewStatus.APPROVED) && !record.pushed_to_computation && (
             <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handlePushToComputation(record.id!)}>
               下推
+            </Button>
+          )}
+          {(record.status === '已审核' || record.status === SalesOrderStatus.AUDITED) && record.pushed_to_computation && (
+            <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(record.id!)}>
+              撤回计算
             </Button>
           )}
           {(record.status === '已审核' || record.status === '已驳回') && (
