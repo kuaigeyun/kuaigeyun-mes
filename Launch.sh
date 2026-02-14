@@ -1,7 +1,9 @@
 #!/bin/bash
 # RiverEdge SaaS 多组织框架 - 一键启动脚本
 # 自动处理端口冲突，进程清理，环境检查等
-# 严禁使用CMD和PowerShell，只使用bash和Linux命令
+#
+# Windows: 默认仅启动 Web 端，启动完成自动打开浏览器
+# Linux/Mac: 默认同时启动 Web + 手机端
 #
 # 快速启动选项:
 #   ./Launch.sh fast    - 最快启动，强制静默
@@ -54,7 +56,12 @@ DEBUG="${DEBUG:-false}"
 QUIET="${QUIET:-false}"
 
 # 手机端启动 - 前端绑定 0.0.0.0，便于同网段手机通过本机 IP 访问
-LAUNCH_MOBILE="${LAUNCH_MOBILE:-true}" # 默认启动手机端
+# Windows 默认不启动手机端（简化流程、提高速度）；Linux/Mac 默认启动
+if [[ "${OSTYPE}" == "msys" || "${OSTYPE}" == "win32" || "${OSTYPE}" == "cygwin" ]]; then
+    LAUNCH_MOBILE="${LAUNCH_MOBILE:-false}"  # Windows: 默认仅 Web 端
+else
+    LAUNCH_MOBILE="${LAUNCH_MOBILE:-true}"   # Linux/Mac: 默认同时启动手机端
+fi
 
 # UV 链接模式配置（避免硬链接警告，Windows 环境下硬链接可能不支持）
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
@@ -1654,8 +1661,10 @@ main() {
         fi
     }
 
-    # 执行日志管理
-    manage_logs ".logs"
+    # 执行日志管理（Windows 跳过以加快启动）
+    if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "win32" && "$OSTYPE" != "cygwin" ]]; then
+        manage_logs ".logs"
+    fi
 
     # 显示配置摘要（main 内 frontend_port 稍后按 LAUNCH_MOBILE 设置，这里先显示默认）
     log_info "启动配置:"
@@ -1741,23 +1750,33 @@ main() {
     # 清理策略：只有在端口被占用时才执行彻底清理
     local need_cleanup=false
     
-    # 默认同时启动 Web 和 手机端
+    # Web 必启；手机端按 LAUNCH_MOBILE 决定
     local web_port="$FRONTEND_PORT"
     local mobile_port="$MOBILE_FRONTEND_PORT"
-    log_info "启动配置：Web 端口 $web_port, 手机端端口 $mobile_port"
+    if [ "$LAUNCH_MOBILE" = "true" ]; then
+        log_info "启动配置：Web 端口 $web_port, 手机端端口 $mobile_port"
+    else
+        log_info "启动配置：Web 端口 $web_port（仅 Web 端，跳过手机端）"
+    fi
 
-    # 检查端口占用情况
-    if check_port "$web_port" || check_port "$mobile_port" || check_port "$BACKEND_PORT"; then
+    # 检查端口占用情况（不启动手机端时跳过手机端端口）
+    local ports_to_check="$web_port $BACKEND_PORT"
+    [ "$LAUNCH_MOBILE" = "true" ] && ports_to_check="$ports_to_check $mobile_port"
+    local port_occupied=false
+    for p in $ports_to_check; do
+        check_port "$p" && port_occupied=true && break
+    done
+    if [ "$port_occupied" = true ]; then
         need_cleanup=true
-        log_warn "检测到端口被占用，执行全局清理：终止所有可能阻碍启动的进程..."
+        log_warn "检测到端口被占用，执行全局清理..."
         cleanup_all_processes
-        sleep 1  # 等待进程完全终止
+        sleep 1
     else
         log_info "端口未被占用，跳过全局清理，直接启动"
     fi
 
     # 清理端口（如果被占用）
-    for p in "$web_port" "$mobile_port" "$BACKEND_PORT"; do
+    for p in $ports_to_check; do
         if check_port "$p"; then
             if ! clear_port "$p"; then
                 log_warn "端口 $p 清理失败，尝试继续启动..."
@@ -1815,7 +1834,7 @@ main() {
         echo
         echo "服务访问地址:"
         echo "  Web 前端:    http://localhost:$frontend_port"
-        echo "  手机端 Web:   http://localhost:$mobile_port"
+        [ "$LAUNCH_MOBILE" = "true" ] && echo "  手机端 Web:   http://localhost:$mobile_port"
         echo "  平台登录:    http://localhost:$frontend_port/infra"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
@@ -1834,7 +1853,7 @@ main() {
 
         if [ -n "$lan_ip" ]; then
             echo "  手机访问(Web): http://$lan_ip:$frontend_port"
-            echo "  手机访问(App): http://$lan_ip:$mobile_port"
+            [ "$LAUNCH_MOBILE" = "true" ] && echo "  手机访问(App): http://$lan_ip:$mobile_port"
         fi
         if [ -f ".logs/inngest.pid" ]; then
             echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
@@ -1867,9 +1886,9 @@ main() {
         [ -z "$lan_ip" ] && command -v ipconfig &>/dev/null && lan_ip=$(ipconfig 2>/dev/null | grep -oE "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 || true)
         
         if [ -n "$lan_ip" ]; then
-            log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://$lan_ip:$mobile_port"
+            [ "$LAUNCH_MOBILE" = "true" ] && log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://$lan_ip:$mobile_port" || log_key "启动完成 - Web: http://localhost:$frontend_port"
         else
-            log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://localhost:$mobile_port"
+            [ "$LAUNCH_MOBILE" = "true" ] && log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://localhost:$mobile_port" || log_key "启动完成 - Web: http://localhost:$frontend_port"
         fi
     fi
     echo
@@ -1885,14 +1904,15 @@ main() {
     # 检查前端是否可以访问（异步检查）
     (sleep 2 && curl -s --max-time 3 "http://localhost:$frontend_port" >/dev/null 2>&1 && log_success "前端服务验证通过" || log_warn "前端服务验证失败，可能仍在编译中") &
 
-    # 启动完成后自动打开 Web 端（默认浏览器）
-    (sleep 3 && (
-        if command -v open &>/dev/null; then
+    # 启动完成后仅自动打开 Web 端（不打开手机端）
+    (sleep 2 && (
+        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+            # Windows: 优先使用 cmd start
+            cmd //c start "" "http://localhost:$frontend_port" 2>/dev/null || start "http://localhost:$frontend_port" 2>/dev/null || true
+        elif command -v open &>/dev/null; then
             open "http://localhost:$frontend_port"
         elif command -v xdg-open &>/dev/null; then
             xdg-open "http://localhost:$frontend_port"
-        elif command -v start &>/dev/null; then
-            start "http://localhost:$frontend_port"
         fi
     )) &
 
@@ -1919,11 +1939,12 @@ RiverEdge SaaS 框架一键启动脚本
     BACKEND_PORT=$BACKEND_PORT          后端服务端口
     FRONTEND_PORT=$FRONTEND_PORT        Web 前端端口 (默认 8100)
     MOBILE_FRONTEND_PORT=$MOBILE_FRONTEND_PORT  手机端前端端口 (默认 8101)
+    LAUNCH_MOBILE=true/false           Windows 默认 false(仅Web)，Linux/Mac 默认 true
     DEBUG=$DEBUG                       调试模式
     QUIET=$QUIET                       静默模式 (减少输出)
 
 示例:
-    $0                            # 启动服务
+    $0                            # 启动服务 (Windows 仅 Web，Linux/Mac 含手机端)
     $0 mobile                     # 手机端启动（同网段手机可访问前端）
     $0 stop                       # 停止服务
     $0 restart                    # 重启服务 (静默模式)
