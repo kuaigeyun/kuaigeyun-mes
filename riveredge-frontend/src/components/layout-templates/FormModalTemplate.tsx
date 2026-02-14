@@ -45,6 +45,8 @@ export interface FormModalTemplateProps {
   formRef?: React.RefObject<ProFormInstance>;
   /** 自定义样式类名 */
   className?: string;
+  /** 自定义 Modal 渲染（如包裹锚点元素供智能建议面板定位） */
+  modalRender?: (modal: React.ReactNode) => React.ReactNode;
 }
 
 /**
@@ -79,6 +81,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   loading = false,
   formRef: externalFormRef,
   className,
+  modalRender,
 }) => {
   const { token } = useToken();
   const internalFormRef = useRef<ProFormInstance>();
@@ -93,6 +96,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       width={width}
       destroyOnHidden
       className={className}
+      modalRender={modalRender}
     >
       <ProForm
         formRef={formRef}

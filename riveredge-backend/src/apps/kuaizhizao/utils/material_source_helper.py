@@ -21,6 +21,47 @@ from decimal import Decimal
 from loguru import logger
 
 from apps.master_data.models.material import Material, BOM
+
+
+async def _get_bom_for_material(
+    tenant_id: int,
+    material_id: int,
+    only_approved: bool,
+    bom_version: Optional[str],
+    use_default_bom: bool,
+    material_bom_versions: Optional[Dict[int, str]],
+) -> Optional[BOM]:
+    """根据版本参数获取物料的 BOM（支持指定版本或默认版本）"""
+    version = (material_bom_versions or {}).get(material_id) if material_bom_versions else None
+    if not version:
+        version = bom_version
+    use_default = use_default_bom and not version
+
+    query = BOM.filter(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        deleted_at__isnull=True
+    )
+    if only_approved:
+        query = query.filter(approval_status="approved")
+
+    if version:
+        query = query.filter(version=version)
+        return await query.first()
+    if use_default:
+        bom = await query.filter(is_default=True).first()
+        if bom:
+            return bom
+        # 无默认版本时回退到最新版本
+        fallback = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True
+        )
+        if only_approved:
+            fallback = fallback.filter(approval_status="approved")
+        return await fallback.order_by("-created_at").first()
+    return await query.order_by("-version", "-created_at").first()
 from infra.exceptions.exceptions import ValidationError, NotFoundError
 
 
@@ -192,7 +233,10 @@ async def expand_bom_with_source_control(
     required_quantity: float,
     only_approved: bool = True,
     level: int = 0,
-    max_level: int = 10
+    max_level: int = 10,
+    bom_version: Optional[str] = None,
+    use_default_bom: bool = False,
+    material_bom_versions: Optional[Dict[int, str]] = None
 ) -> List[Dict[str, Any]]:
     """
     展开BOM，自动跳过虚拟件（物料来源控制）
@@ -204,6 +248,9 @@ async def expand_bom_with_source_control(
         only_approved: 是否只使用已审核的BOM
         level: 当前层级
         max_level: 最大层级（防止无限递归）
+        bom_version: 全局 BOM 版本（可选），用于顶层物料
+        use_default_bom: 是否使用默认版本（is_default=True），当 bom_version 未指定时生效
+        material_bom_versions: 按物料ID指定版本（可选），格式 {material_id: version}
         
     Returns:
         List[Dict]: 展开后的物料需求列表，虚拟件已跳过
@@ -223,31 +270,20 @@ async def expand_bom_with_source_control(
     if source_type == SOURCE_TYPE_PHANTOM:
         logger.debug(f"跳过虚拟件，直接展开下层物料，物料ID: {material_id}, 物料编码: {material.main_code}")
         
-        # 获取虚拟件的BOM
-        phantom_bom_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            deleted_at__isnull=True
+        # 获取虚拟件的BOM（支持版本参数）
+        target_bom = await _get_bom_for_material(
+            tenant_id, material_id, only_approved,
+            bom_version, use_default_bom, material_bom_versions
         )
-        if only_approved:
-            phantom_bom_query = phantom_bom_query.filter(approval_status="approved")
-        bom_items = await phantom_bom_query.prefetch_related("component").all()
-        
-        if not bom_items:
+        if not target_bom or not target_bom.bom_code:
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
-            return []
-        
-        # 获取最新版本的bom_code
-        latest_bom = await phantom_bom_query.order_by("-version", "-created_at").first()
-        
-        if not latest_bom or not latest_bom.bom_code:
             return []
         
         # 获取该bom_code下的所有BOM明细（限定同一主物料）
         bom_items_query = BOM.filter(
             tenant_id=tenant_id,
             material_id=material_id,
-            bom_code=latest_bom.bom_code,
+            bom_code=target_bom.bom_code,
             deleted_at__isnull=True
         )
         if only_approved:
@@ -270,14 +306,17 @@ async def expand_bom_with_source_control(
             if bom_item.waste_rate:
                 component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
             
-            # 递归展开子物料
+            # 递归展开子物料（传递版本参数）
             child_requirements = await expand_bom_with_source_control(
                 tenant_id=tenant_id,
                 material_id=component.id,
                 required_quantity=component_qty,
                 only_approved=only_approved,
                 level=level + 1,
-                max_level=max_level
+                max_level=max_level,
+                bom_version=bom_version,
+                use_default_bom=use_default_bom,
+                material_bom_versions=material_bom_versions,
             )
             
             # 合并需求（如果有子物料展开的结果，使用子物料的结果；否则添加当前物料）
@@ -301,30 +340,18 @@ async def expand_bom_with_source_control(
         return requirements
     
     # 非虚拟件，正常展开BOM
-    make_bom_query = BOM.filter(
-        tenant_id=tenant_id,
-        material_id=material_id,
-        deleted_at__isnull=True
+    target_bom = await _get_bom_for_material(
+        tenant_id, material_id, only_approved,
+        bom_version, use_default_bom, material_bom_versions
     )
-    if only_approved:
-        make_bom_query = make_bom_query.filter(approval_status="approved")
-    bom_items = await make_bom_query.prefetch_related("component").all()
-    
-    if not bom_items:
-        # 没有BOM，返回空列表
-        return []
-    
-    # 获取最新版本的bom_code
-    latest_bom = await make_bom_query.order_by("-version", "-created_at").first()
-    
-    if not latest_bom or not latest_bom.bom_code:
+    if not target_bom or not target_bom.bom_code:
         return []
     
     # 获取该bom_code下的所有BOM明细（限定同一主物料）
     bom_items_query = BOM.filter(
         tenant_id=tenant_id,
         material_id=material_id,
-        bom_code=latest_bom.bom_code,
+        bom_code=target_bom.bom_code,
         deleted_at__isnull=True
     )
     if only_approved:
@@ -357,7 +384,10 @@ async def expand_bom_with_source_control(
                 required_quantity=component_qty,
                 only_approved=only_approved,
                 level=level + 1,
-                max_level=max_level
+                max_level=max_level,
+                bom_version=bom_version,
+                use_default_bom=use_default_bom,
+                material_bom_versions=material_bom_versions,
             )
             requirements.extend(child_requirements)
         else:
@@ -391,7 +421,10 @@ async def expand_bom_with_source_control(
                     required_quantity=component_qty,
                     only_approved=only_approved,
                     level=level + 1,
-                    max_level=max_level
+                    max_level=max_level,
+                    bom_version=bom_version,
+                    use_default_bom=use_default_bom,
+                    material_bom_versions=material_bom_versions,
                 )
                 requirements.extend(child_requirements)
     

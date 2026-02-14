@@ -19,7 +19,9 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 async def get_bom_by_material_id(
     tenant_id: int,
     material_id: int,
-    only_approved: bool = True
+    only_approved: bool = True,
+    version: Optional[str] = None,
+    use_default: bool = False
 ) -> Optional[BOM]:
     """
     根据物料ID获取BOM（从master_data）
@@ -28,6 +30,8 @@ async def get_bom_by_material_id(
         tenant_id: 租户ID
         material_id: 物料ID
         only_approved: 是否只返回已审核的BOM（默认：True）
+        version: 指定版本号（可选），若提供则按版本查询
+        use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
 
     Returns:
         BOM对象或None
@@ -41,8 +45,25 @@ async def get_bom_by_material_id(
     if only_approved:
         query = query.filter(approval_status="approved")
     
-    # 获取最新版本的BOM
-    bom = await query.order_by("-version", "-created_at").first()
+    if version:
+        query = query.filter(version=version)
+        bom = await query.first()
+    elif use_default:
+        query = query.filter(is_default=True)
+        bom = await query.first()
+        if not bom:
+            # 无默认版本时回退到最新版本
+            query = BOM.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                deleted_at__isnull=True
+            )
+            if only_approved:
+                query = query.filter(approval_status="approved")
+            bom = await query.order_by("-created_at").first()
+    else:
+        # 获取最新版本的BOM
+        bom = await query.order_by("-version", "-created_at").first()
     
     return bom
 
@@ -50,7 +71,9 @@ async def get_bom_by_material_id(
 async def get_bom_items_by_material_id(
     tenant_id: int,
     material_id: int,
-    only_approved: bool = True
+    only_approved: bool = True,
+    version: Optional[str] = None,
+    use_default: bool = False
 ) -> List[BOM]:
     """
     根据物料ID获取BOM明细列表（从master_data）
@@ -59,35 +82,27 @@ async def get_bom_items_by_material_id(
         tenant_id: 租户ID
         material_id: 物料ID
         only_approved: 是否只返回已审核的BOM（默认：True）
+        version: 指定版本号（可选）
+        use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
 
     Returns:
         BOM明细列表
     """
-    query = BOM.filter(
+    bom = await get_bom_by_material_id(
         tenant_id=tenant_id,
         material_id=material_id,
-        deleted_at__isnull=True
+        only_approved=only_approved,
+        version=version,
+        use_default=use_default
     )
-    
-    if only_approved:
-        query = query.filter(approval_status="approved")
-    
-    # 获取最新版本的BOM明细
-    # master_data的BOM表结构：每个BOM项都是一条记录，通过material_id和bom_code关联
-    # 先获取最新版本的bom_code
-    latest_bom = await query.order_by("-version", "-created_at").first()
-    if not latest_bom:
-        return []
-    
-    bom_code = latest_bom.bom_code
-    if not bom_code:
+    if not bom or not bom.bom_code:
         return []
     
     # 获取该bom_code下的所有BOM明细（限定同一主物料，确保子物料完整）
     items_query = BOM.filter(
         tenant_id=tenant_id,
         material_id=material_id,
-        bom_code=bom_code,
+        bom_code=bom.bom_code,
         deleted_at__isnull=True
     )
     if only_approved:

@@ -55,6 +55,7 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     path: (raw.path as string) ?? undefined,
     version: (raw.version as string) ?? '1.0',
     bomCode: (raw.bom_code ?? raw.bomCode) as string | undefined,
+    isDefault: (raw.is_default ?? raw.isDefault) === true,
     effectiveDate: (raw.effective_date ?? raw.effectiveDate) as string | undefined,
     expiryDate: (raw.expiry_date ?? raw.expiryDate) as string | undefined,
     approvalStatus: (raw.approval_status ?? raw.approvalStatus) as BOM['approvalStatus'],

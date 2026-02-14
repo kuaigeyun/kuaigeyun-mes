@@ -258,8 +258,8 @@ code {
     }
   }
 
-  /* 移动端Drawer样式 */
-  .ant-drawer {
+  /* 移动端Drawer样式（排除需求计算详情抽屉，该抽屉在桌面端需更宽） */
+  .ant-drawer:not(.demand-computation-drawer) {
     width: 90vw !important;
 
     .ant-drawer-header {
@@ -496,6 +496,18 @@ code {
     display: none;
     width: 0;
     height: 0;
+  }
+}
+
+/* 需求计算详情抽屉：桌面端固定宽度 1200px，移动端 90vw */
+@media (min-width: 769px) {
+  .demand-computation-drawer .ant-drawer-content-wrapper {
+    width: 1300px !important;
+  }
+}
+@media (max-width: 768px) {
+  .demand-computation-drawer .ant-drawer-content-wrapper {
+    width: 90vw !important;
   }
 }
 

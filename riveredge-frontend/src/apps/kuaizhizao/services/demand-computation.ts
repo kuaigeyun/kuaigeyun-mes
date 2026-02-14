@@ -170,6 +170,14 @@ export interface GenerateOrdersResponse {
     product_name: string;
     quantity: number;
   }>;
+  /** 委外工单（在委外管理页展示，不在工单管理页） */
+  outsource_work_orders?: Array<{
+    id: number;
+    code: string;
+    product_code: string;
+    product_name: string;
+    quantity: number;
+  }>;
   purchase_orders: Array<{
     id: number;
     order_code: string;
@@ -177,7 +185,10 @@ export interface GenerateOrdersResponse {
     material_name: string;
     quantity: number;
   }>;
+  /** 生产工单数量（工单管理页） */
   work_order_count: number;
+  /** 委外工单数量（委外管理页） */
+  outsource_work_order_count?: number;
   purchase_order_count: number;
 }
 

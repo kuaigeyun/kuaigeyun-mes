@@ -9,7 +9,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { ProFormText } from '@ant-design/pro-components';
-import { Button, Space } from 'antd';
+import { Button, Form, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { getCodeRulePageConfig, generateCode, testGenerateCode } from '../../services/codeRule';
@@ -57,9 +57,18 @@ const CodeField: React.FC<CodeFieldProps> = ({
   fieldProps = {},
 }) => {
   const { message } = App.useApp();
+  const form = Form.useFormInstance();
   const [pageConfig, setPageConfig] = useState<CodeRulePageConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const hasGeneratedRef = useRef(false); // 防止重复生成编码
+
+  const updateFormValue = React.useCallback((code: string) => {
+    if (onChange) {
+      onChange(code);
+    } else if (form) {
+      form.setFieldsValue({ [name]: code });
+    }
+  }, [form, name, onChange]);
 
   /**
    * 生成编码
@@ -74,12 +83,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
       setLoading(true);
       
       // 使用测试生成（不更新序号）或正式生成（更新序号）
-      // 根据 pageCode 确定实体类型
       const entityTypeMap: Record<string, string> = {
         'master-data-material': 'material',
         'master-data-process-route': 'process_route',
         'master-data-engineering-bom': 'bom',
         'kuaizhizao-sales-order': 'sales_order',
+        'kuaizhizao-production-work-order': 'work_order',
       };
       const entityType = entityTypeMap[pageCode];
       
@@ -95,8 +104,8 @@ const CodeField: React.FC<CodeFieldProps> = ({
             context,
           });
       
-      if (response.code && onChange) {
-        onChange(response.code);
+      if (response.code) {
+        updateFormValue(response.code);
       }
     } catch (error: any) {
       console.error('生成编码失败:', error);
@@ -104,7 +113,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [context, message, onChange]);
+  }, [context, message, updateFormValue]);
 
   // 生成编码的辅助函数
   const generateCodeWithContext = React.useCallback(async (config: CodeRulePageConfig, currentContext: Record<string, any>) => {
@@ -118,6 +127,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
       'master-data-process-route': 'process_route',
       'master-data-engineering-bom': 'bom',
       'kuaizhizao-sales-order': 'sales_order',
+      'kuaizhizao-production-work-order': 'work_order',
     };
     const entityType = entityTypeMap[pageCode];
     
@@ -131,11 +141,8 @@ const CodeField: React.FC<CodeFieldProps> = ({
         check_duplicate: true,
         entity_type: entityType,
       });
-      // 如果返回的编码为空，说明规则不存在或未启用，静默处理
       if (response.code) {
-        if (onChange) {
-          onChange(response.code);
-        }
+        updateFormValue(response.code);
       } else {
         // 规则不存在或未启用，静默处理
         console.info(`编码规则 ${config.ruleCode} 不存在或未启用，跳过自动生成`);
@@ -145,7 +152,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
       const errorMessage = error?.response?.data?.detail || error?.message || error;
       console.warn('自动生成编码失败:', errorMessage);
     }
-  }, [pageCode, onChange]);
+  }, [pageCode, updateFormValue]);
 
   // 加载页面配置
   useEffect(() => {

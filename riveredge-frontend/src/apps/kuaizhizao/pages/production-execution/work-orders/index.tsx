@@ -9,10 +9,10 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch, ProForm } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, InputNumber, Popconfirm, Select, Progress, Spin, Divider, Input, Timeline } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined, QrcodeOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch, ProForm, ProFormGroup } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, InputNumber, Popconfirm, Select, Progress, Spin, Divider, Input, Timeline, Form, Segmented, ConfigProvider, theme, Typography, Empty } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined, QrcodeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -23,6 +23,9 @@ import { qrcodeApi } from '../../../../../services/qrcode';
 import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
 import { stateTransitionApi, AvailableTransition, StateTransitionLog } from '../../../services/state-transition';
 import { listSalesOrders } from '../../../services/sales';
+import { getSalesOrder } from '../../../services/sales-order';
+import { listSalesForecasts, getSalesForecast, getSalesForecastItems } from '../../../services/sales-forecast';
+import { listDemands, getDemand } from '../../../services/demand';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { operationApi, processRouteApi } from '../../../../master-data/services/process';
 import { workshopApi } from '../../../../master-data/services/factory';
@@ -31,6 +34,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import CodeField from '../../../../../components/code-field';
+import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestion-float-panel';
 import { getUserList } from '../../../../../services/user';
 import { getEquipmentList } from '../../../../../services/equipment';
 
@@ -74,6 +78,7 @@ interface WorkOrder {
 
 const WorkOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -96,12 +101,141 @@ const WorkOrdersPage: React.FC = () => {
     validationErrors?: string[];
     canCreateWorkOrder?: boolean;
   } | null>(null);
+  // 只显示自制件
+  const [onlyShowMake, setOnlyShowMake] = useState(false);
+  // 从文档加载的产品列表（销售订单/销售预测/需求）
+  const [productSourceData, setProductSourceData] = useState<{ type: string; materials: any[]; items?: { productId: number; quantity: number }[] } | null>(null);
+  // 选择文档弹窗
+  const [productSourceModalVisible, setProductSourceModalVisible] = useState(false);
+  const [productSourceModalType, setProductSourceModalType] = useState<'sales_order' | 'sales_forecast' | 'demand' | null>(null);
+  const [productSourceDocList, setProductSourceDocList] = useState<any[]>([]);
+  const [productSourceDocLoading, setProductSourceDocLoading] = useState(false);
+  // 加载产品来源文档列表（销售订单/销售预测/需求）- 直接拉平为明细行
+  useEffect(() => {
+    if (!productSourceModalVisible || !productSourceModalType) {
+      setProductSourceDocList([]);
+      return;
+    }
+    const load = async () => {
+      setProductSourceDocLoading(true);
+      try {
+        if (productSourceModalType === 'sales_order') {
+          const res = await listSalesOrders({ limit: 50 });
+          const orders = Array.isArray(res) ? res : (res?.data ?? []);
+          const ordersWithItems = await Promise.all(orders.map((o: any) => getSalesOrder(o.id, true)));
+          const flat: any[] = [];
+          ordersWithItems.forEach((ord: any) => {
+            (ord?.items ?? []).forEach((it: any, idx: number) => {
+              flat.push({
+                ...it,
+                _doc_id: ord.id,
+                _order_code: ord.order_code,
+                _customer_name: ord.customer_name,
+                _row_key: `${ord.id}-${it.id ?? it.material_id ?? idx}`,
+              });
+            });
+          });
+          setProductSourceDocList(flat);
+        } else if (productSourceModalType === 'sales_forecast') {
+          const res = await listSalesForecasts({ limit: 50 });
+          const forecasts = res?.data ?? [];
+          const flat: any[] = [];
+          for (const f of forecasts) {
+            const items = (await getSalesForecastItems(f.id)) ?? [];
+            items.forEach((it: any, idx: number) => {
+              flat.push({
+                ...it,
+                _doc_id: f.id,
+                _forecast_code: f.forecast_code,
+                _forecast_name: f.forecast_name,
+                _row_key: `${f.id}-${it.id ?? it.material_id ?? idx}`,
+              });
+            });
+          }
+          setProductSourceDocList(flat);
+        } else if (productSourceModalType === 'demand') {
+          const res = await listDemands({ limit: 50 });
+          const demands = res?.data ?? [];
+          const demandsWithItems = await Promise.all(demands.map((d: any) => getDemand(d.id, true)));
+          const flat: any[] = [];
+          demandsWithItems.forEach((d: any) => {
+            (d?.items ?? []).forEach((it: any, idx: number) => {
+              flat.push({
+                ...it,
+                _doc_id: d.id,
+                _demand_code: d.demand_code,
+                _demand_name: d.demand_name,
+                _row_key: `${d.id}-${it.id ?? it.material_id ?? idx}`,
+              });
+            });
+          });
+          setProductSourceDocList(flat);
+        }
+      } catch (e) {
+        console.error('加载文档列表失败:', e);
+        setProductSourceDocList([]);
+      } finally {
+        setProductSourceDocLoading(false);
+      }
+    };
+    load();
+  }, [productSourceModalVisible, productSourceModalType]);
+
+  // 产品选项：根据只显示自制件、文档来源过滤
+  const productOptionsList = useMemo(() => {
+    let list = productSourceData ? productSourceData.materials : productList;
+    if (!productSourceData && onlyShowMake) {
+      list = productList.filter((m: any) => (m.sourceType || m.source_type) === 'Make');
+    }
+    return list;
+  }, [productList, onlyShowMake, productSourceData]);
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null);
   const formRef = useRef<any>(null);
+
+  // 从加载来源填充表单：当 productSourceData 有 items 且新建工单弹窗打开时，自动填充产品与数量
+  useEffect(() => {
+    if (!productSourceData?.items?.length || !modalVisible || isEdit || !formRef.current) return;
+    const first = productSourceData.items[0];
+    formRef.current.setFieldsValue({
+      product_id: first.productId,
+      quantity: first.quantity,
+    });
+    // 同步加载物料来源信息
+    const selectedMaterial = productSourceData.materials.find((p: any) => p.id === first.productId);
+    if (selectedMaterial) {
+      materialApi.get(selectedMaterial.uuid).then((materialDetail: any) => {
+        const sourceType = materialDetail.sourceType || materialDetail.source_type;
+        const sourceTypeNames: Record<string, string> = {
+          Make: '自制件', Buy: '采购件', Phantom: '虚拟件',
+          Outsource: '委外件', Configure: '配置件',
+        };
+        let canCreateWorkOrder = true;
+        const validationErrors: string[] = [];
+        if (sourceType === 'Buy') {
+          canCreateWorkOrder = false;
+          validationErrors.push('采购件不应创建生产工单，请使用采购订单功能');
+        } else if (sourceType === 'Phantom') {
+          canCreateWorkOrder = false;
+          validationErrors.push('虚拟件不应创建工单');
+        } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线');
+        else if (sourceType === 'Outsource') validationErrors.push('委外件需配置委外供应商和工序');
+        setSelectedMaterialSourceInfo({
+          sourceType,
+          sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
+          validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+          canCreateWorkOrder,
+        });
+      }).catch(() => setSelectedMaterialSourceInfo(null));
+    } else {
+      setSelectedMaterialSourceInfo(null);
+    }
+    // 自动加载物料绑定的工艺路线及工序
+    if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid);
+  }, [productSourceData, modalVisible, isEdit]);
 
   // 初始化产品列表
   useEffect(() => {
@@ -129,9 +263,9 @@ const WorkOrdersPage: React.FC = () => {
           setProcessRouteList([]);
         }
 
-        // 加载人员列表
+        // 加载人员列表（后端 page_size 最大 100）
         try {
-          const users = await getUserList({ is_active: true, page_size: 1000 });
+          const users = await getUserList({ is_active: true, page_size: 100 });
           setWorkerList(users.items || []);
         } catch (error) {
           console.error('获取人员列表失败:', error);
@@ -140,7 +274,7 @@ const WorkOrdersPage: React.FC = () => {
 
         // 加载设备列表
         try {
-          const equipment = await getEquipmentList({ is_active: true, limit: 1000 });
+          const equipment = await getEquipmentList({ is_active: true, limit: 100 });
           setEquipmentList(equipment.items || []);
         } catch (error) {
           console.error('获取设备列表失败:', error);
@@ -234,6 +368,79 @@ const WorkOrdersPage: React.FC = () => {
   const [workerList, setWorkerList] = useState<any[]>([]);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const dispatchFormRef = useRef<any>(null);
+
+  /** 解析工艺路线的 operation_sequence，兼容多种格式（与工艺路线编辑页保存格式对接） */
+  const parseOperationSequence = (seq: any, opList: any[]): { operation_id: number; operation_code: string; operation_name: string; sequence: number }[] => {
+    if (!seq || opList.length === 0) return [];
+    let items: any[] = [];
+    if (Array.isArray(seq)) {
+      items = seq;
+    } else if (typeof seq === 'object') {
+      if (Array.isArray(seq.operations)) {
+        items = seq.operations;
+      } else if (Array.isArray(seq.sequence)) {
+        items = seq.sequence.map((uuid: string, i: number) => ({ uuid, _idx: i }));
+      } else if (seq.operation_ids || seq.operationIds) {
+        const ids = seq.operation_ids ?? seq.operationIds ?? [];
+        items = ids.map((id: number, i: number) => ({ operation_id: id, operationId: id, sequence: i + 1 }));
+      } else {
+        const vals = Object.values(seq).filter((v: any) => v && (typeof v === 'object' || typeof v === 'string'));
+        const arr = vals.find((v: any) => Array.isArray(v)) as any[] | undefined;
+        items = arr ?? vals;
+      }
+    }
+    const result: { operation_id: number; operation_code: string; operation_name: string; sequence: number }[] = [];
+    items.forEach((item: any, index: number) => {
+      let op: any = null;
+      if (item?.operation_id != null || item?.operationId != null) {
+        const id = item.operation_id ?? item.operationId;
+        op = opList.find((o: any) => o.id === id);
+      } else if (typeof item === 'string' || item?.uuid) {
+        const uuid = typeof item === 'string' ? item : item.uuid;
+        op = opList.find((o: any) => (o.uuid ?? '') === uuid);
+      } else if (item?.code || item?.name) {
+        op = opList.find((o: any) => o.uuid === item.uuid || (o.code === item.code && o.name === item.name));
+      }
+      if (op) {
+        result.push({
+          operation_id: op.id,
+          operation_code: op.code ?? op.mainCode ?? '',
+          operation_name: op.name ?? '',
+          sequence: item.sequence ?? item._idx ?? (index + 1),
+        });
+      }
+    });
+    result.sort((a, b) => a.sequence - b.sequence);
+    return result.map((r, i) => ({ ...r, sequence: i + 1 }));
+  };
+
+  /** 根据物料加载其绑定的工艺路线并填充工序 */
+  const loadProcessRouteForMaterial = async (materialUuid: string) => {
+    try {
+      const route = await processRouteApi.getProcessRouteForMaterial(materialUuid);
+      if (!route) {
+        formRef.current?.setFieldsValue({ process_route_id: undefined });
+        setSelectedOperations([]);
+        formRef.current?.setFieldsValue({ operations: undefined });
+        return;
+      }
+      formRef.current?.setFieldsValue({ process_route_id: route.id });
+      const routeDetail = await processRouteApi.get(route.uuid);
+      const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList);
+      if (operations.length > 0) {
+        setSelectedOperations(operations);
+        formRef.current?.setFieldsValue({ operations: operations.map((o: any) => o.operation_id) });
+        messageApi.success(`已加载工艺路线及 ${operations.length} 个工序`);
+      } else {
+        setSelectedOperations([]);
+        formRef.current?.setFieldsValue({ operations: undefined });
+      }
+    } catch (e: any) {
+      console.warn('加载工艺路线失败:', e);
+      formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined });
+      setSelectedOperations([]);
+    }
+  };
 
   /**
    * 处理新建工单
@@ -1986,86 +2193,75 @@ const WorkOrdersPage: React.FC = () => {
       </ListPageTemplate>
 
       {/* 创建/编辑工单 Modal */}
+      <SmartSuggestionFloatPanel
+        visible={modalVisible && !!selectedMaterialSourceInfo}
+        messages={selectedMaterialSourceInfo ? (() => {
+          const msgs: Array<{ text: string; title?: string }> = [];
+          msgs.push({
+            title: '物料来源',
+            text: selectedMaterialSourceInfo.sourceTypeName || '未配置',
+          });
+          if (selectedMaterialSourceInfo.validationErrors?.length) {
+            msgs.push({
+              title: '配置建议',
+              text: selectedMaterialSourceInfo.validationErrors.map((e, i) => `${i + 1}. ${e}`).join('\n'),
+            });
+          }
+          if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
+            msgs.push({
+              title: '提醒',
+              text: '该物料不允许创建生产工单，请选择其他物料',
+            });
+          }
+          return msgs;
+        })() : []}
+        anchorSelector="[data-smart-suggestion-anchor='work-order-form']"
+      />
       <FormModalTemplate
         title={isEdit ? '编辑工单' : '新建工单'}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
           setCurrentWorkOrder(null);
-          setSelectedMaterialSourceInfo(null); // 清空物料来源信息
+          setSelectedMaterialSourceInfo(null);
+          setProductSourceData(null);
           formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="work-order-form">
+            {modal}
+          </div>
+        )}
       >
-        {/* 编码信息组 */}
-        <Divider style={{ marginTop: 0 }}>编码信息</Divider>
         <CodeField
           pageCode="kuaizhizao-production-work-order"
           name="code"
           label="工单编码"
           required={true}
           autoGenerateOnCreate={!isEdit}
+          showGenerateButton={false}
           context={{}}
+          colProps={{ span: 12 }}
         />
-
-        {/* 基本信息组 */}
-        <Divider>基本信息</Divider>
         <ProFormText
           name="name"
           label="工单名称"
-          placeholder="请输入工单名称（可选）"
+          placeholder="可选"
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
-        {/* 隐藏生产模式字段，默认MTS，选择销售订单时自动变为MTO */}
         <ProFormText name="production_mode" initialValue="MTS" hidden />
-        {/* 销售订单选择（选择后自动变为MTO模式） */}
-        <ProFormSelect
-          name="sales_order_id"
-          label="销售订单"
-          placeholder="请选择销售订单（可选，选择后自动切换为MTO模式）"
-          options={salesOrderList.map(order => ({
-            label: `${order.order_code} - ${order.customer_name || ''}`,
-            value: order.id,
-          }))}
-          disabled={isEdit}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            onChange: (value: number | undefined) => {
-              if (value) {
-                // 选择了销售订单，自动设置为MTO模式
-                const selectedOrder = salesOrderList.find(order => order.id === value);
-                if (selectedOrder) {
-                  formRef.current?.setFieldsValue({
-                    production_mode: 'MTO',
-                    sales_order_code: selectedOrder.order_code,
-                    sales_order_name: selectedOrder.customer_name || selectedOrder.order_code,
-                  });
-                  setProductionMode('MTO');
-                }
-              } else {
-                // 清空销售订单，恢复为MTS模式
-                formRef.current?.setFieldsValue({
-                  production_mode: 'MTS',
-                  sales_order_code: undefined,
-                  sales_order_name: undefined,
-                });
-                setProductionMode('MTS');
-              }
-            }
-          }}
-          colProps={{ span: 12 }}
-        />
+
+        {/* 产品与数量 */}
         <ProFormSelect
           name="product_id"
-          label="产品选择"
+          label="产品"
           placeholder="请选择产品"
-          options={productList.map(product => ({
+          options={productOptionsList.map((product: any) => ({
             label: `${product.code || product.mainCode} - ${product.name}`,
             value: product.id,
           }))}
@@ -2077,109 +2273,92 @@ const WorkOrdersPage: React.FC = () => {
               (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
             onChange: async (value: number | undefined) => {
               if (value) {
-                // 查找选中的物料
-                const selectedMaterial = productList.find(p => p.id === value);
+                const selectedMaterial = productOptionsList.find((p: any) => p.id === value);
                 if (selectedMaterial) {
-                  // 获取物料详情（包含source_type和source_config）
                   try {
                     const materialDetail = await materialApi.get(selectedMaterial.uuid);
                     const sourceType = materialDetail.sourceType || materialDetail.source_type;
-
-                    // 物料来源类型名称映射
                     const sourceTypeNames: Record<string, string> = {
-                      'Make': '自制件',
-                      'Buy': '采购件',
-                      'Phantom': '虚拟件',
-                      'Outsource': '委外件',
-                      'Configure': '配置件',
+                      'Make': '自制件', 'Buy': '采购件', 'Phantom': '虚拟件',
+                      'Outsource': '委外件', 'Configure': '配置件',
                     };
-
-                    // 判断是否可以创建工单
                     let canCreateWorkOrder = true;
                     const validationErrors: string[] = [];
-
                     if (sourceType === 'Buy') {
                       canCreateWorkOrder = false;
                       validationErrors.push('采购件不应创建生产工单，请使用采购订单功能');
                     } else if (sourceType === 'Phantom') {
                       canCreateWorkOrder = false;
-                      validationErrors.push('虚拟件不应创建工单，虚拟件会自动展开到下层物料');
-                    } else if (sourceType === 'Make') {
-                      // 自制件需要验证BOM和工艺路线（后端会验证，这里只显示提示）
-                      validationErrors.push('自制件需要配置BOM和工艺路线');
-                    } else if (sourceType === 'Outsource') {
-                      // 委外件需要验证委外供应商和委外工序（后端会验证，这里只显示提示）
-                      validationErrors.push('委外件需要配置委外供应商和委外工序');
-                    }
-
+                      validationErrors.push('虚拟件不应创建工单');
+                    } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线');
+                    else if (sourceType === 'Outsource') validationErrors.push('委外件需配置委外供应商和工序');
                     setSelectedMaterialSourceInfo({
                       sourceType,
                       sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
                       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
                       canCreateWorkOrder,
                     });
+                    // 自动加载物料绑定的工艺路线及工序
+                    loadProcessRouteForMaterial(selectedMaterial.uuid);
                   } catch (error) {
                     console.error('获取物料详情失败:', error);
                     setSelectedMaterialSourceInfo(null);
                   }
-                } else {
-                  setSelectedMaterialSourceInfo(null);
-                }
-              } else {
-                setSelectedMaterialSourceInfo(null);
-              }
+                } else setSelectedMaterialSourceInfo(null);
+              } else setSelectedMaterialSourceInfo(null);
             }
           }}
-          colProps={{ span: 12 }}
+          colProps={{ span: 10 }}
         />
-        {/* 物料来源信息显示 */}
-        {selectedMaterialSourceInfo && (
-          <div style={{ marginTop: -16, marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: 4, gridColumn: 'span 24' }}>
-            <div style={{ marginBottom: 8 }}>
-              <span style={{ fontWeight: 'bold' }}>物料来源类型：</span>
-              <Tag color={
-                selectedMaterialSourceInfo.sourceType === 'Make' ? 'blue' :
-                  selectedMaterialSourceInfo.sourceType === 'Buy' ? 'orange' :
-                    selectedMaterialSourceInfo.sourceType === 'Phantom' ? 'purple' :
-                      selectedMaterialSourceInfo.sourceType === 'Outsource' ? 'cyan' :
-                        selectedMaterialSourceInfo.sourceType === 'Configure' ? 'green' :
-                          'default'
-              }>
-                {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || '未配置'}
-              </Tag>
-            </div>
-            {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                {selectedMaterialSourceInfo.validationErrors.map((error, index) => (
-                  <div key={index} style={{ color: selectedMaterialSourceInfo.canCreateWorkOrder === false ? '#ff4d4f' : '#faad14', marginBottom: 4 }}>
-                    {selectedMaterialSourceInfo.canCreateWorkOrder === false ? '❌' : '⚠️'} {error}
-                  </div>
-                ))}
-              </div>
-            )}
-            {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
-              <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
-                该物料来源类型不允许创建生产工单，请选择其他物料或使用相应的功能模块
-              </div>
-            )}
-          </div>
-        )}
+        <ProFormGroup colProps={{ span: 14 }} style={{ marginBottom: 0 }}>
+          <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
+            <Space size="middle" wrap={false} style={{ flexWrap: 'nowrap' }}>
+              <ConfigProvider
+                theme={{
+                  components: {
+                    Segmented: {
+                      trackBg: 'rgba(0, 0, 0, 0.06)',
+                      itemSelectedBg: token.colorPrimary,
+                      itemSelectedColor: '#fff',
+                    },
+                  },
+                }}
+              >
+                <Segmented
+                  size="small"
+                  value={onlyShowMake ? 'make' : 'all'}
+                  onChange={(v) => setOnlyShowMake(v === 'make')}
+                  options={[
+                    { label: '全部', value: 'all' },
+                    { label: '自制件', value: 'make' },
+                  ]}
+                />
+              </ConfigProvider>
+              <Divider type="vertical" style={{ margin: 0, height: 20 }} />
+              <Space size="small" wrap={false}>
+                <Button size="small" onClick={() => { setProductSourceModalType('sales_order'); setProductSourceModalVisible(true); }}>从销售订单加载</Button>
+                <Button size="small" onClick={() => { setProductSourceModalType('sales_forecast'); setProductSourceModalVisible(true); }}>从销售预测加载</Button>
+                <Button size="small" onClick={() => { setProductSourceModalType('demand'); setProductSourceModalVisible(true); }}>从需求管理加载</Button>
+                {productSourceData && (
+                  <Button size="small" type="link" onClick={() => setProductSourceData(null)} style={{ padding: '0 4px', minWidth: 'auto' }}>清除</Button>
+                )}
+              </Space>
+            </Space>
+          </Form.Item>
+        </ProFormGroup>
         <ProFormDigit
           name="quantity"
           label="计划数量"
-          placeholder="请输入计划生产数量"
+          placeholder="请输入"
           min={0}
           precision={2}
           rules={[{ required: true, message: '请输入计划数量' }]}
-          colProps={{ span: 12 }}
+          colProps={{ span: 6 }}
         />
 
-        {/* 优先级和时间组 */}
-        <Divider>优先级和时间</Divider>
         <ProFormSelect
           name="priority"
           label="优先级"
-          placeholder="请选择优先级"
           options={[
             { label: '低', value: 'low' },
             { label: '正常', value: 'normal' },
@@ -2187,29 +2366,27 @@ const WorkOrdersPage: React.FC = () => {
             { label: '紧急', value: 'urgent' },
           ]}
           initialValue="normal"
-          colProps={{ span: 12 }}
+          colProps={{ span: 6 }}
         />
         <ProFormDatePicker
           name="planned_start_date"
-          label="计划开始时间"
-          placeholder="请选择计划开始时间"
-          width="md"
-          colProps={{ span: 12 }}
+          label="计划开始"
+          placeholder="可选"
+          colProps={{ span: 6 }}
+          fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="planned_end_date"
-          label="计划结束时间"
-          placeholder="请选择计划结束时间"
-          width="md"
-          colProps={{ span: 12 }}
+          label="计划结束"
+          placeholder="可选"
+          colProps={{ span: 6 }}
+          fieldProps={{ style: { width: '100%' } }}
         />
 
-        {/* 工序设置组 */}
-        <Divider>工序设置（可选）</Divider>
         <ProFormSelect
           name="process_route_id"
-          label="工艺路线（可选）"
-          placeholder="请选择工艺路线（选择后自动加载工序）"
+          label="工艺路线"
+          placeholder="选择后自动加载工序"
           options={processRouteList.map(route => ({
             label: `${route.code} - ${route.name}`,
             value: route.id,
@@ -2231,67 +2408,21 @@ const WorkOrdersPage: React.FC = () => {
 
                   // 调用详情 API 获取完整的工艺路线信息（包含工序序列）
                   const routeDetail = await processRouteApi.get(route.uuid);
-
-                  if (routeDetail && routeDetail.operation_sequence) {
-                    // 解析工序序列（可能是列表或字典格式）
-                    let sequence: any[] = [];
-
-                    if (Array.isArray(routeDetail.operation_sequence)) {
-                      // 列表格式：[{"operation_id": 1, "sequence": 1}, ...]
-                      sequence = routeDetail.operation_sequence;
-                    } else if (typeof routeDetail.operation_sequence === 'object') {
-                      // 字典格式：{"1": {"operation_id": 1, "sequence": 1}, ...}
-                      sequence = Object.values(routeDetail.operation_sequence);
-                    }
-
-                    // 按 sequence 排序
-                    sequence.sort((a: any, b: any) => {
-                      const seqA = a.sequence || a.sequence || 0;
-                      const seqB = b.sequence || b.sequence || 0;
-                      return seqA - seqB;
-                    });
-
-                    // 转换为工序对象
-                    const operations = sequence
-                      .map((item: any, index: number) => {
-                        const opId = item.operation_id || item.operationId;
-                        if (!opId) return null;
-
-                        const op = operationList.find(o => o.id === opId);
-                        if (op) {
-                          return {
-                            operation_id: op.id,
-                            operation_code: op.code,
-                            operation_name: op.name,
-                            sequence: item.sequence || (index + 1),
-                          };
-                        } else {
-                          console.warn(`未找到工序 ID: ${opId}`);
-                          return null;
-                        }
-                      })
-                      .filter(Boolean);
-
-                    if (operations.length > 0) {
-                      setSelectedOperations(operations);
-                      // 更新表单中的工序字段
-                      formRef.current?.setFieldsValue({
-                        operations: operations.map((op: any) => op.operation_id),
-                      });
-                      messageApi.success(`已加载 ${operations.length} 个工序`);
-                    } else {
-                      messageApi.warning('该工艺路线未配置工序');
-                      setSelectedOperations([]);
-                      formRef.current?.setFieldsValue({
-                        operations: undefined,
-                      });
-                    }
-                  } else {
-                    messageApi.warning('该工艺路线未配置工序序列');
-                    setSelectedOperations([]);
+                  const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList);
+                  if (operations.length > 0) {
+                    setSelectedOperations(operations);
                     formRef.current?.setFieldsValue({
-                      operations: undefined,
+                      operations: operations.map((op: any) => op.operation_id),
                     });
+                    messageApi.success(`已加载 ${operations.length} 个工序`);
+                  } else {
+                    setSelectedOperations([]);
+                    formRef.current?.setFieldsValue({ operations: undefined });
+                    if (routeDetail?.operation_sequence) {
+                      messageApi.warning('该工艺路线工序数据无法解析，请检查工序主数据是否完整');
+                    } else {
+                      messageApi.warning('该工艺路线未配置工序序列');
+                    }
                   }
                 } catch (error: any) {
                   console.error('获取工艺路线工序失败:', error);
@@ -2311,69 +2442,123 @@ const WorkOrdersPage: React.FC = () => {
           }}
           colProps={{ span: 12 }}
         />
-        <ProFormSelect
-          mode="multiple"
+        <Form.Item
           name="operations"
-          label="选择工序（可选）"
-          placeholder="请选择工序（可多选，将按选择顺序排列）"
-          options={operationList.map(op => ({
-            label: `${op.code} - ${op.name}`,
-            value: op.id,
-          }))}
-          disabled={isEdit}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            onChange: (values: number[]) => {
-              // 更新选中的工序列表
-              const ops = values.map((id, index) => {
-                const op = operationList.find(o => o.id === id);
-                return op ? {
-                  operation_id: op.id,
-                  operation_code: op.code,
-                  operation_name: op.name,
-                  sequence: index + 1,
-                } : null;
-              }).filter(Boolean);
-              setSelectedOperations(ops);
-            }
-          }}
-          colProps={{ span: 12 }}
+          hidden
         />
-        {selectedOperations.length > 0 && (
-          <div style={{ marginTop: 8, padding: 12, background: '#f5f5f5', borderRadius: 4, marginBottom: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>已选工序（{selectedOperations.length}个）：</div>
-            {selectedOperations.map((op, index) => (
-              <div key={op.operation_id} style={{ marginBottom: 4 }}>
-                {index + 1}. {op.operation_code} - {op.operation_name}
-              </div>
-            ))}
-          </div>
-        )}
+        <Form.Item
+          label="工艺路线工序清单"
+          colon
+          style={{ gridColumn: '1 / -1', marginBottom: 0 }}
+        >
+          <CreateWorkOrderOperationsList
+            selectedOperations={selectedOperations}
+            setSelectedOperations={setSelectedOperations}
+            operationList={operationList}
+            formRef={formRef}
+            disabled={isEdit}
+          />
+        </Form.Item>
 
-        {/* 工序控制组 */}
-        <Divider>工序控制</Divider>
         <ProFormSwitch
           name="allow_operation_jump"
           label="允许跳转工序"
-          extra="开启后，每道工序允许自由报工；关闭后，下一道工序的报工数量不可超过上一道工序"
+          extra="开启后允许自由报工；关闭后下一道工序报工数量不可超过上一道"
           initialValue={false}
           colProps={{ span: 24 }}
         />
-
-        {/* 备注组 */}
-        <Divider>备注信息</Divider>
         <ProFormTextArea
           name="remarks"
           label="备注"
-          placeholder="请输入备注信息"
-          fieldProps={{
-            rows: 4,
-          }}
+          placeholder="可选"
+          fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
+
+      {/* 选择产品来源文档 Modal（销售订单/销售预测/需求）- 产品明细 */}
+      <Modal
+        title={
+          productSourceModalType === 'sales_order' ? '选择销售订单 - 产品明细' :
+          productSourceModalType === 'sales_forecast' ? '选择销售预测 - 产品明细' :
+          productSourceModalType === 'demand' ? '选择需求 - 产品明细' : '选择 - 产品明细'
+        }
+        open={productSourceModalVisible}
+        onCancel={() => {
+          setProductSourceModalVisible(false);
+          setProductSourceModalType(null);
+        }}
+        footer={null}
+        width={900}
+      >
+        <Table
+          loading={productSourceDocLoading}
+          dataSource={productSourceDocList}
+          rowKey={(r: any) => r._row_key ?? `${r._doc_id}-${r.id ?? r.uuid}`}
+          size="small"
+          pagination={{ pageSize: 15 }}
+          onRow={(record: any) => ({
+            style: { cursor: 'pointer' },
+            onClick: () => {
+              const docId = record._doc_id;
+              if (!docId) return;
+              try {
+                const sourceItems = productSourceDocList.filter((r: any) => r._doc_id === docId);
+                const itemsWithQty: { productId: number; quantity: number }[] = [];
+                const materials: any[] = [];
+                for (const it of sourceItems) {
+                  const product = productList.find((m: any) =>
+                    m.id === it.material_id || (m.code || m.mainCode) === it.material_code
+                  );
+                  if (!product) continue;
+                  const qty = productSourceModalType === 'sales_forecast'
+                    ? (it.forecast_quantity ?? 0)
+                    : (it.required_quantity ?? 0);
+                  itemsWithQty.push({ productId: product.id, quantity: Number(qty) || 0 });
+                  if (!materials.some((m: any) => m.id === product.id)) materials.push(product);
+                }
+                setProductSourceData({
+                  type: productSourceModalType!,
+                  materials,
+                  items: itemsWithQty,
+                });
+                setProductSourceModalVisible(false);
+                setProductSourceModalType(null);
+                messageApi.success(`已加载 ${materials.length} 个产品`);
+              } catch (e: any) {
+                messageApi.error(e?.message || '加载失败');
+              }
+            },
+          })}
+          columns={[
+            ...(productSourceModalType === 'sales_order'
+              ? [
+                  { title: '订单编码', dataIndex: '_order_code', key: '_order_code', width: 140 },
+                  { title: '客户', dataIndex: '_customer_name', key: '_customer_name', width: 160 },
+                  { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
+                  { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
+                  { title: '数量', dataIndex: 'required_quantity', key: 'required_quantity', width: 80 },
+                ]
+              : productSourceModalType === 'sales_forecast'
+              ? [
+                  { title: '预测编码', dataIndex: '_forecast_code', key: '_forecast_code', width: 120 },
+                  { title: '预测名称', dataIndex: '_forecast_name', key: '_forecast_name', width: 120 },
+                  { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
+                  { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
+                  { title: '数量', dataIndex: 'forecast_quantity', key: 'forecast_quantity', width: 80 },
+                ]
+              : productSourceModalType === 'demand'
+              ? [
+                  { title: '需求编码', dataIndex: '_demand_code', key: '_demand_code', width: 120 },
+                  { title: '需求名称', dataIndex: '_demand_name', key: '_demand_name', width: 120 },
+                  { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
+                  { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
+                  { title: '数量', dataIndex: 'required_quantity', key: 'required_quantity', width: 80 },
+                ]
+              : []),
+          ]}
+        />
+      </Modal>
 
       {/* 工单详情 Drawer */}
       <DetailDrawerTemplate<WorkOrder>
@@ -3467,6 +3652,269 @@ const WorkOrdersPage: React.FC = () => {
         />
       </FormModalTemplate>
     </>
+  );
+};
+
+/**
+ * 新建工单时的工序清单（样式参考工艺路线编辑页面）
+ */
+interface CreateWorkOrderOperationsListProps {
+  selectedOperations: any[];
+  setSelectedOperations: (ops: any[]) => void;
+  operationList: any[];
+  formRef: React.RefObject<any>;
+  disabled?: boolean;
+}
+
+const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps> = ({
+  selectedOperations,
+  setSelectedOperations,
+  operationList,
+  formRef,
+  disabled = false,
+}) => {
+  const [addOpModalVisible, setAddOpModalVisible] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const syncToForm = (ops: any[]) => {
+    formRef.current?.setFieldsValue({ operations: ops.map((o: any) => o.operation_id) });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = selectedOperations.findIndex((_: any, i: number) => `op-${i}` === active.id);
+    const newIdx = selectedOperations.findIndex((_: any, i: number) => `op-${i}` === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const next = arrayMove(selectedOperations, oldIdx, newIdx).map((o: any, i: number) => ({ ...o, sequence: i + 1 }));
+    setSelectedOperations(next);
+    syncToForm(next);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = selectedOperations.filter((_: any, i: number) => i !== index).map((o: any, i: number) => ({ ...o, sequence: i + 1 }));
+    setSelectedOperations(next);
+    syncToForm(next);
+  };
+
+  const handleReplace = (index: number, newOpId: number) => {
+    const op = operationList.find((o: any) => o.id === newOpId);
+    if (!op) return;
+    const next = [...selectedOperations];
+    next[index] = { operation_id: op.id, operation_code: op.code, operation_name: op.name, sequence: index + 1 };
+    setSelectedOperations(next);
+    syncToForm(next);
+  };
+
+  const addableOptions = operationList
+    .filter((o: any) => !selectedOperations.some((s: any) => s.operation_id === o.id))
+    .map((op: any) => ({ label: `${op.code} - ${op.name}`, value: op.id }));
+  const handleAddSelect = (id: number) => {
+    const op = operationList.find((o: any) => o.id === id);
+    if (!op) return;
+    const next = [...selectedOperations, { operation_id: op.id, operation_code: op.code, operation_name: op.name, sequence: selectedOperations.length + 1 }];
+    setSelectedOperations(next);
+    syncToForm(next);
+  };
+
+  const getOpDetail = (opId: number) => operationList.find((o: any) => o.id === opId);
+
+  if (selectedOperations.length === 0) {
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
+            <Tag color="default">已配置 0 个工序</Tag>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+            支持拖拽排序，点击删除移除工序
+          </Typography.Text>
+        </div>
+        <div style={{ padding: 24, background: '#fafafa', borderRadius: 4, border: '1px dashed #d9d9d9', textAlign: 'center', color: '#999' }}>
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请先选择工艺路线，将自动加载工序清单" />
+        </div>
+        {!disabled && addableOptions.length > 0 && (
+          <>
+            <div
+              onClick={() => setAddOpModalVisible(true)}
+              style={{
+                marginTop: 16,
+                padding: '12px',
+                border: '1px dashed #1890ff',
+                borderRadius: '4px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                color: '#1890ff',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#40a9ff'; e.currentTarget.style.backgroundColor = '#f0f9ff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1890ff'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <PlusOutlined style={{ marginRight: 8 }} />
+              <span>新增工序</span>
+            </div>
+            <Modal title="选择工序" open={addOpModalVisible} onCancel={() => setAddOpModalVisible(false)} footer={null} destroyOnClose>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="选择要添加的工序"
+                showSearch
+                filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+                options={addableOptions}
+                onSelect={(id: number) => { handleAddSelect(id); setAddOpModalVisible(false); }}
+              />
+            </Modal>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const columns = [
+    { title: '序号', key: 'index', width: 100 },
+    { title: '工序代码/名称', key: 'operation' },
+    { title: '报工类型', key: 'reportingType', width: 120 },
+    { title: '允许跳转', key: 'allowJump', width: 100 },
+    { title: '操作', key: 'action', width: 150 },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Space>
+          <Tag color={selectedOperations.length > 0 ? 'processing' : 'default'}>
+            已配置 {selectedOperations.length} 个工序
+          </Tag>
+        </Space>
+        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+          支持拖拽排序，点击删除移除工序
+        </Typography.Text>
+      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={selectedOperations.map((_: any, i: number) => `op-${i}`)} strategy={verticalListSortingStrategy}>
+          <Table
+            columns={columns}
+            dataSource={selectedOperations}
+            rowKey={(_, i) => `op-${i}`}
+            pagination={false}
+            size="small"
+            components={{
+              body: {
+                wrapper: (wrapperProps: any) => (
+                  <tbody {...wrapperProps}>
+                    {selectedOperations.map((op: any, idx: number) => (
+                      <CreateWorkOrderTableRow
+                        key={`op-${idx}`}
+                        op={op}
+                        index={idx}
+                        disabled={disabled}
+                        onRemove={() => handleRemove(idx)}
+                        onReplace={(id) => handleReplace(idx, id)}
+                        operationList={operationList}
+                        getOpDetail={getOpDetail}
+                      />
+                    ))}
+                  </tbody>
+                ),
+              },
+            }}
+          />
+        </SortableContext>
+      </DndContext>
+      {!disabled && addableOptions.length > 0 && (
+        <div
+          onClick={() => setAddOpModalVisible(true)}
+          style={{
+            marginTop: 16,
+            padding: '12px',
+            border: '1px dashed #1890ff',
+            borderRadius: '4px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            color: '#1890ff',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#40a9ff'; e.currentTarget.style.backgroundColor = '#f0f9ff'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1890ff'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+        >
+          <PlusOutlined style={{ marginRight: 8 }} />
+          <span>新增工序</span>
+        </div>
+      )}
+      {!disabled && addableOptions.length > 0 && (
+        <Modal title="选择工序" open={addOpModalVisible} onCancel={() => setAddOpModalVisible(false)} footer={null} destroyOnClose>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择要添加的工序"
+            showSearch
+            filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+            options={addableOptions}
+            onSelect={(id: number) => { handleAddSelect(id); setAddOpModalVisible(false); }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+/** 可拖拽的表格行 */
+const CreateWorkOrderTableRow: React.FC<{
+  op: any;
+  index: number;
+  disabled?: boolean;
+  onRemove: () => void;
+  onReplace: (newOpId: number) => void;
+  operationList: any[];
+  getOpDetail: (id: number) => any;
+}> = ({ op, index, disabled, onRemove, onReplace, operationList, getOpDetail }) => {
+  const id = `op-${index}`;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    backgroundColor: isDragging ? '#f0f9ff' : 'transparent',
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+  };
+  return (
+    <tr ref={setNodeRef} style={style}>
+      <td>
+        <Space>
+          {!disabled && <span className="drag-handle" {...attributes} {...listeners} style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', padding: '4px', minWidth: '24px', minHeight: '24px' }}><HolderOutlined style={{ fontSize: '16px' }} /></span>}
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '28px', height: '28px', padding: '0 8px', backgroundColor: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: '6px', color: '#1890ff', fontWeight: 600, fontSize: '13px' }}>{index + 1}</span>
+        </Space>
+      </td>
+      <td><div style={{ fontWeight: 500 }}>{op.operation_code} - {op.operation_name}</div></td>
+      <td><Tag color={(getOpDetail(op.operation_id)?.reportingType || getOpDetail(op.operation_id)?.reporting_type) === 'quantity' ? 'blue' : 'green'}>{(getOpDetail(op.operation_id)?.reportingType || getOpDetail(op.operation_id)?.reporting_type) === 'quantity' ? '按数量报工' : (getOpDetail(op.operation_id)?.reportingType || getOpDetail(op.operation_id)?.reporting_type) === 'status' ? '按状态报工' : '-'}</Tag></td>
+      <td><Tag color={getOpDetail(op.operation_id)?.allowJump ?? getOpDetail(op.operation_id)?.allow_jump ? 'success' : 'default'}>{getOpDetail(op.operation_id)?.allowJump ?? getOpDetail(op.operation_id)?.allow_jump ? '允许' : '不允许'}</Tag></td>
+      <td onClick={(e) => e.stopPropagation()}>
+        <Space>
+          <Button type="link" size="small" onClick={() => {
+            const opts = operationList.filter((o: any) => o.id !== op.operation_id);
+            if (opts.length === 0) return;
+            Modal.confirm({
+              title: '替换工序',
+              content: (
+                <Select
+                  style={{ width: '100%', marginTop: 8 }}
+                  placeholder="选择替换的工序"
+                  showSearch
+                  filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+                  options={opts.map((opp: any) => ({ label: `${opp.code} - ${opp.name}`, value: opp.id }))}
+                  onSelect={(v: number) => { onReplace(v); Modal.destroyAll(); }}
+                />
+              ),
+              okText: '取消',
+              cancelButtonProps: { style: { display: 'none' } },
+              onOk: () => Modal.destroyAll(),
+            });
+          }}>替换</Button>
+          <Button type="link" size="small" danger onClick={onRemove}>删除</Button>
+        </Space>
+      </td>
+    </tr>
   );
 };
 

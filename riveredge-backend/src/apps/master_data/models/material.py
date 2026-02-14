@@ -281,6 +281,7 @@ class BOM(BaseModel):
     # 版本控制
     version = fields.CharField(max_length=50, default="1.0", description="BOM版本号")
     bom_code = fields.CharField(max_length=100, null=True, description="BOM编码（升版时随版本更新）")
+    is_default = fields.BooleanField(default=False, description="是否为默认版本（每个物料至多一个默认版本）")
     
     # 有效期管理
     effective_date = fields.DatetimeField(null=True, description="生效日期")
