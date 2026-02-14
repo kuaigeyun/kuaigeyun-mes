@@ -91,6 +91,11 @@ export const workOrderApi = {
     return apiRequest('/apps/kuaizhizao/work-orders/batch-priority', { method: 'PUT', data });
   },
 
+  // 批量更新工单计划日期（甘特图拖拽后持久化）
+  batchUpdateDates: async (updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>) => {
+    return apiRequest('/apps/kuaizhizao/work-orders/batch-update-dates', { method: 'PUT', data: { updates } });
+  },
+
   // 合并工单
   merge: async (data: { work_order_ids: number[]; remarks?: string }) => {
     return apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data });
@@ -890,6 +895,26 @@ export const planningApi = {
     },
     pushToWorkOrders: async (id: number) => {
       return apiRequest(`/apps/kuaizhizao/production-plans/${id}/push-to-work-orders`, { method: 'POST' });
+    },
+    getStatistics: async () => {
+      return apiRequest('/apps/kuaizhizao/production-plans/statistics', { method: 'GET' });
+    },
+    getPlanningConfig: async () => {
+      return apiRequest<{
+        production_plan_enabled: boolean;
+        production_plan_audit_required: boolean;
+        can_direct_generate_work_order: boolean;
+        planning_mode: 'direct' | 'via_plan';
+      }>('/apps/kuaizhizao/production-plans/planning-config', { method: 'GET' });
+    },
+    create: async (data: any) => {
+      return apiRequest('/apps/kuaizhizao/production-plans', { method: 'POST', data });
+    },
+    update: async (id: string, data: any) => {
+      return apiRequest(`/apps/kuaizhizao/production-plans/${id}`, { method: 'PUT', data });
+    },
+    delete: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/production-plans/${id}`, { method: 'DELETE' });
     },
   },
 };

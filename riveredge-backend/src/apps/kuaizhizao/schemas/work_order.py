@@ -93,6 +93,18 @@ class WorkOrderCreate(WorkOrderBase):
     operations: Optional[List["WorkOrderOperationCreate"]] = Field(None, description="工单工序列表（可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成）")
 
 
+class WorkOrderBatchUpdateDatesItem(BaseModel):
+    """批量更新工单计划日期项"""
+    work_order_id: int = Field(..., description="工单ID")
+    planned_start_date: datetime = Field(..., description="计划开始时间")
+    planned_end_date: datetime = Field(..., description="计划结束时间")
+
+
+class WorkOrderBatchUpdateDatesRequest(BaseModel):
+    """批量更新工单计划日期请求"""
+    updates: list[WorkOrderBatchUpdateDatesItem] = Field(..., description="更新项列表")
+
+
 class WorkOrderUpdate(BaseModel):
     """
     工单更新Schema
@@ -149,9 +161,11 @@ class WorkOrderListResponse(BaseModel):
     production_mode: str = Field(..., description="生产模式")
     sales_order_code: Optional[str] = Field(None, description="销售订单编码")
     status: str = Field(..., description="工单状态")
+    priority: Optional[str] = Field(None, description="优先级")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     completed_quantity: Decimal = Field(default=Decimal("0"), description="已完成数量")
+    work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     created_at: datetime = Field(..., description="创建时间")
 

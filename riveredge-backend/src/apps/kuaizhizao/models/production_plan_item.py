@@ -21,7 +21,7 @@ class ProductionPlanItem(BaseModel):
     plan_id = fields.IntField(description="生产计划ID")
 
     # 物料信息
-    material_id = fields.IntField(description="物料ID")
+    material_id = fields.IntField(null=True, description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
     material_type = fields.CharField(max_length=20, description="物料类型")
@@ -35,8 +35,8 @@ class ProductionPlanItem(BaseModel):
     safety_stock = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="安全库存")
 
     # 需求信息
-    gross_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="毛需求")
-    net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="净需求")
+    gross_requirement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="毛需求")
+    net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="净需求")
 
     # 建议行动
     suggested_action = fields.CharField(max_length=20, description="建议行动")

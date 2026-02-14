@@ -345,10 +345,12 @@ class BOMBase(BaseModel):
     
     @validator("unit")
     def validate_unit(cls, v):
-        """验证单位格式"""
-        if not v or not v.strip():
-            raise ValueError("单位不能为空")
-        return v.strip()
+        """验证单位格式（unit 为可选，None 或空时返回 None）"""
+        if v is None:
+            return v
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip()
     
     @validator("approval_status")
     def validate_approval_status(cls, v):

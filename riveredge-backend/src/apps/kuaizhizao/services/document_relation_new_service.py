@@ -51,7 +51,6 @@ class DocumentRelationNewService:
                 source_id=relation_data.source_id,
                 target_type=relation_data.target_type,
                 target_id=relation_data.target_id,
-                deleted_at__isnull=True
             )
             
             if existing:
@@ -101,7 +100,6 @@ class DocumentRelationNewService:
             tenant_id=tenant_id,
             source_type=document_type,
             source_id=document_id,
-            deleted_at__isnull=True
         ).all()
         
         # 查询作为目标单据的关联（上游单据）
@@ -109,7 +107,6 @@ class DocumentRelationNewService:
             tenant_id=tenant_id,
             target_type=document_type,
             target_id=document_id,
-            deleted_at__isnull=True
         ).all()
         
         return DocumentRelationListResponse(
@@ -193,13 +190,12 @@ class DocumentRelationNewService:
         relation = await DocumentRelation.get_or_none(
             tenant_id=tenant_id,
             id=relation_id,
-            deleted_at__isnull=True
         )
         
         if not relation:
             raise NotFoundError(f"关联关系不存在: {relation_id}")
         
-        await relation.soft_delete()
+        await relation.delete()
     
     async def get_relation_by_id(
         self,
@@ -219,7 +215,6 @@ class DocumentRelationNewService:
         relation = await DocumentRelation.get_or_none(
             tenant_id=tenant_id,
             id=relation_id,
-            deleted_at__isnull=True
         )
         
         if not relation:
@@ -317,7 +312,6 @@ class DocumentRelationNewService:
             tenant_id=tenant_id,
             target_type=document_type,
             target_id=document_id,
-            deleted_at__isnull=True
         ).all()
         
         nodes: List[DocumentTraceNode] = []
@@ -369,7 +363,6 @@ class DocumentRelationNewService:
             tenant_id=tenant_id,
             source_type=document_type,
             source_id=document_id,
-            deleted_at__isnull=True
         ).all()
         
         nodes: List[DocumentTraceNode] = []

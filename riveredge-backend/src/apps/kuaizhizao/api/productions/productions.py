@@ -96,6 +96,7 @@ from apps.kuaizhizao.services.advanced_scheduling_service import AdvancedSchedul
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
+    WorkOrderBatchUpdateDatesRequest,
     WorkOrderResponse,
     WorkOrderListResponse,
     MaterialShortageResponse,
@@ -354,17 +355,9 @@ from apps.kuaizhizao.schemas.planning import (
     # 生产计划
     ProductionPlanResponse,
     ProductionPlanListResponse,
+    ProductionPlanCreate,
+    ProductionPlanUpdate,
     ProductionPlanItemResponse,
-    # MRP运算
-    MRPComputationRequest,
-    MRPComputationResult,
-    MRPResultResponse,
-    MRPResultListResponse,
-    # LRP运算
-    LRPComputationRequest,
-    LRPComputationResult,
-    LRPResultResponse,
-    LRPResultListResponse,
     # 高级排产
     IntelligentSchedulingRequest,
     IntelligentSchedulingResponse,
@@ -446,14 +439,6 @@ async def list_work_orders(
             workshop_id=workshop_id,
             work_center_id=work_center_id,
         )
-        # #region agent log
-        try:
-            _ids = [r.id for r in result] if result else []
-            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
-                _f.write(__import__("json").dumps({"location": "productions.py:list_work_orders", "message": "list_result", "data": {"count": len(result), "ids": _ids[:20], "total": total, "status_filter": status}, "hypothesisId": "E"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         return {
             "data": result,
             "total": total,
@@ -616,6 +601,25 @@ async def update_work_order(
         work_order_data=work_order,
         updated_by=current_user.id
     )
+
+
+@router.put("/work-orders/batch-update-dates", summary="批量更新工单计划日期")
+async def batch_update_work_order_dates(
+    request: WorkOrderBatchUpdateDatesRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量更新工单计划日期（甘特图拖拽后持久化）
+
+    - **updates**: 更新项列表，每项包含 work_order_id、planned_start_date、planned_end_date
+    """
+    await WorkOrderService().batch_update_dates(
+        tenant_id=tenant_id,
+        updates=request.updates,
+        updated_by=current_user.id,
+    )
+    return {"success": True, "message": "更新成功"}
 
 
 @router.delete("/work-orders/{work_order_id}", summary="删除工单")
@@ -5504,335 +5508,40 @@ async def export_sales_forecasts(
 
 # ============ 生产计划管理 API ============
 
-# TODO: MRP运算已合并为统一需求计算，此路由已废弃
-# @router.post("/mrp-computation", response_model=MRPComputationResult, summary="执行MRP运算")
-async def run_mrp_computation_deprecated(
-    mrp_request: MRPComputationRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> MRPComputationResult:
-    """
-    执行物料需求计划（MRP）运算
-
-    基于销售预测计算物料需求和生产计划
-
-    - **mrp_request**: MRP运算请求参数
-    """
-    return await ProductionPlanningService().run_mrp_computation(
-        tenant_id=tenant_id,
-        request=mrp_request,
-        user_id=current_user.id
-    )
+# 此处原为废弃的MRP/LRP运算及结果查询接口，已移除。
+# 统一使用 DemandComputationService 进行需求计算。
 
 
-# TODO: LRP运算已合并为统一需求计算，此路由已废弃
-# @router.post("/lrp-computation", response_model=LRPComputationResult, summary="执行LRP运算")
-async def run_lrp_computation_deprecated(
-    lrp_request: LRPComputationRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> LRPComputationResult:
-    """
-    执行物流需求计划（LRP）运算
-
-    基于销售订单计算详细的生产和采购计划
-
-    - **lrp_request**: LRP运算请求参数
-    """
-    return await ProductionPlanningService().run_lrp_computation(
-        tenant_id=tenant_id,
-        request=lrp_request,
-        user_id=current_user.id
-    )
-
-
-# ============ MRP/LRP运算结果查看 API ============
-
-@router.get("/mrp/results", summary="获取MRP运算结果列表")
-async def list_mrp_results(
-    forecast_id: Optional[int] = Query(None, description="销售预测ID"),
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+@router.get("/production-plans/planning-config", summary="获取计划管理配置")
+async def get_planning_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    获取MRP运算结果列表
+    获取计划管理相关配置，供前端展示当前模式。
+    用于需求计算页展示「直连工单」或「经生产计划」的路径说明。
+    """
+    from infra.services.business_config_service import BusinessConfigService
+    return await BusinessConfigService().get_planning_config(tenant_id)
 
-    - **forecast_id**: 销售预测ID（可选，用于筛选）
-    - **skip**: 跳过数量
-    - **limit**: 限制数量
+
+@router.post("/production-plans", response_model=ProductionPlanResponse, summary="手动创建生产计划")
+async def create_production_plan(
+    plan_data: ProductionPlanCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPlanResponse:
+    """
+    手动创建生产计划
     
-    Returns:
-        Dict: 包含data（结果列表）和total（总数）的字典
+    允许用户手动录入计划基本信息和明细项。
     """
-    return await ProductionPlanningService().list_mrp_results(
+    return await ProductionPlanningService().create_production_plan(
         tenant_id=tenant_id,
-        forecast_id=forecast_id,
-        skip=skip,
-        limit=limit
+        plan_data=plan_data,
+        created_by=current_user.id
     )
 
-
-@router.get("/mrp/results/{result_id}", summary="获取MRP运算结果详情")
-async def get_mrp_result(
-    result_id: int = Path(..., description="MRP运算结果ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    根据ID获取MRP运算结果详情
-
-    - **result_id**: MRP运算结果ID
-    
-    Returns:
-        Dict: MRP运算结果（包含物料信息）
-    """
-    return await ProductionPlanningService().get_mrp_result_by_id(
-        tenant_id=tenant_id,
-        result_id=result_id
-    )
-
-
-@router.get("/mrp/results/export", response_class=FileResponse, summary="导出MRP运算结果（按预测ID）")
-async def export_mrp_results(
-    forecast_id: Optional[int] = Query(None, description="销售预测ID筛选"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量导出MRP运算结果到Excel文件
-    
-    Args:
-        forecast_id: 销售预测ID筛选（可选）
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        FileResponse: Excel文件
-    """
-    import os
-    
-    try:
-        service = ProductionPlanningService()
-        file_path = await service.export_mrp_results_to_excel(
-            tenant_id=tenant_id,
-            forecast_id=forecast_id
-        )
-        
-        if not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="导出文件生成失败"
-            )
-        
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type='application/vnd.ms-excel'
-        )
-                
-    except Exception as e:
-        logger.error(f"导出MRP运算结果失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
-
-
-@router.get("/mrp/results/{result_id}/export", response_class=FileResponse, summary="导出单个MRP运算结果")
-async def export_mrp_result_by_id(
-    result_id: int = Path(..., description="MRP运算结果ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    导出单个MRP运算结果到Excel文件
-    
-    Args:
-        result_id: MRP运算结果ID
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        FileResponse: Excel文件
-    """
-    import os
-    
-    try:
-        # 获取MRP结果详情
-        service = ProductionPlanningService()
-        result = await service.get_mrp_result_by_id(tenant_id, result_id)
-        
-        # 使用forecast_id导出
-        file_path = await service.export_mrp_results_to_excel(
-            tenant_id=tenant_id,
-            forecast_id=result.forecast_id
-        )
-        
-        if not os.path.exists(file_path):
-            raise HTTPException(
-                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="导出文件生成失败"
-            )
-        
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type='application/vnd.ms-excel'
-        )
-                
-    except Exception as e:
-        logger.error(f"导出MRP运算结果失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
-
-
-@router.get("/lrp/results", response_model=List[LRPResultListResponse], summary="获取LRP运算结果列表")
-async def list_lrp_results(
-    sales_order_id: Optional[int] = Query(None, description="销售订单ID"),
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[LRPResultListResponse]:
-    """
-    获取LRP运算结果列表
-
-    - **sales_order_id**: 销售订单ID（可选，用于筛选）
-    - **skip**: 跳过数量
-    - **limit**: 限制数量
-    """
-    return await ProductionPlanningService().list_lrp_results(
-        tenant_id=tenant_id,
-        sales_order_id=sales_order_id,
-        skip=skip,
-        limit=limit
-    )
-
-
-@router.get("/lrp/results/{result_id}", response_model=LRPResultResponse, summary="获取LRP运算结果详情")
-async def get_lrp_result(
-    result_id: int = Path(..., description="LRP运算结果ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> LRPResultResponse:
-    """
-    根据ID获取LRP运算结果详情
-
-    - **result_id**: LRP运算结果ID
-    """
-    return await ProductionPlanningService().get_lrp_result_by_id(
-        tenant_id=tenant_id,
-        result_id=result_id
-    )
-
-
-@router.get("/lrp/results/export", response_class=FileResponse, summary="导出LRP运算结果")
-async def export_lrp_results(
-    sales_order_id: Optional[int] = Query(None, description="销售订单ID（可选，用于筛选）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    导出LRP运算结果到Excel文件
-
-    - **sales_order_id**: 销售订单ID（可选，用于筛选）
-    """
-    try:
-        file_path = await ProductionPlanningService().export_lrp_results_to_excel(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id
-        )
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception as e:
-        logger.error(f"导出LRP运算结果失败: {str(e)}")
-        raise HTTPException(
-            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
-
-
-# ============ 一键生成工单和采购单 API ============
-
-@router.post("/mrp/results/{forecast_id}/generate-orders", summary="从MRP运算结果一键生成工单和采购单")
-async def generate_orders_from_mrp(
-    forecast_id: int = Path(..., description="销售预测ID"),
-    generate_work_orders: bool = Query(True, description="是否生成工单"),
-    generate_purchase_orders: bool = Query(True, description="是否生成采购单"),
-    selected_material_ids: Optional[List[int]] = Query(None, description="选中的物料ID列表（可选，如果不提供则生成所有）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    从MRP运算结果一键生成工单和采购单
-
-    - **forecast_id**: 销售预测ID
-    - **generate_work_orders**: 是否生成工单（默认：是）
-    - **generate_purchase_orders**: 是否生成采购单（默认：是）
-    - **selected_material_ids**: 选中的物料ID列表（可选，如果不提供则生成所有）
-
-    系统会自动：
-    1. 获取MRP运算结果
-    2. 根据物料类型和运算结果生成工单或采购单
-    3. 返回生成的工单和采购单信息
-    """
-    result = await ProductionPlanningService().generate_orders_from_mrp_result(
-        tenant_id=tenant_id,
-        forecast_id=forecast_id,
-        created_by=current_user.id,
-        generate_work_orders=generate_work_orders,
-        generate_purchase_orders=generate_purchase_orders,
-        selected_material_ids=selected_material_ids
-    )
-    return JSONResponse(content={
-        "success": True,
-        "message": f"成功生成 {result['generated_work_orders']} 个工单和 {result['generated_purchase_orders']} 个采购单",
-        "data": result
-    })
-
-
-@router.post("/lrp/results/{sales_order_id}/generate-orders", summary="从LRP运算结果一键生成工单和采购单")
-async def generate_orders_from_lrp(
-    sales_order_id: int = Path(..., description="销售订单ID"),
-    generate_work_orders: bool = Query(True, description="是否生成工单"),
-    generate_purchase_orders: bool = Query(True, description="是否生成采购单"),
-    selected_material_ids: Optional[List[int]] = Query(None, description="选中的物料ID列表（可选，如果不提供则生成所有）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    从LRP运算结果一键生成工单和采购单
-
-    - **sales_order_id**: 销售订单ID
-    - **generate_work_orders**: 是否生成工单（默认：是）
-    - **generate_purchase_orders**: 是否生成采购单（默认：是）
-    - **selected_material_ids**: 选中的物料ID列表（可选，如果不提供则生成所有）
-
-    系统会自动：
-    1. 获取LRP运算结果
-    2. 根据运算结果生成工单或采购单（关联销售订单）
-    3. 返回生成的工单和采购单信息
-    """
-    result = await ProductionPlanningService().generate_orders_from_lrp_result(
-        tenant_id=tenant_id,
-        sales_order_id=sales_order_id,
-        created_by=current_user.id,
-        generate_work_orders=generate_work_orders,
-        generate_purchase_orders=generate_purchase_orders,
-        selected_material_ids=selected_material_ids
-    )
-    return JSONResponse(content={
-        "success": True,
-        "message": f"成功生成 {result['generated_work_orders']} 个工单和 {result['generated_purchase_orders']} 个采购单",
-        "data": result
-    })
 
 
 @router.get("/production-plans", response_model=List[ProductionPlanListResponse], summary="获取生产计划列表")
@@ -5841,6 +5550,7 @@ async def list_production_plans(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     plan_type: Optional[str] = Query(None, description="计划类型（MRP/LRP）"),
     status: Optional[str] = Query(None, description="计划状态"),
+    plan_code: Optional[str] = Query(None, description="计划编码"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[ProductionPlanListResponse]:
@@ -5849,13 +5559,24 @@ async def list_production_plans(
 
     支持多种筛选条件的高级搜索。
     """
-    return await ProductionPlanningService().list_production_plans(
+    service = ProductionPlanningService()
+    return await service.list_production_plans(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         plan_type=plan_type,
         status=status,
+        plan_code=plan_code,
     )
+
+
+@router.get("/production-plans/statistics", summary="获取生产计划统计信息")
+async def get_production_plan_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取生产计划统计信息"""
+    return await ProductionPlanningService().get_production_plan_statistics(tenant_id)
 
 
 @router.get("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="获取生产计划详情")
@@ -5910,6 +5631,37 @@ async def execute_production_plan(
         plan_id=plan_id,
         executed_by=current_user.id
     )
+
+
+@router.put("/production-plans/{plan_id}", response_model=ProductionPlanResponse, summary="更新生产计划")
+async def update_production_plan(
+    plan_id: int,
+    plan_data: ProductionPlanUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPlanResponse:
+    """更新生产计划"""
+    return await ProductionPlanningService().update_production_plan(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        plan_data=plan_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/production-plans/{plan_id}", summary="删除生产计划")
+async def delete_production_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除生产计划"""
+    await ProductionPlanningService().delete_production_plan(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        updated_by=current_user.id
+    )
+    return {"success": True, "message": "删除成功"}
 
 
 @router.post("/production-plans/{plan_id}/push-to-work-orders", summary="生产计划转工单")
@@ -5974,7 +5726,9 @@ async def intelligent_scheduling(
     result = await service.intelligent_scheduling(
         tenant_id=tenant_id,
         work_order_ids=request.work_order_ids,
-        constraints=request.constraints.model_dump() if request.constraints else None
+        constraints=request.constraints.model_dump() if request.constraints else None,
+        apply_results=request.apply_results,
+        updated_by=current_user.id,
     )
     return IntelligentSchedulingResponse(**result)
 

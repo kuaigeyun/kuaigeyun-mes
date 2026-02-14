@@ -171,22 +171,9 @@ async def get_demand(
         result = await demand_service.get_demand_by_id(
             tenant_id=tenant_id,
             demand_id=demand_id,
-            include_items=include_items
+            include_items=include_items,
+            include_duration=include_duration
         )
-        
-        # 如果需要耗时统计，计算并添加到响应中
-        if include_duration:
-            from apps.kuaizhizao.models.demand import Demand
-            demand = await Demand.get_or_none(
-                tenant_id=tenant_id,
-                id=demand_id
-            )
-            if demand:
-                duration_info = demand_service.calculate_demand_duration(demand)
-                # 将耗时信息添加到响应中（通过model_dump后添加）
-                result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
-                result_dict['duration_info'] = duration_info
-                return result_dict
         
         return result
     except NotFoundError as e:
@@ -418,12 +405,12 @@ async def push_demand_to_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         logger.error(f"下推需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下推需求失败: {str(e)}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下推需求失败: {str(e)}")
 
 
 @router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="撤回需求计算")

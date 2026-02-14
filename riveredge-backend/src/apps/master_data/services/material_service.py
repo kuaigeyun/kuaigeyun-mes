@@ -1536,7 +1536,42 @@ class MaterialService:
             "level", "path", "priority", "id"
         ).all()
         
-        return [BOMResponse.model_validate(b) for b in bom_list]
+        result = []
+        for b in bom_list:
+            # 手动构建 dict，确保 uuid/unit 等类型正确，避免 ORM 与 Pydantic 类型差异导致 500
+            d = {
+                "id": b.id,
+                "uuid": str(b.uuid) if b.uuid else "",
+                "tenant_id": b.tenant_id,
+                "material_id": b.material_id,
+                "component_id": b.component_id,
+                "quantity": b.quantity,
+                "unit": (b.unit and str(b.unit).strip()) or None,
+                "waste_rate": getattr(b, "waste_rate", None) or Decimal("0"),
+                "is_required": getattr(b, "is_required", True),
+                "level": getattr(b, "level", 0),
+                "path": b.path,
+                "version": b.version or "1.0",
+                "bom_code": b.bom_code,
+                "is_default": getattr(b, "is_default", False),
+                "effective_date": b.effective_date,
+                "expiry_date": b.expiry_date,
+                "approval_status": (b.approval_status or "draft").lower() if b.approval_status else "draft",
+                "approved_by": b.approved_by,
+                "approved_at": b.approved_at,
+                "approval_comment": b.approval_comment,
+                "is_alternative": getattr(b, "is_alternative", False),
+                "alternative_group_id": b.alternative_group_id,
+                "priority": getattr(b, "priority", 0),
+                "description": b.description,
+                "remark": b.remark,
+                "is_active": getattr(b, "is_active", True),
+                "created_at": b.created_at,
+                "updated_at": b.updated_at,
+                "deleted_at": b.deleted_at,
+            }
+            result.append(BOMResponse.model_validate(d))
+        return result
     
     @staticmethod
     async def update_bom(
