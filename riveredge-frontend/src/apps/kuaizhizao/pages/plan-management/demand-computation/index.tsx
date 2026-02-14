@@ -23,6 +23,7 @@ import {
 } from '@ant-design/pro-components'
 import {
   App,
+  Alert,
   Button,
   Tag,
   Space,
@@ -63,6 +64,7 @@ import {
 } from '../../../services/demand-computation'
 import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
+import { planningApi } from '../../../services/production'
 
 const { Panel } = Collapse
 
@@ -156,6 +158,16 @@ const DemandComputationPage: React.FC = () => {
   const [demandList, setDemandList] = useState<Demand[]>([])
   // BOM 允许多版本共存（用于决定是否显示版本选择）
   const [bomMultiVersionAllowed, setBomMultiVersionAllowed] = useState(true)
+
+  // 计划管理配置（用于展示当前模式：直连工单 vs 经生产计划）
+  const [planningConfig, setPlanningConfig] = useState<{
+    can_direct_generate_work_order?: boolean
+    planning_mode?: 'direct' | 'via_plan'
+    production_plan_enabled?: boolean
+  } | null>(null)
+  React.useEffect(() => {
+    planningApi.productionPlan.getPlanningConfig().then(setPlanningConfig).catch(() => setPlanningConfig(null))
+  }, [])
 
   /**
    * 处理新建计算
@@ -573,26 +585,18 @@ const DemandComputationPage: React.FC = () => {
               <Dropdown
                 menu={{
                   items: [
-                    {
-                      key: 'all',
-                      label: '全部（工单+采购单）',
-                      onClick: () => handleGenerateOrders(record, 'all'),
-                    },
-                    {
-                      key: 'work_order_only',
-                      label: '仅工单',
-                      onClick: () => handleGenerateOrders(record, 'work_order_only'),
-                    },
-                    {
-                      key: 'purchase_only',
-                      label: '仅采购单',
-                      onClick: () => handleGenerateOrders(record, 'purchase_only'),
-                    },
+                    ...(canDirectWO
+                      ? [
+                          { key: 'all', label: '全部（工单+采购单）', onClick: () => handleGenerateOrders(record, 'all') },
+                          { key: 'work_order_only', label: '仅工单', onClick: () => handleGenerateOrders(record, 'work_order_only') },
+                        ]
+                      : []),
+                    { key: 'purchase_only', label: '仅采购单', onClick: () => handleGenerateOrders(record, 'purchase_only') },
                   ],
                 }}
               >
                 <Button type="link" size="small" icon={<FileAddOutlined />}>
-                  生成工单/采购单 <DownOutlined />
+                  {canDirectWO ? '生成工单/采购单' : '生成采购单'} <DownOutlined />
                 </Button>
               </Dropdown>
             </>
@@ -605,11 +609,25 @@ const DemandComputationPage: React.FC = () => {
   /**
    * 渲染页面
    */
+  const canDirectWO = planningConfig?.can_direct_generate_work_order !== false
+
   return (
     <ListPageTemplate
       title="统一需求计算"
       description="按需求来源自动选择计算模式（按预测/按订单），统一管理需求计算结果"
     >
+      {planningConfig && (
+        <Alert
+          type="info"
+          showIcon
+          message={
+            canDirectWO
+              ? '当前模式：可直连生成工单，也可经生产计划。适合小批量、急单快速响应。'
+              : '当前模式：需经生产计划生成工单。请先「转生产计划」，再在生产计划中执行转工单。'
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <UniTable<DemandComputation>
         actionRef={actionRef}
         columns={columns}

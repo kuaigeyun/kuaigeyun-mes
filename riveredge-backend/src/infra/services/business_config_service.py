@@ -79,6 +79,9 @@ class BusinessConfigService:
             "bom": {
                 "bom_multi_version_allowed": True,  # BOM 是否允许多版本共存，需求计算时可选择版本
             },
+            "planning": {
+                "require_production_plan": False,  # 极简模式下计划节点关闭，仅可直连工单
+            },
         }
     }
     
@@ -126,6 +129,34 @@ class BusinessConfigService:
             return False
             
         return node_config.get("auditRequired", False)
+
+    async def can_direct_generate_work_order_from_computation(self, tenant_id: int) -> bool:
+        """
+        检查需求计算是否可直接生成工单（不经过生产计划）。
+        - production_plan.enabled=false 时：计划层关闭，仅可直连，返回 True
+        - production_plan.enabled=true 且 require_production_plan=false 时：可直连可经计划，返回 True
+        - production_plan.enabled=true 且 require_production_plan=true 时：必须经计划，返回 False
+        """
+        plan_enabled = await self.check_node_enabled(tenant_id, "production_plan")
+        if not plan_enabled:
+            return True  # 计划关闭，必须直连
+        config = await self.get_business_config(tenant_id)
+        require_plan = config.get("parameters", {}).get("planning", {}).get("require_production_plan", False)
+        return not require_plan
+
+    async def get_planning_config(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        获取计划管理相关配置，供前端展示当前模式。
+        """
+        plan_enabled = await self.check_node_enabled(tenant_id, "production_plan")
+        audit_required = await self.check_audit_required(tenant_id, "production_plan")
+        can_direct_wo = await self.can_direct_generate_work_order_from_computation(tenant_id)
+        return {
+            "production_plan_enabled": plan_enabled,
+            "production_plan_audit_required": audit_required,
+            "can_direct_generate_work_order": can_direct_wo,
+            "planning_mode": "direct" if not plan_enabled or can_direct_wo else "via_plan",
+        }
 
     
     # 全流程模式默认配置

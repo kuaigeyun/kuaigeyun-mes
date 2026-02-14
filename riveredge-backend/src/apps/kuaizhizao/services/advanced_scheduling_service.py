@@ -34,7 +34,9 @@ class AdvancedSchedulingService(BaseService):
         self,
         tenant_id: int,
         work_order_ids: Optional[List[int]] = None,
-        constraints: Optional[Dict[str, Any]] = None
+        constraints: Optional[Dict[str, Any]] = None,
+        apply_results: bool = True,
+        updated_by: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         智能排产算法
@@ -59,16 +61,18 @@ class AdvancedSchedulingService(BaseService):
                 - statistics: 统计信息
         """
         # 获取待排产工单
+        # 待排产工单：草稿、已下达（与工单模型 status 一致）
+        status_filter = ['draft', 'released']
         if work_order_ids:
             work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
                 id__in=work_order_ids,
-                status__in=['pending', 'released']
+                status__in=status_filter
             ).prefetch_related('operations').all()
         else:
             work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
-                status__in=['pending', 'released']
+                status__in=status_filter
             ).prefetch_related('operations').all()
         
         if not work_orders:
@@ -98,6 +102,14 @@ class AdvancedSchedulingService(BaseService):
             default_constraints
         )
         
+        # 若需应用结果，将排产日期写入工单
+        if apply_results and result.get("scheduled_orders") and updated_by:
+            await self.apply_scheduling_results(
+                tenant_id=tenant_id,
+                results=result["scheduled_orders"],
+                updated_by=updated_by,
+            )
+        
         return result
     
     async def _execute_scheduling_algorithm(
@@ -112,47 +124,66 @@ class AdvancedSchedulingService(BaseService):
         使用启发式算法（如遗传算法、模拟退火等）进行排产优化。
         """
         # TODO: 实现具体的排产算法
-        # 这里先实现一个简单的优先级排序算法
+        # 简单算法：基于优先级的贪心排产 + 车间日产能负荷约束
         
         scheduled_orders = []
         unscheduled_orders = []
         conflicts = []
         
-        # 按优先级和交期排序
+        # 维护一个简单的日产能负荷表: {(workshop_id, date): current_hours}
+        daily_load = {}
+        
+        # 按优先级评分排序
         sorted_orders = sorted(
             work_orders,
-            key=lambda wo: (
-                self._get_priority_score(wo, constraints),
-                wo.planned_start_date or datetime.max
-            ),
+            key=lambda wo: self._get_priority_score(wo, constraints),
             reverse=True
         )
         
         # 模拟排产过程
         for work_order in sorted_orders:
             try:
-                # 检查工作中心能力
-                capacity_ok = await self._check_capacity(tenant_id, work_order)
+                # 获取计划日期，若无则默认今天
+                current_date = (work_order.planned_start_date or datetime.now()).date()
+                workshop_id = work_order.workshop_id or 0
                 
-                if capacity_ok:
+                # 预估工单耗时
+                estimated_hours = (work_order.planned_quantity or 1.0) * 0.1
+                capacity_limit = 24.0 # 默认每日 24h
+                
+                # 寻找可用日期 (最多向后搜索 14 天)
+                found_date = None
+                for i in range(14):
+                    check_date = current_date + timedelta(days=i)
+                    load = daily_load.get((workshop_id, check_date), 0.0)
+                    if load + estimated_hours <= capacity_limit:
+                        found_date = check_date
+                        break
+                
+                if found_date:
+                    # 分配产能
+                    daily_load[(workshop_id, found_date)] = daily_load.get((workshop_id, found_date), 0.0) + estimated_hours
+                    
                     scheduled_orders.append({
                         "work_order_id": work_order.id,
                         "work_order_code": work_order.code,
-                        "planned_start_date": work_order.planned_start_date,
-                        "planned_end_date": work_order.planned_end_date,
+                        "original_date": current_date,
+                        "scheduled_date": found_date,
+                        "delay_days": (found_date - current_date).days,
+                        "estimated_hours": estimated_hours
                     })
                 else:
                     unscheduled_orders.append({
                         "work_order_id": work_order.id,
                         "work_order_code": work_order.code,
-                        "reason": "工作中心产能不足"
+                        "reason": "未来 14 天内均无足够车间产能"
                     })
             except Exception as e:
                 logger.error(f"排产工单 {work_order.code} 失败: {e}")
                 unscheduled_orders.append({
                     "work_order_id": work_order.id,
                     "work_order_code": work_order.code,
-                    "reason": str(e)
+                    "reason": f"系统错误: {str(e)}"
                 })
         
         return {
@@ -181,6 +212,12 @@ class AdvancedSchedulingService(BaseService):
             days_until_due = (work_order.planned_end_date.date() - date.today()).days
             due_date_score = max(0, 10 - days_until_due) / 10  # 10天内交期得分最高
             score += due_date_score * constraints.get("due_date_weight", 0.3)
+            
+        # 计划一致性得分（工单开始日期越接近计划建议日期，得分越高）
+        if work_order.planned_start_date:
+            # 这里的思路是：排程系统应当尽量满足生产计划给出的建议日期，减少计划震荡
+            # 如果没有建议日期，该权重则不生效
+            score += 1.0 * constraints.get("plan_fidelity_weight", 0.2)
         
         return score
     
@@ -194,6 +231,36 @@ class AdvancedSchedulingService(BaseService):
         # 这里先返回True，表示能力充足
         return True
     
+    async def apply_scheduling_results(
+        self,
+        tenant_id: int,
+        results: List[Dict[str, Any]],
+        updated_by: int
+    ) -> bool:
+        """
+        应用排产结果
+        
+        将排产建议的具体日期更新到工单模型中。
+        """
+        async with in_transaction():
+            for res in results:
+                wo_id = res.get("work_order_id")
+                scheduled_date = res.get("scheduled_date")
+                
+                if not wo_id or not scheduled_date:
+                    continue
+                    
+                wo = await WorkOrder.get_or_none(id=wo_id, tenant_id=tenant_id)
+                if wo:
+                    # 将建议日期转化为 datetime (设为当天 08:00)
+                    dt_start = datetime.combine(scheduled_date, datetime.min.time().replace(hour=8))
+                    wo.planned_start_date = dt_start
+                    # 简单预估结束日期 (若无逻辑则顺延到 17:00)
+                    wo.planned_end_date = datetime.combine(scheduled_date, datetime.min.time().replace(hour=17))
+                    wo.updated_by = updated_by
+                    await wo.save()
+            return True
+
     async def optimize_schedule(
         self,
         tenant_id: int,
@@ -202,21 +269,8 @@ class AdvancedSchedulingService(BaseService):
     ) -> Dict[str, Any]:
         """
         优化排产计划
-        
-        对已有的排产计划进行优化，调整工单排产时间以优化目标函数。
-        
-        Args:
-            tenant_id: 组织ID
-            schedule_id: 排产计划ID（可选）
-            optimization_params: 优化参数
-                - max_iterations: 最大迭代次数
-                - convergence_threshold: 收敛阈值
-                - optimization_objective: 优化目标
-        
-        Returns:
-            Dict[str, Any]: 优化结果
         """
-        # TODO: 实现排产计划优化算法
+        # TODO: 实现更复杂的排产优化算法
         return {
             "optimized": True,
             "improvement": 0.0,

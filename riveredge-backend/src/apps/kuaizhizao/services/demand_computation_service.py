@@ -1335,6 +1335,17 @@ class DemandComputationService:
         if computation.computation_status != "完成":
             raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
         
+        # 按配置校验：若必须经生产计划，则不允许直连生成工单
+        needs_work_order = generate_mode in ("all", "work_order_only")
+        if needs_work_order:
+            from infra.services.business_config_service import BusinessConfigService
+            biz_config = BusinessConfigService()
+            can_direct = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
+            if not can_direct:
+                raise BusinessLogicError(
+                    "当前配置要求经生产计划生成工单，请先「下推到生产计划」，再在生产计划中执行转工单。"
+                )
+        
         # 获取计算结果明细
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
@@ -1519,6 +1530,58 @@ class DemandComputationService:
                 except Exception:
                     pass
                 # #endregion
+        
+        # 建立需求计算→工单的追溯关系（支持全链路追溯）
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        relation_service = DocumentRelationNewService()
+        for wo in work_orders:
+            wo_id = wo.get("id") if isinstance(wo, dict) else wo.id
+            wo_code = wo.get("code") if isinstance(wo, dict) else wo.code
+            wo_name = wo.get("name") if isinstance(wo, dict) else getattr(wo, "name", None)
+            try:
+                rel_data = DocumentRelationCreate(
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    source_code=computation.computation_code,
+                    source_name=None,
+                    target_type="work_order",
+                    target_id=wo_id,
+                    target_code=wo_code,
+                    target_name=wo_name,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="从需求计算直连生成工单",
+                    business_mode=computation.business_mode,
+                    demand_id=computation.demand_id,
+                )
+                await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
+            except BusinessLogicError as e:
+                if "关联关系已存在" not in str(e):
+                    raise
+        for wo in outsource_work_orders:
+            wo_id = wo.get("id") if isinstance(wo, dict) else wo.id
+            wo_code = wo.get("code") if isinstance(wo, dict) else wo.code
+            try:
+                rel_data = DocumentRelationCreate(
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    source_code=computation.computation_code,
+                    source_name=None,
+                    target_type="outsource_work_order",
+                    target_id=wo_id,
+                    target_code=wo_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="从需求计算直连生成委外工单",
+                    business_mode=computation.business_mode,
+                    demand_id=computation.demand_id,
+                )
+                await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
+            except BusinessLogicError as e:
+                if "关联关系已存在" not in str(e):
+                    raise
         
         # 按供应商分组生成采购订单（物料来源控制增强）
         for supplier_id, items_for_supplier in purchase_items_by_supplier.items():

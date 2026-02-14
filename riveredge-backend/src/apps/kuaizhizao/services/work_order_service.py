@@ -80,6 +80,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         匹配规则（优先级从高到低）：
         1. 物料直接绑定的工艺路线（process_route_id）
         2. 物料所属分组绑定的工艺路线（material_group.process_route_id）
+        3. 物料来源配置中的工艺路线（source_config.process_route_id）
         
         Args:
             tenant_id: 组织ID
@@ -106,7 +107,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 deleted_at__isnull=True
             )
             if process_route:
-                logger.info(f"物料 {material.code} 使用直接绑定的工艺路线: {process_route.code}")
+                logger.info(f"物料 {material.main_code or material.code} 使用直接绑定的工艺路线: {process_route.code}")
                 return process_route
         
         # 2. 检查物料分组绑定的工艺路线
@@ -125,10 +126,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     deleted_at__isnull=True
                 )
                 if process_route:
-                    logger.info(f"物料 {material.code} 使用分组绑定的工艺路线: {process_route.code}")
+                    logger.info(f"物料 {material.main_code or material.code} 使用分组绑定的工艺路线: {process_route.code}")
                     return process_route
         
-        logger.warning(f"物料 {material.code} 未找到匹配的工艺路线")
+        # 3. 检查 source_config 中的工艺路线（物料来源配置可能单独存储）
+        source_config = material.source_config or {}
+        pr_id = source_config.get("process_route_id")
+        if pr_id:
+            process_route = await ProcessRoute.get_or_none(
+                id=pr_id,
+                tenant_id=tenant_id,
+                is_active=True,
+                deleted_at__isnull=True
+            )
+            if process_route:
+                logger.info(f"物料 {material.main_code or material.code} 使用 source_config 中的工艺路线: {process_route.code}")
+                return process_route
+        
+        logger.warning(f"物料 {material.main_code or material.code} 未找到匹配的工艺路线")
         return None
 
     async def _generate_work_order_operations_from_route(
@@ -157,28 +172,74 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         # 获取创建人信息
         user_info = await self.get_user_info(created_by)
         
-        # 解析工序序列
+        # 解析工序序列（支持多种前端保存格式）
         sequence_data = process_route.operation_sequence
         operation_list = []
         
         if isinstance(sequence_data, list):
-            # 列表格式：[{"operation_id": 1, "sequence": 1, ...}, ...]
+            # 列表格式：[{"operation_id": 1, "sequence": 1, ...}, ...] 或 [{"uuid": "..."}, ...]
             for item in sequence_data:
                 if isinstance(item, dict):
                     op_id = item.get("operation_id") or item.get("operationId")
+                    op_uuid = item.get("uuid") or item.get("operation_uuid")
                     sequence = item.get("sequence", len(operation_list) + 1)
                     operation_list.append({
                         "operation_id": op_id,
+                        "operation_uuid": op_uuid,
                         "sequence": sequence,
                         "extra_data": item  # 保存额外数据（如workshop_id, work_center_id等）
                     })
         elif isinstance(sequence_data, dict):
-            # 字典格式：{"operation_ids": [1, 2, 3]} 或其他格式
-            if "operation_ids" in sequence_data or "operationIds" in sequence_data:
+            # 字典格式：{"operations": [...], "sequence": [...]}（前端工艺路线页面保存格式）
+            if "operations" in sequence_data and isinstance(sequence_data["operations"], list):
+                ops = sequence_data["operations"]
+                seq_uuids = sequence_data.get("sequence")
+                # 前端格式：{"sequence": [uuid1, uuid2], "operations": [{uuid, code, name}, ...]}，两者顺序一致
+                if isinstance(seq_uuids, list) and seq_uuids:
+                    for idx, op_uuid in enumerate(seq_uuids, 1):
+                        op_obj = next((o for o in ops if isinstance(o, dict) and (o.get("uuid") or o.get("operation_uuid")) == op_uuid), None)
+                        if op_obj:
+                            op_id = op_obj.get("operation_id") or op_obj.get("operationId")
+                            operation_list.append({
+                                "operation_id": op_id,
+                                "operation_uuid": op_uuid if isinstance(op_uuid, str) else (op_obj.get("uuid") or op_obj.get("operation_uuid")),
+                                "sequence": idx,
+                                "extra_data": op_obj
+                            })
+                        elif isinstance(op_uuid, str):
+                            operation_list.append({
+                                "operation_id": None,
+                                "operation_uuid": op_uuid,
+                                "sequence": idx,
+                                "extra_data": {}
+                            })
+                else:
+                    for idx, op_obj in enumerate(ops, 1):
+                        if isinstance(op_obj, dict):
+                            op_id = op_obj.get("operation_id") or op_obj.get("operationId")
+                            op_uuid = op_obj.get("uuid") or op_obj.get("operation_uuid")
+                            operation_list.append({
+                                "operation_id": op_id,
+                                "operation_uuid": op_uuid,
+                                "sequence": op_obj.get("sequence", idx),
+                                "extra_data": op_obj
+                            })
+            elif "sequence" in sequence_data and isinstance(sequence_data["sequence"], list):
+                # 仅 sequence 数组（UUID 列表）
+                for idx, op_uuid in enumerate(sequence_data["sequence"], 1):
+                    if isinstance(op_uuid, str):
+                        operation_list.append({
+                            "operation_id": None,
+                            "operation_uuid": op_uuid,
+                            "sequence": idx,
+                            "extra_data": {}
+                        })
+            elif "operation_ids" in sequence_data or "operationIds" in sequence_data:
                 op_ids = sequence_data.get("operation_ids") or sequence_data.get("operationIds", [])
                 for idx, op_id in enumerate(op_ids, 1):
                     operation_list.append({
                         "operation_id": op_id,
+                        "operation_uuid": None,
                         "sequence": idx,
                         "extra_data": {}
                     })
@@ -187,9 +248,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 for key, value in sequence_data.items():
                     if isinstance(value, dict):
                         op_id = value.get("operation_id") or value.get("operationId") or (int(key) if key.isdigit() else None)
+                        op_uuid = value.get("uuid") or value.get("operation_uuid")
                         sequence = value.get("sequence", len(operation_list) + 1)
                         operation_list.append({
                             "operation_id": op_id,
+                            "operation_uuid": op_uuid,
                             "sequence": sequence,
                             "extra_data": value
                         })
@@ -198,12 +261,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         if op_id:
                             operation_list.append({
                                 "operation_id": op_id,
+                                "operation_uuid": None,
                                 "sequence": len(operation_list) + 1,
                                 "extra_data": {}
                             })
         
         # 按序列排序
         operation_list.sort(key=lambda x: x["sequence"])
+        
+        # 解析 UUID 为 operation_id（前端可能只存 uuid）
+        op_uuids = [op["operation_uuid"] for op in operation_list if op.get("operation_uuid") and not op.get("operation_id")]
+        if op_uuids:
+            ops_by_uuid = await Operation.filter(
+                uuid__in=op_uuids,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            uuid_to_id = {o.uuid: o.id for o in ops_by_uuid}
+            for op in operation_list:
+                if not op.get("operation_id") and op.get("operation_uuid"):
+                    op["operation_id"] = uuid_to_id.get(op["operation_uuid"])
         
         # 获取所有工序信息
         operation_ids = [op["operation_id"] for op in operation_list if op["operation_id"]]
@@ -785,6 +862,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
 
             return WorkOrderResponse.model_validate(work_order)
+
+    async def batch_update_dates(
+        self,
+        tenant_id: int,
+        updates: list,
+        updated_by: int,
+    ) -> None:
+        """
+        批量更新工单计划日期（甘特图拖拽后持久化）
+
+        Args:
+            tenant_id: 组织ID
+            updates: 更新项列表，每项包含 work_order_id、planned_start_date、planned_end_date
+            updated_by: 更新人ID
+        """
+        if not updates:
+            return
+        async with in_transaction():
+            for item in updates[:50]:  # 单次最多 50 条
+                wo_id = item.work_order_id if hasattr(item, 'work_order_id') else item.get('work_order_id')
+                start = item.planned_start_date if hasattr(item, 'planned_start_date') else item.get('planned_start_date')
+                end = item.planned_end_date if hasattr(item, 'planned_end_date') else item.get('planned_end_date')
+                if not wo_id or not start or not end:
+                    continue
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id)
+                if wo:
+                    wo.planned_start_date = start
+                    wo.planned_end_date = end
+                    wo.updated_by = updated_by
+                    await wo.save()
 
     async def delete_work_order(
         self,

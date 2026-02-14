@@ -18,72 +18,21 @@ from pydantic import BaseModel, Field
 from core.schemas.base import BaseSchema
 
 
-# === 生产计划 ===
-
-class ProductionPlanBase(BaseSchema):
-    """生产计划基础schema"""
-    plan_code: str = Field(..., max_length=50, description="计划编码")
-    plan_name: str = Field(..., max_length=200, description="计划名称")
-    plan_type: str = Field(..., max_length=20, description="计划类型（MRP/LRP）")
-    source_type: str = Field(..., max_length=20, description="来源类型")
-    source_id: int = Field(..., description="来源ID")
-    source_code: str = Field(..., max_length=50, description="来源编码")
-    plan_start_date: date = Field(..., description="计划开始日期")
-    plan_end_date: date = Field(..., description="计划结束日期")
-    status: str = Field("草稿", max_length=20, description="计划状态")
-    execution_status: str = Field("未执行", max_length=20, description="执行状态")
-    total_work_orders: int = Field(0, description="总工单数")
-    total_purchase_orders: int = Field(0, description="总采购订单数")
-    total_cost: float = Field(0, ge=0, description="总成本")
-    reviewer_id: Optional[int] = Field(None, description="审核人ID")
-    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
-    review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
-    review_remarks: Optional[str] = Field(None, description="审核备注")
-    notes: Optional[str] = Field(None, description="备注")
-
-
-class ProductionPlanCreate(ProductionPlanBase):
-    """生产计划创建schema"""
-    pass
-
-
-class ProductionPlanUpdate(ProductionPlanBase):
-    """生产计划更新schema"""
-    plan_code: Optional[str] = Field(None, max_length=50, description="计划编码")
-
-
-class ProductionPlanResponse(ProductionPlanBase):
-    """生产计划响应schema"""
-    id: int = Field(..., description="计划ID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-
-    class Config:
-        from_attributes = True
-
-
-class ProductionPlanListResponse(ProductionPlanResponse):
-    """生产计划列表响应schema（简化版）"""
-    pass
-
-
 # === 生产计划明细 ===
 
 class ProductionPlanItemBase(BaseSchema):
     """生产计划明细基础schema"""
-    material_id: int = Field(..., description="物料ID")
+    material_id: Optional[int] = Field(None, description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
-    material_type: str = Field(..., max_length=20, description="物料类型")
+    material_type: Optional[str] = Field("Finished", max_length=20, description="物料类型")
     planned_quantity: float = Field(..., gt=0, description="计划数量")
     planned_date: date = Field(..., description="计划日期")
     available_inventory: float = Field(0, ge=0, description="可用库存")
     safety_stock: float = Field(0, ge=0, description="安全库存")
-    gross_requirement: float = Field(..., ge=0, description="毛需求")
-    net_requirement: float = Field(..., ge=0, description="净需求")
-    suggested_action: str = Field(..., max_length=20, description="建议行动")
+    gross_requirement: Optional[float] = Field(None, ge=0, description="毛需求")
+    net_requirement: Optional[float] = Field(None, ge=0, description="净需求")
+    suggested_action: str = Field("生产", max_length=20, description="建议行动")
     work_order_quantity: float = Field(0, ge=0, description="建议工单数量")
     purchase_order_quantity: float = Field(0, ge=0, description="建议采购数量")
     execution_status: str = Field("未执行", max_length=20, description="执行状态")
@@ -113,6 +62,59 @@ class ProductionPlanItemResponse(ProductionPlanItemBase):
 
     class Config:
         from_attributes = True
+
+
+# === 生产计划 ===
+
+class ProductionPlanBase(BaseSchema):
+    """生产计划基础schema"""
+    plan_code: Optional[str] = Field(None, max_length=50, description="计划编码")
+    plan_name: str = Field(..., max_length=200, description="计划名称")
+    plan_type: str = Field("MANUAL", max_length=20, description="计划类型（MRP/LRP/MANUAL）")
+    source_type: Optional[str] = Field("Manual", max_length=20, description="来源类型")
+    source_id: Optional[int] = Field(None, description="来源ID")
+    source_code: Optional[str] = Field(None, max_length=50, description="来源编码")
+    plan_start_date: date = Field(..., description="计划开始日期")
+    plan_end_date: date = Field(..., description="计划结束日期")
+    status: str = Field("草稿", max_length=20, description="计划状态")
+    execution_status: str = Field("未执行", max_length=20, description="执行状态")
+    total_work_orders: int = Field(0, description="总工单数")
+    total_purchase_orders: int = Field(0, description="总采购订单数")
+    total_cost: float = Field(0, ge=0, description="总成本")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class ProductionPlanCreate(ProductionPlanBase):
+    """生产计划创建schema"""
+    items: List[ProductionPlanItemCreate] = Field(default_factory=list, description="计划明细项")
+
+
+class ProductionPlanUpdate(ProductionPlanBase):
+    """生产计划更新schema"""
+    plan_code: Optional[str] = Field(None, max_length=50, description="计划编码")
+
+
+class ProductionPlanResponse(ProductionPlanBase):
+    """生产计划响应schema"""
+    id: int = Field(..., description="计划ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class ProductionPlanListResponse(ProductionPlanResponse):
+    """生产计划列表响应schema（简化版）"""
+    pass
+
+
 
 
 # === MRP运算结果（已废弃） ===
@@ -268,6 +270,7 @@ class IntelligentSchedulingRequest(BaseSchema):
     """智能排产请求"""
     work_order_ids: Optional[List[int]] = Field(None, description="工单ID列表（可选，如果不提供则对所有待排产工单进行排产）")
     constraints: Optional[SchedulingConstraints] = Field(None, description="约束条件")
+    apply_results: bool = Field(True, description="是否将排产结果写入工单（默认True，排产后直接更新工单计划日期）")
 
 
 class ScheduledOrder(BaseSchema):

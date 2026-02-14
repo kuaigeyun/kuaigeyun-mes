@@ -966,7 +966,9 @@ class DemandService(AppBaseService[Demand]):
         """
         async with in_transaction():
             # 获取需求
-            demand = await self.get_demand_by_id(tenant_id, demand_id)
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+            if not demand:
+                raise NotFoundError("需求", str(demand_id))
             
             # 验证需求状态：只能下推已审核的需求
             if demand.status != DemandStatus.AUDITED:
@@ -977,32 +979,75 @@ class DemandService(AppBaseService[Demand]):
             
             # 检查是否已经下推过
             if demand.pushed_to_computation:
-                raise ValidationError("该需求已经下推到需求计算，不能重复下推")
+                # 检查是否真的存在计算记录
+                from apps.kuaizhizao.models.demand_computation import DemandComputation
+                exists = await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).exists()
+                if exists:
+                    raise ValidationError("该需求已经下推到需求计算，不能重复下推")
+                else:
+                    logger.warning(f"需求 {demand.demand_code} 标记为已下推但未找到计算记录，允许重新下推")
             
-            # TODO: 步骤1.2实现统一需求计算服务后，在这里创建需求计算任务
-            # 目前先标记为已下推，并生成一个临时的计算编码
-            computation_code = f"COMP-{demand.demand_code}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
-            # 更新需求状态
-            await Demand.filter(
-                tenant_id=tenant_id,
-                id=demand_id
-            ).update(
-                pushed_to_computation=True,
-                computation_code=computation_code,
-                updated_by=created_by,
-                updated_at=datetime.now()
-            )
-            
-            logger.info(f"需求 {demand.demand_code} 已下推到需求计算，计算编码：{computation_code}")
-            
-            return {
-                "success": True,
-                "message": "需求下推成功",
-                "demand_code": demand.demand_code,
-                "computation_code": computation_code,
-                "note": "需求计算任务将在统一需求计算服务实现后自动创建"
+            # 确定计算类型：MTO/销售订单 -> LRP (按单), MTS/销售预测 -> MRP (批产)
+            if demand.business_mode == "MTO" or demand.demand_type == "sales_order":
+                computation_type = "LRP"
+            else:
+                computation_type = "MRP"
+                
+            # 设置默认计算参数
+            default_params = {
+                "include_safety_stock": True,
+                "include_in_transit": True,
+                "include_reserved": True,
+                "include_reorder_point": False,
+                "bom_expand_level": 10
             }
+            
+            # 创建需求计算任务
+            try:
+                from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+                from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
+                
+                comp_service = DemandComputationService()
+                comp_data = DemandComputationCreate(
+                    demand_id=demand_id,
+                    computation_type=computation_type,
+                    computation_params=default_params,
+                    notes=f"从需求 {demand.demand_code} 下推创建"
+                )
+                
+                computation = await comp_service.create_computation(
+                    tenant_id=tenant_id,
+                    computation_data=comp_data,
+                    created_by=created_by
+                )
+                
+                computation_code = computation.computation_code
+                computation_id = computation.id
+                
+                # 更新需求状态
+                await Demand.filter(
+                    tenant_id=tenant_id,
+                    id=demand_id
+                ).update(
+                    pushed_to_computation=True,
+                    computation_id=computation_id,
+                    computation_code=computation_code,
+                    updated_by=created_by,
+                    updated_at=datetime.now()
+                )
+                
+                logger.info(f"需求 {demand.demand_code} 已下推到需求计算，计算编码：{computation_code}")
+                
+                return {
+                    "success": True,
+                    "message": "需求下推成功",
+                    "demand_code": demand.demand_code,
+                    "computation_code": computation_code,
+                    "computation_id": computation_id
+                }
+            except Exception as e:
+                logger.error(f"创建需求计算任务失败: {e}")
+                raise BusinessLogicError(f"下推失败：创建计算任务出错 - {str(e)}")
 
     async def withdraw_demand(
         self, 

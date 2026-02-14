@@ -234,7 +234,8 @@ async def list_bom(
     - **material_id**: 主物料ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     """
-    return await MaterialService.list_bom(tenant_id, skip, limit, material_id, is_active)
+    result = await MaterialService.list_bom(tenant_id, skip, limit, material_id, is_active)
+    return result if result is not None else []
 
 
 @router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="获取BOM详情")
