@@ -1206,7 +1206,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           box-sizing: border-box;
           padding: 0 16px;
         }
-        /* HMI 内层：带圆角的框，裁剪内部 HMI，工业风边框与阴影 */
+        /* HMI 内层：带圆角的框，裁剪内部 HMI，工业风边框 */
         .uni-tabs-content-hmi-inner {
           flex: 1;
           min-height: 0;
@@ -1215,7 +1215,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           isolation: isolate;
           contain: layout paint;
           border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
         }
         /* 内层直接子元素（HMI 根）适配圆角与宽度 */
         .uni-tabs-content-hmi-inner > * {

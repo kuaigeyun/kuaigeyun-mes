@@ -12,15 +12,12 @@
 
 import React, { ReactNode, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Layout, Button, Typography, Divider, theme, ConfigProvider, Tag } from 'antd';
+import { Layout, Button, Divider, theme, ConfigProvider, Tag } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import Lottie from 'lottie-react';
-import circleAnimation from '../../../static/lottie/circle.json';
-import { HMI_DESIGN_TOKENS } from './constants';
+import { HMI_DESIGN_TOKENS, HMI_LAYOUT, HMI_ANTD_TOKEN_OVERRIDE } from './constants';
 
 const { Header, Content } = Layout;
-const { Title } = Typography; // 移除 Text，因为它未被使用
 
 export interface PremiumTerminalTemplateProps {
   /** 标题 */
@@ -50,7 +47,6 @@ export interface PremiumTerminalTemplateProps {
 }
 
 const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
-  title,
   operatorName = '未登录',
   operatorAvatar,
   operatorRole,
@@ -137,8 +133,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
       theme={{
         algorithm: theme.darkAlgorithm,
         token: {
-          colorPrimary: HMI_DESIGN_TOKENS.STATUS_INFO,
-          borderRadius: 8,
+          ...HMI_ANTD_TOKEN_OVERRIDE,
           colorBgBase: HMI_DESIGN_TOKENS.BG_PRIMARY,
         },
       }}
@@ -161,7 +156,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
       >
         <style>{`
           #premium-terminal-layout .ant-layout-header {
-            background: linear-gradient(135deg, #001a33 0%, #001529 50%, #000d1a 100%) !important;
+            background: linear-gradient(135deg, #0a1f3c 0%, #061428 50%, #000814 100%) !important;
             color: #ffffff !important;
           }
           #premium-terminal-layout .ant-layout-header .ant-typography,
@@ -169,8 +164,9 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             color: #ffffff !important;
           }
           #premium-terminal-layout .ant-layout-header .ant-btn-primary {
-            color: #ffffff !important;
-            background-color: ${HMI_DESIGN_TOKENS.STATUS_INFO} !important;
+            color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
+            background: ${HMI_DESIGN_TOKENS.BG_ELEVATED} !important;
+            border-color: ${HMI_DESIGN_TOKENS.BORDER} !important;
           }
           #premium-terminal-layout .premium-header-extra-item {
             display: inline-flex;
@@ -189,13 +185,12 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
 
         {/* 顶部状态栏 */}
         <Header style={{ 
-          backgroundColor: '#001529',
-          background: 'linear-gradient(180deg, #001529 0%, #000c17 100%)',
+          backgroundColor: '#061428',
+          background: 'linear-gradient(180deg, #0a1f3c 0%, #061428 50%, #000814 100%)',
           borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-          boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW,
-          padding: '0 16px',
-          height: 64,
-          minHeight: 64,
+          padding: '0 24px',
+          height: HMI_LAYOUT.HEADER_HEIGHT,
+          minHeight: HMI_LAYOUT.HEADER_HEIGHT,
           display: 'flex',
           alignItems: 'center',
           zIndex: 100,
@@ -204,26 +199,19 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
           overflowY: 'hidden',
           flexShrink: 0,
         }}>
-          {/* 左侧区域：标题(液态玻璃，左贴边) / 工位信息(一行) / 员工信息 */}
+          {/* 左侧区域：工位信息(一行) / 员工信息 */}
           <div className="header-left-block">
-            <div className="header-title-row">
-              <div className="header-title-bordered">
-                <span className="header-title-left-accent" aria-hidden />
-                <span className="header-title-lottie" aria-hidden>
-                  <Lottie animationData={circleAnimation as object} loop style={{ width: 48, height: 48 }} />
-                </span>
-                <Title level={4} className="header-title-text">{title || '生产终端'}</Title>
-              </div>
-            </div>
-            <div className="header-station-block">
-              <span className="header-station-label">工位信息</span>
-              <span className="header-station-content">
-                {[stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).length > 0
-                  ? [stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).map((item, i) => (
-                      <span key={i} className="header-station-item">{item}</span>
-                    ))
-                  : <span className="header-station-item">未绑定</span>}
-              </span>
+            <div className="header-station-breadcrumb">
+              {[stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).length > 0
+                ? [stationArea, stationWorkshop, stationLine, stationName].filter(Boolean).map((item, i, arr) => (
+                    <span
+                      key={i}
+                      className={`header-station-segment ${i === arr.length - 1 ? 'header-station-segment-current' : ''}`}
+                    >
+                      {item}
+                    </span>
+                  ))
+                : <span className="header-station-segment header-station-segment-current">未绑定</span>}
             </div>
             <Divider type="vertical" className="header-divider-v" />
             <div className="header-operator-block">
@@ -263,9 +251,16 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
           {/* 中间自适应占位 */}
           <div style={{ flex: 1, minWidth: 20 }} />
 
-          {/* 右侧区域：先 extra 再分隔再全屏+时间，避免堆叠 */}
+          {/* 右侧区域：全屏、刷新、切换工位、时间 */}
           <div className="header-right-group">
             <div className="header-extra-container">
+              <Button 
+                type="default"
+                icon={isTerminalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
+                onClick={toggleTerminalFullscreen}
+              >
+                {isTerminalFullscreen ? '退出全屏' : '全屏'}
+              </Button>
               {headerExtra}
             </div>
             <div className="header-controls">
@@ -275,13 +270,6 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                   <span className="time-display-date">{time.split(' ')[0]}</span>
                 </div>
               </div>
-              <Button 
-                type="primary"
-                shape="circle"
-                icon={isTerminalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
-                onClick={toggleTerminalFullscreen}
-                className="fullscreen-btn"
-              />
             </div>
           </div>
 
@@ -305,14 +293,14 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             #premium-terminal-layout .header-right-group {
               display: flex !important;
               align-items: center !important;
-              gap: 20px !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
               flex-shrink: 0 !important;
               min-width: 0 !important;
             }
             #premium-terminal-layout .header-extra-container {
               display: flex !important;
               align-items: center !important;
-              gap: 20px !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
               flex-shrink: 0 !important;
               min-width: 0 !important;
               overflow: visible !important;
@@ -320,49 +308,37 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             #premium-terminal-layout .header-extra-container > * {
               display: flex !important;
               align-items: center !important;
-              gap: 12px !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
               flex-shrink: 0 !important;
             }
-            /* 液态玻璃：刷新 / 切换工位 */
+            /* 刷新 / 切换工位 / 全屏：与工位面包屑对齐，图标与文字间距统一 */
             #premium-terminal-layout .header-extra-container .ant-btn {
               flex-shrink: 0 !important;
               white-space: nowrap !important;
               width: auto !important;
               min-width: auto !important;
               margin: 0 !important;
-              position: relative !important;
               box-sizing: border-box !important;
-              border-radius: 14px !important;
-              min-height: ${HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE}px !important;
-              padding: 0 22px !important;
-              backdrop-filter: blur(16px) saturate(1.2) !important;
-              -webkit-backdrop-filter: blur(16px) saturate(1.2) !important;
-              border: 1px solid rgba(255,255,255,0.2) !important;
-              box-shadow: 
-                0 1px 0 rgba(255,255,255,0.35) inset,
-                0 1px 2px rgba(0,0,0,0.08),
-                0 8px 24px rgba(0,0,0,0.18) !important;
-              transition: box-shadow 0.25s ease, border-color 0.2s ease, transform 0.15s ease !important;
+              border-radius: ${HMI_DESIGN_TOKENS.PANEL_RADIUS}px !important;
+              min-height: 36px !important;
+              height: 36px !important;
+              padding: 0 18px !important;
+              font-size: 14px !important;
+              font-weight: 600 !important;
+              line-height: 1.4 !important;
+              gap: 8px !important;
+              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              border: 1px solid rgba(255,255,255,0.15) !important;
+              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
             }
             #premium-terminal-layout .header-extra-container .ant-btn:hover {
-              border-color: rgba(255,255,255,0.28) !important;
-              box-shadow: 
-                0 1px 0 rgba(255,255,255,0.4) inset,
-                0 2px 4px rgba(0,0,0,0.1),
-                0 12px 32px rgba(0,0,0,0.22) !important;
+              background: linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.09) 100%) !important;
+              border-color: ${HMI_DESIGN_TOKENS.BORDER} !important;
+              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
             }
-            #premium-terminal-layout .header-extra-container .ant-btn:active {
-              transform: translateY(1px) !important;
-              box-shadow: 
-                0 0 0 1px rgba(0,0,0,0.1) inset,
-                0 1px 0 rgba(255,255,255,0.2) inset,
-                0 4px 12px rgba(0,0,0,0.2) !important;
-            }
-            #premium-terminal-layout .header-extra-container .ant-btn + .ant-btn {
-              margin-left: 12px !important;
-            }
+            /* 刷新、切换工位、全屏：统一使用 BG_ELEVATED 配色 */
             #premium-terminal-layout .header-extra-buttons {
-              gap: 12px !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
             }
             #premium-terminal-layout .header-extra-buttons .ant-btn {
               flex-shrink: 0 !important;
@@ -379,32 +355,10 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
             #premium-terminal-layout .header-controls {
               display: flex !important;
               align-items: center !important;
-              gap: 20px !important;
+              gap: ${HMI_DESIGN_TOKENS.BUTTON_GAP}px !important;
               flex-shrink: 0 !important;
             }
 
-            #premium-terminal-layout .fullscreen-btn {
-              border-radius: 50% !important;
-              background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #e65100 100%) !important;
-              border: 1px solid rgba(0,0,0,0.2) !important;
-              width: ${HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE}px !important;
-              height: ${HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE}px !important;
-              min-width: ${HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE}px !important;
-              display: flex !important;
-              align-items: center !important;
-              justify-content: center !important;
-              cursor: pointer !important;
-              transition: box-shadow 0.2s, transform 0.1s !important;
-              box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 3px 8px rgba(230,81,0,0.35) !important;
-              flex-shrink: 0 !important;
-            }
-            #premium-terminal-layout .fullscreen-btn:hover {
-              box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 4px 12px rgba(230,81,0,0.4) !important;
-            }
-            #premium-terminal-layout .fullscreen-btn:active {
-              box-shadow: 0 2px 4px rgba(0,0,0,0.3) inset !important;
-              transform: translateY(1px);
-            }
             
             #premium-terminal-layout .header-left-block {
               display: flex !important;
@@ -413,101 +367,58 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               gap: 0 !important;
               min-width: 800px !important;
             }
-            #premium-terminal-layout .header-title-row {
-              display: inline-flex !important;
-              align-items: stretch !important;
-              margin-left: -16px !important;
-            }
-            #premium-terminal-layout .header-title-bordered {
-              position: relative !important;
-              display: inline-flex !important;
-              align-items: center !important;
-              gap: 0 !important;
-              justify-content: center !important;
-              padding: 0 32px 0 28px !important;
-              min-height: 62px !important;
-              margin-top:-4px !important;
-              box-sizing: border-box !important;
-              border-radius: 0 0 24px 0 !important;
-              backdrop-filter: blur(16px) saturate(1.2) !important;
-              -webkit-backdrop-filter: blur(16px) saturate(1.2) !important;
-              background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.02) 100%) !important;
-              border: 1px solid rgba(255,255,255,0.2) !important;
-              border-left: none !important;
-              box-shadow: 
-                0 1px 0 rgba(255,255,255,0.35) inset,
-                2px 2px 0 rgba(255,255,255,0.08),
-                4px 4px 12px rgba(0,0,0,0.12),
-                4px 0 20px rgba(0,0,0,0.08) !important;
-            }
-            #premium-terminal-layout .header-title-left-accent {
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              bottom: 0 !important;
-              width: 5px !important;
-              background: linear-gradient(180deg, ${HMI_DESIGN_TOKENS.STATUS_INFO} 0%, rgba(22,119,255,0.75) 100%) !important;
-              border-radius: 0 0 0 0 !important;
-              flex-shrink: 0 !important;
-            }
-            #premium-terminal-layout .header-title-lottie {
-              display: inline-flex !important;
-              align-items: center !important;
-              justify-content: center !important;
-              margin-right: 12px !important;
-              flex-shrink: 0 !important;
-              line-height: 1 !important;
-            }
-            #premium-terminal-layout .header-title-lottie svg {
-              vertical-align: middle !important;
-            }
-            #premium-terminal-layout .header-title-text {
-              margin: 0 !important;
-              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
-              font-size: clamp(${HMI_DESIGN_TOKENS.FONT_TITLE_MIN}px, 1.5vw, 22px) !important;
-              font-weight: 600 !important;
-              white-space: nowrap !important;
-              line-height: 1.2 !important;
-            }
             #premium-terminal-layout .header-divider-v {
               border-color: ${HMI_DESIGN_TOKENS.BORDER} !important;
               height: 28px !important;
               margin: 0 12px !important;
             }
-            #premium-terminal-layout .header-station-block {
-              display: flex !important;
-              flex-direction: row !important;
-              align-items: center !important;
-              justify-content: flex-start !important;
-              gap: 10px !important;
+            /* 工位信息：| A> >B > >C | 形，段间有 gap，箭头方向正确 */
+            #premium-terminal-layout .header-station-breadcrumb {
+              display: inline-flex !important;
+              align-items: stretch !important;
               min-width: 0 !important;
-              margin-left: 14px !important;
+              margin-left: 0 !important;
+              border-radius: ${HMI_DESIGN_TOKENS.PANEL_RADIUS}px !important;
+              overflow: hidden !important;
+              box-shadow: 0 1px 2px rgba(0,0,0,0.25) !important;
+              gap: 4px !important;
+              isolation: isolate !important;
             }
-            #premium-terminal-layout .header-station-label {
+            #premium-terminal-layout .header-station-segment {
+              position: relative !important;
+              padding: 8px 18px !important;
               font-size: 14px !important;
               font-weight: 600 !important;
-              color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important;
-              flex-shrink: 0 !important;
-            }
-            #premium-terminal-layout .header-station-content {
-              display: inline-flex !important;
-              align-items: center !important;
-              flex-wrap: nowrap !important;
-              gap: 0 !important;
-              min-width: 0 !important;
-              font-size: 17px !important;
-              font-weight: 500 !important;
-              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
-              line-height: 1.35 !important;
-            }
-            #premium-terminal-layout .header-station-content .header-station-item {
+              letter-spacing: 0.02em !important;
+              line-height: 1.4 !important;
               white-space: nowrap !important;
+              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
+              margin-left: 0 !important;
             }
-            #premium-terminal-layout .header-station-content .header-station-item + .header-station-item::before {
-              content: ' · ' !important;
-              margin: 0 4px !important;
-              color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important;
-              font-weight: 400 !important;
+            /* 首段：左直 | 右箭头 >（尖朝右），略亮于普通段 */
+            #premium-terminal-layout .header-station-segment:first-child {
+              padding-left: 18px !important;
+              background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.08) 100%) !important;
+              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
+              clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%) !important;
+            }
+            /* 中间段：左 >（尖朝右） 右 > */
+            #premium-terminal-layout .header-station-segment + .header-station-segment:not(.header-station-segment-current) {
+              padding-left: 20px !important;
+              clip-path: polygon(0 0, 10px 50%, 0 100%, calc(100% - 10px) 100%, 100% 50%, calc(100% - 10px) 0) !important;
+            }
+            /* 末段：左 >（尖朝右） 右直 | */
+            #premium-terminal-layout .header-station-segment + .header-station-segment.header-station-segment-current {
+              padding-left: 20px !important;
+              background: ${HMI_DESIGN_TOKENS.HEADER_FLOATING_BG} !important;
+              color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important;
+              clip-path: polygon(0 0, 10px 50%, 0 100%, 100% 100%, 100% 0) !important;
+            }
+            #premium-terminal-layout .header-station-segment:only-child {
+              margin-left: 0 !important;
+              clip-path: none !important;
+              border-radius: ${HMI_DESIGN_TOKENS.PANEL_RADIUS}px !important;
             }
             #premium-terminal-layout .header-operator-block {
               display: flex !important;
@@ -596,34 +507,6 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               #premium-terminal-layout .hidden-tablet { display: none; }
             }
             
-            #premium-terminal-layout .ant-layout-header .ant-btn:not(.fullscreen-btn) {
-              min-height: ${HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE}px !important;
-              padding: 0 20px !important;
-              color: #fff !important;
-              font-size: ${HMI_DESIGN_TOKENS.FONT_BODY_MIN}px !important;
-            }
-            /* 液态玻璃 - 主按钮（刷新）：蓝调玻璃 */
-            #premium-terminal-layout .header-extra-container .ant-btn-primary {
-              background: linear-gradient(135deg, rgba(64,140,255,0.35) 0%, rgba(30,100,230,0.28) 50%, rgba(22,119,255,0.22) 100%) !important;
-              border-color: rgba(255,255,255,0.25) !important;
-              box-shadow: 
-                0 1px 0 rgba(255,255,255,0.4) inset,
-                0 0 0 1px rgba(22,119,255,0.2),
-                0 1px 2px rgba(0,0,0,0.08),
-                0 8px 24px rgba(22,119,255,0.15) !important;
-            }
-            #premium-terminal-layout .header-extra-container .ant-btn-primary:hover {
-              background: linear-gradient(135deg, rgba(80,155,255,0.42) 0%, rgba(45,115,240,0.35) 50%, rgba(22,119,255,0.28) 100%) !important;
-              box-shadow: 
-                0 1px 0 rgba(255,255,255,0.45) inset,
-                0 0 0 1px rgba(22,119,255,0.25),
-                0 12px 32px rgba(22,119,255,0.2) !important;
-            }
-            /* 液态玻璃 - 次要按钮（切换工位）：中性玻璃 */
-            #premium-terminal-layout .ant-layout-header .ant-btn-default:not(.fullscreen-btn) {
-              background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.04) 100%) !important;
-              border-color: rgba(255,255,255,0.2) !important;
-            }
           `}</style>
         </Header>
 

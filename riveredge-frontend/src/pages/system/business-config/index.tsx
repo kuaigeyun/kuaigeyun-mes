@@ -37,6 +37,10 @@ const PARAMETER_CONFIG = {
       priority: { name: '工单优先级', description: '是否启用工单优先级管理' },
       split: { name: '工单拆分', description: '是否支持工单拆分' },
       merge: { name: '工单合并', description: '是否支持工单合并' },
+      allow_production_without_material: {
+        name: '允许不带料生产',
+        description: '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
+      },
     },
   },
   reporting: {

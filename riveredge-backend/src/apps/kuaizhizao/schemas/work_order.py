@@ -267,6 +267,13 @@ class WorkOrderOperationUpdate(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
 
 
+class DefectTypeMinimal(BaseModel):
+    """不良品项简要（工序绑定用）"""
+    uuid: str = Field(..., description="不良品UUID")
+    code: str = Field(..., description="不良品编码")
+    name: str = Field(..., description="不良品名称")
+
+
 class WorkOrderOperationResponse(WorkOrderOperationBase):
     """工单工序响应Schema"""
     id: int = Field(..., description="工单工序ID")
@@ -283,6 +290,9 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     # 派工审计信息
     assigned_by: Optional[int] = Field(None, description="分配人ID")
     assigned_by_name: Optional[str] = Field(None, description="分配人姓名")
+    
+    # 工序关联的不良品项（从 master_data 获取）
+    defect_types: List[DefectTypeMinimal] = Field(default_factory=list, description="工序关联的不良品类型")
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

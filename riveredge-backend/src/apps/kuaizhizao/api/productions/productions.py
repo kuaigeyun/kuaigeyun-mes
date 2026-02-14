@@ -405,6 +405,7 @@ async def list_work_orders(
     status: Optional[str] = Query(None, description="工单状态"),
     workshop_id: Optional[int] = Query(None, description="车间ID"),
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
+    assigned_worker_id: Optional[int] = Query(None, description="分配员工ID（只看当前用户时传入）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -427,6 +428,7 @@ async def list_work_orders(
             status=status,
             workshop_id=workshop_id,
             work_center_id=work_center_id,
+            assigned_worker_id=assigned_worker_id,
         )
         # 返回分页格式，包含总数
         total = await service.get_work_order_count(
@@ -438,6 +440,7 @@ async def list_work_orders(
             status=status,
             workshop_id=workshop_id,
             work_center_id=work_center_id,
+            assigned_worker_id=assigned_worker_id,
         )
         return {
             "data": result,
@@ -1083,7 +1086,6 @@ async def check_work_order_shortage(
 @router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="下达工单")
 async def release_work_order(
     work_order_id: int,
-    check_shortage: bool = Query(True, description="是否在下达前检查缺料（默认：True）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderResponse:
@@ -1091,10 +1093,13 @@ async def release_work_order(
     下达工单
 
     将工单状态从"草稿"更新为"已下达"。
+    是否检查缺料由业务配置「允许不带料生产」决定：开启时只管制造过程，不检查缺料。
 
     - **work_order_id**: 工单ID
-    - **check_shortage**: 是否在下达前检查缺料（默认：True）。如果为True且存在缺料，将阻止下达并返回错误。
     """
+    from infra.services.business_config_service import BusinessConfigService
+    allow_without_material = await BusinessConfigService().allow_production_without_material(tenant_id)
+    check_shortage = not allow_without_material
     return await WorkOrderService().release_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
