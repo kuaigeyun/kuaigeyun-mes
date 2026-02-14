@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from tortoise import timezone
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -466,7 +467,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 created_by_name=user_info["name"],
             )
 
-            # 记录"创建"节点开始时间
+            # 记录"创建"节点开始时间（必须在同一事务内，失败时需抛出以触发回滚）
             try:
                 timing_service = DocumentTimingService()
                 await timing_service.record_node_start(
@@ -480,8 +481,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     operator_name=user_info["name"],
                 )
             except Exception as e:
-                # 节点时间记录失败不影响主流程，记录日志
+                # 节点时间记录失败会导致事务中止，必须重新抛出，否则后续工序单创建会报"当前事务被终止"
                 logger.warning(f"记录工单创建节点时间失败: {e}")
+                raise
 
             # 处理工序单（如果提供了 operations，使用提供的工序；否则自动匹配工艺路线）
             operations = getattr(work_order_data, 'operations', None)
@@ -800,17 +802,45 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             NotFoundError: 工单不存在
             ValidationError: 不允许删除的工单状态
         """
-        def validate_work_order(work_order):
-            """验证工单是否可以删除"""
-            if work_order.status not in ['draft', 'cancelled']:
-                raise ValidationError("只能删除草稿状态或已取消的工单")
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-        await self.delete_with_validation(
-            tenant_id=tenant_id,
-            record_id=work_order_id,
-            validate_func=validate_work_order,
-            soft_delete=True
-        )
+            def validate_work_order(wo):
+                """验证工单是否可以删除"""
+                # 允许删除草稿、已取消或已下达但未执行的工单
+                if wo.status == 'released':
+                    # 已下达但未开始执行（无实际开始时间且无产出）
+                    if wo.actual_start_date or (wo.completed_quantity and wo.completed_quantity > 0):
+                        raise ValidationError("已开始执行的工单不能删除")
+                elif wo.status not in ['draft', 'cancelled']:
+                    raise ValidationError("只能删除草稿、已取消或未执行的工单")
+
+            validate_work_order(work_order)
+
+            # 检查是否有报工记录（包括待审核的）
+            reporting_count = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id
+            ).count()
+            
+            if reporting_count > 0:
+                raise ValidationError("工单存在相关的报工记录，不允许删除")
+
+            # 使用 timezone.now()：工单表 deleted_at 为 TIMESTAMPTZ，与物料/工单工序等一致
+            now = timezone.now()
+
+            # 级联软删除工单工序
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).update(deleted_at=now)
+
+            # 软删除工单
+            await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id=work_order_id
+            ).update(deleted_at=now)
 
     async def check_material_shortage(
         self,
@@ -1446,7 +1476,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 删除未更新的未报工工序
             for op in existing_operations:
                 if op.id not in updated_operation_ids and op.id not in reported_operation_ids:
-                    op.deleted_at = datetime.now()
+                    op.deleted_at = timezone.now()
                     op.updated_by = updated_by
                     op.updated_by_name = user_info["name"]
                     await op.save()
