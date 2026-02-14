@@ -39,6 +39,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderMergeRequest,
     WorkOrderMergeResponse,
     WorkOrderOperationDispatch,
+    DefectTypeMinimal,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -46,6 +47,7 @@ from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import ProcessRoute, Operation
+from apps.master_data.services.process_service import _get_operation_defect_types_via_table
 from core.services.business.code_generation_service import CodeGenerationService
 from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
@@ -704,6 +706,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         status: Optional[str] = None,
         workshop_id: Optional[int] = None,
         work_center_id: Optional[int] = None,
+        assigned_worker_id: Optional[int] = None,
     ) -> List[WorkOrderListResponse]:
         """
         获取工单列表
@@ -743,6 +746,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             query = query.filter(workshop_id=workshop_id)
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
+        if assigned_worker_id:
+            # 筛选有工序分配给该员工的工单
+            from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+            wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_worker_id=assigned_worker_id,
+                deleted_at__isnull=True
+            ).values_list("work_order_id", flat=True)
+            wo_id_set = set(wo_ids)
+            if wo_id_set:
+                query = query.filter(id__in=wo_id_set)
+            else:
+                query = query.filter(id__in=[])  # 无匹配
 
         # 获取总数（用于分页）
         total = await query.count()
@@ -787,6 +803,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         status: Optional[str] = None,
         workshop_id: Optional[int] = None,
         work_center_id: Optional[int] = None,
+        assigned_worker_id: Optional[int] = None,
     ) -> int:
         """
         获取工单总数（用于分页）
@@ -800,6 +817,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             status: 工单状态
             workshop_id: 车间ID
             work_center_id: 工作中心ID
+            assigned_worker_id: 分配员工ID
 
         Returns:
             int: 工单总数
@@ -824,6 +842,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             query = query.filter(workshop_id=workshop_id)
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
+        if assigned_worker_id:
+            from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+            wo_ids = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                assigned_worker_id=assigned_worker_id,
+                deleted_at__isnull=True
+            ).values_list("work_order_id", flat=True)
+            wo_id_set = set(wo_ids)
+            if wo_id_set:
+                query = query.filter(id__in=wo_id_set)
+            else:
+                query = query.filter(id__in=[])
 
         return await query.count()
 
@@ -1456,7 +1486,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             deleted_at__isnull=True
         ).order_by('sequence').all()
         
-        return [WorkOrderOperationResponse.model_validate(op) for op in operations]
+        result = []
+        for op in operations:
+            defect_types_raw = await _get_operation_defect_types_via_table(op.operation_id)
+            defect_types = [DefectTypeMinimal(uuid=dt["uuid"], code=dt["code"], name=dt["name"]) for dt in defect_types_raw]
+            op_data = {f: getattr(op, f, None) for f in WorkOrderOperationResponse.model_fields if hasattr(op, f)}
+            op_data["defect_types"] = defect_types
+            result.append(WorkOrderOperationResponse.model_validate(op_data))
+        return result
 
     async def update_work_order_operations(
         self,

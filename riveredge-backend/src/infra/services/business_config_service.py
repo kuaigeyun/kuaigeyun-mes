@@ -58,6 +58,7 @@ class BusinessConfigService:
                 "priority": False,       # 简化优先级管理
                 "split": False,          # 关闭拆单
                 "merge": False,          # 关闭合单
+                "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
             },
             "reporting": {
                 "quick_reporting": True,     # 开启快捷报工
@@ -110,6 +111,16 @@ class BusinessConfigService:
         config = await self.get_business_config(tenant_id)
         bom_params = config.get("parameters", {}).get("bom", {})
         return bom_params.get("bom_multi_version_allowed", True)
+
+    async def allow_production_without_material(self, tenant_id: int) -> bool:
+        """
+        获取是否允许不带料生产配置
+        
+        当为 true 时，工单下达不检查缺料，只管制造过程；为 false 时，缺料则禁止下达。
+        """
+        config = await self.get_business_config(tenant_id)
+        wo_params = config.get("parameters", {}).get("work_order", {})
+        return wo_params.get("allow_production_without_material", False)
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
@@ -190,6 +201,7 @@ class BusinessConfigService:
                 "priority": True,
                 "split": True,
                 "merge": True,
+                "allow_production_without_material": False,  # 允许不带料生产（只管制造过程，不检查缺料）
             },
             "reporting": {
                 "quick_reporting": True,

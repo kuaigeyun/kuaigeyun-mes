@@ -237,6 +237,10 @@ class Workstation(BaseModel):
         related_name="workstations",
         description="所属产线"
     )
+
+    # 工作中心（用于生产终端按工作中心筛选工单）
+    work_center_id = fields.IntField(null=True, description="关联工作中心ID")
+    work_center_name = fields.CharField(max_length=200, null=True, description="关联工作中心名称")
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

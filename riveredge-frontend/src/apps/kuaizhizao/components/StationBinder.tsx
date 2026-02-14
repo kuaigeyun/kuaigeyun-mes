@@ -26,6 +26,8 @@ export interface StationInfo {
     stationId: number;
     stationName: string;
     stationCode: string;
+    workCenterId?: number;
+    workCenterName?: string;
 }
 
 interface StationBinderProps {
@@ -153,7 +155,9 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                 lineName: line?.name,
                 stationId: station.id,
                 stationName: station.name,
-                stationCode: station.code
+                stationCode: station.code,
+                workCenterId: (station as any).workCenterId ?? (station as any).work_center_id,
+                workCenterName: (station as any).workCenterName ?? (station as any).work_center_name,
             };
 
             localStorage.setItem(STATION_STORAGE_KEY, JSON.stringify(info));

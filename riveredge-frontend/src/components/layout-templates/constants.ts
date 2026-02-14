@@ -232,16 +232,22 @@ export const HMI_DESIGN_TOKENS = {
   FONT_BODY_MIN: 20,
   /** 标题最小字号（px） */
   FONT_TITLE_MIN: 28,
+  /** 卡片标题字号（工单列表/工单操作/文档/最近操作记录 统一） */
+  FONT_CARD_HEADER: 20,
+  /** 卡片标题图标尺寸（px） */
+  CARD_HEADER_ICON_SIZE: 18,
   /** 数字/指标主字号（px），与正文统一字体 */
   FONT_FIGURE: 26,
   /** HMI 统一字体（整站继承） */
   FONT_FAMILY: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif",
-  /** 深色主题：主背景 */
-  BG_PRIMARY: '#000c17',
+  /** 深色主题：主背景（蓝黑底） */
+  BG_PRIMARY: '#000814',
   /** 深色主题：卡片/面板背景 */
   BG_CARD: 'rgba(255, 255, 255, 0.05)',
   /** 深色主题：悬浮/强调背景 */
   BG_ELEVATED: 'rgba(255, 255, 255, 0.08)',
+  /** 顶栏内浮起元素背景（工位面包屑、全屏/刷新/切换工位），与顶栏深蓝区分 */
+  HEADER_FLOATING_BG: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
   /** 深色主题：边框 */
   BORDER: 'rgba(255, 255, 255, 0.15)',
   /** 深色主题：正文 */
@@ -256,20 +262,45 @@ export const HMI_DESIGN_TOKENS = {
   CONTAINER_BORDER: '1px solid rgba(255, 255, 255, 0.08)',
   /** HMI 圆角容器：外阴影 */
   CONTAINER_SHADOW: '0 2px 12px rgba(0, 0, 0, 0.25)',
-  /** 内嵌面板圆角（px） */
+  /** 统一圆角（px） */
   PANEL_RADIUS: 8,
-  /** 大面板/主按钮圆角（px） */
-  PANEL_RADIUS_LG: 12,
   /** 区块间距（px） */
   SECTION_GAP: 24,
-  /** 主界面背景渐变 */
-  BG_GRADIENT_MAIN: 'linear-gradient(180deg, #0d2137 0%, #0a1628 50%, #000c17 100%)',
+  /** 三栏容器统一内边距（工单列表/工单操作/文档/最近操作记录） */
+  PANEL_PADDING: 24,
+  /** 工单列表卡片内边距（px） */
+  LIST_CARD_PADDING: 12,
+  /** 工单列表卡片间距（px） */
+  LIST_CARD_GAP: 6,
+  /** 工单列表卡片默认背景 */
+  LIST_CARD_BG: 'rgba(255, 255, 255, 0.04)',
+  /** 工单列表选中卡片背景（淡绿） */
+  LIST_CARD_SELECTED_BG: 'rgba(0, 200, 83, 0.15)',
+  /** 工单状态徽章配色：{ bg, color }，保证文字与背景有足够对比 */
+  STATUS_BADGE: {
+    draft: { bg: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.9)' },
+    released: { bg: 'rgba(22,119,255,0.3)', color: '#90caff' },
+    pending: { bg: 'rgba(22,119,255,0.3)', color: '#90caff' },
+    in_progress: { bg: 'rgba(255,179,0,0.35)', color: '#ffe58f' },
+    processing: { bg: 'rgba(255,179,0,0.35)', color: '#ffe58f' },
+    completed: { bg: 'rgba(0,200,83,0.35)', color: '#95de64' },
+    cancelled: { bg: 'rgba(211,47,47,0.35)', color: '#ff7875' },
+    default: { bg: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)' },
+  } as const,
+  /** 按钮间距（px） */
+  BUTTON_GAP: 20,
+  /** 主按钮水平内边距（px） */
+  BUTTON_PADDING_PRIMARY: 28,
+  /** 次要按钮水平内边距（px） */
+  BUTTON_PADDING_SECONDARY: 24,
+  /** 主界面背景渐变（蓝黑/深蓝） */
+  BG_GRADIENT_MAIN: 'linear-gradient(180deg, #0f2847 0%, #0a1f3c 40%, #061428 70%, #000814 100%)',
   /** 左栏侧栏背景渐变 */
   BG_GRADIENT_SIDEBAR: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
   /** 主内容面板外发光 */
   PANEL_GLOW: '0 0 40px rgba(22,119,255,0.06), 0 4px 24px rgba(0,0,0,0.2)',
   /** 毛玻璃背景色（配合 backdrop-filter: blur(12px)） */
-  PANEL_FROSTED: 'rgba(0,12,23,0.75)',
+  PANEL_FROSTED: 'rgba(0,8,20,0.75)',
   /** 指标卡/内容卡阴影 */
   CARD_SHADOW: '0 4px 16px rgba(0,0,0,0.2)',
   /** 主按钮阴影（蓝色系） */
@@ -279,9 +310,51 @@ export const HMI_DESIGN_TOKENS = {
 } as const;
 
 /**
+ * 生产终端 HMI 固定布局尺寸（ISA-101 风格）
+ */
+export const HMI_LAYOUT = {
+  /** 顶部状态栏高度 */
+  HEADER_HEIGHT: 64,
+  /** 指标条高度 */
+  METRICS_HEIGHT: 80,
+  /** 左侧面板固定宽度 */
+  LEFT_PANEL_WIDTH: 320,
+  /** 右侧面板固定宽度 */
+  RIGHT_PANEL_WIDTH: 360,
+  /** 底部操作栏高度（可选） */
+  FOOTER_HEIGHT: 72,
+} as const;
+
+/**
+ * HMI 生产终端 Ant Design Token 覆盖
+ * 供 ConfigProvider 使用，与全局主题语义一致
+ */
+export const HMI_ANTD_TOKEN_OVERRIDE = {
+  colorPrimary: '#1677ff',
+  colorSuccess: '#52c41a',
+  colorWarning: '#faad14',
+  colorError: '#ff4d4f',
+  colorBgLayout: '#000814',
+  colorBgContainer: 'rgba(255, 255, 255, 0.05)',
+  colorBorder: 'rgba(255, 255, 255, 0.15)',
+  colorText: '#ffffff',
+  colorTextSecondary: 'rgba(255, 255, 255, 0.65)',
+  colorTextTertiary: 'rgba(255, 255, 255, 0.45)',
+  borderRadius: 8,
+  fontSize: 14,
+  fontSizeLG: 16,
+  fontSizeXL: 20,
+  fontSizeHeading1: 38,
+  fontSizeHeading2: 30,
+  fontSizeHeading3: 24,
+} as const;
+
+/**
  * 工位机触屏模式配置
  */
 export const TOUCH_SCREEN_CONFIG = {
+  /** 触控最小区域（px），符合工业 HMI 规范 */
+  TOUCH_MIN_SIZE: 48,
   /** 按钮最小高度 */
   BUTTON_MIN_HEIGHT: 60,
   /** 字体最小大小 */

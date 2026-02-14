@@ -375,7 +375,10 @@ export async function apiRequest<T = any>(
       
       // 处理 400 错误（可能是组织上下文未设置或其他验证错误）
       if (response.status === 400) {
-        const errorDetail = data?.detail || data?.message || '';
+        const errorDetail =
+          data?.detail ||
+          data?.message ||
+          (data?.success === false && data?.error?.message ? data.error.message : '');
         console.error('❌ 400 错误详情:', {
           url,
           errorDetail,

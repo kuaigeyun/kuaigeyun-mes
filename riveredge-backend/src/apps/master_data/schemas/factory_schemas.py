@@ -238,6 +238,8 @@ class WorkstationBase(BaseModel):
     name: str = Field(..., max_length=200, description="工位名称")
     production_line_id: int = Field(..., description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
+    work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
     is_active: bool = Field(True, description="是否启用")
     
     model_config = ConfigDict(populate_by_name=True)
@@ -269,6 +271,8 @@ class WorkstationUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="工位名称")
     production_line_id: Optional[int] = Field(None, description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
+    work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
     model_config = ConfigDict(populate_by_name=True)

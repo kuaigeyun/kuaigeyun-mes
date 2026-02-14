@@ -8,8 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Card, Button, Tag, message, Input, Empty, 
-  List, Typography, Form, Row, Col, Progress, Statistic,
-  Tooltip, Tabs
+  List, Typography, Form, Progress, Tooltip, Tabs, theme, Alert, Segmented, Modal, Radio, Select
 } from 'antd';
 import { 
   PlayCircleOutlined, 
@@ -21,18 +20,17 @@ import {
   StopOutlined,
   UnorderedListOutlined,
   FileProtectOutlined,
-  FileImageOutlined,
-  CodeOutlined,
-  PaperClipOutlined,
   HistoryOutlined,
 } from '@ant-design/icons';
 
-import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi, reportingApi } from '../../../services/production';
-import StationBinder, { STATION_STORAGE_KEY, StationInfo } from '../../../components/StationBinder';
+import StationBinder, { STATION_STORAGE_KEY, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
-import DocumentCenter from './components/DocumentCenter';
+import NumericKeypad from './components/NumericKeypad';
+import DocumentCenter, { type DocumentCenterTabKey } from './components/DocumentCenter';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
+import dayjs from 'dayjs';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -49,11 +47,15 @@ interface WorkOrder {
   priority?: string;
   completed_quantity?: number;
   unqualified_quantity?: number;
+  qualified_quantity?: number;
   planned_start_date?: string;
   planned_end_date?: string;
+  work_center_id?: number;
+  work_center_name?: string;
 }
 
 const WorkOrdersKioskPage: React.FC = () => {
+    const { token } = theme.useToken();
     const [loading, setLoading] = useState(false);
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [searchKeyword, setSearchKeyword] = useState('');
@@ -67,8 +69,20 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [opsLoading, setOpsLoading] = useState(false);
     const [form] = Form.useForm();
     const [isPaused, setIsPaused] = useState(false);
-    const [recentOps, setRecentOps] = useState<Array<{ time: string; action: string; detail?: string }>>([]);
+    const [recentOps, setRecentOps] = useState<Array<{ time: string; action: string; detail?: string; operator?: string }>>([]);
     const [middleTabKey, setMiddleTabKey] = useState<string>('operation');
+    const [docSubTabKey, setDocSubTabKey] = useState<DocumentCenterTabKey>('sop');
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [focusedNumField, setFocusedNumField] = useState<'qualified_quantity' | 'unqualified_quantity' | null>(null);
+    // 不良品弹窗：输入不合格数>0时弹出
+    const [defectModalVisible, setDefectModalVisible] = useState(false);
+    const [defectTypeOptions, setDefectTypeOptions] = useState<Array<{ code: string; name: string }>>([]);
+    const [selectedDefectType, setSelectedDefectType] = useState<string | null>(null);
+    // 作业指导书弹窗
+    const [sopModalVisible, setSopModalVisible] = useState(false);
+    const [sopModalTab, setSopModalTab] = useState<'static' | 'guided'>('static');
+    // 工单列表筛选：全部/只看本机台/只看当前用户
+    const [workOrderFilter, setWorkOrderFilter] = useState<'all' | 'station' | 'currentUser'>('all');
 
     useEffect(() => {
         // Load User Info
@@ -84,30 +98,33 @@ const WorkOrdersKioskPage: React.FC = () => {
             try {
                 const info = JSON.parse(savedStation);
                 setStationInfo(info);
-                loadWorkOrders(info.stationId);
+                loadWorkOrders((info as any).workCenterId);
             } catch (e) {
                 localStorage.removeItem(STATION_STORAGE_KEY);
             }
         }
     }, []);
 
-    const loadWorkOrders = async (stationId?: number) => {
+    // 不良品弹窗打开时：只显示当前工序关联的不良品项
+    useEffect(() => {
+        if (!defectModalVisible || !activeOperation) return;
+        const opDefects = activeOperation?.defect_types ?? activeOperation?.defectTypes ?? [];
+        setDefectTypeOptions(opDefects.map((d: any) => ({ code: d.code, name: d.name })));
+    }, [defectModalVisible, activeOperation]);
+
+
+    const loadWorkOrders = async (workCenterId?: number, filterOverride?: 'all' | 'station' | 'currentUser') => {
         setLoading(true);
+        setLoadError(null);
         try {
-            // Use work_center_id for filtering based on selected station
-            const params: any = { 
-                skip: 0, 
-                limit: 100,
-                status: 'production', // Optional: Only show work orders in production? Or all? Let's show all or filter by relevant statuses. 
-                // Actually the user might want "ready" or "processing".
-                // For now, let's just filter by work_center_id.
-            };
-            if (stationId) params.work_center_id = stationId;
-            
+            const effectiveFilter = filterOverride ?? workOrderFilter;
+            const params: any = { skip: 0, limit: 200 };
+            if (workCenterId) params.work_center_id = workCenterId;
+            if (effectiveFilter === 'currentUser' && userInfo?.id) params.assigned_worker_id = userInfo.id;
             const response = await workOrderApi.list(params);
-            // API returns { data: [], total: ... } based on productions.py list_work_orders
-            const data = response.data || []; 
-            setWorkOrders(data);
+            const data = response?.data ?? (Array.isArray(response) ? response : []);
+            const list = Array.isArray(data) ? data : [];
+            setWorkOrders(list.filter((wo: WorkOrder) => ['released', 'in_progress'].includes(wo.status || '')));
             
             if (selectedWorkOrder) {
                 const updated = data.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
@@ -115,6 +132,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             }
         } catch (error) {
             console.error(error);
+            setLoadError('加载工单列表失败，请重试');
             message.error('加载工单列表失败');
         } finally {
             setLoading(false);
@@ -158,7 +176,8 @@ const WorkOrdersKioskPage: React.FC = () => {
 
     const addRecentOp = (action: string, detail?: string) => {
         const time = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setRecentOps(prev => [{ time, action, detail }, ...prev].slice(0, 20));
+        const operator = userInfo?.full_name || userInfo?.username || '操作员';
+        setRecentOps(prev => [{ time, action, detail, operator }, ...prev].slice(0, 20));
     };
 
     const handleStart = async () => {
@@ -176,7 +195,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
             if (updatedOp) setActiveOperation(updatedOp);
 
-            loadWorkOrders(stationInfo?.stationId);
+            loadWorkOrders(stationInfo?.workCenterId);
         } catch (error) {
             console.error(error);
             message.error('操作失败');
@@ -189,35 +208,67 @@ const WorkOrdersKioskPage: React.FC = () => {
         try {
             const values = await form.validateFields();
             if (!activeOperation || !selectedWorkOrder) return;
-            
+            const qualified = Number(values.qualified_quantity) || 0;
+            const unqualified = Number(values.unqualified_quantity) || 0;
+            const qty = qualified + unqualified;
+            if (qty <= 0) {
+                message.warning('合格数和不合格数之和须大于 0');
+                return;
+            }
+            if (unqualified > 0 && defectTypeOptions.length > 0 && !selectedDefectType) {
+                message.warning('请选择不良品类型');
+                return;
+            }
             setOpsLoading(true);
+            const sopParams = Object.fromEntries(
+                Object.entries(values).filter(([k]) => !['qualified_quantity', 'unqualified_quantity', 'work_hours', 'remarks'].includes(k))
+            );
             
-            // Construct report payload
-            // reportingApi.create expected payload: { work_order_id, operation_id, quantity, data: { ...parameters } }
-            // Verify schema: ReportingRecordCreate in productions.py (Line 156) -> reporting_record.py
-            // It usually expects: work_order_id, operation_id, quantity, qualified_quantity, unqualified_quantity match logic.
-            // Let's assume the basic fields.
-            
-            await reportingApi.create({
-                work_order_id: selectedWorkOrder.id,
-                operation_id: activeOperation.id,
-                quantity: Number(values.report_quantity) || 0,
-                // qualified/unqualified logic if needed
-                // parameters: values, // If backend supports dynamic parameters blob
+            const created = await reportingApi.create({
+                work_order_id: selectedWorkOrder.id!,
+                work_order_code: selectedWorkOrder.code || '',
+                work_order_name: selectedWorkOrder.name || selectedWorkOrder.product_name || '',
+                operation_id: activeOperation.operation_id ?? activeOperation.id,
+                operation_code: activeOperation.operation_code || '',
+                operation_name: activeOperation.operation_name || activeOperation.name || '',
+                worker_id: userInfo?.id ?? 0,
+                worker_name: userInfo?.full_name || userInfo?.username || '操作员',
+                reported_quantity: qty,
+                qualified_quantity: qualified,
+                unqualified_quantity: unqualified,
+                work_hours: Number(values.work_hours) || 0,
+                status: 'pending',
+                reported_at: new Date().toISOString(),
+                remarks: values.remarks,
+                sop_parameters: Object.keys(sopParams).length ? sopParams : undefined,
             });
             
-            addRecentOp('完成报工', `数量 ${values.report_quantity || 0}`);
+            // 不合格数 > 0 且已选不良品类型时，创建不良品记录
+            if (unqualified > 0 && selectedDefectType && created?.id) {
+                try {
+                    await reportingApi.recordDefect(created.id.toString(), {
+                        defect_quantity: unqualified,
+                        defect_type: selectedDefectType,
+                        defect_reason: '报工终端录入',
+                        disposition: 'quarantine',
+                    });
+                } catch (defectErr) {
+                    console.error('创建不良品记录失败', defectErr);
+                    message.warning('报工成功，但不良品记录创建失败');
+                }
+            }
+            
+            addRecentOp('完成报工', `合格 ${qualified} / 不合格 ${unqualified}`);
             message.success('报工成功');
             form.resetFields();
+            setSelectedDefectType(null);
             
             // Refresh
-            loadWorkOrders(stationInfo?.stationId);
+            loadWorkOrders(stationInfo?.workCenterId);
             if (selectedWorkOrder.id) {
                 const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
                 setOperations(ops || []);
-                // Update active op? If completed, maybe move to next? 
-                // For now just refresh state
-                 const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
+                const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
                 if (updatedOp) setActiveOperation(updatedOp);
             }
             
@@ -229,56 +280,91 @@ const WorkOrdersKioskPage: React.FC = () => {
         }
     };
 
-    const getStatusColor = (status?: string): string => {
-        const map: Record<string, string> = {
-            '已下达': HMI_DESIGN_TOKENS.STATUS_INFO,
-            '生产中': HMI_DESIGN_TOKENS.STATUS_WARNING,
-            '已完成': HMI_DESIGN_TOKENS.STATUS_OK,
-            'pending': HMI_DESIGN_TOKENS.STATUS_INFO,
-            'processing': HMI_DESIGN_TOKENS.STATUS_WARNING,
-            'completed': HMI_DESIGN_TOKENS.STATUS_OK,
-        };
-        return map[status || ''] || HMI_DESIGN_TOKENS.TEXT_SECONDARY;
+    const STATUS_LABELS: Record<string, string> = {
+        draft: '草稿', released: '已下达', in_progress: '生产中', completed: '已完成', cancelled: '已取消',
+        pending: '待执行', processing: '执行中',
+    };
+    const PRIORITY_LABELS: Record<string, string> = {
+        low: '低', normal: '普通', high: '高', urgent: '紧急',
+    };
+    const formatDate = (d?: string) => d ? dayjs(d).format('MM-DD HH:mm') : '—';
+    const getStatusBadgeStyle = (status?: string): { background: string; color: string } => {
+        const s = HMI_DESIGN_TOKENS.STATUS_BADGE[status as keyof typeof HMI_DESIGN_TOKENS.STATUS_BADGE] ?? HMI_DESIGN_TOKENS.STATUS_BADGE.default;
+        return { background: s.bg, color: s.color };
     };
 
-    const filteredWorkOrders = workOrders.filter(wo => 
-        !searchKeyword || 
-        wo.code?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        wo.product_name?.toLowerCase().includes(searchKeyword.toLowerCase())
-    );
+    const filteredWorkOrders = workOrders.filter(wo => {
+        const matchSearch = !searchKeyword ||
+            wo.code?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+            wo.product_name?.toLowerCase().includes(searchKeyword.toLowerCase());
+        if (!matchSearch) return false;
+        if (workOrderFilter === 'station' && stationInfo?.workCenterId != null) {
+            return wo.work_center_id === stationInfo.workCenterId;
+        }
+        return true;
+    });
 
     const renderLeftPanel = () => (
         <div
+            onClick={() => setFocusedNumField(null)}
             style={{
                 height: '100%',
-                minWidth: 280,
-                background: HMI_DESIGN_TOKENS.BG_GRADIENT_SIDEBAR,
-                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
+                width: HMI_LAYOUT.LEFT_PANEL_WIDTH,
+                minWidth: HMI_LAYOUT.LEFT_PANEL_WIDTH,
+                background: HMI_DESIGN_TOKENS.BG_CARD,
+                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
                 border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
             }}
         >
-            <div style={{ padding: '16px 12px 12px 16px', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, flexShrink: 0 }}>
+            <div style={{ padding: HMI_DESIGN_TOKENS.PANEL_PADDING, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: 22, fontWeight: 600 }}>
-                        <UnorderedListOutlined style={{ fontSize: 20 }} />
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}>
+                        <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
                         工单列表
                     </span>
-                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>共 {filteredWorkOrders.length} 项</div>
+                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 400 }}>共 {filteredWorkOrders.length} 项</div>
                 </div>
+                <Select
+                    value={workOrderFilter}
+                    getPopupContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                    onChange={(v) => {
+                        setWorkOrderFilter(v);
+                        if (stationInfo?.workCenterId) loadWorkOrders(stationInfo.workCenterId, v);
+                    }}
+                    options={[
+                        { label: '全部', value: 'all' },
+                        { label: '只看本机台', value: 'station' },
+                        { label: '只看当前用户', value: 'currentUser' },
+                    ]}
+                    style={{ width: '100%', marginBottom: 12 }}
+                    className="kiosk-work-order-filter-select"
+                    popupClassName="kiosk-work-order-filter-dropdown"
+                />
                 <Search
-                   // This is just a placeholder. I need to edit PremiumTerminalTemplate.tsx
-// Please ignore this block content, I will target the correct file below.="搜索编号或产品..."
+                    placeholder="搜索编号或产品"
                     onChange={e => setSearchKeyword(e.target.value)}
                     style={{ background: HMI_DESIGN_TOKENS.BG_CARD, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
                 />
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px 16px' }}>
+            <div className="kiosk-work-order-list" style={{ flex: 1, overflowY: 'auto', padding: `${HMI_DESIGN_TOKENS.PANEL_PADDING}px` }}>
+                <style>{`
+                    .kiosk-work-order-list .ant-list-item { border: none !important; border-bottom: none !important; }
+                    .kiosk-work-order-filter-select.ant-select .ant-select-selector,
+                    .kiosk-work-order-filter-select.ant-select-single .ant-select-selection-item {
+                        font-size: 14px !important;
+                        font-weight: 400 !important;
+                        color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important;
+                    }
+                    .kiosk-work-order-filter-dropdown .ant-select-item { font-size: 14px !important; font-weight: 400 !important; color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important; }
+                `}</style>
                 <List
+                    split={false}
                     dataSource={filteredWorkOrders}
                     loading={loading}
+                    style={{ margin: 0, padding: 0, border: 'none' }}
                     locale={{ emptyText: (
                         <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -288,27 +374,33 @@ const WorkOrdersKioskPage: React.FC = () => {
                     renderItem={wo => {
                         const isSelected = selectedWorkOrder?.id === wo.id;
                         const pct = Math.round(((wo.completed_quantity || 0) / (wo.quantity || 1)) * 100);
-                        const isComplete = (wo.status === 'completed' || wo.status === '已完成');
+                        const isComplete = wo.status === 'completed';
                         return (
                             <List.Item
                                 onClick={() => handleSelectWorkOrder(wo)}
                                 style={{
                                     cursor: 'pointer',
                                     minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                    padding: '16px 12px 16px 16px',
+                                    padding: `${HMI_DESIGN_TOKENS.LIST_CARD_PADDING}px 16px`,
                                     borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                    marginBottom: 8,
-                                    borderLeft: `4px solid ${isSelected ? HMI_DESIGN_TOKENS.STATUS_INFO : 'transparent'}`,
-                                    background: isSelected ? `rgba(22, 119, 255, 0.2)` : 'transparent',
-                                    transition: 'all 0.3s',
+                                    marginBottom: HMI_DESIGN_TOKENS.LIST_CARD_GAP,
+                                    background: isSelected ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.LIST_CARD_BG,
+                                    border: 'none',
+                                    borderBottom: 'none',
+                                    transition: 'background 0.2s',
                                 }}
                             >
                                 <div style={{ width: '100%' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                         <Text strong style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{wo.code}</Text>
-                                        <Tag color={getStatusColor(wo.status)} style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{wo.status}</Tag>
+                                        <span style={{ fontSize: 12, lineHeight: 1, padding: '4px 8px', margin: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontWeight: 500, ...getStatusBadgeStyle(wo.status) }}>{STATUS_LABELS[wo.status || ''] || wo.status}</span>
                                     </div>
                                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{wo.product_name}</div>
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                        {wo.work_center_name && <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>{wo.work_center_name}</span>}
+                                        {wo.priority && wo.priority !== 'normal' && <Tag style={{ margin: 0, fontSize: 11 }}>{PRIORITY_LABELS[wo.priority] || wo.priority}</Tag>}
+                                        <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>{formatDate(wo.planned_start_date)} ~ {formatDate(wo.planned_end_date)}</span>
+                                    </div>
                                     <div style={{ marginTop: 8 }}>
                                         <Progress
                                             percent={pct}
@@ -330,14 +422,11 @@ const WorkOrdersKioskPage: React.FC = () => {
         ? '待选择'
         : (activeOperation?.status === 'processing' ? '执行中' : activeOperation?.status === 'completed' ? '已完成' : '待执行');
 
-    const frostedPanelStyle: React.CSSProperties = {
-        background: HMI_DESIGN_TOKENS.PANEL_FROSTED,
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-        boxShadow: HMI_DESIGN_TOKENS.PANEL_GLOW,
+    const panelStyle: React.CSSProperties = {
+        background: HMI_DESIGN_TOKENS.BG_CARD,
+        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
         border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-        padding: HMI_DESIGN_TOKENS.SECTION_GAP,
+        padding: HMI_DESIGN_TOKENS.PANEL_PADDING,
         height: '100%',
         minWidth: 0,
         display: 'flex',
@@ -346,7 +435,9 @@ const WorkOrdersKioskPage: React.FC = () => {
     };
 
     const docCenterProps = {
-        sopContent: selectedWorkOrder ? `操作指引：${selectedWorkOrder.code}` : undefined,
+        sopContent: selectedWorkOrder
+            ? `操作指引：${selectedWorkOrder.code}${activeOperation ? `\n工序：${activeOperation.name || activeOperation.operation_name}` : ''}`
+            : undefined,
         drawings: selectedWorkOrder ? [{ id: '1', name: '图纸.png', url: '' }] : [],
     };
 
@@ -354,152 +445,242 @@ const WorkOrdersKioskPage: React.FC = () => {
         if (!selectedWorkOrder) {
             return (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
-                    <Empty
-                        image={
-                            <span style={{ fontSize: 72, color: HMI_DESIGN_TOKENS.STATUS_INFO, opacity: 0.9 }}>
-                                <UnorderedListOutlined />
-                            </span>
-                        }
-                        description={
-                            <div style={{ textAlign: 'center' }}>
-                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN, marginBottom: 8 }}>请选择工单开始</div>
-                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>从左侧列表选择工单</div>
-                            </div>
-                        }
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}>
+                            <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE, color: HMI_DESIGN_TOKENS.STATUS_INFO }} />
+                            请选择工单开始
+                        </div>
+                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>从左侧列表选择工单</div>
+                    </div>
                 </div>
             );
         }
 
-        const jobCardAccent = selectedWorkOrder.status === '生产中' || selectedWorkOrder.status === 'processing' ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
+        const jobCardAccent = selectedWorkOrder.status === 'in_progress' || selectedWorkOrder.status === 'processing' ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
 
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flex: 1, minHeight: 0 }}>
                     <Card
                         style={{
-                            background: 'rgba(255,255,255,0.04)',
+                            background: HMI_DESIGN_TOKENS.BG_CARD,
                             border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                            borderLeft: `4px solid ${jobCardAccent}`,
                             borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
                         }}
-                        styles={{ body: { padding: 20 } }}
+                        styles={{ body: { padding: 16 } }}
                     >
-                        <Row gutter={24} align="middle">
-                            <Col flex="1">
-                                <Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>正在执行</Text>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4 }}>
-                                    <Title level={2} style={{ margin: 0, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>{selectedWorkOrder.code}</Title>
-                                    <Tag color={jobCardAccent}>{selectedWorkOrder.product_name}</Tag>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>正在执行</Text>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                                        <Title level={2} style={{ margin: 0, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>{selectedWorkOrder.code}</Title>
+                                        <Tag color={jobCardAccent}>{selectedWorkOrder.product_name}</Tag>
+                                    </div>
                                 </div>
-                            </Col>
-                            <Col>
-                                <Statistic
-                                    title={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>计划</Text>}
-                                    value={selectedWorkOrder.quantity}
-                                    valueStyle={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE }}
-                                />
-                            </Col>
-                            <Col>
-                                <Statistic
-                                    title={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>已报</Text>}
-                                    value={selectedWorkOrder.completed_quantity || 0}
-                                    valueStyle={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE }}
-                                />
-                            </Col>
-                        </Row>
+                            </div>
+                            {/* 工序圆环：不换行，超宽横向滑动 */}
+                            {operations.length > 0 && (
+                                <div style={{ overflowX: 'auto', overflowY: 'hidden', margin: '0 -8px', WebkitOverflowScrolling: 'touch' }}>
+                                    <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 16, padding: '0 8px', minWidth: 'min-content' }}>
+                                        {operations.map((op, idx) => {
+                                            const isActive = op.id === activeOperation?.id;
+                                            const isProcessing = op.status === 'processing';
+                                            const isCompleted = op.status === 'completed';
+                                            const progress = op.reporting_type === 'status'
+                                                ? (isCompleted ? 100 : 0)
+                                                : Math.min(100, Math.round(((Number(op.completed_quantity) || 0) / (Number(selectedWorkOrder?.quantity) || 1)) * 100));
+                                            const strokeColor = isCompleted ? HMI_DESIGN_TOKENS.STATUS_OK : isProcessing ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
+                                            const opName = op.name || op.operation_name || `工序${idx + 1}`;
+                                            return (
+                                                <Tooltip title={opName} key={op.id}>
+                                                    <div
+                                                        onClick={() => setActiveOperation(op)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            cursor: 'pointer',
+                                                            padding: 8,
+                                                            flexShrink: 0,
+                                                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                                            background: isActive ? (isProcessing ? 'rgba(255,179,0,0.15)' : 'rgba(22,119,255,0.15)') : 'transparent',
+                                                            border: `2px solid ${isActive ? strokeColor : 'transparent'}`,
+                                                        }}
+                                                    >
+                                                        <Progress
+                                                            type="circle"
+                                                            percent={progress}
+                                                            size={64}
+                                                            strokeWidth={12}
+                                                            strokeColor={strokeColor}
+                                                            trailColor="rgba(255,255,255,0.1)"
+                                                            showInfo={true}
+                                                            format={(p) => <span style={{ fontSize: 14, fontWeight: 600, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY }}>{p}%</span>}
+                                                        />
+                                                        <div style={{ marginTop: 6, fontSize: 16, color: isActive ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap' }}>{opName}</div>
+                                                    </div>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </Card>
 
                     <Card
                         loading={opsLoading}
-                        title={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>工序: {activeOperation?.name || '未选择'}</Text>}
-                        extra={
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                {activeOperation?.status === 'pending' && (
-                                    <Button
-                                        type="primary"
-                                        size="large"
-                                        icon={<PlayCircleOutlined />}
-                                        onClick={handleStart}
-                                        style={{
-                                            minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                                            height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                                            padding: '0 24px',
-                                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-                                            boxShadow: HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW,
-                                        }}
-                                    >
-                                        开始执行
-                                    </Button>
-                                )}
-                                {activeOperation?.status === 'processing' && (
-                                    <Button
-                                        type="primary"
-                                        icon={<CheckCircleOutlined />}
-                                        onClick={handleReport}
-                                        style={{
-                                            minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                                            height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                                            padding: '0 24px',
-                                            background: HMI_DESIGN_TOKENS.STATUS_OK,
-                                            borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
-                                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-                                            boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                                        }}
-                                    >
-                                        完成报工
-                                    </Button>
-                                )}
-                            </div>
-                        }
                         style={{ flex: 1, minHeight: 0, background: 'rgba(255,255,255,0.04)', border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
                         styles={{ body: { padding: 24, overflowY: 'auto' } }}
                     >
-                        {activeOperation ? (
+                        {operations.length === 0 ? (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无工序</span>} />
+                        ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP }}>
-                                <Form form={form} layout="vertical">
-                                    <Form.Item name="report_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>报工数量</Text>} initialValue={1}>
-                                        <Input
-                                            type="number"
-                                            style={{ height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, textAlign: 'center', background: HMI_DESIGN_TOKENS.BG_CARD, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
-                                        />
-                                    </Form.Item>
-                                    <ReportingParameterForm form={form} parameters={[{ id: 'quality', name: '首检', type: 'boolean', defaultValue: true }]} />
-                                </Form>
-                                <div>
-                                    <Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, display: 'block', marginBottom: 12 }}>流转进度</Text>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                        {operations.map((op, idx) => (
-                                            <Tooltip title={op.name} key={op.id}>
-                                                <div
-                                                    onClick={() => setActiveOperation(op)}
+                                {activeOperation ? (
+                                    <>
+                                        {/* 选中工序信息 */}
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: 16, background: HMI_DESIGN_TOKENS.BG_ELEVATED, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>工序名称</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>{activeOperation.name || activeOperation.operation_name}</div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>状态</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                        {activeOperation.status === 'completed' ? '已完成' : activeOperation.status === 'processing' ? '执行中' : '待执行'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>完成进度</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                        {activeOperation.reporting_type === 'status'
+                                                            ? (activeOperation.status === 'completed' ? '100%' : '0%')
+                                                            : `${activeOperation.completed_quantity ?? 0} / ${selectedWorkOrder?.quantity ?? 0}`}
+                                                    </div>
+                                                </div>
+                                                {activeOperation.reporting_type !== 'status' && (
+                                                    <>
+                                                        <div>
+                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>合格/不合格</div>
+                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                                {activeOperation.qualified_quantity ?? 0} / {activeOperation.unqualified_quantity ?? 0}
+                                                            </div>
+                                                        </div>
+                                                        {(Number(activeOperation.completed_quantity) || 0) > 0 && (
+                                                            <div>
+                                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>合格率</div>
+                                                                <div style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>
+                                                                    {Math.round(((Number(activeOperation.qualified_quantity) || 0) / (Number(activeOperation.completed_quantity) || 1)) * 100)}%
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                            <Button
+                                                type="default"
+                                                icon={<FileProtectOutlined />}
+                                                onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}
+                                                style={{
+                                                    minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                    fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                    fontWeight: 600,
+                                                    background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                    borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                    color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                }}
+                                            >
+                                                作业指导书
+                                            </Button>
+                                        </div>
+                                        <Form form={form} layout="vertical">
+                                        <div style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                            <Form.Item name="qualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>合格数</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="none"
+                                                    readOnly
+                                                    onClick={(e) => { e.stopPropagation(); setFocusedNumField('qualified_quantity'); }}
                                                     style={{
-                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                        padding: '8px 14px',
+                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE,
+                                                        textAlign: 'center',
+                                                        background: focusedNumField === 'qualified_quantity' ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.BG_CARD,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                        border: `2px solid ${focusedNumField === 'qualified_quantity' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.BORDER}`,
                                                         borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                                        background: op.id === activeOperation.id ? HMI_DESIGN_TOKENS.STATUS_INFO : (op.status === 'completed' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.BG_ELEVATED),
-                                                        color: op.id === activeOperation.id || op.status === 'completed' ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : HMI_DESIGN_TOKENS.TEXT_SECONDARY,
-                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
                                                         cursor: 'pointer',
-                                                        border: op.id === activeOperation.id ? `2px solid ${HMI_DESIGN_TOKENS.TEXT_PRIMARY}` : '2px solid transparent',
+                                                    }}
+                                                />
+                                            </Form.Item>
+                                            <Form.Item name="unqualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>不合格数</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="none"
+                                                    readOnly
+                                                    onClick={(e) => { e.stopPropagation(); setFocusedNumField('unqualified_quantity'); }}
+                                                    style={{
+                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE,
+                                                        textAlign: 'center',
+                                                        background: focusedNumField === 'unqualified_quantity' ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.BG_CARD,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                        border: `2px solid ${focusedNumField === 'unqualified_quantity' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.BORDER}`,
+                                                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                />
+                                            </Form.Item>
+                                            <Form.Item label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>总数</Text>}>
+                                                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.qualified_quantity !== curr.qualified_quantity || prev.unqualified_quantity !== curr.unqualified_quantity}>
+                                                    {({ getFieldValue }) => {
+                                                        const q = Number(getFieldValue('qualified_quantity')) || 0;
+                                                        const u = Number(getFieldValue('unqualified_quantity')) || 0;
+                                                        return (
+                                                            <div style={{ height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, display: 'flex', alignItems: 'center', justifyContent: 'center', background: HMI_DESIGN_TOKENS.BG_ELEVATED, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}>
+                                                                {q + u}
+                                                            </div>
+                                                        );
+                                                    }}
+                                                </Form.Item>
+                                            </Form.Item>
+                                            <Form.Item label={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>&nbsp;</span>}>
+                                                <Button
+                                                    type="primary"
+                                                    icon={<CheckCircleOutlined />}
+                                                    onClick={handleReport}
+                                                    loading={opsLoading}
+                                                    style={{
+                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.STATUS_OK,
+                                                        borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
+                                                        boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
+                                                        padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
                                                     }}
                                                 >
-                                                    {idx + 1}
-                                                </div>
-                                            </Tooltip>
-                                        ))}
-                                    </div>
-                                </div>
+                                                    确认报工
+                                                </Button>
+                                            </Form.Item>
+                                        </div>
+                                        <ReportingParameterForm form={form} parameters={[{ id: 'quality', name: '首检', type: 'boolean', defaultValue: true }]} />
+                                    </Form>
+                                    </>
+                                ) : (
+                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, padding: 16, textAlign: 'center' }}>请先选择工序</div>
+                                )}
                             </div>
-                        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无工序</span>} />}
+                        )}
                     </Card>
             </div>
         );
     };
 
     const renderMiddlePanel = () => (
-        <div className="kiosk-middle-tabs" style={frostedPanelStyle}>
+        <div className="kiosk-middle-tabs" style={panelStyle} onClick={() => setFocusedNumField(null)}>
             <style>{`
                 .kiosk-middle-tabs .ant-tabs { height: 100%; display: flex; flex-direction: column; min-height: 0; }
                 .kiosk-middle-tabs .ant-tabs-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -507,6 +688,10 @@ const WorkOrdersKioskPage: React.FC = () => {
                 .kiosk-middle-tabs .ant-tabs-tabpane { flex: 1; min-height: 0; overflow: hidden; }
                 .kiosk-middle-tabs .ant-tabs-tabpane:not(.ant-tabs-tabpane-active) { display: none !important; }
                 .kiosk-middle-tabs .ant-tabs-tabpane.ant-tabs-tabpane-active { display: flex !important; flex-direction: column; }
+                .kiosk-middle-tabs .ant-tabs-tab { font-size: ${HMI_DESIGN_TOKENS.FONT_CARD_HEADER}px !important; font-weight: 600 !important; color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important; }
+                .kiosk-middle-tabs .ant-tabs-tab .anticon { font-size: ${HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE}px !important; }
+                .kiosk-middle-tabs .ant-tabs-nav { margin-bottom: 12px !important; padding-top: 0 !important; }
+                .kiosk-middle-tabs .ant-tabs-tab { padding-top: 0 !important; }
             `}</style>
             <Tabs
                 activeKey={middleTabKey}
@@ -514,11 +699,11 @@ const WorkOrdersKioskPage: React.FC = () => {
                 destroyInactiveTabPane={true}
                 size="large"
                 style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}
-                tabBarStyle={{ marginBottom: 12, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, minHeight: 40 }}
+                tabBarStyle={{ marginBottom: 12, paddingTop: 0, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, minHeight: 40 }}
                 items={[
                     {
                         key: 'operation',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}><PlayCircleOutlined />工单操作</span>,
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><PlayCircleOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />工单操作</span>,
                         children: (
                             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                 {renderOperationTab()}
@@ -526,38 +711,24 @@ const WorkOrdersKioskPage: React.FC = () => {
                         ),
                     },
                     {
-                        key: 'sop',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}><FileProtectOutlined />作业指导书</span>,
+                        key: 'doc',
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><FileProtectOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />文档</span>,
                         children: (
-                            <div style={{ flex: 1, minHeight: 0 }}>
-                                <DocumentCenter {...docCenterProps} singleTab="sop" style={{ height: '100%', minWidth: 0 }} />
-                            </div>
-                        ),
-                    },
-                    {
-                        key: 'drawings',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}><FileImageOutlined />图纸</span>,
-                        children: (
-                            <div style={{ flex: 1, minHeight: 0 }}>
-                                <DocumentCenter {...docCenterProps} singleTab="drawings" style={{ height: '100%', minWidth: 0 }} />
-                            </div>
-                        ),
-                    },
-                    {
-                        key: 'cnc',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}><CodeOutlined />代码</span>,
-                        children: (
-                            <div style={{ flex: 1, minHeight: 0 }}>
-                                <DocumentCenter {...docCenterProps} singleTab="cnc" style={{ height: '100%', minWidth: 0 }} />
-                            </div>
-                        ),
-                    },
-                    {
-                        key: 'attachments',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}><PaperClipOutlined />附件</span>,
-                        children: (
-                            <div style={{ flex: 1, minHeight: 0 }}>
-                                <DocumentCenter {...docCenterProps} singleTab="attachments" style={{ height: '100%', minWidth: 0 }} />
+                            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                <Segmented
+                                    value={docSubTabKey}
+                                    onChange={v => setDocSubTabKey(v as DocumentCenterTabKey)}
+                                    options={[
+                                        { label: '作业指导书', value: 'sop' },
+                                        { label: '图纸', value: 'drawings' },
+                                        { label: '代码', value: 'cnc' },
+                                        { label: '附件', value: 'attachments' },
+                                    ]}
+                                    style={{ marginBottom: 12, flexShrink: 0, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}
+                                />
+                                <div style={{ flex: 1, minHeight: 0 }}>
+                                    <DocumentCenter {...docCenterProps} singleTab={docSubTabKey} style={{ height: '100%', minWidth: 0 }} />
+                                </div>
                             </div>
                         ),
                     },
@@ -585,95 +756,91 @@ const WorkOrdersKioskPage: React.FC = () => {
         message.info('已发起呼叫');
     };
 
-    const rightPanelFrostedStyle: React.CSSProperties = {
-        background: HMI_DESIGN_TOKENS.PANEL_FROSTED,
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-        boxShadow: HMI_DESIGN_TOKENS.PANEL_GLOW,
-        border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-        padding: HMI_DESIGN_TOKENS.SECTION_GAP,
-        height: '100%',
-        minWidth: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
+    const handleKeypadInput = (field: string, action: 'digit' | 'backspace' | 'clear', value?: string) => {
+        const v = form.getFieldValue(field);
+        const str = String(v ?? '');
+        let next: string;
+        if (action === 'clear') next = '0';
+        else if (action === 'backspace') next = str.length <= 1 ? '0' : str.slice(0, -1);
+        else if (value === '.') {
+            if (str.includes('.')) return;
+            next = str === '0' || str === '' ? '0.' : str + '.';
+        } else {
+            next = str === '0' && !str.includes('.') && value !== '0' ? (value ?? '0') : str + (value ?? '0');
+        }
+        form.setFieldValue(field, next === '.' ? '0.' : next);
+        // 不合格数 > 0 时弹出不良品选项
+        if (field === 'unqualified_quantity') {
+            const num = parseFloat(next === '.' ? '0.' : next) || 0;
+            if (num > 0) {
+                setDefectModalVisible(true);
+            } else {
+                setSelectedDefectType(null);
+            }
+        }
     };
 
+    const showNumericKeypad = middleTabKey === 'operation' && !!selectedWorkOrder && !!activeOperation && !!focusedNumField;
+
     const renderRightPanel = () => (
-        <div style={rightPanelFrostedStyle}>
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: HMI_DESIGN_TOKENS.SECTION_GAP }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, marginBottom: 12 }}>
-                    <HistoryOutlined />
-                    最近操作记录
-                </span>
-                <div style={{ flex: 1, overflowY: 'auto', background: 'rgba(255,255,255,0.04)', borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, padding: 12 }}>
-                    {recentOps.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无记录</span>} style={{ marginTop: 24 }} />
-                    ) : (
-                        <List
-                            size="small"
-                            dataSource={recentOps}
-                            renderItem={item => (
-                                <List.Item style={{ border: 'none', padding: '8px 0', color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
-                                    <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, marginRight: 8 }}>{item.time}</span>
-                                    <span>{item.action}{item.detail ? ` · ${item.detail}` : ''}</span>
-                                </List.Item>
+        <div style={panelStyle}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {showNumericKeypad ? (
+                    <>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600, marginBottom: 12 }}>
+                            数字输入
+                        </span>
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                            <NumericKeypad
+                                focusedField={focusedNumField}
+                                onInput={handleKeypadInput}
+                                onSelectField={(k) => setFocusedNumField(k as 'qualified_quantity' | 'unqualified_quantity')}
+                                fields={[
+                                    { key: 'qualified_quantity', label: '合格数' },
+                                    { key: 'unqualified_quantity', label: '不合格数' },
+                                ]}
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600, marginBottom: 12 }}>
+                            <HistoryOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
+                            最近操作记录
+                        </span>
+                        <div style={{ flex: 1, overflowY: 'auto', background: 'rgba(255,255,255,0.04)', borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, padding: HMI_DESIGN_TOKENS.PANEL_PADDING }}>
+                            {recentOps.length === 0 ? (
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无记录</span>} style={{ marginTop: 24 }} />
+                            ) : (
+                                <List
+                                    size="small"
+                                    dataSource={recentOps}
+                                    split={false}
+                                    renderItem={(item, idx) => (
+                                        <List.Item
+                                            style={{
+                                                border: 'none',
+                                                borderBottom: idx < recentOps.length - 1 ? `1px solid ${HMI_DESIGN_TOKENS.BORDER}` : 'none',
+                                                padding: '10px 0',
+                                                color: HMI_DESIGN_TOKENS.TEXT_SECONDARY,
+                                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', minWidth: 0 }}>
+                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.operator || '操作员'} · {item.time}
+                                                </div>
+                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.action}{item.detail ? ` · ${item.detail}` : ''}
+                                                </div>
+                                            </div>
+                                        </List.Item>
+                                    )}
+                                />
                             )}
-                        />
-                    )}
-                </div>
-            </div>
-            <div style={{ flexShrink: 0, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Button
-                    type="primary"
-                    icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
-                    onClick={handleStartEnd}
-                    style={{
-                        flex: 1,
-                        minWidth: 100,
-                        minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-                        background: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
-                        borderColor: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
-                        boxShadow: isRunning ? HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW : HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                    }}
-                >
-                    {isRunning ? '结束' : '开始'}
-                </Button>
-                <Button
-                    icon={<PauseCircleOutlined />}
-                    onClick={handlePauseResume}
-                    style={{
-                        flex: 1,
-                        minWidth: 100,
-                        minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                        border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
-                    }}
-                >
-                    {isPaused ? '继续' : '暂停'}
-                </Button>
-                <Button
-                    icon={<AlertOutlined />}
-                    onClick={handleCall}
-                    style={{
-                        flex: 1,
-                        minWidth: 100,
-                        minHeight: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
-                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
-                        background: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                        borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                        color: '#fff',
-                    }}
-                >
-                    呼叫
-                </Button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
@@ -688,16 +855,16 @@ const WorkOrdersKioskPage: React.FC = () => {
                             background: HMI_DESIGN_TOKENS.PANEL_FROSTED,
                             backdropFilter: 'blur(12px)',
                             WebkitBackdropFilter: 'blur(12px)',
-                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
                             boxShadow: HMI_DESIGN_TOKENS.PANEL_GLOW,
                             border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
                             padding: HMI_DESIGN_TOKENS.SECTION_GAP,
                         }}
                     >
                         <StationBinder onBindSuccess={() => {
-                            const info = JSON.parse(localStorage.getItem(STATION_STORAGE_KEY) || '{}');
+                            const info = JSON.parse(localStorage.getItem(STATION_STORAGE_KEY) || '{}') as StationInfo;
                             setStationInfo(info);
-                            loadWorkOrders(info.stationId);
+                            loadWorkOrders(info.workCenterId);
                         }} />
                     </div>
                 </div>
@@ -724,39 +891,79 @@ const WorkOrdersKioskPage: React.FC = () => {
             stationArea={(stationInfo as any).areaName}
             deviceName={(stationInfo as any).deviceName || '未连接'}
             headerExtra={
-                <div className="header-extra-buttons" style={{ display: 'flex', gap: 12 }}>
-                    <Button icon={<ReloadOutlined />} type="primary" onClick={() => loadWorkOrders(stationInfo.stationId)}>刷新</Button>
+                <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
+                    <Button icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</Button>
                     <Button icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</Button>
                 </div>
             }
         >
+            <style>{`
+                .kiosk-modal-terminal-bg .ant-modal-content {
+                    background: linear-gradient(180deg, #0f2847 0%, #0a1f3c 40%, #061428 70%, #000814 100%) !important;
+                }
+                .kiosk-modal-terminal-bg .ant-modal-header { background: transparent !important; }
+                .kiosk-modal-terminal-bg .ant-modal-body { background: transparent !important; }
+                .kiosk-modal-terminal-bg .ant-modal-footer { background: transparent !important; }
+            `}</style>
             <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
-                {/* 指标卡行：工单数 / 计划-已报 / 当前状态 / 质检 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flexShrink: 0 }}>
-                    <div style={{ background: HMI_DESIGN_TOKENS.BG_CARD, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG, padding: '16px 20px', boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` }}>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, marginBottom: 4 }}>工单数</div>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{filteredWorkOrders.length}</div>
-                    </div>
-                    <div style={{ background: HMI_DESIGN_TOKENS.BG_CARD, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG, padding: '16px 20px', boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` }}>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, marginBottom: 4 }}>计划 / 已报</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-                            <span style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{selectedWorkOrder?.quantity ?? '—'}</span>
-                            <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>/</span>
-                            <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{selectedWorkOrder?.completed_quantity ?? 0}</span>
-                        </div>
-                    </div>
-                    <div style={{ background: HMI_DESIGN_TOKENS.BG_CARD, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG, padding: '16px 20px', boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` }}>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, marginBottom: 4 }}>当前状态</div>
-                        <div style={{ color: currentStatusLabel === '执行中' ? HMI_DESIGN_TOKENS.STATUS_WARNING : currentStatusLabel === '已完成' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{currentStatusLabel}</div>
-                    </div>
-                    <div style={{ background: HMI_DESIGN_TOKENS.BG_CARD, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG, padding: '16px 20px', boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` }}>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, marginBottom: 4 }}>质检</div>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>—</div>
-                    </div>
+                {loadError && (
+                    <Alert
+                        type="error"
+                        message={loadError}
+                        showIcon
+                        closable
+                        onClose={() => setLoadError(null)}
+                        style={{ flexShrink: 0 }}
+                    />
+                )}
+                {/* 指标条：统一底条，轻量分隔线 */}
+                <div
+                    onClick={() => setFocusedNumField(null)}
+                    style={{
+                    display: 'flex',
+                    flexShrink: 0,
+                    height: HMI_LAYOUT.METRICS_HEIGHT,
+                    minHeight: HMI_LAYOUT.METRICS_HEIGHT,
+                    background: HMI_DESIGN_TOKENS.BG_CARD,
+                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                    border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                }}>
+                    {[
+                        { label: '工单数', value: String(filteredWorkOrders.length), valueColor: HMI_DESIGN_TOKENS.STATUS_INFO },
+                        { label: '计划/已报', planValue: selectedWorkOrder?.quantity ?? '—', reportedValue: selectedWorkOrder?.completed_quantity ?? 0 },
+                        { label: '合格率', value: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? `${Math.round(((selectedWorkOrder.qualified_quantity ?? ((selectedWorkOrder.completed_quantity ?? 0) - (selectedWorkOrder.unqualified_quantity ?? 0))) / (selectedWorkOrder.completed_quantity ?? 1)) * 100)}%` : '—', valueColor: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_TERTIARY },
+                        { label: '质检', value: '—', valueColor: HMI_DESIGN_TOKENS.TEXT_TERTIARY },
+                        { label: '当前状态', value: currentStatusLabel, valueColor: currentStatusLabel === '执行中' ? token.colorWarning : currentStatusLabel === '已完成' ? token.colorSuccess : HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    ].map((item, i) => {
+                        const valueEl = 'planValue' in item ? (
+                            <span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>
+                                <span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY }}>{item.planValue}</span>
+                                <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, margin: '0 4px' }}>/</span>
+                                <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK }}>{item.reportedValue}</span>
+                            </span>
+                        ) : (
+                            <div style={{ color: item.valueColor, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{item.value}</div>
+                        );
+                        return (
+                        <Tooltip key={i} title={item.label === '质检' ? '工序检验数据待对接' : undefined}>
+                            <div key={i} style={{
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                padding: '0 16px',
+                                borderRight: i < 4 ? `1px solid ${HMI_DESIGN_TOKENS.BORDER}` : 'none',
+                                cursor: item.label === '质检' ? 'help' : 'default',
+                            }}>
+                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: 12, marginBottom: 2 }}>{item.label}</div>
+                                {valueEl}
+                            </div>
+                        </Tooltip>
+                    );})}
                 </div>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(280px, 350px) minmax(0, 1fr) minmax(320px, 420px)',
+                    gridTemplateColumns: `${HMI_LAYOUT.LEFT_PANEL_WIDTH}px 1fr ${HMI_LAYOUT.RIGHT_PANEL_WIDTH}px`,
                     gap: HMI_DESIGN_TOKENS.SECTION_GAP,
                     flex: 1,
                     minHeight: 0,
@@ -768,7 +975,199 @@ const WorkOrdersKioskPage: React.FC = () => {
                     {renderMiddlePanel()}
                     {renderRightPanel()}
                 </div>
+                {/* 底部操作栏：唯一主操作区，提高对比度突出 */}
+                {selectedWorkOrder && (
+                    <div
+                        onClick={() => setFocusedNumField(null)}
+                        style={{
+                        flexShrink: 0,
+                        height: HMI_LAYOUT.FOOTER_HEIGHT,
+                        minHeight: HMI_LAYOUT.FOOTER_HEIGHT,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: HMI_DESIGN_TOKENS.BUTTON_GAP,
+                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                        borderTop: `2px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                        boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
+                    }}>
+                        <Button
+                            type="primary"
+                            icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
+                            onClick={handleStartEnd}
+                            style={{
+                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
+                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                background: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
+                                borderColor: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
+                                boxShadow: isRunning ? HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW : HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
+                            }}
+                        >
+                            {isRunning ? '结束' : '开始'}
+                        </Button>
+                        {activeOperation?.status === 'processing' && (
+                            <Button
+                                type="primary"
+                                icon={<CheckCircleOutlined />}
+                                onClick={handleReport}
+                                style={{
+                                    minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                    height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                    padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
+                                    background: HMI_DESIGN_TOKENS.STATUS_OK,
+                                    borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
+                                    fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                    boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
+                                }}
+                            >
+                                完成报工
+                            </Button>
+                        )}
+                        <Button
+                            icon={<PauseCircleOutlined />}
+                            onClick={handlePauseResume}
+                            style={{
+                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                                color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                            }}
+                        >
+                            {isPaused ? '继续' : '暂停'}
+                        </Button>
+                        <Button
+                            icon={<AlertOutlined />}
+                            onClick={handleCall}
+                            style={{
+                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                background: HMI_DESIGN_TOKENS.STATUS_ALARM,
+                                borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM,
+                                color: '#fff',
+                            }}
+                        >
+                            呼叫
+                        </Button>
+                    </div>
+                )}
             </div>
+            {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}
+            <Modal
+                title="选择不良品类型"
+                open={defectModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                onCancel={() => {
+                    setDefectModalVisible(false);
+                }}
+                styles={{
+                    content: { background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN },
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    footer: { background: 'transparent', borderTop: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` },
+                }}
+                footer={[
+                    <Button key="cancel" onClick={() => setDefectModalVisible(false)}>取消</Button>,
+                    <Button
+                        key="ok"
+                        type="primary"
+                        onClick={() => {
+                            if (selectedDefectType) {
+                                setDefectModalVisible(false);
+                            } else {
+                                message.warning('请选择不良品类型');
+                            }
+                        }}
+                    >
+                        确定
+                    </Button>,
+                ]}
+                width={480}
+                destroyOnClose
+            >
+                <div style={{ padding: '8px 0' }}>
+                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: 12, marginBottom: 12 }}>
+                        不合格数 &gt; 0 时请选择不良品类型：
+                    </div>
+                    {defectTypeOptions.length === 0 ? (
+                        <Empty description="当前工序未关联不良品项，请联系管理员在工序中配置" />
+                    ) : (
+                        <Radio.Group
+                            value={selectedDefectType ?? undefined}
+                            onChange={(e) => setSelectedDefectType(e.target.value)}
+                            style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+                        >
+                            {defectTypeOptions.map((opt) => (
+                                <Radio
+                                    key={opt.code}
+                                    value={opt.code}
+                                    style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}
+                                >
+                                    {opt.name} ({opt.code})
+                                </Radio>
+                            ))}
+                        </Radio.Group>
+                    )}
+                </div>
+            </Modal>
+            {/* 作业指导书弹窗 */}
+            <Modal
+                title="作业指导书"
+                open={sopModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                onCancel={() => setSopModalVisible(false)}
+                footer={null}
+                width={720}
+                destroyOnClose
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                styles={{
+                    content: { background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN },
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                }}
+            >
+                <Tabs
+                    activeKey={sopModalTab}
+                    onChange={(k) => setSopModalTab(k as 'static' | 'guided')}
+                    items={[
+                        {
+                            key: 'static',
+                            label: '图文作业指导（静态）',
+                            children: (
+                                <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
+                                    {docCenterProps.sopContent ? (
+                                        <Typography.Paragraph style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, lineHeight: 1.8 }}>
+                                            {docCenterProps.sopContent}
+                                        </Typography.Paragraph>
+                                    ) : (
+                                        <Empty description="暂无图文作业指导" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 48 }} />
+                                    )}
+                                </div>
+                            ),
+                        },
+                        {
+                            key: 'guided',
+                            label: '分步作业指导（引导式）',
+                            children: (
+                                <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
+                                    <Empty description="分步引导式作业指导开发中" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 48 }} />
+                                </div>
+                            ),
+                        },
+                    ]}
+                />
+            </Modal>
         </PremiumTerminalTemplate>
     ); 
 };

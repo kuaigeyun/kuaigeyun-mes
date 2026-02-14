@@ -164,7 +164,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
       background: HMI_DESIGN_TOKENS.PANEL_FROSTED,
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
-      borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS_LG,
+      borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
       boxShadow: HMI_DESIGN_TOKENS.PANEL_GLOW,
       border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
       overflow: 'hidden',

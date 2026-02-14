@@ -1450,8 +1450,8 @@ const WorkOrdersPage: React.FC = () => {
       await workOrderApi.release(record.id!.toString())
       messageApi.success('工单下达成功')
       actionRef.current?.reload()
-    } catch (error) {
-      messageApi.error('工单下达失败')
+    } catch (error: any) {
+      messageApi.error(error?.message || '工单下达失败')
     }
   }
 
