@@ -75,7 +75,10 @@ class BusinessConfigService:
                 "auto_approval": True,       # 开启采购自动审批
                 "price_control": False,      # 关闭价格控制
                 "supplier_evaluation": False,# 关闭供应商评估
-            }
+            },
+            "bom": {
+                "bom_multi_version_allowed": True,  # BOM 是否允许多版本共存，需求计算时可选择版本
+            },
         }
     }
     
@@ -94,6 +97,16 @@ class BusinessConfigService:
             return True
             
         return node_config.get("enabled", True)
+
+    async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
+        """
+        获取 BOM 是否允许多版本共存配置
+        
+        当为 true 时，需求计算可选择 BOM 版本；为 false 时，统一使用默认版本。
+        """
+        config = await self.get_business_config(tenant_id)
+        bom_params = config.get("parameters", {}).get("bom", {})
+        return bom_params.get("bom_multi_version_allowed", True)
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
@@ -174,6 +187,9 @@ class BusinessConfigService:
             },
             "planning": {
                 "require_production_plan": False,
+            },
+            "bom": {
+                "bom_multi_version_allowed": True,  # BOM 是否允许多版本共存，需求计算时可选择版本
             },
         },
     }
@@ -476,7 +492,6 @@ class BusinessConfigService:
         return {
             "success": True,
             "message": "流程参数已批量更新",
-            "updated_count": sum(len(params) for params in parameters.values()),
             "updated_count": sum(len(params) for params in parameters.values()),
         }
 

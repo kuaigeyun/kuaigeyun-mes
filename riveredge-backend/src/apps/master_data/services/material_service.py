@@ -1603,10 +1603,31 @@ class MaterialService:
         
         # 更新字段
         update_data = data.dict(exclude_unset=True)
+        is_default_updated = "is_default" in update_data and update_data["is_default"] is True
+        
+        if is_default_updated:
+            # 设为默认版本时：先清除该物料其他版本的 is_default，再设置当前版本所有行为默认
+            await BOM.filter(
+                tenant_id=tenant_id,
+                material_id=bom.material_id,
+                deleted_at__isnull=True
+            ).update(is_default=False)
+            await BOM.filter(
+                tenant_id=tenant_id,
+                material_id=bom.material_id,
+                version=bom.version,
+                deleted_at__isnull=True
+            ).update(is_default=True)
+            # 已批量更新，跳过单条 setattr
+            update_data.pop("is_default", None)
+        
         for key, value in update_data.items():
             setattr(bom, key, value)
         
         await bom.save()
+        
+        if is_default_updated:
+            await bom.refresh_from_db()
         
         return BOMResponse.model_validate(bom)
     

@@ -353,7 +353,16 @@ class CodeGenerationService:
                 deleted_at__isnull=True
             ).first()
             return existing is not None
-        
+
+        if entity_type == 'work_order':
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            existing = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+
         # 其他实体类型的检查可以在这里扩展
         return False
     

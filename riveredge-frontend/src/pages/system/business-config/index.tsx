@@ -73,6 +73,15 @@ const PARAMETER_CONFIG = {
       audit_enabled: { name: '销售订单审核', description: '是否启用销售订单审核流程。若关闭，订单提交后将自动通过/生效。' },
     },
   },
+  bom: {
+    name: 'BOM 参数',
+    params: {
+      bom_multi_version_allowed: {
+        name: 'BOM 允许多版本共存',
+        description: '开启时，需求计算时可选择 BOM 版本；关闭时，统一使用各物料的默认 BOM 版本。',
+      },
+    },
+  },
 };
 
 /**

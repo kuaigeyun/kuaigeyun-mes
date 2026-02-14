@@ -446,6 +446,14 @@ async def list_work_orders(
             workshop_id=workshop_id,
             work_center_id=work_center_id,
         )
+        # #region agent log
+        try:
+            _ids = [r.id for r in result] if result else []
+            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                _f.write(__import__("json").dumps({"location": "productions.py:list_work_orders", "message": "list_result", "data": {"count": len(result), "ids": _ids[:20], "total": total, "status_filter": status}, "hypothesisId": "E"}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return {
             "data": result,
             "total": total,

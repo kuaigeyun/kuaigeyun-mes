@@ -12,7 +12,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined, StarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -1088,6 +1088,31 @@ const BOMPage: React.FC = () => {
   };
 
   /**
+   * 设为默认版本
+   */
+  const handleSetAsDefault = async (record: BOM) => {
+    if (record.isDefault) {
+      messageApi.info('当前已是默认版本');
+      return;
+    }
+    Modal.confirm({
+      title: '设为默认版本',
+      content: `确定将 ${record.bomCode} (版本 ${record.version}) 设为该物料的默认 BOM 版本吗？需求计算在「不允许多版本」时将使用此版本。`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await bomApi.update(record.uuid, { isDefault: true });
+          messageApi.success('已设为默认版本');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '操作失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理BOM升版 (Revision)
    */
   const handleRevise = async (record: BOM) => {
@@ -1255,11 +1280,17 @@ const BOMPage: React.FC = () => {
     { 
       title: '版本', 
       dataIndex: 'version', 
-      width: 80, 
+      width: 100, 
       hideInSearch: true, 
       render: (_, r: any) => {
         if ('groupKey' in r) {
-          return <Tag>{r.version}</Tag>;
+          const first = r.firstItem;
+          return (
+            <Space size={4}>
+              <Tag>{r.version}</Tag>
+              {first?.isDefault && <Tag color="gold">默认</Tag>}
+            </Space>
+          );
         }
         return '-';
       }
@@ -1360,6 +1391,7 @@ const BOMPage: React.FC = () => {
             type: 'group',
             label: '版本管理',
             children: [
+              { key: 'setDefault', icon: <StarOutlined />, label: '设为默认', onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
               { key: 'revise', icon: <BranchesOutlined />, label: '升版', onClick: () => handleRevise(r), disabled: !isApproved },
               { key: 'newVersion', icon: <PlusOutlined />, label: '手工新建版本', onClick: () => handleCreateVersion(r) },
               { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
@@ -1443,7 +1475,12 @@ const BOMPage: React.FC = () => {
     {
       title: '版本',
       dataIndex: 'version',
-      render: (_, record) => <Tag>{record.version}</Tag>,
+      render: (_, record) => (
+        <Space size={4}>
+          <Tag>{record.version}</Tag>
+          {record.isDefault && <Tag color="gold">默认</Tag>}
+        </Space>
+      ),
     },
     {
       title: '审核状态',

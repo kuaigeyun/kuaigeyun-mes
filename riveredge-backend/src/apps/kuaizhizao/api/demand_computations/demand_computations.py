@@ -211,6 +211,13 @@ async def generate_orders(
     
     generate_mode: all=全部，work_order_only=仅工单，purchase_only=仅采购
     """
+    # #region agent log
+    try:
+        with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+            _f.write(__import__("json").dumps({"location": "demand_computations.py:generate_orders", "message": "api_entry", "data": {"computation_id": computation_id, "generate_mode": generate_mode}, "hypothesisId": "D"}) + "\n")
+    except Exception:
+        pass
+    # #endregion
     try:
         result = await computation_service.generate_work_orders_and_purchase_orders(
             tenant_id=tenant_id,
@@ -224,6 +231,13 @@ async def generate_orders(
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        # #region agent log
+        try:
+            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                _f.write(__import__("json").dumps({"location": "demand_computations.py:generate_orders", "message": "api_exception", "data": {"error": str(e), "type": type(e).__name__}, "hypothesisId": "C"}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         logger.exception("生成工单和采购单失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

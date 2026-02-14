@@ -58,7 +58,7 @@ class EquipmentBase(BaseModel):
         Raises:
             ValueError: 如果设备状态不合法
         """
-        allowed_statuses = ["正常", "维修中", "停用", "报废"]
+        allowed_statuses = ["正常", "维修中", "停用", "校验中", "报废"]
         if v not in allowed_statuses:
             raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
         return v
@@ -118,7 +118,7 @@ class EquipmentUpdate(BaseModel):
             ValueError: 如果设备状态不合法
         """
         if v is not None:
-            allowed_statuses = ["正常", "维修中", "停用", "报废"]
+            allowed_statuses = ["正常", "维修中", "停用", "校验中", "报废"]
             if v not in allowed_statuses:
                 raise ValueError(f"设备状态必须是 {allowed_statuses} 之一")
         return v

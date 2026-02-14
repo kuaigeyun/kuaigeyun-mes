@@ -40,6 +40,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 async def _fetch_config_via_raw_conn(
@@ -706,9 +707,20 @@ class DemandComputationService:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
         
-        # 2. 计算参数（库存相关开关）
+        # 2. 计算参数（库存相关开关、BOM版本）
         computation_params = computation.computation_params or {}
         include_safety_stock = computation_params.get("include_safety_stock", True)
+        # BOM 版本：根据 bom_multi_version_allowed 决定使用指定版本或默认版本
+        biz_config = BusinessConfigService()
+        bom_multi_allowed = await biz_config.get_bom_multi_version_allowed(tenant_id)
+        if bom_multi_allowed:
+            bom_version = computation_params.get("bom_version")
+            material_bom_versions = computation_params.get("material_bom_versions")
+            use_default_bom = False
+        else:
+            bom_version = None
+            material_bom_versions = None
+            use_default_bom = True
         
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
@@ -750,7 +762,10 @@ class DemandComputationService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     required_quantity=required_quantity,
-                    only_approved=True
+                    only_approved=True,
+                    bom_version=bom_version,
+                    use_default_bom=use_default_bom,
+                    material_bom_versions=material_bom_versions,
                 )
                 
                 # 合并到总需求中
@@ -777,7 +792,10 @@ class DemandComputationService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     required_quantity=required_quantity,
-                    only_approved=True
+                    only_approved=True,
+                    bom_version=bom_version,
+                    use_default_bom=use_default_bom,
+                    material_bom_versions=material_bom_versions,
                 )
                 
                 # 合并到总需求中
@@ -814,7 +832,9 @@ class DemandComputationService:
                 bom_items = await get_bom_items_by_material_id(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    only_approved=True
+                    only_approved=True,
+                    version=bom_version,
+                    use_default=use_default_bom,
                 )
                 
                 if bom_items:
@@ -823,7 +843,10 @@ class DemandComputationService:
                         tenant_id=tenant_id,
                         material_id=material_id,
                         required_quantity=required_quantity,
-                        only_approved=True
+                        only_approved=True,
+                        bom_version=bom_version,
+                        use_default_bom=use_default_bom,
+                        material_bom_versions=material_bom_versions,
                     )
                     
                     # 合并到总需求中
@@ -970,8 +993,18 @@ class DemandComputationService:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
         
-        # 2. 计算参数
+        # 2. 计算参数（含 BOM 版本）
         computation_params = computation.computation_params or {}
+        biz_config = BusinessConfigService()
+        bom_multi_allowed = await biz_config.get_bom_multi_version_allowed(tenant_id)
+        if bom_multi_allowed:
+            bom_version = computation_params.get("bom_version")
+            material_bom_versions = computation_params.get("material_bom_versions")
+            use_default_bom = False
+        else:
+            bom_version = None
+            material_bom_versions = None
+            use_default_bom = True
         
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
@@ -1011,7 +1044,10 @@ class DemandComputationService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     required_quantity=required_quantity,
-                    only_approved=True
+                    only_approved=True,
+                    bom_version=bom_version,
+                    use_default_bom=use_default_bom,
+                    material_bom_versions=material_bom_versions,
                 )
                 
                 for req in expanded_requirements:
@@ -1035,7 +1071,10 @@ class DemandComputationService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     required_quantity=required_quantity,
-                    only_approved=True
+                    only_approved=True,
+                    bom_version=bom_version,
+                    use_default_bom=use_default_bom,
+                    material_bom_versions=material_bom_versions,
                 )
                 
                 for req in expanded_requirements:
@@ -1072,7 +1111,9 @@ class DemandComputationService:
                 bom_items = await get_bom_items_by_material_id(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    only_approved=True
+                    only_approved=True,
+                    version=bom_version,
+                    use_default=use_default_bom,
                 )
                 
                 if bom_items:
@@ -1080,7 +1121,10 @@ class DemandComputationService:
                         tenant_id=tenant_id,
                         material_id=material_id,
                         required_quantity=required_quantity,
-                        only_approved=True
+                        only_approved=True,
+                        bom_version=bom_version,
+                        use_default_bom=use_default_bom,
+                        material_bom_versions=material_bom_versions,
                     )
                     
                     for req in expanded_requirements:
@@ -1300,23 +1344,28 @@ class DemandComputationService:
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
         
-        # 生成工单和采购单（根据物料来源类型智能生成）
-        work_orders = []
-        purchase_orders = []
-        validation_errors = []
+        # #region agent log
+        try:
+            import json as _json
+            _log_path = r"f:\dev\riveredge\.cursor\debug.log"
+            _items_debug = [{"material_code": i.material_code, "source_type": i.material_source_type, "suggested_wo_qty": getattr(i, "suggested_work_order_quantity", None), "suggested_po_qty": getattr(i, "suggested_purchase_order_quantity", None)} for i in items]
+            with open(_log_path, "a", encoding="utf-8") as _f:
+                _f.write(_json.dumps({"location": "demand_computation_service.py:generate_orders", "message": "items_before_loop", "data": {"computation_id": computation_id, "generate_mode": generate_mode, "items_count": len(items), "items": _items_debug}, "timestamp": __import__("time").time() * 1000, "hypothesisId": "A,B"}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         
-        # 按供应商分组采购件（物料来源控制增强）
-        purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+        # 【第一阶段：预验证】先验证所有物料，如有错误立即失败（避免部分工单已创建但最后抛异常）
+        validation_errors = []
         
         for item in items:
             source_type = item.material_source_type
             
             # 跳过虚拟件（虚拟件不生成工单和采购单）
             if source_type == SOURCE_TYPE_PHANTOM:
-                logger.debug(f"跳过虚拟件，不生成工单和采购单，物料ID: {item.material_id}")
                 continue
             
-            # 验证物料来源配置（验证失败时不允许生成）
+            # 验证物料来源配置（验证失败时收集错误）
             if source_type:
                 validation_passed, errors = await validate_material_source_config(
                     tenant_id=tenant_id,
@@ -1326,18 +1375,61 @@ class DemandComputationService:
                 
                 if not validation_passed:
                     validation_errors.extend([f"物料 {item.material_code} ({item.material_name}): {err}" for err in errors])
-                    logger.warning(f"物料来源验证失败，跳过生成，物料ID: {item.material_id}, 错误: {errors}")
-                    continue
+        
+        # 如果有验证错误，立即抛出异常（此时还未创建任何工单）
+        if validation_errors:
+            error_msg = "物料来源验证失败，无法生成工单和采购单：\n" + "\n".join(validation_errors)
+            logger.error(f"预验证失败: {error_msg}")
+            raise BusinessLogicError(error_msg)
+        
+        # 【第二阶段：创建工单和采购单】验证全部通过后，开始创建
+        work_orders = []  # 生产工单（WorkOrder，在工单管理页展示）
+        outsource_work_orders = []  # 委外工单（OutsourceWorkOrder，在委外管理页展示）
+        purchase_orders = []
+        
+        # 按供应商分组采购件（物料来源控制增强）
+        purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+        
+        for item in items:
+            source_type = item.material_source_type
+            
+            # 跳过虚拟件（虚拟件不生成工单和采购单）
+            if source_type == SOURCE_TYPE_PHANTOM:
+                # #region agent log
+                try:
+                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_phantom", "data": {"material_code": item.material_code}, "hypothesisId": "A"}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+                logger.debug(f"跳过虚拟件，不生成工单和采购单，物料ID: {item.material_id}")
+                continue
             
             # 根据 generate_mode 决定是否生成
             if generate_mode == "purchase_only" and source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
                 continue
             if generate_mode == "work_order_only" and source_type == SOURCE_TYPE_BUY:
+                # #region agent log
+                try:
+                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_buy_work_order_only", "data": {"material_code": item.material_code}, "hypothesisId": "A"}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 continue
 
             # 根据物料来源类型生成相应的单据
             if source_type == SOURCE_TYPE_MAKE:
                 # 自制件：生成生产工单
+                sq = getattr(item, "suggested_work_order_quantity", None)
+                if not (sq and sq > 0):
+                    # #region agent log
+                    try:
+                        with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                            _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "skip_make_no_qty", "data": {"material_code": item.material_code, "suggested_work_order_quantity": sq}, "hypothesisId": "A"}) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     work_order = await self._create_work_order_from_item(
                         tenant_id=tenant_id,
@@ -1366,7 +1458,7 @@ class DemandComputationService:
                     purchase_items_by_supplier[supplier_id].append(item)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外工单（OutsourceWorkOrder）
+                # 委外件：生成委外工单（OutsourceWorkOrder，在委外管理页展示）
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     work_order = await self._create_outsource_work_order_from_item(
                         tenant_id=tenant_id,
@@ -1374,7 +1466,7 @@ class DemandComputationService:
                         item=item,
                         created_by=created_by
                     )
-                    work_orders.append(work_order)
+                    outsource_work_orders.append(work_order)
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
                 # 配置件：按变体生成生产工单（TODO: 后续支持变体选择）
@@ -1389,6 +1481,13 @@ class DemandComputationService:
             
             # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容）
             elif not source_type:
+                # #region agent log
+                try:
+                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "no_source_type_legacy", "data": {"material_code": item.material_code, "suggested_wo_qty": getattr(item, "suggested_work_order_quantity", None)}, "hypothesisId": "B"}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 # 如果有建议工单数量，生成工单
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     work_order = await self._create_work_order_from_item(
@@ -1411,6 +1510,15 @@ class DemandComputationService:
                     if supplier_id not in purchase_items_by_supplier:
                         purchase_items_by_supplier[supplier_id] = []
                     purchase_items_by_supplier[supplier_id].append(item)
+            
+            else:
+                # #region agent log
+                try:
+                    with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                        _f.write(__import__("json").dumps({"location": "demand_computation_service.py:loop", "message": "unhandled_source_type", "data": {"material_code": item.material_code, "source_type": source_type}, "hypothesisId": "B"}) + "\n")
+                except Exception:
+                    pass
+                # #endregion
         
         # 按供应商分组生成采购订单（物料来源控制增强）
         for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
@@ -1424,17 +1532,21 @@ class DemandComputationService:
                 )
                 purchase_orders.append(purchase_order)
         
-        # 如果有验证错误，抛出异常
-        if validation_errors:
-            error_msg = "物料来源验证失败，无法生成工单和采购单：\n" + "\n".join(validation_errors)
-            raise BusinessLogicError(error_msg)
-        
+        # #region agent log
+        try:
+            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                _f.write(__import__("json").dumps({"location": "demand_computation_service.py:return", "message": "generate_orders_result", "data": {"work_order_count": len(work_orders), "outsource_work_order_count": len(outsource_work_orders), "purchase_order_count": len(purchase_orders)}, "hypothesisId": "A,C,E"}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return {
             "computation_id": computation_id,
             "computation_code": computation.computation_code,
             "work_orders": work_orders,
+            "outsource_work_orders": outsource_work_orders,
             "purchase_orders": purchase_orders,
-            "work_order_count": len(work_orders),
+            "work_order_count": len(work_orders),  # 生产工单数量（工单管理页）
+            "outsource_work_order_count": len(outsource_work_orders),  # 委外工单数量（委外管理页）
             "purchase_order_count": len(purchase_orders),
         }
     
@@ -1504,7 +1616,13 @@ class DemandComputationService:
                 work_order_data=work_order_data,
                 created_by=created_by
             )
-            
+            # #region agent log
+            try:
+                with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                    _f.write(__import__("json").dumps({"location": "demand_computation_service.py:_create_work_order", "message": "work_order_created", "data": {"id": work_order.id, "code": work_order.code, "material_code": item.material_code}, "hypothesisId": "C,E"}) + "\n")
+            except Exception:
+                pass
+            # #endregion
             return {
                 "id": work_order.id,
                 "code": work_order.code,

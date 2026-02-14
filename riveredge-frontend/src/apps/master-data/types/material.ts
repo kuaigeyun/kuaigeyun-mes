@@ -266,6 +266,7 @@ export interface BOM {
   // 版本控制
   version: string;
   bomCode?: string;
+  isDefault?: boolean; // 是否为默认版本（每个物料至多一个）
   // 有效期管理
   effectiveDate?: string;
   expiryDate?: string;
@@ -316,6 +317,7 @@ export interface BOMUpdate {
   // 层级信息（根据优化设计规范新增）
   level?: number; // 层级深度（0为顶层）
   path?: string; // 层级路径（如：1/2/3）
+  isDefault?: boolean; // 设为默认版本（每个物料至多一个）
   isAlternative?: boolean;
   alternativeGroupId?: number;
   priority?: number;

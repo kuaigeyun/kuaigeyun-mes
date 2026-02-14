@@ -310,6 +310,7 @@ class BOMBase(BaseModel):
     # 版本控制
     version: str = Field("1.0", max_length=50, description="BOM版本号")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")
+    is_default: bool = Field(False, description="是否为默认版本（每个物料至多一个）")
     
     # 有效期管理
     effective_date: Optional[datetime] = Field(None, description="生效日期")
@@ -374,6 +375,8 @@ class BOMCreate(BOMBase):
 class BOMUpdate(BaseModel):
     """更新BOM Schema"""
     
+    model_config = ConfigDict(populate_by_name=True)
+    
     material_id: Optional[int] = Field(None, description="主物料ID（父件）")
     component_id: Optional[int] = Field(None, description="子物料ID（子件）")
     quantity: Optional[Decimal] = Field(None, description="用量（必填，数字）")
@@ -393,6 +396,7 @@ class BOMUpdate(BaseModel):
     # 版本控制
     version: Optional[str] = Field(None, max_length=50, description="BOM版本号")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")
+    is_default: Optional[bool] = Field(None, alias="isDefault", description="是否为默认版本")
     
     # 有效期管理
     effective_date: Optional[datetime] = Field(None, description="生效日期")
