@@ -20,7 +20,7 @@ set -e  # 遇到错误立即退出
 # 服务端口配置（避免系统保留端口和主流项目常用端口）
 BACKEND_PORT="${BACKEND_PORT:-8200}"   # 后端服务端口（避免与主流项目常用端口冲突）
 FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（Web 端，默认 8100）
-MOBILE_FRONTEND_PORT="${MOBILE_FRONTEND_PORT:-8101}" # 手机端前端端口（与 Web 分开，默认 8101）
+MOBILE_FRONTEND_PORT="${MOBILE_FRONTEND_PORT:-8101}" # 手机端前端端口（与 Web 端 8100 分开，默认 8101）
 KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
 INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（可通过环境变量INNGEST_PORT覆盖，默认8288为Inngest官方默认端口）
 
@@ -58,7 +58,7 @@ QUIET="${QUIET:-false}"
 # 手机端启动 - 前端绑定 0.0.0.0，便于同网段手机通过本机 IP 访问
 # Windows 默认不启动手机端（简化流程、提高速度）；Linux/Mac 默认启动
 if [[ "${OSTYPE}" == "msys" || "${OSTYPE}" == "win32" || "${OSTYPE}" == "cygwin" ]]; then
-    LAUNCH_MOBILE="${LAUNCH_MOBILE:-false}"  # Windows: 默认仅 Web 端
+    LAUNCH_MOBILE="${LAUNCH_MOBILE:-true}"  # Windows: 默认同时启动 (用户要求)
 else
     LAUNCH_MOBILE="${LAUNCH_MOBILE:-true}"   # Linux/Mac: 默认同时启动手机端
 fi
@@ -344,6 +344,13 @@ kill_processes_by_name() {
             # 通过命令行清理vite进程
             if command -v wmic &> /dev/null; then
                 wmic process where "CommandLine like '%vite%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            fi
+            ;;
+        "$MOBILE_FRONTEND_PORT")
+            # 手机端端口：仅清理 Expo 相关进程（保护 Web 端 Node 进程）
+            log_info "清理手机端进程 (expo相关)..."
+            if command -v wmic &> /dev/null; then
+                wmic process where "Name='node.exe' and CommandLine like '%expo%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
             fi
             ;;
         "$BACKEND_PORT")
@@ -659,6 +666,25 @@ terminate_process_on_port() {
                         taskkill /PID $pid /T /F >> "$log_dir/taskkill.log" 2>&1 || true
                     fi
                 done
+            fi
+        fi
+
+        # 清理手机端相关进程（仅终止 expo 相关，避免误杀 Web 端）
+        if [ "$port" == "$MOBILE_FRONTEND_PORT" ]; then
+            log_warn "Windows: 清理手机端相关进程（终止 expo 进程）..."
+            
+            # 查找所有占用手机端端口的进程
+            local mobile_pids=$(netstat -ano 2>/dev/null | grep ":$MOBILE_FRONTEND_PORT " | awk '{print $NF}' | sort -u | grep -v "^0$" | grep -v "^$")
+            
+            for pid in $mobile_pids; do
+                if [ ! -z "$pid" ] && [ "$pid" != "0" ]; then
+                    taskkill /PID $pid /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+                fi
+            done
+            
+            # 通过命令行清理 expo 进程
+            if command -v wmic &> /dev/null; then
+                wmic process where "Name='node.exe' and CommandLine like '%expo%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
             fi
         fi
     fi
@@ -1343,10 +1369,26 @@ start_mobile_frontend() {
     local backend_port=$2
     log_info "启动手机端前端服务 (端口: $port, 后端: $backend_port)..."
     
-    # 清理策略：只有在端口被占用时才执行彻底清理
+    # 清理策略：只有在端口被占用时才执行清理
     if check_port $port; then
-        terminate_process_on_port $port || true
-        sleep 1
+        log_warn "端口 $port 被占用，尝试清理..."
+        
+        # 使用 clear_port 进行清理 (已更新支持 MOBILE_FRONTEND_PORT 的安全清理)
+        if ! clear_port $port; then
+            log_error "端口 $port 清理失败，无法启动手机端服务"
+            return 1
+        fi
+        
+        # 启动前最后一次验证端口
+        if check_port $port; then
+            log_error "端口 $port 在启动前仍被占用，执行最后一次清理尝试..."
+            terminate_process_on_port $port || true
+            sleep 2
+            if check_port $port; then
+                log_error "端口 $port 仍被占用，请手动检查并清理占用进程"
+                return 1
+            fi
+        fi
     fi
 
     local project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1369,8 +1411,12 @@ start_mobile_frontend() {
         }
     fi
 
+    # 清理旧的PID文件
+    rm -f "$project_root/.logs/mobile.pid"
+
     # 启动 Expo Web 服务
     # 使用 npx expo start --web 启动，指定端口
+    log_info "执行 Expo Web 启动命令..."
     nohup npx expo start --web --port $port --non-interactive > "$project_root/.logs/mobile.log" 2>&1 &
     local mobile_pid=$!
     echo $mobile_pid > "$project_root/.logs/mobile.pid"
@@ -1379,7 +1425,7 @@ start_mobile_frontend() {
     log_success "手机端前端服务启动中 (PID: $mobile_pid, 端口: $port)"
     
     # 等待端口监听
-    if ! wait_for_frontend $port "手机端前端" 20; then
+    if ! wait_for_frontend $port "手机端前端" 30; then
         log_warn "手机端前端启动验证未完全通过，请检查 .logs/mobile.log"
     fi
 }
@@ -1852,13 +1898,20 @@ main() {
         fi
 
         if [ -n "$lan_ip" ]; then
-            echo "  手机访问(Web): http://$lan_ip:$frontend_port"
-            [ "$LAUNCH_MOBILE" = "true" ] && echo "  手机访问(App): http://$lan_ip:$mobile_port"
+            echo "  局域网访问 (Web): http://$lan_ip:$frontend_port"
+            [ "$LAUNCH_MOBILE" = "true" ] && echo "  局域网访问 (App): http://$lan_ip:$mobile_port"
         fi
         if [ -f ".logs/inngest.pid" ]; then
             echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
         fi
         echo
+        
+        # Windows: 如果未启动手机端，给予提示
+        if [ "$LAUNCH_MOBILE" != "true" ] && [ -d "riveredge-mobile" ]; then
+            echo "提示: 如需启动手机端 App，请运行: ./Launch.sh mobile"
+            echo
+        fi
+
         echo "管理命令:"
         echo "  查看状态:    ./Launch.sh status"
         echo "  停止服务:    ./Launch.sh stop"

@@ -24,10 +24,9 @@ export default defineConfig({
   publicDir: publicDir,
   // 服务器配置 - 优化稳定性
   server: {
-    // Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost
-    // localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
-    // 主机和端口从环境变量读取
-    host: process.env.VITE_HOST || (platform() === 'win32' ? '127.0.0.1' : '0.0.0.0'), // 从环境变量读取，Windows 默认使用 IPv4
+    // 使用 0.0.0.0 监听所有接口，确保 localhost 和 127.0.0.1 均可访问
+    // （Windows 上 localhost 可能解析为 IPv6 ::1，仅绑定 127.0.0.1 会导致 localhost 无法连接）
+    host: process.env.VITE_HOST || '0.0.0.0',
     port: parseInt(process.env.VITE_PORT || '8100', 10), // 从环境变量读取前端端口
     strictPort: false, // 如果端口被占用，自动寻找下一个可用端口
     open: false, // 不自动打开浏览器
