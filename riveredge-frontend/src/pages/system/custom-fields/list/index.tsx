@@ -15,7 +15,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, message, Input, theme, Modal, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, PAGE_SPACING } from '../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
@@ -997,7 +997,6 @@ const CustomFieldListPage: React.FC = () => {
         style={{
           display: 'flex',
           height: '100%',
-          padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
           margin: 0,
           boxSizing: 'border-box',
           borderRadius: token.borderRadiusLG || token.borderRadius,

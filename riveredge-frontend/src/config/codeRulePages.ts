@@ -41,6 +41,19 @@ export interface CodeRulePageConfig {
    */
   autoGenerate?: boolean;
   /**
+   * 是否允许手动编辑
+   */
+  allowManualEdit?: boolean;
+  /**
+   * 可用字段（用于编码规则变量）
+   */
+  availableFields?: {
+    fieldName: string;
+    fieldLabel: string;
+    fieldType: string;
+    description?: string;
+  }[];
+  /**
    * 关联的编码规则代码（可选）
    */
   ruleCode?: string;
@@ -208,7 +221,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   },
   {
     pageCode: 'master-data-engineering-bom',
-    pageName: '工程BOM',
+    pageName: '物料清单BOM',
     pagePath: '/apps/master-data/process/engineering-bom',
     codeField: 'bomCode',
     codeFieldLabel: 'BOM编码',
@@ -520,7 +533,7 @@ export const PAGE_CODE_TO_FIXED_TEXT_PRESET: Record<string, string> = {
   'master-data-material': 'WL',                // 物料
   'master-data-process-operation': 'GX',       // 工序
   'master-data-process-route': 'GY',           // 工艺
-  'master-data-engineering-bom': 'GC',         // 工程
+  'master-data-engineering-bom': 'WLQD',         // 物料清单
   'master-data-defect-type': 'BL',             // 不良
   'master-data-supply-chain-customer': 'KH',   // 客户
   'master-data-supply-chain-supplier': 'GYS',  // 供应商

@@ -304,10 +304,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         Returns:
             List[ReportingRecordListResponse]: 报工记录列表
         """
-        query = ReportingRecord.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
+        query = ReportingRecord.filter(tenant_id=tenant_id)
 
         # 添加筛选条件
         if work_order_code:
@@ -407,7 +404,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record = await ReportingRecord.get_or_none(
             id=record_id,
             tenant_id=tenant_id,
-            deleted_at__isnull=True
         )
 
         if not record:
@@ -417,9 +413,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if record.status == 'approved':
             raise ValidationError("已审核通过的报工记录不允许删除")
 
-        # 软删除
-        record.deleted_at = datetime.now()
-        await record.save()
+        # 硬删除（报工记录表暂无 deleted_at 字段，后续可改为软删除）
+        await record.delete()
 
     async def get_reporting_statistics(
         self,

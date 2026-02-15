@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -14,6 +15,7 @@ import {
   getSiteSetting,
   updateSiteSetting,
 } from '../../../services/siteSetting';
+import { useConfigStore } from '../../../stores/configStore';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
 import { 
   getDataDictionaryByCode, 
@@ -28,6 +30,8 @@ import ImageCropper from '../../../components/image-cropper';
  */
 const SiteSettingsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
+  const { fetchConfigs } = useConfigStore();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -373,6 +377,10 @@ const SiteSettingsPage: React.FC = () => {
       await updateSiteSetting({ settings });
       messageApi.success('保存成功');
 
+      // 刷新 configStore 使日期格式等配置立即生效
+      await fetchConfigs();
+      // 使其他使用 siteSetting 的组件（如 BasicLayout）获取最新数据
+      queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
       // 重新加载设置
       await loadSiteSetting();
     } catch (error: any) {
@@ -382,9 +390,8 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
-  const headerContent = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <h2 style={{ margin: 0 }}>站点设置</h2>
+  const actionButtons = (
+    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
       <Space>
         <Button
           icon={<ReloadOutlined />}
@@ -554,6 +561,13 @@ const SiteSettingsPage: React.FC = () => {
     </Row>
   );
 
+  const basicInfoWithActions = (
+    <>
+      {basicInfoContent}
+      {actionButtons}
+    </>
+  );
+
   const functionSettingsContent = (
     <Row gutter={[24, 16]}>
       <Col xs={24} sm={24} md={12} lg={12}>
@@ -569,7 +583,12 @@ const SiteSettingsPage: React.FC = () => {
     </Row>
   );
 
-
+  const functionSettingsWithActions = (
+    <>
+      {functionSettingsContent}
+      {actionButtons}
+    </>
+  );
 
   return (
     <Form
@@ -585,12 +604,11 @@ const SiteSettingsPage: React.FC = () => {
       }}
     >
       <MultiTabListPageTemplate
-        header={headerContent}
         activeTabKey={activeTabKey}
         onTabChange={setActiveTabKey}
         tabs={[
-          { key: 'basic', label: '基本信息', children: basicInfoContent },
-          { key: 'function', label: '功能设置', children: functionSettingsContent },
+          { key: 'basic', label: '基本信息', children: basicInfoWithActions },
+          { key: 'function', label: '功能设置', children: functionSettingsWithActions },
         ]}
       />
 

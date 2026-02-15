@@ -28,28 +28,22 @@ export interface ReportingParameterFormProps {
   parameters: ParameterDefinition[];
   form: any;
   onValuesChange?: (changedValues: any, allValues: any) => void;
+  /** 嵌入模式：不渲染 Card 外壳，仅渲染表单内容（用于 Modal 内） */
+  embedded?: boolean;
 }
 
 const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
   parameters,
   form,
   onValuesChange,
+  embedded = false,
 }) => {
   if (!parameters || parameters.length === 0) {
     return null;
   }
 
-  return (
-    <Card 
-      title={<Text style={{ color: '#fff', fontSize: 18 }}>报工参数采集</Text>}
-      style={{ 
-        background: 'rgba(255, 255, 255, 0.05)', 
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        marginBottom: 16 
-      }}
-      styles={{ body: { padding: '12px 24px' } }}
-    >
-      <Form
+  const formContent = (
+    <Form
         form={form}
         layout="vertical"
         onValuesChange={onValuesChange}
@@ -79,9 +73,26 @@ const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
                 />
               )}
             </Form.Item>
-          ))}
+          )          )}
         </div>
       </Form>
+  );
+
+  if (embedded) {
+    return <div style={{ padding: '12px 0' }}>{formContent}</div>;
+  }
+
+  return (
+    <Card 
+      title={<Text style={{ color: '#fff', fontSize: 18 }}>报工参数采集</Text>}
+      style={{ 
+        background: 'rgba(255, 255, 255, 0.05)', 
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        marginBottom: 16 
+      }}
+      styles={{ body: { padding: '12px 24px' } }}
+    >
+      {formContent}
     </Card>
   );
 };

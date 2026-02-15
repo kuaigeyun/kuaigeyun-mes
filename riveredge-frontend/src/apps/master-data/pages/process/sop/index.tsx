@@ -1,7 +1,7 @@
 /**
- * 制造SOP管理页面
+ * 标准操作SOP管理页面
  * 
- * 提供制造SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 提供标准操作SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -20,7 +20,7 @@ import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/core';
 
 /**
- * 制造SOP管理列表页面组件
+ * 标准操作SOP管理列表页面组件
  */
 const SOPPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -466,7 +466,7 @@ const SOPPage: React.FC = () => {
           if (searchFormValues?.operationId !== undefined && searchFormValues.operationId !== '' && searchFormValues.operationId !== null) {
             apiParams.operationId = searchFormValues.operationId;
           }
-          // 绑定/载入筛选（制造SOP 阶段一）
+          // 绑定/载入筛选（标准操作SOP 阶段一）
           if (searchFormValues?.material_uuid) apiParams.material_uuid = searchFormValues.material_uuid;
           if (searchFormValues?.material_group_uuid) apiParams.material_group_uuid = searchFormValues.material_group_uuid;
           if (searchFormValues?.route_uuid) apiParams.route_uuid = searchFormValues.route_uuid;

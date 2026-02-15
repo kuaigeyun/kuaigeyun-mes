@@ -110,6 +110,11 @@ export const workOrderApi = {
       material_code: workOrderName, // Note: Schema says material_code, but using workOrderName as fallback if needed, or check if it should be name
     });
   },
+
+  // 获取打印 URL
+  getPrintUrl: (id: string) => {
+    return `/api/v1/apps/kuaizhizao/work-orders/${id}/print`;
+  },
 };
 
 // 返工单相关接口
@@ -287,14 +292,13 @@ export const reportingApi = {
     return apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'GET' });
   },
 
-  // 审核报工记录
-  approve: async (id: string, data: any) => {
-    return apiRequest(`/apps/kuaizhizao/reporting/${id}/approve`, { method: 'POST', data });
-  },
-
-  // 驳回报工记录
-  reject: async (id: string, data: any) => {
-    return apiRequest(`/apps/kuaizhizao/reporting/${id}/reject`, { method: 'POST', data });
+  // 审核报工记录（通过时不传 rejection_reason，驳回时传 params: { rejection_reason }）
+  approve: async (id: string, data?: any, params?: { rejection_reason?: string }) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${id}/approve`, {
+      method: 'POST',
+      data: data || {},
+      params,
+    });
   },
 
   // 获取报工统计
@@ -377,6 +381,13 @@ export const warehouseApi = {
     },
     confirm: async (id: string) => {
       return apiRequest(`/apps/kuaizhizao/production-pickings/${id}/confirm`, { method: 'POST' });
+    },
+    // 一键领料
+    quickPick: async (workOrderId: string) => {
+      return apiRequest('/apps/kuaizhizao/production-pickings/quick-pick', { 
+        method: 'POST', 
+        params: { work_order_id: workOrderId } 
+      });
     },
   },
 

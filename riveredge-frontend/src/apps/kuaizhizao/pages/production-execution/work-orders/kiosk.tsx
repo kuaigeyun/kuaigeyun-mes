@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Card, Button, Tag, message, Input, Empty, 
-  List, Typography, Form, Progress, Tooltip, Tabs, theme, Alert, Segmented, Modal, Radio, Select
+  List, Typography, Form, Progress, Tooltip, Tabs, theme, Alert, Segmented, Modal, Radio, Select, Divider, Table
 } from 'antd';
 import { 
   PlayCircleOutlined, 
@@ -21,12 +21,17 @@ import {
   UnorderedListOutlined,
   FileProtectOutlined,
   HistoryOutlined,
+  PrinterOutlined,
+  QrcodeOutlined,
 } from '@ant-design/icons';
 
 import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
-import { workOrderApi, reportingApi } from '../../../services/production';
+import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
 import StationBinder, { STATION_STORAGE_KEY, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
+import MaterialBindingModal from './components/MaterialBindingModal';
+import BarcodePrintModal from './components/BarcodePrintModal';
+import ProcessInspectionModal from './components/ProcessInspectionModal';
 import NumericKeypad from './components/NumericKeypad';
 import DocumentCenter, { type DocumentCenterTabKey } from './components/DocumentCenter';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
@@ -81,6 +86,16 @@ const WorkOrdersKioskPage: React.FC = () => {
     // 作业指导书弹窗
     const [sopModalVisible, setSopModalVisible] = useState(false);
     const [sopModalTab, setSopModalTab] = useState<'static' | 'guided'>('static');
+    // 报工参数弹窗
+    const [paramModalVisible, setParamModalVisible] = useState(false);
+    // 物料绑定弹窗
+    const [materialBindingModalVisible, setMaterialBindingModalVisible] = useState(false);
+    const [lastReportingRecordId, setLastReportingRecordId] = useState<string | number | null>(null);
+    // 条码打印弹窗
+    const [barcodePrintModalVisible, setBarcodePrintModalVisible] = useState(false);
+    const [barcodePrintLevel, setBarcodePrintLevel] = useState<'work_order' | 'operation'>('operation');
+    // 工序检验弹窗
+    const [processInspectionModalVisible, setProcessInspectionModalVisible] = useState(false);
     // 工单列表筛选：全部/只看本机台/只看当前用户
     const [workOrderFilter, setWorkOrderFilter] = useState<'all' | 'station' | 'currentUser'>('all');
 
@@ -204,6 +219,32 @@ const WorkOrdersKioskPage: React.FC = () => {
         }
     };
 
+    const handleQuickPick = async () => {
+        if (!selectedWorkOrder?.id) {
+            message.warning('请先选择工单');
+            return;
+        }
+        try {
+            setLoading(true);
+            await warehouseApi.productionPicking.quickPick(selectedWorkOrder.id.toString());
+            message.success('一键领料成功');
+        } catch (error) {
+            console.error(error);
+            message.error('领料失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePrintWorkOrder = () => {
+        if (!selectedWorkOrder?.id) {
+            message.warning('请先选择工单');
+            return;
+        }
+        const url = workOrderApi.getPrintUrl(selectedWorkOrder.id.toString());
+        window.open(url, '_blank');
+    };
+
     const handleReport = async () => {
         try {
             const values = await form.validateFields();
@@ -262,6 +303,12 @@ const WorkOrdersKioskPage: React.FC = () => {
             message.success('报工成功');
             form.resetFields();
             setSelectedDefectType(null);
+            
+            if (created?.id) {
+                setLastReportingRecordId(created.id);
+                // Optionally auto-open material binding
+                // setMaterialBindingModalVisible(true);
+            }
             
             // Refresh
             loadWorkOrders(stationInfo?.workCenterId);
@@ -428,6 +475,7 @@ const WorkOrdersKioskPage: React.FC = () => {
         border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
         padding: HMI_DESIGN_TOKENS.PANEL_PADDING,
         height: '100%',
+        minHeight: 0,
         minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -439,6 +487,65 @@ const WorkOrdersKioskPage: React.FC = () => {
             ? `操作指引：${selectedWorkOrder.code}${activeOperation ? `\n工序：${activeOperation.name || activeOperation.operation_name}` : ''}`
             : undefined,
         drawings: selectedWorkOrder ? [{ id: '1', name: '图纸.png', url: '' }] : [],
+    };
+
+    const renderWipTab = () => {
+        if (!selectedWorkOrder) {
+            return (
+                <div style={{ padding: 24, textAlign: 'center' }}>
+                    <Empty 
+                        description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>当前工位暂无正在执行的工单，可在左侧选择工单查看进进度。</span>}
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                </div>
+            );
+        }
+
+        // Mock WIP data based on work order operations
+        const wipData = operations.map((op, idx) => ({
+            key: op.id,
+            sequence: idx + 1,
+            name: op.name || op.operation_name,
+            input: selectedWorkOrder.quantity || 0,
+            output: op.completed_quantity || 0,
+            scrap: op.unqualified_quantity || 0,
+            yield: op.completed_quantity ? Math.round(((Number(op.completed_quantity) - (Number(op.unqualified_quantity) || 0)) / (Number(selectedWorkOrder.quantity) || 1)) * 100) : 0,
+            status: op.status,
+        }));
+
+        return (
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Title level={4} style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, margin: 0 }}>工序流转进度 - {selectedWorkOrder.code}</Title>
+                    <Tag color="blue">在制数量: {Math.max(0, (Number(selectedWorkOrder.quantity || 0) - (Number(selectedWorkOrder.completed_quantity) || 0)))}</Tag>
+                </div>
+                
+                <Table
+                    dataSource={wipData}
+                    pagination={false}
+                    size="small"
+                    bordered
+                    className="kiosk-wip-table"
+                    columns={[
+                        { title: '序号', dataIndex: 'sequence', width: 60, align: 'center' },
+                        { title: '工序名称', dataIndex: 'name', minWidth: 120 },
+                        { title: '投入数', dataIndex: 'input', width: 80, align: 'right' },
+                        { title: '产出数', dataIndex: 'output', width: 80, align: 'right', render: (val: number) => <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontWeight: 600 }}>{val}</span> },
+                        { title: '不良数', dataIndex: 'scrap', width: 80, align: 'right', render: (val: number) => <span style={{ color: val > 0 ? HMI_DESIGN_TOKENS.STATUS_ALARM : HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>{val}</span> },
+                        { title: '合格率', dataIndex: 'yield', width: 80, align: 'right', render: (val: number) => `${val}%` },
+                    ]}
+                    rowClassName={(record: any) => record.key === activeOperation?.id ? 'kiosk-wip-row-active' : ''}
+                />
+                
+                <style>{`
+                    .kiosk-wip-table .ant-table { background: transparent !important; color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important; }
+                    .kiosk-wip-table .ant-table-thead > tr > th { background: rgba(255,255,255,0.05) !important; color: ${HMI_DESIGN_TOKENS.TEXT_SECONDARY} !important; border-bottom: 1px solid ${HMI_DESIGN_TOKENS.BORDER} !important; }
+                    .kiosk-wip-table .ant-table-tbody > tr > td { border-bottom: 1px solid ${HMI_DESIGN_TOKENS.BORDER} !important; }
+                    .kiosk-wip-table .ant-table-cell { font-size: 16px !important; padding: 16px 12px !important; }
+                    .kiosk-wip-row-active { background: rgba(22, 119, 255, 0.1) !important; }
+                `}</style>
+            </div>
+        );
     };
 
     const renderOperationTab = () => {
@@ -579,21 +686,82 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                     </>
                                                 )}
                                             </div>
-                                            <Button
-                                                type="default"
-                                                icon={<FileProtectOutlined />}
-                                                onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}
-                                                style={{
-                                                    minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                                    fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                                    fontWeight: 600,
-                                                    background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                                    borderColor: HMI_DESIGN_TOKENS.BORDER,
-                                                    color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
-                                                }}
-                                            >
-                                                作业指导书
-                                            </Button>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <Button
+                                                    type="default"
+                                                    icon={<FileProtectOutlined />}
+                                                    onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}
+                                                    style={{
+                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                    }}
+                                                >
+                                                    作业指导书
+                                                </Button>
+                                                <Button
+                                                    type="default"
+                                                    onClick={() => setParamModalVisible(true)}
+                                                    style={{
+                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                    }}
+                                                >
+                                                    报工参数
+                                                </Button>
+                                                <Button
+                                                    type="default"
+                                                    disabled={!lastReportingRecordId}
+                                                    onClick={() => setMaterialBindingModalVisible(true)}
+                                                    style={{
+                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                        color: lastReportingRecordId ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                                                    }}
+                                                >
+                                                    物料绑定
+                                                </Button>
+                                                <Button
+                                                    type="default"
+                                                    disabled={!activeOperation}
+                                                    onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}
+                                                    style={{
+                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                        color: activeOperation ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                                                    }}
+                                                >
+                                                    条码打印
+                                                </Button>
+                                                <Button
+                                                    type="default"
+                                                    disabled={!activeOperation}
+                                                    onClick={() => setProcessInspectionModalVisible(true)}
+                                                    style={{
+                                                        minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                                        fontWeight: 600,
+                                                        background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                                                        borderColor: HMI_DESIGN_TOKENS.BORDER,
+                                                        color: activeOperation ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                                                    }}
+                                                >
+                                                    工序检验
+                                                </Button>
+                                            </div>
                                         </div>
                                         <Form form={form} layout="vertical">
                                         <div style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -666,7 +834,6 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 </Button>
                                             </Form.Item>
                                         </div>
-                                        <ReportingParameterForm form={form} parameters={[{ id: 'quality', name: '首检', type: 'boolean', defaultValue: true }]} />
                                     </Form>
                                     </>
                                 ) : (
@@ -729,6 +896,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                                 <div style={{ flex: 1, minHeight: 0 }}>
                                     <DocumentCenter {...docCenterProps} singleTab={docSubTabKey} style={{ height: '100%', minWidth: 0 }} />
                                 </div>
+                            </div>
+                        ),
+                    },
+                    {
+                        key: 'wip',
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />在制品跟踪</span>,
+                        children: (
+                            <div style={{ flex: 1, minHeight: 0 }}>
+                                {renderWipTab()}
                             </div>
                         ),
                     },
@@ -905,7 +1081,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 .kiosk-modal-terminal-bg .ant-modal-body { background: transparent !important; }
                 .kiosk-modal-terminal-bg .ant-modal-footer { background: transparent !important; }
             `}</style>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
                 {loadError && (
                     <Alert
                         type="error"
@@ -964,22 +1140,22 @@ const WorkOrdersKioskPage: React.FC = () => {
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: `${HMI_LAYOUT.LEFT_PANEL_WIDTH}px 1fr ${HMI_LAYOUT.RIGHT_PANEL_WIDTH}px`,
+                    gridTemplateRows: '1fr',
                     gap: HMI_DESIGN_TOKENS.SECTION_GAP,
                     flex: 1,
                     minHeight: 0,
                     minWidth: 0,
-                    overflow: 'auto',
+                    overflow: 'hidden',
                     alignContent: 'stretch',
                 }}>
                     {renderLeftPanel()}
                     {renderMiddlePanel()}
                     {renderRightPanel()}
                 </div>
-                {/* 底部操作栏：唯一主操作区，提高对比度突出 */}
-                {selectedWorkOrder && (
-                    <div
-                        onClick={() => setFocusedNumField(null)}
-                        style={{
+                {/* 底部操作栏：始终显示，未选工单时置灰辅助功能 */}
+                <div
+                    onClick={() => setFocusedNumField(null)}
+                    style={{
                         flexShrink: 0,
                         height: HMI_LAYOUT.FOOTER_HEIGHT,
                         minHeight: HMI_LAYOUT.FOOTER_HEIGHT,
@@ -991,76 +1167,131 @@ const WorkOrdersKioskPage: React.FC = () => {
                         borderTop: `2px solid ${HMI_DESIGN_TOKENS.BORDER}`,
                         boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
                     }}>
+                    <Button
+                        type="primary"
+                        disabled={!selectedWorkOrder}
+                        icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
+                        onClick={handleStartEnd}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: !selectedWorkOrder ? undefined : (isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK),
+                            borderColor: !selectedWorkOrder ? undefined : (isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK),
+                            boxShadow: isRunning ? HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW : HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
+                        }}
+                    >
+                        {isRunning ? '结束' : '开始'}
+                    </Button>
+                    {activeOperation?.status === 'processing' && (
                         <Button
                             type="primary"
-                            icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
-                            onClick={handleStartEnd}
+                            icon={<CheckCircleOutlined />}
+                            onClick={handleReport}
                             style={{
                                 minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
                                 height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
                                 padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
+                                background: HMI_DESIGN_TOKENS.STATUS_OK,
+                                borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
                                 fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
                                 borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                background: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
-                                borderColor: isRunning ? undefined : HMI_DESIGN_TOKENS.STATUS_OK,
-                                boxShadow: isRunning ? HMI_DESIGN_TOKENS.BTN_PRIMARY_SHADOW : HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
+                                boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
                             }}
                         >
-                            {isRunning ? '结束' : '开始'}
+                            完成报工
                         </Button>
-                        {activeOperation?.status === 'processing' && (
-                            <Button
-                                type="primary"
-                                icon={<CheckCircleOutlined />}
-                                onClick={handleReport}
-                                style={{
-                                    minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                    height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                    padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_PRIMARY}px`,
-                                    background: HMI_DESIGN_TOKENS.STATUS_OK,
-                                    borderColor: HMI_DESIGN_TOKENS.STATUS_OK,
-                                    fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                    boxShadow: HMI_DESIGN_TOKENS.BTN_SUCCESS_SHADOW,
-                                }}
-                            >
-                                完成报工
-                            </Button>
-                        )}
-                        <Button
-                            icon={<PauseCircleOutlined />}
-                            onClick={handlePauseResume}
-                            style={{
-                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                background: HMI_DESIGN_TOKENS.BG_ELEVATED,
-                                border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-                                color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
-                            }}
-                        >
-                            {isPaused ? '继续' : '暂停'}
-                        </Button>
-                        <Button
-                            icon={<AlertOutlined />}
-                            onClick={handleCall}
-                            style={{
-                                minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
-                                padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
-                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
-                                borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                                background: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                                borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM,
-                                color: '#fff',
-                            }}
-                        >
-                            呼叫
-                        </Button>
-                    </div>
-                )}
+                    )}
+                    <Button
+                        icon={<PauseCircleOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={handlePauseResume}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                        }}
+                    >
+                        {isPaused ? '继续' : '暂停'}
+                    </Button>
+                    <Button
+                        icon={<AlertOutlined />}
+                        onClick={handleCall}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: HMI_DESIGN_TOKENS.STATUS_ALARM,
+                            borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM,
+                            color: '#fff',
+                        }}
+                    >
+                        呼叫
+                    </Button>
+
+                    <Divider type="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+                    <Button
+                        icon={<HistoryOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={handleQuickPick}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                        }}
+                    >
+                        领料
+                    </Button>
+                    <Button
+                        icon={<PrinterOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={handlePrintWorkOrder}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                        }}
+                    >
+                        打印
+                    </Button>
+                    <Button
+                        icon={<QrcodeOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={() => { setBarcodePrintLevel('work_order'); setBarcodePrintModalVisible(true); }}
+                        style={{
+                            minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            height: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE,
+                            padding: `0 ${HMI_DESIGN_TOKENS.BUTTON_PADDING_SECONDARY}px`,
+                            fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            background: HMI_DESIGN_TOKENS.BG_ELEVATED,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            color: selectedWorkOrder ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : 'rgba(255,255,255,0.25)',
+                        }}
+                    >
+                        条码
+                    </Button>
+                </div>
             </div>
             {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}
             <Modal
@@ -1072,7 +1303,6 @@ const WorkOrdersKioskPage: React.FC = () => {
                     setDefectModalVisible(false);
                 }}
                 styles={{
-                    content: { background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN },
                     header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                     body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                     footer: { background: 'transparent', borderTop: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` },
@@ -1132,7 +1362,6 @@ const WorkOrdersKioskPage: React.FC = () => {
                 destroyOnClose
                 getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
                 styles={{
-                    content: { background: HMI_DESIGN_TOKENS.BG_GRADIENT_MAIN },
                     header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                     body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                 }}
@@ -1168,6 +1397,54 @@ const WorkOrdersKioskPage: React.FC = () => {
                     ]}
                 />
             </Modal>
+            {/* 报工参数弹窗 */}
+            <Modal
+                title="报工参数采集"
+                open={paramModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                onCancel={() => setParamModalVisible(false)}
+                footer={[
+                    <Button key="close" onClick={() => setParamModalVisible(false)}>关闭</Button>,
+                ]}
+                width={640}
+                destroyOnClose
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                styles={{
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                }}
+            >
+                <ReportingParameterForm
+                    form={form}
+                    parameters={[{ id: 'quality', name: '首检', type: 'boolean', defaultValue: true }]}
+                    embedded
+                />
+            </Modal>
+            {/* 物料绑定弹窗 */}
+            {lastReportingRecordId && (
+                <MaterialBindingModal
+                    visible={materialBindingModalVisible}
+                    reportingRecordId={lastReportingRecordId}
+                    onCancel={() => setMaterialBindingModalVisible(false)}
+                />
+            )}
+            {/* 条码打印弹窗 */}
+            <BarcodePrintModal
+                visible={barcodePrintModalVisible}
+                level={barcodePrintLevel}
+                workOrderId={selectedWorkOrder?.id}
+                operationId={activeOperation?.id}
+                onCancel={() => setBarcodePrintModalVisible(false)}
+            />
+            {/* 工序检验弹窗 */}
+            <ProcessInspectionModal
+                visible={processInspectionModalVisible}
+                workOrderId={selectedWorkOrder?.id}
+                operationId={activeOperation?.id}
+                workOrderCode={selectedWorkOrder?.code}
+                operationName={activeOperation?.name || activeOperation?.operation_name}
+                onCancel={() => setProcessInspectionModalVisible(false)}
+            />
         </PremiumTerminalTemplate>
     ); 
 };

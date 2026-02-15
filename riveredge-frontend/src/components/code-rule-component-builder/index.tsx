@@ -413,17 +413,6 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               <Text type="secondary">
                 💡 这是根据当前配置生成的编码预览，实际生成时会使用真实的序号和日期
               </Text>
-              {(() => {
-                const counterComponent = components.find(c => c.type === 'auto_counter') as AutoCounterComponent | undefined;
-                if (counterComponent) {
-                  return (
-                    <Text type="secondary" style={{ fontSize: '11px' }}>
-                      当前序号示例：{counterComponent.initial_value || 1}（{counterComponent.digits}位，{counterComponent.fixed_width ? '固定位数' : '不固定位数'}）
-                    </Text>
-                  );
-                }
-                return null;
-              })()}
             </div>
           </Card>
         )}

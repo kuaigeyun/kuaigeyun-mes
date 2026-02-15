@@ -44,6 +44,7 @@ const useProTableSearch = () => {
 import { UniImport } from '../uni-import'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
 
 /**
  * 从 columns 自动生成导入配置
@@ -600,6 +601,32 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 使用自动生成的配置或手动提供的配置
   const finalImportHeaders = importHeaders || autoImportConfig?.headers
   const finalImportExampleRow = importExampleRow || autoImportConfig?.exampleRow
+
+  // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
+  const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')
+
+  // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
+  const processedColumns = React.useMemo(() => {
+    return columns.map((col: any) => {
+      if ((col.valueType === 'date' || col.valueType === 'dateTime') && !col.render && !col.valueFormatter) {
+        const dataIndex = col.dataIndex
+        return {
+          ...col,
+          render: (_: any, record: T) => {
+            const val = dataIndex != null
+              ? (Array.isArray(dataIndex)
+                  ? dataIndex.reduce((acc: any, key: string) => acc?.[key], record)
+                  : record[dataIndex])
+              : null
+            return col.valueType === 'dateTime'
+              ? formatDateTimeBySiteSetting(val, '-')
+              : formatDateBySiteSetting(val, '-')
+          },
+        }
+      }
+      return col
+    })
+  }, [columns, dateFormatKey])
 
   // 检测是否有操作列（用于决定scroll配置）
   // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
@@ -1321,7 +1348,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               />
               {showAdvancedSearch && (
                 <QuerySearchButton
-                  columns={columns}
+                  columns={processedColumns}
                   formRef={formRef as React.MutableRefObject<ProFormInstance>}
                   actionRef={actionRef as React.MutableRefObject<ActionType>}
                   searchParamsRef={searchParamsRef}
@@ -1345,7 +1372,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}
               formRef={formRef}
-              columns={columns}
+              columns={processedColumns}
               request={handleRequest}
               debounceTime={300}
               rowKey={rowKey}

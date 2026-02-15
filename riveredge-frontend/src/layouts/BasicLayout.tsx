@@ -303,8 +303,9 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
       '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
-      '/system/business-config': ManufacturingIcons.systemConfig, // 业务配置 - 使用系统配置图标
-      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 使用配置图标
+      '/system/config-center': ManufacturingIcons.systemConfig, // 配置中心
+      '/system/business-config': ManufacturingIcons.systemConfig, // 业务配置 - 保留兼容
+      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 保留兼容
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
       '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
@@ -481,14 +482,9 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
           },
           {
-            path: '/system/system-parameters',
-            name: t('menu.system.system-parameters'),
-            icon: getMenuIcon(t('menu.system.system-parameters'), '/system/system-parameters'),
-          },
-          {
-            path: '/system/business-config',
-            name: t('menu.system.business-config'),
-            icon: getMenuIcon(t('menu.system.business-config'), '/system/business-config'),
+            path: '/system/config-center',
+            name: t('menu.system.config-center'),
+            icon: getMenuIcon(t('menu.system.config-center'), '/system/config-center'),
           },
           {
             path: '/system/data-dictionaries',
@@ -1034,7 +1030,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           timestamp: Date.now(),
           tenantId: currentUser?.tenant_id, // 添加租户ID，确保不同租户的缓存不冲突
         };
-        localStorage.setItem('applicationMenusCache', JSON.stringify(cacheData));
+        localStorage.setItem('applicationMenusCache_v3', JSON.stringify(cacheData));
+        localStorage.removeItem('applicationMenusCache_v2'); // 清除旧版本缓存
+        localStorage.removeItem('applicationMenusCache');
       } catch (error) {
         // 忽略存储错误（localStorage 可能已满或被禁用）
         console.warn('保存应用菜单缓存失败:', error);
@@ -1048,7 +1046,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     placeholderData: () => {
       // 使用缓存数据作为占位符，避免闪烁
       try {
-        const cachedStr = localStorage.getItem('applicationMenusCache');
+        const cachedStr = localStorage.getItem('applicationMenusCache_v2');
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           // 检查缓存是否过期（超过5分钟视为过期）和租户是否匹配
@@ -1089,7 +1087,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
       // 清除 localStorage 缓存
       try {
-        localStorage.removeItem('applicationMenusCache');
+        localStorage.removeItem('applicationMenusCache_v2');
       } catch (error) {
         // 忽略清除错误
       }
@@ -1131,7 +1129,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       console.log('🔄 检测到用户登录（从无到有），主动触发菜单加载...');
       // 清除可能存在的旧缓存
       try {
-        localStorage.removeItem('applicationMenusCache');
+        localStorage.removeItem('applicationMenusCache_v2');
       } catch (error) {
         // 忽略清除错误
       }
@@ -1163,7 +1161,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 如果租户ID不匹配，清除缓存并重新加载
           if (cached.tenantId !== currentUser.tenant_id) {
             console.log('🔄 检测到租户ID变化，清除菜单缓存并重新加载...');
-            localStorage.removeItem('applicationMenusCache');
+            localStorage.removeItem('applicationMenusCache_v2');
             queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
             // 主动触发菜单查询
             refetchApplicationMenus();
@@ -4595,18 +4593,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             if (item.path.startsWith('/apps/') && item.name) {
               // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
               const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
-              // 如果翻译成功且与 dom 不一致，使用翻译后的名称
-              if (translatedName && translatedName !== item.name) {
-                // 如果 dom 是 React 元素，需要重新构建；如果是字符串，直接替换
-                if (typeof dom === 'string') {
-                  finalDom = translatedName;
-                } else if (dom && typeof dom === 'object' && 'props' in dom) {
-                  // 如果是 React 元素，尝试替换其中的文本内容
-                  // 这里我们直接使用翻译后的名称创建一个新的元素
-                  finalDom = <span>{translatedName}</span>;
-                } else {
-                  finalDom = translatedName;
-                }
+              // ⚠️ 关键修复：直接强制使用翻译后的名称，不再依赖 dom 参数的内容
+              // 因为 ProLayout 内部可能缓存了旧的 dom 结构
+              if (translatedName) {
+                finalDom = <span>{translatedName}</span>;
               }
             }
 
