@@ -25,7 +25,7 @@ import {
   Modal,
   Tree,
   Tabs,
-  Dropdown,
+
   message as antdMessage,
   theme,
   Segmented,
@@ -40,7 +40,7 @@ import {
   RightOutlined,
   ShopOutlined,
   SettingOutlined,
-  PlusOutlined,
+
   PlayCircleOutlined,
   WarningOutlined,
   SafetyOutlined,
@@ -48,7 +48,7 @@ import {
   BarChartOutlined,
   DatabaseOutlined,
   ShoppingOutlined,
-  MoreOutlined,
+
   ArrowUpOutlined,
   AppstoreOutlined,
   BulbOutlined,
@@ -625,65 +625,115 @@ export default function DashboardPage() {
                 <WeatherWidget />
               </Col>
               
-              {/* 快捷操作按钮 */}
+              {/* 工作状态指示器 - 替换原有的快捷操作按钮 */}
               <Col>
-                <Space>
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<PlusOutlined />}
+                <Space size="middle">
+                  {/* 创意组件：今日效率指数 (模拟数据) */}
+                  <div
                     style={{
-                      backgroundColor: '#ffffff',
-                      color: token.colorPrimary,
-                      border: 'none',
+                      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(8px)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      cursor: 'help',
+                      transition: 'all 0.3s',
                     }}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?action=create')}
+                    title="根据完成工单与考勤计算"
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
                   >
-                    新建工单
-                  </Button>
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<PlayCircleOutlined />}
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>今日效率</Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: 'bold' }}>98%</Text>
+                      <ArrowUpOutlined style={{ color: '#52c41a', fontSize: 12 }} />
+                    </div>
+                  </div>
+
+                  {/* 实用组件：待办事项统计 */}
+                  <div
                     style={{
-                      backgroundColor: '#ffffff',
-                      color: token.colorPrimary,
-                      border: 'none',
+                      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(8px)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      display: 'flex',
+                      alignItems: 'center', // 水平排列
+                      gap: 12,
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      height: 62, // 保持高度一致
                     }}
-                    onClick={() => navigate('/apps/kuaizhizao/production-execution/reporting')}
-                  >
-                    快速报工
-                  </Button>
-                  <Dropdown
-                    menu={{
-                      items: [
-                        {
-                          key: 'demand',
-                          label: '创建需求',
-                          icon: <FileTextOutlined />,
-                          onClick: () => navigate('/apps/kuaizhizao/plan-management/demand-management?action=create'),
-                        },
-                        {
-                          key: 'purchase',
-                          label: '创建采购订单',
-                          icon: <ShoppingOutlined />,
-                          onClick: () => navigate('/apps/kuaizhizao/purchase-management/purchase-orders?action=create'),
-                        },
-                      ],
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // 滚动到待办事项区域或跳转
+                      const todoElement = document.getElementById('dashboard-todo-list');
+                      if (todoElement) todoElement.scrollIntoView({ behavior: 'smooth' });
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
                   >
-                    <Button
-                      size="large"
-                      icon={<MoreOutlined />}
-                      style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        color: '#ffffff',
-                        border: 'none',
-                      }}
-                    >
-                      更多操作
-                    </Button>
-                  </Dropdown>
+                    <Badge count={todos?.length} offset={[5, -5]} color="#faad14">
+                      <div style={{ 
+                        backgroundColor: 'rgba(255,255,255,0.2)', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center' 
+                      }}>
+                        <ClockCircleOutlined style={{ color: '#ffffff', fontSize: 18 }} />
+                      </div>
+                    </Badge>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: 600 }}>待办</Text>
+                      <Text style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 12 }}>{todos?.length || 0} 个未处理</Text>
+                    </div>
+                  </div>
+
+                  {/* 实用组件：消息通知统计 */}
+                  <div
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                      backdropFilter: 'blur(8px)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      display: 'flex',
+                      alignItems: 'center', // 水平排列
+                      gap: 12,
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      height: 62, // 保持高度一致
+                    }}
+                    onClick={() => navigate('/system/notice')}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
+                  >
+                    <Badge count={unreadCount} offset={[5, -5]}>
+                      <div style={{ 
+                        backgroundColor: 'rgba(255,255,255,0.2)', 
+                        borderRadius: '50%', 
+                        width: 32, 
+                        height: 32, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center' 
+                      }}>
+                        <BellOutlined style={{ color: '#ffffff', fontSize: 18 }} />
+                      </div>
+                    </Badge>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: 600 }}>消息</Text>
+                      <Text style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 12 }}>{unreadCount} 条未读</Text>
+                    </div>
+                  </div>
                 </Space>
               </Col>
             </Row>
