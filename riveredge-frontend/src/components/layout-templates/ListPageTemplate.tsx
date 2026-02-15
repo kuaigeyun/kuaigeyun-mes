@@ -110,10 +110,12 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     prefix={card.prefix}
                     suffix={card.suffix}
                     precision={card.precision}
-                    valueStyle={{
-                      fontSize: '24px',
-                      fontWeight: 600,
-                      ...card.valueStyle,
+                    styles={{
+                      content: {
+                        fontSize: '24px',
+                        fontWeight: 600,
+                        ...card.valueStyle,
+                      },
                     }}
                     style={{ marginBottom: 0 }} // 确保 Statistic 自身没有额外下边距
                   />

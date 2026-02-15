@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Select, message, Typography, Space, Form, Button } from 'antd';
+import { Select, message, Typography, Space, Form, Button } from 'antd';
 import { LoginOutlined, EnvironmentOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { workshopApi, productionLineApi, workstationApi } from '../../master-data/services/factory';
 
@@ -107,7 +107,6 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                 } else if (res && (res as any).items) {
                     setLines((res as any).items);
                 }
-                loadStations(val, undefined);
             } catch (error) {
                 console.error('加载产线失败', error);
             }
@@ -138,6 +137,14 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
     };
 
     const handleConfirm = () => {
+         if (!selectedWorkshop) {
+            message.warning('请选择车间');
+            return;
+        }
+         if (!selectedLine) {
+            message.warning('请选择产线');
+            return;
+        }
          if (!selectedStation) {
             message.warning('请选择要绑定的工位');
             return;
@@ -182,6 +189,8 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                         onChange={handleWorkshopChange}
                         value={selectedWorkshop}
                         optionFilterProp="children"
+                        loading={loading}
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
                     >
                         {workshops.map(w => (
                             <Option key={w.id} value={w.id}>{w.name}</Option>
@@ -189,14 +198,14 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                     </Select>
                 </Form.Item>
 
-                <Form.Item label="所属产线 (可选)">
+                <Form.Item label="所属产线" required>
                     <Select
                         placeholder="请选择产线"
                         style={{ height: 50 }}
                         onChange={handleLineChange}
                         value={selectedLine}
                         disabled={!selectedWorkshop}
-                        allowClear
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
                     >
                         {lines.map(l => (
                             <Option key={l.id} value={l.id}>{l.name}</Option>
@@ -210,9 +219,10 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                         style={{ height: 50 }}
                         onChange={(val) => setSelectedStation(val)}
                         value={selectedStation}
-                        disabled={!selectedWorkshop}
+                        disabled={!selectedLine}
                         showSearch
                         optionFilterProp="children"
+                        getPopupContainer={(triggerNode) => triggerNode.parentElement}
                     >
                         {stations.map(s => (
                             <Option key={s.id} value={s.id}>
@@ -237,6 +247,7 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                         icon={<LoginOutlined />} 
                         onClick={handleConfirm}
                         disabled={!selectedStation}
+                        loading={loading}
                         style={{ flex: 1, height: 50 }}
                     >
                         确认绑定

@@ -53,9 +53,11 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji',
-    'Segoe UI Emoji', 'Segoe UI Symbol';
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  // B 端项目核心优化：虽然不再强制使用全等宽字体，但保留数字的等宽特性（表格对齐必须）
+  font-variant-numeric: tabular-nums; 
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* 使用 Ant Design 主题变量，支持深色模式 */
@@ -68,8 +70,7 @@ body {
 }
 
 code {
-  font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono',
-    Consolas, 'Courier New', monospace;
+  font-family: ui-monospace, 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
   /* 使用主题变量，支持深色模式 */
   background-color: var(--ant-colorFillTertiary);
   padding: 2px 6px;
@@ -89,7 +90,7 @@ code {
     padding: 12px 24px;
 
     /* 按钮间距 */
-    &+.ant-btn {
+    & + .ant-btn {
       margin-left: 20px;
     }
   }
@@ -104,7 +105,7 @@ code {
   }
 
   /* 触屏模式下的表单标签样式 */
-  .ant-form-item-label>label {
+  .ant-form-item-label > label {
     font-size: 24px;
     height: 60px;
     line-height: 60px;
@@ -114,13 +115,13 @@ code {
   .ant-table {
     font-size: 24px;
 
-    .ant-table-thead>tr>th {
+    .ant-table-thead > tr > th {
       font-size: 24px;
       padding: 16px;
       min-height: 60px;
     }
 
-    .ant-table-tbody>tr>td {
+    .ant-table-tbody > tr > td {
       font-size: 24px;
       padding: 16px;
       min-height: 60px;
@@ -183,7 +184,6 @@ code {
 
 /* 移动端响应式样式 */
 @media (max-width: 768px) {
-
   /* 移动端字体大小调整 */
   body {
     font-size: 14px;
@@ -209,12 +209,12 @@ code {
   .ant-table {
     font-size: 12px;
 
-    .ant-table-thead>tr>th {
+    .ant-table-thead > tr > th {
       font-size: 12px;
       padding: 8px;
     }
 
-    .ant-table-tbody>tr>td {
+    .ant-table-tbody > tr > td {
       font-size: 12px;
       padding: 8px;
     }
@@ -276,7 +276,7 @@ code {
   }
 
   /* 移动端表单样式 */
-  .ant-form-item-label>label {
+  .ant-form-item-label > label {
     font-size: 14px;
     height: 44px;
     line-height: 44px;
@@ -289,7 +289,6 @@ code {
   }
 }
 
-
 /* 两栏布局中的 uni-table 高度限制 */
 .two-column-layout-content {
   /* 确保内容区使用 flex 布局 */
@@ -299,7 +298,7 @@ code {
   overflow: hidden !important;
 
   /* uni-table 容器在 two-column-layout 中时，高度填满容器 */
-  >.uni-table-container {
+  > .uni-table-container {
     flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
@@ -307,7 +306,7 @@ code {
     height: 100% !important;
 
     /* ProTable 容器 */
-    >div {
+    > div {
       flex: 1 !important;
       display: flex !important;
       flex-direction: column !important;
@@ -408,7 +407,6 @@ code {
 
 /* 高级搜索 Modal 动画统一 */
 .query-search-modal-wrap {
-
   /* 确保 Modal 动画方向一致：始终从上向下弹出 */
   .ant-modal {
     animation-duration: 0.3s;
@@ -473,13 +471,10 @@ code {
   margin: 0 !important;
 }
 
-
 /* Spin 嵌套容器 padding 优化 */
-.ant-spin-nested-loading>.ant-spin-container {
+.ant-spin-nested-loading > .ant-spin-container {
   padding: 0 !important;
 }
-
-
 
 .hide-scrollbar,
 .left-panel-scroll-container {
@@ -537,7 +532,7 @@ code {
 }
 
 /* 全局：Modal 内表单标题为粗体 */
-.ant-modal .ant-form-item-label>label {
+.ant-modal .ant-form-item-label > label {
   font-weight: 600;
 }
 
@@ -568,8 +563,8 @@ code {
 
 /* 应用级菜单分组标题容器样式优化 - 修改包含 menu-group-title-app 的菜单项容器 */
 /* 通过 data-menu-id 属性定位应用分组菜单项（key 以 app-group- 开头） */
-.ant-menu-item[data-menu-id*="app-group-"],
-.ant-menu-item[class*="menu-group-title-app"] {
+.ant-menu-item[data-menu-id*='app-group-'],
+.ant-menu-item[class*='menu-group-title-app'] {
   /* 减小容器的上下 padding */
   padding-top: 10px !important;
   padding-bottom: 0 !important;

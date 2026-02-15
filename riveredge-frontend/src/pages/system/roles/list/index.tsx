@@ -512,7 +512,6 @@ const RoleListPage: React.FC = () => {
             { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
           ]}
           placeholder="请输入角色代码（如：admin、user）"
-          disabled={isEdit}
         />
         <ProFormTextArea
           name="description"

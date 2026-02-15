@@ -100,7 +100,7 @@
                         "sort_order": 2
                     },
                     {
-                        "title": "生产终端",
+                        "title": "app.kuaizhizao.menu.production-execution.terminal",
                         "path": "/apps/kuaizhizao/production-execution/terminal",
                         "sort_order": 2.5
                     },

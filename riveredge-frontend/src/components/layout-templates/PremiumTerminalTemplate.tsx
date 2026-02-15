@@ -510,12 +510,12 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
           `}</style>
         </Header>
 
-        {/* 内容区域：适配父容器剩余高度，溢出可滚动 */}
+        {/* 内容区域：适配父容器剩余高度，flex 子项填满 */}
         <Content style={{ 
           padding: '24px 24px 24px 24px', 
           flex: 1,
           minHeight: 0,
-          overflow: 'auto',
+          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',

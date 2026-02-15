@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FlowEditor } from '@ant-design/pro-flow';
 import { Layout, Form, Switch, Select, Button, Space, Typography, message, Alert, Card, List, Popconfirm } from 'antd';
 import {
@@ -510,32 +510,59 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         applyTemplate(industry, value);
     };
 
-
+    // 选中的节点添加光晕效果
+    const displayNodes = useMemo(
+        () =>
+            nodes.map((node) => ({
+                ...node,
+                style:
+                    selectedNode?.id === node.id
+                        ? {
+                              ...node.style,
+                              boxShadow: '0 0 0 2px #1890ff, 0 0 16px 6px rgba(24, 144, 255, 0.35)',
+                              border: '2px solid #1890ff',
+                          }
+                        : node.style,
+            })),
+        [nodes, selectedNode]
+    );
 
     const renderToolbox = () => (
         <Card title="组件库" bordered={false} styles={{ body: { padding: 10 } }}>
-            <List
-                grid={{ gutter: 16, column: 1 }}
-                dataSource={nodes} // Currently showing active nodes, usually this is a static list of ALL available types
-                renderItem={item => (
-                    <List.Item>
-                        <Card
-                            size="small"
-                            hoverable
-                            style={{
-                                cursor: 'grab',
-                                border: '1px solid #d9d9d9',
-                                background: '#fafafa'
-                            }}
-                        >
-                            <Space>
-                                {item.data.icon}
-                                <Text>{(item.data as any).title}</Text>
-                            </Space>
-                        </Card>
-                    </List.Item>
-                )}
-            />
+            <div style={{ maxHeight: 400, overflowY: 'auto', margin: '-10px', padding: 10 }}>
+                <List
+                    grid={{ gutter: 16, column: 1 }}
+                    dataSource={nodes}
+                    renderItem={item => {
+                        const isSelected = selectedNode?.id === item.id;
+                        return (
+                            <List.Item style={{ marginBottom: 8 }}>
+                                <Card
+                                    size="small"
+                                    hoverable
+                                    style={{
+                                        cursor: 'pointer',
+                                        border: isSelected ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                                        background: isSelected ? '#e6f4ff' : '#fafafa'
+                                    }}
+                                    onClick={() => {
+                                        setSelectedNode(item);
+                                        form.setFieldsValue({
+                                            enabled: item.data.enabled,
+                                            auditRequired: item.data.auditRequired,
+                                        });
+                                    }}
+                                >
+                                    <Space>
+                                        {item.data.icon}
+                                        <Text>{(item.data as any).title}</Text>
+                                    </Space>
+                                </Card>
+                            </List.Item>
+                        );
+                    }}
+                />
+            </div>
         </Card>
     );
 
@@ -545,7 +572,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                 <Card title="全局配置" bordered={false} style={{ height: '100%' }}>
                     <Alert
                         message="未选择节点"
-                        description="请在画布中点击节点以配置其属性，或者在左上方选择预设模版。"
+                        description="请点击左侧组件库或画布中的节点以配置其属性，也可在左上方选择预设模版。"
                         type="info"
                         showIcon
                     />
@@ -681,7 +708,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                 <Content style={{ position: 'relative', background: '#fff' }}>
                     <FlowEditor
                         flowProps={{
-                            nodes,
+                            nodes: displayNodes,
                             edges,
                             onNodeClick: handleNodeClick,
                             fitView: false,

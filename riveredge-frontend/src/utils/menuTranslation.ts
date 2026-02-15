@@ -251,8 +251,21 @@ export function translateAppMenuItemName(
     }
   }
 
-  // 如果无法找到翻译，直接返回原始名称（不使用 translatePathTitle 的硬编码映射）
-  // 这样可以确保数据库中的菜单名称（如"仓库管理"）不会被硬编码映射（如"仓库"）覆盖
+  // 如果所有基于 Key 的翻译都失败了，最后尝试使用路径最后一段的硬编码映射作为保底
+  // 这能解决数据库中历史遗留的硬编码名称（如 "工程BOM" -> "物料清单BOM"）
+  // 仅对应用菜单进行此保底处理
+  const segments = (path || '').split('/').filter(Boolean);
+  const lastSegment = segments.pop();
+  if (lastSegment) {
+    // 借用 translatePathTitle 中的逻辑进行映射平衡
+    const fallbackName = translatePathTitle(lastSegment, t);
+    // 如果映射回来的名称不是原始 segment（说明命中了映射表），则使用映射名称
+    if (fallbackName && fallbackName !== lastSegment && fallbackName !== (lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1))) {
+       return fallbackName;
+    }
+  }
+
+  // 如果无法找到翻译且无特殊映射，直接返回原始名称
   return name;
 }
 
@@ -335,8 +348,8 @@ export function translatePathTitle(path: string, t: TFunction): string {
     'defect-types': '不良品类型',
     'operations': '工序',
     'routes': '工艺路线',
-    'engineering-bom': '工程BOM',
-    'sop': '制造SOP',
+    'engineering-bom': '物料清单BOM',
+    'sop': '标准操作SOP',
     'customers': '客户',
     'suppliers': '供应商',
     'holidays': '假期设置',

@@ -1,7 +1,7 @@
 /**
- * 工程BOM可视化设计器页面
+ * 物料清单BOM可视化设计器页面
  * 
- * 使用 Ant Design Charts MindMap 可视化设计工程BOM结构。
+ * 使用 Ant Design Charts MindMap 可视化设计物料清单BOM结构。
  * 支持节点点击、添加、删除、配置等功能。
  * 
  * Author: Luigi Lu

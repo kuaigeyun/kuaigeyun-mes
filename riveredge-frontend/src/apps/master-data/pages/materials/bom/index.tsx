@@ -1,7 +1,7 @@
 /**
- * 工程BOM管理页面
+ * 物料清单BOM管理页面
  * 
- * 提供工程BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 提供物料清单BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -46,7 +46,7 @@ interface BOMGroupRow {
 }
 
 /**
- * 工程BOM管理列表页面组件
+ * 物料清单BOM管理列表页面组件
  */
 const BOMPage: React.FC = () => {
   const { message: messageApi } = App.useApp();

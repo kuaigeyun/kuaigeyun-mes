@@ -1,16 +1,19 @@
 /**
  * 图片剪裁组件
  * 
- * 基于react-easy-crop实现的图片剪裁组件
- * 支持圆形、方形、自由剪裁三种模式
+ * 支持圆形、方形、自由剪裁、不剪裁四种模式
+ * - 方形/圆形：react-easy-crop（固定宽高比）
+ * - 自由剪裁：react-image-crop（可拖拽调整裁剪框尺寸，真正自由）
  * 
  * Author: Luigi Lu
  * Date: 2025-12-28
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
+import ReactCrop, { centerCrop, type Crop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { Modal, Button, Space, Radio, Slider } from 'antd';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import type { Area } from 'react-easy-crop';
@@ -18,7 +21,7 @@ import type { Area } from 'react-easy-crop';
 /**
  * 剪裁形状类型
  */
-export type CropShape = 'rect' | 'round' | 'free';
+export type CropShape = 'rect' | 'round' | 'free' | 'none';
 
 /**
  * 图片剪裁组件属性
@@ -73,18 +76,26 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // 自由剪裁：使用 react-image-crop，支持拖拽调整裁剪框尺寸
+  const [freeCrop, setFreeCrop] = useState<Crop | undefined>(undefined);
+  const imgRef = useRef<HTMLImageElement>(null);
 
-  // 根据剪裁形状计算宽高比
+  // 根据剪裁形状计算宽高比（仅用于 react-easy-crop，自由剪裁用 ReactCrop）
   const cropAspect = React.useMemo(() => {
-    if (cropShape === 'round') return 1; // 圆形（1:1）
-    if (cropShape === 'rect') return 1; // 方形（1:1）
-    return undefined; // 自由剪裁（无限制，aspect = undefined）
+    if (cropShape === 'none') return undefined;
+    if (cropShape === 'round') return 1;
+    if (cropShape === 'rect') return 1;
+    return 1;
   }, [cropShape]);
+
+  const isNoCrop = cropShape === 'none';
+  const isFreeCrop = cropShape === 'free';
 
   // 加载图片
   React.useEffect(() => {
     if (!image) {
       setImageSrc(null);
+      setFreeCrop(undefined);
       return;
     }
 
@@ -127,6 +138,34 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       image.setAttribute('crossOrigin', 'anonymous');
       image.src = url;
     });
+  };
+
+  // 自由剪裁：从 ReactCrop 的 Crop 转为 Blob（支持 px 或 % 单位）
+  const getCroppedImgFromFreeCrop = async (
+    imageEl: HTMLImageElement,
+    crop: Crop
+  ): Promise<Blob> => {
+    const scaleX = imageEl.naturalWidth / imageEl.width;
+    const scaleY = imageEl.naturalHeight / imageEl.height;
+    let px: number, py: number, pw: number, ph: number;
+    if (crop.unit === '%') {
+      px = (crop.x / 100) * imageEl.width;
+      py = (crop.y / 100) * imageEl.height;
+      pw = (crop.width / 100) * imageEl.width;
+      ph = (crop.height / 100) * imageEl.height;
+    } else {
+      px = crop.x;
+      py = crop.y;
+      pw = crop.width;
+      ph = crop.height;
+    }
+    const pixelCrop: Area = {
+      x: px * scaleX,
+      y: py * scaleY,
+      width: pw * scaleX,
+      height: ph * scaleY,
+    };
+    return getCroppedImg(imageSrc!, pixelCrop, 'free');
   };
 
   // 获取剪裁后的图片
@@ -187,17 +226,34 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
 
   // 处理确认剪裁
   const handleConfirm = async () => {
-    if (!imageSrc || !croppedAreaPixels) {
-      return;
-    }
+    if (!image) return;
 
     try {
       setLoading(true);
-      const croppedImageBlob = await getCroppedImg(imageSrc, croppedAreaPixels, cropShape);
-      onConfirm(croppedImageBlob);
-      
+      if (isNoCrop) {
+        // 不剪裁：直接使用原图
+        let blob: Blob;
+        if (image instanceof File) {
+          blob = image;
+        } else if (typeof image === 'string') {
+          const res = await fetch(image);
+          blob = await res.blob();
+        } else {
+          return;
+        }
+        onConfirm(blob);
+      } else if (isFreeCrop && freeCrop && imgRef.current && imageSrc) {
+        const croppedImageBlob = await getCroppedImgFromFreeCrop(imgRef.current, freeCrop);
+        onConfirm(croppedImageBlob);
+      } else if (imageSrc && croppedAreaPixels) {
+        const croppedImageBlob = await getCroppedImg(imageSrc, croppedAreaPixels, cropShape);
+        onConfirm(croppedImageBlob);
+      } else {
+        return;
+      }
+
       // 清理本地URL（如果是File对象创建的）
-      if (image instanceof File && imageSrc.startsWith('blob:')) {
+      if (image instanceof File && imageSrc?.startsWith('blob:')) {
         URL.revokeObjectURL(imageSrc);
       }
     } catch (error) {
@@ -216,6 +272,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
+    setFreeCrop(undefined);
     onCancel();
   };
 
@@ -235,7 +292,13 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
           icon={<CheckOutlined />}
           loading={loading}
           onClick={handleConfirm}
-          disabled={!imageSrc || !croppedAreaPixels}
+          disabled={
+            !image ||
+            (!isNoCrop &&
+              (isFreeCrop
+                ? !freeCrop || !(freeCrop.width > 0 && freeCrop.height > 0)
+                : !imageSrc || !croppedAreaPixels))
+          }
         >
           确认
         </Button>,
@@ -251,28 +314,33 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
               setCropShape(e.target.value);
               setCrop({ x: 0, y: 0 });
               setZoom(1);
+              setCroppedAreaPixels(null);
+              if (e.target.value !== 'free') setFreeCrop(undefined);
             }}
           >
             <Radio.Button value="rect">方形</Radio.Button>
             <Radio.Button value="round">圆形</Radio.Button>
             <Radio.Button value="free">自由剪裁</Radio.Button>
+            <Radio.Button value="none">不剪裁</Radio.Button>
           </Radio.Group>
         </div>
 
-        {/* 缩放控制 */}
-        <div>
-          <div style={{ marginBottom: 8 }}>缩放：</div>
-          <Slider
-            min={1}
-            max={3}
-            step={0.1}
-            value={zoom}
-            onChange={setZoom}
-            style={{ width: '100%' }}
-          />
-        </div>
+        {/* 缩放控制（方形/圆形时显示，自由剪裁无缩放） */}
+        {!isNoCrop && !isFreeCrop && (
+          <div>
+            <div style={{ marginBottom: 8 }}>缩放：</div>
+            <Slider
+              min={1}
+              max={3}
+              step={0.1}
+              value={zoom}
+              onChange={setZoom}
+              style={{ width: '100%' }}
+            />
+          </div>
+        )}
 
-        {/* 图片剪裁区域 */}
+        {/* 图片展示：不剪裁时仅预览，剪裁时显示 Cropper */}
         {imageSrc && (
           <div
             style={{
@@ -284,23 +352,56 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
               overflow: 'hidden',
             }}
           >
-            <Cropper
-              image={imageSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={cropAspect}
-              cropShape={cropShape === 'round' ? 'round' : 'rect'}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={onCropComplete}
-              style={{
-                containerStyle: {
+            {isNoCrop ? (
+              <img
+                src={imageSrc}
+                alt="预览"
+                style={{
                   width: '100%',
                   height: '100%',
-                  position: 'relative',
-                },
-              }}
-            />
+                  objectFit: 'contain',
+                }}
+              />
+            ) : isFreeCrop ? (
+              <ReactCrop
+                crop={freeCrop}
+                onChange={(c) => setFreeCrop(c)}
+                aspect={undefined}
+                className="react-crop-free"
+                style={{ maxHeight: 400 }}
+              >
+                <img
+                  ref={imgRef}
+                  src={imageSrc}
+                  alt="裁剪"
+                  style={{ maxHeight: 400, width: '100%', objectFit: 'contain', display: 'block' }}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img && !freeCrop?.width) {
+                      setFreeCrop(centerCrop({ unit: '%', width: 80, height: 80 }, img.width, img.height));
+                    }
+                  }}
+                />
+              </ReactCrop>
+            ) : (
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={cropAspect}
+                cropShape={cropShape === 'round' ? 'round' : 'rect'}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+                style={{
+                  containerStyle: {
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
+                  },
+                }}
+              />
+            )}
           </div>
         )}
       </Space>

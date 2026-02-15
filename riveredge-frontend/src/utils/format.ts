@@ -2,39 +2,95 @@
  * 格式化工具函数
  * 
  * 提供日期、数字、字符串等格式化函数
+ * 日期格式优先使用站点设置中的 date_format 配置
  */
 
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
+import { useConfigStore } from '../stores/configStore';
+
+/** 从 configStore 获取日期格式 */
+function getDateFormatFromSiteSetting(): string {
+  return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
+}
+
+/** 从站点设置获取日期时间格式 */
+function getDatetimeFormatFromSiteSetting(): string {
+  return `${getDateFormatFromSiteSetting()} HH:mm:ss`;
+}
+
+/**
+ * 格式化日期（使用站点设置中的日期格式）
+ * 用于单据、表格等业务展示场景
+ *
+ * @param date - 日期（字符串、Date 对象、Dayjs 或时间戳）
+ * @param fallback - 空值时的占位（默认 '-'）
+ * @returns 格式化后的日期字符串
+ */
+export function formatDateBySiteSetting(
+  date: string | Date | number | Dayjs | null | undefined,
+  fallback: string = '-'
+): string {
+  if (date == null || date === '') return fallback;
+  const d = dayjs(date);
+  if (!d.isValid()) return fallback;
+  return d.format(getDateFormatFromSiteSetting());
+}
+
+/**
+ * 格式化日期时间（使用站点设置中的日期格式 + 时间）
+ *
+ * @param date - 日期时间
+ * @param fallback - 空值时的占位（默认 '-'）
+ * @returns 格式化后的日期时间字符串
+ */
+export function formatDateTimeBySiteSetting(
+  date: string | Date | number | Dayjs | null | undefined,
+  fallback: string = '-'
+): string {
+  if (date == null || date === '') return fallback;
+  const d = dayjs(date);
+  if (!d.isValid()) return fallback;
+  return d.format(getDatetimeFormatFromSiteSetting());
+}
+
+/** 获取站点日期格式字符串（用于 DatePicker 等组件的 format 属性） */
+export function getDateFormatString(): string {
+  return getDateFormatFromSiteSetting();
+}
+
+/** 获取站点日期时间格式字符串 */
+export function getDatetimeFormatString(): string {
+  return getDatetimeFormatFromSiteSetting();
+}
 
 /**
  * 格式化日期时间
  * 
  * @param date - 日期（字符串、Date 对象或时间戳）
- * @param format - 格式化模板（默认 'YYYY-MM-DD HH:mm:ss'）
+ * @param format - 格式化模板（默认使用站点设置）
  * @returns 格式化后的日期字符串
  */
 export function formatDateTime(
   date: string | Date | number | null | undefined,
-  format: string = 'YYYY-MM-DD HH:mm:ss'
+  format?: string
 ): string {
-  if (!date) {
-    return '-';
-  }
-  return dayjs(date).format(format);
+  if (!date) return '-';
+  return dayjs(date).format(format ?? getDatetimeFormatFromSiteSetting());
 }
 
 /**
  * 格式化日期
  * 
  * @param date - 日期
- * @param format - 格式化模板（默认 'YYYY-MM-DD'）
+ * @param format - 格式化模板（默认使用站点设置）
  * @returns 格式化后的日期字符串
  */
 export function formatDate(
   date: string | Date | number | null | undefined,
-  format: string = 'YYYY-MM-DD'
+  format?: string
 ): string {
-  return formatDateTime(date, format);
+  if (!date) return '-';
+  return dayjs(date).format(format ?? getDateFormatFromSiteSetting());
 }
 
 /**

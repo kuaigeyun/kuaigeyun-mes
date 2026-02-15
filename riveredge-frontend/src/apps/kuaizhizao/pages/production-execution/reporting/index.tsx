@@ -14,20 +14,21 @@ import { reportingApi, workOrderApi, materialBindingApi } from '../../../service
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 
+/** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
   id: number;
-  workOrderCode: string;
-  workOrderName: string;
-  operationName: string;
-  workerName: string;
-  reportedQuantity: number;
-  qualifiedQuantity: number;
-  unqualifiedQuantity: number;
-  workHours: number;
+  work_order_code: string;
+  work_order_name: string;
+  operation_name: string;
+  worker_name: string;
+  reported_quantity: number;
+  qualified_quantity: number;
+  unqualified_quantity: number;
+  work_hours: number;
   status: 'pending' | 'approved' | 'rejected';
-  reportedAt: string;
+  reported_at: string;
   remarks?: string;
-  sopParameters?: Record<string, any>; // SOP参数数据（JSON格式）
+  sop_parameters?: Record<string, any>;
 }
 
 const ReportingPage: React.FC = () => {
@@ -84,13 +85,11 @@ const ReportingPage: React.FC = () => {
   const [subOperationReportingVisible, setSubOperationReportingVisible] = useState(false); // 子工序报工Modal
   const subOperationFormRef = useRef<any>(null);
 
-  // 快速报工状态
-  const [quickReportModalVisible, setQuickReportModalVisible] = useState(false);
-  const [quickReportWorkOrderId, setQuickReportWorkOrderId] = useState<number | null>(null);
-  const [quickReportOperationId, setQuickReportOperationId] = useState<number | null>(null);
-  const [quickReportWorkOrders, setQuickReportWorkOrders] = useState<any[]>([]);
-  const [quickReportOperations, setQuickReportOperations] = useState<any[]>([]);
-  const quickReportFormRef = useRef<any>(null);
+  // 新建报工状态（工单、工序列表）
+  const [reportWorkOrders, setReportWorkOrders] = useState<any[]>([]);
+  const [reportOperations, setReportOperations] = useState<any[]>([]);
+  const [reportWorkOrderId, setReportWorkOrderId] = useState<number | null>(null);
+  const [reportOperationId, setReportOperationId] = useState<number | null>(null);
 
   /**
    * 处理扫码报工
@@ -558,100 +557,67 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
-   * 处理手动报工
+   * 处理新建报工（打开弹窗并加载工单列表）
    */
-  const handleManualReporting = () => {
+  const handleNewReporting = async () => {
     setReportingModalVisible(true);
     formRef.current?.resetFields();
-  };
-
-  /**
-   * 处理快速报工
-   */
-  const handleQuickReporting = async () => {
+    setReportOperations([]);
+    setReportWorkOrderId(null);
+    setReportOperationId(null);
     try {
-      // 加载进行中的工单列表
-      const workOrders = await workOrderApi.list({ status: 'in_progress', limit: 100 });
-      setQuickReportWorkOrders(workOrders || []);
-      setQuickReportModalVisible(true);
-      setQuickReportWorkOrderId(null);
-      setQuickReportOperationId(null);
-      setQuickReportOperations([]);
-      quickReportFormRef.current?.resetFields();
-    } catch (error: any) {
-      messageApi.error(error.message || '加载工单列表失败');
+      const workOrders = await workOrderApi.list({ status: 'in_progress', limit: 200 });
+      const list = Array.isArray(workOrders) ? workOrders : (workOrders as any)?.data ?? (workOrders as any)?.items ?? [];
+      setReportWorkOrders(Array.isArray(list) ? list : []);
+    } catch (e) {
+      messageApi.error('加载工单列表失败');
+      setReportWorkOrders([]);
     }
   };
 
   /**
-   * 处理快速报工工单变更
+   * 新建报工：工单变更时加载工序
    */
-  const handleQuickReportWorkOrderChange = async (workOrderId: number) => {
-    setQuickReportWorkOrderId(workOrderId);
-    setQuickReportOperationId(null);
-    setQuickReportOperations([]);
-    quickReportFormRef.current?.setFieldsValue({ operation_id: undefined });
-    
+  const handleReportWorkOrderChange = async (workOrderId: number) => {
+    setReportWorkOrderId(workOrderId);
+    setReportOperations([]);
+    setReportOperationId(null);
+    formRef.current?.setFieldsValue({ operation_id: undefined });
+    if (!workOrderId) return;
     try {
-      // 加载工单的工序列表
       const operations = await workOrderApi.getOperations(workOrderId.toString());
-      setQuickReportOperations(operations || []);
-    } catch (error: any) {
-      messageApi.error(error.message || '加载工序列表失败');
+      const ops = Array.isArray(operations) ? operations : (operations as any)?.data ?? (operations as any)?.items ?? [];
+      setReportOperations(Array.isArray(ops) ? ops : []);
+    } catch (e) {
+      messageApi.error('加载工序列表失败');
+      setReportOperations([]);
     }
   };
 
   /**
-   * 处理快速报工提交
+   * 新建报工：工序变更时自动填充
    */
-  const handleQuickReportSubmit = async (values: any) => {
-    try {
-      const workOrder = quickReportWorkOrders.find((wo: any) => wo.id === values.work_order_id);
-      const operation = quickReportOperations.find((op: any) => op.operation_id === values.operation_id);
-      
-      if (!workOrder || !operation) {
-        messageApi.error('工单或工序信息不存在');
-        return;
+  const handleReportOperationChange = (operationId: number) => {
+    setReportOperationId(operationId);
+    const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === operationId);
+    const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === reportWorkOrderId);
+    if (!operation || !workOrder) return;
+    const autoFillValues: any = {};
+    if (operation.standard_time) {
+      autoFillValues.work_hours = parseFloat(operation.standard_time.toString()) * parseFloat(workOrder.quantity?.toString() || '1');
+    }
+    if (operation.reporting_type === 'quantity') {
+      const remaining = parseFloat(workOrder.quantity?.toString() || '0') - parseFloat(operation.completed_quantity?.toString() || '0');
+      if (remaining > 0) {
+        autoFillValues.reported_quantity = remaining;
+        autoFillValues.qualified_quantity = remaining;
       }
-
-      const reportingData: any = {
-        work_order_id: workOrder.id,
-        work_order_code: workOrder.code,
-        work_order_name: workOrder.name,
-        operation_id: operation.operation_id,
-        operation_code: operation.operation_code,
-        operation_name: operation.operation_name,
-        worker_id: 1, // TODO: 从用户信息获取
-        worker_name: '当前用户', // TODO: 从用户信息获取
-        status: 'pending',
-        reported_at: new Date().toISOString(),
-        remarks: values.remarks,
-      };
-
-      // 根据报工类型设置数量
-      if (operation.reporting_type === 'status') {
-        reportingData.reported_quantity = values.completed_status === 'completed' ? 1 : 0;
-        reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0;
-        reportingData.unqualified_quantity = 0;
-      } else {
-        reportingData.reported_quantity = values.reported_quantity || 0;
-        reportingData.qualified_quantity = values.qualified_quantity || values.reported_quantity || 0;
-        reportingData.unqualified_quantity = (values.reported_quantity || 0) - (values.qualified_quantity || values.reported_quantity || 0);
-      }
-
-      reportingData.work_hours = values.work_hours || 0;
-
-      await reportingApi.create(reportingData);
-      messageApi.success('快速报工成功');
-      setQuickReportModalVisible(false);
-      setQuickReportWorkOrderId(null);
-      setQuickReportOperationId(null);
-      setQuickReportOperations([]);
-      quickReportFormRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '快速报工失败');
-      throw error;
+    }
+    if (operation.reporting_type === 'status') {
+      autoFillValues.completed_status = 'completed';
+    }
+    if (Object.keys(autoFillValues).length > 0) {
+      setTimeout(() => formRef.current?.setFieldsValue(autoFillValues), 100);
     }
   };
 
@@ -691,11 +657,43 @@ const ReportingPage: React.FC = () => {
         return;
       }
 
-      // 手动报工模式（原有逻辑）
-      await reportingApi.create(values);
+      // 新建报工：从工单+工序构建完整 payload
+      const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === values.work_order_id);
+      const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === values.operation_id);
+      if (!workOrder || !operation) {
+        messageApi.error('工单或工序信息不存在');
+        throw new Error('工单或工序未选择');
+      }
+      const reportingData: any = {
+        work_order_id: workOrder.id,
+        work_order_code: workOrder.code,
+        work_order_name: workOrder.name,
+        operation_id: operation.operation_id,
+        operation_code: operation.operation_code,
+        operation_name: operation.operation_name,
+        worker_id: 1,
+        worker_name: '当前用户',
+        status: 'pending',
+        reported_at: new Date().toISOString(),
+        remarks: values.remarks,
+        work_hours: values.work_hours || 0,
+      };
+      if (operation.reporting_type === 'status') {
+        reportingData.reported_quantity = values.completed_status === 'completed' ? 1 : 0;
+        reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0;
+        reportingData.unqualified_quantity = 0;
+      } else {
+        reportingData.reported_quantity = values.reported_quantity || 0;
+        reportingData.qualified_quantity = values.qualified_quantity ?? values.reported_quantity ?? 0;
+        reportingData.unqualified_quantity = (values.reported_quantity || 0) - (values.qualified_quantity ?? values.reported_quantity ?? 0);
+      }
+      await reportingApi.create(reportingData);
       messageApi.success('报工成功');
       setReportingModalVisible(false);
       formRef.current?.resetFields();
+      setReportOperations([]);
+      setReportWorkOrderId(null);
+      setReportOperationId(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '报工失败');
@@ -709,10 +707,48 @@ const ReportingPage: React.FC = () => {
   const handleApproveReporting = (record: ReportingRecord) => {
     Modal.confirm({
       title: '确认审核',
-      content: `确定要审核通过报工记录 "${record.workOrderCode}" 吗？`,
+      content: `确定要审核通过报工记录 "${record.work_order_code}" 吗？`,
       onOk: async () => {
-        messageApi.success('审核通过');
-        actionRef.current?.reload();
+        try {
+          await reportingApi.approve(record.id.toString(), {});
+          messageApi.success('审核通过');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '审核失败');
+          throw error;
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理驳回报工
+   */
+  const handleRejectReporting = (record: ReportingRecord) => {
+    let rejectionReason = '';
+    Modal.confirm({
+      title: '驳回报工',
+      content: (
+        <div>
+          <p style={{ marginBottom: 12 }}>确定要驳回报工记录 "{record.work_order_code}" 吗？</p>
+          <Input.TextArea
+            placeholder="请输入驳回原因（选填）"
+            rows={3}
+            onChange={(e) => { rejectionReason = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: '确认驳回',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await reportingApi.approve(record.id.toString(), {}, { rejection_reason: rejectionReason || undefined });
+          messageApi.success('已驳回');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '驳回失败');
+          throw error;
+        }
       },
     });
   };
@@ -721,7 +757,7 @@ const ReportingPage: React.FC = () => {
    * 处理创建报废记录
    */
   const handleCreateScrap = (record: ReportingRecord) => {
-    if (record.unqualifiedQuantity <= 0) {
+    if ((record.unqualified_quantity || 0) <= 0) {
       messageApi.warning('该报工记录没有不合格数量，无法创建报废记录');
       return;
     }
@@ -729,7 +765,7 @@ const ReportingPage: React.FC = () => {
     setScrapModalVisible(true);
     setTimeout(() => {
       scrapFormRef.current?.setFieldsValue({
-        scrap_quantity: record.unqualifiedQuantity,
+        scrap_quantity: record.unqualified_quantity,
         scrap_type: 'other',
       });
     }, 100);
@@ -760,7 +796,7 @@ const ReportingPage: React.FC = () => {
    * 处理创建不良品记录
    */
   const handleCreateDefect = (record: ReportingRecord) => {
-    if (record.unqualifiedQuantity <= 0) {
+    if ((record.unqualified_quantity || 0) <= 0) {
       messageApi.warning('该报工记录没有不合格数量，无法创建不良品记录');
       return;
     }
@@ -768,7 +804,7 @@ const ReportingPage: React.FC = () => {
     setDefectModalVisible(true);
     setTimeout(() => {
       defectFormRef.current?.setFieldsValue({
-        defect_quantity: record.unqualifiedQuantity,
+        defect_quantity: record.unqualified_quantity,
         defect_type: 'other',
         disposition: 'quarantine',
       });
@@ -802,15 +838,15 @@ const ReportingPage: React.FC = () => {
   const handleCorrectReporting = async (record: ReportingRecord) => {
     try {
       const detail = await reportingApi.get(record.id!.toString());
-      setCurrentReportingRecordForCorrect(detail);
+      setCurrentReportingRecordForCorrect(detail as ReportingRecord);
       setCorrectModalVisible(true);
       setTimeout(() => {
         correctFormRef.current?.setFieldsValue({
-          reported_quantity: detail.reportedQuantity,
-          qualified_quantity: detail.qualifiedQuantity,
-          unqualified_quantity: detail.unqualifiedQuantity,
-          work_hours: detail.workHours,
-          remarks: detail.remarks,
+          reported_quantity: (detail as any).reported_quantity ?? (detail as any).reportedQuantity,
+          qualified_quantity: (detail as any).qualified_quantity ?? (detail as any).qualifiedQuantity,
+          unqualified_quantity: (detail as any).unqualified_quantity ?? (detail as any).unqualifiedQuantity,
+          work_hours: (detail as any).work_hours ?? (detail as any).workHours,
+          remarks: (detail as any).remarks,
         });
       }, 100);
     } catch (error) {
@@ -855,50 +891,50 @@ const ReportingPage: React.FC = () => {
   const columns: ProColumns<ReportingRecord>[] = [
     {
       title: '工单编号',
-      dataIndex: 'workOrderCode',
+      dataIndex: 'work_order_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
       title: '工单名称',
-      dataIndex: 'workOrderName',
+      dataIndex: 'work_order_name',
       width: 150,
       ellipsis: true,
     },
     {
       title: '工序',
-      dataIndex: 'operationName',
+      dataIndex: 'operation_name',
       width: 120,
       ellipsis: true,
     },
     {
       title: '操作工',
-      dataIndex: 'workerName',
+      dataIndex: 'worker_name',
       width: 100,
       ellipsis: true,
     },
     {
       title: '报工数量',
-      dataIndex: 'reportedQuantity',
+      dataIndex: 'reported_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '合格数量',
-      dataIndex: 'qualifiedQuantity',
+      dataIndex: 'qualified_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '不合格数量',
-      dataIndex: 'unqualifiedQuantity',
+      dataIndex: 'unqualified_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '工时(小时)',
-      dataIndex: 'workHours',
+      dataIndex: 'work_hours',
       width: 100,
       align: 'right',
     },
@@ -914,7 +950,7 @@ const ReportingPage: React.FC = () => {
     },
     {
       title: '报工时间',
-      dataIndex: 'reportedAt',
+      dataIndex: 'reported_at',
       valueType: 'dateTime',
       width: 160,
     },
@@ -940,7 +976,7 @@ const ReportingPage: React.FC = () => {
                 size="small"
                 danger
                 icon={<CloseCircleOutlined />}
-                onClick={() => messageApi.info('驳回报工')}
+                onClick={() => handleRejectReporting(record)}
               >
                 驳回
               </Button>
@@ -955,7 +991,7 @@ const ReportingPage: React.FC = () => {
           )}
           {record.status === 'approved' && (
             <>
-              {record.unqualifiedQuantity > 0 && (
+              {(record.unqualified_quantity || 0) > 0 && (
                 <>
                   <Button
                     type="link"
@@ -991,31 +1027,57 @@ const ReportingPage: React.FC = () => {
     },
   ];
 
+  // 报工统计数据（从 API 获取）
+  const [statData, setStatData] = useState<{
+    total_count: number;
+    pending_count: number;
+    qualification_rate: number;
+    total_work_hours: number;
+  } | null>(null);
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const stats = await reportingApi.getStatistics({
+          date_start: today.toISOString(),
+          date_end: tomorrow.toISOString(),
+        });
+        setStatData(stats as any);
+      } catch (e) {
+        setStatData({ total_count: 0, pending_count: 0, qualification_rate: 0, total_work_hours: 0 });
+      }
+    };
+    loadStats();
+  }, []);
+
   return (
     <ListPageTemplate
       statCards={[
         {
           title: '今日报工总数',
-          value: 128,
+          value: statData?.total_count ?? '-',
           prefix: <ClockCircleOutlined />,
           valueStyle: { color: '#1890ff' },
         },
         {
           title: '待审核数量',
-          value: 23,
+          value: statData?.pending_count ?? '-',
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#faad14' },
         },
         {
           title: '合格率',
-          value: 96.8,
+          value: statData?.qualification_rate != null ? statData.qualification_rate.toFixed(1) : '-',
           suffix: '%',
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#52c41a' },
         },
         {
           title: '总工时(小时)',
-          value: 1247.5,
+          value: statData?.total_work_hours != null ? statData.total_work_hours.toFixed(1) : '-',
           prefix: <ClockCircleOutlined />,
           valueStyle: { color: '#722ed1' },
         },
@@ -1028,56 +1090,31 @@ const ReportingPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
-          // 模拟数据
-          const mockData: ReportingRecord[] = [
-            {
-              id: 1,
-              workOrderCode: 'WO20241201001',
-              workOrderName: '产品A生产工单',
-              operationName: '注塑工序',
-              workerName: '张三',
-              reportedQuantity: 50,
-              qualifiedQuantity: 48,
-              unqualifiedQuantity: 2,
-              workHours: 8.5,
-              status: 'approved',
-              reportedAt: '2024-12-01 16:30:00',
-              remarks: '正常生产',
-            },
-            {
-              id: 2,
-              workOrderCode: 'WO20241201002',
-              workOrderName: '产品B定制工单',
-              operationName: '组装工序',
-              workerName: '李四',
-              reportedQuantity: 25,
-              qualifiedQuantity: 25,
-              unqualifiedQuantity: 0,
-              workHours: 6.0,
-              status: 'pending',
-              reportedAt: '2024-12-01 17:00:00',
-            },
-            {
-              id: 3,
-              workOrderCode: 'WO20241201001',
-              workOrderName: '产品A生产工单',
-              operationName: '包装工序',
-              workerName: '王五',
-              reportedQuantity: 48,
-              qualifiedQuantity: 46,
-              unqualifiedQuantity: 2,
-              workHours: 4.5,
-              status: 'approved',
-              reportedAt: '2024-12-01 18:15:00',
-              remarks: '包装完成',
-            },
-          ];
-
-          return {
-            data: mockData,
-            success: true,
-            total: mockData.length,
-          };
+          try {
+            const skip = ((params.current ?? 1) - 1) * (params.pageSize ?? 20);
+            const limit = params.pageSize ?? 20;
+            const list = await reportingApi.list({
+              skip,
+              limit,
+              work_order_code: params.work_order_code,
+              work_order_name: params.work_order_name,
+              operation_name: params.operation_name,
+              worker_name: params.worker_name,
+              status: params.status,
+              reported_at_start: params.reported_at?.[0],
+              reported_at_end: params.reported_at?.[1],
+            });
+            const data = Array.isArray(list) ? list : (list as any)?.items ?? [];
+            const total = data.length < limit ? skip + data.length : skip + data.length + 1;
+            return {
+              data,
+              success: true,
+              total: data.length < limit ? skip + data.length : total,
+            };
+          } catch (error: any) {
+            messageApi.error(error.message || '获取报工记录失败');
+            return { data: [], success: false, total: 0 };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -1085,14 +1122,12 @@ const ReportingPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
-            key="quick"
+            key="new"
             type="primary"
-            size="large"
-            icon={<CheckCircleOutlined />}
-            onClick={handleQuickReporting}
-            style={{ fontSize: '16px', height: '40px', padding: '0 24px' }}
+            icon={<PlusOutlined />}
+            onClick={handleNewReporting}
           >
-            快速报工
+            新建报工
           </Button>,
           <Button
             key="scan"
@@ -1101,67 +1136,86 @@ const ReportingPage: React.FC = () => {
           >
             扫码报工
           </Button>,
-          <Button
-            key="manual"
-            icon={<QrcodeOutlined />}
-            onClick={handleManualReporting}
-          >
-            手动报工
-          </Button>,
         ]}
       />
 
       <FormModalTemplate
-        title="手动报工"
+        title="新建报工"
         open={reportingModalVisible}
-        onClose={() => setReportingModalVisible(false)}
+        onClose={() => {
+          setReportingModalVisible(false);
+          setReportOperations([]);
+          setReportWorkOrderId(null);
+          setReportOperationId(null);
+        }}
         onFinish={handleReportingSubmit}
         isEdit={false}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid={true}
       >
         <ProFormSelect
-          name="workOrderCode"
-          label="工单编号"
+          name="work_order_id"
+          label="工单"
           placeholder="请选择工单"
           rules={[{ required: true, message: '请选择工单' }]}
-          options={[
-            { label: 'WO20241201001 - 产品A生产工单', value: 'WO20241201001' },
-            { label: 'WO20241201002 - 产品B定制工单', value: 'WO20241201002' },
-          ]}
+          options={(Array.isArray(reportWorkOrders) ? reportWorkOrders : []).map((wo: any) => ({
+            label: `${wo.code || wo.work_order_code || ''} - ${wo.name || wo.work_order_name || ''}`,
+            value: wo.id,
+          }))}
           colProps={{ span: 12 }}
+          fieldProps={{
+            onChange: (value: number) => handleReportWorkOrderChange(value),
+          }}
         />
         <ProFormSelect
-          name="operationName"
+          name="operation_id"
           label="工序"
-          placeholder="请选择工序"
+          placeholder="请先选择工单"
           rules={[{ required: true, message: '请选择工序' }]}
-          options={[
-            { label: '注塑工序', value: '注塑工序' },
-            { label: '组装工序', value: '组装工序' },
-            { label: '包装工序', value: '包装工序' },
-          ]}
+          options={(Array.isArray(reportOperations) ? reportOperations : []).map((op: any) => ({
+            label: `${op.operation_name || op.name} (${op.sequence || ''})`,
+            value: op.operation_id,
+          }))}
           colProps={{ span: 12 }}
+          fieldProps={{
+            disabled: (Array.isArray(reportOperations) ? reportOperations : []).length === 0,
+            onChange: (value: number) => handleReportOperationChange(value),
+          }}
         />
+        {(Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === reportOperationId)?.reporting_type === 'status' ? (
+          <ProFormRadio.Group
+            name="completed_status"
+            label="完成状态"
+            rules={[{ required: true, message: '请选择完成状态' }]}
+            options={[
+              { label: '完成', value: 'completed' },
+              { label: '未完成', value: 'incomplete' },
+            ]}
+            colProps={{ span: 12 }}
+          />
+        ) : (
+          <>
+            <ProFormDigit
+              name="reported_quantity"
+              label="报工数量"
+              placeholder="报工数量"
+              rules={[{ required: true, message: '请输入报工数量' }]}
+              min={0}
+              colProps={{ span: 8 }}
+            />
+            <ProFormDigit
+              name="qualified_quantity"
+              label="合格数量"
+              placeholder="合格数量"
+              rules={[{ required: true, message: '请输入合格数量' }]}
+              min={0}
+              colProps={{ span: 8 }}
+            />
+          </>
+        )}
         <ProFormDigit
-          name="reportedQuantity"
-          label="报工数量"
-          placeholder="报工数量"
-          rules={[{ required: true, message: '请输入报工数量' }]}
-          min={0}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name="qualifiedQuantity"
-          label="合格数量"
-          placeholder="合格数量"
-          rules={[{ required: true, message: '请输入合格数量' }]}
-          min={0}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name="workHours"
+          name="work_hours"
           label="工时(小时)"
           placeholder="工时"
           rules={[{ required: true, message: '请输入工时' }]}
@@ -1745,13 +1799,13 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecord.workOrderCode}</div>
+                  <div><strong>工单编码：</strong>{currentReportingRecord.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecord.operationName}</div>
+                  <div><strong>工序：</strong>{currentReportingRecord.operation_name}</div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
-                  <div><strong>不合格数量：</strong>{currentReportingRecord.unqualifiedQuantity}</div>
+                  <div><strong>不合格数量：</strong>{currentReportingRecord.unqualified_quantity}</div>
                 </Col>
               </Row>
             </Card>
@@ -1761,7 +1815,7 @@ const ReportingPage: React.FC = () => {
               placeholder="请输入报废数量"
               rules={[{ required: true, message: '请输入报废数量' }]}
               min={0}
-              max={currentReportingRecord.unqualifiedQuantity}
+              max={currentReportingRecord.unqualified_quantity}
               fieldProps={{ precision: 2 }}
             />
             <ProFormSelect
@@ -1819,13 +1873,13 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecordForDefect.workOrderCode}</div>
+                  <div><strong>工单编码：</strong>{currentReportingRecordForDefect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecordForDefect.operationName}</div>
+                  <div><strong>工序：</strong>{currentReportingRecordForDefect.operation_name}</div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
-                  <div><strong>不合格数量：</strong>{currentReportingRecordForDefect.unqualifiedQuantity}</div>
+                  <div><strong>不合格数量：</strong>{currentReportingRecordForDefect.unqualified_quantity}</div>
                 </Col>
               </Row>
             </Card>
@@ -1835,7 +1889,7 @@ const ReportingPage: React.FC = () => {
               placeholder="请输入不良品数量"
               rules={[{ required: true, message: '请输入不良品数量' }]}
               min={0}
-              max={currentReportingRecordForDefect.unqualifiedQuantity}
+              max={currentReportingRecordForDefect.unqualified_quantity}
               fieldProps={{ precision: 2 }}
             />
             <ProFormSelect
@@ -1905,10 +1959,10 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编码：</strong>{currentReportingRecordForCorrect.workOrderCode}</div>
+                  <div><strong>工单编码：</strong>{currentReportingRecordForCorrect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecordForCorrect.operationName}</div>
+                  <div><strong>工序：</strong>{currentReportingRecordForCorrect.operation_name}</div>
                 </Col>
               </Row>
             </Card>
@@ -2079,173 +2133,6 @@ const ReportingPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* 快速报工Modal */}
-      <FormModalTemplate
-        title="快速报工"
-        open={quickReportModalVisible}
-        onCancel={() => {
-          setQuickReportModalVisible(false);
-          setQuickReportWorkOrderId(null);
-          setQuickReportOperationId(null);
-          setQuickReportOperations([]);
-          quickReportFormRef.current?.resetFields();
-        }}
-        onFinish={handleQuickReportSubmit}
-        formRef={quickReportFormRef}
-        {...MODAL_CONFIG}
-      >
-        <ProFormSelect
-          name="work_order_id"
-          label="工单"
-          placeholder="请选择工单"
-          rules={[{ required: true, message: '请选择工单' }]}
-          options={quickReportWorkOrders.map((wo: any) => ({
-            label: `${wo.code} - ${wo.name}`,
-            value: wo.id,
-          }))}
-          fieldProps={{
-            onChange: (value: number) => {
-              handleQuickReportWorkOrderChange(value);
-            },
-            size: 'large',
-            style: { fontSize: '16px' },
-          }}
-        />
-        <ProFormSelect
-          name="operation_id"
-          label="工序"
-          placeholder="请选择工序"
-          rules={[{ required: true, message: '请选择工序' }]}
-          options={quickReportOperations.map((op: any) => ({
-            label: `${op.operation_name} (${op.sequence})`,
-            value: op.operation_id,
-          }))}
-          fieldProps={{
-            onChange: (value: number) => {
-              setQuickReportOperationId(value);
-              // 切换工序时自动填充数据
-              const operation = quickReportOperations.find((op: any) => op.operation_id === value);
-              const workOrder = quickReportWorkOrders.find((wo: any) => wo.id === quickReportWorkOrderId);
-              
-              if (operation && workOrder) {
-                setTimeout(() => {
-                  const autoFillValues: any = {};
-                  
-                  // 自动填充工时（根据标准工时和工单数量计算）
-                  if (operation.standard_time) {
-                    const estimatedWorkHours = parseFloat(operation.standard_time.toString()) * parseFloat(workOrder.quantity.toString());
-                    autoFillValues.work_hours = estimatedWorkHours;
-                  }
-                  
-                  // 按数量报工时，自动填充完成数量（默认等于剩余数量）
-                  if (operation.reporting_type === 'quantity') {
-                    const remainingQuantity = parseFloat(workOrder.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
-                    if (remainingQuantity > 0) {
-                      autoFillValues.reported_quantity = remainingQuantity;
-                      // 默认合格数量等于完成数量
-                      autoFillValues.qualified_quantity = remainingQuantity;
-                      autoFillValues.unqualified_quantity = 0;
-                    }
-                  }
-                  
-                  // 按状态报工时，默认选择"完成"
-                  if (operation.reporting_type === 'status') {
-                    autoFillValues.completed_status = 'completed';
-                  }
-                  
-                  if (Object.keys(autoFillValues).length > 0) {
-                    quickReportFormRef.current?.setFieldsValue(autoFillValues);
-                  }
-                }, 100);
-              }
-            },
-            size: 'large',
-            style: { fontSize: '16px' },
-            disabled: !quickReportWorkOrderId || quickReportOperations.length === 0,
-          }}
-        />
-        {quickReportOperations.find((op: any) => op.operation_id === quickReportOperationId)?.reporting_type === 'status' ? (
-          // 按状态报工
-          <Form.Item
-            name="completed_status"
-            label="完成状态"
-            rules={[{ required: true, message: '请选择完成状态' }]}
-          >
-            <Radio.Group size="large" style={{ fontSize: '16px' }}>
-              <Radio.Button value="completed" style={{ fontSize: '18px', padding: '12px 24px', height: '50px', lineHeight: '26px' }}>
-                完成
-              </Radio.Button>
-              <Radio.Button value="incomplete" style={{ fontSize: '18px', padding: '12px 24px', height: '50px', lineHeight: '26px' }}>
-                未完成
-              </Radio.Button>
-            </Radio.Group>
-          </Form.Item>
-        ) : (
-          // 按数量报工
-          <>
-            <ProFormDigit
-              name="reported_quantity"
-              label="完成数量"
-              placeholder="请输入完成数量"
-              rules={[{ required: true, message: '请输入完成数量' }]}
-              min={0}
-              fieldProps={{
-                precision: 2,
-                size: 'large',
-                style: { fontSize: '16px', height: '40px' },
-              }}
-            />
-            <ProFormDigit
-              name="qualified_quantity"
-              label="合格数量"
-              placeholder="请输入合格数量（默认等于完成数量）"
-              min={0}
-              fieldProps={{
-                precision: 2,
-                size: 'large',
-                style: { fontSize: '16px', height: '40px' },
-              }}
-            />
-            <ProFormDigit
-              name="unqualified_quantity"
-              label="不合格数量"
-              placeholder="不合格数量（自动计算）"
-              disabled
-              fieldProps={{
-                precision: 2,
-                size: 'large',
-                style: { fontSize: '16px', height: '40px' },
-              }}
-              dependencies={['reported_quantity', 'qualified_quantity']}
-              transform={(value, namePath, allValues) => {
-                const reportedQuantity = allValues.reported_quantity || 0;
-                const qualifiedQuantity = allValues.qualified_quantity || 0;
-                return reportedQuantity - qualifiedQuantity;
-              }}
-            />
-          </>
-        )}
-        <ProFormDigit
-          name="work_hours"
-          label="工时(小时)"
-          placeholder="工时"
-          min={0}
-          fieldProps={{
-            step: 0.1,
-            size: 'large',
-            style: { fontSize: '16px', height: '40px' },
-          }}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label="备注（可选）"
-          placeholder="请输入备注"
-          fieldProps={{
-            rows: 3,
-            style: { fontSize: '16px' },
-          }}
-        />
-      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

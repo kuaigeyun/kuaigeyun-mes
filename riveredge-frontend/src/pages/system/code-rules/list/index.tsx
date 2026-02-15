@@ -9,7 +9,6 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse, Spin } from 'antd';
-import { PAGE_SPACING } from '../../../../components/layout-templates/constants';
 import { SearchOutlined, DatabaseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   getCodeRuleList,
@@ -694,7 +693,6 @@ const CodeRuleListPage: React.FC = () => {
         style={{
           display: 'flex',
           height: '100%',
-          padding: `0 ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px`,
           margin: 0,
           boxSizing: 'border-box',
           borderRadius: token.borderRadiusLG || token.borderRadius,
