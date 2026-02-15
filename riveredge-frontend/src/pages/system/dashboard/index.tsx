@@ -1032,16 +1032,16 @@ export default function DashboardPage() {
                       navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
                     }}
                   >
-                    <div style={{ marginBottom: 4 }}>
+                    <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Space>
                         <Text strong style={{ fontSize: 13 }}>
                           {item.operator_name} | {item.process_name}
                         </Text>
                       </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
+                      </Text>
                     </div>
-                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                      {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
-                    </Text>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                       工单号：{item.work_order_no}
                     </Text>
