@@ -1140,13 +1140,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           refetchApplicationMenus();
         }, 0);
       });
-    } else if (currentUser && !applicationMenusLoading) {
-      // 如果用户已登录但没有菜单数据，尝试加载
-      const hasMenuData = applicationMenus && applicationMenus.length > 0;
-      if (!hasMenuData) {
-        console.log('🔄 用户已登录但没有菜单数据，主动触发菜单加载...');
-        refetchApplicationMenus();
-      }
     }
   }, [currentUser, applicationMenus, applicationMenusLoading, refetchApplicationMenus]);
 

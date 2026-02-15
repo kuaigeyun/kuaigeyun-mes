@@ -109,7 +109,8 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
         }
       }
     } catch (wttrError) {
-      console.warn('wttr.in API 请求失败，尝试备用方案:', wttrError);
+      // wttr.in 失败是预期内的（如超时），静默失败并尝试备用方案
+      // console.debug('wttr.in API 请求失败，尝试备用方案:', wttrError);
     }
     
     // 方法2: 备用方案 - 使用 Open-Meteo（免费，无需API Key）
