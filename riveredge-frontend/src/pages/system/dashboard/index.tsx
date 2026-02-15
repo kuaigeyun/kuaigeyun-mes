@@ -1258,7 +1258,7 @@ export default function DashboardPage() {
                 type="link"
                 size="small"
                 onClick={() => {
-                  message.info('通知中心功能开发中');
+                  navigate('/personal/messages');
                 }}
               >
                 查看全部 <RightOutlined />
