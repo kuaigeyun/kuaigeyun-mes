@@ -743,7 +743,7 @@ const ApplicationListPage: React.FC = () => {
             保存
           </Button>
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         <form
           id="edit-app-form"
