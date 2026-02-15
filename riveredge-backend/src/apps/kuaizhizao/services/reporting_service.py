@@ -95,7 +95,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 tenant_id=tenant_id,
                 work_order_id=reporting_data.work_order_id,
                 operation_id=reporting_data.operation_id,
-                deleted_at__isnull=True
+                operation_id=reporting_data.operation_id,
+
             )
 
             if not work_order_operation:
@@ -111,7 +112,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     tenant_id=tenant_id,
                     work_order_id=reporting_data.work_order_id,
                     sequence__lt=work_order_operation.sequence,
-                    deleted_at__isnull=True
+                    sequence__lt=work_order_operation.sequence,
+
                 ).order_by('sequence').all()
 
                 if previous_operations:
@@ -229,7 +231,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             all_operations = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order.id,
-                deleted_at__isnull=True
+                work_order_id=work_order.id,
+
             ).all()
             
             all_completed = all(op.status == 'completed' for op in all_operations)
@@ -284,7 +287,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record = await ReportingRecord.get_or_none(
             id=record_id,
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            tenant_id=tenant_id,
+
         )
 
         if not record:
@@ -588,7 +592,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             status='approved',
-            deleted_at__isnull=True
+            status='approved',
+
         ).all()
 
         # 计算总完成数量
@@ -599,7 +604,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         work_order = await WorkOrder.get_or_none(
             id=work_order_id,
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            tenant_id=tenant_id,
+
         )
 
         if work_order:
@@ -638,7 +644,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order = await WorkOrder.get_or_none(
                 id=work_order_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+                tenant_id=tenant_id,
+
             )
             
         if not work_order:
@@ -649,7 +656,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             status__in=['draft', 'confirmed'],  # 统计draft和confirmed状态的报废记录
-            deleted_at__isnull=True
+            status__in=['draft', 'confirmed'],  # 统计draft和confirmed状态的报废记录
+
         ).all()
         
         # 累加报废数量
@@ -686,7 +694,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reporting_record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+                tenant_id=tenant_id,
+
             )
 
             if not reporting_record:
@@ -696,7 +705,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order = await WorkOrder.get_or_none(
                 id=reporting_record.work_order_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+                tenant_id=tenant_id,
+
             )
 
             if not work_order:
