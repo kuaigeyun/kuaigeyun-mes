@@ -95,7 +95,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 tenant_id=tenant_id,
                 work_order_id=reporting_data.work_order_id,
                 operation_id=reporting_data.operation_id,
-                operation_id=reporting_data.operation_id,
 
             )
 
@@ -111,7 +110,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 previous_operations = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
                     work_order_id=reporting_data.work_order_id,
-                    sequence__lt=work_order_operation.sequence,
                     sequence__lt=work_order_operation.sequence,
 
                 ).order_by('sequence').all()
@@ -231,7 +229,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             all_operations = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order.id,
-                work_order_id=work_order.id,
 
             ).all()
             
@@ -286,7 +283,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
         """
         record = await ReportingRecord.get_or_none(
             id=record_id,
-            tenant_id=tenant_id,
             tenant_id=tenant_id,
 
         )
@@ -592,7 +588,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             status='approved',
-            status='approved',
 
         ).all()
 
@@ -603,7 +598,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
         # 更新工单
         work_order = await WorkOrder.get_or_none(
             id=work_order_id,
-            tenant_id=tenant_id,
             tenant_id=tenant_id,
 
         )
@@ -644,7 +638,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order = await WorkOrder.get_or_none(
                 id=work_order_id,
                 tenant_id=tenant_id,
-                tenant_id=tenant_id,
 
             )
             
@@ -655,7 +648,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
         scrap_records = await ScrapRecord.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
-            status__in=['draft', 'confirmed'],  # 统计draft和confirmed状态的报废记录
             status__in=['draft', 'confirmed'],  # 统计draft和confirmed状态的报废记录
 
         ).all()
@@ -694,7 +686,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reporting_record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
                 tenant_id=tenant_id,
-                tenant_id=tenant_id,
 
             )
 
@@ -704,7 +695,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 获取工单信息
             work_order = await WorkOrder.get_or_none(
                 id=reporting_record.work_order_id,
-                tenant_id=tenant_id,
                 tenant_id=tenant_id,
 
             )
@@ -812,7 +802,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reporting_record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+
             )
 
             if not reporting_record:
@@ -822,7 +812,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order = await WorkOrder.get_or_none(
                 id=reporting_record.work_order_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+
             )
 
             if not work_order:
@@ -984,7 +974,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reporting_record = await ReportingRecord.get_or_none(
                 id=record_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+
             )
 
             if not reporting_record:
@@ -1028,7 +1018,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             updated_record = await ReportingRecord.get_or_none(
                 id=record_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+
             )
 
             if not updated_record:
