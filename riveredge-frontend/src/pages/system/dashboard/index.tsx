@@ -230,7 +230,7 @@ export default function DashboardPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   
   // 时间范围筛选器状态
-  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'custom'>('today');
+  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'last7days' | 'last30days' | 'custom'>('thisMonth');
   const [customDateRange, setCustomDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
   // 工作台小 TIPS：每 10 秒随机换一条（避免与当前相同）
@@ -350,6 +350,16 @@ export default function DashboardPage() {
         return {
           dateStart: yesterday.format('YYYY-MM-DD'),
           dateEnd: yesterday.format('YYYY-MM-DD'),
+        };
+      case 'thisWeek':
+        return {
+          dateStart: now.startOf('week').format('YYYY-MM-DD'),
+          dateEnd: now.endOf('week').format('YYYY-MM-DD'),
+        };
+      case 'thisMonth':
+        return {
+          dateStart: now.startOf('month').format('YYYY-MM-DD'),
+          dateEnd: now.endOf('month').format('YYYY-MM-DD'),
         };
       case 'last7days':
         return {
@@ -671,6 +681,8 @@ export default function DashboardPage() {
                 options={[
                   { label: '今天', value: 'today' },
                   { label: '昨天', value: 'yesterday' },
+                  { label: '本周', value: 'thisWeek' },
+                  { label: '本月', value: 'thisMonth' },
                   { label: '近7天', value: 'last7days' },
                   { label: '近30天', value: 'last30days' },
                   { label: '自定义', value: 'custom' },
