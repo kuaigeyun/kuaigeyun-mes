@@ -801,8 +801,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 获取报工记录
             reporting_record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
-                tenant_id=tenant_id,
-
+                tenant_id=tenant_id
             )
 
             if not reporting_record:
@@ -811,8 +810,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 获取工单信息
             work_order = await WorkOrder.get_or_none(
                 id=reporting_record.work_order_id,
-                tenant_id=tenant_id,
-
+                tenant_id=tenant_id
             )
 
             if not work_order:
