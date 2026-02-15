@@ -292,10 +292,10 @@ async def get_statistics(
         completed_work_orders = len([wo for wo in work_orders if wo.status == "completed"])
         in_progress_work_orders = len([wo for wo in work_orders if wo.status == "in_progress"])
         
-        # 计算完工数量（已完成工单的计划数量总和）
+        # 计算完工数量（已完成工单的计划数量总和，WorkOrder 使用 quantity 表示计划数量）
         completed_quantity = sum(
-            float(wo.planned_quantity) for wo in work_orders 
-            if wo.status == "completed" and wo.planned_quantity
+            float(wo.quantity) for wo in work_orders 
+            if wo.status == "completed" and wo.quantity
         )
         
         # 获取订单统计
@@ -317,10 +317,10 @@ async def get_statistics(
                         product_codes.add(item.product_code)
         product_count = len(product_codes)
         
-        # 计算生产计划数（所有工单的计划数量总和）
+        # 计算生产计划数（所有工单的计划数量总和，WorkOrder 使用 quantity 表示计划数量）
         plan_quantity = sum(
-            float(wo.planned_quantity) for wo in work_orders 
-            if wo.planned_quantity
+            float(wo.quantity) for wo in work_orders 
+            if wo.quantity
         )
         
         # 获取报工统计，计算不良品率
@@ -734,6 +734,7 @@ async def get_production_broadcast(
             tenant_id=tenant_id,
             status="approved",  # 只显示已审核通过的报工记录
             reported_at__gte=date_threshold,
+            deleted_at__isnull=True,  # 排除软删除的记录
         ).order_by("-reported_at").limit(limit).all()
         
         # 获取相关的工单信息

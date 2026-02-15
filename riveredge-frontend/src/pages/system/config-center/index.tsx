@@ -324,7 +324,13 @@ const ConfigCenterPage: React.FC = () => {
   );
 
   return (
-    <>
+    <div className="config-center-page">
+      <style>{`
+        /* 修正 ant-card-body 多出的 16px 高度：将 padding 从默认 24px 调整为 16px */
+        .config-center-page .ant-card .ant-card-body {
+          padding: 16px !important;
+        }
+      `}</style>
       <MultiTabListPageTemplate
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
@@ -377,7 +383,7 @@ const ConfigCenterPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 };
 

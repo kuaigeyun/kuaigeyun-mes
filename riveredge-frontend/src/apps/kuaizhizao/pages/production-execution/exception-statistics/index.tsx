@@ -113,8 +113,8 @@ const ExceptionStatisticsPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <div style={{ padding: '24px' }}>
-        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+      <div>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           {/* 日期筛选和操作 */}
           <Card>
             <Space>
@@ -211,7 +211,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
             {statistics.material_shortage?.by_level && Object.keys(statistics.material_shortage.by_level).length > 0 && (
               <>
-                <Row gutter={16} style={{ marginTop: 16 }}>
+                <Row gutter={16} style={{ marginTop: 12 }}>
                   {Object.entries(statistics.material_shortage.by_level).map(([level, count]) => (
                     <Col span={6} key={level}>
                       <Statistic
@@ -221,7 +221,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                     </Col>
                   ))}
                 </Row>
-                <div style={{ marginTop: 24 }}>
+                <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
                       level: level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低',
@@ -272,7 +272,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
             {statistics.delivery_delay?.by_level && Object.keys(statistics.delivery_delay.by_level).length > 0 && (
               <>
-                <Row gutter={16} style={{ marginTop: 16 }}>
+                <Row gutter={16} style={{ marginTop: 12 }}>
                   {Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => (
                     <Col span={6} key={level}>
                       <Statistic
@@ -282,7 +282,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                     </Col>
                   ))}
                 </Row>
-                <div style={{ marginTop: 24 }}>
+                <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
                       level: level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低',
@@ -333,7 +333,7 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
             {statistics.quality?.by_severity && Object.keys(statistics.quality.by_severity).length > 0 && (
               <>
-                <Row gutter={16} style={{ marginTop: 16 }}>
+                <Row gutter={16} style={{ marginTop: 12 }}>
                   {Object.entries(statistics.quality.by_severity).map(([severity, count]) => (
                     <Col span={6} key={severity}>
                       <Statistic
@@ -343,7 +343,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                     </Col>
                   ))}
                 </Row>
-                <div style={{ marginTop: 24 }}>
+                <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.quality.by_severity).map(([severity, count]) => ({
                       severity: severity === 'critical' ? '紧急' : severity === 'major' ? '严重' : '轻微',

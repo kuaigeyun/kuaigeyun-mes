@@ -22,12 +22,7 @@ import {
   updateApprovalProcess,
   ApprovalProcess,
 } from '../../../../services/approvalProcess';
-import { CanvasPageTemplate } from '../../../../components/layout-templates';
-
-const GRID_STYLE: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
-  backgroundSize: '12px 12px',
-};
+import { CanvasPageTemplate, CANVAS_GRID_STYLE } from '../../../../components/layout-templates';
 
 /**
  * 审批节点组件
@@ -605,7 +600,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </Space>
       }
       canvas={
-        <div style={{ width: '100%', height: '100%', position: 'relative', ...GRID_STYLE }}>
+        <div style={{ width: '100%', height: '100%', position: 'relative', ...CANVAS_GRID_STYLE }}>
           <ReactFlowProvider>
             <FlowStoreProvider>
               <div style={{ width: '100%', height: '100%', position: 'relative' }}>

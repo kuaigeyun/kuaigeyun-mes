@@ -759,6 +759,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
           <Card
             hoverable
+            loading={statisticsLoading}
             style={{
               borderRadius: token.borderRadius,
               border: 'none',
@@ -801,6 +802,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
           <Card
             hoverable
+            loading={statisticsLoading}
             style={{
               borderRadius: token.borderRadius,
               border: 'none',
@@ -843,6 +845,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
           <Card
             hoverable
+            loading={statisticsLoading}
             style={{
               borderRadius: token.borderRadius,
               border: 'none',
@@ -884,6 +887,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
           <Card
             hoverable
+            loading={statisticsLoading}
             style={{
               borderRadius: token.borderRadius,
               border: 'none',
@@ -926,6 +930,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
           <Card
             hoverable
+            loading={statisticsLoading}
             style={{
               borderRadius: token.borderRadius,
               border: 'none',
@@ -1095,7 +1100,7 @@ export default function DashboardPage() {
                       </Space>
                     </div>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                      {item.date}
+                      {item.created_at ? dayjs(item.created_at).format('MM-DD HH:mm') : item.date}
                     </Text>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                       工单号：{item.work_order_no}

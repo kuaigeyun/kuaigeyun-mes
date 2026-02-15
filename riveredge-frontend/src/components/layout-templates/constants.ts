@@ -7,6 +7,8 @@
  * Date: 2025-12-26
  */
 
+import type { CSSProperties } from 'react';
+
 /**
  * Modal 标准配置
  */
@@ -106,6 +108,24 @@ export const CANVAS_PAGE_LAYOUT = {
   RIGHT_PANEL_WIDTH: 400,
   /** 画板最小高度 */
   CANVAS_MIN_HEIGHT: 600,
+} as const;
+
+/**
+ * 画板网格样式（浅色主题，流程图/BOM/SOP 等设计器统一使用）
+ */
+export const CANVAS_GRID_STYLE: CSSProperties = {
+  backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
+  backgroundSize: '12px 12px',
+};
+
+/**
+ * ReactFlow Background 组件的等价参数（供 FlowEditor/FlowView 使用）
+ */
+export const CANVAS_GRID_REACTFLOW = {
+  variant: 'dots' as const,
+  gap: 12,
+  size: 1,
+  color: '#e0e0e0',
 } as const;
 
 /**

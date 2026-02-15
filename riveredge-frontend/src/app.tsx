@@ -19,6 +19,7 @@ import { getUserPreference, UserPreference } from './services/userPreference';
 import { getSiteSetting } from './services/siteSetting';
 import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
+import { updateLastActivity, getLastActivityTime } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
@@ -174,46 +175,29 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [currentUser, configInitialized, fetchConfigs]);
 
-  // 用户不活动检测状态
-  const ACTIVITY_STORAGE_KEY = 'riveredge_last_activity';
-  // 初始化最后活动时间：优先从 localStorage 获取，实现跨标签页同步
-  const getStoredActivity = () => {
-    const stored = localStorage.getItem(ACTIVITY_STORAGE_KEY);
-    return stored ? parseInt(stored, 10) : Date.now();
-  };
-  const lastActivityRef = React.useRef(getStoredActivity());
-  
-  // 更新最后活动时间
-  const updateActivity = React.useCallback(() => {
-    const now = Date.now();
-    // 简单的节流：每 5 秒更新一次 localStorage，避免频繁写入性能损耗
-    if (now - lastActivityRef.current > 5000) {
-      lastActivityRef.current = now;
-      localStorage.setItem(ACTIVITY_STORAGE_KEY, String(now));
-    }
-  }, []);
-
-  // 监听用户活动
+  // 监听用户活动（仅用户操作时更新，API 请求由 api.ts 在成功响应时更新）
   useEffect(() => {
     if (isPublicPath) return;
 
-    // 初始化时更新一次
-    updateActivity();
+    // 进入受保护页面时重置活动时间（清除可能来自上一会话的旧数据）
+    updateLastActivity(true);
 
-    window.addEventListener('mousemove', updateActivity);
-    window.addEventListener('keydown', updateActivity);
-    window.addEventListener('click', updateActivity);
-    window.addEventListener('scroll', updateActivity);
-    window.addEventListener('touchstart', updateActivity);
+    const onActivity = () => updateLastActivity();
+
+    window.addEventListener('mousemove', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('click', onActivity);
+    window.addEventListener('scroll', onActivity);
+    window.addEventListener('touchstart', onActivity);
 
     return () => {
-      window.removeEventListener('mousemove', updateActivity);
-      window.removeEventListener('keydown', updateActivity);
-      window.removeEventListener('click', updateActivity);
-      window.removeEventListener('scroll', updateActivity);
-      window.removeEventListener('touchstart', updateActivity);
+      window.removeEventListener('mousemove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('click', onActivity);
+      window.removeEventListener('scroll', onActivity);
+      window.removeEventListener('touchstart', onActivity);
     };
-  }, [isPublicPath, updateActivity]);
+  }, [isPublicPath]);
 
   // TOKEN 过期与不活动检测
   React.useEffect(() => {
@@ -245,12 +229,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return false;
       }
 
-      // 2. 检查用户不活动超时 (0表示禁用)
+      // 2. 检查用户不活动超时 (0表示禁用)，仅当无用户操作且无 API 请求时才超时
       if (inactivityTimeout > 0) {
-        // 读取跨标签页的最后活动时间（获取所有标签页中最新的活动时间）
-        const storedActivityStr = localStorage.getItem(ACTIVITY_STORAGE_KEY);
-        const lastActivityTime = storedActivityStr ? parseInt(storedActivityStr, 10) : lastActivityRef.current;
-        
+        const lastActivityTime = getLastActivityTime();
         const inactiveTime = Date.now() - lastActivityTime;
         if (inactiveTime > inactivityTimeout) {
           console.warn(`⚠️ 用户已不活动 ${inactiveTime / 1000} 秒，超过阈值 ${inactivityTimeout / 1000} 秒，自动退出`);

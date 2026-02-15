@@ -6,6 +6,7 @@
 
 // 使用 Fetch API 进行 HTTP 请求
 import { clearAuth } from '../utils/auth';
+import { updateLastActivity } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
 
 /**
@@ -452,6 +453,11 @@ export async function apiRequest<T = any>(
       const error = new Error(errorMessage) as any;
       error.response = { data, status: response.status };
       throw error;
+    }
+
+    // 非公开接口的成功响应计入用户活动（API 请求表示用户正在使用系统）
+    if (!isPublicEndpoint && response.ok) {
+      updateLastActivity(true);
     }
 
     // 检查后端响应格式

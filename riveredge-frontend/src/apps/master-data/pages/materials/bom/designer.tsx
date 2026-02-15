@@ -39,13 +39,8 @@ import {
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
-import { CanvasPageTemplate, PAGE_SPACING } from '../../../../../components/layout-templates';
+import { CanvasPageTemplate, CANVAS_GRID_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
-const GRID_STYLE: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(#dcdcdc 1px, transparent 1px)',
-  backgroundSize: '16px 16px',
-  backgroundColor: '#f5f7fa', // 略微修改颜色证明配置生效
-};
 
 /** 物料来源类型显示标签（用于BOM节点配置中展示物料来源） */
 const SOURCE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -1317,7 +1312,7 @@ const BOMDesignerPage: React.FC = () => {
         <div 
           ref={canvasRef}
           tabIndex={-1} // Allow div to be focused
-          style={{ width: '100%', height: '100%', position: 'relative', outline: 'none', ...GRID_STYLE }}
+          style={{ width: '100%', height: '100%', position: 'relative', outline: 'none', ...CANVAS_GRID_STYLE }}
         >
           {/* 调试标示：如果能看到这个文字和背景色变化，说明代码已更新 */}
           <div style={{ position: 'absolute', right: 12, top: 12, color: '#722ed1', fontSize: 10, opacity: 0.5, zIndex: 100 }}>
