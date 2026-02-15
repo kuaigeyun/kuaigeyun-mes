@@ -102,6 +102,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           dataSource={dataSource}
           column={column}
           columns={columns}
+          // 此属性被传递给底层的 Descriptions 组件，用于替换被弃用的 contentStyle
+          styles={{ content: {} }}
         />
       )}
     </Drawer>
