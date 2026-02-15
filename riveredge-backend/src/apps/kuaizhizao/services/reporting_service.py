@@ -398,6 +398,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             await record.save()
 
+            # 如果审核通过，触发物料倒冲
+            if record.status == 'approved':
+                try:
+                    from apps.kuaizhizao.services.backflush_service import BackflushService
+                    backflush_svc = BackflushService()
+                    await backflush_svc.backflush_materials(
+                        tenant_id=tenant_id,
+                        work_order_id=record.work_order_id,
+                        report_id=record.id,
+                        report_quantity=float(record.reported_quantity),
+                        operation_id=record.operation_id,
+                        operation_code=record.operation_code,
+                        processed_by=approved_by,
+                    )
+                except Exception as e:
+                    logger.warning(f"报工审核通过，但物料倒冲失败: {e}")
+
             # 如果审核通过，更新工单完成数量
             if record.status == 'approved':
                 await self._update_work_order_progress(tenant_id, record.work_order_id)
