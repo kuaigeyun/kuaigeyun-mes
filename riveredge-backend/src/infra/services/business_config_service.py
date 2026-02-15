@@ -65,6 +65,7 @@ class BusinessConfigService:
                 "parameter_reporting": False, # 关闭参数报工
                 "auto_fill": True,           # 开启自动填充
                 "data_correction": False,    # 关闭数据修正
+                "auto_approve": False,       # 开启后，提交的报工记录将自动通过审核
             },
             "warehouse": {
                 "batch_management": False,   # 关闭批次管理
@@ -208,6 +209,7 @@ class BusinessConfigService:
                 "parameter_reporting": True,
                 "auto_fill": True,
                 "data_correction": True,
+                "auto_approve": False,       # 开启后，提交的报工记录将自动通过审核
             },
             "warehouse": {
                 "batch_management": True,
