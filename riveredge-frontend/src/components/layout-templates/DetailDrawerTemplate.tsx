@@ -11,6 +11,7 @@
 import React, { ReactNode } from 'react';
 import { Drawer, theme, Descriptions } from 'antd';
 import { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
 import { DRAWER_CONFIG } from './constants';
 
 const { useToken } = theme;
@@ -102,12 +103,11 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
             
             let content: ReactNode = value;
             
+            
             // 处理 valueType
             if (col.valueType === 'dateTime' && value) {
-              const dayjs = require('dayjs');
               content = dayjs(value).format('YYYY-MM-DD HH:mm:ss');
             } else if (col.valueType === 'date' && value) {
-              const dayjs = require('dayjs');
               content = dayjs(value).format('YYYY-MM-DD');
             } else if (col.valueEnum && value) {
               const enumItem = col.valueEnum[value as string];
