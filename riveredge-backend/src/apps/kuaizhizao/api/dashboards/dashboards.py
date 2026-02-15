@@ -733,7 +733,6 @@ async def get_production_broadcast(
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
             status__in=["approved", "pending"],  # 显示已审核和待审核的报工记录
-            deleted_at__isnull=True,  # 排除软删除的记录
         ).order_by("-reported_at").limit(limit).all()
         
         # 获取相关的工单信息
