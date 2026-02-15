@@ -372,7 +372,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             record = await ReportingRecord.get_or_none(
                 id=record_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
             )
 
             if not record:
