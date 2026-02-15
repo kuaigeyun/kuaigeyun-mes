@@ -1016,7 +1016,16 @@ export default function DashboardPage() {
               </Button>
             }
             style={{ width: '100%' }}
-            styles={{ body: { flex: 1, overflow: 'auto', minHeight: 0 } }}
+            styles={{ 
+              body: {
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                padding: '0 24px 24px 24px',
+                minHeight: 0,
+              }
+            }}
           >
             {productionBroadcast && productionBroadcast.length > 0 ? (
               <div>
@@ -1265,7 +1274,16 @@ export default function DashboardPage() {
               </Button>
             }
             style={{ width: '100%' }}
-            styles={{ body: { flex: 1, overflow: 'auto', minHeight: 0 } }}
+            styles={{ 
+              body: {
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                padding: '0 24px 24px 24px',
+                minHeight: 0,
+              }
+            }}
           >
             {notifications && notifications.length > 0 ? (
               <div>
