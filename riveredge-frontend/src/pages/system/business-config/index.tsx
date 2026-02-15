@@ -50,6 +50,7 @@ const PARAMETER_CONFIG = {
       parameter_reporting: { name: '带参数报工', description: '是否支持带参数报工' },
       auto_fill: { name: '自动填充', description: '是否自动填充报工数据' },
       data_correction: { name: '报工数据修正', description: '是否允许修正已提交的报工数据' },
+      auto_approve: { name: '自动审核', description: '开启后，提交的报工记录将自动通过审核，无需人工确认。' },
     },
   },
   warehouse: {

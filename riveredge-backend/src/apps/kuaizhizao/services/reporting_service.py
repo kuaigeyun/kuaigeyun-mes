@@ -149,6 +149,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 if reporting_data.qualified_quantity + reporting_data.unqualified_quantity != reporting_data.reported_quantity:
                     raise ValidationError("合格数量 + 不合格数量必须等于报工数量")
 
+            # 检查是否开启自动审核
+            from infra.services.business_config_service import BusinessConfigService
+            biz_config_svc = BusinessConfigService()
+            biz_config = await biz_config_svc.get_business_config(tenant_id)
+            auto_approve = biz_config.get("parameters", {}).get("reporting", {}).get("auto_approve", False)
+
+            approved_at = None
+            approved_by = None
+            approved_by_name = None
+
+            if auto_approve and reporting_data.status == 'pending':
+                reporting_data.status = 'approved'
+                approved_at = datetime.now()
+                approved_by = reported_by
+                approved_by_name = reporting_data.worker_name or "自动审核"
+
             # 创建报工记录
             reporting_record = await ReportingRecord.create(
                 tenant_id=tenant_id,
@@ -170,6 +186,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 remarks=reporting_data.remarks,
                 device_info=reporting_data.device_info,
                 sop_parameters=reporting_data.sop_parameters,  # SOP参数数据（核心功能，新增）
+                approved_at=approved_at,
+                approved_by=approved_by,
+                approved_by_name=approved_by_name,
             )
 
             # 更新工单工序状态和进度（核心功能，新增）
