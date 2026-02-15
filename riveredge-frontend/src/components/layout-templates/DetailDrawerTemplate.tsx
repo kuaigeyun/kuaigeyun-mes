@@ -9,8 +9,8 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Drawer, theme } from 'antd';
-import { ProDescriptions, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { Drawer, theme, Descriptions } from 'antd';
+import { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { DRAWER_CONFIG } from './constants';
 
 const { useToken } = theme;
@@ -28,7 +28,7 @@ export interface DetailDrawerTemplateProps<T = any> {
   /** 数据源 */
   dataSource?: T;
   /** ProDescriptions 列配置 */
-  columns: ProDescriptionsItemType<T>[];
+  columns: ProDescriptionsItemProps<T>[];
   /** Drawer 宽度（默认：标准宽度） */
   width?: number | string;
   /** 加载状态 */
@@ -95,15 +95,40 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       extra={extra}
     >
       {customContent || (
-        // ⚠️ 注意：ProDescriptions 组件会触发 Ant Design 的 contentStyle 弃用警告
-        // 这是 ProComponents 库内部的问题，无法直接修复，需要等待库更新
-        // 警告信息：[antd: Descriptions] `contentStyle` is deprecated. Please use `styles.content` instead.
-        <ProDescriptions<T>
-          dataSource={dataSource}
+        <Descriptions
           column={column}
-          columns={columns}
-          // 此属性被传递给底层的 Descriptions 组件，用于替换被弃用的 contentStyle
-          styles={{ content: {} }}
+          items={columns.map((col: any, index) => {
+            const value = dataSource ? (col.dataIndex ? (dataSource as any)[col.dataIndex as string] : undefined) : undefined;
+            
+            let content: ReactNode = value;
+            
+            // 处理 valueType
+            if (col.valueType === 'dateTime' && value) {
+              const dayjs = require('dayjs');
+              content = dayjs(value).format('YYYY-MM-DD HH:mm:ss');
+            } else if (col.valueType === 'date' && value) {
+              const dayjs = require('dayjs');
+              content = dayjs(value).format('YYYY-MM-DD');
+            } else if (col.valueEnum && value) {
+              const enumItem = col.valueEnum[value as string];
+              content = enumItem?.text || enumItem || value;
+            }
+
+            // 处理 render
+            if (col.render) {
+              // ProDescriptions render signature: (dom, entity, index, action, schema)
+              // 这里简化处理，传入 content 作为 dom，dataSource 作为 entity
+              // 注意：ProDescriptions 的 render 第一个参数是 dom (即已经格式化过的值)，第二个是 entity
+              content = col.render(content, dataSource, index, {}, col);
+            }
+
+            return {
+              key: col.key || col.dataIndex || index,
+              label: col.title,
+              children: content !== undefined && content !== null ? content : '-',
+              span: col.span || 1,
+            };
+          })}
         />
       )}
     </Drawer>
