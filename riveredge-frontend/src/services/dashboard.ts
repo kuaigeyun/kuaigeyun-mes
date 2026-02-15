@@ -41,6 +41,8 @@ export interface StatisticsResponse {
     completed: number;
     in_progress: number;
     completion_rate: number;
+    completed_quantity: number;
+    capacity_achievement_rate: number;
   };
   inventory: {
     total_quantity: number;
@@ -84,9 +86,19 @@ export async function handleTodo(todoId: string, action: string): Promise<void> 
 
 /**
  * 获取统计数据
+ * @param dateStart 开始日期（YYYY-MM-DD），可选
+ * @param dateEnd 结束日期（YYYY-MM-DD），可选
  */
-export async function getStatistics(): Promise<StatisticsResponse> {
-  return apiRequest<StatisticsResponse>('/apps/kuaizhizao/dashboard/statistics');
+export async function getStatistics(
+  dateStart?: string,
+  dateEnd?: string
+): Promise<StatisticsResponse> {
+  return apiRequest<StatisticsResponse>('/apps/kuaizhizao/dashboard/statistics', {
+    params: {
+      ...(dateStart && { date_start: dateStart }),
+      ...(dateEnd && { date_end: dateEnd }),
+    },
+  });
 }
 
 /**

@@ -197,9 +197,9 @@ const ReportingStatisticsPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       {/* 筛选条件 */}
-      <Card style={{ marginBottom: 16 }}>
+      <Card style={{ marginBottom: 12 }}>
         <Space>
           <span>日期范围：</span>
           <RangePicker
@@ -224,7 +224,7 @@ const ReportingStatisticsPage: React.FC = () => {
       {/* 统计概览 */}
       {statistics && (
         <>
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} style={{ marginBottom: 12 }}>
             <Col span={6}>
               <Card>
                 <Statistic
@@ -269,7 +269,7 @@ const ReportingStatisticsPage: React.FC = () => {
             </Col>
           </Row>
 
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} style={{ marginBottom: 12 }}>
             <Col span={6}>
               <Card>
                 <Statistic
@@ -314,7 +314,7 @@ const ReportingStatisticsPage: React.FC = () => {
           </Row>
 
           {/* 图表展示 */}
-          <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Row gutter={16} style={{ marginBottom: 12 }}>
             <Col span={12}>
               <Card title="按工序统计（Top 10）">
                 <Bar
@@ -346,7 +346,7 @@ const ReportingStatisticsPage: React.FC = () => {
           </Row>
 
           {/* 按工序统计表格 */}
-          <Card title="按工序统计详情（Top 10）" style={{ marginBottom: 16 }}>
+          <Card title="按工序统计详情（Top 10）" style={{ marginBottom: 12 }}>
             <Table
               columns={operationColumns}
               dataSource={statistics.operation_stats}

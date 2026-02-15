@@ -15,6 +15,7 @@ import type { ConfigTemplate } from '../../../services/businessConfig';
 import { getBusinessConfig, updateNodesConfig, deleteConfigTemplate } from '../../../services/businessConfig';
 
 import { Background, BackgroundVariant, MarkerType } from 'reactflow';
+import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
 
 const { Content, Sider } = Layout;
 
@@ -528,18 +529,19 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     );
 
     const renderToolbox = () => (
-        <Card title="组件库" bordered={false} styles={{ body: { padding: 10 } }}>
-            <div style={{ maxHeight: 400, overflowY: 'auto', margin: '-10px', padding: 10 }}>
+        <Card title="组件库" bordered={false} styles={{ body: { padding: 10 } }} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ maxHeight: 'calc(100vh - 218px - 64px - 64px)', overflowY: 'auto', margin: '-10px', padding: 10, flex: 1, minHeight: 0 }}>
                 <List
                     grid={{ gutter: 16, column: 1 }}
                     dataSource={nodes}
                     renderItem={item => {
                         const isSelected = selectedNode?.id === item.id;
                         return (
-                            <List.Item style={{ marginBottom: 8 }}>
+                            <List.Item style={{ marginBottom: 6 }}>
                                 <Card
                                     size="small"
                                     hoverable
+                                    styles={{ body: { padding: '6px 12px' } }}
                                     style={{
                                         cursor: 'pointer',
                                         border: isSelected ? '2px solid #1890ff' : '1px solid #d9d9d9',
@@ -553,9 +555,9 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                                         });
                                     }}
                                 >
-                                    <Space>
+                                    <Space size="small">
                                         {item.data.icon}
-                                        <Text>{(item.data as any).title}</Text>
+                                        <Text style={{ fontSize: 13 }}>{(item.data as any).title}</Text>
                                     </Space>
                                 </Card>
                             </List.Item>
@@ -635,7 +637,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     };
 
     return (
-        <Layout style={{ height: 'calc(100vh - 200px)', border: '1px solid #f0f0f0' }}>
+        <Layout style={{ height: 'calc(100vh - 218px)', border: '1px solid #f0f0f0' }}>
             {/* Top Toolbar */}
             <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Space>
@@ -717,7 +719,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                         miniMap={true}
                         devtools={false}
                     >
-                        <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#e0e0e0" />
+                        <Background variant={BackgroundVariant.Dots} gap={CANVAS_GRID_REACTFLOW.gap} size={CANVAS_GRID_REACTFLOW.size} color={CANVAS_GRID_REACTFLOW.color} />
                     </FlowEditor>
                 </Content>
                 <Sider width={300} theme="light" style={{ borderLeft: '1px solid #f0f0f0' }}>

@@ -18,6 +18,7 @@ import { ReactFlowProvider, Handle, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { sopApi } from '../../../services/process';
 import type { SOP } from '../../../types/process';
+import { CANVAS_GRID_STYLE } from '../../../../../components/layout-templates';
 import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/core';
 
@@ -423,7 +424,7 @@ const ESOPDesignerPage: React.FC = () => {
         <div style={{ width: '100%', height: '100%', flex: 1, minHeight: 600 }}>
           <ReactFlowProvider>
             <FlowStoreProvider>
-              <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <div style={{ width: '100%', height: '100%', position: 'relative', ...CANVAS_GRID_STYLE }}>
                 <FlowView
                   nodes={nodes}
                   edges={edges}
