@@ -25,7 +25,7 @@ KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
 INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（可通过环境变量INNGEST_PORT覆盖，默认8288为Inngest官方默认端口）
 
 # Inngest 配置
-INNGEST_BACKEND_URL="${INNGEST_BACKEND_URL:-http://127.0.0.1:${BACKEND_PORT}/api/inngest}"  # Inngest连接的后端URL
+INNGEST_BACKEND_URL="${INNGEST_BACKEND_URL:-http://localhost:${BACKEND_PORT}/api/inngest}"  # Inngest连接的后端URL（使用localhost与sync请求一致，避免双App）
 
 # 启动超时配置（秒）- 已缩短
 BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
