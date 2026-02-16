@@ -11,6 +11,7 @@ from tortoise.exceptions import DoesNotExist
 
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate
+from inngest import Event
 from core.inngest.client import inngest_client
 
 
@@ -89,16 +90,16 @@ class DataBackupService:
             # 发送事件到 Inngest
             # 注意：Inngest 会异步处理后续的物理备份操作
             await inngest_client.send(
-                {
-                    "name": "database/backup.requested",
-                    "data": {
+                Event(
+                    name="database/backup.requested",
+                    data={
                         "backup_uuid": backup.uuid,
                         "tenant_id": tenant_id,
                         "backup_type": data.backup_type,
                         "backup_scope": data.backup_scope,
                         "backup_tables": data.backup_tables
                     }
-                }
+                )
             )
             logger.info(f"已发送备份请求事件: {backup.uuid}")
         except Exception as e:
@@ -140,14 +141,14 @@ class DataBackupService:
             
         try:
             await inngest_client.send(
-                {
-                    "name": "database/restore.requested",
-                    "data": {
+                Event(
+                    name="database/restore.requested",
+                    data={
                         "backup_uuid": backup.uuid,
                         "tenant_id": tenant_id,
                         "file_path": backup.file_path
                     }
-                }
+                )
             )
             logger.info(f"已发送恢复请求事件: {backup.uuid}")
             return True

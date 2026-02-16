@@ -41,6 +41,8 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             Response: 响应对象
         """
         try:
+            if request.url.path.startswith("/api/inngest"):
+                return await call_next(request)
             response = await call_next(request)
             return response
         except RiverEdgeException as e:

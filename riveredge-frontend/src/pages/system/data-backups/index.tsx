@@ -560,9 +560,9 @@ const DataBackupsPage: React.FC = () => {
           label="备份范围"
           rules={[{ required: true, message: '请选择备份范围' }]}
           options={[
-            { label: '全部', value: 'all' },
-            { label: '组织', value: 'tenant' },
-            { label: '表', value: 'table' },
+            ...(currentUser?.is_infra_admin ? [{ label: '全部 (系统级)', value: 'all' }] : []),
+            { label: '组织 (租户级)', value: 'tenant' },
+            { label: '表 (特定数据)', value: 'table' },
           ]}
           placeholder="请选择备份范围"
         />

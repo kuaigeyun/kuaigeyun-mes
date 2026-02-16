@@ -32,6 +32,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         "/docs",
         "/openapi.json",
         "/redoc",
+        "/api/inngest",
     ]
     
     # 性能统计（内存中，重启后丢失）
@@ -102,6 +103,9 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.EXCLUDED_PATHS:
             return False
         
+        if request.url.path.startswith("/api/inngest"):
+            return False
+            
         # 只监控API路径
         if not request.url.path.startswith("/api/"):
             return False

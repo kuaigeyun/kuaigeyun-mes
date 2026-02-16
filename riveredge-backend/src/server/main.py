@@ -292,6 +292,8 @@ if INNGEST_AVAILABLE:
             sop_node_complete_workflow_function,
             material_ai_suggestion_workflow,
             material_change_notification_workflow,
+            data_backup_workflow,
+            data_restore_workflow,
         )
         
         # 准备所有 Inngest 函数列表（过滤掉 None 值）
@@ -305,20 +307,14 @@ if INNGEST_AVAILABLE:
                 sop_node_complete_workflow_function,
                 material_ai_suggestion_workflow,
                 material_change_notification_workflow,
+                data_backup_workflow,
+                data_restore_workflow,
             ] if func is not None
         ]
         
-        # 使用 app.mount() 挂载 Inngest 服务端点
-        # 这会注册 /api/inngest/serve 和 /api/inngest/function/run 等端点
+        # 注册 Inngest 服务端点（serve 会直接向 app 添加 /api/inngest 路由）
         if inngest_functions:
-            app.mount(
-                "/api/inngest",
-                inngest_serve(
-                    app,
-                    inngest_client,
-                    inngest_functions,
-                ),
-            )
+            inngest_serve(app, inngest_client, inngest_functions)
             logger.info(f"✅ Inngest 服务端点注册成功")
             logger.info(f"✅ 已注册 {len(inngest_functions)} 个 Inngest 函数")
             logger.info(f"✅ Inngest 端点路径: /api/inngest")
@@ -676,24 +672,6 @@ app.include_router(performance_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
-
-# 注册 Inngest 服务端点
-if INNGEST_AVAILABLE and inngest_serve:
-    from core.inngest.functions import __all__ as inngest_functions_names
-    import core.inngest.functions as inngest_functions
-    
-    # 过滤出已定义且非空的函数
-    functions = []
-    for name in inngest_functions_names:
-        fn = getattr(inngest_functions, name)
-        if fn is not None:
-            functions.append(fn)
-    
-    if functions:
-        inngest_serve(app, inngest_client, functions)
-        logger.info(f"✅ Inngest 工作流已注册: {len(functions)} 个函数")
-    else:
-        logger.warning("⚠️ 未找到可注册的 Inngest 函数")
 
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动注册应用路由
