@@ -188,7 +188,7 @@ const UserPreferencesPage: React.FC = () => {
 
   return (
     <div style={{ padding: 0 }}>
-      <Card title="偏好设置" loading={storeLoading} bodyStyle={{ padding: '24px 24px 16px' }}>
+      <Card title="偏好设置" loading={storeLoading} styles={{ body: { padding: '24px 24px 16px' } }}>
         <ProForm
           formRef={formRef}
           initialValues={defaultPreferenceValues}

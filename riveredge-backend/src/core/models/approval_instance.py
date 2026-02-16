@@ -6,6 +6,7 @@
 
 from tortoise import fields
 from typing import Optional, Dict, Any
+from uuid import UUID
 from .base import BaseModel
 from .approval_process import ApprovalProcess
 
@@ -71,6 +72,13 @@ class ApprovalInstance(BaseModel):
             ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
         ]
     
+    @property
+    def process_uuid(self) -> Optional[UUID]:
+        """获取关联流程UUID"""
+        if hasattr(self, "process") and hasattr(self.process, "uuid"):
+             return self.process.uuid
+        return None
+
     def __str__(self):
         """字符串表示"""
         return f"{self.title} ({self.status})"

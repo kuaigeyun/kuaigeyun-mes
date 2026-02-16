@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { FlowEditor } from '@ant-design/pro-flow';
-import { Layout, Form, Switch, Select, Button, Space, Typography, message, Alert, Card, List, Popconfirm } from 'antd';
+import { Layout, Form, Switch, Select, Button, Space, Typography, message, Alert, Card, Popconfirm } from 'antd';
 import {
     DeleteOutlined,
     ShopOutlined,
@@ -529,41 +529,37 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     );
 
     const renderToolbox = () => (
-        <Card title="组件库" bordered={false} styles={{ body: { padding: 10 } }} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card title="组件库" variant="borderless" styles={{ body: { padding: 10 } }} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ maxHeight: 'calc(100vh - 218px - 64px - 64px)', overflowY: 'auto', margin: '-10px', padding: 10, flex: 1, minHeight: 0 }}>
-                <List
-                    grid={{ gutter: 16, column: 1 }}
-                    dataSource={nodes}
-                    renderItem={item => {
-                        const isSelected = selectedNode?.id === item.id;
-                        return (
-                            <List.Item style={{ marginBottom: 6 }}>
-                                <Card
-                                    size="small"
-                                    hoverable
-                                    styles={{ body: { padding: '6px 12px' } }}
-                                    style={{
-                                        cursor: 'pointer',
-                                        border: isSelected ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                                        background: isSelected ? '#e6f4ff' : '#fafafa'
-                                    }}
-                                    onClick={() => {
-                                        setSelectedNode(item);
-                                        form.setFieldsValue({
-                                            enabled: item.data.enabled,
-                                            auditRequired: item.data.auditRequired,
-                                        });
-                                    }}
-                                >
-                                    <Space size="small">
-                                        {item.data.icon}
-                                        <Text style={{ fontSize: 13 }}>{(item.data as any).title}</Text>
-                                    </Space>
-                                </Card>
-                            </List.Item>
-                        );
-                    }}
-                />
+                {nodes.map(item => {
+                    const isSelected = selectedNode?.id === item.id;
+                    return (
+                        <div key={item.id} style={{ marginBottom: 6 }}>
+                            <Card
+                                size="small"
+                                hoverable
+                                styles={{ body: { padding: '6px 12px' } }}
+                                style={{
+                                    cursor: 'pointer',
+                                    border: isSelected ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                                    background: isSelected ? '#e6f4ff' : '#fafafa'
+                                }}
+                                onClick={() => {
+                                    setSelectedNode(item);
+                                    form.setFieldsValue({
+                                        enabled: item.data.enabled,
+                                        auditRequired: item.data.auditRequired,
+                                    });
+                                }}
+                            >
+                                <Space size="small">
+                                    {item.data.icon}
+                                    <Text style={{ fontSize: 13 }}>{(item.data as any).title}</Text>
+                                </Space>
+                            </Card>
+                        </div>
+                    );
+                })}
             </div>
         </Card>
     );
@@ -571,9 +567,9 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     const renderPropertiesPanel = () => {
         if (!selectedNode) {
             return (
-                <Card title="全局配置" bordered={false} style={{ height: '100%' }}>
+                <Card title="全局配置" variant="borderless" style={{ height: '100%' }}>
                     <Alert
-                        message="未选择节点"
+                        title="未选择节点"
                         description="请点击左侧组件库或画布中的节点以配置其属性，也可在左上方选择预设模版。"
                         type="info"
                         showIcon
@@ -607,14 +603,14 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         }
 
         return (
-            <Card title={`节点配置: ${(selectedNode.data as any).title}`} bordered={false} style={{ height: '100%' }}>
+            <Card title={`节点配置: ${(selectedNode.data as any).title}`} variant="borderless" style={{ height: '100%' }}>
                 <Form form={form} layout="vertical" onValuesChange={handleFormChange}>
                     <Form.Item name="enabled" label="功能启用" valuePropName="checked">
                         <Switch checkedChildren="已启用" unCheckedChildren="已禁用" />
                     </Form.Item>
 
                     <Alert
-                        message={selectedNode.data.enabled ? "功能处于启用状态" : "功能已禁用，相关菜单将隐藏"}
+                        title={selectedNode.data.enabled ? "功能处于启用状态" : "功能已禁用，相关菜单将隐藏"}
                         type={selectedNode.data.enabled ? "success" : "warning"}
                         showIcon
                         style={{ marginBottom: 24 }}
@@ -624,7 +620,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                         <Switch checkedChildren="需要审核" unCheckedChildren="自动通过" disabled={!selectedNode.data.enabled} />
                     </Form.Item>
                     <Alert
-                        message="开启审核后，单据提交后需要主管审批才能生效；关闭则自动生效。"
+                        title="开启审核后，单据提交后需要主管审批才能生效；关闭则自动生效。"
                         type="info"
                         style={{ fontSize: 12 }}
                     />

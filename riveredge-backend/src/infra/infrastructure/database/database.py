@@ -142,6 +142,8 @@ TORTOISE_ORM = {
                 "core.models.scheduled_task",
                 "core.models.approval_process",
                 "core.models.approval_instance",
+                "core.models.approval_task",
+                "core.models.data_backup",
                 "core.models.approval_history",
                 "core.models.script",
                 "core.models.print_template",

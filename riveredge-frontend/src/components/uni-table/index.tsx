@@ -1321,44 +1321,44 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
           {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
           {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
-          <div
-            ref={buttonContainerRef}
-            className="pro-table-button-container"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {beforeSearchButtons}
-              {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
-              <Input
-                className="uni-table-fuzzy-search"
-                placeholder="模糊搜索"
-                allowClear
-                value={fuzzySearchKeyword}
-                onChange={e => handleFuzzySearch(e.target.value)}
-                onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
-                style={{
-                  width: 160,
-                  height: '32px',
-                }}
-              />
-              {showAdvancedSearch && (
-                <QuerySearchButton
-                  columns={processedColumns}
-                  formRef={formRef as React.MutableRefObject<ProFormInstance>}
-                  actionRef={actionRef as React.MutableRefObject<ActionType>}
-                  searchParamsRef={searchParamsRef}
+            <div
+              ref={buttonContainerRef}
+              className="pro-table-button-container"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {beforeSearchButtons}
+                {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
+                <Input
+                  className="uni-table-fuzzy-search"
+                  placeholder="模糊搜索"
+                  allowClear
+                  value={fuzzySearchKeyword}
+                  onChange={e => handleFuzzySearch(e.target.value)}
+                  onPressEnter={e => handleFuzzySearch((e.target as HTMLInputElement).value)}
+                  style={{
+                    width: 160,
+                    height: '32px',
+                  }}
                 />
-              )}
-              {afterSearchButtons}
+                {showAdvancedSearch && (
+                  <QuerySearchButton
+                    columns={processedColumns}
+                    formRef={formRef as React.MutableRefObject<ProFormInstance>}
+                    actionRef={actionRef as React.MutableRefObject<ActionType>}
+                    searchParamsRef={searchParamsRef}
+                  />
+                )}
+                {afterSearchButtons}
+              </div>
+              {/* 视图切换按钮（右侧） */}
+              {viewTypes && viewTypes.length > 1 && buildViewTypeButtons()}
             </div>
-            {/* 视图切换按钮（右侧） */}
-            {viewTypes && viewTypes.length > 1 && buildViewTypeButtons()}
-          </div>
 
           {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
           {/* overflow: visible 避免双滚动条，由外层 UniTabs content 统一滚动 */}

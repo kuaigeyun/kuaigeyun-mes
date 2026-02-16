@@ -501,8 +501,9 @@ const MenuListPage: React.FC = () => {
                     treeData: menuTreeData,
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
                     showSearch: true,
-                    treeDefaultExpandAll: true,
                     allowClear: true,
+                    treeDefaultExpandAll: false, // 禁用默认展开以优化性能
+                    variant: 'outlined',
                 }}
                 colProps={{ span: 24 }}
              />
@@ -511,6 +512,7 @@ const MenuListPage: React.FC = () => {
                 label="关联应用"
                 options={applications}
                 placeholder="请选择应用"
+                fieldProps={{ variant: 'outlined' }}
                 colProps={{ span: 12 }}
              />
              <ProFormText name="permission_code" label="权限代码" colProps={{ span: 12 }} />
@@ -532,20 +534,20 @@ const MenuListPage: React.FC = () => {
                 {
                   title: '名称',
                   dataIndex: 'name',
-                  render: (v: string, row: any) =>
-                    translateAppMenuItemName(v, row.path, t, row.children),
+                  render: (_: any, row: any) =>
+                    translateAppMenuItemName(row?.name, row?.path, t, row?.children),
                 },
                 { title: '路径', dataIndex: 'path' },
                 { title: '图标', dataIndex: 'icon' },
                 { title: '组件', dataIndex: 'component' },
                 { title: '权限代码', dataIndex: 'permission_code' },
                 { title: '排序', dataIndex: 'sort_order' },
-                { title: '状态', dataIndex: 'is_active', render: (v: boolean) => v ? '启用' : '禁用' },
-                { title: '外部链接', dataIndex: 'is_external', render: (v: boolean) => v ? '是' : '否' },
+                { title: '状态', dataIndex: 'is_active', render: (_: any, entity: any) => (entity?.is_active ? '启用' : '禁用') },
+                { title: '外部链接', dataIndex: 'is_external', render: (_: any, entity: any) => (entity?.is_external ? '是' : '否') },
                 { title: '外部URL', dataIndex: 'external_url' },
                 { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
                 { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-                { title: '元数据', dataIndex: 'meta', render: (v: any) => <pre>{JSON.stringify(v, null, 2)}</pre> }
+                { title: '元数据', dataIndex: 'meta', render: (_: any, entity: any) => <pre>{JSON.stringify(entity?.meta, null, 2)}</pre> }
             ]}
         />
     </ListPageTemplate>

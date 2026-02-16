@@ -6,9 +6,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Table, Input } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -488,7 +488,7 @@ const LanguageListPage: React.FC = () => {
         <UniTable<Language>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
@@ -609,7 +609,6 @@ const LanguageListPage: React.FC = () => {
           name="sort_order"
           label="排序顺序"
           fieldProps={{ min: 0 }}
-          initialValue={0}
         />
         <ProFormSwitch
           name="is_active"
@@ -624,13 +623,13 @@ const LanguageListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
+        dataSource={detailData || undefined}
         columns={[
           {
             title: '语言代码',
             dataIndex: 'code',
-            render: (value: string) => (
-              <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{value}</span>
+            render: (_: any, entity: Language) => (
+              <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{entity?.code}</span>
             ),
           },
           {
@@ -640,17 +639,17 @@ const LanguageListPage: React.FC = () => {
           {
             title: '本地名称',
             dataIndex: 'native_name',
-            render: (value: string) => value || '-',
+            render: (_: any, entity: Language) => entity?.native_name || '-',
           },
           {
             title: '翻译数量',
             dataIndex: 'translations',
-            render: (value: Record<string, string>) => Object.keys(value || {}).length,
+            render: (_: any, entity: Language) => Object.keys(entity?.translations || {}).length,
           },
           {
             title: '默认语言',
             dataIndex: 'is_default',
-            render: (value: boolean) => (value ? '是' : '否'),
+            render: (_: any, entity: Language) => (entity?.is_default ? '是' : '否'),
           },
           {
             title: '排序顺序',
@@ -659,7 +658,7 @@ const LanguageListPage: React.FC = () => {
           {
             title: '状态',
             dataIndex: 'is_active',
-            render: (value: boolean) => (value ? '启用' : '禁用'),
+            render: (_: any, entity: Language) => (entity?.is_active ? '启用' : '禁用'),
           },
           {
             title: '创建时间',

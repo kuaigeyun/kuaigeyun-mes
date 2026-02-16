@@ -420,7 +420,7 @@ const SiteSettingsPage: React.FC = () => {
           label="站点 Logo"
           tooltip="上传图片作为站点Logo，未配置时将使用默认Logo（支持租户隔离）"
         >
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             {logoUrl && (
               <div style={{ marginBottom: 8 }}>
                 <img

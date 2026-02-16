@@ -8,13 +8,11 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode } from 'react';
-import { Drawer, theme, Descriptions } from 'antd';
+import { ReactNode } from 'react';
+import { Drawer, Descriptions } from 'antd';
 import { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { DRAWER_CONFIG } from './constants';
-
-const { useToken } = theme;
 
 /**
  * 详情 Drawer 模板属性
@@ -40,6 +38,8 @@ export interface DetailDrawerTemplateProps<T = any> {
   customContent?: ReactNode;
   /** Drawer 头部额外内容（如操作按钮） */
   extra?: ReactNode;
+  /** Drawer 底部额外内容（如操作按钮或其他组件） */
+  children?: ReactNode;
   /** 自定义样式类名 */
   className?: string;
 }
@@ -73,8 +73,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   customContent,
   extra,
   className,
+  children,
 }: DetailDrawerTemplateProps<T>) => {
-  const { token } = useToken();
 
   // Ant Design 6: 使用 size 替代已废弃的 width
   // size='default' | 'large'；自定义宽度通过 styles.body 设置
@@ -131,6 +131,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           })}
         />
       )}
+      {children}
     </Drawer>
   );
 };

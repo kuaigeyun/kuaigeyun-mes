@@ -520,7 +520,7 @@ const DataBackupsPage: React.FC = () => {
           showCreateButton
           onCreate={() => setCreateModalVisible(true)}
           viewTypes={['table', 'card']}
-          defaultViewType="card"
+          defaultViewType="table"
           cardViewConfig={{
             renderCard,
           }}

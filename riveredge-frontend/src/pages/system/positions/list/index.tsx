@@ -468,11 +468,11 @@ const PositionListPage: React.FC = () => {
           { title: '职位名称', dataIndex: 'name' },
           { title: '职位代码', dataIndex: 'code' },
           { title: '描述', dataIndex: 'description', span: 2 },
-          { title: '所属部门', dataIndex: ['department', 'name'], render: (_: any, record: any) => record.department?.name || '-' },
+          { title: '所属部门', dataIndex: ['department', 'name'], span: 2, render: (_: any, record: any) => record?.department?.name || '-' },
           {
             title: '状态',
             dataIndex: 'is_active',
-            render: (value: boolean) => (value ? '启用' : '禁用'),
+            render: (_: any, entity: any) => (entity?.is_active ? '启用' : '禁用'),
           },
           { title: '用户数', dataIndex: 'user_count' },
           { title: '排序', dataIndex: 'sort_order' },

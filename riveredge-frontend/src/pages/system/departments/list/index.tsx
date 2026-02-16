@@ -658,18 +658,18 @@ const DepartmentListPage: React.FC = () => {
         columns={[
           { title: '部门名称', dataIndex: 'name' },
           { title: '部门代码', dataIndex: 'code' },
-          { title: '父部门', dataIndex: ['parent', 'name'], render: (_: any, record: any) => record.parent_name || '-' },
-          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: '父部门', dataIndex: ['parent', 'name'], span: 2, render: (_: any, record: any) => record?.parent_name || '-' },
           {
             title: '状态',
             dataIndex: 'is_active',
-            render: (value: boolean) => (value ? '启用' : '禁用'),
+            render: (_: any, entity: any) => (entity?.is_active ? '启用' : '禁用'),
           },
           { title: '人员数量', dataIndex: 'user_count' },
           { title: '排序', dataIndex: 'sort_order' },
           { title: '查询码', dataIndex: 'query_code' },
           { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
           { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: '描述', dataIndex: 'description', span: 2 },
         ]}
       />
     </ListPageTemplate>
