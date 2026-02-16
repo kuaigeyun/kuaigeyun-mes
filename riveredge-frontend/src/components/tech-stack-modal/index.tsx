@@ -696,12 +696,6 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             <div>
               <Text strong>Ant Design</Text>：企业级 UI 组件库
             </div>
-            <div>
-              <Text strong>@ant-design/pro-flow</Text>：流程与业务蓝图设计器
-            </div>
-            <div>
-              <Text strong>@univerjs/*</Text>：Excel 在线编辑器
-            </div>
           </Space>
           <Divider />
           <Title level={5}>许可协议说明</Title>

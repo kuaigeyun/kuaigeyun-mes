@@ -75,7 +75,6 @@ const ReportingPage: React.FC = () => {
 
   // SOP参数收集状态
   const [sopFormConfig, setSopFormConfig] = useState<any>(null);
-  const [sopParameters, setSopParameters] = useState<Record<string, any>>({});
   const [loadingSOP, setLoadingSOP] = useState(false);
   const [currentSOP, setCurrentSOP] = useState<any>(null);
 
@@ -255,13 +254,14 @@ const ReportingPage: React.FC = () => {
             const initialParams: Record<string, any> = {};
             if (sop.formConfig.properties) {
               Object.keys(sop.formConfig.properties).forEach((key) => {
-                const field = sop.formConfig.properties[key];
+                const formConfig = (sop as any).formConfig;
+                const field = formConfig.properties[key];
                 if (field.default !== undefined) {
                   initialParams[key] = field.default;
                 }
               });
             }
-            setSopParameters(initialParams);
+            // Initial params handled elsewhere
             // 设置表单初始值
             setTimeout(() => {
               scanFormRef.current?.setFieldsValue({
@@ -300,19 +300,19 @@ const ReportingPage: React.FC = () => {
             }, 200);
           } else {
             setSopFormConfig(null);
-            setSopParameters({});
+            // Clear SOP parameters
             setCurrentSOP(null);
           }
         } else {
           setSopFormConfig(null);
-          setSopParameters({});
+          // Clear SOP parameters
           setCurrentSOP(null);
         }
       } catch (error: any) {
         console.error('获取SOP信息失败:', error);
         messageApi.warning('获取SOP信息失败，将不显示参数收集表单');
         setSopFormConfig(null);
-        setSopParameters({});
+        // Clear SOP parameters
         setCurrentSOP(null);
       } finally {
         setLoadingSOP(false);
@@ -1207,7 +1207,7 @@ const ReportingPage: React.FC = () => {
             <ProFormDigit
               name="qualified_quantity"
               label="合格数量"
-              placeholder="合格数量"
+              placeholder="请输入合格数量"
               rules={[{ required: true, message: '请输入合格数量' }]}
               min={0}
               colProps={{ span: 8 }}
@@ -1319,21 +1319,21 @@ const ReportingPage: React.FC = () => {
               <div style={{ marginBottom: 16 }}>
                 {currentOperation.allow_jump ? (
                   <Alert
-                    message="此工序允许跳转，可随时报工"
+                    title="此工序允许跳转，可随时报工"
                     type="info"
                     showIcon
                     description="允许跳转的工序可以并行进行，不依赖上道工序完成"
                   />
                 ) : jumpRuleError ? (
                   <Alert
-                    message={jumpRuleError}
+                    title={jumpRuleError}
                     type="warning"
                     showIcon
                     description="不允许跳转的工序，必须完成上道工序才能开始此工序"
                   />
                 ) : (
                   <Alert
-                    message="此工序不允许跳转"
+                    title="此工序不允许跳转"
                     type="info"
                     showIcon
                     description="必须完成上道工序才能开始此工序"
@@ -1357,7 +1357,6 @@ const ReportingPage: React.FC = () => {
                   {subOperations.map((subOp: any, index: number) => {
                     const isCompleted = subOp.status === 'completed';
                     const isInProgress = subOp.status === 'in_progress';
-                    const isPending = subOp.status === 'pending';
                     
                     return (
                       <div
@@ -1413,7 +1412,7 @@ const ReportingPage: React.FC = () => {
                   })}
                 </div>
                 <Alert
-                  message="提示"
+                  title="提示"
                   description="必须先完成所有子工序，才能完成主工序"
                   type="info"
                   showIcon
@@ -1603,7 +1602,15 @@ const ReportingPage: React.FC = () => {
                         name="reported_quantity"
                         label="完成数量"
                         placeholder="请输入完成数量"
-                        rules={[{ required: true, message: '请输入完成数量' }]}
+                        rules={[{
+                          required: true,
+                          validator: (_: any, value: any) => {
+                            if (value === undefined || value === null || value <= 0) {
+                              return Promise.reject(new Error('请输入上料数量且必须大于0'));
+                            }
+                            return Promise.resolve();
+                          },
+                        }]}
                         min={0}
                         fieldProps={{
                           precision: 2,
@@ -1616,11 +1623,19 @@ const ReportingPage: React.FC = () => {
                         label="合格数量"
                         placeholder="请输入合格数量"
                         rules={[
-                          { required: true, message: '请输入合格数量' },
-                          ({ getFieldValue }) => ({
-                            validator: (_, value) => {
+                          {
+                            required: true,
+                            validator: (_: any, value: any) => {
+                              if (value === undefined || value === null) {
+                                return Promise.reject(new Error('请输入合格数量'));
+                              }
+                              return Promise.resolve();
+                            },
+                          },
+                          ({ getFieldValue }: any) => ({
+                            validator: (_: any, value: any) => {
                               const reportedQuantity = getFieldValue('reported_quantity');
-                              if (reportedQuantity && value > reportedQuantity) {
+                              if (reportedQuantity !== undefined && value > reportedQuantity) {
                                 return Promise.reject(new Error('合格数量不能大于完成数量'));
                               }
                               return Promise.resolve();
@@ -1639,7 +1654,7 @@ const ReportingPage: React.FC = () => {
                         fieldProps={{ precision: 2 }}
                         extra="不合格数量 = 完成数量 - 合格数量（自动计算）"
                         dependencies={['reported_quantity', 'qualified_quantity']}
-                        transform={(value, namePath, allValues) => {
+                        transform={(_: any, __: any, allValues: any) => {
                           const reportedQuantity = allValues.reported_quantity || 0;
                           const qualifiedQuantity = allValues.qualified_quantity || 0;
                           return reportedQuantity - qualifiedQuantity;
@@ -1744,11 +1759,11 @@ const ReportingPage: React.FC = () => {
                         setScanModalVisible(false);
                         setCurrentWorkOrder(null);
                         setWorkOrderOperations([]);
-                      setCurrentOperation(null);
-                      setScanWorkOrderCode('');
-                      setFeedingList([]);
-                      setDischargingList([]);
-                      scanFormRef.current?.resetFields();
+                        setCurrentOperation(null);
+                        setScanWorkOrderCode('');
+                        setFeedingList([]);
+                        setDischargingList([]);
+                        scanFormRef.current?.resetFields();
                       }}
                       style={{ marginRight: 8 }}
                     >
@@ -1783,9 +1798,9 @@ const ReportingPage: React.FC = () => {
 
       {/* 创建报废记录Modal */}
       <FormModalTemplate
-        title="创建报废记录"
+        title="记录报废"
         open={scrapModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setScrapModalVisible(false);
           setCurrentReportingRecord(null);
           scrapFormRef.current?.resetFields();
@@ -1857,9 +1872,9 @@ const ReportingPage: React.FC = () => {
 
       {/* 创建不良品记录Modal */}
       <FormModalTemplate
-        title="创建不良品记录"
+        title="记录不良品"
         open={defectModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setDefectModalVisible(false);
           setCurrentReportingRecordForDefect(null);
           defectFormRef.current?.resetFields();
@@ -1943,9 +1958,9 @@ const ReportingPage: React.FC = () => {
 
       {/* 修正报工数据Modal */}
       <FormModalTemplate
-        title="修正报工数据"
+        title="修正报工记录"
         open={correctModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setCorrectModalVisible(false);
           setCurrentReportingRecordForCorrect(null);
           correctFormRef.current?.resetFields();
@@ -1978,7 +1993,18 @@ const ReportingPage: React.FC = () => {
               name="qualified_quantity"
               label="合格数量"
               placeholder="请输入合格数量"
-              rules={[{ required: true, message: '请输入合格数量' }]}
+              rules={[
+                { required: true, message: '请输入合格数量' },
+                ({ getFieldValue }: { getFieldValue: (name: string) => number }) => ({
+                  validator: (_: any, value: number) => {
+                    const reportedQuantity = getFieldValue('reported_quantity');
+                    if (reportedQuantity !== undefined && value > reportedQuantity) {
+                      return Promise.reject(new Error('合格数量不能大于完成数量'));
+                    }
+                    return Promise.resolve();
+                  },
+                }),
+              ]}
               min={0}
               fieldProps={{ precision: 2 }}
             />
@@ -2019,7 +2045,7 @@ const ReportingPage: React.FC = () => {
       <FormModalTemplate
         title={bindingType === 'feeding' ? '添加上料绑定' : '添加下料绑定'}
         open={materialBindingVisible}
-        onCancel={() => {
+        onClose={() => {
           setMaterialBindingVisible(false);
           setBindingType(null);
           materialBindingFormRef.current?.resetFields();
@@ -2039,7 +2065,7 @@ const ReportingPage: React.FC = () => {
             material: material,
           }))}
           fieldProps={{
-            onChange: (value: number, option: any) => {
+            onChange: (_: number, option: any) => {
               if (option?.material) {
                 const material = option.material;
                 materialBindingFormRef.current?.setFieldsValue({
@@ -2164,7 +2190,8 @@ const SubOperationReportingForm: React.FC<{
           setSubOpSopConfig(sop.formConfig);
           const initialParams: Record<string, any> = {};
           Object.keys(sop.formConfig.properties).forEach((key) => {
-            const field = sop.formConfig.properties[key];
+            const formConfig = (sop as any).formConfig;
+            const field = formConfig.properties[key];
             if (field.default !== undefined) {
               initialParams[key] = field.default;
             }
@@ -2364,8 +2391,8 @@ const SubOperationReportingForm: React.FC<{
             placeholder="请输入合格数量"
             rules={[
               { required: true, message: '请输入合格数量' },
-              ({ getFieldValue }) => ({
-                validator: (_, value) => {
+              ({ getFieldValue }: any) => ({
+                validator: (_: any, value: any) => {
                   const reportedQuantity = getFieldValue('reported_quantity');
                   if (reportedQuantity && value > reportedQuantity) {
                     return Promise.reject(new Error('合格数量不能大于完成数量'));

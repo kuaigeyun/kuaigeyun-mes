@@ -121,7 +121,7 @@ const WorkstationsPage: React.FC = () => {
         name: detail.name,
         productionLineId: detail.productionLineId,
         description: detail.description,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取工位详情失败');
@@ -526,7 +526,7 @@ const WorkstationsPage: React.FC = () => {
           item.name || '',
           productionLine ? `${productionLine.code}(${productionLine.name})` : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -656,7 +656,7 @@ const WorkstationsPage: React.FC = () => {
       dataIndex: 'productionLineId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getProductionLineName(record.productionLineId),
+      render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
     },
     {
       title: '描述',
@@ -673,11 +673,14 @@ const WorkstationsPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -742,7 +745,7 @@ const WorkstationsPage: React.FC = () => {
     {
       title: '所属产线',
       dataIndex: 'productionLineId',
-      render: (_, record) => getProductionLineName(record.productionLineId),
+      render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
     },
     {
       title: '描述',
@@ -752,11 +755,14 @@ const WorkstationsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
       span: 2,
     },
     {
@@ -812,7 +818,7 @@ const WorkstationsPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        viewTypes={['table']}
+        viewTypes={['table', 'help']}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

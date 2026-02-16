@@ -23,12 +23,14 @@ from .document_push_pull.document_push_pull import router as document_push_pull_
 from .document_relations.document_relations import router as document_relation_router
 from .computation_configs.computation_configs import router as computation_config_router
 from .dashboards.dashboards import router as dashboard_router
+from .reports.reports import router as reports_router
 
 # 导入设备管理路由
 from .equipment.equipment import router as equipment_router
 from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
+from .tools.tools import router as tools_router
 from .equipment_status.equipment_status import router as equipment_status_router
 from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
 
@@ -79,6 +81,7 @@ router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
+router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
 
@@ -108,6 +111,9 @@ router.include_router(backflush_router)
 # 注册追溯管理路由
 from .traceability.traceability import router as traceability_router
 router.include_router(traceability_router, prefix="/traceability")
+
+# 注册报表路由
+router.include_router(reports_router)
 
 @router.get("/health")
 async def health_check():

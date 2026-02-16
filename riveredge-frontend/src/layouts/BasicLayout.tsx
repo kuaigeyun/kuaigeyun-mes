@@ -46,6 +46,7 @@ import {
   InboxOutlined,
   SafetyOutlined,
   ShoppingOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
 import type { MenuProps } from 'antd';
@@ -1021,7 +1022,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 获取菜单数据
       const menuData = await getMenuTree({ is_active: true });
       // 只返回应用菜单（application_uuid 不为空）
-      const appMenus = menuData.filter(menu => menu.application_uuid);
+      const appMenusRaw = menuData.filter(menu => menu.application_uuid);
+      // 按 application_uuid 去重，避免同一应用出现多次（清除缓存后可能出现的异常）
+      const seenAppUuids = new Set<string>();
+      const appMenus = appMenusRaw.filter(menu => {
+        const uuid = menu.application_uuid;
+        if (!uuid) return false;
+        if (seenAppUuids.has(uuid)) return false;
+        seenAppUuids.add(uuid);
+        return true;
+      });
 
       // 更新 localStorage 缓存（包含时间戳，用于判断是否过期）
       try {
@@ -1044,9 +1054,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000, // 开发环境30秒缓存，生产环境5分钟缓存
     gcTime: 10 * 60 * 1000, // 缓存保留时间10分钟
     placeholderData: () => {
-      // 使用缓存数据作为占位符，避免闪烁
+      // 使用缓存数据作为占位符，避免闪烁（优先 v3，兼容 v2）
       try {
-        const cachedStr = localStorage.getItem('applicationMenusCache_v2');
+        const cachedStr = localStorage.getItem('applicationMenusCache_v3') ?? localStorage.getItem('applicationMenusCache_v2');
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
           // 检查缓存是否过期（超过5分钟视为过期）和租户是否匹配
@@ -2005,6 +2015,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       type: 'divider',
     },
     {
+      key: 'clear-menu-cache',
+      icon: <DeleteOutlined />,
+      label: t('ui.clearCache'),
+    },
+    {
+      type: 'divider',
+    },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('ui.logout'),
@@ -2021,6 +2039,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         break;
       case 'copyright':
         setTechStackModalOpen(true);
+        break;
+      case 'clear-menu-cache':
+        // 清除菜单缓存：localStorage + React Query，并重新拉取
+        try {
+          localStorage.removeItem('applicationMenusCache_v3');
+          localStorage.removeItem('applicationMenusCache_v2');
+          localStorage.removeItem('applicationMenusCache');
+          // 先移除查询缓存，再拉取，避免旧数据与新数据混合导致菜单重复
+          queryClient.removeQueries({ queryKey: ['applicationMenus'] });
+          refetchApplicationMenus();
+          message.success(t('ui.clearCacheSuccess'));
+        } catch (e) {
+          message.error(t('ui.clearCacheError'));
+        }
         break;
       case 'logout':
         logout();

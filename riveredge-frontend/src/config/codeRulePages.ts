@@ -409,7 +409,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-warehouse-finished-goods-inbound',
     pageName: '成品入库',
-    pagePath: '/apps/kuaizhizao/warehouse-management/finished-goods-inventory',
+    pagePath: '/apps/kuaizhizao/warehouse-management/product-inbound',
     codeField: 'code',
     codeFieldLabel: '成品入库单编码',
     module: '快格轻制造',

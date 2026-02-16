@@ -87,7 +87,7 @@ const PlantsPage: React.FC = () => {
         name: detail.name,
         description: detail.description,
         address: detail.address,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '加载厂区详情失败');
@@ -443,7 +443,7 @@ const PlantsPage: React.FC = () => {
           item.name || '',
           item.address || '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -561,11 +561,14 @@ const PlantsPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -629,11 +632,14 @@ const PlantsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
       span: 2,
     },
     { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -646,7 +652,7 @@ const PlantsPage: React.FC = () => {
         <UniTable<Plant>
           actionRef={actionRef}
           columns={columns}
-          viewTypes={['table']}
+          viewTypes={['table', 'help']}
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, _sort, _filter, searchFormValues) => {

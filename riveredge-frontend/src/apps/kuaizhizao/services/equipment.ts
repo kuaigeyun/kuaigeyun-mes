@@ -156,6 +156,22 @@ export const moldApi = {
   },
 };
 
+// 工装相关接口
+export const toolApi = {
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/tools', { method: 'GET', params });
+  },
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/tools', { method: 'POST', data });
+  },
+  update: async (uuid: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'PUT', data });
+  },
+  get: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'GET' });
+  },
+};
+
 // 设备状态监控相关接口
 export const equipmentStatusApi = {
   // 获取设备实时状态列表

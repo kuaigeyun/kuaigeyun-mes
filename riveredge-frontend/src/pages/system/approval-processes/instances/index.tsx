@@ -458,7 +458,7 @@ const ApprovalInstanceListPage: React.FC = () => {
           }}
           showCreateButton={true}
           onCreate={handleSubmit}
-          viewTypes={['table', 'kanban']}
+          viewTypes={['table', 'help']}
           defaultViewType="table"
           kanbanViewConfig={{
             statusField: 'status',

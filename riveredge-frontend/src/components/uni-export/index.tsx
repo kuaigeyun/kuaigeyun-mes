@@ -330,7 +330,7 @@ export const UniExport: React.FC<UniExportProps> = ({
           )}
         </Space>
       }
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
     >
       <div

@@ -628,7 +628,7 @@ class SOP(BaseModel):
         description="关联工序"
     )
     
-    # 制造SOP 阶段一：绑定与融合（工艺路线+BOM 融合，不改造工艺路线表）
+    # 标准操作SOP 阶段一：绑定与融合（工艺路线+BOM 融合，不改造工艺路线表）
     material_group_uuids = fields.JSONField(null=True, description="绑定的物料组 UUID 列表（JSON 数组）")
     material_uuids = fields.JSONField(null=True, description="绑定的具体物料 UUID 列表（JSON 数组），匹配时优先于物料组")
     route_uuids = fields.JSONField(null=True, description="载入的工艺路线 UUID 列表（JSON 数组），作为融合输入")

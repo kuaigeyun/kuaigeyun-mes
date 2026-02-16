@@ -1055,7 +1055,7 @@ const ProcessRoutesPage: React.FC = () => {
         code: detail.code,
         name: detail.name,
         description: detail.description,
-        isActive: detail.is_active,
+        isActive: detail.is_active ?? (detail as any).isActive ?? true,
       });
       
       // 加载工序序列
@@ -1465,11 +1465,14 @@ const ProcessRoutesPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.is_active ?? (record as any)?.isActive;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -1606,11 +1609,14 @@ const ProcessRoutesPage: React.FC = () => {
           {
             title: '启用状态',
             dataIndex: 'is_active',
-            render: (_, record) => (
-              <Tag color={record.is_active ? 'success' : 'default'}>
-                {record.is_active ? '启用' : '禁用'}
-              </Tag>
-            ),
+            render: (_, record) => {
+              const isActive = record?.is_active ?? (record as any)?.isActive;
+              return (
+                <Tag color={isActive ? 'success' : 'default'}>
+                  {isActive ? '启用' : '禁用'}
+                </Tag>
+              );
+            },
           },
           { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
           { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
@@ -1618,7 +1624,8 @@ const ProcessRoutesPage: React.FC = () => {
             title: '工序序列',
             span: 2,
             render: (_, record) => {
-              if (!record.operation_sequence) {
+              const seq = record?.operation_sequence ?? (record as any)?.operationSequence;
+              if (!seq) {
                 return <span style={{ color: '#999' }}>暂无工序</span>;
               }
 
@@ -1626,21 +1633,22 @@ const ProcessRoutesPage: React.FC = () => {
                 let operations: any[] = [];
 
                 // 解析工序序列数据
-                if (Array.isArray(record.operation_sequence)) {
-                  operations = record.operation_sequence;
-                } else if (typeof record.operation_sequence === 'object' && record.operation_sequence !== null) {
+                if (Array.isArray(seq)) {
+                  operations = seq;
+                } else if (typeof seq === 'object' && seq !== null) {
                   // 优先使用 operations 数组（包含完整信息）
-                  if (record.operation_sequence.operations && Array.isArray(record.operation_sequence.operations)) {
-                    operations = record.operation_sequence.operations;
-                  } else if (record.operation_sequence.sequence && Array.isArray(record.operation_sequence.sequence)) {
-                    operations = record.operation_sequence.sequence.map((uuid: string) => ({
+                  const seqObj = seq as Record<string, any>;
+                  if (seqObj.operations && Array.isArray(seqObj.operations)) {
+                    operations = seqObj.operations;
+                  } else if (seqObj.sequence && Array.isArray(seqObj.sequence)) {
+                    operations = seqObj.sequence.map((uuid: string) => ({
                       uuid,
                       code: uuid.substring(0, 8),
                       name: '工序',
                     }));
                   } else {
                     // 尝试直接使用对象的值
-                    const entries = Object.entries(record.operation_sequence);
+                    const entries = Object.entries(seqObj);
                     for (const [key, value] of entries) {
                       if (Array.isArray(value)) {
                         operations = value;
@@ -1650,7 +1658,7 @@ const ProcessRoutesPage: React.FC = () => {
 
                     // 如果还没找到，尝试将所有值合并
                     if (operations.length === 0) {
-                      const allValues = Object.values(record.operation_sequence).filter(v => v != null);
+                      const allValues = Object.values(seqObj).filter(v => v != null);
                       if (allValues.length > 0 && Array.isArray(allValues[0])) {
                         operations = allValues[0] as any[];
                       } else if (allValues.length > 0) {
@@ -1681,7 +1689,7 @@ const ProcessRoutesPage: React.FC = () => {
                   </div>
                 );
               } catch (error: any) {
-                console.error('解析工序序列失败:', error, record.operation_sequence);
+                console.error('解析工序序列失败:', error, seq);
                 return <span style={{ color: '#ff4d4f' }}>工序数据解析失败: {error.message}</span>;
               }
             },

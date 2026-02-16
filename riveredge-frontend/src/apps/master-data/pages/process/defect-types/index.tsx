@@ -90,7 +90,7 @@ const DefectTypesPage: React.FC = () => {
         name: detail.name,
         category: detail.category,
         description: detail.description,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取不良品详情失败');
@@ -431,11 +431,14 @@ const DefectTypesPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -591,11 +594,14 @@ const DefectTypesPage: React.FC = () => {
           {
             title: '启用状态',
             dataIndex: 'isActive',
-            render: (_, record) => (
-              <Tag color={record.isActive ? 'success' : 'default'}>
-                {record.isActive ? '启用' : '禁用'}
-              </Tag>
-            ),
+            render: (_, record) => {
+              const isActive = record?.isActive ?? (record as any)?.is_active;
+              return (
+                <Tag color={isActive ? 'success' : 'default'}>
+                  {isActive ? '启用' : '禁用'}
+                </Tag>
+              );
+            },
           },
           { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
           { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },

@@ -674,7 +674,7 @@ const PrintTemplateListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          viewTypes={['table', 'card']}
+          viewTypes={['table', 'help']}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

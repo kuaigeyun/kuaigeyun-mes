@@ -9,7 +9,7 @@ import React, { useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip } from 'antd';
-import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
@@ -18,6 +18,7 @@ import {
   getBackupDetail,
   restoreBackup,
   deleteBackup,
+  downloadBackup,
   DataBackup,
   DataBackupListResponse,
   CreateDataBackupData,
@@ -138,6 +139,24 @@ const DataBackupsPage: React.FC = () => {
   };
 
   /**
+   * 下载备份
+   */
+  const handleDownload = async (record: DataBackup) => {
+    try {
+      const blob = await downloadBackup(record.uuid);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${record.name || 'backup'}_${record.uuid.slice(0, 8)}.zip`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      messageApi.success('备份下载已开始');
+    } catch (error: any) {
+      messageApi.error(error.message || '下载备份失败');
+    }
+  };
+
+  /**
    * 备份状态标签
    */
   const getStatusTag = (status: string) => {
@@ -225,6 +244,14 @@ const DataBackupsPage: React.FC = () => {
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
+          backup.status === 'success' ? (
+            <Tooltip key="download" title="下载备份">
+              <DownloadOutlined
+                onClick={() => handleDownload(backup)}
+                style={{ fontSize: 16, color: '#52c41a' }}
+              />
+            </Tooltip>
+          ) : null,
           backup.status === 'success' ? (
             <Tooltip key="restore" title="恢复备份">
               <ReloadOutlined
@@ -391,6 +418,47 @@ const DataBackupsPage: React.FC = () => {
       search: false,
       width: 180,
     },
+    {
+      title: '操作',
+      key: 'option',
+      valueType: 'option',
+      width: 180,
+      fixed: 'right',
+      render: (_: any, record: DataBackup) => [
+        <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>查看</Button>,
+        record.status === 'success' && (
+          <Button key="download" type="link" size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(record)}>下载</Button>
+        ),
+        record.status === 'success' && (
+          <Button
+            key="restore"
+            type="link"
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              Modal.confirm({
+                title: '确定要恢复此备份吗？',
+                content: '此操作将覆盖当前数据库数据，请谨慎操作！',
+                okText: '确定',
+                cancelText: '取消',
+                onOk: () => handleRestore(record),
+              });
+            }}
+          >
+            恢复
+          </Button>
+        ),
+        <Popconfirm
+          key="delete"
+          title="确定要删除这个备份吗？"
+          onConfirm={() => handleDelete(record)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+        </Popconfirm>,
+      ].filter(Boolean),
+    },
   ];
 
   /**
@@ -519,7 +587,7 @@ const DataBackupsPage: React.FC = () => {
           rowKey="uuid"
           showCreateButton
           onCreate={() => setCreateModalVisible(true)}
-          viewTypes={['table', 'card']}
+          viewTypes={['table', 'help']}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

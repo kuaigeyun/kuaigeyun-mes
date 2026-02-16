@@ -85,6 +85,9 @@ class BackflushRecord(BaseModel):
     processed_at = fields.DatetimeField(null=True, description="处理时间")
     processed_by = fields.IntField(null=True, description="处理人ID")
     processed_by_name = fields.CharField(max_length=100, null=True, description="处理人姓名")
+
+    # 软删除
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
     
     def __str__(self):
         """字符串表示"""

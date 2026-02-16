@@ -87,38 +87,7 @@ const SmartSuggestionFloatPanel: React.FC<SmartSuggestionFloatPanelProps> = ({
 }) => {
   const [position, setPosition] = useState<{ top: number; right: number } | null>(null);
 
-  // #region agent log
-  const prevVisibleRef = React.useRef<boolean | null>(null);
-  const prevPositionReadyRef = React.useRef<boolean | null>(null);
-  useEffect(() => {
-    const isPositionReady = !anchorSelector || !!position;
-    const visibleChanged = prevVisibleRef.current !== null && prevVisibleRef.current !== visible;
-    const positionReadyChanged =
-      prevPositionReadyRef.current !== null && prevPositionReadyRef.current !== isPositionReady;
-    prevVisibleRef.current = visible;
-    prevPositionReadyRef.current = isPositionReady;
-    if (visible) {
-      fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'SmartSuggestionFloatPanel:render',
-          message: 'visible / positionReady / position',
-          data: {
-            visible,
-            visibleChanged,
-            isPositionReady,
-            positionReadyChanged,
-            hasPosition: !!position,
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'A,B,D',
-        }),
-      }).catch(() => {});
-    }
-  });
-  // #endregion
+
 
   const updatePosition = useCallback(() => {
     if (!anchorSelector) return;
@@ -241,39 +210,7 @@ const SmartSuggestionFloatPanel: React.FC<SmartSuggestionFloatPanelProps> = ({
     contentReady
   );
 
-  // #region agent log
-  const prevContentReadyRef = React.useRef<boolean | null>(null);
-  const prevDisplayBlocksCountRef = React.useRef<number | null>(null);
-  useEffect(() => {
-    const contentReadyChanged = prevContentReadyRef.current !== contentReady;
-    const displayBlocksChanged = prevDisplayBlocksCountRef.current !== displayBlocks.length;
-    prevContentReadyRef.current = contentReady;
-    prevDisplayBlocksCountRef.current = displayBlocks.length;
-    if (visible && displayBlocks.length > 0) {
-      fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'SmartSuggestionFloatPanel:contentReady',
-          message: 'contentReady / displayBlocks / useLineReveal',
-          data: {
-            contentReady,
-            contentReadyChanged,
-            displayBlocksCount: displayBlocks.length,
-            displayBlocksChanged,
-            flatSegmentsCount: flatTexts.length,
-            visibleSegmentsCount: visibleSegments.length,
-            loading,
-            loadingValidation,
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'C,E',
-        }),
-      }).catch(() => {});
-    }
-  });
-  // #endregion
+
 
   // 根据已展示的段落，按块分组回显内容
   const visibleBlockContents = useMemo(() => {

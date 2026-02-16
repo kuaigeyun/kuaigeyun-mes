@@ -1085,7 +1085,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 {loadError && (
                     <Alert
                         type="error"
-                        message={loadError}
+                        title={loadError}
                         showIcon
                         closable
                         onClose={() => setLoadError(null)}
@@ -1238,7 +1238,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         呼叫
                     </Button>
 
-                    <Divider type="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
+                    <Divider vertical style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
 
                     <Button
                         icon={<HistoryOutlined />}
@@ -1324,7 +1324,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     </Button>,
                 ]}
                 width={480}
-                destroyOnClose
+                destroyOnHidden
             >
                 <div style={{ padding: '8px 0' }}>
                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: 12, marginBottom: 12 }}>
@@ -1359,7 +1359,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 onCancel={() => setSopModalVisible(false)}
                 footer={null}
                 width={720}
-                destroyOnClose
+                destroyOnHidden
                 getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
                 styles={{
                     header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
@@ -1407,7 +1407,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     <Button key="close" onClick={() => setParamModalVisible(false)}>关闭</Button>,
                 ]}
                 width={640}
-                destroyOnClose
+                destroyOnHidden
                 getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
                 styles={{
                     header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },

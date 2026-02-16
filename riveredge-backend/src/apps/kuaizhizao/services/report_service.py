@@ -697,9 +697,13 @@ class ReportService:
         from apps.master_data.models.material_batch import MaterialBatch
         from apps.master_data.models.material import Material
         from datetime import date
+        from tortoise.expressions import Q
         
         # 构建查询
         query = MaterialBatch.filter(tenant_id=tenant_id)
+        
+        # 排除已软删除的记录
+        query = query.filter(deleted_at__isnull=True)
         
         if material_id:
             query = query.filter(material_id=material_id)
@@ -710,6 +714,7 @@ class ReportService:
         # 如果不包含过期批次，过滤掉已过期的
         if not include_expired:
             today = date.today()
+            # 兼容 expiry_date 可能为 null 的情况（无保质期视为不过期）
             query = query.filter(
                 Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
             )
@@ -720,14 +725,29 @@ class ReportService:
         # 构建返回数据
         items = []
         for batch in batches:
-            material = await batch.material
+            # 获取关联物料
+            material = batch.material
             
-            # 判断状态
-            status = batch.status
+            # 判断状态 - 优先使用计算状态，然后是数据库状态
+            status_display = batch.status
+            
+            # 状态映射字典
+            status_map = {
+                "in_stock": "在库",
+                "out_stock": "已出库",
+                "expired": "已过期",
+                "scrapped": "已报废"
+            }
+            
+            # 先映射数据库状态
+            if batch.status in status_map:
+                status_display = status_map[batch.status]
+            
+            # 再根据业务规则覆盖状态
             if batch.expiry_date and batch.expiry_date < date.today():
-                status = "已过期"
+                status_display = "已过期"
             elif batch.quantity <= 0:
-                status = "无库存"
+                status_display = "无库存"
             
             items.append({
                 "id": batch.id,
@@ -739,9 +759,9 @@ class ReportService:
                 "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
                 "quantity": float(batch.quantity),
                 "supplier_batch_no": batch.supplier_batch_no,
-                "status": status,
-                "warehouse_id": warehouse_id,  # TODO: 从实际库存记录获取
-                "warehouse_name": None,  # TODO: 从实际库存记录获取
+                "status": status_display,
+                "warehouse_id": warehouse_id, 
+                "warehouse_name": None, 
             })
         
         return {

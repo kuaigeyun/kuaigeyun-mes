@@ -121,7 +121,7 @@ const StorageLocationsPage: React.FC = () => {
         name: detail.name,
         storageAreaId: detail.storageAreaId,
         description: detail.description,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取库位详情失败');
@@ -526,7 +526,7 @@ const StorageLocationsPage: React.FC = () => {
           item.name || '',
           storageArea ? `${storageArea.code}(${storageArea.name})` : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -656,7 +656,7 @@ const StorageLocationsPage: React.FC = () => {
       dataIndex: 'storageAreaId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getStorageAreaName(record.storageAreaId),
+      render: (_, record) => getStorageAreaName(record?.storageAreaId ?? (record as any)?.storage_area_id),
     },
     {
       title: '描述',
@@ -673,11 +673,14 @@ const StorageLocationsPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -742,7 +745,7 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: '所属库区',
       dataIndex: 'storageAreaId',
-      render: (_, record) => getStorageAreaName(record.storageAreaId),
+      render: (_, record) => getStorageAreaName(record?.storageAreaId ?? (record as any)?.storage_area_id),
     },
     {
       title: '描述',
@@ -752,11 +755,14 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: '启用状态',
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -811,7 +817,7 @@ const StorageLocationsPage: React.FC = () => {
           }
         }}
         rowKey="uuid"
-        viewTypes={['table']}
+        viewTypes={['table', 'help']}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

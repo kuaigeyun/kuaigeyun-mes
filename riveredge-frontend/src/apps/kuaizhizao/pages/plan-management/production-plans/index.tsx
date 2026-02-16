@@ -291,7 +291,7 @@ const ProductionPlansPage: React.FC = () => {
         <Alert
           type="info"
           showIcon
-          message="当前配置要求计划审核通过后才能执行。请先将计划状态改为「已审核」，再执行转工单。"
+          title="当前配置要求计划审核通过后才能执行。请先将计划状态改为「已审核」，再执行转工单。"
           style={{ marginBottom: 16 }}
         />
       )}

@@ -117,7 +117,7 @@ const SOPPage: React.FC = () => {
         operationId: detail.operationId,
         version: detail.version,
         content: detail.content,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
         material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
         route_uuids: d.route_uuids ?? d.routeUuids ?? undefined,
@@ -372,11 +372,14 @@ const SOPPage: React.FC = () => {
         true: { text: '启用', status: 'Success' },
         false: { text: '禁用', status: 'Default' },
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -529,17 +532,20 @@ const SOPPage: React.FC = () => {
         columns={[
           { title: 'SOP编码', dataIndex: 'code' },
           { title: 'SOP名称', dataIndex: 'name' },
-          { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record.operationId) },
+          { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record?.operationId ?? (record as any)?.operation_id) },
           { title: '版本号', dataIndex: 'version' },
           { title: 'SOP内容', dataIndex: 'content', span: 2 },
           {
             title: '启用状态',
             dataIndex: 'isActive',
-            render: (_, record) => (
-              <Tag color={record.isActive ? 'success' : 'default'}>
-                {record.isActive ? '启用' : '禁用'}
-              </Tag>
-            ),
+            render: (_, record) => {
+              const isActive = record?.isActive ?? (record as any)?.is_active;
+              return (
+                <Tag color={isActive ? 'success' : 'default'}>
+                  {isActive ? '启用' : '禁用'}
+                </Tag>
+              );
+            },
           },
           { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
           { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },

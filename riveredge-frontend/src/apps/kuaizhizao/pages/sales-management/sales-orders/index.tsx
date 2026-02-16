@@ -1241,7 +1241,7 @@ const SalesOrdersPage: React.FC = () => {
       {/* 详情 Drawer */}
       <Drawer
         title="销售订单详情"
-        size={720}
+        styles={{ wrapper: { width: 720 } }}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
       >

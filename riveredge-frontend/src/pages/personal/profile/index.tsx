@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ProForm, ProFormTextArea, ProFormText, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, Segmented, theme, Form, Tabs } from 'antd';
+import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
+import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, Segmented, theme, Form, Tabs, Descriptions } from 'antd';
 import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 
@@ -277,9 +277,6 @@ const UserProfilePage: React.FC = () => {
     try {
       setLoading(true);
       
-      console.log('📝 表单提交值:', values);
-      console.log('📝 性别字段值:', values.gender);
-      console.log('📝 性别字段类型:', typeof values.gender);
       
       // 组装联系方式对象（只包含有值的字段）
       // 注意：对于空字符串，也需要包含在对象中，以便清空字段
@@ -308,7 +305,6 @@ const UserProfilePage: React.FC = () => {
         contact_info: Object.keys(contact_info).length > 0 ? contact_info : null,
       };
       
-      console.log('📤 准备发送的数据:', data);
       
       // 移除 undefined 字段（但保留 null 值，因为 null 表示清空字段）
       Object.keys(data).forEach(key => {
@@ -420,45 +416,18 @@ const UserProfilePage: React.FC = () => {
             
             <Divider />
             
-            {/* 
-              ⚠️ 注意：ProDescriptions 组件会触发 Ant Design 的 contentStyle 弃用警告
-              这是 ProComponents 库内部的问题，无法直接修复，需要等待库更新
-              警告信息：[antd: Descriptions] `contentStyle` is deprecated. Please use `styles.content` instead.
-            */}
-            <ProDescriptions
-              column={1}
-              dataSource={profileData || {}}
-              loading={loading}
-              styles={{
-                content: {},
-              }}
-            >
-              <ProDescriptions.Item
-                label="用户名"
-                dataIndex="username"
-              />
-              <ProDescriptions.Item
-                label="邮箱"
-                dataIndex="email"
-                valueType="text"
-              >
+            <Descriptions column={1}>
+              <Descriptions.Item label="用户名">{profileData?.username || '-'}</Descriptions.Item>
+              <Descriptions.Item label="邮箱">
                 {profileData?.email && profileData.email.trim() ? profileData.email : <Text type="secondary">未设置</Text>}
-              </ProDescriptions.Item>
-              <ProDescriptions.Item
-                label="姓名"
-                dataIndex="full_name"
-              >
+              </Descriptions.Item>
+              <Descriptions.Item label="姓名">
                 {profileData?.full_name && profileData.full_name.trim() ? profileData.full_name : <Text type="secondary">未设置</Text>}
-              </ProDescriptions.Item>
-              <ProDescriptions.Item
-                label="手机号"
-                dataIndex="phone"
-              >
+              </Descriptions.Item>
+              <Descriptions.Item label="手机号">
                 {profileData?.phone && profileData.phone.trim() ? profileData.phone : <Text type="secondary">未设置</Text>}
-              </ProDescriptions.Item>
-              <ProDescriptions.Item
-                label="性别"
-              >
+              </Descriptions.Item>
+              <Descriptions.Item label="性别">
                 {profileData?.gender === 'male' ? (
                   <Text>男</Text>
                 ) : profileData?.gender === 'female' ? (
@@ -466,19 +435,12 @@ const UserProfilePage: React.FC = () => {
                 ) : (
                   <Text type="secondary">未设置</Text>
                 )}
-              </ProDescriptions.Item>
+              </Descriptions.Item>
               {profileData?.bio && (
-                <ProDescriptions.Item
-                  label="个人简介"
-                  dataIndex="bio"
-                  valueType="text"
-                />
+                <Descriptions.Item label="个人简介">{profileData.bio}</Descriptions.Item>
               )}
               {profileData?.contact_info && Object.keys(profileData.contact_info).length > 0 && (
-                <ProDescriptions.Item
-                  label="联系方式"
-                  valueType="text"
-                >
+                <Descriptions.Item label="联系方式">
                   <div>
                     {profileData.contact_info.wechat && (
                       <div>微信：{profileData.contact_info.wechat}</div>
@@ -490,9 +452,9 @@ const UserProfilePage: React.FC = () => {
                       <div>地址：{profileData.contact_info.address}</div>
                     )}
                   </div>
-                </ProDescriptions.Item>
+                </Descriptions.Item>
               )}
-            </ProDescriptions>
+            </Descriptions>
           </Card>
         </Col>
 
@@ -608,15 +570,11 @@ const UserProfilePage: React.FC = () => {
                 <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.gender !== currentValues.gender}>
                   {({ getFieldValue, setFieldValue }) => {
                     const genderValue = getFieldValue('gender');
-                    console.log('🔍 当前性别值:', genderValue);
                     return (
                       <div className="gender-segmented-wrapper">
                         <Segmented
                           value={genderValue}
-                          onChange={(newValue) => {
-                            console.log('🔍 Segmented onChange 新值:', newValue);
-                            setFieldValue('gender', newValue);
-                          }}
+                          onChange={(newValue) => setFieldValue('gender', newValue)}
                           options={[
                             { label: '男', value: 'male' },
                             { label: '女', value: 'female' },

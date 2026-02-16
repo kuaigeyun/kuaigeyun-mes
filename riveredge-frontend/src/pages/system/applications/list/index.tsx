@@ -656,8 +656,8 @@ const ApplicationListPage: React.FC = () => {
             pageSizeOptions: ['12', '24', '48', '96'],
           }}
           toolBarRender={() => []}
-          viewTypes={['table', 'card']}
-          defaultViewType="card"
+          viewTypes={['table', 'help']}
+          defaultViewType="table"
           cardViewConfig={{
             renderCard: renderApplicationCard,
             columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },

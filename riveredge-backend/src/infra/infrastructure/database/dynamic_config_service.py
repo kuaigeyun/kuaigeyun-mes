@@ -188,6 +188,7 @@ class DynamicDatabaseConfigService:
 
             # 常见的应用模型模块
             potential_modules = [
+                f"apps.{module_code}.models",
                 f"apps.{module_code}.models.factory",
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
@@ -229,6 +230,8 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
+                f"apps.{module_code}.models.purchase_requisition",
+                f"apps.{module_code}.models.purchase_requisition_item",
                 # 质量管理模块
                 f"apps.{module_code}.models.incoming_inspection",
                 f"apps.{module_code}.models.process_inspection",
@@ -365,6 +368,7 @@ class DynamicDatabaseConfigService:
 
             # 常见的应用模型模块
             potential_modules = [
+                f"apps.{module_code}.models",
                 f"apps.{module_code}.models.factory",
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
@@ -406,6 +410,8 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
+                f"apps.{module_code}.models.purchase_requisition",
+                f"apps.{module_code}.models.purchase_requisition_item",
                 # 质量管理模块
                 f"apps.{module_code}.models.incoming_inspection",
                 f"apps.{module_code}.models.process_inspection",

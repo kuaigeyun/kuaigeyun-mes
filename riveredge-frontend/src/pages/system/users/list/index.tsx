@@ -654,7 +654,7 @@ const UserListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<User>
-        viewTypes={['table']}
+        viewTypes={['table', 'help']}
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {

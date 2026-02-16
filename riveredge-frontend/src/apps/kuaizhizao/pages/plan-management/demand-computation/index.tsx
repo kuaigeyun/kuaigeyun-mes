@@ -15,11 +15,8 @@ import {
   ProColumns,
   ProForm,
   ProFormSelect,
-  ProFormText,
-  ProFormDigit,
   ProFormTextArea,
   ProDescriptions,
-  ProFormSwitch,
 } from '@ant-design/pro-components'
 import {
   App,
@@ -30,7 +27,6 @@ import {
   Modal,
   Drawer,
   Table,
-  message,
   Dropdown,
   Collapse,
   Switch,
@@ -151,7 +147,6 @@ const DemandComputationPage: React.FC = () => {
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null)
 
   // 物料来源信息状态
-  const [materialSources, setMaterialSources] = useState<any[]>([])
   const [validationResults, setValidationResults] = useState<any>(null)
 
   // 需求列表（用于选择需求）
@@ -209,11 +204,9 @@ const DemandComputationPage: React.FC = () => {
 
         // 获取物料来源信息
         try {
-          const sources = await getMaterialSources(id)
-          setMaterialSources(sources.material_sources || [])
+          await getMaterialSources(id)
         } catch (error) {
           console.error('获取物料来源信息失败:', error)
-          setMaterialSources([])
         }
 
         // 获取验证结果
@@ -411,9 +404,7 @@ const DemandComputationPage: React.FC = () => {
         onOk: async () => {
           try {
             const result = await generateOrdersFromComputation(record.id!, generateMode)
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'demand-computation/index.tsx:onOk',message:'api_response',data:{work_order_count:result?.work_order_count,outsource_work_order_count:result?.outsource_work_order_count,purchase_order_count:result?.purchase_order_count},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
+
             const parts = []
             if (result.work_order_count > 0)
               parts.push(`生产工单 ${result.work_order_count} 个（工单管理）`)
@@ -430,9 +421,7 @@ const DemandComputationPage: React.FC = () => {
             }
             actionRef.current?.reload()
           } catch (error: any) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'demand-computation/index.tsx:onOk',message:'api_error',data:{error:String(error?.response?.data?.detail||error?.message||error)},timestamp:Date.now(),hypothesisId:'C,D'})}).catch(()=>{});
-            // #endregion
+
             messageApi.error(error?.response?.data?.detail || '生成工单和采购单失败')
           }
         },
@@ -469,8 +458,10 @@ const DemandComputationPage: React.FC = () => {
         LRP: { text: '按订单' },
       },
       hideInSearch: true, // 隐藏 MRP/LRP 术语，按需求来源自动推断
-      render: (text: string) => (
-        <Tag color={text === 'MRP' ? 'blue' : 'green'}>{text === 'MRP' ? '按预测' : '按订单'}</Tag>
+      render: (_, record) => (
+        <Tag color={record.computation_type === 'MRP' ? 'blue' : 'green'}>
+          {record.computation_type === 'MRP' ? '按预测' : '按订单'}
+        </Tag>
       ),
     },
     {
@@ -485,7 +476,8 @@ const DemandComputationPage: React.FC = () => {
         失败: { text: '失败' },
       },
       hideInSearch: false,
-      render: (status: string) => {
+      render: (_, record) => {
+        const status = record.computation_status || ''
         const colorMap: Record<string, string> = {
           进行中: 'processing',
           计算中: 'processing',
@@ -505,9 +497,9 @@ const DemandComputationPage: React.FC = () => {
         MTO: { text: '按订单生产' },
       },
       hideInSearch: false,
-      render: (text: string) => (
-        <Tag color={text === 'MTS' ? 'cyan' : 'purple'}>
-          {text === 'MTS' ? '按库存生产' : '按订单生产'}
+      render: (_, record) => (
+        <Tag color={record.business_mode === 'MTS' ? 'cyan' : 'purple'}>
+          {record.business_mode === 'MTS' ? '按库存生产' : '按订单生产'}
         </Tag>
       ),
     },
@@ -517,9 +509,8 @@ const DemandComputationPage: React.FC = () => {
       width: 160,
       valueType: 'dateTime',
       hideInSearch: false,
-      search: {
-        valueType: 'dateRange',
-      },
+      // search: false explicitly handled if needed, or remove search if no special config
+      search: undefined,
     },
     {
       title: '结束时间',
@@ -620,7 +611,7 @@ const DemandComputationPage: React.FC = () => {
         <Alert
           type="info"
           showIcon
-          message={
+          title={
             canDirectWO
               ? '当前模式：可直连生成工单，也可经生产计划。适合小批量、急单快速响应。'
               : '当前模式：需经生产计划生成工单。请先「转生产计划」，再在生产计划中执行转工单。'
@@ -632,7 +623,7 @@ const DemandComputationPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const apiParams: any = {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
@@ -749,7 +740,7 @@ const DemandComputationPage: React.FC = () => {
               value: d.id,
             }))}
             fieldProps={{
-              onChange: value => setSelectedDemandIds(value),
+              onChange: (value: number[]) => setSelectedDemandIds(value),
               placeholder: '支持多选需求合并计算',
             }}
             rules={[{ required: true, message: '请至少选择一个需求' }]}
@@ -776,7 +767,6 @@ const DemandComputationPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         title="计算详情"
-        size={1300}
         rootClassName="demand-computation-drawer"
         styles={{ wrapper: { width: 1300 } }}
       >
@@ -790,7 +780,7 @@ const DemandComputationPage: React.FC = () => {
                 {
                   title: '计算模式',
                   dataIndex: 'computation_type',
-                  render: (t: string) => (t === 'MRP' ? '按预测' : '按订单'),
+                  render: (t: any) => (t === 'MRP' ? '按预测' : '按订单'),
                 },
                 { title: '计算状态', dataIndex: 'computation_status' },
                 { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
@@ -815,7 +805,7 @@ const DemandComputationPage: React.FC = () => {
                     {
                       title: '验证状态',
                       dataIndex: 'all_passed',
-                      render: (text: string) => (
+                      render: (text: any) => (
                         <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
                       ),
                     },

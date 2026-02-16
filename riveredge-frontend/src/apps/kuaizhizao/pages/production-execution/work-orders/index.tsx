@@ -2402,7 +2402,7 @@ const WorkOrdersPage: React.FC = () => {
             </Button>,
           ]}
           onDelete={handleDelete}
-          viewTypes={['table', 'touch']}
+          viewTypes={['table', 'help']}
           touchViewConfig={{
             renderCard: renderTouchCard,
             columns: 1,
@@ -2561,7 +2561,7 @@ const WorkOrdersPage: React.FC = () => {
                   ]}
                 />
               </ConfigProvider>
-              <Divider type="vertical" style={{ margin: 0, height: 20 }} />
+              <Divider vertical style={{ margin: 0, height: 20 }} />
               <Space size="small" wrap={false}>
                 <Button
                   size="small"
@@ -2920,7 +2920,7 @@ const WorkOrdersPage: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <Divider type="vertical" />
+                <Divider vertical />
                 <Button
                   type="primary"
                   onClick={() => handleCreateRework(workOrderDetail!)}
@@ -4194,7 +4194,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
               open={addOpModalVisible}
               onCancel={() => setAddOpModalVisible(false)}
               footer={null}
-              destroyOnClose
+              destroyOnHidden
             >
               <Select
                 style={{ width: '100%' }}
@@ -4307,7 +4307,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
           open={addOpModalVisible}
           onCancel={() => setAddOpModalVisible(false)}
           footer={null}
-          destroyOnClose
+          destroyOnHidden
         >
           <Select
             style={{ width: '100%' }}
@@ -4690,7 +4690,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
             {isReported && <Tag color="warning">已报工</Tag>}
           </div>
           <div style={{ fontSize: '12px', color: '#999' }}>
-            <Space split={<span>|</span>}>
+            <Space separator={<span>|</span>}>
               <span>编码: {operation.operation_code || operation.code}</span>
               {operation.workshop_name && <span>车间: {operation.workshop_name}</span>}
               {operation.standard_time > 0 && <span>标准工时: {operation.standard_time}h</span>}

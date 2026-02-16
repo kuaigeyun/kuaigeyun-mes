@@ -211,7 +211,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 footer={null}
                 width={600}
                 centered
-                destroyOnClose
+                destroyOnHidden
             >
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
                     <div style={{ width: '100%' }}>

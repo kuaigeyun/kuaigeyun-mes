@@ -10,7 +10,7 @@
 
 import React, { ReactNode } from 'react';
 import { Row, Col, Card, Statistic } from 'antd';
-import { STAT_CARD_CONFIG, PAGE_SPACING } from './constants';
+import { STAT_CARD_CONFIG } from './constants';
 
 
 /**
@@ -37,6 +37,10 @@ export interface StatCard {
  * 列表页面模板属性
  */
 export interface ListPageTemplateProps {
+  /** 标题 */
+  title?: ReactNode;
+  /** 描述 */
+  description?: ReactNode;
   /** 统计卡片数据（可选） */
   statCards?: StatCard[];
   /** 主要内容（通常是 UniTable） */
@@ -67,6 +71,8 @@ export interface ListPageTemplateProps {
  * ```
  */
 export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
+  title,
+  description,
   statCards,
   children,
   className,
@@ -81,6 +87,14 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         ...style,
       }}
     >
+      {/* 标题和描述区域 */}
+      {(title || description) && (
+        <div style={{ marginBottom: 16 }}>
+          {title && <h1 style={{ fontSize: '20px', fontWeight: 600, margin: '0 0 4px 0' }}>{title}</h1>}
+          {description && <div style={{ color: 'rgba(0, 0, 0, 0.45)', fontSize: '14px' }}>{description}</div>}
+        </div>
+      )}
+
       {/* 统计卡片区域 - 只有在数量足够（>3）时才显示，且始终占满一行 */}
       {statCards && statCards.length > 3 && (
         <div style={{ marginBottom: 16 }}>

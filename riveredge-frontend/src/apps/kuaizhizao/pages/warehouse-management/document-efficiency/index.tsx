@@ -217,7 +217,7 @@ const DocumentEfficiencyPage: React.FC = () => {
                 renderItem={(item) => (
                   <List.Item>
                     <Alert
-                      message={item.node_name}
+                      title={item.node_name}
                       description={item.suggestion}
                       type={item.type === 'bottleneck' ? 'warning' : 'info'}
                       icon={item.type === 'bottleneck' ? <WarningOutlined /> : <CheckCircleOutlined />}

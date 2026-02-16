@@ -686,7 +686,7 @@ const SalesForecastsPage: React.FC = () => {
         title="销售预测详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={640}
+        styles={{ wrapper: { width: 640 } }}
       >
         {currentForecast && (
           <>
@@ -713,7 +713,7 @@ const SalesForecastsPage: React.FC = () => {
             )}
             {documentRelations && (
               <div style={{ marginTop: 24 }}>
-                <DocumentRelationDisplay data={documentRelations} />
+                <DocumentRelationDisplay relations={documentRelations} />
               </div>
             )}
             <div style={{ marginTop: 24 }}>

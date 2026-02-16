@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, message, Select } from 'antd';
+import { Tag, App, Select } from 'antd';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -38,6 +38,7 @@ interface LineSideInventoryItem {
 }
 
 const LineSideWarehousePage: React.FC = () => {
+  const { message } = App.useApp();
   const actionRef = useRef<any>(null);
   const [warehouses, setWarehouses] = useState<LineSideWarehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | undefined>();

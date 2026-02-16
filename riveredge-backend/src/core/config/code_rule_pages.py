@@ -20,7 +20,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-material": "WL",                # 物料
     "master-data-process-operation": "GX",       # 工序
     "master-data-process-route": "GY",           # 工艺
-    "master-data-engineering-bom": "GC",         # 工程
+    "master-data-engineering-bom": "GC",         # 物料清单BOM（沿用原工程BOM编码前缀）
     "master-data-defect-type": "BL",             # 不良
     "master-data-supply-chain-customer": "KH",   # 客户
     "master-data-supply-chain-supplier": "GYS",  # 供应商
@@ -205,7 +205,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     },
     {
         "page_code": "master-data-engineering-bom",
-        "page_name": "工程BOM",
+        "page_name": "物料清单BOM",
         "page_path": "/apps/master-data/process/engineering-bom",
         "code_field": "bom_code",
         "code_field_label": "BOM编码",
@@ -398,7 +398,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
         "page_name": "成品入库",
-        "page_path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+        "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
         "code_field": "receipt_code",
         "code_field_label": "成品入库单编码",
         "module": "快格轻制造",
