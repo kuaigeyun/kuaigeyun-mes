@@ -85,7 +85,7 @@ const CustomersPage: React.FC = () => {
         email: detail.email,
         address: detail.address,
         category: detail.category,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取客户详情失败');
@@ -281,8 +281,8 @@ const CustomersPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -373,8 +373,8 @@ const CustomersPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
         </Tag>
       ),
     },

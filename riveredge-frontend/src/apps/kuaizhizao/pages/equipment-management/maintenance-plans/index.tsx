@@ -209,7 +209,7 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: '维护周期',
       dataIndex: 'maintenance_cycle',
-      render: (_, record) => `${record.maintenance_cycle} ${record.maintenance_cycle_unit}`,
+      render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
       title: '计划开始日期',
@@ -289,7 +289,7 @@ const MaintenancePlansPage: React.FC = () => {
       title: '维护周期',
       dataIndex: 'maintenance_cycle',
       width: 120,
-      render: (_, record) => `${record.maintenance_cycle} ${record.maintenance_cycle_unit}`,
+      render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
       title: '状态',

@@ -216,7 +216,7 @@ export async function getDocumentRelations(
   documentId: number
 ): Promise<DocumentRelation> {
   return apiRequest<DocumentRelation>(
-    `/apps/kuaizhizao/production/documents/${documentType}/${documentId}/relations`,
+    `/apps/kuaizhizao/documents/${documentType}/${documentId}/relations`,
     { method: 'GET' }
   );
 }

@@ -26,6 +26,7 @@ import {
   BarChartOutlined,
   DownOutlined,
   TabletOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { QuerySearchButton } from '../riveredge-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
@@ -42,6 +43,7 @@ const useProTableSearch = () => {
   }
 }
 import { UniImport } from '../uni-import'
+import ErrorBoundary from '../error-boundary'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
@@ -369,18 +371,27 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   showQuickJumper?: boolean
   /**
    * 视图类型配置
-   * 支持：'table' | 'card' | 'kanban' | 'stats' | 'touch'
-   * 默认：['table', 'card', 'kanban', 'stats'] - 支持所有视图类型
+   * 支持：'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
+   * 默认：['table', 'help'] - 表格视图 + 帮助视图
    */
-  viewTypes?: Array<'table' | 'card' | 'kanban' | 'stats' | 'touch'>
+  viewTypes?: Array<'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'>
   /**
    * 默认视图类型（默认：'table'）
    */
-  defaultViewType?: 'table' | 'card' | 'kanban' | 'stats' | 'touch'
+  defaultViewType?: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
   /**
    * 视图切换回调
    */
-  onViewTypeChange?: (viewType: 'table' | 'card' | 'kanban' | 'stats' | 'touch') => void
+  onViewTypeChange?: (viewType: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch') => void
+  /**
+   * 帮助视图配置（仅当 viewTypes 包含 'help' 时生效）
+   */
+  helpViewConfig?: {
+    /** 自定义帮助内容 */
+    content?: ReactNode
+    /** 帮助标题（默认：使用帮助） */
+    title?: string
+  }
   /**
    * 卡片视图配置（仅当 viewTypes 包含 'card' 时生效）
    */
@@ -507,9 +518,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   deleteButtonText = '删除',
   defaultPageSize: defaultPageSizeProp,
   showQuickJumper = true,
-  viewTypes = ['table', 'card', 'kanban', 'stats'],
+  viewTypes = ['table', 'help'],
   defaultViewType = 'table',
   onViewTypeChange,
+  helpViewConfig,
   cardViewConfig,
   kanbanViewConfig,
   statsViewConfig,
@@ -536,7 +548,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<
-    'table' | 'card' | 'kanban' | 'stats' | 'touch'
+    'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
   >(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
@@ -855,7 +867,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 处理视图类型切换
    */
-  const handleViewTypeChange = (viewType: 'table' | 'card' | 'kanban' | 'stats' | 'touch') => {
+  const handleViewTypeChange = (viewType: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch') => {
     setCurrentViewType(viewType)
     if (onViewTypeChange) {
       onViewTypeChange(viewType)
@@ -872,6 +884,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     const viewTypeOptions = [
       { value: 'table', label: '表格', icon: TableOutlined },
+      { value: 'help', label: '帮助', icon: QuestionCircleOutlined },
       { value: 'card', label: '卡片', icon: AppstoreOutlined },
       { value: 'kanban', label: '看板', icon: BarsOutlined },
       { value: 'stats', label: '统计', icon: BarChartOutlined },
@@ -1347,12 +1360,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   }}
                 />
                 {showAdvancedSearch && (
-                  <QuerySearchButton
-                    columns={processedColumns}
-                    formRef={formRef as React.MutableRefObject<ProFormInstance>}
-                    actionRef={actionRef as React.MutableRefObject<ActionType>}
-                    searchParamsRef={searchParamsRef}
-                  />
+                  <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>搜索组件错误</span>}>
+                    <QuerySearchButton
+                      columns={processedColumns}
+                      formRef={formRef as React.MutableRefObject<ProFormInstance>}
+                      actionRef={actionRef as React.MutableRefObject<ActionType>}
+                      searchParamsRef={searchParamsRef}
+                    />
+                  </ErrorBoundary>
                 )}
                 {afterSearchButtons}
               </div>
@@ -1391,7 +1406,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               columnsState={{
                 persistenceKey: (restProps as any).headerTitle ? `ui.tables.${(restProps as any).headerTitle}.columns` : undefined,
                 persistenceType: 'localStorage',
-                onChange: (map) => {
+                onChange: (_map) => {
                    // 这里的 map 是 Record<string, ColumnsState>
                    // ProTable 内部会自动处理 localStorage 持久化
                    // 如果我们需要同步到后端，可以在这里调用 API
@@ -1665,6 +1680,33 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   <div style={{ fontSize: '16px', marginBottom: '8px' }}>统计视图</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
                     请配置 <code>statsViewConfig.metrics</code> 来启用统计视图
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 帮助视图 */}
+          {currentViewType === 'help' && viewTypes.includes('help') && (
+            <div
+              style={{
+                padding: '24px',
+                minHeight: '400px',
+                background: '#fafafa',
+                borderRadius: '8px',
+                border: '1px solid #f0f0f0',
+              }}
+            >
+              {helpViewConfig?.content ?? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <QuestionCircleOutlined
+                    style={{ fontSize: '48px', marginBottom: '16px', color: '#1890ff' }}
+                  />
+                  <div style={{ fontSize: '18px', marginBottom: '8px', fontWeight: 500 }}>
+                    {helpViewConfig?.title ?? '使用帮助'}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#666', maxWidth: 400, margin: '0 auto' }}>
+                    可通过顶部搜索栏筛选数据，支持导入导出。如需页面专属帮助，可配置 helpViewConfig.content。
                   </div>
                 </div>
               )}

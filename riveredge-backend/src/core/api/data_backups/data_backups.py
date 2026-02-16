@@ -2,8 +2,10 @@
 数据备份 API 模块
 """
 
+import os
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi.responses import FileResponse
 from core.api.deps import get_current_user
 from infra.models.user import User
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
@@ -82,6 +84,37 @@ async def get_backup(
     """
     try:
         return await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{uuid}/download")
+async def download_backup(
+    uuid: str,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    下载备份文件（仅成功的备份可下载）
+    """
+    try:
+        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        if backup.status != "success":
+            raise HTTPException(status_code=400, detail="只能下载成功的备份")
+        if not backup.file_path:
+            raise HTTPException(status_code=404, detail="备份文件不存在")
+        if not os.path.exists(backup.file_path):
+            raise HTTPException(status_code=404, detail="备份文件已丢失")
+        # 防止路径遍历：确保文件在 backups 目录下
+        abs_path = os.path.abspath(backup.file_path)
+        backups_dir = os.path.abspath("backups")
+        if not abs_path.startswith(backups_dir):
+            raise HTTPException(status_code=403, detail="无效的备份路径")
+        filename = os.path.basename(backup.file_path)
+        return FileResponse(
+            path=abs_path,
+            filename=filename,
+            media_type="application/zip",
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

@@ -79,7 +79,7 @@ const ProcessInspectionPage: React.FC = () => {
   const [importVisible, setImportVisible] = useState(false);
 
   // 扫码检验Modal状态
-  // const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [scanModalVisible, setScanModalVisible] = useState(false);
 
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);

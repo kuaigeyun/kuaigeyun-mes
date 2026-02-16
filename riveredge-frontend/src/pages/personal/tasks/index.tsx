@@ -417,7 +417,7 @@ const UserTasksPage: React.FC = () => {
               我提交的
             </Button>,
           ]}
-          viewTypes={['table', 'kanban']}
+          viewTypes={['table', 'help']}
           defaultViewType="table"
           kanbanViewConfig={useMemo(() => {
             if (taskType === 'pending') {

@@ -5,11 +5,12 @@
  */
 
 import React, { useRef } from 'react';
-import { ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Card, Tag, message, Button, Modal } from 'antd';
+import { Tag, App, Button } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { warehouseApi } from '../../../services/production';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface BackflushRecordItem {
   id: number;
@@ -30,7 +31,28 @@ interface BackflushRecordItem {
 }
 
 const BackflushRecordsPage: React.FC = () => {
+  const { message, modal } = App.useApp();
   const actionRef = useRef<any>(null);
+
+  const handleRetry = (record: BackflushRecordItem) => {
+    modal.confirm({
+      title: '重试倒冲',
+      content: `确定要重试物料 "${record.material_name}" 的倒冲吗？请确保线边仓已有足够库存。`,
+      onOk: async () => {
+        try {
+          const res = await warehouseApi.backflushRecords.retry(String(record.id));
+          if (res?.success) {
+            message.success(res?.message || '重试成功');
+            actionRef.current?.reload();
+          } else {
+            message.warning(res?.message || '重试失败');
+          }
+        } catch {
+          message.error('重试失败');
+        }
+      },
+    });
+  };
 
   const columns: ProColumns<BackflushRecordItem>[] = [
     {
@@ -127,26 +149,6 @@ const BackflushRecordsPage: React.FC = () => {
     },
   ];
 
-  const handleRetry = (record: BackflushRecordItem) => {
-    Modal.confirm({
-      title: '重试倒冲',
-      content: `确定要重试物料 "${record.material_name}" 的倒冲吗？请确保线边仓已有足够库存。`,
-      onOk: async () => {
-        try {
-          const res = await warehouseApi.backflushRecords.retry(String(record.id));
-          if (res?.success) {
-            message.success(res?.message || '重试成功');
-            actionRef.current?.reload();
-          } else {
-            message.warning(res?.message || '重试失败');
-          }
-        } catch {
-          message.error('重试失败');
-        }
-      },
-    });
-  };
-
   const fetchRecords = async (params: any) => {
     try {
       const res = await warehouseApi.backflushRecords.list({
@@ -168,29 +170,18 @@ const BackflushRecordsPage: React.FC = () => {
   };
 
   return (
-    <Card title="物料倒冲记录">
-      <ProTable<BackflushRecordItem>
+    <ListPageTemplate>
+      <UniTable<BackflushRecordItem>
+        headerTitle="物料倒冲记录"
         actionRef={actionRef}
         columns={columns}
         request={fetchRecords}
         rowKey="id"
-        search={{
-          labelWidth: 'auto',
-          optionRender: (_, formConfig, form) => [
-            ...form,
-            <Button key="reset" onClick={() => form?.resetFields()}>
-              重置
-            </Button>,
-            <Button key="submit" type="primary" onClick={() => form?.submit()}>
-              查询
-            </Button>,
-          ],
-        }}
+        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         scroll={{ x: 1300 }}
-        headerTitle="倒冲记录列表"
       />
-    </Card>
+    </ListPageTemplate>
   );
 };
 

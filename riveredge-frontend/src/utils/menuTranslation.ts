@@ -153,6 +153,15 @@ export function translateAppMenuItemName(
     return '';
   }
 
+  // 显式替换：数据库/缓存中历史遗留的旧名称统一显示为新名称（不依赖 path，确保替换生效）
+  const trimmed = name.trim();
+  if (trimmed === '工程BOM') {
+    return t('app.master-data.menu.process.engineering-bom', { defaultValue: '物料清单BOM' });
+  }
+  if (trimmed === '制造SOP') {
+    return t('app.master-data.menu.process.sop', { defaultValue: '标准操作SOP' });
+  }
+
   // 如果 name 已经是翻译 key，直接翻译
   if (name.includes('.') && !name.startsWith('/')) {
     const translated = t(name, { defaultValue: name });

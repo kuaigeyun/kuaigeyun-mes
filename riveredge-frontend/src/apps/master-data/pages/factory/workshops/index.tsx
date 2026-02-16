@@ -177,7 +177,7 @@ const WorkshopsPage: React.FC = () => {
         name: detail.name,
         description: detail.description,
         plantId: detail.plantId,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
       
       // 加载自定义字段值
@@ -845,7 +845,7 @@ const WorkshopsPage: React.FC = () => {
           item.name || '',
           plant ? plant.name : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -949,11 +949,14 @@ const WorkshopsPage: React.FC = () => {
           true: { text: '启用', status: 'Success' },
           false: { text: '禁用', status: 'Default' },
         },
-        render: (_, record) => (
-          <Tag color={record.isActive ? 'success' : 'default'}>
-            {record.isActive ? '启用' : '禁用'}
-          </Tag>
-        ),
+        render: (_, record) => {
+          const isActive = record?.isActive ?? (record as any)?.is_active;
+          return (
+            <Tag color={isActive ? 'success' : 'default'}>
+              {isActive ? '启用' : '禁用'}
+            </Tag>
+          );
+        },
       },
       // 插入自定义字段列
       ...customFieldColumns,
@@ -1025,7 +1028,7 @@ const WorkshopsPage: React.FC = () => {
       title: '所属厂区',
       dataIndex: 'plantId',
       render: (_, record) => {
-        const plant = plants.find(p => p.id === record.plantId);
+        const plant = plants.find(p => p.id === (record?.plantId ?? (record as any)?.plant_id));
         return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
       },
     },
@@ -1037,11 +1040,14 @@ const WorkshopsPage: React.FC = () => {
     {
       title: '启用状态',
       dataIndex: 'isActive',
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
+      render: (_, record) => {
+        const isActive = record?.isActive ?? (record as any)?.is_active;
+        return (
+          <Tag color={isActive ? 'success' : 'default'}>
+            {isActive ? '启用' : '禁用'}
+          </Tag>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -1103,7 +1109,7 @@ const WorkshopsPage: React.FC = () => {
         <UniTable<Workshop>
         actionRef={actionRef}
         columns={columns}
-        viewTypes={['table']}
+        viewTypes={['table', 'help']}
         defaultViewType="table"
         onImport={handleImport}
         importHeaders={['*车间编码', '*车间名称', '所属厂区', '描述']}

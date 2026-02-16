@@ -1119,7 +1119,7 @@ const SuperAdminTenantList: React.FC = () => {
       importExampleRow={['示例组织', 'example', '体验套餐', '未激活', '10', '1024', '']}
       showExportButton={true}
       onExport={handleExport}
-      viewTypes={['table', 'card', 'kanban', 'stats']}
+      viewTypes={['table', 'help']}
       defaultViewType="table"
       request={async (params, sort, _filter, searchFormValues) => {
         // 处理排序参数

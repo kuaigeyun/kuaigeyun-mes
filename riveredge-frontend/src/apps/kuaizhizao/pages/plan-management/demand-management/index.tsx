@@ -652,7 +652,7 @@ const DemandManagementPage: React.FC = () => {
         title={isEdit ? '编辑需求' : '新建需求'}
         width={900}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
           formRef={formRef}
@@ -781,7 +781,7 @@ const DemandManagementPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         title={`需求详情 - ${currentDemand?.demand_code || ''}`}
-        width={900}
+        size="large"
         extra={
           currentDemand && (
             <Space>

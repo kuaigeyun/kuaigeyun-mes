@@ -173,12 +173,6 @@
                                 "sort_order": 2
                             },
                             {
-                                "title": "成品库存",
-                                "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
-                                "permission": "kuaizhizao:finished-goods-inventory:view",
-                                "sort_order": 3
-                            },
-                            {
                                 "title": "期初数据导入",
                                 "path": "/apps/kuaizhizao/warehouse-management/opening-inventory-import",
                                 "permission": "kuaizhizao:opening-inventory-import:view",
@@ -802,7 +796,7 @@
         {
             "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
             "page_name": "成品入库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+            "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
             "code_field": "receipt_code",
             "code_field_label": "成品入库单编码",
             "module": "快格轻制造",
@@ -974,7 +968,7 @@
         {
             "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
             "page_name": "成品入库",
-            "page_path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+            "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
             "table_name": "apps_kuaizhizao_finished_goods_receipts",
             "table_name_label": "成品入库表",
             "module": "快格轻制造",

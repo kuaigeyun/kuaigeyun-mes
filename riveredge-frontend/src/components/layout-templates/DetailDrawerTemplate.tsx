@@ -21,13 +21,15 @@ export interface DetailDrawerTemplateProps<T = any> {
   /** Drawer 标题 */
   title: string;
   /** 是否显示 */
-  open: boolean;
+  open?: boolean;
+  /** 是否显示 (兼容旧版本) */
+  visible?: boolean;
   /** 关闭回调 */
   onClose: () => void;
   /** 数据源 */
   dataSource?: T;
   /** ProDescriptions 列配置 */
-  columns: ProDescriptionsItemProps<T>[];
+  columns?: ProDescriptionsItemProps<T>[];
   /** Drawer 宽度（默认：标准宽度） */
   width?: number | string;
   /** 加载状态 */
@@ -64,9 +66,10 @@ export interface DetailDrawerTemplateProps<T = any> {
 export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, any>>({
   title,
   open,
+  visible,
   onClose,
   dataSource,
-  columns,
+  columns = [],
   width = DRAWER_CONFIG.STANDARD_WIDTH,
   loading = false,
   column = 2,
@@ -87,7 +90,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   return (
     <Drawer
       title={title}
-      open={open}
+      open={open ?? visible}
       onClose={onClose}
       size={size}
       styles={bodyStyle ? { body: bodyStyle } : undefined}
@@ -95,7 +98,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       className={className}
       extra={extra}
     >
-      {customContent || (
+      {customContent || (columns && columns.length > 0 && (
         <Descriptions
           column={column}
           items={columns.map((col: any, index) => {
@@ -118,7 +121,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
             if (col.render) {
               // ProDescriptions render signature: (dom, entity, index, action, schema)
               // 这里简化处理，传入 content 作为 dom，dataSource 作为 entity
-              // 注意：ProDescriptions 的 render 第一个参数是 dom (即已经格式化过的值)，第二个是 entity
+              // 注意：ProDescriptions 的 render 第一个参数 is dom (即已经格式化过的值)，第二个 is entity
               content = col.render(content, dataSource, index, {}, col);
             }
 
@@ -130,7 +133,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
             };
           })}
         />
-      )}
+      ))}
       {children}
     </Drawer>
   );

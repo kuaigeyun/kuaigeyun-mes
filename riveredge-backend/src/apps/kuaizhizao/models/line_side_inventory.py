@@ -74,6 +74,9 @@ class LineSideInventory(BaseModel):
     
     # 状态
     status = fields.CharField(max_length=20, default="available", description="状态（available=可用, reserved=已预留, consumed=已消耗）")
+
+    # 软删除
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
     
     def __str__(self):
         """字符串表示"""

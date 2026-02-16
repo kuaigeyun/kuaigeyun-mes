@@ -243,12 +243,6 @@
                                 "sort_order": 1
                             },
                             {
-                                "title": "成品库存",
-                                "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
-                                "permission": "kuaizhizao:finished-goods-inventory:view",
-                                "sort_order": 2
-                            },
-                            {
                                 "title": "期初数据导入",
                                 "path": "/apps/kuaizhizao/warehouse-management/initial-data",
                                 "permission": "kuaizhizao:initial-data:view",

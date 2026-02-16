@@ -1862,7 +1862,7 @@ export default function LoginPage() {
         placement="right"
         maskClosable={true}
         closable={true}
-        destroyOnClose={false}
+        destroyOnHidden={false}
         styles={{
           body: {
             padding: '24px',

@@ -61,6 +61,7 @@ import EquipmentPage from './pages/equipment-management/equipment';
 import EquipmentFaultsPage from './pages/equipment-management/equipment-faults';
 import MaintenancePlansPage from './pages/equipment-management/maintenance-plans';
 import MoldsPage from './pages/equipment-management/molds';
+import ToolLedgerPage from './pages/equipment-management/tool-ledger';
 import EquipmentStatusPage from './pages/equipment-management/equipment-status';
 import MaintenanceRemindersPage from './pages/equipment-management/maintenance-reminders';
 
@@ -162,6 +163,11 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/equipment-faults" element={<EquipmentFaultsPage />} />
       <Route path="equipment-management/maintenance-plans" element={<MaintenancePlansPage />} />
       <Route path="equipment-management/molds" element={<MoldsPage />} />
+      <Route path="equipment-management/tool-ledger" element={<ToolLedgerPage />} />
+      <Route path="equipment-management/tool-usage" element={<ToolLedgerPage />} />
+      <Route path="equipment-management/tool-calibration" element={<ToolLedgerPage />} />
+      <Route path="equipment-management/equipment-calibration" element={<EquipmentPage />} />
+      <Route path="equipment-management/mold-calibration" element={<MoldsPage />} />
       <Route path="equipment-management/equipment-status" element={<EquipmentStatusPage />} />
       <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
 
@@ -186,15 +192,19 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />
+      <Route path="warehouse-management/inventory-query" element={<InventoryPage />} />
       <Route path="warehouse-management/inbound" element={<InboundPage />} />
-      <Route path="warehouse-management/finished-goods-inventory" element={<FinishedGoodsInboundPage />} />
+      <Route path="warehouse-management/product-inbound" element={<FinishedGoodsInboundPage />} />
       <Route path="warehouse-management/sales-outbound" element={<SalesOutboundPage />} />
       <Route path="warehouse-management/outbound" element={<OutboundPage />} />
       <Route path="warehouse-management/customer-material-registration" element={<CustomerMaterialRegistrationPage />} />
       <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />
       <Route path="warehouse-management/document-timing" element={<DocumentTimingPage />} />
+      <Route path="warehouse-management/document-node-timing" element={<DocumentTimingPage />} />
       <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
+      <Route path="warehouse-management/document-efficiency-analysis" element={<DocumentEfficiencyPage />} />
       <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
+      <Route path="warehouse-management/opening-inventory-import" element={<InitialDataImportPage />} />
       <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
       <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
       <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />

@@ -226,7 +226,7 @@ const CostOptimizationPage: React.FC = () => {
                       ]}
                     />
                     <Alert
-                      message={item.description}
+                      title={item.description}
                       type="info"
                       showIcon
                       style={{ marginTop: 12 }}
@@ -237,7 +237,7 @@ const CostOptimizationPage: React.FC = () => {
             />
           ) : (
             <Alert
-              message="暂无优化建议"
+              title="暂无优化建议"
               description="当前物料的成本已经是最优的，或者无法找到更优的替代方案。"
               type="info"
               showIcon

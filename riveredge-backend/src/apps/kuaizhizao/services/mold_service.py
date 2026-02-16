@@ -10,6 +10,7 @@ Date: 2026-01-05
 from typing import List, Optional
 from datetime import datetime
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.mold import Mold, MoldUsage
 from apps.kuaizhizao.schemas.mold import (
@@ -139,13 +140,9 @@ class MoldService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        # 搜索条件
+        # 搜索条件（使用 Q 对象实现 OR 逻辑）
         if search:
-            query = query.filter(
-                code__icontains=search
-            ) | query.filter(
-                name__icontains=search
-            )
+            query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
         
         # 获取总数量
         total = await query.count()

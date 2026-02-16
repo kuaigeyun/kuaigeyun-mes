@@ -100,3 +100,21 @@ export async function deleteBackup(uuid: string): Promise<void> {
   });
 }
 
+/**
+ * 下载备份文件（返回 Blob，用于触发浏览器下载）
+ */
+export async function downloadBackup(uuid: string): Promise<Blob> {
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('tenant_id');
+  const url = `/api/v1/core/data-backups/${uuid}/download`;
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (tenantId) headers['X-Tenant-Id'] = tenantId;
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || err.message || `下载失败: ${res.status}`);
+  }
+  return res.blob();
+}
+

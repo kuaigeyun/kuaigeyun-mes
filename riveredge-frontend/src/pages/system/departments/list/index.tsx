@@ -519,7 +519,7 @@ const DepartmentListPage: React.FC = () => {
       ]}
     >
       <UniTable<Department>
-        viewTypes={['table']}
+        viewTypes={['table', 'help']}
         actionRef={actionRef}
         headerTitle="部门列表"
         rowKey="uuid"

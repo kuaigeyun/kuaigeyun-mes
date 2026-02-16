@@ -273,7 +273,7 @@ const ComputationConfigPage: React.FC = () => {
         onOk={() => formRef.current?.submit()}
         title={isEdit ? '编辑参数配置' : '新建参数配置'}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
           formRef={formRef}

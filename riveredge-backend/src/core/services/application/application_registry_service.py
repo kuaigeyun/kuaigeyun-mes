@@ -357,8 +357,16 @@ class ApplicationRegistryService:
             current_file = Path(__file__)
             src_dir = current_file.parent.parent.parent.parent  # 向上4级到src目录
 
-            full_path = src_dir / file_path
-            return full_path.exists()
+            # 1. 检查作为单个文件是否存在 (.py)
+            py_file_path = module_path.replace('.', '/') + '.py'
+            full_py_path = src_dir / py_file_path
+            if full_py_path.exists():
+                return True
+
+            # 2. 检查作为包是否存在 (/__init__.py)
+            init_file_path = module_path.replace('.', '/') + '/__init__.py'
+            full_init_path = src_dir / init_file_path
+            return full_init_path.exists()
 
         except Exception as e:
             logger.debug(f"检查模块 {module_path} 存在性失败: {e}")

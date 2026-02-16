@@ -4,7 +4,7 @@
 工艺路线类型：simple（简易路线）/ with_sop（带SOP工艺路线）。
 带SOP时工序序列中每个工序需关联 sop_uuid。
 
-Author: 制造SOP开发计划
+Author: 标准操作SOP开发计划
 Date: 2026-01-27
 """
 

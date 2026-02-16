@@ -10,6 +10,7 @@ Date: 2026-02-02
 from typing import List, Optional, Tuple
 from datetime import datetime
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.tool import Tool, ToolUsage, ToolMaintenance, ToolCalibration
 from apps.kuaizhizao.schemas.tool import (
@@ -66,7 +67,7 @@ class ToolService:
         if type: query = query.filter(type=type)
         if status: query = query.filter(status=status)
         if search:
-            query = query.filter(code__icontains=search) | query.filter(name__icontains=search)
+            query = query.filter(Q(code__icontains=search) | Q(name__icontains=search))
         
         total = await query.count()
         items = await query.offset(skip).limit(limit).order_by("-created_at")

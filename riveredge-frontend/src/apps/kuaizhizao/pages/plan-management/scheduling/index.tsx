@@ -15,7 +15,7 @@ import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { workOrderApi, advancedSchedulingApi } from '../../../services/production';
-import GanttSchedulingChart, { type ViewMode } from '../../../components/GanttSchedulingChart';
+import GanttSchedulingChart, { type ViewMode, type WorkOrderForGantt } from '../../../components/GanttSchedulingChart';
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -23,11 +23,11 @@ const SchedulingPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('week');
 
-  const { data: ganttWorkOrders = [], loading: ganttLoading, run: refreshGantt } = useRequest(
+  const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
     async () => {
       const res = await workOrderApi.list({ skip: 0, limit: 500 });
       const list = Array.isArray(res) ? res : (res?.data ?? []);
-      return list;
+      return list as WorkOrderForGantt[];
     },
     { refreshDeps: [] }
   );
@@ -189,7 +189,7 @@ const SchedulingPage: React.FC = () => {
       <Alert
         type="info"
         showIcon
-        message="MRP/LRP 运算结果请前往「需求计算」页面查看和操作。本页仅对已有工单进行排产。"
+        title="MRP/LRP 运算结果请前往「需求计算」页面查看和操作。本页仅对已有工单进行排产。"
         style={{ marginBottom: 16 }}
       />
       <UniTable
@@ -198,7 +198,7 @@ const SchedulingPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        request={async (params: any) => {
           const res = await workOrderApi.list({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
             limit: params.pageSize ?? 20,
@@ -239,7 +239,7 @@ const SchedulingPage: React.FC = () => {
         extra={
           <Space>
             <span>视图：</span>
-            <Button.Group>
+            <Space.Compact>
               <Button
                 type={ganttViewMode === 'day' ? 'primary' : 'default'}
                 size="small"
@@ -261,7 +261,7 @@ const SchedulingPage: React.FC = () => {
               >
                 月
               </Button>
-            </Button.Group>
+            </Space.Compact>
           </Space>
         }
       >

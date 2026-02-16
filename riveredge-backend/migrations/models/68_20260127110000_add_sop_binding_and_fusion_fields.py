@@ -1,7 +1,7 @@
 """
 为 apps_master_data_sop 表添加「工艺路线+BOM 融合」与绑定字段
 
-制造SOP 开发计划阶段一：SOP 绑定物料/物料组、工艺路线载入、BOM 载入方式。
+标准操作SOP 开发计划阶段一：SOP 绑定物料/物料组、工艺路线载入、BOM 载入方式。
 仅改造 SOP 表，不改动工艺路线与 BOM 表。
 
 新增字段：
@@ -11,7 +11,7 @@
 - bom_load_mode: BOM 载入方式（by_material / by_material_group / specific_bom）
 - specific_bom_uuid: 指定 BOM 的 UUID（当 bom_load_mode 为 specific_bom 时使用）
 
-Author: 制造SOP开发计划
+Author: 标准操作SOP开发计划
 Date: 2026-01-27
 """
 

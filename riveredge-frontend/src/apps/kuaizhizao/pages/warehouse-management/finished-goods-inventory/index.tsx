@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Modal } from 'antd';
+import { App, Button, Modal, Space } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -161,30 +161,32 @@ const FinishedGoodsInboundPage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       width: 120,
-      render: (_, record) => [
-        record.status === 'draft' && (
-          <Button
-            key="confirm"
-            type="link"
-            size="small"
-            icon={<CheckCircleOutlined />}
-            onClick={() => handleConfirmInbound(record)}
-            style={{ color: '#52c41a' }}
-          >
-            确认
-          </Button>
-        ),
-        record.status === 'confirmed' && (
-          <Button
-            key="view"
-            type="link"
-            size="small"
-            onClick={() => messageApi.info('查看详情功能开发中')}
-          >
-            详情
-          </Button>
-        ),
-      ],
+      render: (_, record) => (
+        <Space>
+          {record.status === 'draft' && (
+            <Button
+              key="confirm"
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirmInbound(record)}
+              style={{ color: '#52c41a' }}
+            >
+              确认
+            </Button>
+          )}
+          {record.status === 'confirmed' && (
+            <Button
+              key="view"
+              type="link"
+              size="small"
+              onClick={() => messageApi.info('查看详情功能开发中')}
+            >
+              详情
+            </Button>
+          )}
+        </Space>
+      ),
     },
   ];
 

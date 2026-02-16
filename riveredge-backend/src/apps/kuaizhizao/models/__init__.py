@@ -88,6 +88,14 @@ from .equipment_status_monitor import EquipmentStatusMonitor, EquipmentStatusHis
 from .maintenance_reminder import MaintenanceReminder
 from .tool import Tool, ToolUsage, ToolMaintenance, ToolCalibration
 
+# 审核流程和状态流转模块
+from .approval_flow import ApprovalFlow, ApprovalFlowStep, ApprovalRecord
+from .state_transition import StateTransitionRule, StateTransitionLog
+
+# 单据关联逻辑
+from .document_relation import DocumentRelation
+from .computation_config import ComputationConfig
+
 __all__ = [
     # 生产执行模块
     'WorkOrder',
@@ -139,6 +147,8 @@ __all__ = [
     # 采购管理模块
     'PurchaseOrder',
     'PurchaseOrderItem',
+    'PurchaseRequisition',
+    'PurchaseRequisitionItem',
 
     # 质量管理模块
     'IncomingInspection',
@@ -190,4 +200,17 @@ __all__ = [
     'EquipmentCalibration',
     'Invoice',
     'InvoiceItem',
+
+    # 审核流程
+    'ApprovalFlow',
+    'ApprovalFlowStep',
+    'ApprovalRecord',
+    
+    # 状态流转
+    'StateTransitionRule',
+    'StateTransitionLog',
+    
+    # 单据关联
+    'DocumentRelation',
+    'ComputationConfig',
 ]

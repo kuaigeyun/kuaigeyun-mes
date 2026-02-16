@@ -63,7 +63,7 @@ const HolidaysPage: React.FC = () => {
         holidayDate: detail.holidayDate ? dayjs(detail.holidayDate) : undefined,
         holidayType: detail.holidayType,
         description: detail.description,
-        isActive: detail.isActive,
+        isActive: detail.isActive ?? (detail as any).is_active ?? true,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取假期详情失败');
@@ -237,8 +237,8 @@ const HolidaysPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -314,8 +314,8 @@ const HolidaysPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
+          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
         </Tag>
       ),
     },

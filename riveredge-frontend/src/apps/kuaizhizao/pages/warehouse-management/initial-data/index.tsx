@@ -8,37 +8,29 @@
  */
 
 import React, { useState } from 'react';
-import { App, Card, Steps, Button, Space, message, DatePicker } from 'antd';
+import { App, Card, Steps, Button, Space, DatePicker } from 'antd';
 import { ImportOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniImport } from '../../../../../components/uni-import';
 import { 
   importInitialInventory, 
   importInitialWIP, 
   importInitialReceivablesPayables,
-  createOrUpdateCountdown,
   getCountdown,
-  calculateCompensation,
   type LaunchCountdown,
 } from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
 
-const { Step } = Steps;
-
-/**
- * 期初数据导入页面
- */
 const InitialDataImportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   
   const [currentStep, setCurrentStep] = useState(0);
   const [snapshotTime, setSnapshotTime] = useState<Dayjs | null>(null);
   const [launchDate, setLaunchDate] = useState<Dayjs | null>(null);
-  const [countdown, setCountdown] = useState<LaunchCountdown | null>(null);
+  const [, setCountdown] = useState<LaunchCountdown | null>(null);
   const [importVisible, setImportVisible] = useState(false);
   const [wipImportVisible, setWipImportVisible] = useState(false);
   const [receivablesPayablesImportVisible, setReceivablesPayablesImportVisible] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [compensating, setCompensating] = useState(false);
+  const [, setImporting] = useState(false);
   
   // 加载上线倒计时
   React.useEffect(() => {
@@ -60,13 +52,6 @@ const InitialDataImportPage: React.FC = () => {
     }
   };
   
-  // 计算倒计时天数
-  const getDaysRemaining = () => {
-    if (!launchDate) return 0;
-    const days = launchDate.diff(dayjs(), 'day');
-    return days > 0 ? days : 0;
-  };
-
   /**
    * 处理期初应收应付导入
    */
@@ -86,14 +71,6 @@ const InitialDataImportPage: React.FC = () => {
         messageApi.warning(
           `期初应收应付导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
         );
-        // 显示错误详情
-        if (result.errors && result.errors.length > 0) {
-          const errorMessages = result.errors
-            .slice(0, 10) // 只显示前10个错误
-            .map(err => `第 ${err.row} 行: ${err.error}`)
-            .join('\n');
-          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
-        }
       }
     } catch (error: any) {
       messageApi.error(`导入失败: ${error.message || '未知错误'}`);
@@ -121,14 +98,6 @@ const InitialDataImportPage: React.FC = () => {
         messageApi.warning(
           `期初在制品导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
         );
-        // 显示错误详情
-        if (result.errors && result.errors.length > 0) {
-          const errorMessages = result.errors
-            .slice(0, 10) // 只显示前10个错误
-            .map(err => `第 ${err.row} 行: ${err.error}`)
-            .join('\n');
-          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
-        }
       }
     } catch (error: any) {
       messageApi.error(`导入失败: ${error.message || '未知错误'}`);
@@ -156,14 +125,6 @@ const InitialDataImportPage: React.FC = () => {
         messageApi.warning(
           `期初库存导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
         );
-        // 显示错误详情
-        if (result.errors && result.errors.length > 0) {
-          const errorMessages = result.errors
-            .slice(0, 10) // 只显示前10个错误
-            .map(err => `第 ${err.row} 行: ${err.error}`)
-            .join('\n');
-          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
-        }
       }
     } catch (error: any) {
       messageApi.error(`导入失败: ${error.message || '未知错误'}`);
@@ -291,14 +252,15 @@ const InitialDataImportPage: React.FC = () => {
     },
   ];
 
+  const stepItems = steps.map(step => ({
+    title: step.title,
+    description: step.description,
+  }));
+
   return (
     <div style={{ padding: 24 }}>
       <Card>
-        <Steps current={currentStep} style={{ marginBottom: 32 }}>
-          {steps.map((step, index) => (
-            <Step key={index} title={step.title} description={step.description} />
-          ))}
-        </Steps>
+        <Steps current={currentStep} items={stepItems} style={{ marginBottom: 32 }} />
         
         <div style={{ minHeight: 400, marginBottom: 24 }}>
           {steps[currentStep].content}
@@ -350,4 +312,3 @@ const InitialDataImportPage: React.FC = () => {
 };
 
 export default InitialDataImportPage;
-

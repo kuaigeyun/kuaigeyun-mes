@@ -262,7 +262,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       onCancel={handleClose}
       footer={null}
       width={640}
-      destroyOnClose
+      destroyOnHidden
     >
       <WizardTemplate
         steps={steps}
