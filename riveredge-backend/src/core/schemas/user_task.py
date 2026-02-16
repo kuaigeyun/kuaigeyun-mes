@@ -6,7 +6,7 @@
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 
@@ -23,17 +23,17 @@ class UserTaskResponse(BaseModel):
     current_approver_id: Optional[int] = Field(None, description="当前审批人ID（当前用户）")
     status: str = Field(..., description="任务状态（pending、approved、rejected、cancelled）")
     current_node: Optional[str] = Field(None, description="当前节点")
-    submitted_at: datetime = Field(..., description="提交时间")
+    submitted_at: Optional[datetime] = Field(None, description="提交时间")
     completed_at: Optional[datetime] = Field(None, description="完成时间")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    created_at: Optional[datetime] = Field(None, description="创建时间")
+    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserTaskListResponse(BaseModel):
     """用户任务列表响应 Schema"""
-    items: list[UserTaskResponse] = Field(..., description="任务列表")
+    items: List[UserTaskResponse] = Field(..., description="任务列表")
     total: int = Field(..., description="总数量")
     page: int = Field(..., description="当前页码")
     page_size: int = Field(..., description="每页数量")

@@ -213,6 +213,16 @@ export async function getFieldValues(recordTable: string, recordId: number): Pro
  * 自定义字段页面配置接口
  */
 export interface CustomFieldPageConfig {
+  pageCode: string;
+  pageName: string;
+  pagePath: string;
+  tableName: string;
+  tableNameLabel: string;
+  module: string;
+  moduleIcon?: string;
+}
+
+interface CustomFieldPageConfigResponse {
   page_code: string;
   page_name: string;
   page_path: string;
@@ -231,9 +241,7 @@ export interface CustomFieldPageConfig {
  */
 export async function getCustomFieldPages(): Promise<CustomFieldPageConfig[]> {
   try {
-    console.log('📡 请求自定义字段页面配置 API: /core/custom-fields/pages');
-    const pages = await apiRequest<CustomFieldPageConfig[]>('/core/custom-fields/pages');
-    console.log(`📋 API 返回 ${pages.length} 个页面配置`);
+    const pages = await apiRequest<CustomFieldPageConfigResponse[]>('/core/custom-fields/pages');
     
     // 转换字段名从 snake_case 到 camelCase
     const convertedPages = pages.map(page => ({
@@ -246,10 +254,9 @@ export async function getCustomFieldPages(): Promise<CustomFieldPageConfig[]> {
       moduleIcon: page.module_icon,
     }));
     
-    console.log('✅ 转换后的页面配置:', convertedPages.map(p => p.pageCode));
     return convertedPages;
   } catch (error: any) {
-    console.error('❌ 获取自定义字段页面配置失败:', error);
+    console.error('获取自定义字段页面配置失败:', error);
     throw error;
   }
 }

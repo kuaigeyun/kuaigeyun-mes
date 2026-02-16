@@ -9,13 +9,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormSelect, ProFormList, ProFormGroup, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Tag, Form, Space, Divider, Card, Tooltip } from 'antd';
+import { App, Button, Tag, Form, Space, Divider, Card } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ColumnWidthOutlined, UserOutlined, TeamOutlined, ControlOutlined, SendOutlined, ForkOutlined } from '@ant-design/icons';
 import { getUserList } from '../../../../services/user';
 import { getRoleList } from '../../../../services/role';
 import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
 import { ReactFlowProvider, Handle, Position } from 'reactflow';
+// @ts-ignore
 import 'reactflow/dist/style.css';
 import {
   getApprovalProcessByUuid,
@@ -201,7 +202,6 @@ const EndNode: React.FC<NodeProps> = ({ data }) => {
  * 审批流程设计器页面组件
  */
 const ApprovalProcessDesignerPage: React.FC = () => {
-  console.log('🚀 [ApprovalDesigner] Version 2.0 Loaded');
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
@@ -379,7 +379,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const isVertical = direction === 'vertical';
 
     if (isVertical) {
-        const layoutedNodes = computeVerticalLayout(nodes, edges);
+        const layoutedNodes = computeVerticalLayout(nodes as Node[], edges as Edge[]);
         setNodes(layoutedNodes);
         messageApi.success(t('pages.approval.designer.verticalAlign'));
         return;
@@ -556,7 +556,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
             {t('pages.approval.designer.back')}
           </Button>
-          <Button.Group>
+          <Space.Compact>
             <Button
               icon={<VerticalAlignBottomOutlined />}
               onClick={() => handleLayout('vertical')}
@@ -569,7 +569,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
             >
               {t('pages.approval.designer.horizontalAlign')}
             </Button>
-          </Button.Group>
+          </Space.Compact>
           <Button
             type="primary"
             icon={<PlusOutlined />}

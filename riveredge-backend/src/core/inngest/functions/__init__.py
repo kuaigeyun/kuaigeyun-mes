@@ -20,6 +20,8 @@ except ImportError:
     sop_execution_workflow_function = None
     sop_node_complete_workflow_function = None
     material_change_notification_workflow = None
+    data_backup_workflow = None
+    data_restore_workflow = None
 
 # 只有在inngest可用时才导入函数
 if INNGEST_AVAILABLE:
@@ -104,6 +106,15 @@ if INNGEST_AVAILABLE:
     except ImportError:
         maintenance_reminder_scheduler_function = None
         maintenance_reminder_checker_function = None
+    
+    try:
+        from core.inngest.functions.backup_functions import (
+            data_backup_workflow,
+            data_restore_workflow
+        )
+    except ImportError:
+        data_backup_workflow = None
+        data_restore_workflow = None
 
 __all__ = [
     "test_integration_function",
@@ -123,5 +134,7 @@ __all__ = [
     "exception_process_step_transition_workflow_function",
     "maintenance_reminder_scheduler_function",
     "maintenance_reminder_checker_function",
+    "data_backup_workflow",
+    "data_restore_workflow",
 ]
 

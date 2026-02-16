@@ -65,6 +65,7 @@ async def list_approval_instances(
     status: Optional[str] = Query(None, description="审批状态（可选）"),
     submitter_id: Optional[int] = Query(None, description="提交人ID（可选）"),
     current_approver_id: Optional[int] = Query(None, description="当前审批人ID（可选）"),
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -97,6 +98,7 @@ async def list_approval_instances(
 @router.get("/{uuid}", response_model=ApprovalInstanceResponse)
 async def get_approval_instance(
     uuid: str,
+    current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """

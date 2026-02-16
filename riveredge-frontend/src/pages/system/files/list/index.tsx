@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider, Select, theme } from 'antd';
+import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, theme } from 'antd';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { 
   EditOutlined, 
@@ -36,7 +36,6 @@ import {
   CopyOutlined,
   ScissorOutlined,
   SnippetsOutlined,
-  SearchOutlined,
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
@@ -868,7 +867,7 @@ const FileListPage: React.FC = () => {
                 >
                   删除
                 </Button>
-                <Divider type="vertical" />
+                <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
                 <Space>
                   <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>排序：</span>
                   <Select
@@ -948,7 +947,7 @@ const FileListPage: React.FC = () => {
           setUploadFileList([]);
         }}
         onOk={handleUpload}
-        size={600}
+        width={600}
       >
         <Upload
           fileList={uploadFileList}

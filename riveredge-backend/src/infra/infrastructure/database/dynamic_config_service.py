@@ -102,6 +102,8 @@ class DynamicDatabaseConfigService:
             "core.models.scheduled_task",
             "core.models.approval_process",
             "core.models.approval_instance",
+            "core.models.approval_task",
+            "core.models.data_backup",
             "core.models.approval_history",
             "core.models.script",
             "core.models.print_template",
@@ -580,6 +582,7 @@ class DynamicDatabaseConfigService:
         # 在实际项目中，可以通过分析模型的ForeignKey关系来确定依赖
         logger.info("🔗 分析模型依赖关系...")
 
+        from .database import get_db_connection
         conn = await get_db_connection()
         try:
             # 查询所有活跃应用

@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptions, ProFormText, ProFormSelect, ProFormSwitch, ProFormTreeSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormTreeSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Card, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -616,12 +616,12 @@ const UserListPage: React.FC = () => {
     { 
       title: '部门', 
       dataIndex: ['department', 'name'], 
-      render: (_: any, record: User) => record.department?.name || '-' 
+      render: (_: any, record: User) => record?.department?.name || '-' 
     },
     { 
       title: '职位', 
       dataIndex: ['position', 'name'], 
-      render: (_: any, record: User) => record.position?.name || '-' 
+      render: (_: any, record: User) => record?.position?.name || '-' 
     },
     {
       title: '角色',
@@ -629,7 +629,7 @@ const UserListPage: React.FC = () => {
       span: 2,
       render: (_: any, record: User) => (
         <Space>
-          {record.roles?.map(role => (
+          {record?.roles?.map(role => (
             <Tag key={role.uuid}>{role.name}</Tag>
           ))}
         </Space>
@@ -638,12 +638,12 @@ const UserListPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'is_active',
-      render: (_: any, record: User) => (record.is_active ? '启用' : '禁用'),
+      render: (_: any, record: User) => (record?.is_active ? '启用' : '禁用'),
     },
     {
       title: '组织管理员',
       dataIndex: 'is_tenant_admin',
-      render: (_: any, record: User) => (record.is_tenant_admin ? '是' : '否'),
+      render: (_: any, record: User) => (record?.is_tenant_admin ? '是' : '否'),
     },
     { title: '最后登录', dataIndex: 'last_login', valueType: 'dateTime' },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
@@ -768,6 +768,7 @@ const UserListPage: React.FC = () => {
             { type: 'email', message: '请输入正确的邮箱地址' }
           ]}
           placeholder="请输入邮箱（可选）"
+          fieldProps={{ autoComplete: 'email' }}
           colProps={{ span: 12 }}
         />
         <ProFormText
@@ -823,7 +824,7 @@ const UserListPage: React.FC = () => {
               children: 'children',
             },
             treeData: deptTreeData,
-            treeDefaultExpandAll: true,
+            // treeDefaultExpandAll: true,
           }}
           colProps={{ span: 12 }}
         />
@@ -851,13 +852,11 @@ const UserListPage: React.FC = () => {
         <ProFormSwitch
           name="is_active"
           label="是否启用"
-          initialValue={true}
           colProps={{ span: 12 }}
         />
         <ProFormSwitch
           name="is_tenant_admin"
           label="是否组织管理员"
-          initialValue={false}
           colProps={{ span: 12 }}
         />
       </FormModalTemplate>
@@ -871,31 +870,23 @@ const UserListPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || undefined}
         columns={detailColumns}
-        customContent={
-          <>
-            <ProDescriptions<User>
-              dataSource={detailData || undefined}
-              column={2}
-              columns={detailColumns}
-            />
-            {detailData && (
-              <div style={{ marginTop: 24 }}>
-                <Card title="人员二维码">
-                  <QRCodeGenerator
-                    qrcodeType="EMP"
-                    data={{
-                      employee_uuid: detailData.uuid,
-                      employee_code: detailData.username,
-                      employee_name: detailData.full_name || detailData.username,
-                    }}
-                    autoGenerate={true}
-                  />
-                </Card>
-              </div>
-            )}
-          </>
-        }
-      />
+      >
+        {detailData && (
+          <div style={{ marginTop: 24 }}>
+            <Card title="人员二维码">
+              <QRCodeGenerator
+                qrcodeType="EMP"
+                data={{
+                  employee_uuid: detailData.uuid,
+                  employee_code: detailData.username,
+                  employee_name: detailData.full_name || detailData.username,
+                }}
+                autoGenerate={true}
+              />
+            </Card>
+          </div>
+        )}
+      </DetailDrawerTemplate>
     </>
   );
 };

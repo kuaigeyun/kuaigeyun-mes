@@ -10,9 +10,9 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, message, Input, theme, Modal, Spin } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -85,7 +85,7 @@ const CustomFieldListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
+  const formRef = useRef<ProFormInstance>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // 功能页面选择状态（左右结构）
@@ -99,7 +99,7 @@ const CustomFieldListPage: React.FC = () => {
   const [currentFieldUuid, setCurrentFieldUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [fieldType, setFieldType] = useState<'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json'>('text');
-  const [configForm, setConfigForm] = useState<Record<string, any>>({});
+
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -116,9 +116,7 @@ const CustomFieldListPage: React.FC = () => {
   const loadPageConfigs = async () => {
     try {
       setPageConfigsLoading(true);
-      console.log('🔍 开始加载自定义字段页面配置...');
       const pages = await getCustomFieldPages();
-      console.log(`✅ 成功加载 ${pages.length} 个页面配置:`, pages.map(p => p.pageCode));
       setPageConfigs(pages);
 
       // 默认选中第一个页面（仅当没有选中页面时）
@@ -215,7 +213,6 @@ const CustomFieldListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentFieldUuid(null);
     setFieldType('text');
-    setConfigForm({});
     setModalVisible(true);
     // 重置表单并设置默认值
     formRef.current?.resetFields();
@@ -238,7 +235,7 @@ const CustomFieldListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentFieldUuid(record.uuid);
       setFieldType(record.field_type);
-      setConfigForm(record.config || {});
+      setFieldType(record.field_type);
       setModalVisible(true);
 
       // 获取字段详情
@@ -421,10 +418,10 @@ const CustomFieldListPage: React.FC = () => {
         }
       } else if (fieldType === 'image') {
         if (values.image_max_size) config.maxSize = parseInt(values.image_max_size);
-        if (values.image_allowed_types) config.allowedTypes = values.image_allowed_types.split(',').map(t => t.trim());
+        if (values.image_allowed_types) config.allowedTypes = values.image_allowed_types.split(',').map((t: string) => t.trim());
       } else if (fieldType === 'file') {
         if (values.file_max_size) config.maxSize = parseInt(values.file_max_size);
-        if (values.file_allowed_types) config.allowedTypes = values.file_allowed_types.split(',').map(t => t.trim());
+        if (values.file_allowed_types) config.allowedTypes = values.file_allowed_types.split(',').map((t: string) => t.trim());
       } else if (fieldType === 'associated_object') {
         if (values.associated_table) config.associatedTable = values.associated_table;
         if (values.associated_field) config.associatedField = values.associated_field;
@@ -700,7 +697,7 @@ const CustomFieldListPage: React.FC = () => {
                 placeholder="请选择关联的数据表"
                 extra="选择要关联的数据表"
                 fieldProps={{
-                  onChange: (value: string) => {
+                  onChange: (_value: string) => {
                     // 当关联表名改变时，清空关联字段名
                     formRef.current?.setFieldsValue({
                       associated_field: undefined,
@@ -715,7 +712,7 @@ const CustomFieldListPage: React.FC = () => {
                 label="关联字段名"
                 rules={[{ required: true, message: '请选择关联字段名' }]}
                 dependencies={['associated_table']}
-                options={({ associated_table }) => {
+                options={({ associated_table }: any) => {
                   if (!associated_table) {
                     return [];
                   }
@@ -952,7 +949,7 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: '字段配置',
       dataIndex: 'config',
-      render: (value: any) => (
+      render: (_: any, entity: CustomField) => (
         <pre style={{
           margin: 0,
           padding: '8px',
@@ -961,33 +958,33 @@ const CustomFieldListPage: React.FC = () => {
           overflow: 'auto',
           maxHeight: '300px',
         }}>
-          {JSON.stringify(value || {}, null, 2)}
+          {JSON.stringify(entity?.config || {}, null, 2)}
         </pre>
       ),
     },
     {
       title: '是否必填',
       dataIndex: 'is_required',
-      render: (value: boolean) => (value ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_required ? '是' : '否'),
     },
     {
       title: '是否可搜索',
       dataIndex: 'is_searchable',
-      render: (value: boolean) => (value ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_searchable ? '是' : '否'),
     },
     {
       title: '是否可排序',
       dataIndex: 'is_sortable',
-      render: (value: boolean) => (value ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_sortable ? '是' : '否'),
     },
     { title: '排序顺序', dataIndex: 'sort_order' },
     {
       title: '状态',
       dataIndex: 'is_active',
-      render: (value: boolean) => (value ? '启用' : '禁用'),
+      render: (_: any, entity: CustomField) => (entity?.is_active ? '启用' : '禁用'),
     },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' as const },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' as const },
   ];
 
   return (
@@ -1113,7 +1110,7 @@ const CustomFieldListPage: React.FC = () => {
                               </div>
                             </div>
                             {fieldCount > 0 && (
-                              <Tag color="blue" size="small" style={{ marginLeft: '8px' }}>
+                              <Tag color="blue" style={{ marginLeft: '8px' }}>
                                 {fieldCount}
                               </Tag>
                             )}
@@ -1184,7 +1181,7 @@ const CustomFieldListPage: React.FC = () => {
                   <UniTable<CustomField>
                     actionRef={actionRef}
                     columns={columns}
-                    request={async (params, sort, _filter) => {
+                    request={async (params, _sort, _filter) => {
                       // 处理搜索参数
                       const apiParams: any = {
                         page: params.current || 1,
@@ -1270,16 +1267,8 @@ const CustomFieldListPage: React.FC = () => {
         isEdit={isEdit}
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-          grid={true}
-          rowProps={{
-            gutter: 16,
-          }}
-        >
           <ProFormText
             name="name"
             label="字段名称"
@@ -1325,10 +1314,8 @@ const CustomFieldListPage: React.FC = () => {
               { label: 'JSON', value: 'json' },
             ]}
             fieldProps={{
-              onChange: (value) => {
+              onChange: (value: any) => {
                 setFieldType(value);
-                // 重置配置
-                setConfigForm({});
               },
             }}
             disabled={isEdit}
@@ -1378,7 +1365,6 @@ const CustomFieldListPage: React.FC = () => {
             name="sort_order"
             label="排序顺序"
             fieldProps={{ min: 0 }}
-            initialValue={0}
             colProps={{ span: 12 }}
           />
           <ProFormSwitch
@@ -1386,7 +1372,6 @@ const CustomFieldListPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
@@ -1396,7 +1381,7 @@ const CustomFieldListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
+        dataSource={detailData || undefined}
         columns={detailColumns}
         column={1}
       />

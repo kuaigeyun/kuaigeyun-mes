@@ -90,6 +90,7 @@ from core.api.user_profile.user_profile import router as user_profile_router
 from core.api.user_preferences.user_preferences import router as user_preferences_router
 from core.api.user_messages.user_messages import router as user_messages_router
 from core.api.user_tasks.user_tasks import router as user_tasks_router
+from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.operation_logs.operation_logs import router as operation_logs_router
 from core.api.login_logs.login_logs import router as login_logs_router
 from core.api.online_users.online_users import router as online_users_router
@@ -658,6 +659,7 @@ app.include_router(user_profile_router, prefix="/api/v1/personal")
 app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
 app.include_router(user_tasks_router, prefix="/api/v1/personal")
+app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(operation_logs_router, prefix="/api/v1/core")
 app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
@@ -674,6 +676,24 @@ app.include_router(performance_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
+
+# 注册 Inngest 服务端点
+if INNGEST_AVAILABLE and inngest_serve:
+    from core.inngest.functions import __all__ as inngest_functions_names
+    import core.inngest.functions as inngest_functions
+    
+    # 过滤出已定义且非空的函数
+    functions = []
+    for name in inngest_functions_names:
+        fn = getattr(inngest_functions, name)
+        if fn is not None:
+            functions.append(fn)
+    
+    if functions:
+        inngest_serve(app, inngest_client, functions)
+        logger.info(f"✅ Inngest 工作流已注册: {len(functions)} 个函数")
+    else:
+        logger.warning("⚠️ 未找到可注册的 Inngest 函数")
 
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动注册应用路由

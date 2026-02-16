@@ -7,8 +7,8 @@
  * Date: 2026-01-27
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Space, message, Spin } from 'antd';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Card, Button, Space, App, Spin } from 'antd';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { qrcodeApi, type QRCodeGenerateRequest, type QRCodeGenerateResponse } from '../../services/qrcode';
 
@@ -44,6 +44,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   autoGenerate = true,
   onGenerateSuccess,
 }) => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [qrcodeResponse, setQrcodeResponse] = useState<QRCodeGenerateResponse | null>(null);
   const isMountedRef = useRef(true);
@@ -58,12 +59,15 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
   /**
    * 生成二维码
    */
-  const generateQRCode = async () => {
+  // 使用 JSON.stringify 比较 data 内容，避免因引用变化导致频繁重新生成
+  const stableData = useMemo(() => data, [JSON.stringify(data)]);
+
+  const generateQRCode = useCallback(async (silent: boolean = false) => {
     try {
       setLoading(true);
       const request: QRCodeGenerateRequest = {
         qrcode_type: qrcodeType,
-        data,
+        data: stableData,
         size,
         border,
         error_correction: errorCorrection,
@@ -72,14 +76,16 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
       if (!isMountedRef.current) return;
       setQrcodeResponse(response);
       onGenerateSuccess?.(response);
-      message.success('二维码生成成功');
+      if (!silent) {
+        message.success('二维码生成成功');
+      }
     } catch (error: any) {
       if (!isMountedRef.current) return;
       message.error(`生成二维码失败: ${error.message || '未知错误'}`);
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  };
+  }, [qrcodeType, stableData, size, border, errorCorrection, message, onGenerateSuccess]);
 
   /**
    * 下载二维码
@@ -121,10 +127,10 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
    * 自动生成二维码
    */
   useEffect(() => {
-    if (autoGenerate && data && Object.keys(data).length > 0) {
-      generateQRCode();
+    if (autoGenerate && stableData && Object.keys(stableData).length > 0) {
+      generateQRCode(true);
     }
-  }, [autoGenerate, qrcodeType, data, size, border, errorCorrection]);
+  }, [autoGenerate, generateQRCode, stableData]);
 
   return (
     <Card
@@ -133,7 +139,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
         <Space>
           <Button
             icon={<ReloadOutlined />}
-            onClick={generateQRCode}
+            onClick={() => generateQRCode(false)}
             loading={loading}
             disabled={!data || Object.keys(data).length === 0}
           >

@@ -14,6 +14,8 @@ from core.inngest.client import inngest_client
 from core.models.scheduled_task import ScheduledTask
 from core.services.scheduling.scheduled_task_service import ScheduledTaskService
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
+from core.services.system.data_backup_service import DataBackupService
+from core.schemas.data_backup import DataBackupCreate
 from infra.domain.tenant_context import get_current_tenant_id
 
 
@@ -92,6 +94,8 @@ async def scheduled_task_executor_function(event: Event) -> Dict[str, Any]:
             result = await _execute_api_call_task(scheduled_task)
         elif scheduled_task.type == "python_script":
             result = await _execute_python_script_task(scheduled_task)
+        elif scheduled_task.type == "backup":
+            result = await _execute_backup_task(tenant_id, scheduled_task)
         else:
             result = {
                 "success": False,
@@ -218,4 +222,41 @@ async def _execute_python_script_task(scheduled_task: ScheduledTask) -> Dict[str
         "success": False,
         "error": "Python 脚本任务执行功能尚未实现"
     }
+
+
+async def _execute_backup_task(tenant_id: int, scheduled_task: ScheduledTask) -> Dict[str, Any]:
+    """
+    执行数据备份任务
+    
+    Args:
+        tenant_id: 租户ID
+        scheduled_task: 定时任务对象
+        
+    Returns:
+        Dict[str, Any]: 执行结果
+    """
+    task_config = scheduled_task.task_config or {}
+    name = task_config.get("name", f"自动备份_{datetime.now().strftime('%Y%m%d')}")
+    backup_type = task_config.get("backup_type", "full")
+    backup_scope = task_config.get("backup_scope", "all")
+    backup_tables = task_config.get("backup_tables")
+    
+    try:
+        data = DataBackupCreate(
+            name=name,
+            backup_type=backup_type,
+            backup_scope=backup_scope,
+            backup_tables=backup_tables
+        )
+        backup = await DataBackupService.create_backup_task(tenant_id, data)
+        return {
+            "success": True,
+            "backup_uuid": str(backup.uuid),
+            "status": backup.status
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"启动备份任务失败: {str(e)}"
+        }
 
