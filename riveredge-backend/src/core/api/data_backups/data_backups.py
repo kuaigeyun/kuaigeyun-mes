@@ -24,6 +24,20 @@ async def get_backups(
     """
     获取备份列表
     """
+    # 权限校验：非平台管理员不能查询全量备份库，除非显式指定了自己的租户ID
+    # 在 Service 层已经通过 tenant_id 隔离了
+    
+    # 特殊逻辑：如果是平台管理员且没有指定租户，可能想看系统级的（tenant_id is None）
+    search_tenant_id = current_user.tenant_id
+    
+    if backup_scope == "all" and not current_user.is_infra_admin_user():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="普通租户无权访问全量备份数据"
+        )
+    """
+    获取备份列表
+    """
     items, total = await DataBackupService.get_backups(
         current_user.tenant_id,
         page,
@@ -48,6 +62,13 @@ async def create_backup(
     """
     创建备份任务
     """
+    # 核心安全校验：非系统管理员严禁尝试全量备份（backup_scope='all'）
+    if data.backup_scope == "all" and not current_user.is_infra_admin_user():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="权限不足：仅平台管理员可创建全量备份（包含所有租户数据）。"
+        )
+        
     return await DataBackupService.create_backup_task(current_user.tenant_id, data)
 
 

@@ -33,6 +33,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/login",
         "/api/v1/auth/logout",
         "/api/v1/auth/refresh",
+        "/api/inngest",
     ]
     
     def __init__(self, app):
@@ -111,6 +112,10 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             bool: 是否需要记录日志
         """
         # 排除的路径
+        if request.url.path == "/api/inngest" or request.url.path == "/api/inngest/":
+            logger.debug(f"跳过操作日志记录（Inngest 路径）: {request.url.path}")
+            return False
+            
         if request.url.path in self.EXCLUDED_PATHS:
             logger.debug(f"跳过操作日志记录（排除路径）: {request.url.path}")
             return False
