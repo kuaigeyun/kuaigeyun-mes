@@ -153,15 +153,6 @@ export function translateAppMenuItemName(
     return '';
   }
 
-  // 显式替换：数据库/缓存中历史遗留的旧名称统一显示为新名称（不依赖 path，确保替换生效）
-  const trimmed = name.trim();
-  if (trimmed === '工程BOM') {
-    return t('app.master-data.menu.process.engineering-bom', { defaultValue: '物料清单BOM' });
-  }
-  if (trimmed === '制造SOP') {
-    return t('app.master-data.menu.process.sop', { defaultValue: '标准操作SOP' });
-  }
-
   // 如果 name 已经是翻译 key，直接翻译
   if (name.includes('.') && !name.startsWith('/')) {
     const translated = t(name, { defaultValue: name });
@@ -181,6 +172,13 @@ export function translateAppMenuItemName(
       relativePath = path.replace(`/apps/${appCode}/`, '');
     }
   } else if (children && children.length > 0) {
+    // 当 name 是翻译 key（如 app.xxx.menu.inbound-group）时，优先直接翻译，避免从子路径推断出父级名称（如 warehouse-management → 仓储管理）
+    if (name?.startsWith('app.')) {
+      const directTranslated = t(name, { defaultValue: '' });
+      if (directTranslated) {
+        return directTranslated;
+      }
+    }
     // 没有path但有子菜单的情况（分组菜单）：从第一个子菜单的path提取应用code
     const firstChildPath = children[0]?.path;
     if (firstChildPath) {
@@ -340,7 +338,8 @@ export function translatePathTitle(path: string, t: TFunction): string {
     }
   }
 
-  // 如果都找不到，尝试使用中文映射（硬编码的后备方案）
+  // 如果都找不到，尝试使用 path.{segment} 映射（由 zh-CN/en-US 等 locale 提供）
+  // 已移除 engineering-bom、sop 的硬编码，统一使用 path.engineering-bom、path.sop 翻译 key
   const chinesePathMap: Record<string, string> = {
     'plants': '厂区管理',
     'workshops': '车间管理',
@@ -357,8 +356,6 @@ export function translatePathTitle(path: string, t: TFunction): string {
     'defect-types': '不良品类型',
     'operations': '工序',
     'routes': '工艺路线',
-    'engineering-bom': '物料清单BOM',
-    'sop': '标准操作SOP',
     'customers': '客户',
     'suppliers': '供应商',
     'holidays': '假期设置',

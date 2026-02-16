@@ -1664,227 +1664,126 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
   }, [isDarkMode, isLightModeLightBg]); // 当主题或背景色变化时重新设置
 
-  // 获取翻译后的菜单配置（必须在 generateBreadcrumb 之前定义）
+  // 获取翻译后的菜单配置（与 applicationMenus 合并后由 filteredMenuData 提供给面包屑、标题、UniTabs）
   const menuConfig = useMemo(() => getMenuConfig(t), [t]);
 
+  const filteredMenuData = useMemo(() => {
+    if (!currentUser) return [];
 
-  /**
-   * 根据当前路径和菜单配置生成面包屑
-   */
-  const generateBreadcrumb = useMemo(() => {
-    const breadcrumbItems: {
-      title: string;
-      path?: string;
-      icon?: React.ReactNode;
-      menu?: { items: Array<{ key: string; label: string; onClick: () => void }> };
-    }[] = [];
+    let menuItems = [...menuConfig];
 
-    // 查找当前路径对应的菜单项及其父级菜单
-    const findMenuPath = (items: MenuDataItem[] | undefined, targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
-      // 防御性检查：如果 items 为空或未定义，直接返回 null
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return null;
-      }
+    // 【第二组】应用菜单：从后端动态加载
+    // 应用菜单处理逻辑：
+    // 1. 应用的名称作为分组标题（不可点击，灰色，小字号）
+    // 2. 应用的子菜单提升到主菜单一级（和"仪表盘"、"系统配置"等同一级别）
+    if (applicationMenus && applicationMenus.length > 0) {
+      // 收集所有应用菜单项（分组标题 + 子菜单）
+      const appMenuItems: MenuDataItem[] = [];
 
-      for (const item of items) {
-        const currentPath = [...path, item];
+      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序）
+      const sortedApplicationMenus = applicationMenus;
 
-        // 精确匹配
-        if (item.path === targetPath) {
-          return currentPath;
-        }
+      // 遍历每个应用，将应用的子菜单提升到主菜单级别
+      sortedApplicationMenus.forEach(appMenu => {
+        if (appMenu.children && appMenu.children.length > 0) {
+          // 1. 先添加应用名称作为分组标题（仅在菜单展开时显示）
+          // 使用 Ant Design 原生的 type: 'group' 来创建分组标题（与系统级菜单保持一致）
+          // 注意：即使子菜单已经提升到主菜单级别，group 仍然需要 children 才能被渲染
+          // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
+          // 菜单收起时不显示分组标题
+          if (!collapsed) {
+            // 翻译应用名称（直接从路径提取应用 code，不依赖数据库中存储的名称）
+            // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
+            const firstChildPath = appMenu.children[0]?.path;
+            let translatedAppName = appMenu.name; // 默认使用数据库中的名称
 
-        // 子菜单递归查找
-        if (item.children) {
-          const found = findMenuPath(item.children, targetPath, currentPath);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    // 查找父级菜单项，用于获取同级菜单
-    const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
-      for (const item of items) {
-        if (item.path === targetPath) {
-          return { item, parent };
-        }
-        if (item.children) {
-          const found = findParentMenu(item.children, targetPath, item);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const menuPath = findMenuPath(menuConfig, location.pathname);
-
-    // 查找菜单组下每层第一组的第一个实际菜单项（有 path 的）
-    // 规则：只查找每层第一组的第一个菜单项，不遍历所有项
-    const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
-      if (!items || !Array.isArray(items) || items.length === 0) return null;
-
-      // 只处理第一项（第一组）
-      const firstItem = items[0];
-
-      // 如果第一项是菜单组，递归查找其子项的第一组
-      if (firstItem.type === 'group' && firstItem.children) {
-        return findFirstActualMenuItem(firstItem.children);
-      }
-
-      // 如果第一项是实际菜单项（有 path），返回它
-      if (firstItem.path && firstItem.name) {
-        return firstItem;
-      }
-
-      // 如果第一项有子项（但不是菜单组），递归查找其子项的第一组
-      if (firstItem.children) {
-        return findFirstActualMenuItem(firstItem.children);
-      }
-
-      return null;
-    };
-
-    if (menuPath) {
-      menuPath.forEach((item, index) => {
-        if (item.name && item.path) {
-          // 检查是否有同级菜单（父级菜单有多个子项）
-          let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-
-          // 检查第一级菜单项：如果第一个子项是菜单组，找到该菜单组下的第一个实际菜单项
-          let actualPath = item.path;
-          if (index === 0 && item.children && item.children.length > 0) {
-            const firstChild = item.children[0];
-            // 如果第一个子项是菜单组，找到该菜单组下的第一个实际菜单项
-            if (firstChild.type === 'group' && firstChild.children) {
-              const firstMenuItem = findFirstActualMenuItem(firstChild.children);
-              if (firstMenuItem && firstMenuItem.path) {
-                actualPath = firstMenuItem.path;
+            // 优先从路径提取应用 code 并使用翻译 key
+            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+              const appCode = extractAppCodeFromPath(firstChildPath);
+              if (appCode) {
+                // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
+                const appNameKey = `app.${appCode}.name`;
+                const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
+                // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
+                if (appNameTranslated && appNameTranslated !== appNameKey) {
+                  translatedAppName = appNameTranslated;
+                }
               }
             }
-          }
 
-          if (index > 0) {
-            // 获取父级菜单项
-            const parentItem = menuPath[index - 1];
-            if (parentItem.children && parentItem.children.length > 1) {
-              // 有同级菜单，创建下拉菜单
-              menu = {
-                items: parentItem.children
-                  .filter(child => child.name && child.path)
-                  .map(child => {
-                    // 检查是否是应用菜单（通过路径判断）
-                    const isAppMenu = child.path?.startsWith('/apps/');
-                    const label = isAppMenu
-                      ? translateAppMenuItemName(child.name as string, child.path, t)
-                      : translateMenuName(child.name as string, t);
-                    return {
-                      key: child.path!,
-                      label: label,
-                      onClick: () => {
-                        navigate(child.path!);
-                      },
-                    };
-                  }),
-              };
+            // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
+            if (translatedAppName === appMenu.name) {
+              translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
             }
+
+            const groupTitle: MenuDataItem = {
+              name: translatedAppName,
+              label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
+              key: `app-group-${appMenu.uuid}`,
+              type: 'group', // 使用原生 group 类型
+              className: 'menu-group-title-app app-menu-container-start', // 用于样式识别和容器开始标记
+              icon: undefined,
+              children: [
+                // 创建一个隐藏的占位子菜单项，确保 group 能被渲染
+                {
+                  key: `app-group-placeholder-${appMenu.uuid}`,
+                  name: '', // 空名称，不显示
+                  path: undefined,
+                  style: { display: 'none' },
+                },
+              ],
+            };
+            appMenuItems.push(groupTitle);
           }
 
-          // 检查是否是应用菜单（通过路径判断）
-          const isAppMenu = item.path?.startsWith('/apps/');
-          const breadcrumbTitle = isAppMenu
-            ? translateAppMenuItemName(item.name as string, item.path, t)
-            : translateMenuName(item.name as string, t);
-
-          breadcrumbItems.push({
-            title: breadcrumbTitle, // 使用统一的翻译逻辑
-            path: actualPath, // 使用实际路径（可能是第一个菜单组下的第一个菜单项）
-            icon: item.icon,
-            menu: menu,
+          // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
+          appMenu.children.forEach(childMenu => {
+            // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
+            // 注意：应用菜单的子菜单也需要使用应用菜单翻译逻辑，递归处理子菜单时也会传递 isAppMenu=true
+            const converted = convertMenuTreeToMenuDataItem(childMenu, true);
+            // 为应用菜单项添加特殊的 className，用于 CSS 容器样式
+            if (converted.className) {
+              converted.className = `${converted.className} app-menu-item`;
+            } else {
+              converted.className = 'app-menu-item';
+            }
+            appMenuItems.push(converted);
           });
-        } else if (item.name && item.type === 'group') {
-          // 菜单组：找到第一个实际菜单项作为点击目标
-          const firstMenuItem = findFirstActualMenuItem(item.children);
-          if (firstMenuItem && firstMenuItem.path) {
-            // 检查是否有同级菜单组（父级菜单有多个子项，包括菜单组）
-            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-
-            if (index > 0) {
-              const parentItem = menuPath[index - 1];
-              if (parentItem.children && parentItem.children.length > 1) {
-                // 为同级菜单组创建下拉菜单，每个菜单组显示其第一个实际菜单项
-                menu = {
-                  items: parentItem.children
-                    .filter(child => child.name)
-                    .map(child => {
-                      // 如果是菜单组，找到第一个实际菜单项
-                      if (child.type === 'group') {
-                        const firstItem = findFirstActualMenuItem(child.children);
-                        if (firstItem && firstItem.path) {
-                          // 检查是否是应用菜单（通过路径判断）
-                          const isAppMenu = firstItem.path.startsWith('/apps/');
-                          const label = isAppMenu
-                            ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
-                            : translateMenuName(child.name as string, t);
-                          return {
-                            key: firstItem.path,
-                            label: label,
-                            onClick: () => {
-                              navigate(firstItem.path!);
-                            },
-                          };
-                        }
-                      } else if (child.path) {
-                        // 检查是否是应用菜单（通过路径判断）
-                        const isAppMenu = child.path.startsWith('/apps/');
-                        const label = isAppMenu
-                          ? translateAppMenuItemName(child.name as string, child.path, t)
-                          : translateMenuName(child.name as string, t);
-                        return {
-                          key: child.path,
-                          label: label,
-                          onClick: () => {
-                            navigate(child.path!);
-                          },
-                        };
-                      }
-                      return null;
-                    })
-                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
-                };
-              }
-            }
-
-            // 检查是否是应用菜单（通过路径判断）
-            const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
-            const breadcrumbTitle = isAppMenu
-              ? translateAppMenuItemName(item.name as string, firstMenuItem.path, t)
-              : translateMenuName(item.name as string, t);
-            breadcrumbItems.push({
-              title: breadcrumbTitle,
-              path: firstMenuItem.path, // 使用第一个实际菜单项的路径
-              icon: item.icon,
-              menu: menu,
-            });
-          }
         }
       });
-    } else {
-      // 如果没有找到匹配的菜单项，使用路径翻译
-      const pathSegments = location.pathname.split('/').filter(Boolean);
-      pathSegments.forEach((segment, index) => {
-        const path = '/' + pathSegments.slice(0, index + 1).join('/');
-        // 使用统一的路径翻译逻辑
-        const translatedTitle = translatePathTitle(path, t);
-        breadcrumbItems.push({
-          title: translatedTitle,
-          path: path,
-        });
+
+      // 插入到第二组位置（在仪表盘之后，系统菜单之前）
+      // 注意：分割线通过 CSS 添加，不通过菜单项
+      menuItems.splice(1, 0, ...appMenuItems);
+    }
+
+    // 【第四组】运营中心：仅平台级管理员可见
+    // 根据路径过滤，而不是名称（因为名称可能已翻译）
+    if (!currentUser.is_infra_admin) {
+      // 过滤掉运营中心菜单（通过检查是否有 /infra/operation 路径的子菜单来判断）
+      menuItems = menuItems.filter(item => {
+        // 如果菜单有子菜单，检查是否包含运营中心相关的路径
+        if (item.children) {
+          const hasInfraOperation = item.children.some(child =>
+            child.path?.startsWith('/infra/operation') ||
+            child.path?.startsWith('/infra/tenants') ||
+            child.path?.startsWith('/infra/packages') ||
+            child.path?.startsWith('/infra/monitoring') ||
+            child.path?.startsWith('/infra/inngest') ||
+            child.path?.startsWith('/infra/admin')
+          );
+          return !hasInfraOperation;
+        }
+        // 如果菜单没有子菜单，保留它（不是运营中心菜单）
+        return true;
       });
     }
 
-    return breadcrumbItems;
-  }, [location.pathname, menuConfig, navigate, t]);
+    // 注意：组织管理已从第三组移除，移至运营中心（第四组）
+    // 因此不再需要过滤第三组的组织管理菜单
+
+    return menuItems;
+  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
 
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
@@ -1895,8 +1794,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // 获取当前页面的标题
-    const pageTitle = findMenuTitleWithTranslation(location.pathname, menuConfig, t);
+    // 获取当前页面的标题（使用统一菜单数据 filteredMenuData，含应用菜单）
+    const pageTitle = findMenuTitleWithTranslation(location.pathname, filteredMenuData, t);
 
     // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
     let currentSiteName = 'RiverEdge SaaS';
@@ -1927,7 +1826,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     } else {
       document.title = `${currentSiteName} - 多组织管理框架`;
     }
-  }, [location.pathname, menuConfig, t, siteSetting]);
+  }, [location.pathname, filteredMenuData, t, siteSetting]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏
@@ -2108,123 +2007,223 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return openKeys;
   }, []);
 
-  const filteredMenuData = useMemo(() => {
-    if (!currentUser) return [];
+  /**
+   * 根据当前路径和统一菜单数据生成面包屑（使用 filteredMenuData，含应用菜单）
+   */
+  const generateBreadcrumb = useMemo(() => {
+    const breadcrumbItems: {
+      title: string;
+      path?: string;
+      icon?: React.ReactNode;
+      menu?: { items: Array<{ key: string; label: string; onClick: () => void }> };
+    }[] = [];
 
-    let menuItems = [...menuConfig];
+    // 查找当前路径对应的菜单项及其父级菜单
+    const findMenuPath = (items: MenuDataItem[] | undefined, targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return null;
+      }
 
-    // 【第二组】应用菜单：从后端动态加载
-    // 应用菜单处理逻辑：
-    // 1. 应用的名称作为分组标题（不可点击，灰色，小字号）
-    // 2. 应用的子菜单提升到主菜单一级（和"仪表盘"、"系统配置"等同一级别）
-    if (applicationMenus && applicationMenus.length > 0) {
-      // 收集所有应用菜单项（分组标题 + 子菜单）
-      const appMenuItems: MenuDataItem[] = [];
+      for (const item of items) {
+        const currentPath = [...path, item];
 
-      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序）
-      const sortedApplicationMenus = applicationMenus;
+        if (item.path === targetPath) {
+          return currentPath;
+        }
 
-      // 遍历每个应用，将应用的子菜单提升到主菜单级别
-      sortedApplicationMenus.forEach(appMenu => {
-        if (appMenu.children && appMenu.children.length > 0) {
-          // 1. 先添加应用名称作为分组标题（仅在菜单展开时显示）
-          // 使用 Ant Design 原生的 type: 'group' 来创建分组标题（与系统级菜单保持一致）
-          // 注意：即使子菜单已经提升到主菜单级别，group 仍然需要 children 才能被渲染
-          // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
-          // 菜单收起时不显示分组标题
-          if (!collapsed) {
-            // 翻译应用名称（直接从路径提取应用 code，不依赖数据库中存储的名称）
-            // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
-            const firstChildPath = appMenu.children[0]?.path;
-            let translatedAppName = appMenu.name; // 默认使用数据库中的名称
+        if (item.children) {
+          const found = findMenuPath(item.children, targetPath, currentPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
 
-            // 优先从路径提取应用 code 并使用翻译 key
-            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
-              const appCode = extractAppCodeFromPath(firstChildPath);
-              if (appCode) {
-                // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
-                const appNameKey = `app.${appCode}.name`;
-                const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
-                // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
-                if (appNameTranslated && appNameTranslated !== appNameKey) {
-                  translatedAppName = appNameTranslated;
-                }
+    const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
+      for (const item of items) {
+        if (item.path === targetPath) {
+          return { item, parent };
+        }
+        if (item.children) {
+          const found = findParentMenu(item.children, targetPath, item);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const menuPath = findMenuPath(filteredMenuData, location.pathname);
+
+    const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
+      if (!items || !Array.isArray(items) || items.length === 0) return null;
+      const firstItem = items[0];
+      if (firstItem.type === 'group' && firstItem.children) {
+        return findFirstActualMenuItem(firstItem.children);
+      }
+      if (firstItem.path && firstItem.name) {
+        return firstItem;
+      }
+      if (firstItem.children) {
+        return findFirstActualMenuItem(firstItem.children);
+      }
+      return null;
+    };
+
+    if (menuPath) {
+      menuPath.forEach((item, index) => {
+        if (item.name && item.path) {
+          let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+          let actualPath = item.path;
+          if (index === 0 && item.children && item.children.length > 0) {
+            const firstChild = item.children[0];
+            if (firstChild.type === 'group' && firstChild.children) {
+              const firstMenuItem = findFirstActualMenuItem(firstChild.children);
+              if (firstMenuItem && firstMenuItem.path) {
+                actualPath = firstMenuItem.path;
+              }
+            }
+          }
+
+          if (index > 0) {
+            const parentItem = menuPath[index - 1];
+            if (parentItem.children && parentItem.children.length > 1) {
+              menu = {
+                items: parentItem.children
+                  .filter(child => child.name && child.path)
+                  .map(child => {
+                    const isAppMenu = child.path?.startsWith('/apps/');
+                    const label = isAppMenu
+                      ? translateAppMenuItemName(child.name as string, child.path, t)
+                      : translateMenuName(child.name as string, t);
+                    return {
+                      key: child.path!,
+                      label: label,
+                      onClick: () => { navigate(child.path!); },
+                    };
+                  }),
+              };
+            }
+          }
+
+          const isAppMenu = item.path?.startsWith('/apps/');
+          const breadcrumbTitle = isAppMenu
+            ? translateAppMenuItemName(item.name as string, item.path, t)
+            : translateMenuName(item.name as string, t);
+
+          breadcrumbItems.push({
+            title: breadcrumbTitle,
+            path: actualPath,
+            icon: item.icon,
+            menu: menu,
+          });
+        } else if (item.name && item.type === 'group') {
+          const firstMenuItem = findFirstActualMenuItem(item.children);
+          if (firstMenuItem && firstMenuItem.path) {
+            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+
+            if (index > 0) {
+              const parentItem = menuPath[index - 1];
+              if (parentItem.children && parentItem.children.length > 1) {
+                menu = {
+                  items: parentItem.children
+                    .filter(child => child.name)
+                    .map(child => {
+                      if (child.type === 'group') {
+                        const firstItem = findFirstActualMenuItem(child.children);
+                        if (firstItem && firstItem.path) {
+                          const isAppMenu = firstItem.path.startsWith('/apps/');
+                          const label = isAppMenu
+                            ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
+                            : translateMenuName(child.name as string, t);
+                          return {
+                            key: firstItem.path,
+                            label: label,
+                            onClick: () => { navigate(firstItem.path!); },
+                          };
+                        }
+                      } else if (child.path) {
+                        const isAppMenu = child.path.startsWith('/apps/');
+                        const label = isAppMenu
+                          ? translateAppMenuItemName(child.name as string, child.path, t)
+                          : translateMenuName(child.name as string, t);
+                        return {
+                          key: child.path,
+                          label: label,
+                          onClick: () => { navigate(child.path!); },
+                        };
+                      }
+                      return null;
+                    })
+                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
+                };
               }
             }
 
-            // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
-            if (translatedAppName === appMenu.name) {
-              translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
-            }
-
-            const groupTitle: MenuDataItem = {
-              name: translatedAppName,
-              label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
-              key: `app-group-${appMenu.uuid}`,
-              type: 'group', // 使用原生 group 类型
-              className: 'menu-group-title-app app-menu-container-start', // 用于样式识别和容器开始标记
-              icon: undefined,
-              children: [
-                // 创建一个隐藏的占位子菜单项，确保 group 能被渲染
-                {
-                  key: `app-group-placeholder-${appMenu.uuid}`,
-                  name: '', // 空名称，不显示
-                  path: undefined,
-                  style: { display: 'none' },
-                },
-              ],
-            };
-            appMenuItems.push(groupTitle);
+            const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
+            // 分组菜单：传 children 而非 path，让 translateAppMenuItemName 从子路径推断分组 key（如 process），避免误用子项 path 导致翻译成子项名称
+            const breadcrumbTitle = isAppMenu
+              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
+              : translateMenuName(item.name as string, t);
+            breadcrumbItems.push({
+              title: breadcrumbTitle,
+              path: firstMenuItem.path,
+              icon: item.icon,
+              menu: menu,
+            });
           }
-
-          // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
-          appMenu.children.forEach(childMenu => {
-            // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
-            // 注意：应用菜单的子菜单也需要使用应用菜单翻译逻辑，递归处理子菜单时也会传递 isAppMenu=true
-            const converted = convertMenuTreeToMenuDataItem(childMenu, true);
-            // 为应用菜单项添加特殊的 className，用于 CSS 容器样式
-            if (converted.className) {
-              converted.className = `${converted.className} app-menu-item`;
-            } else {
-              converted.className = 'app-menu-item';
+        } else if (item.name && !item.path && item.children && item.children.length > 0) {
+          // 应用内父级分组（有 name 和 children 但无 path，如「工艺数据」「工厂数据」）
+          const firstMenuItem = findFirstActualMenuItem(item.children);
+          const linkPath = firstMenuItem?.path;
+          if (linkPath) {
+            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+            if (index > 0) {
+              const parentItem = menuPath[index - 1];
+              if (parentItem.children && parentItem.children.length > 1) {
+                menu = {
+                  items: parentItem.children
+                    .filter(child => child.name && (child.path || findFirstActualMenuItem(child.children)?.path))
+                    .map(child => {
+                      const childPath = child.path || findFirstActualMenuItem(child.children)?.path;
+                      if (!childPath) return null;
+                      const isAppMenu = childPath.startsWith('/apps/');
+                      const label = isAppMenu
+                        ? (child.path ? translateAppMenuItemName(child.name as string, child.path, t) : translateAppMenuItemName(child.name as string, undefined, t, child.children))
+                        : translateMenuName(child.name as string, t);
+                      return { key: childPath, label: label, onClick: () => { navigate(childPath); } };
+                    })
+                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
+                };
+              }
             }
-            appMenuItems.push(converted);
-          });
+            // 分组菜单：传 children 而非 path，避免翻译成第一个子项名称
+            const isAppMenu = linkPath.startsWith('/apps/');
+            const breadcrumbTitle = isAppMenu
+              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
+              : translateMenuName(item.name as string, t);
+            breadcrumbItems.push({
+              title: breadcrumbTitle,
+              path: linkPath,
+              icon: item.icon,
+              menu: menu,
+            });
+          }
         }
       });
-
-      // 插入到第二组位置（在仪表盘之后，系统菜单之前）
-      // 注意：分割线通过 CSS 添加，不通过菜单项
-      menuItems.splice(1, 0, ...appMenuItems);
-    }
-
-    // 【第四组】运营中心：仅平台级管理员可见
-    // 根据路径过滤，而不是名称（因为名称可能已翻译）
-    if (!currentUser.is_infra_admin) {
-      // 过滤掉运营中心菜单（通过检查是否有 /infra/operation 路径的子菜单来判断）
-      menuItems = menuItems.filter(item => {
-        // 如果菜单有子菜单，检查是否包含运营中心相关的路径
-        if (item.children) {
-          const hasInfraOperation = item.children.some(child =>
-            child.path?.startsWith('/infra/operation') ||
-            child.path?.startsWith('/infra/tenants') ||
-            child.path?.startsWith('/infra/packages') ||
-            child.path?.startsWith('/infra/monitoring') ||
-            child.path?.startsWith('/infra/inngest') ||
-            child.path?.startsWith('/infra/admin')
-          );
-          return !hasInfraOperation;
-        }
-        // 如果菜单没有子菜单，保留它（不是运营中心菜单）
-        return true;
+    } else {
+      const pathSegments = location.pathname.split('/').filter(Boolean);
+      pathSegments.forEach((segment, index) => {
+        const path = '/' + pathSegments.slice(0, index + 1).join('/');
+        const translatedTitle = translatePathTitle(path, t);
+        breadcrumbItems.push({
+          title: translatedTitle,
+          path: path,
+        });
       });
     }
 
-    // 注意：组织管理已从第三组移除，移至运营中心（第四组）
-    // 因此不再需要过滤第三组的组织管理菜单
-
-    return menuItems;
-  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t]);
+    return breadcrumbItems;
+  }, [location.pathname, filteredMenuData, navigate, t]);
 
   // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
   const requiredOpenKeys = useMemo(() => {
@@ -4645,7 +4644,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       >
         <UniTabs
-          menuConfig={menuConfig}
+          menuConfig={filteredMenuData}
           isFullscreen={isFullscreen}
           onToggleFullscreen={handleToggleFullscreen}
         >

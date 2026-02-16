@@ -407,6 +407,11 @@ export default {
   'app.master-data.menu.performance.holidays': '假期设置',
   'app.master-data.menu.performance.skills': '技能管理',
 
+  // 报表与看板应用
+  'app.kuaireport.name': '报表与看板',
+  'app.kuaireport.menu.reports': '报表中心',
+  'app.kuaireport.menu.dashboards': '大屏中心',
+
   // 审批设计器翻译
   'pages.approval.designer.title': '审批流程设计器',
   'pages.approval.designer.save': '保存',
