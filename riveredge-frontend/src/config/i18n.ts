@@ -2,6 +2,7 @@
  * i18n 配置文件
  * 
  * 集成 react-i18next，从后端语言管理获取翻译内容
+ * 菜单相关翻译（path.*、app.*.menu.*）优先使用本地 locale，避免后端历史错误值覆盖
  */
 
 import i18n from 'i18next';
@@ -12,6 +13,30 @@ import { getUserPreference } from '../services/userPreference';
 // 默认语言包（本地静态文件，作为后备）
 import zhCN from '../locales/zh-CN';
 import enUS from '../locales/en-US';
+
+/** 本地 locale 映射 */
+const LOCALE_BUNDLES: Record<string, Record<string, string>> = {
+  'zh-CN': zhCN,
+  'en-US': enUS,
+};
+
+/**
+ * 合并翻译：菜单相关 key 优先使用本地值，其余使用后端值
+ * 避免后端数据库中的历史错误（如 path.sop=制造SOP）覆盖正确的「标准操作SOP」
+ */
+function mergeTranslationsWithMenuPriority(
+  backendTranslations: Record<string, string>,
+  languageCode: string
+): Record<string, string> {
+  const local = LOCALE_BUNDLES[languageCode] || {};
+  const merged = { ...backendTranslations };
+  for (const key of Object.keys(local)) {
+    if ((key.startsWith('path.') || (key.startsWith('app.') && key.includes('.menu.'))) && local[key]) {
+      merged[key] = local[key];
+    }
+  }
+  return merged;
+}
 
 // 语言代码到语言名称的映射（仅保留简体中文和英语）
 export const LANGUAGE_MAP: Record<string, string> = {
@@ -88,12 +113,12 @@ export async function loadUserLanguage(): Promise<void> {
     // 切换到用户选择的语言
     await i18n.changeLanguage(languageCode);
 
-    // 从后端加载翻译内容
+    // 从后端加载翻译内容（菜单 key 优先使用本地 locale）
     try {
       const response = await getTranslations(languageCode);
       if (response.translations) {
-        // 将后端翻译内容添加到 i18n 资源中
-        i18n.addResourceBundle(languageCode, 'translation', response.translations, true, true);
+        const merged = mergeTranslationsWithMenuPriority(response.translations, languageCode);
+        i18n.addResourceBundle(languageCode, 'translation', merged, true, true);
       }
     } catch (error) {
       console.warn(`Failed to load translations from backend for ${languageCode}:`, error);
@@ -116,8 +141,8 @@ export async function refreshTranslations(): Promise<void> {
   try {
     const response = await getTranslations(currentLanguage);
     if (response.translations) {
-      // 更新 i18n 资源
-      i18n.addResourceBundle(currentLanguage, 'translation', response.translations, true, true);
+      const merged = mergeTranslationsWithMenuPriority(response.translations, currentLanguage);
+      i18n.addResourceBundle(currentLanguage, 'translation', merged, true, true);
     }
   } catch (error) {
     console.warn(`Failed to refresh translations for ${currentLanguage}:`, error);

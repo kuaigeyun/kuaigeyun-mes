@@ -138,6 +138,7 @@ export default {
   'path.materials': 'Materials',
   'path.material': 'Material Data',
   'path.bom': 'Material List (BOM)',
+  'path.engineering-bom': 'Material List (BOM)',
   'path.apps.master-data.process.engineering-bom.designer': 'BOM Graphical Design',
   'path.defect-types': 'Defect Types',
   'path.operations': 'Operations',
@@ -405,6 +406,11 @@ export default {
   'app.master-data.menu.performance': 'Performance Management',
   'app.master-data.menu.performance.holidays': 'Holiday Settings',
   'app.master-data.menu.performance.skills': 'Skills',
+
+  // Report & Dashboard application
+  'app.kuaireport.name': 'Reports & Dashboards',
+  'app.kuaireport.menu.reports': 'Report Center',
+  'app.kuaireport.menu.dashboards': 'Dashboard Center',
 
   // Approval Designer translations
   'pages.approval.designer.title': 'Approval Process Designer',
