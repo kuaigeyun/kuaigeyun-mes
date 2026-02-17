@@ -26,6 +26,8 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
+import { DOCUMENT_TYPE_OPTIONS } from '../../../../configs/printTemplateSchemas';
+import { EMPTY_UNIVER_DOC_JSON } from '../../../../components/univer-doc/constants';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -99,6 +101,7 @@ const PrintTemplateListPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentPrintTemplateUuid, setCurrentPrintTemplateUuid] = useState<string | null>(null);
+  const [currentEditDetail, setCurrentEditDetail] = useState<PrintTemplate | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
@@ -120,8 +123,10 @@ const PrintTemplateListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPrintTemplateUuid(null);
+    setCurrentEditDetail(null);
     setFormInitialValues({
       type: 'pdf',
+      document_type: undefined,
       is_active: true,
       is_default: false,
     });
@@ -138,10 +143,12 @@ const PrintTemplateListPage: React.FC = () => {
       
       // 获取打印模板详情
       const detail = await getPrintTemplateByUuid(record.uuid);
+      setCurrentEditDetail(detail);
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
         type: detail.type,
+        document_type: detail.config?.document_type,
         description: detail.description,
         is_active: detail.is_active,
         is_default: detail.is_default,
@@ -401,13 +408,23 @@ const PrintTemplateListPage: React.FC = () => {
       setFormLoading(true);
       
       if (isEdit && currentPrintTemplateUuid) {
-        await updatePrintTemplate(currentPrintTemplateUuid, values as UpdatePrintTemplateData);
+        const updateData: UpdatePrintTemplateData = {
+          name: values.name,
+          description: values.description,
+          is_active: values.is_active,
+          is_default: values.is_default,
+          config: { ...(currentEditDetail?.config || {}), document_type: values.document_type },
+        };
+        await updatePrintTemplate(currentPrintTemplateUuid, updateData);
         messageApi.success('更新成功');
       } else {
         const data: CreatePrintTemplateData = {
-          ...values,
-          content: '{}',
-          config: {},
+          name: values.name,
+          code: values.code,
+          type: values.type,
+          description: values.description,
+          content: EMPTY_UNIVER_DOC_JSON,
+          config: { document_type: values.document_type },
         };
         await createPrintTemplate(data);
         messageApi.success('创建成功');
@@ -852,6 +869,7 @@ const PrintTemplateListPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setFormInitialValues(undefined);
+          setCurrentEditDetail(null);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -875,9 +893,16 @@ const PrintTemplateListPage: React.FC = () => {
           tooltip="模板代码用于程序识别，创建后不可修改"
         />
         <SafeProFormSelect
+          name="document_type"
+          label="关联业务单据"
+          rules={[{ required: true, message: '请选择关联的业务单据类型，设计时可绑定对应变量' }]}
+          options={DOCUMENT_TYPE_OPTIONS}
+          tooltip="选择后，设计器将显示该单据的可用变量供插入"
+        />
+        <SafeProFormSelect
           name="type"
-          label="模板类型"
-          rules={[{ required: true, message: '请选择模板类型' }]}
+          label="输出格式"
+          rules={[{ required: true, message: '请选择输出格式' }]}
           options={[
             { label: 'PDF', value: 'pdf' },
             { label: 'HTML', value: 'html' },

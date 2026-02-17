@@ -275,11 +275,20 @@ export default defineConfig({
       'dayjs',
       'lodash-es',
       '@jiaminghi/data-view-react',
+      '@univerjs/core',
+      '@univerjs/design',
+      '@univerjs/docs',
+      '@univerjs/docs-ui',
+      '@univerjs/engine-formula',
+      '@univerjs/engine-render',
+      '@univerjs/network',
+      '@univerjs/ui',
+      '@univerjs/themes',
     ],
     // ⚠️ 关键修复：强制重新构建依赖，避免缓存问题
     force: false, // 开发环境不强制重建，提高启动速度
     // ⚠️ 关键修复：排除可能导致问题的依赖
-    exclude: ['@univerjs'], // UniverJS 体积较大，按需加载
+    // exclude: [], // UniverJS 体积较大，但排除可能导致 bundling 问题，且 '@univerjs' 写法可能无效
     // 优化预构建配置
     esbuildOptions: {
       target: 'es2015',
