@@ -66,6 +66,7 @@ import ApprovalProcessDesignerPage from '../pages/system/approval-processes/desi
 import ApprovalInstancesPage from '../pages/system/approval-processes/instances';
 import ReportTemplatesPage from '../pages/system/report-templates';
 import ReportDesignPage from '../pages/system/report-templates/design';
+import PrintTemplateDesignPage from '../pages/system/print-templates/design';
 import RoleScenariosPage from '../pages/system/role-scenarios';
 import OnboardingWizardPage from '../pages/system/onboarding-wizard';
 import DataQualityPage from '../pages/system/data-quality';
@@ -142,6 +143,7 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/scripts" element={<ScriptsPage />} />
       <Route path="/system/print-devices" element={<PrintDevicesPage />} />
       <Route path="/system/print-templates" element={<PrintTemplatesPage />} />
+      <Route path="/system/print-templates/design/:uuid" element={<PrintTemplateDesignPage />} />
       <Route path="/system/code-rules" element={<CodeRulesPage />} />
       <Route path="/system/data-dictionaries" element={<DataDictionariesPage />} />
       <Route path="/system/data-sources" element={<DataSourcesPage />} />

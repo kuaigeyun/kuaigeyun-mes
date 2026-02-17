@@ -434,6 +434,39 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [location.pathname, location.search, addTab]);
 
   /**
+   * 监听自定义事件更新标签标题
+   */
+  useEffect(() => {
+    const handleUpdateTabTitle = (event: CustomEvent<{ key?: string; path?: string; title: string }>) => {
+      const { key, path, title } = event.detail;
+      if (!title) return;
+
+      setTabs((prevTabs) => {
+        return prevTabs.map((tab) => {
+          // 优先匹配 key (完整路径+查询参数)
+          if (key && tab.key === key) {
+            return { ...tab, label: title };
+          }
+          // 其次匹配 path (仅路径部分)
+          if (path && tab.path === path) {
+            return { ...tab, label: title };
+          }
+          // 如果只提供了 path，但 tab.key 包含了 query，我们也尝试匹配 path 部分
+          if (path && tab.key.split('?')[0] === path) {
+             return { ...tab, label: title };
+          }
+          return tab;
+        });
+      });
+    };
+
+    window.addEventListener('riveredge:update-tab-title', handleUpdateTabTitle as EventListener);
+    return () => {
+      window.removeEventListener('riveredge:update-tab-title', handleUpdateTabTitle as EventListener);
+    };
+  }, []);
+
+  /**
    * 返回时关闭当前标签：当通过 state.closeTab 指定要关闭的标签时，移除该标签并清除 state
    */
   useEffect(() => {

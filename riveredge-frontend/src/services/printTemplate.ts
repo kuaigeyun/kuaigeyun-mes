@@ -39,6 +39,8 @@ export interface CreatePrintTemplateData {
   description?: string;
   content: string;
   config?: Record<string, any>;
+  is_active?: boolean;
+  is_default?: boolean;
 }
 
 export interface UpdatePrintTemplateData {

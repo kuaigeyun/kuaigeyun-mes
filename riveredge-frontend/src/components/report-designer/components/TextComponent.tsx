@@ -18,22 +18,38 @@ const { Title, Paragraph, Text } = Typography;
  */
 export interface TextComponentProps {
   component: ReportComponent;
+  data?: Record<string, any>;
 }
 
 /**
  * 文本组件
  */
-const TextComponent: React.FC<TextComponentProps> = ({ component }) => {
+const TextComponent: React.FC<TextComponentProps> = ({ component, data = {} }) => {
   const { content, textType = 'paragraph', style } = component;
+
+  // 变量替换
+  const resolvedContent = React.useMemo(() => {
+    if (!content) return '';
+    return content.replace(/\{\{([\w.]+)\}\}/g, (_: string, key: string) => {
+      // 支持点号访问嵌套属性，如 user.name
+      const keys = key.split('.');
+      let value = data;
+      for (const k of keys) {
+        value = value?.[k];
+        if (value === undefined) break;
+      }
+      return value !== undefined ? String(value) : `{{${key}}}`;
+    });
+  }, [content, data]);
 
   switch (textType) {
     case 'title':
-      return <Title level={component.level || 1} style={style}>{content}</Title>;
+      return <Title level={component.level || 1} style={style}>{resolvedContent}</Title>;
     case 'label':
-      return <Text strong style={style}>{content}</Text>;
+      return <Text strong style={style}>{resolvedContent}</Text>;
     case 'paragraph':
     default:
-      return <Paragraph style={style}>{content}</Paragraph>;
+      return <Paragraph style={style}>{resolvedContent}</Paragraph>;
   }
 };
 

@@ -58,6 +58,7 @@ import {
   PlayCircleOutlined,
   QrcodeOutlined,
   DeleteOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -112,6 +113,7 @@ import CodeField from '../../../../../components/code-field'
 import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestion-float-panel'
 import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
+import WorkOrderPrintModal from './components/WorkOrderPrintModal'
 
 interface WorkOrder {
   id?: number
@@ -464,6 +466,10 @@ const WorkOrdersPage: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<any[]>([])
   const dispatchFormRef = useRef<any>(null)
 
+  // 打印相关状态
+  const [printModalVisible, setPrintModalVisible] = useState(false)
+  const [currentWorkOrderForPrint, setCurrentWorkOrderForPrint] = useState<any>(null)
+
   /** 解析工艺路线的 operation_sequence，兼容多种格式（与工艺路线编辑页保存格式对接） */
   const parseOperationSequence = (
     seq: any,
@@ -721,6 +727,14 @@ const WorkOrdersPage: React.FC = () => {
       return '#faad14' // 黄色：合格率偏低
     }
     return '#ff4d4f' // 红色：异常或合格率过低
+  }
+
+  /**
+   * 处理打印
+   */
+  const handlePrint = (record: WorkOrder) => {
+    setCurrentWorkOrderForPrint(record)
+    setPrintModalVisible(true)
   }
 
   /**
@@ -2239,6 +2253,14 @@ const WorkOrdersPage: React.FC = () => {
           <Button
             type="link"
             size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => handlePrint(record)}
+          >
+            打印
+          </Button>
+          <Button
+            type="link"
+            size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
@@ -2409,6 +2431,19 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      {/* 打印工单 Modal */}
+      {printModalVisible && (
+        <WorkOrderPrintModal
+          visible={printModalVisible}
+          onCancel={() => {
+            setPrintModalVisible(false)
+            setCurrentWorkOrderForPrint(null)
+          }}
+          workOrderData={currentWorkOrderForPrint}
+          workOrderId={currentWorkOrderForPrint?.id}
+        />
+      )}
 
       {/* 创建/编辑工单 Modal */}
       <SmartSuggestionFloatPanel
@@ -4717,6 +4752,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
           </Space>
         )}
       </div>
+
     </div>
   )
 }
