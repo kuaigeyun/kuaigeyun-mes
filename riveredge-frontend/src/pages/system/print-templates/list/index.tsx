@@ -26,7 +26,7 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS } from '../../../../configs/printTemplateSchemas';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../configs/printTemplateSchemas';
 import { EMPTY_UNIVER_DOC_JSON } from '../../../../components/univer-doc/constants';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -74,17 +74,26 @@ const getTypeInfo = (type: string): { color: string; text: string; icon: React.R
 };
 
 /**
- * 提取模板变量
+ * 提取模板变量（支持 Univer JSON 的 dataStream 和纯文本）
  */
 const extractVariables = (content: string): string[] => {
   if (!content) return [];
-  const regex = /\{\{(\w+)\}\}/g;
-  const matches = content.matchAll(regex);
+  let text = content;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
+      text = parsed.body.dataStream;
+    }
+  } catch {
+    // 非 JSON，使用原始 content
+  }
+  const regex = /\{\{([^}]+)\}\}/g;
+  const matches = text.matchAll(regex);
   const variables = new Set<string>();
   for (const match of matches) {
-    variables.add(match[1]);
+    variables.add(match[1].trim());
   }
-  return Array.from(variables);
+  return Array.from(variables).sort();
 };
 
 /**
@@ -104,6 +113,7 @@ const PrintTemplateListPage: React.FC = () => {
   const [currentEditDetail, setCurrentEditDetail] = useState<PrintTemplate | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const formRef = useRef<ProFormInstance>(null);
   
   // Modal 相关状态（渲染模板）
   const [renderModalVisible, setRenderModalVisible] = useState(false);
@@ -420,7 +430,7 @@ const PrintTemplateListPage: React.FC = () => {
       } else {
         const data: CreatePrintTemplateData = {
           name: values.name,
-          code: values.code,
+          code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
           type: values.type,
           description: values.description,
           content: EMPTY_UNIVER_DOC_JSON,
@@ -876,28 +886,32 @@ const PrintTemplateListPage: React.FC = () => {
         initialValues={formInitialValues}
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
+        onValuesChange={(changed, all) => {
+          if ('document_type' in changed && all.document_type) {
+            const code = DOCUMENT_TYPE_TO_CODE[all.document_type];
+            if (code) formRef.current?.setFieldValue('code', code);
+          }
+        }}
       >
         <ProFormText
           name="name"
           label="模板名称"
           rules={[{ required: true, message: '请输入模板名称' }]}
         />
-        <ProFormText
-          name="code"
-          label="模板代码"
-          rules={[
-            { required: true, message: '请输入模板代码' },
-            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '模板代码只能包含字母、数字和下划线，且必须以字母开头' },
-          ]}
-          disabled={isEdit}
-          tooltip="模板代码用于程序识别，创建后不可修改"
-        />
         <SafeProFormSelect
           name="document_type"
           label="关联业务单据"
           rules={[{ required: true, message: '请选择关联的业务单据类型，设计时可绑定对应变量' }]}
           options={DOCUMENT_TYPE_OPTIONS}
-          tooltip="选择后，设计器将显示该单据的可用变量供插入"
+          tooltip="选择后，模板代码将自动生成，设计器将显示该单据的可用变量"
+        />
+        <ProFormText
+          name="code"
+          label="模板代码"
+          rules={[{ required: true, message: '请先选择关联业务单据' }]}
+          disabled
+          tooltip="根据关联业务单据自动生成，创建后不可修改"
         />
         <SafeProFormSelect
           name="type"

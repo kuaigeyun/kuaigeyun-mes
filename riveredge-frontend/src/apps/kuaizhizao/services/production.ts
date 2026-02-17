@@ -111,9 +111,11 @@ export const workOrderApi = {
     });
   },
 
-  // 获取打印 URL
-  getPrintUrl: (id: string) => {
-    return `/api/v1/apps/kuaizhizao/work-orders/${id}/print`;
+  // 获取打印 URL（用于 window.open 直接打开，返回 HTML）
+  getPrintUrl: (id: string, templateUuid?: string) => {
+    const params = new URLSearchParams({ response_format: 'html' });
+    if (templateUuid) params.set('template_uuid', templateUuid);
+    return `/api/v1/apps/kuaizhizao/work-orders/${id}/print?${params}`;
   },
 };
 

@@ -21,7 +21,7 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
 import ReportDesigner, { ReportConfig, ReportComponent } from '../../../components/report-designer';
-import { DOCUMENT_TYPE_OPTIONS } from '../../../configs/printTemplateSchemas';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../configs/printTemplateSchemas';
 import { EMPTY_UNIVER_DOC_JSON } from '../../../components/univer-doc/constants';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
@@ -34,11 +34,20 @@ const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 /**
- * 从模板内容中提取变量
+ * 从模板内容中提取变量（支持 Univer JSON 和纯文本）
  */
 const extractVariables = (content: string): string[] => {
+  let text = content;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
+      text = parsed.body.dataStream;
+    }
+  } catch {
+    // 非 JSON，使用原始 content
+  }
   const regex = /\{\{([^}]+)\}\}/g;
-  const matches = content.matchAll(regex);
+  const matches = text.matchAll(regex);
   const variables = new Set<string>();
   for (const match of matches) {
     variables.add(match[1].trim());
@@ -47,9 +56,25 @@ const extractVariables = (content: string): string[] => {
 };
 
 /**
- * 预览模板内容（替换变量为示例值）
+ * 预览模板内容（替换变量为示例值，支持 Univer JSON）
  */
 const previewTemplate = (content: string, variables: string[]): string => {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
+      let dataStream = parsed.body.dataStream;
+      variables.forEach((variable) => {
+        const exampleValue = `[${variable}]`;
+        dataStream = dataStream.replace(
+          new RegExp(`\\{\\{${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}\\}`, 'g'),
+          exampleValue
+        );
+      });
+      return dataStream.replace(/\r/g, '\n').trim();
+    }
+  } catch {
+    // 非 JSON，使用原始逻辑
+  }
   let preview = content;
   variables.forEach((variable) => {
     const exampleValue = `[${variable}]`;
@@ -163,6 +188,7 @@ const CardView: React.FC = () => {
       setLoading(true);
       await createPrintTemplate({
         ...values,
+        code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
         content: EMPTY_UNIVER_DOC_JSON,
         config: { document_type: values.document_type },
       });
@@ -781,7 +807,6 @@ const CardView: React.FC = () => {
             渲染
           </Button>,
         ]}
-        ]}
         width={700}
       >
         {currentTemplate && (
@@ -855,7 +880,12 @@ const CardView: React.FC = () => {
         onOk={handleCreateSubmit}
         confirmLoading={loading}
       >
-        <Form form={createForm} layout="vertical">
+        <Form form={createForm} layout="vertical" onValuesChange={(changed, all) => {
+          if ('document_type' in changed && all.document_type) {
+            const code = DOCUMENT_TYPE_TO_CODE[all.document_type];
+            if (code) createForm.setFieldValue('code', code);
+          }
+        }}>
           <Form.Item
             name="name"
             label="模板名称"
@@ -864,18 +894,18 @@ const CardView: React.FC = () => {
             <Input placeholder="请输入模板名称" />
           </Form.Item>
           <Form.Item
-            name="code"
-            label="模板代码"
-            rules={[{ required: true, message: '请输入模板代码' }]}
-          >
-            <Input placeholder="请输入模板代码（唯一标识）" />
-          </Form.Item>
-          <Form.Item
             name="document_type"
             label="关联业务单据"
             rules={[{ required: true, message: '请选择关联业务单据' }]}
           >
             <Select placeholder="请选择关联业务单据" options={DOCUMENT_TYPE_OPTIONS} />
+          </Form.Item>
+          <Form.Item
+            name="code"
+            label="模板代码"
+            rules={[{ required: true, message: '请先选择关联业务单据' }]}
+          >
+            <Input placeholder="根据关联业务单据自动生成" disabled />
           </Form.Item>
           <Form.Item
             name="type"

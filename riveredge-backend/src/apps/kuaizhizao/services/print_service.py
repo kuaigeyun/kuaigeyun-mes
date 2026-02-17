@@ -15,6 +15,7 @@ from core.schemas.print_template import PrintTemplateRenderRequest
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
@@ -45,6 +46,7 @@ class DocumentPrintService:
         document_type: str,
         document_id: int,
         template_code: Optional[str] = None,
+        template_uuid: Optional[str] = None,
         output_format: str = "html"
     ) -> Dict[str, Any]:
         """
@@ -54,7 +56,8 @@ class DocumentPrintService:
             tenant_id: 租户ID
             document_type: 单据类型
             document_id: 单据ID
-            template_code: 模板代码（可选，如果不提供则使用默认模板）
+            template_code: 模板代码（可选，与 template_uuid 二选一）
+            template_uuid: 模板UUID（可选，优先于 template_code）
             output_format: 输出格式（html/pdf）
 
         Returns:
@@ -63,22 +66,28 @@ class DocumentPrintService:
         # 获取单据数据
         document_data = await self._get_document_data(tenant_id, document_type, document_id)
         
-        # 获取打印模板
-        if not template_code:
-            template_code = self.DOCUMENT_TEMPLATE_CODES.get(document_type)
-            if not template_code:
-                raise ValidationError(f"未找到单据类型 {document_type} 的默认打印模板")
-
-        # 查找打印模板
+        # 查找打印模板：优先 template_uuid，其次 template_code，最后默认模板
         try:
             from core.models.print_template import PrintTemplate
             
-            template = await PrintTemplate.filter(
-                tenant_id=tenant_id,
-                code=template_code,
-                is_active=True,
-                deleted_at__isnull=True
-            ).first()
+            if template_uuid:
+                template = await PrintTemplate.filter(
+                    tenant_id=tenant_id,
+                    uuid=template_uuid,
+                    is_active=True,
+                    deleted_at__isnull=True
+                ).first()
+            else:
+                if not template_code:
+                    template_code = self.DOCUMENT_TEMPLATE_CODES.get(document_type)
+                    if not template_code:
+                        raise ValidationError(f"未找到单据类型 {document_type} 的默认打印模板")
+                template = await PrintTemplate.filter(
+                    tenant_id=tenant_id,
+                    code=template_code,
+                    is_active=True,
+                    deleted_at__isnull=True
+                ).first()
             
             if not template:
                 # 如果没有找到模板，返回基础HTML格式
@@ -170,8 +179,12 @@ class DocumentPrintService:
             raise ValidationError(f"不支持的单据类型: {document_type}")
 
     async def _format_work_order_data(self, work_order: WorkOrder) -> Dict[str, Any]:
-        """格式化工单数据"""
-        return {
+        """格式化工单数据，包含工序列表"""
+        operations = await WorkOrderOperation.filter(
+            work_order_id=work_order.id, deleted_at__isnull=True
+        ).order_by("sequence")
+
+        data: Dict[str, Any] = {
             "document_type": "work_order",
             "code": work_order.code,
             "name": work_order.name,
@@ -184,8 +197,35 @@ class DocumentPrintService:
             "work_center_name": work_order.work_center_name,
             "planned_start_date": work_order.planned_start_date.isoformat() if work_order.planned_start_date else None,
             "planned_end_date": work_order.planned_end_date.isoformat() if work_order.planned_end_date else None,
+            "priority": work_order.priority,
+            "remarks": work_order.remarks,
+            "created_by_name": work_order.created_by_name,
             "created_at": work_order.created_at.isoformat() if work_order.created_at else None,
         }
+
+        ops_list = []
+        for op in operations:
+            ops_list.append({
+                "operation_code": op.operation_code,
+                "operation_name": op.operation_name,
+                "sequence": op.sequence,
+                "status": op.status,
+                "workshop_name": op.workshop_name,
+                "work_center_name": op.work_center_name,
+                "planned_start_date": op.planned_start_date.isoformat() if op.planned_start_date else None,
+                "planned_end_date": op.planned_end_date.isoformat() if op.planned_end_date else None,
+                "actual_start_date": op.actual_start_date.isoformat() if op.actual_start_date else None,
+                "actual_end_date": op.actual_end_date.isoformat() if op.actual_end_date else None,
+                "completed_quantity": str(op.completed_quantity) if op.completed_quantity is not None else "",
+                "qualified_quantity": str(op.qualified_quantity) if op.qualified_quantity is not None else "",
+                "unqualified_quantity": str(op.unqualified_quantity) if op.unqualified_quantity is not None else "",
+                "assigned_worker_name": op.assigned_worker_name,
+                "assigned_equipment_name": op.assigned_equipment_name,
+                "remarks": op.remarks,
+            })
+        data["operations"] = ops_list
+
+        return data
 
     async def _format_production_picking_data(self, picking: ProductionPicking) -> Dict[str, Any]:
         """格式化生产领料单数据"""

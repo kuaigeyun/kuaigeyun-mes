@@ -43,6 +43,8 @@ export interface FormModalTemplateProps {
   loading?: boolean;
   /** 表单引用（可选，用于外部访问表单实例） */
   formRef?: React.RefObject<ProFormInstance>;
+  /** 表单值变化回调 */
+  onValuesChange?: (changedValues: any, allValues: any) => void;
   /** 自定义样式类名 */
   className?: string;
   /** 自定义 Modal 渲染（如包裹锚点元素供智能建议面板定位） */
@@ -80,6 +82,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   grid = true,
   loading = false,
   formRef: externalFormRef,
+  onValuesChange,
   className,
   modalRender,
 }) => {
@@ -102,6 +105,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         formRef={formRef}
         loading={loading}
         onFinish={onFinish}
+        onValuesChange={onValuesChange}
         initialValues={initialValues}
         layout={layout}
         grid={grid}

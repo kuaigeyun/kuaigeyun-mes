@@ -121,12 +121,9 @@ const PrintTemplateDesignPage: React.FC = () => {
     try {
       const data = editorRef.current.getData();
       const content = JSON.stringify(data);
-      // 同时保存 content 和 config (作为备份或用于旧版渲染)
-      // 注意：Univer 的数据结构与旧版 ReportDesigner 不兼容
-      // 这里主要依赖 content 字段存储 Univer 的 JSON 数据
       await updatePrintTemplate(uuid, {
         content,
-        // config: data, // 可选：如果后端需要 config 字段用于其他用途
+        config: templateType ? { document_type: templateType } : undefined,
       });
       messageApi.success('保存成功');
     } catch (error: any) {

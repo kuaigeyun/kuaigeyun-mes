@@ -5120,61 +5120,71 @@ from fastapi.responses import HTMLResponse, Response
 async def print_document(
     document_type: str = Path(..., description="单据类型（如：work_order, production_picking等）"),
     document_id: int = Path(..., description="单据ID"),
-    template_code: Optional[str] = Query(None, description="打印模板代码（可选，如果不提供则使用默认模板）"),
+    template_code: Optional[str] = Query(None, description="打印模板代码（可选）"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，优先于 template_code）"),
     output_format: str = Query("html", description="输出格式（html/pdf）"),
+    response_format: str = Query("json", description="响应格式：json（API调用）或 html（window.open 直接打开）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     打印单据
 
-    - **document_type**: 单据类型（如：work_order, production_picking, finished_goods_receipt, sales_delivery, purchase_order, purchase_receipt, sales_forecast, sales_order）
+    - **document_type**: 单据类型（如：work_order, production_picking 等）
     - **document_id**: 单据ID
-    - **template_code**: 打印模板代码（可选，如果不提供则使用默认模板）
+    - **template_code**: 打印模板代码（可选）
+    - **template_uuid**: 打印模板UUID（可选，优先于 template_code）
     - **output_format**: 输出格式（html/pdf，默认：html）
+    - **response_format**: json（默认，API 调用）或 html（window.open 直接打开）
 
-    返回渲染后的打印内容（HTML或PDF）
+    返回 JSON { success, content, message } 或直接返回 HTML
     """
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
         document_type=document_type,
         document_id=document_id,
         template_code=template_code,
+        template_uuid=template_uuid,
         output_format=output_format
     )
-    
-    if output_format == "pdf":
-        # TODO: 实现PDF生成
-        # 目前返回HTML，后续可以集成weasyprint或reportlab生成PDF
-        return HTMLResponse(content=result["content"], status_code=200)
-    else:
-        return HTMLResponse(content=result["content"], status_code=200)
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.get("/work-orders/{id}/print", summary="打印工单")
 async def print_work_order(
     id: int = Path(..., description="工单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，优先于 template_code）"),
     output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式：json 或 html"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """打印工单"""
-    return await print_document(
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
         document_type="work_order",
         document_id=id,
         template_code=template_code,
-        output_format=output_format,
-        current_user=current_user,
-        tenant_id=tenant_id
+        template_uuid=template_uuid,
+        output_format=output_format
     )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.get("/production-pickings/{id}/print", summary="打印生产领料单")
 async def print_production_picking(
     id: int = Path(..., description="生产领料单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
     output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -5183,7 +5193,9 @@ async def print_production_picking(
         document_type="production_picking",
         document_id=id,
         template_code=template_code,
+        template_uuid=template_uuid,
         output_format=output_format,
+        response_format=response_format,
         current_user=current_user,
         tenant_id=tenant_id
     )
@@ -5193,7 +5205,9 @@ async def print_production_picking(
 async def print_finished_goods_receipt(
     id: int = Path(..., description="成品入库单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
     output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -5202,7 +5216,9 @@ async def print_finished_goods_receipt(
         document_type="finished_goods_receipt",
         document_id=id,
         template_code=template_code,
+        template_uuid=template_uuid,
         output_format=output_format,
+        response_format=response_format,
         current_user=current_user,
         tenant_id=tenant_id
     )
