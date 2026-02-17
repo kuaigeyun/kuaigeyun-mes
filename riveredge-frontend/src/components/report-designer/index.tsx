@@ -61,6 +61,8 @@ export interface ReportDesignerProps {
   onSave?: (config: ReportConfig) => void;
   /** 预览回调 */
   onPreview?: (config: ReportConfig) => void;
+  /** 数据模式（可用变量） */
+  dataSchema?: any;
 }
 
 /**
@@ -70,6 +72,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
   initialConfig,
   onSave,
   onPreview,
+  dataSchema,
 }) => {
   const [config, setConfig] = useState<ReportConfig>(
     initialConfig || {
@@ -310,6 +313,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
           <PropertyPanel
             selectedComponent={selectedComponent}
             onUpdate={handleComponentUpdate}
+            dataSchema={dataSchema}
           />
         </Sider>
       </Layout>
@@ -322,4 +326,5 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
 };
 
 export default ReportDesigner;
+export { default as Preview } from './preview';
 

@@ -22,12 +22,14 @@ export interface PreviewProps {
   config: ReportConfig;
   /** 是否显示刷新按钮 */
   showRefresh?: boolean;
+  /** 外部传入数据（用于打印预览等场景） */
+  externalData?: Record<string, any>;
 }
 
 /**
  * 报表预览组件
  */
-const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
+const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true, externalData }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Record<string, any>>({});
 
@@ -35,6 +37,12 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
    * 加载数据
    */
   const loadData = async () => {
+    // 如果有外部数据，直接使用外部数据
+    if (externalData) {
+      setData(externalData);
+      return;
+    }
+
     setLoading(true);
     try {
       // TODO: 从API获取数据
@@ -43,7 +51,8 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
       
       // 模拟数据加载
       const dataSources = config.dataSources || {};
-      for (const [dsId, dsConfig] of Object.entries(dataSources)) {
+      for (const [dsId, config] of Object.entries(dataSources)) {
+        const dsConfig = config as any;
         if (dsConfig.type === 'api' && dsConfig.url) {
           try {
             const response = await apiRequest(dsConfig.url, {
@@ -71,13 +80,16 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
 
   useEffect(() => {
     loadData();
-  }, [config]);
+  }, [config, externalData]);
 
   /**
    * 渲染组件
    */
   const renderComponent = (component: ReportComponent) => {
-    const componentData = data[component.dataSource?.code || ''] || [];
+    // 优先使用数据源绑定的数据，如果没有绑定数据源，则传递整个 data 上下文（用于文本变量替换）
+    const componentData = component.dataSource?.code 
+      ? (data[component.dataSource.code] || []) 
+      : data;
 
     switch (component.type) {
       case 'table':
@@ -85,7 +97,7 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
           <TableComponent
             component={{
               ...component,
-              data: componentData,
+              data: Array.isArray(componentData) ? componentData : [],
             }}
           />
         );
@@ -94,12 +106,12 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true }) => {
           <ChartComponent
             component={{
               ...component,
-              data: componentData,
+              data: Array.isArray(componentData) ? componentData : [],
             }}
           />
         );
       case 'text':
-        return <TextComponent component={component} />;
+        return <TextComponent component={component} data={data} />;
       case 'image':
         return <ImageComponent component={component} />;
       default:

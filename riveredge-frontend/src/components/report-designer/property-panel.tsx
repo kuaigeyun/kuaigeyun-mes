@@ -29,6 +29,8 @@ export interface PropertyPanelProps {
   selectedComponent: ReportComponent | null;
   /** 更新组件回调 */
   onUpdate?: (component: ReportComponent) => void;
+  /** 数据模式（可用变量） */
+  dataSchema?: any;
 }
 
 /**
@@ -37,6 +39,7 @@ export interface PropertyPanelProps {
 const PropertyPanel: React.FC<PropertyPanelProps> = ({
   selectedComponent,
   onUpdate,
+  dataSchema,
 }) => {
   const [form] = Form.useForm();
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
@@ -214,8 +217,28 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({
               </Select>
             </Form.Item>
             <Form.Item label="文本内容" name="content">
-              <Input.TextArea rows={4} placeholder="请输入文本内容" />
+              <Input.TextArea rows={4} placeholder="请输入文本内容，支持 {{variable}} 语法" />
             </Form.Item>
+            {dataSchema && dataSchema.fields && (
+              <Form.Item label="插入变量">
+                <Select
+                  placeholder="选择变量插入"
+                  onChange={(value) => {
+                    const currentContent = form.getFieldValue('content') || '';
+                    form.setFieldsValue({
+                      content: currentContent + `{{${value}}}`
+                    });
+                    handleUpdate({ content: currentContent + `{{${value}}}` });
+                  }}
+                >
+                  {dataSchema.fields.map((field: any) => (
+                    <Select.Option key={field.key} value={field.key}>
+                      {field.label} ({field.key})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
             {selectedComponent.textType === 'title' && (
               <Form.Item label="标题级别" name="level">
                 <InputNumber min={1} max={6} style={{ width: '100%' }} />
@@ -227,8 +250,28 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({
         {selectedComponent.type === 'image' && (
           <>
             <Form.Item label="图片URL" name="src">
-              <Input placeholder="请输入图片URL" />
+              <Input placeholder="请输入图片URL，支持 {{variable}} 语法" />
             </Form.Item>
+            {dataSchema && dataSchema.fields && (
+              <Form.Item label="插入变量到URL">
+                <Select
+                  placeholder="选择变量插入"
+                  onChange={(value) => {
+                    const currentSrc = form.getFieldValue('src') || '';
+                    form.setFieldsValue({
+                      src: currentSrc + `{{${value}}}`
+                    });
+                    handleUpdate({ src: currentSrc + `{{${value}}}` });
+                  }}
+                >
+                  {dataSchema.fields.map((field: any) => (
+                    <Select.Option key={field.key} value={field.key}>
+                      {field.label} ({field.key})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
             <Form.Item label="图片描述" name="alt">
               <Input placeholder="请输入图片描述" />
             </Form.Item>

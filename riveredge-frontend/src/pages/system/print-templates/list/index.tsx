@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Space, Typography, Tooltip, Card } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, FileTextOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Modal, Input, Form, Space, Typography, Tooltip, Card } from 'antd';
+import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -25,13 +26,15 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
+
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 
-const { TextArea } = Input;
+dayjs.extend(relativeTime);
+
 const { Text, Paragraph } = Typography;
 
 /**
@@ -87,6 +90,7 @@ const extractVariables = (content: string): string[] => {
  */
 const PrintTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
@@ -97,7 +101,6 @@ const PrintTemplateListPage: React.FC = () => {
   const [currentPrintTemplateUuid, setCurrentPrintTemplateUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [configJson, setConfigJson] = useState<string>('{}');
   
   // Modal 相关状态（渲染模板）
   const [renderModalVisible, setRenderModalVisible] = useState(false);
@@ -117,7 +120,6 @@ const PrintTemplateListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPrintTemplateUuid(null);
-    setConfigJson('{}');
     setFormInitialValues({
       type: 'pdf',
       is_active: true,
@@ -136,13 +138,11 @@ const PrintTemplateListPage: React.FC = () => {
       
       // 获取打印模板详情
       const detail = await getPrintTemplateByUuid(record.uuid);
-      setConfigJson(detail.config ? JSON.stringify(detail.config, null, 2) : '{}');
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
         type: detail.type,
         description: detail.description,
-        content: detail.content,
         is_active: detail.is_active,
         is_default: detail.is_default,
       });
@@ -175,8 +175,8 @@ const PrintTemplateListPage: React.FC = () => {
     setCurrentRenderTemplateUuid(record.uuid);
     setRenderModalVisible(true);
     setRenderResult(null);
-    renderFormRef.current?.resetFields();
-    renderFormRef.current?.setFieldsValue({
+    renderFormRef.resetFields();
+    renderFormRef.setFieldsValue({
       output_format: 'pdf',
       async_execution: false,
     });
@@ -248,33 +248,168 @@ const PrintTemplateListPage: React.FC = () => {
   };
 
   /**
+   * 打开设计器 (新标签页)
+   */
+  const handleOpenDesigner = (record: PrintTemplate) => {
+    // 在当前标签页打开
+    navigate(`/system/print-templates/design/${record.uuid}`);
+  };
+
+  /**
+   * 创建示例工单模板
+   */
+  const createSampleWorkOrderTemplate = async () => {
+    try {
+      const sampleConfig: ReportConfig = {
+        version: '1.0',
+        layout: {
+          width: 800,
+          height: 1123, // A4 pixel height (approx)
+          type: 'A4',
+        },
+        components: [
+          // 标题
+          {
+            id: 'title',
+            type: 'text',
+            x: 0,
+            y: 30,
+            width: 800,
+            height: 60,
+            content: '生产工单',
+            style: {
+              fontSize: 24,
+              fontWeight: 'bold',
+              textAlign: 'center',
+            }
+          } as ReportComponent,
+          // 基本信息区域
+          {
+            id: 'info-panel',
+            type: 'text',
+            x: 40,
+            y: 100,
+            width: 720,
+            height: 150,
+            content: `工单编号：{{work_order_no}}
+产品名称：{{product_name}}
+产品编码：{{product_code}}
+计划数量：{{plan_quantity}}
+单位：{{unit}}
+计划开始时间：{{plan_start_time}}
+计划结束时间：{{plan_end_time}}`,
+            style: {
+              fontSize: 14,
+              lineHeight: 1.8,
+              border: '1px solid #ccc',
+              padding: '10px',
+            }
+          } as ReportComponent,
+          // 物料清单标题
+          {
+            id: 'material-title',
+            type: 'text',
+            x: 40,
+            y: 270,
+            width: 200,
+            height: 40,
+            content: '物料清单',
+            style: {
+              fontSize: 16,
+              fontWeight: 'bold',
+            }
+          } as ReportComponent,
+          // 物料清单表格
+          {
+            id: 'material-table',
+            type: 'table',
+            x: 40,
+            y: 310,
+            width: 720,
+            height: 300,
+            columns: [
+              { title: '物料编码', dataIndex: 'material_code', width: 150 },
+              { title: '物料名称', dataIndex: 'material_name', width: 250 },
+              { title: '规格型号', dataIndex: 'spec', width: 150 },
+              { title: '需求数量', dataIndex: 'quantity', width: 100 },
+              { title: '单位', dataIndex: 'unit', width: 70 },
+            ],
+            dataSource: 'materials', // 关联数据源 key
+            style: {
+              border: '1px solid #000',
+            }
+          } as ReportComponent,
+          // 备注
+          {
+            id: 'remark',
+            type: 'text',
+            x: 40,
+            y: 650,
+            width: 720,
+            height: 100,
+            content: '备注：\n{{remark}}',
+            style: {
+              fontSize: 14,
+              border: '1px solid #ccc',
+              padding: '10px',
+            }
+          } as ReportComponent,
+          // 底部信息
+          {
+            id: 'footer',
+            type: 'text',
+            x: 40,
+            y: 1000,
+            width: 720,
+            height: 40,
+            content: '打印时间：{{print_time}}    操作员：{{operator}}',
+            style: {
+              fontSize: 12,
+              textAlign: 'right',
+            }
+          } as ReportComponent,
+        ]
+      };
+
+      await createPrintTemplate({
+        name: '示例生产工单模板',
+        code: 'SAMPLE_WORK_ORDER_' + Date.now(),
+        type: 'other',
+        description: '自动生成的示例生产工单模板，包含基本信息和物料表格。',
+        content: JSON.stringify(sampleConfig),
+        config: sampleConfig.layout,
+        is_active: true,
+      });
+
+      messageApi.success('示例模板创建成功');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建示例模板失败');
+    }
+  };
+
+  /**
+   * 保存设计器内容
+   */
+
+
+  /**
    * 处理表单提交
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
-      // 解析 JSON 配置
-      let config: Record<string, any> | undefined;
-      if (configJson) {
-        try {
-          config = JSON.parse(configJson);
-        } catch (e) {
-          messageApi.error('模板配置 JSON 格式错误');
-          throw new Error('模板配置 JSON 格式错误');
-        }
-      }
-      
-      const data: CreatePrintTemplateData | UpdatePrintTemplateData = {
-        ...values,
-        config,
-      };
-      
       if (isEdit && currentPrintTemplateUuid) {
-        await updatePrintTemplate(currentPrintTemplateUuid, data as UpdatePrintTemplateData);
+        await updatePrintTemplate(currentPrintTemplateUuid, values as UpdatePrintTemplateData);
         messageApi.success('更新成功');
       } else {
-        await createPrintTemplate(data as CreatePrintTemplateData);
+        const data: CreatePrintTemplateData = {
+          ...values,
+          content: '{}',
+          config: {},
+        };
+        await createPrintTemplate(data);
         messageApi.success('创建成功');
       }
       
@@ -531,6 +666,27 @@ const PrintTemplateListPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
     },
+    {
+      title: '操作',
+      dataIndex: 'option',
+      valueType: 'option',
+      width: 200,
+      render: (_, record) => (
+        <Space>
+          <a onClick={() => handleEdit(record)}>编辑</a>
+          <a onClick={() => handleOpenDesigner(record)}>设计</a>
+          <a onClick={() => handleView(record)}>详情</a>
+          <Popconfirm
+            title="确定要删除这个打印模板吗？"
+            onConfirm={() => handleDelete(record)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <a style={{ color: '#ff4d4f' }}>删除</a>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   /**
@@ -661,20 +817,27 @@ const PrintTemplateListPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton
           onCreate={handleCreate}
-          headerActions={
+          toolBarRender={() => [
             <Button
+              key="createSample"
+              onClick={createSampleWorkOrderTemplate}
+            >
+              一键生成工单模板
+            </Button>,
+            <Button
+              key="batchDelete"
               danger
               onClick={handleBatchDelete}
               disabled={selectedRowKeys.length === 0}
             >
               批量删除
-            </Button>
-          }
+            </Button>,
+          ]}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          viewTypes={['table', 'help']}
+          viewTypes={['table', 'card', 'help']}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,
@@ -731,29 +894,7 @@ const PrintTemplateListPage: React.FC = () => {
             rows: 3,
           }}
         />
-        <ProFormTextArea
-          name="content"
-          label="模板内容"
-          rules={[{ required: true, message: '请输入模板内容' }]}
-          fieldProps={{
-            rows: 12,
-            style: { fontFamily: CODE_FONT_FAMILY },
-          }}
-          tooltip="支持变量替换，使用 {{variable_name}} 格式"
-        />
-        <ProForm.Item
-          name="config"
-          label="模板配置（JSON，可选）"
-          tooltip="模板配置，JSON 格式，如页面大小、边距等"
-        >
-          <TextArea
-            rows={4}
-            value={configJson}
-            onChange={(e) => setConfigJson(e.target.value)}
-            placeholder='{"page_size": "A4", "margin": {"top": 10, "bottom": 10, "left": 10, "right": 10}}'
-            style={{ fontFamily: CODE_FONT_FAMILY }}
-          />
-        </ProForm.Item>
+
         {isEdit && (
           <>
             <ProFormSwitch
@@ -839,8 +980,8 @@ const PrintTemplateListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData || {}}
-        columns={detailColumns}
+        dataSource={detailData || undefined}
+        columns={detailColumns as any}
       />
     </>
   );

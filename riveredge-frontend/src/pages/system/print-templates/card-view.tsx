@@ -5,19 +5,22 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Tabs, Input, List, Divider } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Form, Select } from 'antd';
+import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
   updatePrintTemplate,
+  createPrintTemplate,
   deletePrintTemplate,
   renderPrintTemplate,
   PrintTemplate,
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
+import ReportDesigner, { ReportConfig, ReportComponent } from '../../../components/report-designer';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -58,18 +61,21 @@ const previewTemplate = (content: string, variables: string[]): string => {
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [currentTemplate, setCurrentTemplate] = useState<PrintTemplate | null>(null);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
-  const [designerModalVisible, setDesignerModalVisible] = useState(false);
   const [variablesModalVisible, setVariablesModalVisible] = useState(false);
   const [renderModalVisible, setRenderModalVisible] = useState(false);
   const [renderFormData, setRenderFormData] = useState<string>('{}');
   const [renderResult, setRenderResult] = useState<PrintTemplateRenderResponse | null>(null);
   const [renderLoading, setRenderLoading] = useState(false);
+
   const [previewContent, setPreviewContent] = useState<string>('');
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createForm] = Form.useForm();
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
@@ -139,17 +145,46 @@ const CardView: React.FC = () => {
   };
 
   /**
-   * 打开设计器
+   * 新建模板
    */
-  const handleOpenDesigner = async (template: PrintTemplate) => {
+  const handleCreate = () => {
+    setCreateModalVisible(true);
+    createForm.resetFields();
+  };
+
+  /**
+   * 提交新建模板
+   */
+  const handleCreateSubmit = async () => {
     try {
-      const detail = await getPrintTemplateByUuid(template.uuid);
-      setCurrentTemplate(detail);
-      setDesignerModalVisible(true);
+      const values = await createForm.validateFields();
+      setLoading(true);
+      await createPrintTemplate({
+        ...values,
+        content: '{"version":"1.0","layout":{},"components":[]}', // 默认空配置
+        config: {},
+      });
+      handleSuccess('模板创建成功');
+      setCreateModalVisible(false);
+      loadTemplates();
     } catch (error: any) {
-      handleError(error, '获取模板详情失败');
+      handleError(error, '创建模板失败');
+    } finally {
+      setLoading(false);
     }
   };
+
+  /**
+   * 打开设计器
+   */
+  const handleOpenDesigner = (template: PrintTemplate) => {
+    navigate(`/system/print-templates/design/${template.uuid}`);
+  };
+
+  /**
+   * 保存设计器内容
+   */
+
 
   /**
    * 查看变量管理
@@ -284,6 +319,14 @@ const CardView: React.FC = () => {
       <PageContainer
         title="打印模板管理"
         extra={[
+          <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新建模板
+          </Button>,
           <Button
             key="refresh"
             icon={<ReloadOutlined />}
@@ -500,7 +543,7 @@ const CardView: React.FC = () => {
           setCurrentTemplate(null);
         }}
         footer={null}
-        size={800}
+        width={800}
       >
         {currentTemplate && (
           <Descriptions column={1} bordered>
@@ -584,7 +627,7 @@ const CardView: React.FC = () => {
           setPreviewContent('');
         }}
         footer={null}
-        size={900}
+        width={900}
       >
         {currentTemplate && (
           <div>
@@ -632,70 +675,23 @@ const CardView: React.FC = () => {
         onCancel={() => {
           setDesignerModalVisible(false);
           setCurrentTemplate(null);
+          setDesignerConfig(undefined);
         }}
         footer={null}
-        size={1000}
+        width="100%"
+        style={{ top: 0, padding: 0 }}
+        styles={{ body: { height: 'calc(100vh - 55px)', padding: 0 } }}
+        destroyOnClose
       >
-        {currentTemplate && (
-          <Tabs
-            defaultActiveKey="editor"
-            items={[
-              {
-                key: 'editor',
-                label: '编辑器',
-                children: (
-                  <>
-                    <Alert
-                      message="模板设计器"
-                      description="编辑模板内容，支持变量替换，使用 {{variable_name}} 格式。修改后需要保存才能生效。"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <TextArea
-                      rows={20}
-                      value={currentTemplate.content}
-                      readOnly
-                      style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 14 }}
-                    />
-                    <div style={{ marginTop: 16 }}>
-                      <Alert
-                        message="提示"
-                        description="模板设计器当前为只读模式。如需编辑模板，请使用列表视图的编辑功能。"
-                        type="warning"
-                        showIcon
-                      />
-                    </div>
-                  </>
-                ),
-              },
-              {
-                key: 'config',
-                label: '配置',
-                children: (
-                  <>
-                    <Alert
-                      message="模板配置"
-                      description="模板配置用于设置页面大小、边距等参数。"
-                      type="info"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                    />
-                    <pre style={{
-                      margin: 0,
-                      padding: '8px',
-                      backgroundColor: '#f5f5f5',
-                      borderRadius: '4px',
-                      overflow: 'auto',
-                      maxHeight: '400px',
-                      fontSize: 12,
-                    }}>
-                      {currentTemplate.config ? JSON.stringify(currentTemplate.config, null, 2) : '{}'}
-                    </pre>
-                  </>
-                ),
-              },
-            ]}
+        {currentTemplate && designerConfig && (
+          <ReportDesigner
+            initialConfig={designerConfig}
+            onSave={handleDesignerSave}
+            onPreview={(config) => {
+              // 预览功能已经在 ReportDesigner 内部实现 Tabs 切换
+              // 这里可以扩展额外的预览逻辑
+              console.log('Preview config:', config);
+            }}
           />
         )}
       </Modal>
@@ -709,7 +705,7 @@ const CardView: React.FC = () => {
           setCurrentTemplate(null);
         }}
         footer={null}
-        size={700}
+        width={700}
       >
         {currentTemplate && (
           <div>
@@ -783,7 +779,8 @@ const CardView: React.FC = () => {
             渲染
           </Button>,
         ]}
-        size={700}
+        ]}
+        width={700}
       >
         {currentTemplate && (
           <div>
@@ -846,6 +843,47 @@ const CardView: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* 新建模板 Modal */}
+      <Modal
+        title="新建打印模板"
+        open={createModalVisible}
+        onCancel={() => setCreateModalVisible(false)}
+        onOk={handleCreateSubmit}
+        confirmLoading={loading}
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="模板名称"
+            rules={[{ required: true, message: '请输入模板名称' }]}
+          >
+            <Input placeholder="请输入模板名称" />
+          </Form.Item>
+          <Form.Item
+            name="code"
+            label="模板代码"
+            rules={[{ required: true, message: '请输入模板代码' }]}
+          >
+            <Input placeholder="请输入模板代码（唯一标识）" />
+          </Form.Item>
+          <Form.Item
+            name="type"
+            label="模板类型"
+            initialValue="pdf"
+            rules={[{ required: true, message: '请选择模板类型' }]}
+          >
+            <Select>
+              <Select.Option value="pdf">PDF</Select.Option>
+              <Select.Option value="html">HTML</Select.Option>
+              <Select.Option value="image">Image</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <TextArea rows={4} placeholder="请输入模板描述" />
+          </Form.Item>
+        </Form>
       </Modal>
     </>
   );

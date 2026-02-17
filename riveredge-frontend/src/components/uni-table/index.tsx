@@ -663,41 +663,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 将按钮容器移动到 ant-pro-table 内部
    */
+  /**
+   * 将按钮容器移动到 ant-pro-table 内部
+   * 
+   * fix: 不再移动按钮容器。
+   * 原因：当切换到卡片/看板等视图时，ProTable 会被隐藏 (display: none)，導致内部的按钮容器也不可见。
+   * 为了在所有视图模式下都能看到搜索和切换按钮，需要保持容器在 ProTable 外部。
+   */
+  /*
   useLayoutEffect(() => {
     // 移动搜索框到 ProTable 内部
-    // 使用重试机制确保在 TwoColumnLayout 等复杂布局中也能正常工作
-    const moveButtonContainer = () => {
-      if (containerRef.current && buttonContainerRef.current) {
-        const proTable = containerRef.current.querySelector('.ant-pro-table')
-        if (proTable && buttonContainerRef.current.parentElement !== proTable) {
-          proTable.insertBefore(buttonContainerRef.current, proTable.firstChild)
-          return true // 成功移动
-        }
-      }
-      return false // 未找到 ProTable 或已经移动
-    }
-
-    // 立即尝试移动
-    if (moveButtonContainer()) {
-      return
-    }
-
-    // 如果立即移动失败，使用多次重试（适用于 TwoColumnLayout 等复杂布局）
-    let retryCount = 0
-    const maxRetries = 10 // 最多重试 10 次
-    const retryInterval = 50 // 每次重试间隔 50ms
-
-    const retryTimer = setInterval(() => {
-      retryCount++
-      if (moveButtonContainer() || retryCount >= maxRetries) {
-        clearInterval(retryTimer)
-      }
-    }, retryInterval)
-
-    return () => {
-      clearInterval(retryTimer)
-    }
-  }, [currentViewType]) // 添加 currentViewType 作为依赖，确保视图切换时也能正确移动
+    // ... logic removed ...
+  }, [currentViewType])
+  */
 
   /**
    * 当视图类型是卡片/看板/统计视图时，确保数据已加载
@@ -884,11 +862,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     const viewTypeOptions = [
       { value: 'table', label: '表格', icon: TableOutlined },
-      { value: 'help', label: '帮助', icon: QuestionCircleOutlined },
       { value: 'card', label: '卡片', icon: AppstoreOutlined },
       { value: 'kanban', label: '看板', icon: BarsOutlined },
       { value: 'stats', label: '统计', icon: BarChartOutlined },
       { value: 'touch', label: '触屏', icon: TabletOutlined },
+      { value: 'help', label: '帮助', icon: QuestionCircleOutlined },
     ].filter(option => viewTypes.includes(option.value as any))
 
     return (
