@@ -21,6 +21,8 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
 import ReportDesigner, { ReportConfig, ReportComponent } from '../../../components/report-designer';
+import { DOCUMENT_TYPE_OPTIONS } from '../../../configs/printTemplateSchemas';
+import { EMPTY_UNIVER_DOC_JSON } from '../../../components/univer-doc/constants';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -161,8 +163,8 @@ const CardView: React.FC = () => {
       setLoading(true);
       await createPrintTemplate({
         ...values,
-        content: '{"version":"1.0","layout":{},"components":[]}', // 默认空配置
-        config: {},
+        content: EMPTY_UNIVER_DOC_JSON,
+        config: { document_type: values.document_type },
       });
       handleSuccess('模板创建成功');
       setCreateModalVisible(false);
@@ -867,6 +869,13 @@ const CardView: React.FC = () => {
             rules={[{ required: true, message: '请输入模板代码' }]}
           >
             <Input placeholder="请输入模板代码（唯一标识）" />
+          </Form.Item>
+          <Form.Item
+            name="document_type"
+            label="关联业务单据"
+            rules={[{ required: true, message: '请选择关联业务单据' }]}
+          >
+            <Select placeholder="请选择关联业务单据" options={DOCUMENT_TYPE_OPTIONS} />
           </Form.Item>
           <Form.Item
             name="type"

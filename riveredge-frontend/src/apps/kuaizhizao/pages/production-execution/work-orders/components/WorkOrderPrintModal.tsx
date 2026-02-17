@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Select, Button, Spin, message, Space, Empty } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
-import { Preview } from '../../../../../../components/report-designer';
-import { ReportConfig } from '../../../../../../components/report-designer';
+import UniverDocPreview from '../../../../../../components/univer-doc/preview';
 import { getPrintTemplateList, getPrintTemplateByUuid, PrintTemplate } from '../../../../../../services/printTemplate';
+import { mapWorkOrderToTemplateVariables } from '../../../../../../utils/printTemplateDataMapper';
 import { handleError } from '../../../../../../utils/errorHandler';
 // Import workOrderApi
 import { workOrderApi } from '../../../../services/production';
@@ -25,9 +25,10 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
-  const [templateConfig, setTemplateConfig] = useState<ReportConfig>();
+  const [templateConfig, setTemplateConfig] = useState<any>();
   const [configLoading, setConfigLoading] = useState(false);
   const [fullWorkOrderData, setFullWorkOrderData] = useState<any>(workOrderData || {});
+  const [templateVariables, setTemplateVariables] = useState<Record<string, unknown>>({});
   const previewRef = useRef<HTMLDivElement>(null);
 
   // Load templates on mount
@@ -36,11 +37,15 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       loadTemplates();
       setTemplateConfig(undefined);
       setSelectedTemplateId(undefined);
-      // If we have an ID, load full data
       if (workOrderId) {
         loadWorkOrderData(workOrderId);
       } else if (workOrderData) {
         setFullWorkOrderData(workOrderData);
+        setTemplateVariables(
+          mapWorkOrderToTemplateVariables(workOrderData, workOrderData.operations || [])
+        );
+      } else {
+        setTemplateVariables({});
       }
     }
   }, [visible, workOrderId, workOrderData]);
@@ -54,16 +59,12 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       const operationsPromise = workOrderApi.getOperations(id.toString());
 
       const [detail, operations] = await Promise.all([detailPromise, operationsPromise]);
-      
-      // Combine data
-      // We will put operations under a specific key, usually 'operations'
-      // But for flat structure access in template like {{operations.0.name}}, it works too if operations is an array
-      const combinedData = {
-        ...detail,
-        operations: operations || [],
-      };
-      
+
+      const combinedData = { ...detail, operations: operations || [] };
       setFullWorkOrderData(combinedData);
+
+      const vars = mapWorkOrderToTemplateVariables(detail, operations || []);
+      setTemplateVariables(vars);
     } catch (error: any) {
       handleError(error, '加载工单详情失败');
     } finally {
@@ -109,60 +110,12 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   };
 
   const handlePrint = () => {
-    if (!previewRef.current) return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      message.error('无法打开打印窗口');
-      return;
-    }
-
-    const content = previewRef.current.innerHTML;
-    
-    // Basic styles for printing
-    const styles = `
-      <style>
-        body { margin: 0; padding: 0; }
-        @media print {
-            @page { margin: 0; }
-            body { -webkit-print-color-adjust: exact; }
-        }
-        /* Restore relative positioning for the canvas content */
-        .preview-content {
-             position: relative;
-             width: 100%;
-             height: 100%;
-        }
-        /* 
-           Since React components might use scoped styles or antd styles, 
-           we might lose them. For a robust solution, we'd need to copy stylesheets.
-           For now, we assume simple inline styles from ReportDesigner.
-        */
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #000; padding: 4px; }
-      </style>
-    `;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>打印预览</title>
-          ${styles}
-        </head>
-        <body>
-          <div class="preview-content">
-            ${content}
-          </div>
-          <script>
-            window.onload = () => {
-              window.print();
-              // window.close(); // Optional: close after print
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    // Univer render canvas, simple innerHTML copy won't work for canvas content.
+    // For MVP, we can try window.print() and rely on @media print styles to hide other elements,
+    // or we need to implement canvas to image conversion.
+    // Since implementing canvas-to-image correctly needs access to the Univer instance or canvas elements,
+    // which are encapsulated, we'll use window.print() for now.
+    window.print();
   };
 
   return (
@@ -183,10 +136,11 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           打印
         </Button>
       ]}
+      className="print-modal"
     >
       <Spin spinning={dataLoading}>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Space>
+          <Space className="no-print">
             <span>选择模板：</span>
             <Select
               style={{ width: 300 }}
@@ -203,8 +157,9 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
               border: '1px solid #f0f0f0', 
               minHeight: 400, 
               marginTop: 16,
-              overflow: 'auto',
-              maxHeight: '60vh'
+              overflow: 'hidden', // Univer handles scrolling internally
+              height: '60vh',
+              position: 'relative'
             }}
           >
             {configLoading ? (
@@ -212,11 +167,10 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
                 <Spin tip="加载模板中..." />
               </div>
             ) : templateConfig ? (
-              <div ref={previewRef}>
-                <Preview 
-                  config={templateConfig} 
-                  showRefresh={false} 
-                  externalData={fullWorkOrderData}
+              <div ref={previewRef} className="print-preview-area" style={{ height: '100%' }}>
+                <UniverDocPreview
+                  data={templateConfig}
+                  variables={templateVariables}
                 />
               </div>
             ) : (
@@ -225,6 +179,49 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           </div>
         </Space>
       </Spin>
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .ant-modal-wrap,
+          .ant-modal-wrap *,
+          .ant-modal-content,
+          .ant-modal-content *,
+          .print-preview-area,
+          .print-preview-area *,
+          .print-preview-area canvas {
+            visibility: visible !important;
+          }
+          .ant-modal-wrap {
+            position: absolute !important;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+          }
+          .ant-modal-content {
+            position: absolute !important;
+            left: 0;
+            top: 0;
+            width: 100%;
+            border: none;
+            box-shadow: none;
+            background: white;
+          }
+          .print-preview-area {
+            width: 100% !important;
+            min-height: auto !important;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print, .ant-modal-footer, .ant-modal-header, .ant-modal-close {
+            display: none !important;
+          }
+        }
+      `}</style>
     </Modal>
   );
 };
