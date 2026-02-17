@@ -30,6 +30,7 @@ export interface PrintTemplateListParams {
   limit?: number;
   type?: string;
   is_active?: boolean;
+  document_type?: string;
 }
 
 export interface CreatePrintTemplateData {

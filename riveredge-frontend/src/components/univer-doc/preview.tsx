@@ -1,30 +1,45 @@
-import React, { useEffect, useRef } from 'react';
-import "@univerjs/design/lib/index.css";
-import "@univerjs/ui/lib/index.css";
-import "@univerjs/docs-ui/lib/index.css";
-
-import { Univer, LocaleType, ICommandService, UniverInstanceType } from "@univerjs/core";
+/**
+ * 打印模板预览 - Univer 文档预览 (系统化优化版)
+ * 与编辑器共用一套原生渲染逻辑，确保“所见即所得”。
+ */
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Univer,
+  LocaleType,
+  UniverInstanceType,
+  ICommandService,
+  merge,
+} from "@univerjs/core";
 import { defaultTheme } from "@univerjs/design";
-import zhCN from "@univerjs/design/lib/locale/zh-CN";
+
 import { UniverDocsPlugin, SetTextSelectionsOperation } from "@univerjs/docs";
 import { UniverDocsUIPlugin, IMEInputCommand } from "@univerjs/docs-ui";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
 import { UniverUIPlugin } from "@univerjs/ui";
 import { UniverFormulaEnginePlugin } from "@univerjs/engine-formula";
 
+import "@univerjs/design/lib/index.css";
+import "@univerjs/ui/lib/index.css";
+import "@univerjs/docs-ui/lib/index.css";
+
+import zhCN from "@univerjs/design/lib/locale/zh-CN";
+
 interface UniverDocPreviewProps {
   data: any;
   variables?: Record<string, any>;
 }
 
+const UNIT_ID = 'SYSTEM_DOC_PREVIEW';
+
 const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const univerRef = useRef<Univer | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || !data) return;
 
-    // Initialize Univer
+    // --- 系统化初始化 ---
     const univer = new Univer({
       theme: defaultTheme,
       locale: LocaleType.ZH_CN,
@@ -35,32 +50,35 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
 
     univerRef.current = univer;
 
-    // Register plugins
+    // 注册预览所需核心插件
     univer.registerPlugin(UniverRenderEnginePlugin);
     univer.registerPlugin(UniverFormulaEnginePlugin);
-    // UI plugin with minimal configuration for read-only preview
     univer.registerPlugin(UniverUIPlugin, {
       container: containerRef.current,
       header: false,
       footer: false,
-      toolbar: false, // Hide toolbar for preview
+      toolbar: false, // 预览模式隐藏工具栏
     });
     univer.registerPlugin(UniverDocsPlugin, {
-      hasScroll: true, // Allow scrolling if content is long
+      hasScroll: true,
     });
     univer.registerPlugin(UniverDocsUIPlugin);
-    // 预览模式不注册 Drawing 插件，与 editor 保持一致
 
-    // Initial load
-    const unitId = 'doc-preview-' + Date.now();
+    // 准备文档数据
     const docData = JSON.parse(JSON.stringify(data));
-    // Ensure unitId matches
-    docData.id = unitId;
+    docData.id = UNIT_ID;
+
+    // 强制同步 Preview 的页面配置
+    docData.documentStyle = merge({}, docData.documentStyle || {}, {
+        pageSize: { width: 595.27, height: 841.89 },
+        marginTop: 72, marginBottom: 72, marginLeft: 90, marginRight: 90,
+        renderConfig: { isPageMode: true }
+    });
 
     const doc = univer.createUnit(UniverInstanceType.UNIVER_DOC, docData);
+    setIsReady(true);
 
-    // Perform Variable Substitution using Command API
-    // Replace from end to start (sequential await) to avoid index shifting and race conditions
+    // 变量替换逻辑 (保持原有功能，但使用稳定触发)
     if (variables) {
       const runSubstitution = async () => {
         try {
@@ -73,8 +91,6 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
 
           const dataStream = body.dataStream;
           const matches: { start: number; end: number; key: string }[] = [];
-
-          // Regex to find {{key}}
           const regex = /\{\{([^}]+)\}\}/g;
           let match;
           while ((match = regex.exec(dataStream)) !== null) {
@@ -85,7 +101,6 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
             });
           }
 
-          // Replace from end to start to avoid index shifting; must await sequentially
           const reversed = [...matches].reverse();
           for (const m of reversed) {
             const value = resolveValue(m.key, variables);
@@ -95,12 +110,12 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
                 : String(value ?? '');
 
             await commandService.executeCommand(SetTextSelectionsOperation.id, {
-              unitId,
+              unitId: UNIT_ID,
               ranges: [{ startOffset: m.start, endOffset: m.end }],
             });
 
             await commandService.executeCommand(IMEInputCommand.id, {
-              unitId,
+              unitId: UNIT_ID,
               newText: strValue,
               oldTextLen: m.end - m.start,
               isCompositionStart: false,
@@ -112,7 +127,7 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
         }
       };
 
-      setTimeout(runSubstitution, 100); // Small delay to ensure doc is ready
+      setTimeout(runSubstitution, 500);
     }
 
     return () => {
@@ -138,14 +153,41 @@ const UniverDocPreview: React.FC<UniverDocPreviewProps> = ({ data, variables }) 
   };
 
   return (
-    <div 
-      ref={containerRef} 
-      style={{ 
-        width: '100%', 
-        height: '100%', 
-        overflow: 'hidden' 
-      }} 
-    />
+    <div className="univer-preview-wrapper" style={{ width: '100%', height: '100%', position: 'relative', background: '#f0f2f5' }}>
+      <style>{`
+        @media screen {
+            .univer-preview-wrapper .univer-render-canvas-container {
+                background-color: #f0f2f5 !important;
+                padding: 24px 0 !important;
+                display: flex !important;
+                justify-content: center !important;
+            }
+            .univer-preview-wrapper .univer-render-canvas-main {
+                background-color: #ffffff !important;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+            }
+        }
+
+        @media print {
+            .univer-preview-wrapper {
+                background: none !important;
+            }
+            .univer-preview-wrapper .univer-render-canvas-container {
+                background: none !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+            .univer-preview-wrapper .univer-render-canvas-main {
+                box-shadow: none !important;
+                border: none !important;
+            }
+        }
+      `}</style>
+      <div 
+        ref={containerRef} 
+        style={{ width: '100%', height: '100%', overflow: 'hidden' }} 
+      />
+    </div>
   );
 };
 

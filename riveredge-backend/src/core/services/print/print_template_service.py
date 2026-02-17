@@ -14,6 +14,11 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.print_template import PrintTemplate
 from core.services.print.print_device_service import PrintDeviceService
+from core.services.print.univer_renderer import (
+    is_univer_document,
+    render_univer_template,
+    render_univer_to_html,
+)
 from core.schemas.print_template import (
     PrintTemplateCreate,
     PrintTemplateUpdate,
@@ -104,7 +109,8 @@ class PrintTemplateService:
         skip: int = 0,
         limit: int = 100,
         type: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        document_type: Optional[str] = None
     ) -> List[PrintTemplate]:
         """
         获取打印模板列表
@@ -115,6 +121,7 @@ class PrintTemplateService:
             limit: 限制数量
             type: 模板类型筛选
             is_active: 是否启用筛选
+            document_type: 关联业务单据类型（按 config.document_type 筛选）
             
         Returns:
             List[PrintTemplate]: 打印模板列表
@@ -129,6 +136,9 @@ class PrintTemplateService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+        
+        if document_type:
+            query = query.filter(config__contains={"document_type": document_type})
         
         return await query.order_by("-created_at").offset(skip).limit(limit).all()
     
@@ -228,7 +238,9 @@ class PrintTemplateService:
         data: dict
     ) -> str:
         """
-        渲染模板内容（简单的变量替换）
+        渲染模板内容（变量替换）
+        - Univer JSON 格式：在 body.dataStream 中替换，支持嵌套路径
+        - 纯文本格式：简单 {{key}} 替换
         
         Args:
             template_content: 模板内容
@@ -237,14 +249,15 @@ class PrintTemplateService:
         Returns:
             str: 渲染后的内容
         """
-        # 简单的变量替换：{{variable_name}}
+        if is_univer_document(template_content):
+            return render_univer_template(template_content, data)
+        # 纯文本：简单变量替换
         rendered = template_content
         for key, value in data.items():
             placeholder = f"{{{{{key}}}}}"
             rendered = rendered.replace(placeholder, str(value))
-        
         return rendered
-    
+
     @staticmethod
     async def render_print_template(
         tenant_id: int,
@@ -295,10 +308,13 @@ class PrintTemplateService:
             raise ValidationError("异步执行功能待实现")
         
         # 同步渲染模板
-        rendered_content = PrintTemplateService.render_template(
-            print_template.content,
-            data.data
-        )
+        if data.output_format == "html" and is_univer_document(print_template.content):
+            rendered_content = render_univer_to_html(print_template.content, data.data)
+        else:
+            rendered_content = PrintTemplateService.render_template(
+                print_template.content,
+                data.data
+            )
         
         # 更新使用统计
         print_template.usage_count += 1

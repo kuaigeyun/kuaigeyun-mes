@@ -164,6 +164,19 @@ export const DOCUMENT_TYPE_OPTIONS = Object.entries(PRINT_TEMPLATE_SCHEMAS).map(
   value,
 }));
 
+/** 单据类型到模板代码的映射，与后端 DOCUMENT_TEMPLATE_CODES 一致 */
+export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
+  work_order: 'WORK_ORDER_PRINT',
+  material: 'MATERIAL_PRINT',
+  production_picking: 'PRODUCTION_PICKING_PRINT',
+  finished_goods_receipt: 'FINISHED_GOODS_RECEIPT_PRINT',
+  sales_delivery: 'SALES_DELIVERY_PRINT',
+  purchase_order: 'PURCHASE_ORDER_PRINT',
+  purchase_receipt: 'PURCHASE_RECEIPT_PRINT',
+  sales_forecast: 'SALES_FORECAST_PRINT',
+  sales_order: 'SALES_ORDER_PRINT',
+};
+
 /** 变量项：key 用于插入，label 用于展示 */
 export interface TemplateVariableItem {
   key: string;

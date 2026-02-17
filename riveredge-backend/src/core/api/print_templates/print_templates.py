@@ -63,6 +63,7 @@ async def list_print_templates(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     type: Optional[str] = Query(None, description="模板类型（可选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    document_type: Optional[str] = Query(None, description="关联业务单据类型（可选，按 config.document_type 筛选）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -85,7 +86,8 @@ async def list_print_templates(
         skip=skip,
         limit=limit,
         type=type,
-        is_active=is_active
+        is_active=is_active,
+        document_type=document_type
     )
     return [PrintTemplateResponse.model_validate(pt) for pt in print_templates]
 
