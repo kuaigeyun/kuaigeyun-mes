@@ -1,0 +1,80 @@
+diff --git a/node_modules/@pdfme/schemas/dist/cjs/src/tables/tableHelper.js b/node_modules/@pdfme/schemas/dist/cjs/src/tables/tableHelper.js
+index 1548810..f287546 100644
+--- a/node_modules/@pdfme/schemas/dist/cjs/src/tables/tableHelper.js
++++ b/node_modules/@pdfme/schemas/dist/cjs/src/tables/tableHelper.js
+@@ -68,6 +68,15 @@ function cellStyles(sectionName, column, rowIndex, styles, fallbackFontName) {
+     const rowStyles = sectionName === 'body' && rowIndex % 2 === 0
+         ? Object.assign({}, styles.alternateRowStyles)
+         : {};
++    const defaultSpacing = { top: 5, right: 5, bottom: 5, left: 5 };
++    const defaultLineWidth = { top: 0, right: 0, bottom: 0, left: 0 };
++    const ensureSpacing = (v, fallback) => {
++        if (v && typeof v === 'object' && 'top' in v)
++            return v;
++        if (typeof v === 'number')
++            return { top: v, right: v, bottom: v, left: v };
++        return fallback;
++    };
+     const defaultStyle = {
+         fontName: fallbackFontName,
+         backgroundColor: '',
+@@ -77,13 +86,16 @@ function cellStyles(sectionName, column, rowIndex, styles, fallbackFontName) {
+         alignment: 'left',
+         verticalAlignment: 'middle',
+         fontSize: 10,
+-        cellPadding: 5,
++        cellPadding: defaultSpacing,
+         lineColor: '#000000',
+-        lineWidth: 0,
++        lineWidth: defaultLineWidth,
+         minCellHeight: 0,
+         minCellWidth: 0,
+     };
+-    return Object.assign(defaultStyle, otherStyles, rowStyles, colStyles);
++    const merged = Object.assign(defaultStyle, otherStyles, rowStyles, colStyles);
++    merged.cellPadding = ensureSpacing(merged.cellPadding, defaultSpacing);
++    merged.lineWidth = ensureSpacing(merged.lineWidth, defaultLineWidth);
++    return merged;
+ }
+ function mapCellStyle(style) {
+     return {
+diff --git a/node_modules/@pdfme/schemas/dist/esm/src/tables/tableHelper.js b/node_modules/@pdfme/schemas/dist/esm/src/tables/tableHelper.js
+index 5491b05..1981960 100644
+--- a/node_modules/@pdfme/schemas/dist/esm/src/tables/tableHelper.js
++++ b/node_modules/@pdfme/schemas/dist/esm/src/tables/tableHelper.js
+@@ -65,6 +65,15 @@ function cellStyles(sectionName, column, rowIndex, styles, fallbackFontName) {
+     const rowStyles = sectionName === 'body' && rowIndex % 2 === 0
+         ? Object.assign({}, styles.alternateRowStyles)
+         : {};
++    const defaultSpacing = { top: 5, right: 5, bottom: 5, left: 5 };
++    const defaultLineWidth = { top: 0, right: 0, bottom: 0, left: 0 };
++    const ensureSpacing = (v, fallback) => {
++        if (v && typeof v === 'object' && 'top' in v)
++            return v;
++        if (typeof v === 'number')
++            return { top: v, right: v, bottom: v, left: v };
++        return fallback;
++    };
+     const defaultStyle = {
+         fontName: fallbackFontName,
+         backgroundColor: '',
+@@ -74,13 +83,16 @@ function cellStyles(sectionName, column, rowIndex, styles, fallbackFontName) {
+         alignment: 'left',
+         verticalAlignment: 'middle',
+         fontSize: 10,
+-        cellPadding: 5,
++        cellPadding: defaultSpacing,
+         lineColor: '#000000',
+-        lineWidth: 0,
++        lineWidth: defaultLineWidth,
+         minCellHeight: 0,
+         minCellWidth: 0,
+     };
+-    return Object.assign(defaultStyle, otherStyles, rowStyles, colStyles);
++    const merged = Object.assign(defaultStyle, otherStyles, rowStyles, colStyles);
++    merged.cellPadding = ensureSpacing(merged.cellPadding, defaultSpacing);
++    merged.lineWidth = ensureSpacing(merged.lineWidth, defaultLineWidth);
++    return merged;
+ }
+ function mapCellStyle(style) {
+     return {

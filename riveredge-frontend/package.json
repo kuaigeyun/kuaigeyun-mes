@@ -16,6 +16,7 @@
         "test:coverage": "vitest --coverage",
         "test:run": "vitest run",
         "install:all": "npm install",
+        "postinstall": "patch-package",
         "clean": "rm -rf node_modules"
     },
     "engines": {
@@ -85,6 +86,7 @@
         "eslint": "9.11.1",
         "jsdom": "^25.0.1",
         "less": "^4.4.2",
+        "patch-package": "^8.0.1",
         "prettier": "3.3.3",
         "typescript": "^5.6.3",
         "vite": "^5.4.8",

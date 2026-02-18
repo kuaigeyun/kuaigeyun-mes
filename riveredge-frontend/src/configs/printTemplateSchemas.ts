@@ -4,6 +4,8 @@
  * 字段 key 与 API 返回的 snake_case 保持一致，确保数据绑定正确
  */
 
+import dayjs from 'dayjs';
+
 export interface FieldSchema {
   key: string;
   label: string;
@@ -199,28 +201,44 @@ export interface TemplateVariableItem {
 /**
  * 根据字段类型生成预览用示例值
  */
-const getSampleValueByType = (type: string, key: string): unknown => {
+const getSampleValueByType = (type: string, key: string, label?: string): any => {
+  const l = label || '';
+  const k = key.toLowerCase();
+
+  // 特殊类型处理
+  if (k.includes('qrcode')) return 'SAMPLE-QR-001';
+  if (k.includes('barcode')) return '1234567890';
+  if (type === 'image') return 'https://placehold.co/400x400/f0f2f5/a8b1bd?text=Image';
+  if (type === 'signature') return 'https://placehold.co/200x100/f0f2f5/a8b1bd?text=Signature';
+
+  // 语义化匹配：根据 Label 或 Key 判断业务含义
+  if (l.includes('日期') || l.includes('时间') || k.includes('date') || k.includes('time')) {
+    return dayjs().format('YYYY-MM-DD HH:mm');
+  }
+  if (l.includes('数量') || l.includes('额') || k.includes('quantity') || k.includes('amount') || k.includes('price')) {
+    return '1,280.00';
+  }
+  if (l.includes('编号') || l.includes('代码') || k.includes('码') || k.includes('code') || k.includes('no')) {
+    return 'SN-20240218-0001';
+  }
+  if (l.includes('名称') || l.includes('规格') || k.includes('name')) {
+    return `测试${l || '数据'}`;
+  }
+  if (l.includes('人') || l.includes('员') || k.includes('user') || k.includes('creator')) {
+    return '管理员';
+  }
+  if (l.includes('状态') || k.includes('status')) {
+    return '进行中';
+  }
+  if (l.includes('备注') || k.includes('remark')) {
+    return '无';
+  }
+
+  // 基础类型后备
   switch (type) {
-    case 'string':
-      if (key.includes('qrcode') || key.includes('二维码')) return 'WO-SAMPLE-001';
-      if (key.includes('name') || key.includes('名称')) return '示例名称';
-      if (key.includes('code') || key.includes('编号') || key.includes('单号')) return 'SAMPLE-001';
-      if (key.includes('status') || key.includes('状态')) return '进行中';
-      if (key.includes('mode') || key.includes('模式')) return '标准';
-      if (key.includes('priority') || key.includes('优先级')) return '普通';
-      if (key.includes('remarks') || key.includes('备注')) return '示例备注';
-      if (key.includes('company')) return '江左艾尔法智能科技有限公司';
-      if (key.includes('user')) return '系统管理员';
-      if (key.includes('tenant')) return '华为制造事业部';
-      return '示例文本';
-    case 'number':
-      return 100;
-    case 'date':
-      return '2024-01-15 10:30:00';
-    case 'boolean':
-      return true;
-    default:
-      return '示例';
+    case 'number': return 888;
+    case 'boolean': return true;
+    default: return `{${label || key}}`;
   }
 };
 
@@ -229,40 +247,39 @@ const getSampleValueByType = (type: string, key: string): unknown => {
  */
 export const getSamplePreviewVariables = (type: string): Record<string, unknown> => {
   const schema = getSchemaByType(type);
-  if (!schema) return {};
+  const result: Record<string, unknown> = {};
+
+  // 1. 注入全局内置变量 (用于页眉页脚预览)
+  result['print_user'] = '系统管理员';
+  result['print_time'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
+  result['dateTime'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
+  result['date'] = dayjs().format('YYYY-MM-DD');
+  result['company_name'] = 'RiverEdge 智能制造演示环境';
+  result['document_type_label'] = type;
+
+  if (!schema) return result;
 
   const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;
   const allFields = [...schema.fields, ...commonFields];
-  const result: Record<string, unknown> = {};
 
   for (const field of allFields) {
     if (field.type === 'array' && field.children?.length) {
-      // 如 operations.0.operation_code -> { operations: [{ operation_code: 'OP1', ... }] }
       const arrKey = field.key;
       const sampleItems: Record<string, unknown>[] = [];
-      const indexMap = new Map<number, Record<string, unknown>>();
-
-      for (const child of field.children) {
-        const parts = child.key.split('.');
-        if (parts.length >= 3) {
-          const idx = parseInt(parts[1], 10);
-          const prop = parts.slice(2).join('.');
-          if (!indexMap.has(idx)) indexMap.set(idx, {});
-          const item = indexMap.get(idx)!;
-          item[prop] = getSampleValueByType(child.type, prop);
+      // 生成 3 条模拟明细数据
+      for (let i = 0; i < 3; i++) {
+        const item: Record<string, unknown> = {};
+        for (const child of field.children) {
+          const prop = child.key.split('.').pop() || '';
+          item[prop] = getSampleValueByType(child.type, prop, child.label);
         }
+        sampleItems.push(item);
       }
-
-      const indices = Array.from(indexMap.keys()).sort((a, b) => a - b);
-      for (const idx of indices) {
-        sampleItems[idx] = indexMap.get(idx)!;
-      }
-      result[arrKey] = sampleItems.filter(Boolean);
+      result[arrKey] = sampleItems;
     } else {
-      result[field.key] = getSampleValueByType(field.type, field.key);
+      result[field.key] = getSampleValueByType(field.type, field.key, field.label);
     }
   }
-
   return result;
 };
 
