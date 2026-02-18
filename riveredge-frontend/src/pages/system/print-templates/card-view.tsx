@@ -20,9 +20,10 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
-import ReportDesigner, { ReportConfig, ReportComponent } from '../../../components/report-designer';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../configs/printTemplateSchemas';
-import { EMPTY_UNIVER_DOC_JSON } from '../../../components/univer-doc/constants';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSamplePreviewVariables } from '../../../configs/printTemplateSchemas';
+import { isPdfmeTemplate } from '../../../utils/pdfmeTemplateUtils';
+import PdfmePreview from '../../../components/pdfme-doc/preview';
+import { EMPTY_PDFME_TEMPLATE_JSON } from '../../../components/pdfme-doc/constants';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -34,53 +35,33 @@ const { Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
 /**
- * 从模板内容中提取变量（支持 Univer JSON 和纯文本）
+ * 从模板内容中提取变量（支持 pdfme schemas 和纯文本 {{key}}）
  */
 const extractVariables = (content: string): string[] => {
-  let text = content;
+  if (!content) return [];
   try {
     const parsed = JSON.parse(content);
-    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
-      text = parsed.body.dataStream;
+    if (parsed?.schemas && Array.isArray(parsed.schemas)) {
+      const names = new Set<string>();
+      for (const page of parsed.schemas) {
+        if (Array.isArray(page)) {
+          for (const s of page) {
+            if (s?.name) names.add(s.name);
+          }
+        }
+      }
+      return Array.from(names).sort();
     }
   } catch {
-    // 非 JSON，使用原始 content
+    // 非 pdfme JSON
   }
   const regex = /\{\{([^}]+)\}\}/g;
-  const matches = text.matchAll(regex);
+  const matches = content.matchAll(regex);
   const variables = new Set<string>();
   for (const match of matches) {
     variables.add(match[1].trim());
   }
   return Array.from(variables).sort();
-};
-
-/**
- * 预览模板内容（替换变量为示例值，支持 Univer JSON）
- */
-const previewTemplate = (content: string, variables: string[]): string => {
-  try {
-    const parsed = JSON.parse(content);
-    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
-      let dataStream = parsed.body.dataStream;
-      variables.forEach((variable) => {
-        const exampleValue = `[${variable}]`;
-        dataStream = dataStream.replace(
-          new RegExp(`\\{\\{${variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}\\}`, 'g'),
-          exampleValue
-        );
-      });
-      return dataStream.replace(/\r/g, '\n').trim();
-    }
-  } catch {
-    // 非 JSON，使用原始逻辑
-  }
-  let preview = content;
-  variables.forEach((variable) => {
-    const exampleValue = `[${variable}]`;
-    preview = preview.replace(new RegExp(`\\{\\{${variable}\\}\\}`, 'g'), exampleValue);
-  });
-  return preview;
 };
 
 /**
@@ -101,6 +82,7 @@ const CardView: React.FC = () => {
   const [renderLoading, setRenderLoading] = useState(false);
 
   const [previewContent, setPreviewContent] = useState<string>('');
+  const [previewPdfme, setPreviewPdfme] = useState<{ template: any; variables: Record<string, unknown> } | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [createForm] = Form.useForm();
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -161,10 +143,19 @@ const CardView: React.FC = () => {
   const handlePreview = async (template: PrintTemplate) => {
     try {
       const detail = await getPrintTemplateByUuid(template.uuid);
-      const variables = extractVariables(detail.content);
-      const preview = previewTemplate(detail.content, variables);
-      setPreviewContent(preview);
       setCurrentTemplate(detail);
+      if (isPdfmeTemplate(detail.content)) {
+        const templateObj = JSON.parse(detail.content);
+        const docType = detail.config?.document_type || detail.type || 'work_order';
+        setPreviewPdfme({
+          template: templateObj,
+          variables: getSamplePreviewVariables(docType),
+        });
+        setPreviewContent('');
+      } else {
+        setPreviewPdfme(null);
+        setPreviewContent('该模板为旧格式，请在设计器中查看或重新设计');
+      }
       setPreviewModalVisible(true);
     } catch (error: any) {
       handleError(error, '获取模板详情失败');
@@ -189,7 +180,7 @@ const CardView: React.FC = () => {
       await createPrintTemplate({
         ...values,
         code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
-        content: EMPTY_UNIVER_DOC_JSON,
+        content: EMPTY_PDFME_TEMPLATE_JSON,
         config: { document_type: values.document_type },
       });
       handleSuccess('模板创建成功');
@@ -653,6 +644,7 @@ const CardView: React.FC = () => {
           setPreviewModalVisible(false);
           setCurrentTemplate(null);
           setPreviewContent('');
+          setPreviewPdfme(null);
         }}
         footer={null}
         width={900}
@@ -666,17 +658,20 @@ const CardView: React.FC = () => {
               showIcon
               style={{ marginBottom: 16 }}
             />
-            <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
-              <pre style={{
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word',
-                fontSize: 14,
-                lineHeight: 1.6,
-              }}>
-                {previewContent}
-              </pre>
-            </div>
+            {previewPdfme ? (
+              <div style={{ height: 500, minHeight: 400 }}>
+                <PdfmePreview
+                  template={previewPdfme.template}
+                  variables={previewPdfme.variables}
+                />
+              </div>
+            ) : (
+              <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', padding: '16px', backgroundColor: '#fff' }}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word', fontSize: 14, lineHeight: 1.6 }}>
+                  {previewContent}
+                </pre>
+              </div>
+            )}
             <Divider />
             <div>
               <Text strong>原始模板内容：</Text>
@@ -693,34 +688,6 @@ const CardView: React.FC = () => {
               </pre>
             </div>
           </div>
-        )}
-      </Modal>
-
-      {/* 模板设计器 Modal */}
-      <Modal
-        title="模板设计器"
-        open={designerModalVisible}
-        onCancel={() => {
-          setDesignerModalVisible(false);
-          setCurrentTemplate(null);
-          setDesignerConfig(undefined);
-        }}
-        footer={null}
-        width="100%"
-        style={{ top: 0, padding: 0 }}
-        styles={{ body: { height: 'calc(100vh - 55px)', padding: 0 } }}
-        destroyOnClose
-      >
-        {currentTemplate && designerConfig && (
-          <ReportDesigner
-            initialConfig={designerConfig}
-            onSave={handleDesignerSave}
-            onPreview={(config) => {
-              // 预览功能已经在 ReportDesigner 内部实现 Tabs 切换
-              // 这里可以扩展额外的预览逻辑
-              console.log('Preview config:', config);
-            }}
-          />
         )}
       </Modal>
 

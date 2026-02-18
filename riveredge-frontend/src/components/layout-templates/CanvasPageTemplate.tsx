@@ -43,8 +43,8 @@ export interface CanvasPageTemplateProps {
   toolbar: ReactNode;
   /** 画板内容（流程图、MindMap、画布等） */
   canvas: ReactNode;
-  /** 右侧配置/属性面板 */
-  rightPanel: CanvasPageRightPanelConfig;
+  /** 右侧配置/属性面板（可选，不传则画板占满宽度，如 pdfme 原生编辑器） */
+  rightPanel?: CanvasPageRightPanelConfig;
   /** 右侧面板宽度，默认 400 */
   rightPanelWidth?: number;
   /** 画板最小高度，默认 600 */
@@ -132,24 +132,26 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
           </div>
         </Card>
 
-        {/* 右侧面板 */}
-        <Card
-          title={rightPanel.title}
-          style={{
-            width: rightPanelWidth,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-          styles={{
-            body: {
-              flex: 1,
-              overflow: 'auto',
-              padding,
-            },
-          }}
-        >
-          {rightPanel.children}
-        </Card>
+        {/* 右侧面板（可选） */}
+        {rightPanel && (
+          <Card
+            title={rightPanel.title}
+            style={{
+              width: rightPanelWidth,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            styles={{
+              body: {
+                flex: 1,
+                overflow: 'auto',
+                padding,
+              },
+            }}
+          >
+            {rightPanel.children}
+          </Card>
+        )}
       </div>
     </div>
   );

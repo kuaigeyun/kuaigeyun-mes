@@ -27,7 +27,7 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../configs/printTemplateSchemas';
-import { EMPTY_UNIVER_DOC_JSON } from '../../../../components/univer-doc/constants';
+import { EMPTY_PDFME_TEMPLATE_JSON, DEFAULT_WORK_ORDER_PDFME_TEMPLATE } from '../../../../components/pdfme-doc/constants';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -74,21 +74,28 @@ const getTypeInfo = (type: string): { color: string; text: string; icon: React.R
 };
 
 /**
- * 提取模板变量（支持 Univer JSON 的 dataStream 和纯文本）
+ * 提取模板变量（支持 pdfme schemas 和纯文本 {{key}}）
  */
 const extractVariables = (content: string): string[] => {
   if (!content) return [];
-  let text = content;
   try {
     const parsed = JSON.parse(content);
-    if (parsed?.body?.dataStream && typeof parsed.body.dataStream === 'string') {
-      text = parsed.body.dataStream;
+    if (parsed?.schemas && Array.isArray(parsed.schemas)) {
+      const names = new Set<string>();
+      for (const page of parsed.schemas) {
+        if (Array.isArray(page)) {
+          for (const s of page) {
+            if (s?.name) names.add(s.name);
+          }
+        }
+      }
+      return Array.from(names).sort();
     }
   } catch {
-    // 非 JSON，使用原始 content
+    // 非 pdfme JSON，尝试 {{key}} 提取
   }
   const regex = /\{\{([^}]+)\}\}/g;
-  const matches = text.matchAll(regex);
+  const matches = content.matchAll(regex);
   const variables = new Set<string>();
   for (const match of matches) {
     variables.add(match[1].trim());
@@ -273,135 +280,25 @@ const PrintTemplateListPage: React.FC = () => {
   };
 
   /**
-   * 创建示例工单模板
+   * 创建示例工单模板（pdfme 格式，含工单二维码）
    */
   const createSampleWorkOrderTemplate = async () => {
     try {
-      const sampleConfig: ReportConfig = {
-        version: '1.0',
-        layout: {
-          width: 800,
-          height: 1123, // A4 pixel height (approx)
-          type: 'A4',
-        },
-        components: [
-          // 标题
-          {
-            id: 'title',
-            type: 'text',
-            x: 0,
-            y: 30,
-            width: 800,
-            height: 60,
-            content: '生产工单',
-            style: {
-              fontSize: 24,
-              fontWeight: 'bold',
-              textAlign: 'center',
-            }
-          } as ReportComponent,
-          // 基本信息区域
-          {
-            id: 'info-panel',
-            type: 'text',
-            x: 40,
-            y: 100,
-            width: 720,
-            height: 150,
-            content: `工单编号：{{work_order_no}}
-产品名称：{{product_name}}
-产品编码：{{product_code}}
-计划数量：{{plan_quantity}}
-单位：{{unit}}
-计划开始时间：{{plan_start_time}}
-计划结束时间：{{plan_end_time}}`,
-            style: {
-              fontSize: 14,
-              lineHeight: 1.8,
-              border: '1px solid #ccc',
-              padding: '10px',
-            }
-          } as ReportComponent,
-          // 物料清单标题
-          {
-            id: 'material-title',
-            type: 'text',
-            x: 40,
-            y: 270,
-            width: 200,
-            height: 40,
-            content: '物料清单',
-            style: {
-              fontSize: 16,
-              fontWeight: 'bold',
-            }
-          } as ReportComponent,
-          // 物料清单表格
-          {
-            id: 'material-table',
-            type: 'table',
-            x: 40,
-            y: 310,
-            width: 720,
-            height: 300,
-            columns: [
-              { title: '物料编码', dataIndex: 'material_code', width: 150 },
-              { title: '物料名称', dataIndex: 'material_name', width: 250 },
-              { title: '规格型号', dataIndex: 'spec', width: 150 },
-              { title: '需求数量', dataIndex: 'quantity', width: 100 },
-              { title: '单位', dataIndex: 'unit', width: 70 },
-            ],
-            dataSource: 'materials', // 关联数据源 key
-            style: {
-              border: '1px solid #000',
-            }
-          } as ReportComponent,
-          // 备注
-          {
-            id: 'remark',
-            type: 'text',
-            x: 40,
-            y: 650,
-            width: 720,
-            height: 100,
-            content: '备注：\n{{remark}}',
-            style: {
-              fontSize: 14,
-              border: '1px solid #ccc',
-              padding: '10px',
-            }
-          } as ReportComponent,
-          // 底部信息
-          {
-            id: 'footer',
-            type: 'text',
-            x: 40,
-            y: 1000,
-            width: 720,
-            height: 40,
-            content: '打印时间：{{print_time}}    操作员：{{operator}}',
-            style: {
-              fontSize: 12,
-              textAlign: 'right',
-            }
-          } as ReportComponent,
-        ]
-      };
-
       await createPrintTemplate({
-        name: '示例生产工单模板',
-        code: 'SAMPLE_WORK_ORDER_' + Date.now(),
-        type: 'other',
-        description: '自动生成的示例生产工单模板，包含基本信息和物料表格。',
-        content: JSON.stringify(sampleConfig),
-        config: sampleConfig.layout,
+        name: '工单打印模板（含二维码）',
+        code: DOCUMENT_TYPE_TO_CODE.work_order,
+        type: 'pdf',
+        description: '基于 pdfme 的工单打印模板，包含工单二维码、基本信息及工序列表。',
+        content: JSON.stringify(DEFAULT_WORK_ORDER_PDFME_TEMPLATE),
+        config: { document_type: 'work_order' },
         is_active: true,
+        is_default: true,
       });
 
-      messageApi.success('示例模板创建成功');
+      messageApi.success('工单模板创建成功，可在设计器中进一步调整');
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建示例模板失败');
+      messageApi.error(error.message || '创建工单模板失败');
     }
   };
 
@@ -433,7 +330,7 @@ const PrintTemplateListPage: React.FC = () => {
           code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
           type: values.type,
           description: values.description,
-          content: EMPTY_UNIVER_DOC_JSON,
+          content: EMPTY_PDFME_TEMPLATE_JSON,
           config: { document_type: values.document_type },
         };
         await createPrintTemplate(data);

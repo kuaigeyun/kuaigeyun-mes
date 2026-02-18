@@ -380,7 +380,7 @@ const techStackData: TechStackItem[] = [
   {
     name: '@univerjs/*',
     version: '^0.12.3+',
-    description: 'Excel 在线编辑器',
+    description: 'Excel 在线编辑（Sheets，用于导入/导出）',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'frontend',
