@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, message, Space, Drawer, Form, Input } from 'antd';
+import { Button, message, Space, Drawer, Form, Input } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 
@@ -18,9 +18,9 @@ import { ReactFlowProvider, Handle, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { sopApi } from '../../../services/process';
 import type { SOP } from '../../../types/process';
-import { CANVAS_GRID_STYLE } from '../../../../../components/layout-templates';
+import { CanvasPageTemplate, CANVAS_GRID_STYLE } from '../../../../../components/layout-templates';
 import FormSchemaEditor from './FormSchemaEditor';
-import type { ISchema } from '@formily/core';
+import type { ISchema } from '@formily/json-schema';
 
 /**
  * 作业步骤节点组件
@@ -316,7 +316,7 @@ const ESOPDesignerPage: React.FC = () => {
   };
 
   /**
-   * 保存流程设计
+   * 保存SOP设计
    */
   const handleSave = async () => {
     if (!sopUuid || !sopData) return;
@@ -344,7 +344,7 @@ const ESOPDesignerPage: React.FC = () => {
         formConfig: Object.keys(formConfig).length > 0 ? formConfig : null,
       });
       
-      messageApi.success('流程设计已保存');
+      messageApi.success('SOP设计已保存');
     } catch (error: any) {
       messageApi.error(error.message || '保存失败');
     } finally {
@@ -378,14 +378,11 @@ const ESOPDesignerPage: React.FC = () => {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
-      {/* 工具栏 */}
-      <Card
-        size="small"
-        style={{ marginBottom: 16 }}
-        styles={{ body: { padding: '12px 16px' } }}
-      >
-        <Space>
+    <>
+      <CanvasPageTemplate
+      functionalTitle="SOP设计"
+      toolbar={
+        <Space style={{ width: '100%' }}>
           <Button
             type="primary"
             icon={<SaveOutlined />}
@@ -409,37 +406,32 @@ const ESOPDesignerPage: React.FC = () => {
           >
             添加检查节点
           </Button>
-          <div style={{ marginLeft: 'auto' }}>
-            <span style={{ marginRight: 8 }}>SOP名称：{sopData.name}</span>
+          <div style={{ marginLeft: 'auto', color: '#666' }}>
+            <span style={{ marginRight: 16 }}>SOP名称：{sopData.name}</span>
             <span>SOP编码：{sopData.code}</span>
           </div>
         </Space>
-      </Card>
+      }
 
-      {/* ProFlow 画布 */}
-      <Card 
-        style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-        styles={{ body: { padding: 0, height: '100%', display: 'flex', flexDirection: 'column' } }}
-      >
-        <div style={{ width: '100%', height: '100%', flex: 1, minHeight: 600 }}>
-          <ReactFlowProvider>
-            <FlowStoreProvider>
-              <div style={{ width: '100%', height: '100%', position: 'relative', ...CANVAS_GRID_STYLE }}>
-                <FlowView
-                  nodes={nodes}
-                  edges={edges}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onNodeClick={(event, node) => {
-                    handleNodeConfig(node);
-                  }}
-                  nodeTypes={nodeTypes}
-                />
-              </div>
-            </FlowStoreProvider>
-          </ReactFlowProvider>
-        </div>
-      </Card>
+      canvas={
+        <ReactFlowProvider>
+          <FlowStoreProvider>
+            <div style={{ width: '100%', height: '100%', position: 'relative', ...CANVAS_GRID_STYLE }}>
+              <FlowView
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={(_, node) => {
+                  handleNodeConfig(node);
+                }}
+                nodeTypes={nodeTypes}
+              />
+            </div>
+          </FlowStoreProvider>
+        </ReactFlowProvider>
+      }
+    />
 
       {/* 节点配置 Drawer */}
       <Drawer
@@ -490,15 +482,15 @@ const ESOPDesignerPage: React.FC = () => {
               </div>
             </div>
             <FormSchemaEditor
-              value={formSchema || undefined}
+              value={(formSchema as any) || undefined}
               onChange={(schema) => {
-                setFormSchema(schema);
+                setFormSchema(schema as any);
               }}
             />
           </div>
         )}
       </Drawer>
-    </div>
+    </>
   );
 };
 

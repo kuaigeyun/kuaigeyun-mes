@@ -10,50 +10,25 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
-  DashboardOutlined,
-  UserOutlined,
-  TeamOutlined,
-  ApartmentOutlined,
-  CrownOutlined,
   LogoutOutlined,
-  UserSwitchOutlined,
-  SettingOutlined,
-  MonitorOutlined,
-  AppstoreOutlined,
-  ControlOutlined,
-  ShopOutlined,
+  UserOutlined,
   FileTextOutlined,
-  DatabaseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  GlobalOutlined,
   TranslationOutlined,
   BgColorsOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
   LockOutlined,
-  SearchOutlined,
   BellOutlined,
-  ApiOutlined,
-  CheckCircleOutlined,
-  CodeOutlined,
-  PrinterOutlined,
-  HistoryOutlined,
-  LoginOutlined,
-  UnorderedListOutlined,
-  CalendarOutlined,
-  PlayCircleOutlined,
-  InboxOutlined,
-  SafetyOutlined,
-  ShoppingOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { RightOutlined, CheckOutlined } from '@ant-design/icons';
-import { translateMenuName, translatePathTitle, translateAppMenuName, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation } from '../utils/menuTranslation';
+import { RightOutlined } from '@ant-design/icons';
+import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation } from '../utils/menuTranslation';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -581,6 +556,13 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/approval-processes',
             name: t('menu.system.approval-processes'),
             icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'),
+            children: [
+              {
+                path: '/system/approval-processes/designer',
+                name: t('path.system.approval-processes.designer'),
+                hideInMenu: true,
+              },
+            ],
           },
           {
             path: '/system/approval-instances',
@@ -616,6 +598,13 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/print-templates',
             name: t('menu.system.print-templates'),
             icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
+            children: [
+              {
+                path: '/system/print-templates/design',
+                name: t('path.system.print-templates.design'),
+                hideInMenu: true,
+              },
+            ],
           },
         ],
       },
@@ -1692,9 +1681,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
           // 菜单收起时不显示分组标题
           if (!collapsed) {
-            // 翻译应用名称（直接从路径提取应用 code，不依赖数据库中存储的名称）
-            // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
-            const firstChildPath = appMenu.children[0]?.path;
+            // 翻译应用名称（递归找第一个有 path 的子孙节点来提取 appCode）
+            const findFirstAppPath = (items: any[]): string | null => {
+              for (const child of items) {
+                if (child?.path) return child.path;
+                if (child?.children?.length > 0) {
+                  const found = findFirstAppPath(child.children);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+            const firstChildPath = findFirstAppPath(appMenu.children);
             let translatedAppName = appMenu.name; // 默认使用数据库中的名称
 
             // 优先从路径提取应用 code 并使用翻译 key
@@ -1704,6 +1702,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
                 const appNameKey = `app.${appCode}.name`;
                 const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
+
                 // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
                 if (appNameTranslated && appNameTranslated !== appNameKey) {
                   translatedAppName = appNameTranslated;
@@ -1713,7 +1712,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
             // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
             if (translatedAppName === appMenu.name) {
-              translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
+              translatedAppName = translateMenuName(appMenu.name, t, firstChildPath ?? undefined);
             }
 
             const groupTitle: MenuDataItem = {
@@ -1786,6 +1785,60 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
 
   /**
+   * 面包屑专用菜单数据：保留应用菜单的完整层级结构（不 flat 展开）
+   * filteredMenuData 为侧边栏渲染而 flat 展开了应用菜单子项，导致面包屑丢失父级层级。
+   * 这里单独维护一份保留树形结构的数据，专供面包屑使用。
+   */
+  const breadcrumbMenuData = useMemo(() => {
+    if (!currentUser) return [];
+
+    // 从系统菜单配置开始（已包含层级结构）
+    const items: MenuDataItem[] = [...menuConfig];
+
+    // 将应用菜单以完整层级插入（appMenu 作为父节点，其 children 保持原始树形）
+    if (applicationMenus && applicationMenus.length > 0) {
+      const appMenuItems: MenuDataItem[] = applicationMenus.map(appMenu => {
+        // 翻译应用名称：递归找第一个有 path 的子孙节点来提取 appCode
+        const findFirstChildPath = (items: any[]): string | null => {
+          for (const child of items) {
+            if (child?.path) return child.path;
+            if (child?.children?.length > 0) {
+              const found = findFirstChildPath(child.children);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const firstChildPath = findFirstChildPath(appMenu.children || []);
+        let translatedAppName = appMenu.name;
+        if (firstChildPath?.startsWith('/apps/')) {
+          const appCode = extractAppCodeFromPath(firstChildPath);
+          if (appCode) {
+            const appNameKey = `app.${appCode}.name`;
+            const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
+            if (appNameTranslated && appNameTranslated !== appNameKey) {
+              translatedAppName = appNameTranslated;
+            }
+          }
+        }
+
+
+        // 将每个 appMenu 作为父节点，其 children 保持完整层级
+        return {
+          ...convertMenuTreeToMenuDataItem(appMenu, true),
+          name: translatedAppName,
+          key: `breadcrumb-app-${appMenu.uuid}`,
+        };
+      });
+
+      // 插入到仪表盘之后
+      items.splice(1, 0, ...appMenuItems);
+    }
+
+    return items;
+  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, t, menuConfig]);
+
+  /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
    */
   useEffect(() => {
@@ -1794,8 +1847,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // 获取当前页面的标题（使用统一菜单数据 filteredMenuData，含应用菜单）
-    const pageTitle = findMenuTitleWithTranslation(location.pathname, filteredMenuData, t);
+    // 获取当前页面的标题（使用 breadcrumbMenuData，保留完整层级结构）
+    const pageTitle = findMenuTitleWithTranslation(location.pathname, breadcrumbMenuData, t);
 
     // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
     let currentSiteName = 'RiverEdge SaaS';
@@ -1820,13 +1873,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
     }
 
-    // 设置文档标题
+    // 设置文档标题，使用站点名称作为后缀
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
       document.title = `${pageTitle} - ${currentSiteName}`;
     } else {
       document.title = `${currentSiteName} - 多组织管理框架`;
     }
-  }, [location.pathname, filteredMenuData, t, siteSetting]);
+  }, [location.pathname, breadcrumbMenuData, t, siteSetting, currentUser]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏
@@ -2039,20 +2092,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return null;
     };
 
-    const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
-      for (const item of items) {
-        if (item.path === targetPath) {
-          return { item, parent };
-        }
-        if (item.children) {
-          const found = findParentMenu(item.children, targetPath, item);
-          if (found) return found;
+    // 统一的面包屑生成逻辑：使用 breadcrumbMenuData（保留完整层级），优先匹配菜单树，匹配不到时向上寻找最近的父级菜单
+    let menuPath = findMenuPath(breadcrumbMenuData, location.pathname);
+    
+    // 如果直接匹配不到（不在菜单里的详情页/设计器），尝试向上寻找父级路径
+    if (!menuPath) {
+      let tempPath = location.pathname;
+      while (tempPath.includes('/') && !menuPath) {
+        tempPath = tempPath.substring(0, tempPath.lastIndexOf('/'));
+        if (tempPath) {
+          const parentPath = findMenuPath(breadcrumbMenuData, tempPath);
+          if (parentPath) {
+            // 找到了最近的菜单父级，构造一个虚拟的菜单路径，包含当前页面
+            const currentTitle = translatePathTitle(location.pathname, t);
+            menuPath = [...parentPath, { path: location.pathname, name: currentTitle }];
+          }
         }
       }
-      return null;
-    };
-
-    const menuPath = findMenuPath(filteredMenuData, location.pathname);
+    }
 
     const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
       if (!items || !Array.isArray(items) || items.length === 0) return null;
@@ -2071,159 +2128,89 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     if (menuPath) {
       menuPath.forEach((item, index) => {
-        if (item.name && item.path) {
-          let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-          let actualPath = item.path;
-          if (index === 0 && item.children && item.children.length > 0) {
-            const firstChild = item.children[0];
-            if (firstChild.type === 'group' && firstChild.children) {
-              const firstMenuItem = findFirstActualMenuItem(firstChild.children);
-              if (firstMenuItem && firstMenuItem.path) {
-                actualPath = firstMenuItem.path;
-              }
-            }
-          }
+        // 跳过没有名称的占位节点
+        if (!item.name) return;
+        // 跳过 UUID 名称（不应显示在面包屑中）
+        if (isUUID(item.name as string)) return;
 
-          if (index > 0) {
-            const parentItem = menuPath[index - 1];
-            if (parentItem.children && parentItem.children.length > 1) {
-              menu = {
-                items: parentItem.children
-                  .filter(child => child.name && child.path)
-                  .map(child => {
-                    const isAppMenu = child.path?.startsWith('/apps/');
-                    const label = isAppMenu
-                      ? translateAppMenuItemName(child.name as string, child.path, t)
-                      : translateMenuName(child.name as string, t);
-                    return {
-                      key: child.path!,
-                      label: label,
-                      onClick: () => { navigate(child.path!); },
-                    };
-                  }),
-              };
-            }
-          }
-
-          const isAppMenu = item.path?.startsWith('/apps/');
-          const breadcrumbTitle = isAppMenu
-            ? translateAppMenuItemName(item.name as string, item.path, t)
-            : translateMenuName(item.name as string, t);
-
-          breadcrumbItems.push({
-            title: breadcrumbTitle,
-            path: actualPath,
-            icon: item.icon,
-            menu: menu,
-          });
-        } else if (item.name && item.type === 'group') {
-          const firstMenuItem = findFirstActualMenuItem(item.children);
-          if (firstMenuItem && firstMenuItem.path) {
-            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-
-            if (index > 0) {
-              const parentItem = menuPath[index - 1];
-              if (parentItem.children && parentItem.children.length > 1) {
-                menu = {
-                  items: parentItem.children
-                    .filter(child => child.name)
-                    .map(child => {
-                      if (child.type === 'group') {
-                        const firstItem = findFirstActualMenuItem(child.children);
-                        if (firstItem && firstItem.path) {
-                          const isAppMenu = firstItem.path.startsWith('/apps/');
-                          const label = isAppMenu
-                            ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
-                            : translateMenuName(child.name as string, t);
-                          return {
-                            key: firstItem.path,
-                            label: label,
-                            onClick: () => { navigate(firstItem.path!); },
-                          };
-                        }
-                      } else if (child.path) {
-                        const isAppMenu = child.path.startsWith('/apps/');
-                        const label = isAppMenu
-                          ? translateAppMenuItemName(child.name as string, child.path, t)
-                          : translateMenuName(child.name as string, t);
-                        return {
-                          key: child.path,
-                          label: label,
-                          onClick: () => { navigate(child.path!); },
-                        };
-                      }
-                      return null;
-                    })
-                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
-                };
-              }
-            }
-
-            const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
-            // 分组菜单：传 children 而非 path，让 translateAppMenuItemName 从子路径推断分组 key（如 process），避免误用子项 path 导致翻译成子项名称
-            const breadcrumbTitle = isAppMenu
-              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
-              : translateMenuName(item.name as string, t);
-            breadcrumbItems.push({
-              title: breadcrumbTitle,
-              path: firstMenuItem.path,
-              icon: item.icon,
-              menu: menu,
-            });
-          }
-        } else if (item.name && !item.path && item.children && item.children.length > 0) {
-          // 应用内父级分组（有 name 和 children 但无 path，如「工艺数据」「工厂数据」）
-          const firstMenuItem = findFirstActualMenuItem(item.children);
-          const linkPath = firstMenuItem?.path;
-          if (linkPath) {
-            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-            if (index > 0) {
-              const parentItem = menuPath[index - 1];
-              if (parentItem.children && parentItem.children.length > 1) {
-                menu = {
-                  items: parentItem.children
-                    .filter(child => child.name && (child.path || findFirstActualMenuItem(child.children)?.path))
-                    .map(child => {
-                      const childPath = child.path || findFirstActualMenuItem(child.children)?.path;
-                      if (!childPath) return null;
-                      const isAppMenu = childPath.startsWith('/apps/');
-                      const label = isAppMenu
-                        ? (child.path ? translateAppMenuItemName(child.name as string, child.path, t) : translateAppMenuItemName(child.name as string, undefined, t, child.children))
-                        : translateMenuName(child.name as string, t);
-                      return { key: childPath, label: label, onClick: () => { navigate(childPath); } };
-                    })
-                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
-                };
-              }
-            }
-            // 分组菜单：传 children 而非 path，避免翻译成第一个子项名称
-            const isAppMenu = linkPath.startsWith('/apps/');
-            const breadcrumbTitle = isAppMenu
-              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
-              : translateMenuName(item.name as string, t);
-            breadcrumbItems.push({
-              title: breadcrumbTitle,
-              path: linkPath,
-              icon: item.icon,
-              menu: menu,
-            });
+        let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+        
+        // 确定面包屑项的跳转路径：
+        // 1. 如果节点有 path，直接使用
+        // 2. 如果节点没有 path（中间分组节点，如"销售管理"），找第一个有 path 的子孙节点
+        let actualPath = item.path;
+        if (!actualPath && item.children && item.children.length > 0) {
+          const firstLeaf = findFirstActualMenuItem(item.children);
+          if (firstLeaf?.path) {
+            actualPath = firstLeaf.path;
           }
         }
-      });
-    } else {
-      const pathSegments = location.pathname.split('/').filter(Boolean);
-      pathSegments.forEach((segment, index) => {
-        const path = '/' + pathSegments.slice(0, index + 1).join('/');
-        const translatedTitle = translatePathTitle(path, t);
+        
+        // 如果是第一级且有子项，尝试找到第一个实际的菜单项作为链接跳转路径
+        if (index === 0 && item.children && item.children.length > 0) {
+          const firstChild = item.children[0];
+          if (firstChild.type === 'group' && firstChild.children) {
+            const firstMenuItem = findFirstActualMenuItem(firstChild.children);
+            if (firstMenuItem && firstMenuItem.path) {
+              actualPath = firstMenuItem.path;
+            }
+          }
+        }
+
+        // 处理下拉菜单（如果有多个同级子项）
+        if (index > 0) {
+          const parentItem = menuPath![index - 1];
+          if (parentItem.children && parentItem.children.length > 1) {
+            menu = {
+              items: parentItem.children
+                .filter(child => child.name && !child.hideInMenu && !isUUID(child.name as string))
+                .map(child => {
+                  // 子节点的跳转路径：有 path 用 path，没有则找第一个叶子
+                  const childPath = child.path || findFirstActualMenuItem(child.children)?.path;
+                  if (!childPath) return null;
+                  const isAppMenu = childPath.startsWith('/apps/');
+                  const label = isAppMenu
+                    ? translateAppMenuItemName(child.name as string, child.path, t)
+                    : translateMenuName(child.name as string, t);
+                  return {
+                    key: childPath,
+                    label: label,
+                    onClick: () => { navigate(childPath); }
+                  };
+                })
+                .filter(Boolean) as Array<{ key: string; label: string; onClick: () => void }>
+            };
+          }
+        }
+
+        // 翻译标题
+        const isAppMenu = (actualPath || '')?.startsWith('/apps/');
+        const breadcrumbTitle = isAppMenu
+          ? translateAppMenuItemName(item.name as string, item.path, t)
+          : translateMenuName(item.name as string, t);
+
         breadcrumbItems.push({
-          title: translatedTitle,
-          path: path,
+          title: breadcrumbTitle,
+          path: actualPath,
+          icon: item.icon,
+          menu: menu?.items && menu.items.length > 0 ? menu : undefined,
         });
       });
     }
 
-    return breadcrumbItems;
-  }, [location.pathname, filteredMenuData, navigate, t]);
+    // 最终兜底：如果还是没找到，仅显示当前页面的翻译
+    if (breadcrumbItems.length === 0) {
+      const translatedTitle = translatePathTitle(location.pathname, t);
+      if (translatedTitle) {
+        breadcrumbItems.push({
+          title: translatedTitle,
+          path: location.pathname,
+        });
+      }
+    }
+
+    return breadcrumbItems.filter(item => item.title);
+  }, [location.pathname, breadcrumbMenuData, navigate, t]);
 
   // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
   const requiredOpenKeys = useMemo(() => {
@@ -4593,8 +4580,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const firstChildPath = item.children?.[0]?.path;
             const isAppMenu = firstChildPath?.startsWith('/apps/');
             const translatedName = isAppMenu
-              ? translateAppMenuName(item.name as string, firstChildPath, undefined, t)
-              : translateMenuName(item.name as string, t);
+              ? translateAppMenuItemName(item.name as string, undefined, t, item.children)
+              : translateMenuName(item.name as string, t, firstChildPath);
             // 如果翻译后的名称与 dom 不一致，返回翻译后的名称
             // 否则直接返回 dom（因为 dom 可能已经是翻译后的）
             if (translatedName !== item.name && translatedName !== dom) {

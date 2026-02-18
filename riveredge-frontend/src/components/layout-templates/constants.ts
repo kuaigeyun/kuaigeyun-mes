@@ -101,7 +101,7 @@ export const TWO_COLUMN_LAYOUT = {
 } as const;
 
 /**
- * 画板页布局配置（流程设计、BOM 设计等带画布的页面）
+ * 画板页布局配置（审批流设计、BOM 设计等带画布的页面）
  */
 export const CANVAS_PAGE_LAYOUT = {
   /** 右侧面板默认宽度 */

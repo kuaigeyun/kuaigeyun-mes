@@ -14,7 +14,7 @@
  * - WizardTemplate: 向导布局模板（步骤式向导）
  * - KanbanViewTemplate: 看板视图布局模板（工单看板、任务看板）
  * - TouchScreenTemplate: 工位机触屏模式布局模板（大按钮、大字体、全屏）
- * - CanvasPageTemplate: 画板页布局模板（操作条 + 画板 + 右侧面板，流程设计、BOM 设计等）
+ * - CanvasPageTemplate: 画板页布局模板（操作条 + 画板 + 右侧面板，审批流设计、BOM 设计等）
  * - IframePageTemplate: Iframe 页面布局模板（嵌入外部页面，自动适应容器）
  *
  * Author: Luigi Lu

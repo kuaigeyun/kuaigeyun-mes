@@ -2,7 +2,7 @@
  * 画板页布局模板
  *
  * 用于带画板的页面统一布局：操作条 + 画板 + 右侧面板。
- * 适用场景：流程设计、工程 BOM 设计、思维导图等以画布为核心的设计器页面。
+ * 适用场景：审批流设计、工程 BOM 设计、思维导图等以画布为核心的设计器页面。
  * 主内容区仅包含上述三块，边距遵循 PAGE_SPACING（16px）。
  *
  * Author: Luigi Lu
@@ -26,7 +26,8 @@
  * ```
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card } from 'antd';
 import { PAGE_SPACING, CANVAS_PAGE_LAYOUT } from './constants';
 
@@ -53,6 +54,8 @@ export interface CanvasPageTemplateProps {
   style?: React.CSSProperties;
   /** 外层容器类名 */
   className?: string;
+  /** 固定功能标题（用于 Tabs 和面包屑） */
+  functionalTitle?: string;
 }
 
 /**
@@ -68,7 +71,21 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
   canvasMinHeight = CANVAS_PAGE_LAYOUT.CANVAS_MIN_HEIGHT,
   style,
   className,
+  functionalTitle = '设计器',
 }) => {
+  const location = useLocation();
+
+  useEffect(() => {
+    // 发送自定义事件更新 UniTabs 内部标签标题
+    // 浏览器标题 document.title 仍由 BasicLayout 统一标准化设置（包含组织名称）
+    const tabKey = location.pathname + location.search;
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, title: functionalTitle },
+      })
+    );
+  }, [location.pathname, location.search, functionalTitle]);
+
   const padding = PAGE_SPACING.PADDING;
 
   return (

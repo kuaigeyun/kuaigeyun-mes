@@ -165,7 +165,7 @@ export default {
   'pages.traceability.materialCode': 'Material Code',
   'pages.traceability.operationName': 'Operation',
   'pages.traceability.viewWorkOrder': 'View Work Order Details',
-  'path.kuaizhizao': 'Fast Light Manufacturing',
+  'path.kuaizhizao': 'Kuaimes Manufacturing',
   'path.plan-management': 'Plan Management',
   'path.demand-management': 'Demand Management',
   'path.scheduling': 'Scheduling',
@@ -270,10 +270,10 @@ export default {
   'tabs.exitFullscreen': 'Exit Fullscreen',
 
   // Application name translations (best practices)
-  'app.kuaizhizao.name': 'Fast Light Manufacturing',
+  'app.kuaizhizao.name': 'Kuaimes Manufacturing',
   'app.master-data.name': 'Master Data',
 
-  // Fast Light Manufacturing application menu translations
+  // Kuaimes Manufacturing application menu translations
   'app.kuaizhizao.menu.plan-management': 'Plan Management',
   'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Management',
   'app.kuaizhizao.menu.plan-management.demand-computation': 'Demand Computation',

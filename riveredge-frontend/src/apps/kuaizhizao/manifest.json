@@ -8,7 +8,7 @@
         "icon": "production",
         "path": "/apps/kuaizhizao",
         "children": [{
-                "title": "计划管理",
+                "title": "app.kuaizhizao.menu.plan-management",
                 "icon": "calendar",
                 "sort_order": 1,
                 "children": [{
@@ -34,7 +34,7 @@
                 ]
             },
             {
-                "title": "销售管理",
+                "title": "app.kuaizhizao.menu.sales-management",
                 "icon": "chartLine",
                 "sort_order": 2,
                 "children": [{
@@ -60,7 +60,7 @@
                 ]
             },
             {
-                "title": "采购管理",
+                "title": "app.kuaizhizao.menu.purchase-management",
                 "icon": "shoppingBag",
                 "sort_order": 3,
                 "children": [{
@@ -86,7 +86,7 @@
                 ]
             },
             {
-                "title": "生产执行",
+                "title": "app.kuaizhizao.menu.production-execution",
                 "icon": "activity",
                 "sort_order": 4,
                 "children": [{
@@ -153,7 +153,7 @@
                 ]
             },
             {
-                "title": "质量管理",
+                "title": "app.kuaizhizao.menu.quality-management",
                 "icon": "quality",
                 "sort_order": 5,
                 "children": [{
@@ -179,7 +179,7 @@
                 ]
             },
             {
-                "title": "仓储管理",
+                "title": "app.kuaizhizao.menu.warehouse-management",
                 "icon": "warehouse",
                 "sort_order": 6,
                 "children": [{
@@ -283,7 +283,7 @@
                 ]
             },
             {
-                "title": "成本管理",
+                "title": "app.kuaizhizao.menu.cost-management",
                 "icon": "calculator",
                 "sort_order": 7,
                 "children": [{
@@ -448,7 +448,7 @@
                 ]
             },
             {
-                "title": "报表分析",
+                "title": "app.kuaizhizao.menu.reports",
                 "icon": "analytics",
                 "sort_order": 10,
                 "children": [{

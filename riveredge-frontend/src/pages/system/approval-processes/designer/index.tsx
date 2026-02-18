@@ -1,5 +1,5 @@
 /**
- * 审批流程设计器页面
+ * 审批流设计器页面
  * 
  * 使用 ProFlow 可视化设计审批流程。
  * 支持节点拖拽、连接线绘制、节点属性配置等功能。
@@ -199,7 +199,7 @@ const EndNode: React.FC<NodeProps> = ({ data }) => {
 };
 
 /**
- * 审批流程设计器页面组件
+ * 审批流设计器页面组件
  */
 const ApprovalProcessDesignerPage: React.FC = () => {
   const { t } = useTranslation();
@@ -486,7 +486,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   };
 
   /**
-   * 保存流程设计
+   * 保存审批流设计
    */
   const handleSave = async () => {
     if (!processUuid || !processData) return;
@@ -542,6 +542,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
 
   return (
     <CanvasPageTemplate
+      functionalTitle="审批流设计"
       style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
         <Space>
