@@ -14,10 +14,10 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.print_template import PrintTemplate
 from core.services.print.print_device_service import PrintDeviceService
-from core.services.print.univer_renderer import (
-    is_univer_document,
-    render_univer_template,
-    render_univer_to_html,
+from core.services.print.template_renderer import (
+    is_pdfme_template,
+    render_plain_template,
+    render_template_to_html,
 )
 from core.schemas.print_template import (
     PrintTemplateCreate,
@@ -239,8 +239,8 @@ class PrintTemplateService:
     ) -> str:
         """
         渲染模板内容（变量替换）
-        - Univer JSON 格式：在 body.dataStream 中替换，支持嵌套路径
-        - 纯文本格式：简单 {{key}} 替换
+        - pdfme 格式：由前端渲染，后端不支持
+        - 纯文本格式：{{key}} 替换，支持点号路径
         
         Args:
             template_content: 模板内容
@@ -249,14 +249,9 @@ class PrintTemplateService:
         Returns:
             str: 渲染后的内容
         """
-        if is_univer_document(template_content):
-            return render_univer_template(template_content, data)
-        # 纯文本：简单变量替换
-        rendered = template_content
-        for key, value in data.items():
-            placeholder = f"{{{{{key}}}}}"
-            rendered = rendered.replace(placeholder, str(value))
-        return rendered
+        if is_pdfme_template(template_content):
+            raise ValidationError("pdfme 模板请在前端渲染")
+        return render_plain_template(template_content, data)
 
     @staticmethod
     async def render_print_template(
@@ -307,9 +302,9 @@ class PrintTemplateService:
             # }
             raise ValidationError("异步执行功能待实现")
         
-        # 同步渲染模板
-        if data.output_format == "html" and is_univer_document(print_template.content):
-            rendered_content = render_univer_to_html(print_template.content, data.data)
+        # 同步渲染模板（pdfme 由前端渲染）
+        if data.output_format == "html" and not is_pdfme_template(print_template.content):
+            rendered_content = render_template_to_html(print_template.content, data.data)
         else:
             rendered_content = PrintTemplateService.render_template(
                 print_template.content,

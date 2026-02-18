@@ -29,6 +29,8 @@ import {
   applyCustomBasePdfToTemplate,
   fileToBasePdfBase64,
   isBlankPdf,
+  HEADER_PRESETS,
+  FOOTER_PRESETS,
 } from '../../../../components/pdfme-doc/constants';
 import { buildTemplateWithFields } from '../../../../utils/pdfmeTemplateUtils';
 import type { Template } from '@pdfme/common';
@@ -152,6 +154,12 @@ const PrintTemplateDesignPage: React.FC = () => {
     setUploadedBasePdfFile(null);
     setBasePdfWasCustomOnOpen(bp.isCustomPdf);
     const staticTexts = getStaticSchemaTexts(current);
+    
+    // 匹配页眉预设
+    const headerP = HEADER_PRESETS.find(p => p.value !== 'custom' && p.value === staticTexts.headerText)?.value ?? (staticTexts.headerText ? 'custom' : '');
+    // 匹配页脚预设
+    const footerP = FOOTER_PRESETS.find(p => p.value !== 'custom' && p.value === staticTexts.footerText)?.value ?? (staticTexts.footerText ? 'custom' : '');
+
     pageSettingsForm.setFieldsValue({
       basePdfSource: bp.isCustomPdf ? 'custom' : 'blank',
       paperPreset: preset?.id ?? 'custom',
@@ -161,7 +169,9 @@ const PrintTemplateDesignPage: React.FC = () => {
       paddingRight: bp.padding[1],
       paddingBottom: bp.padding[2],
       paddingLeft: bp.padding[3],
+      headerPreset: headerP,
       headerText: staticTexts.headerText,
+      footerPreset: footerP,
       footerText: staticTexts.footerText,
     });
     setPageSettingsOpen(true);
@@ -516,20 +526,57 @@ const PrintTemplateDesignPage: React.FC = () => {
                       </Form.Item>
                     </Space>
                   </Form.Item>
-                  <Form.Item
-                    name="headerText"
-                    label="页眉"
-                    extra="支持变量：{currentPage} {totalPages} {date} {dateTime} {code} 等"
-                  >
-                    <Input.TextArea rows={2} placeholder="例：工单打印 · 第 {currentPage} 页 / 共 {totalPages} 页" />
-                  </Form.Item>
-                  <Form.Item
-                    name="footerText"
-                    label="页脚"
-                    extra="支持变量：{currentPage} {totalPages} {date} {dateTime}"
-                  >
-                    <Input.TextArea rows={2} placeholder="例：打印时间 {dateTime}" />
-                  </Form.Item>
+                  <div style={{ background: '#fafafa', padding: 12, borderRadius: 6, marginTop: 16 }}>
+                    <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 13 }}>页眉页脚设置</div>
+                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                      <Form.Item label="页眉格式" style={{ marginBottom: 0 }}>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="headerPreset" noStyle>
+                            <Select 
+                              style={{ width: '40%' }}
+                              options={HEADER_PRESETS} 
+                              onChange={(v) => {
+                                if (v !== 'custom') {
+                                  pageSettingsForm.setFieldsValue({ headerText: v });
+                                }
+                              }}
+                            />
+                          </Form.Item>
+                          <Form.Item name="headerText" noStyle>
+                            <Input 
+                              placeholder="自定义内容或变量" 
+                              onChange={() => pageSettingsForm.setFieldsValue({ headerPreset: 'custom' })}
+                            />
+                          </Form.Item>
+                        </Space.Compact>
+                      </Form.Item>
+
+                      <Form.Item label="页脚格式" style={{ marginBottom: 0 }}>
+                        <Space.Compact style={{ width: '100%' }}>
+                          <Form.Item name="footerPreset" noStyle>
+                            <Select 
+                              style={{ width: '40%' }}
+                              options={FOOTER_PRESETS} 
+                              onChange={(v) => {
+                                if (v !== 'custom') {
+                                  pageSettingsForm.setFieldsValue({ footerText: v });
+                                }
+                              }}
+                            />
+                          </Form.Item>
+                          <Form.Item name="footerText" noStyle>
+                            <Input 
+                              placeholder="自定义内容或变量" 
+                              onChange={() => pageSettingsForm.setFieldsValue({ footerPreset: 'custom' })}
+                            />
+                          </Form.Item>
+                        </Space.Compact>
+                      </Form.Item>
+                      <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+                        提示：支持 `{'{currentPage}'}`、`{'{totalPages}'}`、`{'{dateTime}'}` 等变量
+                      </div>
+                    </Space>
+                  </div>
                 </>
               ) : (
                 <Form.Item

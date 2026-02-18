@@ -194,6 +194,28 @@ export function buildStaticSchemaFromConfig(
   return schemas;
 }
 
+/** 页眉页脚预设格式 */
+export interface HeaderFooterPreset {
+  label: string;
+  value: string;
+}
+
+export const HEADER_PRESETS: HeaderFooterPreset[] = [
+  { label: '无', value: '' },
+  { label: '公司版头 (含时间)', value: 'RiverEdge 智能制造 · {dateTime}' },
+  { label: '单据页码 (顶部)', value: '单据打印 · 第 {currentPage} 页 / 共 {totalPages} 页' },
+  { label: '带单据号页眉', value: '{document_type_label}: {code} · {dateTime}' },
+  { label: '自定义', value: 'custom' },
+];
+
+export const FOOTER_PRESETS: HeaderFooterPreset[] = [
+  { label: '无', value: '' },
+  { label: '标准页码 (底部)', value: '第 {currentPage} 页 / 共 {totalPages} 页' },
+  { label: '打印信息 (人员+时间)', value: '打印人: {print_user} · 打印时间: {dateTime}' },
+  { label: '完整页脚 (页码+信息)', value: '第 {currentPage}/{totalPages} 页 · 打印人: {print_user} · {dateTime}' },
+  { label: '自定义', value: 'custom' },
+];
+
 /** 将上传的 PDF 文件转为 base64，用于 basePdf */
 export function fileToBasePdfBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

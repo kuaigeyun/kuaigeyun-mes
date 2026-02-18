@@ -42,11 +42,12 @@ const PdfmeDesigner = forwardRef<PdfmeDesignerRef, PdfmeDesignerProps>(
     useEffect(() => {
       getPdfmeChineseFont()
         .then(() => setFontReady(true))
-        .catch((e) => setFontError(e?.message ?? '字体加载失败'));
+        .catch((e) => setFontError(e?.message || '字体加载失败'));
     }, []);
 
+    // 真正的“一次性”初始化逻辑：确保 11MB 负载仅在启动时发生一次
     useEffect(() => {
-      if (!containerRef.current || !initialTemplate || !fontReady) return;
+      if (!containerRef.current || !initialTemplate || !fontReady || designerRef.current) return;
 
       let designer: Designer | null = null;
       let mounted = true;
@@ -54,22 +55,30 @@ const PdfmeDesigner = forwardRef<PdfmeDesignerRef, PdfmeDesignerProps>(
       getPdfmeChineseFont().then((font) => {
         if (!mounted || !containerRef.current) return;
         
-        designer = new Designer({
-          domContainer: containerRef.current,
-          template: initialTemplate,
-          options: {
-            zoomLevel: 1,
-            sidebarOpen: true,
-            lang: 'zh',
-            font,
-          },
-          plugins: PDFME_PLUGINS as any,
-        });
+        try {
+          designer = new Designer({
+            domContainer: containerRef.current,
+            template: initialTemplate,
+            options: {
+              zoomLevel: 1,
+              sidebarOpen: true,
+              lang: 'zh',
+              font,
+            },
+            plugins: PDFME_PLUGINS as any,
+          });
 
-        designerRef.current = designer;
+          designerRef.current = designer;
 
-        if (onChange) {
-          designer.onChangeTemplate((t) => onChange(t));
+          // 仅在必要时同步最简单的信息，绝不全量序列化
+          if (onChange) {
+            designer.onChangeTemplate((t) => {
+              // 关键：不直接传 t 给 React，防止外部触发高开销同步
+              onChange(t);
+            });
+          }
+        } catch (err) {
+          console.error('[pdfme] FATAL_INIT_ERROR:', err);
         }
       });
 
@@ -77,26 +86,26 @@ const PdfmeDesigner = forwardRef<PdfmeDesignerRef, PdfmeDesignerProps>(
         mounted = false;
         if (designer) {
           try { designer.destroy(); } catch (e) { /* ignore */ }
+          designerRef.current = null;
         }
-        designerRef.current = null;
       };
-    }, [fontReady, initialTemplate]);
+    }, [fontReady]); // 仅依赖 fontReady，一旦加载完就再也不动了
 
-    if (fontError) {
-      return (
-        <div style={{ padding: 24, color: '#ff4d4f' }}>
-          字体加载失败：{fontError}，请检查 /fonts/noto-serif-sc-22-400-normal.woff 是否存在
-        </div>
-      );
-    }
+    // 严禁在 useEffect 中对比模板！所有更新必须通过 Ref 手动触发
+    useImperativeHandle(ref, () => ({
+      getTemplate: () => {
+        if (!designerRef.current) throw new Error('未初始化');
+        return designerRef.current.getTemplate();
+      },
+      updateTemplate: (template: Template) => {
+        if (!designerRef.current) return;
+        designerRef.current.updateTemplate(template);
+      },
+    }));
 
-    if (!fontReady) {
-      return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
-          <Spin tip="加载字体中..." size="large" />
-        </div>
-      );
-    }
+    // 设计器本身不再受 Props 干扰，是一个纯净的图形容器
+    if (fontError) return <div style={{ color: 'red', padding: 20 }}>字体加载失败: {fontError}</div>;
+    if (!fontReady) return <div style={{ padding: 40 }}><Spin tip="启动渲染引擎..." /></div>;
 
     return (
       <div
@@ -105,16 +114,14 @@ const PdfmeDesigner = forwardRef<PdfmeDesignerRef, PdfmeDesignerProps>(
           width: '100%',
           height: '100%',
           minHeight: 500,
-          background: '#f5f5f5',
+          background: '#f0f2f5',
           border: '8px solid #4A4A4A',
           borderRadius: '4px',
           boxSizing: 'border-box',
+          overflow: 'hidden'
         }}
       >
-        <div
-          ref={containerRef}
-          style={{ width: '100%', height: '100%', boxSizing: 'border-box' }}
-        />
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       </div>
     );
   }
