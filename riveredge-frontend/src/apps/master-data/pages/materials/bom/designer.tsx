@@ -1253,6 +1253,7 @@ const BOMDesignerPage: React.FC = () => {
   return (
     <>
     <CanvasPageTemplate
+      functionalTitle="BOM设计"
       style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
         <Space>

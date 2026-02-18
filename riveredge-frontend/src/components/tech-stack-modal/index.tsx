@@ -308,7 +308,7 @@ const techStackData: TechStackItem[] = [
   {
     name: '@ant-design/pro-flow',
     version: '^1.3.12+',
-    description: '流程设计器，用于审批流程、业务蓝图设计',
+    description: '审批流设计器，用于审批流、业务蓝图设计',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',

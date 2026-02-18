@@ -122,13 +122,23 @@
                         "title": "物料清单BOM",
                         "path": "/apps/master-data/process/engineering-bom",
                         "permission": "master-data:process:engineering-bom:view",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "children": [{
+                            "title": "BOM设计",
+                            "path": "/apps/master-data/process/engineering-bom/designer",
+                            "hideInMenu": true
+                        }]
                     },
                     {
                         "title": "标准操作SOP",
                         "path": "/apps/master-data/process/sop",
                         "permission": "master-data:process:sop:view",
-                        "sort_order": 5
+                        "sort_order": 5,
+                        "children": [{
+                            "title": "SOP设计",
+                            "path": "/apps/master-data/process/sop/designer",
+                            "hideInMenu": true
+                        }]
                     }
                 ]
             },

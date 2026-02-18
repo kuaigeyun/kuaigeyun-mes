@@ -78,9 +78,6 @@ const PrintTemplateDesignPage: React.FC = () => {
 
   useEffect(() => {
     if (uuid) loadTemplate();
-    return () => {
-      document.title = 'RiverEdge';
-    };
   }, [uuid]);
 
   const loadTemplate = async () => {
@@ -102,7 +99,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       }
       // 加固并修复已污染内容（如「备注」重复），设计器与预览均使用修复后的模板
       template = sanitizeTemplate(template);
-      document.title = `设计模板 - ${data.name}`;
+      document.title = '打印设计';
       setTemplateName(data.name);
       setInitialTemplate(template);
       setAvailableVariables(variableItems);
@@ -116,13 +113,7 @@ const PrintTemplateDesignPage: React.FC = () => {
 
       const searchParams = new URLSearchParams(location.search || '');
       searchParams.delete('_refresh');
-      const cleanSearch = searchParams.toString();
-      const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
-      window.dispatchEvent(
-        new CustomEvent('riveredge:update-tab-title', {
-          detail: { key: tabKey, title: `设计模板 - ${data.name}` },
-        })
-      );
+      // Title update is handled by CanvasPageTemplate via functionalTitle prop
     } catch (error) {
       console.error('[Print Template Design] 加载失败:', error);
       messageApi.error('加载模板失败');
@@ -395,6 +386,7 @@ const PrintTemplateDesignPage: React.FC = () => {
   return (
     <div style={{ height: 'calc(100vh - 48px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <CanvasPageTemplate
+        functionalTitle="打印设计"
         toolbar={
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space>
