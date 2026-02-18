@@ -105,7 +105,7 @@ const PdfmeDesigner = forwardRef<PdfmeDesignerRef, PdfmeDesignerProps>(
 
     // 设计器本身不再受 Props 干扰，是一个纯净的图形容器
     if (fontError) return <div style={{ color: 'red', padding: 20 }}>字体加载失败: {fontError}</div>;
-    if (!fontReady) return <div style={{ padding: 40 }}><Spin tip="启动渲染引擎..." /></div>;
+    if (!fontReady) return <div style={{ padding: 40, textAlign: 'center' }}><Spin tip="启动渲染引擎..." spinning={true}><div /></Spin></div>;
 
     return (
       <div

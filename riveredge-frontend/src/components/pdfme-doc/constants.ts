@@ -71,8 +71,19 @@ export const DEFAULT_WORK_ORDER_PDFME_TEMPLATE: Template = {
           ['3', 'OP03', '检验', '待开始', '质检中心'],
         ]),
         tableStyles: { borderWidth: 0.3, borderColor: '#000000' },
-        headStyles: { fontSize: 9, alignment: 'center', verticalAlignment: 'middle', backgroundColor: '#f0f0f0' },
-        bodyStyles: { fontSize: 8, alignment: 'left', verticalAlignment: 'middle' },
+        headStyles: {
+          fontSize: 9,
+          alignment: 'center',
+          verticalAlignment: 'middle',
+          backgroundColor: '#f0f0f0',
+          padding: { top: 5, right: 5, bottom: 5, left: 5 },
+        },
+        bodyStyles: {
+          fontSize: 8,
+          alignment: 'left',
+          verticalAlignment: 'middle',
+          padding: { top: 5, right: 5, bottom: 5, left: 5 },
+        },
       },
       { name: 'remarks', type: 'text', position: { x: 10, y: 150 }, width: 180, height: 15, content: '备注：{remarks}', readOnly: true },
     ],
@@ -167,7 +178,8 @@ export function buildStaticSchemaFromConfig(
     schemas.push({
       name: 'staticHeader',
       type: 'text',
-      position: { x: pl, y: h - pt - 12 },
+      // 页眉放在页面顶部边距内
+      position: { x: pl, y: pt - 12 > 0 ? pt - 12 : 5 },
       width: w,
       height: 10,
       content: config.headerText,
@@ -175,13 +187,15 @@ export function buildStaticSchemaFromConfig(
       fontSize: 9,
       alignment: 'center',
       verticalAlignment: 'middle',
+      fontName: 'NotoSansSC',
     });
   }
   if (config.footerText) {
     schemas.push({
       name: 'staticFooter',
       type: 'text',
-      position: { x: pl, y: pb },
+      // 页脚放在页面底部边距内
+      position: { x: pl, y: h - pb - 2 > 0 ? h - pb - 2 : h - 15 },
       width: w,
       height: 10,
       content: config.footerText,
@@ -189,6 +203,7 @@ export function buildStaticSchemaFromConfig(
       fontSize: 9,
       alignment: 'center',
       verticalAlignment: 'middle',
+      fontName: 'NotoSansSC',
     });
   }
   return schemas;

@@ -536,11 +536,34 @@ code {
   font-weight: 600;
 }
 
-/* 全局：Modal 标题区下边框与阴影 */
+/* 全局：Modal 标题区高度规范（与打印预览一致，统一标题高度） */
 .ant-modal .ant-modal-header {
+  min-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--ant-colorBorder);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  padding-inline-end: 56px !important;
+}
+
+/* 全局：Modal 关闭按钮（圆角跟随系统，红色系最佳实践） */
+.ant-modal .ant-modal-close {
+  width: 32px !important;
+  height: 32px !important;
+  background: #fff1f0 !important;
+  color: #cf1322 !important;
+  border-radius: var(--ant-borderRadius, 6px) !important;
+  inset-inline-end: 24px !important;
+  top: 36px !important;
+  transform: translateY(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.ant-modal .ant-modal-close:hover {
+  background: #ffccc7 !important;
+  color: #a8071a !important;
 }
 
 /* 全局：Modal 标题几何装饰（主题色竖条） */

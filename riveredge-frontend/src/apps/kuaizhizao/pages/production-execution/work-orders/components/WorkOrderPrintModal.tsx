@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Select, Button, Spin, message, Space, Empty } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Select, Button, Spin, message, Empty } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import {
   getPrintTemplateList,
@@ -10,7 +10,7 @@ import { handleError } from '../../../../../../utils/errorHandler';
 import { apiRequest } from '../../../../../../services/api';
 import { DOCUMENT_TYPE_TO_CODE } from '../../../../../../configs/printTemplateSchemas';
 import { mapWorkOrderToTemplateVariables } from '../../../../../../utils/printTemplateDataMapper';
-import { isPdfmeTemplate, variablesToPdfmeInputs } from '../../../../../../utils/pdfmeTemplateUtils';
+import { isPdfmeTemplate, variablesToPdfmeInputs, sanitizeTemplate } from '../../../../../../utils/pdfmeTemplateUtils';
 import { generate } from '@pdfme/generator';
 import { PDFME_PLUGINS } from '../../../../../../components/pdfme-doc/plugins';
 import { getPdfmeChineseFont } from '../../../../../../components/pdfme-doc/fonts';
@@ -35,8 +35,19 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
+  const fontPromiseRef = useRef<Promise<Awaited<ReturnType<typeof getPdfmeChineseFont>>> | null>(null);
+  const templateCacheRef = useRef<Map<string, { template: any }>>(new Map());
+  const latestSelectionRef = useRef<{ selectedTemplateId?: string; effectiveWorkOrderId?: number }>({});
 
   const effectiveWorkOrderId = workOrderId ?? workOrderData?.id;
+  latestSelectionRef.current = { selectedTemplateId, effectiveWorkOrderId };
+
+  // Modal 打开时预加载字体，减少首次预览等待
+  useEffect(() => {
+    if (visible) {
+      fontPromiseRef.current = getPdfmeChineseFont();
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
@@ -80,26 +91,35 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
 
   const loadPreview = async () => {
     if (!effectiveWorkOrderId || !selectedTemplateId) return;
+    const reqId = `${selectedTemplateId}-${effectiveWorkOrderId}`;
     setPrintLoading(true);
     try {
-      const [templateDetail, detail, operations] = await Promise.all([
+      // 并行：API 请求 + 字体加载（字体在 modal 打开时已预加载）
+      const [templateDetail, detail, operations, font] = await Promise.all([
         getPrintTemplateByUuid(selectedTemplateId),
         workOrderApi.get(effectiveWorkOrderId.toString()),
         workOrderApi.getOperations(effectiveWorkOrderId.toString()),
+        fontPromiseRef.current ?? getPdfmeChineseFont(),
       ]);
 
       const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
 
       if (isPdfmeTemplate(templateDetail.content)) {
-        const template = JSON.parse(templateDetail.content);
+        let template = templateCacheRef.current.get(selectedTemplateId)?.template;
+        if (!template) {
+          const rawTemplate = JSON.parse(templateDetail.content);
+          template = sanitizeTemplate(rawTemplate);
+          templateCacheRef.current.set(selectedTemplateId, { template });
+        }
         const inputs = variablesToPdfmeInputs(template, variables);
-        const font = await getPdfmeChineseFont();
         const pdf = await generate({
           template,
           inputs,
           plugins: PDFME_PLUGINS as any,
           options: { font },
         });
+        const current = latestSelectionRef.current;
+        if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
         const blob = new Blob([pdf.buffer], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         setPreviewPdfUrl(url);
@@ -116,15 +136,22 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
             },
           }
         );
+        const current = latestSelectionRef.current;
+        if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
         setPreviewHtml(result?.content ?? '');
         setPreviewPdfUrl(null);
       }
     } catch (error: any) {
+      const current = latestSelectionRef.current;
+      if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
       handleError(error, '加载预览失败');
       setPreviewHtml('');
       setPreviewPdfUrl(null);
     } finally {
-      setPrintLoading(false);
+      const current = latestSelectionRef.current;
+      if (reqId === `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) {
+        setPrintLoading(false);
+      }
     }
   };
 
@@ -147,9 +174,14 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       const variables = mapWorkOrderToTemplateVariables(detail, operations || []);
 
       if (isPdfmeTemplate(templateDetail.content)) {
-        const template = JSON.parse(templateDetail.content);
+        let template = templateCacheRef.current.get(selectedTemplateId)?.template;
+        if (!template) {
+          const rawTemplate = JSON.parse(templateDetail.content);
+          template = sanitizeTemplate(rawTemplate);
+          templateCacheRef.current.set(selectedTemplateId, { template });
+        }
         const inputs = variablesToPdfmeInputs(template, variables);
-        const font = await getPdfmeChineseFont();
+        const font = await (fontPromiseRef.current ?? getPdfmeChineseFont());
         const pdf = await generate({
           template,
           inputs,
@@ -219,10 +251,34 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
 
   return (
     <Modal
-      title="工单打印"
+      title={
+        <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 16 }}>
+          <span style={{ fontWeight: 600, fontSize: 16 }}>工单打印</span>
+          <Select
+            style={{ width: 260, flexShrink: 0 }}
+            placeholder="请选择打印模板"
+            value={selectedTemplateId}
+            onChange={setSelectedTemplateId}
+            loading={loading}
+            options={templates.map((t: PrintTemplate) => ({
+              label: t.name,
+              value: t.uuid,
+            }))}
+          />
+        </div>
+      }
       open={visible}
       onCancel={onCancel}
       width={1000}
+      wrapClassName="work-order-print-modal-wrap"
+      styles={{
+        body: {
+          padding: 0,
+          overflow: 'hidden',
+          height: '70vh',
+          minHeight: 500,
+        },
+      }}
       footer={[
         <Button key="cancel" onClick={onCancel}>
           取消
@@ -238,69 +294,46 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           打印
         </Button>,
       ]}
-      className="print-modal"
+      className="work-order-print-modal"
     >
       <Spin spinning={loading}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Space className="no-print">
-            <span>选择模板：</span>
-            <Select
-              style={{ width: 300 }}
-              placeholder="请选择打印模板"
-              value={selectedTemplateId}
-              onChange={setSelectedTemplateId}
-              loading={loading}
-              options={templates.map((t: PrintTemplate) => ({
-                label: t.name,
-                value: t.uuid,
-              }))}
+        <div className="work-order-print-preview" style={{ height: '100%', overflow: 'auto' }}>
+          {!effectiveWorkOrderId ? (
+            <Empty description="工单ID缺失，无法预览" style={{ paddingTop: 100 }} />
+          ) : printLoading && !previewHtml && !previewPdfUrl ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
+              <Spin tip="加载预览中..." />
+            </div>
+          ) : previewPdfUrl ? (
+            <iframe
+              src={`${previewPdfUrl}#toolbar=0&view=Fit`}
+              title="打印预览"
+              className="work-order-print-iframe"
             />
-          </Space>
-
-          <div
-            style={{
-              border: '1px solid #f0f0f0',
-              minHeight: 400,
-              marginTop: 16,
-              overflow: 'auto',
-              height: '60vh',
-              position: 'relative',
-              padding: 16,
-              background: '#fff',
-            }}
-            className="print-preview-area"
-          >
-            {!effectiveWorkOrderId ? (
-              <Empty description="工单ID缺失，无法预览" style={{ paddingTop: 100 }} />
-            ) : printLoading && !previewHtml && !previewPdfUrl ? (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  height: 400,
-                }}
-              >
-                <Spin tip="加载预览中..." />
-              </div>
-            ) : previewPdfUrl ? (
-              <iframe
-                src={previewPdfUrl}
-                title="打印预览"
-                style={{ width: '100%', height: '100%', minHeight: 500, border: 'none' }}
-              />
-            ) : previewHtml ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-                style={{ minHeight: 200 }}
-              />
-            ) : (
-              <Empty description="请选择有效的打印模板" style={{ paddingTop: 100 }} />
-            )}
-          </div>
-        </Space>
+          ) : previewHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: previewHtml }} style={{ height: '100%', overflow: 'auto', padding: 16 }} />
+          ) : (
+            <Empty description="请选择有效的打印模板" style={{ paddingTop: 100 }} />
+          )}
+        </div>
       </Spin>
       <style>{`
+        .work-order-print-modal-wrap .ant-modal {
+          max-width: calc(100vw - 32px) !important;
+        }
+        .work-order-print-modal-wrap .ant-modal-body .ant-spin-nested-loading,
+        .work-order-print-modal-wrap .ant-modal-body .ant-spin-container,
+        .work-order-print-modal-wrap .work-order-print-preview {
+          height: 100% !important;
+        }
+        .work-order-print-modal-wrap .work-order-print-iframe {
+          width: 100% !important;
+          height: 100% !important;
+          min-height: 500px !important;
+          border: none !important;
+          display: block !important;
+          background: #fff !important;
+        }
         @media print {
           body * {
             visibility: hidden;
@@ -309,8 +342,8 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           .ant-modal-wrap *,
           .ant-modal-content,
           .ant-modal-content *,
-          .print-preview-area,
-          .print-preview-area * {
+          .work-order-print-preview,
+          .work-order-print-preview * {
             visibility: visible !important;
           }
           .ant-modal-wrap {
@@ -330,7 +363,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
             box-shadow: none;
             background: white;
           }
-          .print-preview-area {
+          .work-order-print-preview {
             width: 100% !important;
             min-height: auto !important;
             overflow: visible !important;

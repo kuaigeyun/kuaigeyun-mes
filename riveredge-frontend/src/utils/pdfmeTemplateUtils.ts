@@ -99,8 +99,14 @@ export function buildTemplateWithFields(
         alignment: 'center',
         verticalAlignment: 'middle',
         backgroundColor: '#f0f0f0',
+        padding: { top: 5, right: 5, bottom: 5, left: 5 },
       },
-      bodyStyles: { fontSize: 9, alignment: 'left', verticalAlignment: 'middle' },
+      bodyStyles: {
+        fontSize: 9,
+        alignment: 'left',
+        verticalAlignment: 'middle',
+        padding: { top: 5, right: 5, bottom: 5, left: 5 },
+      },
     });
     y += 60;
   }
@@ -136,6 +142,210 @@ export function enhanceTemplateWithLabels(
         return { ...schema, name: label };
       }
       return schema;
+    });
+  });
+
+  return next;
+}
+
+/**
+ * 模板加固层：全方位修复 Generator 渲染器对缺失样式与结构的“敏锐性”
+ * 针对所有插件类型补齐默认值与必需的数组/对象结构：
+ * 1. 补齐 padding/margin 防止 reading 'right'
+ * 2. 补齐 table 的 columns/styles 防止 reading 'push' 或 reading 'alignment'
+ * 3. 补齐 multiVariableText 的 variables 数组
+ */
+/**
+ * 规范化文本 content 中因递归替换导致的重复标签
+ * 例如 "备注: 备注: 备注: {remarks}" -> "备注：{remarks}"
+ */
+function normalizeRepeatedLabelInContent(content: string): string {
+  if (!content || typeof content !== 'string') return content;
+  // 匹配 "备注" 或 "备注：" 重复多次后跟 {remarks} 的模式
+  const repeatedRemarks = /^(备注[：:]\s*)+(\{remarks\})$/;
+  const match = content.match(repeatedRemarks);
+  if (match) {
+    return `备注：${match[2]}`;
+  }
+  // 更通用的模式：任意 "备注：" 重复
+  const anyRepeated = content.replace(/(备注[：:]\s*){2,}/g, '备注：');
+  return anyRepeated;
+}
+
+/**
+ * 模板加固层：全方位修复 Generator 渲染器对缺失样式与结构的“敏锐性”
+ * 针对所有插件类型补齐默认值与必需的数组/对象结构
+ */
+export function sanitizeTemplate(template: Template): Template {
+  if (!template) return { basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] }, schemas: [[]] };
+  
+  const ensurePadding = (p: any) => {
+    if (typeof p === 'number') return { top: p, right: p, bottom: p, left: p };
+    const base = { top: 0, right: 0, bottom: 0, left: 0 };
+    if (!p || typeof p !== 'object') return base;
+    return { ...base, ...p };
+  };
+
+  // --- 二进制安全克隆策略 ---
+  // JSON.stringify 会破坏 base64 以外的二进制 basePdf (如 ArrayBuffer)
+  const isBinaryBasePdf = template.basePdf instanceof ArrayBuffer || ArrayBuffer.isView(template.basePdf);
+  
+  const next: Template = {
+    // 如果是二进制背景，直接引用（Generator 内部会处理），否则深拷贝
+    basePdf: isBinaryBasePdf ? template.basePdf : JSON.parse(JSON.stringify(template.basePdf)),
+    schemas: JSON.parse(JSON.stringify(template.schemas || [[]]))
+  };
+
+  // 1. 基础配置样式补全
+  if (!next.basePdf) {
+    next.basePdf = { width: 210, height: 297, padding: [10, 10, 10, 10] };
+  } else if (!isBinaryBasePdf && typeof next.basePdf === 'object') {
+    const bp = next.basePdf as any;
+    if ('padding' in bp) {
+      bp.padding = Array.isArray(bp.padding) ? bp.padding : [10, 10, 10, 10];
+    }
+  }
+
+  // 2. 页面内容递归加固
+  next.schemas = next.schemas.map((page: any, pageIdx) => {
+    const actualPage = Array.isArray(page) ? page : [];
+    return actualPage.map((schema: any, schemaIdx) => {
+      if (!schema || typeof schema !== 'object') return { type: 'text', content: '', position: { x: 0, y: 0 }, width: 10, height: 10 };
+
+      const s = { ...schema };
+      s.name = s.name || `schema_${pageIdx}_${schemaIdx}`;
+      
+      // 通用样式字典兜底
+      if (s.padding !== undefined) s.padding = ensurePadding(s.padding);
+      if (s.margin !== undefined) s.margin = ensurePadding(s.margin);
+      
+      // 字体兜底 (Canvas 测量宽高的命脉)
+      if (['text', 'table', 'multiVariableText', 'date', 'time', 'dateTime'].includes(s.type)) {
+        s.fontName = s.fontName || 'NotoSansSC';
+      }
+
+      // --- 表格专项加固 (修复 reading 'alignment' / 'top' / columnStyles 的终极方案) ---
+      // pdfme TableSchema 要求: columnStyles 为 { alignment?: { [colIndex]: ALIGNMENT } }
+      // headStyles/bodyStyles 需包含 padding、borderWidth 为 BoxDimensions { top, right, bottom, left }
+      if (s.type === 'table') {
+        s.columns = Array.isArray(s.columns) && s.columns.length > 0 ? s.columns : [{ key: 'dummy', label: ' ' }];
+        s.showHead = s.showHead !== false;
+        s.showFoot = !!s.showFoot;
+        s.tableStyles = s.tableStyles || { borderWidth: 0.1, borderColor: '#b1b1b1' };
+
+        // head 与 headWidthPercentages 为 getTableOptions 必需
+        if (!Array.isArray(s.head) || s.head.length === 0) {
+          s.head = s.columns.map((c: any) => c.label ?? c.key ?? '');
+        }
+        // 修复表头污染：当 head 与首行数据合并时（如 "3序号"、"OP03工序编码"），恢复为纯表头
+        const OPERATIONS_HEAD = ['序号', '工序编码', '工序名称', '工序状态', '工作中心'];
+        const knownTableHeads: Record<string, string[]> = {
+          operations: OPERATIONS_HEAD,
+          工序列表: OPERATIONS_HEAD, // enhanceTemplateWithLabels 可能将 name 改为中文
+        };
+        const expectedHead = s.name ? knownTableHeads[s.name] : null;
+        if (expectedHead && Array.isArray(s.head) && s.head.length === expectedHead.length) {
+          const isCorrupted = s.head.some(
+            (h: string, i: number) =>
+              typeof h === 'string' && h !== expectedHead[i] && h.includes(expectedHead[i])
+          );
+          if (isCorrupted) {
+            s.head = [...expectedHead];
+          }
+        }
+        if (!Array.isArray(s.headWidthPercentages) || s.headWidthPercentages.length !== s.head.length) {
+          s.headWidthPercentages = s.head.map(() => 100 / s.head.length);
+        }
+
+        // 单元格内边距：5mm 与 pdfme 默认一致，确保行高正确计算，避免多行压缩为 1 行
+        const defaultCellPadding = 5;
+        const defaultBorderWidth = { top: 0.1, right: 0.1, bottom: 0.1, left: 0.1 };
+        const defaultCellStyle = {
+          fontSize: 9,
+          alignment: 'center' as const,
+          verticalAlignment: 'middle' as const,
+          fontName: 'NotoSansSC',
+          padding: ensurePadding(defaultCellPadding),
+          borderWidth: defaultBorderWidth,
+        };
+
+        s.headStyles = {
+          ...defaultCellStyle,
+          backgroundColor: '#f1f1f1',
+          ...s.headStyles,
+          padding: ensurePadding(s.headStyles?.padding ?? defaultCellPadding),
+          borderWidth: typeof s.headStyles?.borderWidth === 'object' && s.headStyles.borderWidth
+            ? { ...defaultBorderWidth, ...s.headStyles.borderWidth }
+            : defaultBorderWidth,
+        };
+
+        s.bodyStyles = {
+          ...defaultCellStyle,
+          fontSize: 8,
+          alignment: 'left' as const,
+          ...s.bodyStyles,
+          padding: ensurePadding(s.bodyStyles?.padding ?? defaultCellPadding),
+          borderWidth: typeof s.bodyStyles?.borderWidth === 'object' && s.bodyStyles.borderWidth
+            ? { ...defaultBorderWidth, ...s.bodyStyles.borderWidth }
+            : defaultBorderWidth,
+          alternateBackgroundColor: s.bodyStyles?.alternateBackgroundColor ?? '',
+        };
+
+        // columnStyles 必须存在；pdfme 期望结构为 { alignment?: { [colIndex]: ALIGNMENT } }
+        s.columnStyles = s.columnStyles && typeof s.columnStyles === 'object' ? s.columnStyles : {};
+
+        // 确保表格有足够高度显示多行：1 表头 + N 数据行，每行至少 8mm
+        const bodyRows = (() => {
+          try {
+            const c = s.content;
+            const parsed = typeof c === 'string' ? JSON.parse(c || '[]') : c;
+            return Array.isArray(parsed) ? parsed.length : 0;
+          } catch {
+            return 1;
+          }
+        })();
+        const minHeight = (1 + Math.max(1, bodyRows)) * 8;
+        if (typeof s.height !== 'number' || s.height < minHeight) {
+          s.height = minHeight;
+        }
+
+        // 若 content 首行与 head 相同（误将表头写入 body），移除首行避免重复/错乱
+        if (Array.isArray(s.head) && s.head.length > 0) {
+          try {
+            const parsed = typeof s.content === 'string' ? JSON.parse(s.content || '[]') : s.content;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const firstRow = parsed[0];
+              if (Array.isArray(firstRow) && firstRow.length === s.head.length &&
+                  firstRow.every((v: string, i: number) => String(v) === String(s.head[i]))) {
+                s.content = JSON.stringify(parsed.slice(1));
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      // --- 动态文本加固 ---
+      if (s.type === 'multiVariableText') {
+        s.variables = Array.isArray(s.variables) ? s.variables : [];
+        s.fontSize = s.fontSize || 10;
+        s.alignment = s.alignment || 'left';
+      }
+
+      // --- 基础文本加固 ---
+      if (s.type === 'text') {
+        s.alignment = s.alignment || 'left';
+        s.verticalAlignment = s.verticalAlignment || 'top';
+        s.lineHeight = s.lineHeight || 1;
+        s.fontSize = s.fontSize || 10;
+        // 修复「备注」等标签因递归替换导致的重复：将 "备注: 备注: 备注: {remarks}" 规范为 "备注：{remarks}"
+        if (s.content && typeof s.content === 'string') {
+          s.content = normalizeRepeatedLabelInContent(s.content);
+        }
+      }
+
+      return s;
     });
   });
 
@@ -204,43 +414,53 @@ export function variablesToPdfmeInputs(
   template: Template,
   variables: Record<string, unknown>
 ): Record<string, unknown>[] {
-  const schemaInputs: Record<string, unknown> = {};
-  const schemas = template.schemas?.[0] ?? [];
+  const allPageInputs: Record<string, unknown>[] = [];
+  const schemas = template.schemas ?? [];
 
-  for (const schema of schemas) {
-    const name = (schema as any).name;
-    const type = (schema as any).type;
-    if (!name) continue;
-
-    if (type === 'table') {
-      const arrData = variables[name] ?? resolveValue(name, variables);
-      if (Array.isArray(arrData)) {
-        if (name === 'operations') {
-          schemaInputs[name] = operationsToTableRows(arrData);
-        } else {
-          schemaInputs[name] = arrData.map((item) =>
-            typeof item === 'object' && item !== null
-              ? Object.values(item)
-              : [formatValue(item)]
-          );
-        }
-      } else {
-        schemaInputs[name] = [];
-      }
-    } else {
-      const val = variables[name] ?? resolveValue(name, variables);
-      if (val !== undefined && val !== null) {
-        schemaInputs[name] = formatValue(val);
+  // 获取所有页面的输入映射
+  for (const pageSchemas of schemas) {
+    const pageInput: Record<string, unknown> = {};
+    
+    // 基础上下文：合并所有变量，供 Expression 使用
+    for (const [k, v] of Object.entries(variables)) {
+      if (!Array.isArray(v)) {
+        pageInput[k] = formatValue(v);
       }
     }
+
+    // 针对当前页面 schema 的特定映射
+    for (const schema of pageSchemas) {
+      const name = (schema as any).name;
+      const type = (schema as any).type;
+      if (!name) continue;
+
+      if (type === 'table') {
+        const arrData = variables[name] ?? resolveValue(name, variables);
+        if (Array.isArray(arrData)) {
+          let tableRows: string[][] = [];
+          if (name === 'operations') {
+            tableRows = operationsToTableRows(arrData);
+          } else {
+            tableRows = arrData.map((item) =>
+              typeof item === 'object' && item !== null
+                ? Object.values(item).map(v => formatValue(v))
+                : [formatValue(item)]
+            );
+          }
+          // 重要：PDFme Table 插件在 Generator 中通常要求 input 为 JSON 字符串
+          pageInput[name] = JSON.stringify(tableRows);
+        } else {
+          pageInput[name] = '[]';
+        }
+      } else {
+        const val = variables[name] ?? resolveValue(name, variables);
+        if (val !== undefined && val !== null) {
+          pageInput[name] = formatValue(val);
+        }
+      }
+    }
+    allPageInputs.push(pageInput);
   }
 
-  // 合并所有变量到 inputs，供 Expression 表达式使用（如 {code}、{code + " - " + name}）
-  const variableContext: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(variables)) {
-    if (Array.isArray(v)) continue;
-    variableContext[k] = formatValue(v);
-  }
-  const inputs = { ...variableContext, ...schemaInputs };
-  return [inputs];
+  return allPageInputs.length > 0 ? allPageInputs : [variables];
 }

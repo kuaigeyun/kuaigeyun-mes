@@ -32,7 +32,7 @@ import {
   HEADER_PRESETS,
   FOOTER_PRESETS,
 } from '../../../../components/pdfme-doc/constants';
-import { buildTemplateWithFields } from '../../../../utils/pdfmeTemplateUtils';
+import { buildTemplateWithFields, sanitizeTemplate } from '../../../../utils/pdfmeTemplateUtils';
 import type { Template } from '@pdfme/common';
 
 const { Title } = Typography;
@@ -100,6 +100,8 @@ const PrintTemplateDesignPage: React.FC = () => {
         // 性能与稳定性优化：不再强制将 ID 转换为纯中文，防止设计器图层渲染异常
         // template = enhanceTemplateWithLabels(template, variableItems);
       }
+      // 加固并修复已污染内容（如「备注」重复），设计器与预览均使用修复后的模板
+      template = sanitizeTemplate(template);
       document.title = `设计模板 - ${data.name}`;
       setTemplateName(data.name);
       setInitialTemplate(template);
@@ -616,7 +618,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         }}
         footer={null}
         width="95%"
-        destroyOnClose
+        destroyOnHidden
         centered
         styles={{ 
           body: { height: '85vh', padding: 0, overflow: 'hidden', background: '#f0f2f5' }
