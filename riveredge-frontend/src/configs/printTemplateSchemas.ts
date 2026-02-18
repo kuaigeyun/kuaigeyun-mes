@@ -333,13 +333,13 @@ export const getTemplateVariableItems = (type: string): TemplateVariableItem[] =
       for (const child of field.children) {
         items.push({ 
           key: child.key, 
-          label: child.key 
+          label: child.label 
         });
       }
     } else {
       items.push({ 
         key: field.key, 
-        label: field.key 
+        label: field.label 
       });
     }
   }
