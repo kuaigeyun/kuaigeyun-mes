@@ -23,6 +23,8 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '工单',
     fields: [
       { key: 'code', label: '工单编号', type: 'string' },
+      { key: 'work_order_qrcode', label: '工单二维码', type: 'string' },
+      { key: 'signature', label: '签名', type: 'string' },
       { key: 'name', label: '工单名称', type: 'string' },
       { key: 'product_code', label: '产品编码', type: 'string' },
       { key: 'product_name', label: '产品名称', type: 'string' },
@@ -152,6 +154,17 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'created_at', label: '创建时间', type: 'date' },
     ],
   },
+  // 通用演示字段（会被合并到所有单据类型中）
+  common: {
+    type: 'common',
+    name: '通用',
+    fields: [
+      { key: 'company_name', label: '公司名称', type: 'string' },
+      { key: 'print_user', label: '打印人', type: 'string' },
+      { key: 'print_time', label: '打印时间', type: 'date' },
+      { key: 'tenant_name', label: '组织名称', type: 'string' },
+    ],
+  },
 };
 
 export const getSchemaByType = (type: string): TemplateSchema | undefined => {
@@ -184,6 +197,127 @@ export interface TemplateVariableItem {
 }
 
 /**
+ * 根据字段类型生成预览用示例值
+ */
+const getSampleValueByType = (type: string, key: string): unknown => {
+  switch (type) {
+    case 'string':
+      if (key.includes('qrcode') || key.includes('二维码')) return 'WO-SAMPLE-001';
+      if (key.includes('name') || key.includes('名称')) return '示例名称';
+      if (key.includes('code') || key.includes('编号') || key.includes('单号')) return 'SAMPLE-001';
+      if (key.includes('status') || key.includes('状态')) return '进行中';
+      if (key.includes('mode') || key.includes('模式')) return '标准';
+      if (key.includes('priority') || key.includes('优先级')) return '普通';
+      if (key.includes('remarks') || key.includes('备注')) return '示例备注';
+      if (key.includes('company')) return '江左艾尔法智能科技有限公司';
+      if (key.includes('user')) return '系统管理员';
+      if (key.includes('tenant')) return '华为制造事业部';
+      return '示例文本';
+    case 'number':
+      return 100;
+    case 'date':
+      return '2024-01-15 10:30:00';
+    case 'boolean':
+      return true;
+    default:
+      return '示例';
+  }
+};
+
+/**
+ * 根据单据类型生成预览用示例变量数据，用于设计器预览时替换 {{variable}}
+ */
+export const getSamplePreviewVariables = (type: string): Record<string, unknown> => {
+  const schema = getSchemaByType(type);
+  if (!schema) return {};
+
+  const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;
+  const allFields = [...schema.fields, ...commonFields];
+  const result: Record<string, unknown> = {};
+
+  for (const field of allFields) {
+    if (field.type === 'array' && field.children?.length) {
+      // 如 operations.0.operation_code -> { operations: [{ operation_code: 'OP1', ... }] }
+      const arrKey = field.key;
+      const sampleItems: Record<string, unknown>[] = [];
+      const indexMap = new Map<number, Record<string, unknown>>();
+
+      for (const child of field.children) {
+        const parts = child.key.split('.');
+        if (parts.length >= 3) {
+          const idx = parseInt(parts[1], 10);
+          const prop = parts.slice(2).join('.');
+          if (!indexMap.has(idx)) indexMap.set(idx, {});
+          const item = indexMap.get(idx)!;
+          item[prop] = getSampleValueByType(child.type, prop);
+        }
+      }
+
+      const indices = Array.from(indexMap.keys()).sort((a, b) => a - b);
+      for (const idx of indices) {
+        sampleItems[idx] = indexMap.get(idx)!;
+      }
+      result[arrKey] = sampleItems.filter(Boolean);
+    } else {
+      result[field.key] = getSampleValueByType(field.type, field.key);
+    }
+  }
+
+  return result;
+};
+
+/** 表格型数组模板配置：用于生成可插入的表格占位符 */
+export interface ArrayTableTemplateConfig {
+  arrayKey: string;
+  label: string;
+  maxRows?: number;
+  columns: { key: string; label: string }[];
+}
+
+/** 各单据类型下可插入的表格模板 */
+const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
+  work_order: [
+    {
+      arrayKey: 'operations',
+      label: '工序列表',
+      maxRows: 10,
+      columns: [
+        { key: 'sequence', label: '序号' },
+        { key: 'operation_code', label: '工序编码' },
+        { key: 'operation_name', label: '工序名称' },
+        { key: 'status', label: '工序状态' },
+        { key: 'work_center_name', label: '工作中心' },
+      ],
+    },
+  ],
+};
+
+/**
+ * 获取可插入的表格型模板列表
+ */
+export const getArrayTableTemplates = (type: string): ArrayTableTemplateConfig[] => {
+  return ARRAY_TABLE_TEMPLATES[type] || [];
+};
+
+/**
+ * 生成表格型数据的插入文本（表头 + 变量占位符行）
+ */
+export const getArrayTableInsertText = (config: ArrayTableTemplateConfig): string => {
+  const sep = ' | ';
+  const header = config.columns.map((c) => c.label).join(sep);
+  const lines: string[] = [header];
+  const n = config.maxRows ?? 5;
+  for (let i = 0; i < n; i++) {
+    const cells = config.columns.map((c) => {
+      const fullKey = `${config.arrayKey}.${i}.${c.key}`;
+      return `{{${fullKey}}}`;
+    });
+    lines.push(cells.join(sep));
+  }
+  return lines.join('\r\n') + '\r\n';
+};
+
+/**
  * 获取可用于模板插入的变量列表（扁平化，支持嵌套如 operations.0.operation_name）
  */
 export const getTemplateVariableItems = (type: string): TemplateVariableItem[] => {
@@ -191,14 +325,40 @@ export const getTemplateVariableItems = (type: string): TemplateVariableItem[] =
   if (!schema) return [];
 
   const items: TemplateVariableItem[] = [];
-  for (const field of schema.fields) {
+  const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;
+  const allFields = [...schema.fields, ...commonFields];
+
+  for (const field of allFields) {
     if (field.type === 'array' && field.children?.length) {
       for (const child of field.children) {
-        items.push({ key: child.key, label: child.label });
+        items.push({ 
+          key: child.key, 
+          label: child.key 
+        });
       }
     } else {
-      items.push({ key: field.key, label: field.label });
+      items.push({ 
+        key: field.key, 
+        label: field.key 
+      });
     }
   }
   return items;
+};
+
+/**
+ * 根据中文标签反查对应的英文变量 Key
+ */
+export const getKeyByLabel = (label: string): string | undefined => {
+  for (const group of Object.values(PRINT_TEMPLATE_SCHEMAS)) {
+    for (const field of group.fields) {
+      if (field.label === label) return field.key;
+      if (field.type === 'array' && field.children) {
+        for (const child of field.children) {
+          if (child.label === label) return child.key;
+        }
+      }
+    }
+  }
+  return undefined;
 };

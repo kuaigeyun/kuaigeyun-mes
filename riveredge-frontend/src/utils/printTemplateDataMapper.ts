@@ -104,6 +104,8 @@ export function mapWorkOrderToTemplateVariables(
 ): Record<string, unknown> {
   const vars: Record<string, unknown> = {
     code: detail.code ?? '',
+    work_order_qrcode: detail.code ?? '', // 二维码内容：工单编号，扫码可快速识别
+    signature: '', // 签名：base64 图片，打印时可留空或由表单填写
     name: detail.name ?? '',
     product_code: detail.product_code ?? '',
     product_name: detail.product_name ?? '',
@@ -149,7 +151,7 @@ export function mapWorkOrderToTemplateVariables(
 
 /**
  * 通用：按点号路径从变量中取值并转为字符串
- * 供 UniverDocPreview 等组件使用
+ * 供 PdfmePreview 等组件使用
  */
 export function getTemplateVariableValue(
   key: string,
