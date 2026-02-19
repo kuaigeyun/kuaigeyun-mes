@@ -279,7 +279,7 @@ class DocumentPrintService:
         return {
             "document_type": "purchase_order",
             "code": order.order_code,
-            "order_name": order.order_name,
+            "order_name": getattr(order, "order_name", None) or order.order_code,
             "supplier_name": order.supplier_name,
             "order_date": order.order_date.isoformat() if order.order_date else None,
             "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
@@ -325,7 +325,7 @@ class DocumentPrintService:
         return {
             "document_type": "sales_order",
             "code": order.order_code,
-            "order_name": order.order_name,
+            "order_name": getattr(order, "order_name", None) or order.order_code,
             "customer_name": order.customer_name,
             "order_date": order.order_date.isoformat() if order.order_date else None,
             "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,

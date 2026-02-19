@@ -18,7 +18,8 @@ from infra.schemas.business_config import (
     BatchProcessParameterUpdateRequest,
     ConfigTemplateSaveRequest,
     ConfigTemplateApplyRequest,
-    NodesUpdateRequest
+    NodesUpdateRequest,
+    ComplexityPresetApplyRequest,
 )
 from infra.services.business_config_service import BusinessConfigService
 from infra.api.deps.deps import get_current_user
@@ -75,6 +76,49 @@ async def switch_running_mode(
     except Exception as e:
         logger.error(f"切换运行模式失败: {e}")
         raise HTTPException(status_code=500, detail=f"切换运行模式失败: {str(e)}")
+
+
+@router.get("/complexity-presets", summary="获取业务复杂度预设列表")
+async def get_complexity_presets(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    获取五级业务复杂度预设列表
+
+    供前端选择器使用，包含 L1-L5 代号、名称、描述。
+    """
+    try:
+        result = await BusinessConfigService().get_complexity_presets()
+        return result
+    except Exception as e:
+        logger.error(f"获取业务复杂度预设失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取业务复杂度预设失败: {str(e)}")
+
+
+@router.post("/complexity-presets/apply", summary="应用业务复杂度预设")
+async def apply_complexity_preset(
+    request: ComplexityPresetApplyRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    应用业务复杂度预设
+
+    支持 L1 来料加工模式、L2 订单生产模式、L3 生产物料模式、L4 进销存生产模式、L5 全流程内控模式。
+    """
+    try:
+        result = await BusinessConfigService().apply_complexity_preset(
+            tenant_id=tenant_id,
+            level=request.level,
+        )
+        return result
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"应用业务复杂度预设失败: {e}")
+        raise HTTPException(status_code=500, detail=f"应用业务复杂度预设失败: {str(e)}")
 
 
 @router.post("/modules/switch", summary="更新模块开关")

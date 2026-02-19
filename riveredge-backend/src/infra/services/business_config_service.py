@@ -239,6 +239,168 @@ class BusinessConfigService:
         },
     }
     
+    # 五级业务复杂度预设（L1-L5）
+    COMPLEXITY_PRESETS = {
+        "L1": {
+            "code": "L1",
+            "name": "来料加工模式",
+            "description": "代工/OEM，只接生产任务，材料由委托方提供",
+            "nodes": {
+                "sales_order": {"enabled": False, "auditRequired": False},
+                "sales_forecast": {"enabled": False, "auditRequired": False},
+                "sales_delivery": {"enabled": False, "auditRequired": False},
+                "inventory_check": {"enabled": False, "auditRequired": False},
+                "production_plan": {"enabled": False, "auditRequired": False},
+                "purchase_request": {"enabled": False, "auditRequired": False},
+                "purchase_order": {"enabled": False, "auditRequired": False},
+                "inbound_delivery": {"enabled": False, "auditRequired": False},
+                "work_order": {"enabled": True, "auditRequired": False},
+                "quality_inspection": {"enabled": False, "auditRequired": False},
+            },
+            "modules": {
+                "production": True,
+                "warehouse": True,
+                "demand": True,
+                "purchase": False,
+                "sales": False,
+                "quality": False,
+                "finance": False,
+            },
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": True},
+            },
+        },
+        "L2": {
+            "code": "L2",
+            "name": "订单生产模式",
+            "description": "有销售但原料外采或委外，不做采购闭环",
+            "nodes": {
+                "sales_order": {"enabled": True, "auditRequired": False},
+                "sales_forecast": {"enabled": True, "auditRequired": False},
+                "sales_delivery": {"enabled": True, "auditRequired": False},
+                "inventory_check": {"enabled": False, "auditRequired": False},
+                "production_plan": {"enabled": False, "auditRequired": False},
+                "purchase_request": {"enabled": False, "auditRequired": False},
+                "purchase_order": {"enabled": False, "auditRequired": False},
+                "inbound_delivery": {"enabled": False, "auditRequired": False},
+                "work_order": {"enabled": True, "auditRequired": False},
+                "quality_inspection": {"enabled": False, "auditRequired": False},
+            },
+            "modules": {
+                "production": True,
+                "warehouse": True,
+                "demand": True,
+                "purchase": False,
+                "sales": True,
+                "quality": False,
+                "finance": False,
+            },
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": True},
+            },
+        },
+        "L3": {
+            "code": "L3",
+            "name": "生产物料模式",
+            "description": "自采原料、自管库存的生产车间",
+            "nodes": {
+                "sales_order": {"enabled": False, "auditRequired": False},
+                "sales_forecast": {"enabled": False, "auditRequired": False},
+                "sales_delivery": {"enabled": False, "auditRequired": False},
+                "inventory_check": {"enabled": True, "auditRequired": False},
+                "production_plan": {"enabled": True, "auditRequired": False},
+                "purchase_request": {"enabled": True, "auditRequired": False},
+                "purchase_order": {"enabled": True, "auditRequired": False},
+                "inbound_delivery": {"enabled": True, "auditRequired": False},
+                "work_order": {"enabled": True, "auditRequired": False},
+                "quality_inspection": {"enabled": True, "auditRequired": False},
+            },
+            "modules": {
+                "production": True,
+                "warehouse": True,
+                "demand": True,
+                "purchase": True,
+                "sales": False,
+                "quality": True,
+                "finance": False,
+            },
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": False},
+            },
+        },
+        "L4": {
+            "code": "L4",
+            "name": "进销存生产模式",
+            "description": "中小厂完整业务，追求效率，不强调内控",
+            "nodes": {
+                "sales_order": {"enabled": True, "auditRequired": False},
+                "sales_forecast": {"enabled": True, "auditRequired": False},
+                "sales_delivery": {"enabled": True, "auditRequired": False},
+                "inventory_check": {"enabled": True, "auditRequired": False},
+                "production_plan": {"enabled": True, "auditRequired": False},
+                "purchase_request": {"enabled": True, "auditRequired": False},
+                "purchase_order": {"enabled": True, "auditRequired": False},
+                "inbound_delivery": {"enabled": True, "auditRequired": False},
+                "work_order": {"enabled": True, "auditRequired": False},
+                "quality_inspection": {"enabled": True, "auditRequired": False},
+            },
+            "modules": {
+                "production": True,
+                "warehouse": True,
+                "demand": True,
+                "purchase": True,
+                "sales": True,
+                "quality": True,
+                "finance": False,
+            },
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": False},
+            },
+        },
+        "L5": {
+            "code": "L5",
+            "name": "全流程内控模式",
+            "description": "规范企业，需内控与追溯",
+            "nodes": {
+                "sales_order": {"enabled": True, "auditRequired": True},
+                "sales_forecast": {"enabled": True, "auditRequired": True},
+                "sales_delivery": {"enabled": True, "auditRequired": False},
+                "inventory_check": {"enabled": True, "auditRequired": True},
+                "production_plan": {"enabled": True, "auditRequired": True},
+                "purchase_request": {"enabled": True, "auditRequired": True},
+                "purchase_order": {"enabled": True, "auditRequired": True},
+                "inbound_delivery": {"enabled": True, "auditRequired": False},
+                "work_order": {"enabled": True, "auditRequired": False},
+                "quality_inspection": {"enabled": True, "auditRequired": True},
+            },
+            "modules": {
+                "production": True,
+                "warehouse": True,
+                "demand": True,
+                "purchase": True,
+                "sales": True,
+                "quality": True,
+                "finance": True,
+            },
+            "parameters": {
+                "planning": {"require_production_plan": False},
+                "procurement": {"require_purchase_requisition": False},
+                "work_order": {"allow_production_without_material": False},
+            },
+        },
+    }
+
+    # 默认业务复杂度（新租户或未配置时使用）
+    DEFAULT_COMPLEXITY_LEVEL = "L4"
+
     # 核心模块列表（不可关闭）
     CORE_MODULES = ["production", "warehouse"]
     
@@ -396,7 +558,79 @@ class BusinessConfigService:
             "running_mode": mode,
             "config": business_config,
         }
-    
+
+    async def apply_complexity_preset(
+        self,
+        tenant_id: int,
+        level: str,
+    ) -> Dict[str, Any]:
+        """
+        应用业务复杂度预设（L1-L5）
+
+        Args:
+            tenant_id: 组织ID
+            level: 复杂度等级（L1/L2/L3/L4/L5）
+
+        Returns:
+            Dict[str, Any]: 应用结果
+        """
+        if level not in self.COMPLEXITY_PRESETS:
+            raise ValidationError(f"无效的复杂度等级: {level}，支持 L1/L2/L3/L4/L5")
+
+        preset = self.COMPLEXITY_PRESETS[level]
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+
+        settings = tenant.settings or {}
+        business_config = settings.get("business_config", {})
+        business_config.setdefault("nodes", {})
+        business_config.setdefault("modules", {})
+        business_config.setdefault("parameters", {})
+
+        # 应用 nodes（完全覆盖）
+        business_config["nodes"] = dict(preset["nodes"])
+        # 应用 modules
+        business_config["modules"].update(preset["modules"])
+        # 合并 parameters（只覆盖预设中指定的分类）
+        for cat, params in preset["parameters"].items():
+            if cat not in business_config["parameters"]:
+                business_config["parameters"][cat] = {}
+            business_config["parameters"][cat].update(params)
+
+        business_config["complexity_level"] = level
+        business_config["complexity_name"] = preset["name"]
+        business_config["complexity_applied_at"] = datetime.now().isoformat()
+
+        settings["business_config"] = business_config
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+
+        logger.info(f"组织 {tenant_id} 已应用业务复杂度预设: {level} {preset['name']}")
+
+        return {
+            "success": True,
+            "message": f"已应用预设：{preset['name']}",
+            "complexity_level": level,
+            "complexity_name": preset["name"],
+            "config": business_config,
+        }
+
+    async def get_complexity_presets(self) -> Dict[str, Any]:
+        """
+        获取五级业务复杂度预设列表（供前端选择器使用）
+        """
+        return {
+            "presets": [
+                {
+                    "code": p["code"],
+                    "name": p["name"],
+                    "description": p["description"],
+                }
+                for p in self.COMPLEXITY_PRESETS.values()
+            ],
+            "default_level": self.DEFAULT_COMPLEXITY_LEVEL,
+        }
+
     async def update_module_switch(
         self,
         tenant_id: int,

@@ -104,7 +104,7 @@ class DemandSourceChainService:
                                     "type": "SalesOrder",
                                     "id": sales_order.id,
                                     "code": sales_order.order_code,
-                                    "name": sales_order.order_name,
+                                    "name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                                 })
                         elif demand.source_type == "sales_forecast" and demand.source_id:
                             forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
@@ -194,7 +194,7 @@ class DemandSourceChainService:
                                     "type": "SalesOrder",
                                     "id": sales_order.id,
                                     "code": sales_order.order_code,
-                                    "name": sales_order.order_name,
+                                    "name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                                 })
                         elif demand.source_type == "sales_forecast" and demand.source_id:
                             forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
@@ -284,7 +284,7 @@ class DemandSourceChainService:
                                     "type": "SalesOrder",
                                     "id": sales_order.id,
                                     "code": sales_order.order_code,
-                                    "name": sales_order.order_name,
+                                    "name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                                 })
                         elif demand.source_type == "sales_forecast" and demand.source_id:
                             forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)

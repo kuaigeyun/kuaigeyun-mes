@@ -11,8 +11,8 @@ import {
     RocketOutlined,
     CloudUploadOutlined,
 } from '@ant-design/icons';
-import type { ConfigTemplate } from '../../../services/businessConfig';
-import { getBusinessConfig, updateNodesConfig, deleteConfigTemplate } from '../../../services/businessConfig';
+import type { ConfigTemplate, ComplexityPreset } from '../../../services/businessConfig';
+import { getBusinessConfig, updateNodesConfig, deleteConfigTemplate, getComplexityPresets, applyComplexityPreset } from '../../../services/businessConfig';
 
 import { Background, BackgroundVariant, MarkerType } from 'reactflow';
 import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
@@ -38,6 +38,8 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     const [scale, setScale] = useState<'small' | 'medium' | 'large'>('medium');
     const [industry, setIndustry] = useState<'general' | 'electronics' | 'machinery' | 'machining'>('general');
     const [loading, setLoading] = useState(false);
+    const [complexityPresets, setComplexityPresets] = useState<ComplexityPreset[]>([]);
+    const [complexityLevel, setComplexityLevel] = useState<string | null>(null);
 
     /**
      * 限制右键菜单仅在画板区域（.react-flow__pane）内触发
@@ -395,6 +397,13 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         // message.success(`已切换至 ${industryName} - ${scaleName}企业配置模版`);
     };
 
+    // Fetch complexity presets
+    useEffect(() => {
+        getComplexityPresets().then((res) => {
+            setComplexityPresets(res.presets || []);
+        }).catch(() => {});
+    }, []);
+
     // Load Config from Backend
     useEffect(() => {
         const loadConfig = async () => {
@@ -402,14 +411,11 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             try {
                 const config = await getBusinessConfig();
                 if (config) {
-                    // If backend has saved industry/scale, use them. 
-                    // Note: Backend stores defaults as 'general'/'medium' if not set.
-                    // We need to cast types as strings from backend might match literals
+                    if (config.complexity_level) setComplexityLevel(config.complexity_level);
                     if (config.industry) setIndustry(config.industry as any);
                     if (config.scale) setScale(config.scale as any);
 
-                    // If backend has nodes config, merge it
-                    if (config.nodes) {
+                    if (config.nodes && Object.keys(config.nodes).length > 0) {
                         setNodes((prevNodes) =>
                             prevNodes.map((node) => {
                                 const nodeConfig = config.nodes?.[node.id];
@@ -428,8 +434,6 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                             })
                         );
                     } else {
-                        // Apply default template based on loaded industry/scale if no specific nodes config
-                        // Note: getBusinessConfig already returns defaults if empty, but explicit Application might be safer visual sync
                         applyTemplate(config.industry as any || 'general', config.scale as any || 'medium');
                     }
                 }
@@ -511,6 +515,39 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         applyTemplate(industry, value);
     };
 
+    const handleComplexityPresetChange = async (level: string) => {
+        if (!level) return;
+        setLoading(true);
+        try {
+            const result = await applyComplexityPreset(level);
+            setComplexityLevel(result.complexity_level);
+            if (result.config?.nodes) {
+                setNodes((prevNodes) =>
+                    prevNodes.map((node) => {
+                        const nodeConfig = result.config.nodes?.[node.id];
+                        if (nodeConfig) {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    enabled: nodeConfig.enabled,
+                                    auditRequired: nodeConfig.auditRequired,
+                                },
+                                style: getNodeStyle(nodeConfig.enabled, nodeConfig.auditRequired),
+                            };
+                        }
+                        return node;
+                    })
+                );
+            }
+            message.success(result.message || `已应用预设：${result.complexity_name}`);
+        } catch (error: any) {
+            message.error(error?.message || '应用预设失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // 选中的节点添加光晕效果
     const displayNodes = useMemo(
         () =>
@@ -577,25 +614,24 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                     <div style={{ marginTop: 24 }}>
                         <Text strong>当前环境：</Text>
                         <div style={{ marginTop: 8 }}>
-                            <Text>行业：</Text>
-                            <Text type="secondary">{
-                                {
-                                    general: '通用制造',
-                                    machinery: '机械装备',
-                                    electronics: '电子电器',
-                                    machining: '零部件加工'
-                                }[industry]
-                            }</Text>
-                        </div>
-                        <div style={{ marginTop: 8 }}>
-                            <Text>规模：</Text>
-                            <Text type="secondary">{
-                                {
-                                    small: '小型',
-                                    medium: '中型',
-                                    large: '大型'
-                                }[scale]
-                            }</Text>
+                            {complexityLevel ? (
+                                <>
+                                    <Text>业务模式：</Text>
+                                    <Text type="secondary">{complexityLevel} {complexityPresets.find(p => p.code === complexityLevel)?.name || ''}</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text>行业：</Text>
+                                    <Text type="secondary">{
+                                        { general: '通用制造', machinery: '机械装备', electronics: '电子电器', machining: '零部件加工' }[industry]
+                                    }</Text>
+                                    <span style={{ marginLeft: 16 }} />
+                                    <Text>规模：</Text>
+                                    <Text type="secondary">{
+                                        { small: '小型', medium: '中型', large: '大型' }[scale]
+                                    }</Text>
+                                </>
+                            )}
                         </div>
                     </div>
                 </Card>
@@ -638,20 +674,23 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Space>
                     <Space size={8}>
-                        <Text strong>行业类型：</Text>
-                        <Select value={industry} onChange={handleIndustryChange} style={{ width: 140 }}>
-                            <Option value="general">通用制造</Option>
-                            <Option value="machinery">机械装备</Option>
-                            <Option value="electronics">电子电器</Option>
-                            <Option value="machining">零部件加工</Option>
-                        </Select>
-                    </Space>
-                    <Space size={8}>
-                        <Text strong>企业规模：</Text>
-                        <Select value={scale} onChange={handleScaleChange} style={{ width: 140 }}>
-                            <Option value="small">小型 (极简)</Option>
-                            <Option value="medium">中型 (标准)</Option>
-                            <Option value="large">大型 (全流程)</Option>
+                        <Text strong>业务模式：</Text>
+                        <Select
+                            value={complexityLevel || undefined}
+                            onChange={handleComplexityPresetChange}
+                            style={{ width: 220 }}
+                            loading={loading}
+                            placeholder="选择业务复杂度预设"
+                            optionLabelProp="label"
+                        >
+                            {complexityPresets.map((p) => (
+                                <Option key={p.code} value={p.code} label={`${p.code} ${p.name}`}>
+                                    <div>
+                                        <div><strong>{p.code} {p.name}</strong></div>
+                                        {p.description ? <div style={{ fontSize: 12, color: '#888' }}>{p.description}</div> : null}
+                                    </div>
+                                </Option>
+                            ))}
                         </Select>
                     </Space>
                     <Space size={8}>

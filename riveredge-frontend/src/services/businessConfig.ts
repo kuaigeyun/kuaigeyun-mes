@@ -20,6 +20,8 @@ export interface BusinessConfig {
   nodes?: Record<string, { enabled: boolean; auditRequired: boolean }>;
   parameters: Record<string, Record<string, any>>;
   mode_switched_at?: string;
+  complexity_level?: string;
+  complexity_name?: string;
 }
 
 /**
@@ -131,6 +133,46 @@ export async function batchUpdateProcessParameters(
   return apiRequest('/infra/business-config/parameters/batch-update', {
     method: 'POST',
     data: request,
+  });
+}
+
+/**
+ * 业务复杂度预设接口
+ */
+export interface ComplexityPreset {
+  code: string;
+  name: string;
+  description: string;
+}
+
+export interface ComplexityPresetsResponse {
+  presets: ComplexityPreset[];
+  default_level: string;
+}
+
+/**
+ * 获取业务复杂度预设列表
+ *
+ * @returns 五级预设 L1-L5 代号、名称、描述
+ */
+export async function getComplexityPresets(): Promise<ComplexityPresetsResponse> {
+  return apiRequest<ComplexityPresetsResponse>('/infra/business-config/complexity-presets', {
+    method: 'GET',
+  });
+}
+
+/**
+ * 应用业务复杂度预设
+ *
+ * @param level - 复杂度等级（L1/L2/L3/L4/L5）
+ * @returns 应用结果
+ */
+export async function applyComplexityPreset(
+  level: string
+): Promise<{ success: boolean; message: string; complexity_level: string; complexity_name: string; config: BusinessConfig }> {
+  return apiRequest('/infra/business-config/complexity-presets/apply', {
+    method: 'POST',
+    data: { level },
   });
 }
 

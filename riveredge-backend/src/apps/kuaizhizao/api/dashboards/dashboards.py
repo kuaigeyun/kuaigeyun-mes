@@ -272,7 +272,6 @@ async def get_statistics(
     
     try:
         # 生产统计
-        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
         from apps.kuaizhizao.services.reporting_service import ReportingService
         from apps.kuaizhizao.services.defect_record_service import DefectRecordService
         from apps.kuaizhizao.models.sales_order import SalesOrder

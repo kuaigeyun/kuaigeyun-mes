@@ -20,6 +20,8 @@ class BusinessConfigResponse(BaseModel):
     nodes: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="节点详细配置")
     parameters: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="流程参数配置")
     mode_switched_at: Optional[str] = Field(None, description="模式切换时间")
+    complexity_level: Optional[str] = Field(None, description="业务复杂度等级（L1/L2/L3/L4/L5）")
+    complexity_name: Optional[str] = Field(None, description="业务模式名称")
 
 
 class RunningModeSwitchRequest(BaseModel):
@@ -62,3 +64,8 @@ class NodesUpdateRequest(BaseModel):
     nodes: Dict[str, Dict[str, Any]] = Field(..., description="节点配置 map")
     industry: Optional[str] = Field(None, description="行业")
     scale: Optional[str] = Field(None, description="规模")
+
+
+class ComplexityPresetApplyRequest(BaseModel):
+    """业务复杂度预设应用请求"""
+    level: str = Field(..., description="复杂度等级（L1/L2/L3/L4/L5）")
