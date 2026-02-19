@@ -4,7 +4,7 @@
 提供集成配置的 CRUD 操作和连接测试功能。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any  # noqa: F401
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import httpx
@@ -221,6 +221,25 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_mysql_connection(integration)
             elif integration.type == "mongodb":
                 result = await IntegrationConfigService._test_mongodb_connection(integration)
+            elif integration.type in ("oracle", "sqlserver", "redis", "clickhouse", "influxdb", "doris", "starrocks", "elasticsearch"):
+                result = await IntegrationConfigService._test_database_config_validation(integration)
+            elif integration.type == "feishu":
+                result = await IntegrationConfigService._test_feishu_connection(integration)
+            elif integration.type == "dingtalk":
+                result = await IntegrationConfigService._test_dingtalk_connection(integration)
+            elif integration.type == "wecom":
+                result = await IntegrationConfigService._test_wecom_connection(integration)
+            elif integration.type in (
+                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
+                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
+                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
+                "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
+                "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
+                "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
+                "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+            ):
+                result = await IntegrationConfigService._test_rest_api_connection(integration)
             else:
                 raise ValueError(f"不支持的集成类型: {integration.type}")
             
@@ -365,26 +384,155 @@ class IntegrationConfigService:
         }
 
     @staticmethod
-    async def _test_postgresql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
-        """测试 PostgreSQL 连接（config: host, port, database, user/username, password）"""
+    async def test_config(type_: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        保存前测试连接配置（不落库）
+        
+        Args:
+            type_: 集成类型
+            config: 连接配置字典
+            
+        Returns:
+            Dict[str, Any]: 测试结果 { success, message, data?, error? }
+        """
+        class _TempConfig:
+            def __init__(self, t: str, c: Dict[str, Any]):
+                self.type = t
+                self.config = c or {}
+            def get_config(self) -> Dict[str, Any]:
+                return self.config
+
+        temp = _TempConfig(type_, config)
+        try:
+            if temp.type in ("API", "api"):
+                result = await IntegrationConfigService._test_api_connection(temp)
+            elif temp.type == "OAuth":
+                result = await IntegrationConfigService._test_oauth_connection(temp)
+            elif temp.type == "Webhook":
+                result = await IntegrationConfigService._test_webhook_connection(temp)
+            elif temp.type == "Database":
+                result = await IntegrationConfigService._test_database_connection(temp)
+            elif temp.type == "postgresql":
+                result = await IntegrationConfigService._test_postgresql_connection(temp)
+            elif temp.type == "mysql":
+                result = await IntegrationConfigService._test_mysql_connection(temp)
+            elif temp.type == "mongodb":
+                result = await IntegrationConfigService._test_mongodb_connection(temp)
+            elif temp.type in ("oracle", "sqlserver", "redis", "clickhouse", "influxdb", "doris", "starrocks", "elasticsearch"):
+                result = await IntegrationConfigService._test_database_config_validation(temp)
+            elif temp.type == "feishu":
+                result = await IntegrationConfigService._test_feishu_connection(temp)
+            elif temp.type == "dingtalk":
+                result = await IntegrationConfigService._test_dingtalk_connection(temp)
+            elif temp.type == "wecom":
+                result = await IntegrationConfigService._test_wecom_connection(temp)
+            elif temp.type in (
+                "sap", "kingdee", "yonyou", "dsc", "inspur", "digiwin_e10",
+                "grasp_erp", "super_erp", "chanjet_tplus", "kingdee_kis",
+                "oracle_netsuite", "erpnext", "odoo", "sunlike_erp",
+                "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
+                "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
+                "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
+                "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
+                "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+            ):
+                result = await IntegrationConfigService._test_rest_api_connection(temp)
+            else:
+                raise ValueError(f"不支持的集成类型: {temp.type}")
+            if isinstance(result, dict) and result.get("success") is False:
+                return {
+                    "success": False,
+                    "message": result.get("message", "连接失败"),
+                    "error": result.get("message"),
+                }
+            return {
+                "success": True,
+                "message": result.get("message", "连接成功"),
+                "data": result,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"连接失败: {str(e)}",
+                "error": str(e),
+            }
+
+    @staticmethod
+    async def get_schema(tenant_id: int, uuid: str) -> Dict[str, Any]:
+        """
+        获取数据源的表/列元数据（用于图形化查询构建器）
+        目前仅支持 PostgreSQL。
+        
+        Returns:
+            Dict: { "tables": [ { "name": "t1", "columns": [ { "name": "c1", "type": "varchar" } ] } ] }
+        """
+        integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.type != "postgresql":
+            return {
+                "tables": [],
+                "error": f"Schema 暂仅支持 PostgreSQL，当前类型: {integration.type}",
+            }
         config = integration.get_config()
         try:
-            from tortoise.backends.asyncpg import AsyncpgDBClient
+            import asyncpg
             host = config.get("host", "localhost")
             port = config.get("port", 5432)
             database = config.get("database", "")
             user = config.get("user") or config.get("username", "")
             password = config.get("password", "")
-            db_client = AsyncpgDBClient(
+            conn = await asyncpg.connect(
                 host=host,
-                port=port,
+                port=int(port),
                 user=user,
                 password=password,
                 database=database,
             )
-            await db_client.create_connection()
-            await db_client.execute_query("SELECT 1")
-            await db_client.close()
+            rows = await conn.fetch(
+                """
+                SELECT table_schema, table_name, column_name, data_type, ordinal_position
+                FROM information_schema.columns
+                WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+                ORDER BY table_schema, table_name, ordinal_position
+                """
+            )
+            await conn.close()
+            tables_map: Dict[str, List[Dict[str, str]]] = {}
+            for row in rows:
+                tbl = f"{row['table_schema']}.{row['table_name']}"
+                if tbl not in tables_map:
+                    tables_map[tbl] = []
+                tables_map[tbl].append({
+                    "name": str(row["column_name"]),
+                    "type": str(row["data_type"]),
+                })
+            tables = [
+                {"name": k, "columns": v}
+                for k, v in tables_map.items()
+            ]
+            return {"tables": tables}
+        except Exception as e:
+            return {"tables": [], "error": str(e)}
+
+    @staticmethod
+    async def _test_postgresql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 PostgreSQL 连接（config: host, port, database, user/username, password）"""
+        config = integration.get_config()
+        try:
+            import asyncpg
+            host = config.get("host", "localhost")
+            port = config.get("port", 5432)
+            database = config.get("database", "")
+            user = config.get("user") or config.get("username", "")
+            password = config.get("password", "")
+            conn = await asyncpg.connect(
+                host=host,
+                port=int(port),
+                user=user,
+                password=password,
+                database=database,
+            )
+            await conn.fetchval("SELECT 1")
+            await conn.close()
             return {"success": True, "message": "PostgreSQL 连接成功"}
         except Exception as e:
             return {"success": False, "message": f"PostgreSQL 连接失败: {str(e)}"}
@@ -398,7 +546,9 @@ class IntegrationConfigService:
             raise ValueError("MySQL 配置缺少必要字段: host、database、user/username")
         return {
             "message": "MySQL 配置验证成功（完整连接测试需要安装 aiomysql 等驱动）",
-        }    @staticmethod
+        }
+
+    @staticmethod
     async def _test_mongodb_connection(integration: IntegrationConfig) -> Dict[str, Any]:
         """测试 MongoDB 连接（暂未实现实际连接）"""
         config = integration.get_config()
@@ -407,3 +557,104 @@ class IntegrationConfigService:
         return {
             "message": "MongoDB 配置验证成功（完整连接测试需要安装 motor 等驱动）",
         }
+
+    @staticmethod
+    async def _test_database_config_validation(integration: Any) -> Dict[str, Any]:
+        """通用数据库配置校验（暂未实现实际连接）"""
+        config = integration.get_config()
+        if not config.get("host"):
+            raise ValueError("配置缺少 host")
+        return {
+            "message": f"{integration.type} 配置基本校验通过",
+        }
+
+    # ── 应用连接器测试（协作、ERP、PLM、CRM）────────────────────────────────────
+
+    @staticmethod
+    async def _test_feishu_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试飞书连接（调用 app_access_token 接口）"""
+        config = integration.get_config()
+        app_id = config.get("app_id")
+        app_secret = config.get("app_secret")
+        if not app_id or not app_secret:
+            raise ValueError("飞书配置缺少 app_id 或 app_secret")
+        url = "https://open.feishu.cn/openapi-connector/auth/v1/app_access_token/internal"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                url,
+                json={"app_id": app_id, "app_secret": app_secret},
+                timeout=10.0,
+            )
+            data = resp.json()
+            if data.get("code") != 0:
+                raise ValueError(data.get("msg", "获取 token 失败"))
+            return {"message": "飞书连接成功", "tenant_access_token": "***"}
+
+    @staticmethod
+    async def _test_dingtalk_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试钉钉连接（调用 gettoken 接口）"""
+        config = integration.get_config()
+        app_key = config.get("app_key")
+        app_secret = config.get("app_secret")
+        if not app_key or not app_secret:
+            raise ValueError("钉钉配置缺少 app_key 或 app_secret")
+        url = "https://oapi.dingtalk.com/gettoken"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                url,
+                params={"appkey": app_key, "appsecret": app_secret},
+                timeout=10.0,
+            )
+            data = resp.json()
+            if data.get("errcode") != 0:
+                raise ValueError(data.get("errmsg", "获取 token 失败"))
+            return {"message": "钉钉连接成功", "access_token": "***"}
+
+    @staticmethod
+    async def _test_wecom_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试企业微信连接（调用 gettoken 接口）"""
+        config = integration.get_config()
+        corp_id = config.get("corp_id")
+        corp_secret = config.get("corp_secret")
+        if not corp_id or not corp_secret:
+            raise ValueError("企业微信配置缺少 corp_id 或 corp_secret")
+        url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                url,
+                params={"corpid": corp_id, "corpsecret": corp_secret},
+                timeout=10.0,
+            )
+            data = resp.json()
+            if data.get("errcode") != 0:
+                raise ValueError(data.get("errmsg", "获取 token 失败"))
+            return {"message": "企业微信连接成功", "access_token": "***"}
+
+    @staticmethod
+    async def _test_rest_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """通用 REST API 连接测试（ERP/PLM/CRM 等）"""
+        config = integration.get_config()
+        base_url = (config.get("base_url") or config.get("url") or "").rstrip("/")
+        if not base_url:
+            raise ValueError("配置缺少 base_url")
+        # 尝试 GET base_url 或 base_url/health 等
+        test_urls = [f"{base_url}/", base_url, f"{base_url}/health", f"{base_url}/api/health"]
+        auth = None
+        username = config.get("username") or config.get("user")
+        password = config.get("password")
+        if username and password:
+            auth = httpx.BasicAuth(username, password)
+        headers = {}
+        if config.get("api_key"):
+            headers["Authorization"] = f"Bearer {config.get('api_key')}"
+        elif config.get("token"):
+            headers["Authorization"] = f"Bearer {config.get('token')}"
+        async with httpx.AsyncClient() as client:
+            for u in test_urls:
+                try:
+                    resp = await client.get(u, auth=auth, headers=headers or None, timeout=10.0)
+                    if resp.status_code < 500:
+                        return {"message": "连接成功", "status_code": resp.status_code}
+                except Exception:
+                    continue
+        raise ValueError("无法连接到配置的 API 地址，请检查 base_url 和认证信息")

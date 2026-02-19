@@ -49,6 +49,8 @@ export interface FormModalTemplateProps {
   className?: string;
   /** 自定义 Modal 渲染（如包裹锚点元素供智能建议面板定位） */
   modalRender?: (modal: React.ReactNode) => React.ReactNode;
+  /** 底部额外内容（如测试连接按钮），渲染在创建/更新按钮后面 */
+  extraFooter?: ReactNode;
 }
 
 /**
@@ -85,6 +87,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   onValuesChange,
   className,
   modalRender,
+  extraFooter,
 }) => {
   const { token } = useToken();
   const internalFormRef = useRef<ProFormInstance>();
@@ -118,6 +121,12 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           resetButtonProps: {
             onClick: onClose,
           },
+          render: (_props: any, doms: React.ReactNode) => (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+              {doms}
+              {extraFooter}
+            </div>
+          ),
         }}
       >
         {children}

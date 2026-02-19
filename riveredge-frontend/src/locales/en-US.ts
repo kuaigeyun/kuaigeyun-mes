@@ -31,6 +31,7 @@ export default {
   'menu.system.files': 'File Management',
   'menu.system.apis': 'API Management',
   'menu.system.data-sources': 'Data Source Management',
+  'menu.system.application-connections': 'Application Connectors',
   'menu.system.datasets': 'Dataset Management',
   'menu.system.messages.config': 'Message Configuration',
   'menu.system.messages.template': 'Message Template',

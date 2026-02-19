@@ -150,7 +150,9 @@ export async function apiRequest<T = any>(
     url === '/register' ||
     url.startsWith('/register?') ||
     url.startsWith('/tenants/search') ||
-    url.startsWith('/tenants/check-domain');
+    url.startsWith('/tenants/check-domain') ||
+    url.startsWith('/apps/kuaireport/dashboards/shared') ||
+    url.startsWith('/apps/kuaireport/reports/shared');
   
   // ========== 重写：简化 Token 和 Tenant ID 获取逻辑 ==========
   

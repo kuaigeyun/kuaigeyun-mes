@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Table } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Dropdown } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, MoreOutlined, CopyOutlined, FormOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -25,18 +26,16 @@ import {
   ExecuteQueryResponse,
 } from '../../../../services/dataset';
 import {
-  getDataSourceList,
-  DataSource,
-} from '../../../../services/dataSource';
-import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-
-const { TextArea } = Input;
+  getDataConnectionsForDataset,
+  IntegrationConfig,
+} from '../../../../services/integrationConfig';
 
 /**
  * 数据集管理列表页面组件
  */
 const DatasetListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -46,9 +45,8 @@ const DatasetListPage: React.FC = () => {
   const [currentDatasetUuid, setCurrentDatasetUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [queryType, setQueryType] = useState<'sql' | 'api'>('sql');
-  const [queryConfigJson, setQueryConfigJson] = useState<string>('{}');
-  const [dataSources, setDataSources] = useState<DataSource[]>([]);
+  const [dataConnectionGroups, setDataConnectionGroups] = useState<{ label: string; options: { label: string; value: string }[] }[]>([]);
+  const [dataConnectionsFlat, setDataConnectionsFlat] = useState<IntegrationConfig[]>([]);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -62,59 +60,58 @@ const DatasetListPage: React.FC = () => {
   const [executingUuid, setExecutingUuid] = useState<string | null>(null);
 
   /**
-   * 加载数据源列表
+   * 加载数据连接列表（合并数据源 + 应用连接器）
    */
   useEffect(() => {
-    const loadDataSources = async () => {
+    const loadDataConnections = async () => {
       try {
-        const result = await getDataSourceList({ page: 1, page_size: 1000 });
-        setDataSources(result.items);
+        const { groups, items } = await getDataConnectionsForDataset();
+        setDataConnectionGroups(groups);
+        setDataConnectionsFlat(items);
       } catch (error: any) {
-        console.error('加载数据源列表失败:', error);
+        console.error('加载数据连接列表失败:', error);
       }
     };
-    loadDataSources();
+    loadDataConnections();
   }, []);
 
   /**
-   * 处理新建数据集
+   * 处理新建数据集（仅创建记录，不配置查询，创建后跳转设计器）
    */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentDatasetUuid(null);
-    setQueryType('sql');
-    setQueryConfigJson('{}');
     setFormInitialValues({
-      query_type: 'sql',
       is_active: true,
     });
     setModalVisible(true);
   };
 
   /**
-   * 处理编辑数据集
+   * 处理编辑数据集（仅编辑基本信息，查询配置在设计器中）
    */
   const handleEdit = async (record: Dataset) => {
     try {
       setIsEdit(true);
       setCurrentDatasetUuid(record.uuid);
-      setQueryType(record.query_type);
-      
-      // 获取数据集详情
       const detail = await getDatasetByUuid(record.uuid);
-      setQueryConfigJson(JSON.stringify(detail.query_config, null, 2));
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
-        query_type: detail.query_type,
-        data_source_uuid: detail.data_source_uuid,
         is_active: detail.is_active,
       });
       setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取数据集详情失败');
     }
+  };
+
+  /**
+   * 处理设计数据集（跳转到设计器，新建 tab）
+   */
+  const handleDesign = (record: Dataset) => {
+    navigate(`/system/datasets/designer?uuid=${record.uuid}`);
   };
 
   /**
@@ -134,6 +131,28 @@ const DatasetListPage: React.FC = () => {
   };
 
   /**
+   * 批量启用/禁用
+   */
+  const handleBatchStatus = async (enable: boolean) => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要操作的数据集');
+      return;
+    }
+    try {
+      let done = 0;
+      for (const uuid of selectedRowKeys) {
+        await updateDataset(String(uuid), { is_active: enable });
+        done++;
+      }
+      messageApi.success(`已${enable ? '启用' : '禁用'} ${done} 个数据集`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '操作失败');
+    }
+  };
+
+  /**
    * 处理删除数据集
    */
   const handleDelete = async (record: Dataset) => {
@@ -143,6 +162,29 @@ const DatasetListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  /**
+   * 处理复制数据集（创建副本后跳转设计器）
+   */
+  const handleCopy = async (record: Dataset) => {
+    try {
+      const detail = await getDatasetByUuid(record.uuid);
+      const created = await createDataset({
+        name: `${detail.name} (副本)`,
+        code: `${detail.code}_copy_${Date.now().toString(36)}`,
+        query_type: detail.query_type,
+        query_config: detail.query_config || {},
+        description: detail.description,
+        data_source_uuid: detail.data_source_uuid,
+        is_active: true,
+      } as CreateDatasetData);
+      messageApi.success('复制成功，即将打开设计器');
+      actionRef.current?.reload();
+      navigate(`/system/datasets/designer?uuid=${created.uuid}`);
+    } catch (error: any) {
+      messageApi.error(error?.message || '复制数据集失败');
     }
   };
 
@@ -185,46 +227,39 @@ const DatasetListPage: React.FC = () => {
 
   /**
    * 处理提交表单（创建/更新数据集）
+   * 新建：仅名称、代码、数据连接、描述、启用状态，创建后跳转设计器
+   * 编辑：仅基本信息
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
-      // 解析查询配置 JSON
-      let queryConfig: Record<string, any> = {};
-      try {
-        queryConfig = JSON.parse(queryConfigJson);
-      } catch (e) {
-        messageApi.error('查询配置 JSON 格式不正确');
-        throw new Error('查询配置 JSON 格式不正确');
-      }
-      
       if (isEdit && currentDatasetUuid) {
         await updateDataset(currentDatasetUuid, {
           name: values.name,
-          code: values.code,
           description: values.description,
-          query_type: values.query_type,
-          query_config: queryConfig,
           is_active: values.is_active,
         } as UpdateDatasetData);
         messageApi.success('更新成功');
+        setModalVisible(false);
+        setFormInitialValues(undefined);
+        actionRef.current?.reload();
       } else {
-        await createDataset({
+        const created = await createDataset({
           name: values.name,
           code: values.code,
-          query_type: values.query_type,
+          query_type: 'sql',
+          query_config: {},
           description: values.description,
-          query_config: queryConfig,
           data_source_uuid: values.data_source_uuid,
           is_active: values.is_active,
         } as CreateDatasetData);
-        messageApi.success('创建成功');
+        messageApi.success('创建成功，即将打开设计器');
+        setModalVisible(false);
+        setFormInitialValues(undefined);
+        actionRef.current?.reload();
+        navigate(`/system/datasets/designer?uuid=${created.uuid}`);
       }
-      
-      setModalVisible(false);
-      setFormInitialValues(undefined);
-      actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
@@ -249,13 +284,13 @@ const DatasetListPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '数据源',
+      title: '数据连接',
       dataIndex: 'data_source_uuid',
       width: 200,
       hideInSearch: true,
       render: (_, record) => {
-        const dataSource = dataSources.find(ds => ds.uuid === record.data_source_uuid);
-        return dataSource ? dataSource.name : record.data_source_uuid;
+        const conn = dataConnectionsFlat.find(c => c.uuid === record.data_source_uuid);
+        return conn ? conn.name : record.data_source_uuid;
       },
     },
     {
@@ -316,48 +351,56 @@ const DatasetListPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 300,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
+        <Space size="small">
+          <Button type="link" size="small" icon={<FormOutlined />} onClick={() => handleDesign(record)}>
+            设计
+          </Button>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             查看
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<PlayCircleOutlined />}
-            loading={executingUuid === record.uuid}
-            onClick={() => handleExecute(record)}
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'execute',
+                  icon: <PlayCircleOutlined />,
+                  label: '执行查询',
+                  onClick: () => handleExecute(record),
+                },
+                {
+                  key: 'copy',
+                  icon: <CopyOutlined />,
+                  label: '复制',
+                  onClick: () => handleCopy(record),
+                },
+                {
+                  key: 'delete',
+                  icon: <DeleteOutlined />,
+                  label: '删除',
+                  danger: true,
+                  onClick: () => {
+                    Modal.confirm({
+                      title: '确定要删除这个数据集吗？',
+                      okText: '确定',
+                      cancelText: '取消',
+                      okType: 'danger',
+                      onOk: () => handleDelete(record),
+                    });
+                  },
+                },
+              ],
+            }}
           >
-            执行
-          </Button>
-          <Popconfirm
-            title="确定要删除这个数据集吗？"
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              删除
+            <Button type="link" size="small" icon={<MoreOutlined />} loading={executingUuid === record.uuid}>
+              更多
             </Button>
-          </Popconfirm>
+          </Dropdown>
         </Space>
       ),
     },
@@ -419,19 +462,99 @@ const DatasetListPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建数据集
-            </Button>,
-          ]}
+          showCreateButton
+          onCreate={handleCreate}
+          createButtonText="新建数据集"
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
+          }}
+          toolBarRender={() =>
+            selectedRowKeys.length > 0
+              ? [
+                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>批量启用</Button>,
+                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>批量禁用</Button>,
+                ]
+              : []
+          }
+          showImportButton
+          onImport={async (data) => {
+            if (!data || data.length < 2) {
+              messageApi.warning('请填写导入数据');
+              return;
+            }
+            const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
+            const rows = data.slice(1).filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()));
+            const fieldMap: Record<string, string> = {
+              '数据集名称': 'name', 'name': 'name',
+              '数据集代码': 'code', 'code': 'code',
+              '数据连接UUID': 'data_source_uuid', 'data_source_uuid': 'data_source_uuid',
+              '查询类型': 'query_type', 'query_type': 'query_type',
+              '描述': 'description', 'description': 'description',
+              '启用状态': 'is_active', 'is_active': 'is_active',
+              '查询配置(JSON)': 'query_config_json', 'query_config_json': 'query_config_json',
+            };
+            let done = 0;
+            const ts = Date.now();
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              const obj: Record<string, any> = {};
+              headers.forEach((h, idx) => {
+                const field = fieldMap[h] || fieldMap[h?.trim()];
+                if (field && row[idx] != null) obj[field] = row[idx];
+              });
+              if (obj.name && obj.code && obj.data_source_uuid) {
+                let queryConfig: Record<string, any> = {};
+                if (obj.query_config_json) {
+                  try {
+                    queryConfig = JSON.parse(String(obj.query_config_json));
+                  } catch {
+                    queryConfig = {};
+                  }
+                }
+                const queryType = obj.query_type === 'api' ? 'api' : 'sql';
+                await createDataset({
+                  name: String(obj.name),
+                  code: `${String(obj.code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
+                  data_source_uuid: String(obj.data_source_uuid),
+                  query_type: queryType,
+                  query_config: queryConfig,
+                  description: obj.description ? String(obj.description) : undefined,
+                  is_active: obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',
+                });
+                done++;
+              }
+            }
+            messageApi.success(`成功导入 ${done} 个数据集`);
+            actionRef.current?.reload();
+          }}
+          importHeaders={['*数据集名称', '*数据集代码', '*数据连接UUID', '*查询类型', '描述', '启用状态', '*查询配置(JSON)']}
+          importExampleRow={['示例数据集', 'example_ds', 'uuid-of-data-source', 'sql', '选填', '是', '{"sql":"SELECT 1","parameters":{}}']}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: Dataset[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getDatasetByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              const res = await getDatasetList({ page: 1, page_size: 1000 });
+              items = res.items;
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `datasets-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
           }}
         />
       </ListPageTemplate>
@@ -455,6 +578,7 @@ const DatasetListPage: React.FC = () => {
           label="数据集名称"
           rules={[{ required: true, message: '请输入数据集名称' }]}
           placeholder="请输入数据集名称"
+          colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
@@ -465,72 +589,25 @@ const DatasetListPage: React.FC = () => {
           ]}
           placeholder="请输入数据集代码（唯一标识，如：user_list）"
           disabled={isEdit}
+          colProps={{ span: 12 }}
         />
-        <SafeProFormSelect
-          name="data_source_uuid"
-          label="数据源"
-          rules={[{ required: true, message: '请选择数据源' }]}
-          options={dataSources.map(ds => ({
-            label: `${ds.name} (${ds.type})`,
-            value: ds.uuid,
-          }))}
-          disabled={isEdit}
-        />
-        <SafeProFormSelect
-          name="query_type"
-          label="查询类型"
-          rules={[{ required: true, message: '请选择查询类型' }]}
-          options={[
-            { label: 'SQL', value: 'sql' },
-            { label: 'API', value: 'api' },
-          ]}
-          fieldProps={{
-            onChange: (value) => {
-              setQueryType(value);
-              // 根据类型设置默认配置
-              const defaultConfigs: Record<string, Record<string, any>> = {
-                sql: {
-                  sql: 'SELECT * FROM table_name WHERE condition = :param',
-                  parameters: {
-                    param: 'value',
-                  },
-                },
-                api: {
-                  endpoint: '/api/data',
-                  method: 'GET',
-                  params: {},
-                  headers: {},
-                },
-              };
-              setQueryConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
-            },
-          }}
-          disabled={isEdit}
-        />
+        {!isEdit && (
+          <SafeProFormSelect
+            name="data_source_uuid"
+            label="数据连接"
+            rules={[{ required: true, message: '请选择数据连接' }]}
+            options={dataConnectionGroups}
+            colProps={{ span: 12 }}
+          />
+        )}
         <ProFormTextArea
           name="description"
-          label="数据集描述"
-          placeholder="请输入数据集描述"
+          label="描述"
+          placeholder="选填"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
         />
-        <div>
-          <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-            查询配置（JSON）
-          </label>
-          <TextArea
-            value={queryConfigJson}
-            onChange={(e) => setQueryConfigJson(e.target.value)}
-            rows={10}
-            placeholder={queryType === 'sql' 
-              ? '请输入 SQL 查询配置（JSON 格式），例如：{"sql": "SELECT * FROM users WHERE status = :status", "parameters": {"status": "active"}}'
-              : '请输入 API 查询配置（JSON 格式），例如：{"endpoint": "/api/users", "method": "GET", "params": {"status": "active"}}'
-            }
-            style={{ fontFamily: CODE_FONT_FAMILY }}
-          />
-        </div>
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-        />
+        <ProFormSwitch name="is_active" label="是否启用" colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
@@ -541,6 +618,42 @@ const DatasetListPage: React.FC = () => {
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         dataSource={detailData}
+        extra={
+          detailData && (
+            <Space>
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setDrawerVisible(false);
+                  handleEdit(detailData);
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                icon={<PlayCircleOutlined />}
+                loading={executingUuid === detailData.uuid}
+                onClick={() => handleExecute(detailData)}
+              >
+                执行查询
+              </Button>
+              <Popconfirm
+                title="确定要删除这个数据集吗？"
+                onConfirm={() => {
+                  handleDelete(detailData);
+                  setDrawerVisible(false);
+                }}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          )
+        }
         columns={[
           {
             title: '数据集名称',
@@ -551,11 +664,11 @@ const DatasetListPage: React.FC = () => {
             dataIndex: 'code',
           },
           {
-            title: '数据源',
+            title: '数据连接',
             dataIndex: 'data_source_uuid',
             render: (value: string) => {
-              const dataSource = dataSources.find(ds => ds.uuid === value);
-              return dataSource ? `${dataSource.name} (${dataSource.type})` : value;
+              const conn = dataConnectionsFlat.find(c => c.uuid === value);
+              return conn ? `${conn.name} (${conn.type})` : value;
             },
           },
           {
@@ -634,7 +747,7 @@ const DatasetListPage: React.FC = () => {
             关闭
           </Button>,
         ]}
-        size={1000}
+        width={1000}
       >
         {executeLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

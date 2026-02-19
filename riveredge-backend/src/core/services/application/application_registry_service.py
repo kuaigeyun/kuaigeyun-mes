@@ -85,7 +85,7 @@ class ApplicationRegistryService:
 
             # 查询所有已安装且启用的应用（系统级配置，不按租户隔离）
             rows = await conn.fetch("""
-                SELECT uuid, code, name, description, version,
+                SELECT uuid, code, name, description, version, changelog,
                        route_path, entry_point, menu_config,
                        is_system, is_active, is_installed,
                        created_at, updated_at
@@ -442,7 +442,7 @@ class ApplicationRegistryService:
             try:
                 logger.info(f"🔍 查询应用 {app_code} 的数据库记录...")
                 rows = await conn.fetch("""
-                    SELECT uuid, code, name, description, version,
+                    SELECT uuid, code, name, description, version, changelog,
                            route_path, entry_point, menu_config,
                            is_system, is_active, is_installed,
                            created_at, updated_at

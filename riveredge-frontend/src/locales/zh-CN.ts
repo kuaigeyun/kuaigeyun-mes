@@ -32,6 +32,7 @@ export default {
   'menu.system.files': '文件管理',
   'menu.system.apis': '接口管理',
   'menu.system.data-sources': '数据源管理',
+  'menu.system.application-connections': '应用连接器',
   'menu.system.datasets': '数据集管理',
   'menu.system.messages.config': '消息配置',
   'menu.system.messages.template': '消息模板',
@@ -59,7 +60,7 @@ export default {
   'menu.infra.admin': '平台管理',
   'menu.group.user-management': '用户管理',
   'menu.group.core-config': '核心配置',
-  'menu.group.data-center': '数据中心',
+  'menu.group.data-center': '数据中心', // 数据接入、抽取与对外接口
   'menu.group.process-management': '流程管理',
   'menu.group.monitoring-ops': '监控运维',
   'menu.system.roles-permissions': '角色权限',

@@ -37,13 +37,15 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
     Returns:
         DatasetResponse: 数据集响应对象
     """
+    # 兼容历史错误数据：query_type 仅支持 sql/api，其他值（如 visual）归一为 sql
+    query_type = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
     return DatasetResponse(
         uuid=dataset.uuid,
         tenant_id=dataset.tenant_id,
         name=dataset.name,
         code=dataset.code,
         description=dataset.description,
-        query_type=dataset.query_type,
+        query_type=query_type,
         query_config=dataset.query_config,
         is_active=dataset.is_active,
         data_source_uuid=data_source_uuid,

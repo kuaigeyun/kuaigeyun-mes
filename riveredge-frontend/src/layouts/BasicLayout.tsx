@@ -191,7 +191,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const publicPaths = ['/login', '/debug/'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isInfraLoginPage = location.pathname === '/infra/login';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
+  // 报表/大屏分享页（通过 token 公开访问，无需登录）
+  const isSharedReportOrDashboard = location.pathname === '/apps/kuaireport/dashboards/shared' || location.pathname === '/apps/kuaireport/reports/shared';
+  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage || isSharedReportOrDashboard;
 
   // ⚠️ 关键修复：如果是调试页面，直接渲染内容，不受加载状态影响
   if (location.pathname.startsWith('/debug/')) {
@@ -290,6 +292,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/files': ManufacturingIcons.folder, // 文件管理 - 使用文件夹图标
       '/system/apis': ManufacturingIcons.api, // API管理 - 使用API图标
       '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
+      '/system/application-connections': ManufacturingIcons.network, // 应用连接 - 使用网络图标
       '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
       '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
       '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
@@ -514,7 +517,7 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
           },
         ],
       },
-      // 数据中心分组标题
+      // 数据中心分组：文件管理 → 接口管理 → 数据源管理 → 应用连接器 → 数据集管理
       {
         key: 'data-center-group',
         type: 'group',
@@ -536,6 +539,11 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/data-sources',
             name: t('menu.system.data-sources'),
             icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'),
+          },
+          {
+            path: '/system/application-connections',
+            name: t('menu.system.application-connections'),
+            icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'),
           },
           {
             path: '/system/datasets',
@@ -1169,8 +1177,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const handleApplicationStatusChange = () => {
       console.log('🔄 检测到应用状态变更，刷新菜单...');
-      // 清除 localStorage 缓存
+      // 清除 localStorage 缓存（需清除 v3，当前使用的缓存键）
       try {
+        localStorage.removeItem('applicationMenusCache_v3');
+        localStorage.removeItem('applicationMenusCache_v2');
         localStorage.removeItem('applicationMenusCache');
       } catch (error) {
         // 忽略清除错误
@@ -3735,6 +3745,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-global-header-logo h1,
         .ant-pro-global-header-logo a h1 {
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+        }
+        .ant-pro-global-header-logo h1{
+        line-height: 30px !important;
         }
         /* ==================== 顶栏布局调整 ==================== */
         /* 顶栏主容器：左侧 LOGO组 + 分割线 + 面包屑，右侧 操作按钮组 */

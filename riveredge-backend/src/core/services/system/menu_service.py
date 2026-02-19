@@ -48,10 +48,10 @@ class MenuService:
             tenant_id: 组织ID
         """
         try:
-            # 清除所有菜单相关的缓存（使用通配符）
-            # 注意：CacheManager 可能不支持通配符删除，这里先清除常见的缓存键
-            await cache_manager.delete("menu", f"{tenant_id}:list")
-            await cache_manager.delete("menu", f"{tenant_id}:tree")
+            # 使用通配符清除该租户的所有菜单相关缓存
+            # 模式为 "tenant_id:list*" 和 "tenant_id:tree*"
+            await cache_manager.delete_pattern("menu", f"{tenant_id}:list*")
+            await cache_manager.delete_pattern("menu", f"{tenant_id}:tree*")
         except Exception:
             # 缓存清除失败不影响主流程
             pass
@@ -792,18 +792,15 @@ class MenuService:
             logger.info(f"应用 {application_uuid} 菜单配置同步完成，删除 {len(deleted_uuids)} 个不再存在的菜单")
         
         logger.info(f"应用 {application_uuid} 菜单配置同步完成，创建/更新 {created_count} 个菜单")
-        
+
         # 菜单同步后，清除相关缓存，确保前端能立即获取最新菜单
         try:
-            # 清除该租户的所有菜单缓存
-            await cache_manager.delete("menu", f"{tenant_id}:list")
-            await cache_manager.delete("menu", f"{tenant_id}:tree")
-            # 清除所有可能的菜单树缓存（不同查询参数的缓存）
-            # 由于缓存键可能包含不同参数，我们清除所有以该租户开头的菜单缓存
-            # 注意：这里简化处理，实际应该根据缓存键模式清除
+            # 使用通配符清除该租户的所有菜单缓存
+            await cache_manager.delete_pattern("menu", f"{tenant_id}:list*")
+            await cache_manager.delete_pattern("menu", f"{tenant_id}:tree*")
             logger.debug(f"已清除租户 {tenant_id} 的菜单缓存")
         except Exception as e:
+            from loguru import logger
             logger.warning(f"清除菜单缓存失败: {e}")
-        
-        return created_count
 
+        return created_count

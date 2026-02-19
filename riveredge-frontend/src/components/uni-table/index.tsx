@@ -5,7 +5,7 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react'
+import React, { useRef, ReactNode, useState, useEffect } from 'react'
 import {
   ProTable,
   ActionType,
@@ -1473,7 +1473,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
           {/* 卡片视图 */}
           {currentViewType === 'card' && viewTypes.includes('card') && (
-            <div style={{ padding: '16px', minHeight: '400px' }}>
+            <div style={{ padding: '0 0 16px 0', minHeight: '400px' }}>
               {cardViewConfig?.renderCard ? (
                 tableData.length > 0 ? (
                   <div
@@ -1517,7 +1517,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
           {/* 看板视图 */}
           {currentViewType === 'kanban' && viewTypes.includes('kanban') && (
-            <div style={{ padding: '16px', minHeight: '400px' }}>
+            <div style={{ minHeight: '400px' }}>
               {kanbanViewConfig?.renderCard && kanbanViewConfig.statusGroups ? (
                 <div
                   style={{ display: 'flex', gap: '16px', overflowX: 'auto', minHeight: '400px' }}
@@ -1591,7 +1591,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
           {/* 统计视图 */}
           {currentViewType === 'stats' && viewTypes.includes('stats') && (
-            <div style={{ padding: '16px', minHeight: '400px' }}>
+            <div style={{ minHeight: '400px' }}>
               {statsViewConfig?.metrics ? (
                 <div>
                   <div

@@ -188,6 +188,31 @@ class CacheManager:
             self.stats.errors += 1
             return False
 
+    async def delete_pattern(self, namespace: str, pattern: str) -> int:
+        """
+        按照模式删除缓存
+
+        Args:
+            namespace: 命名空间
+            pattern: 匹配模式，如 "1:*"
+
+        Returns:
+            int: 删除的键数量
+        """
+        try:
+            # 构建完整的模式：riveredge:namespace:pattern
+            full_pattern = self._make_key(namespace, pattern)
+            result = await cache.delete_by_pattern(full_pattern)
+
+            if result > 0:
+                self.stats.deletes += result
+            return result
+
+        except Exception as e:
+            logger.warning(f"缓存模式删除失败: {e}")
+            self.stats.errors += 1
+            return 0
+
     async def exists(self, namespace: str, key: str) -> bool:
         """
         检查缓存是否存在
