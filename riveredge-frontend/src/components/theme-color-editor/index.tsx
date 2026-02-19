@@ -10,6 +10,7 @@ import { Popover, Space, App } from 'antd';
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getToken } from '../../utils/auth';
+import { useThemeStore } from '../../stores/themeStore';
 
 /**
  * 简化版主题颜色编辑器组件属性
@@ -139,22 +140,24 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
           };
           
           await updateSiteSetting({ settings });
-          
-          // 触发主题更新事件
-          window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-            detail: { themeConfig }
-          }));
-          
+
+          const currentConfig = useThemeStore.getState().config;
+          useThemeStore.getState().applyTheme(
+            useThemeStore.getState().theme,
+            { ...currentConfig, colorPrimary: colorPrimaryValue }
+          );
+
           message.success('主题颜色已更新');
         } catch (error: any) {
-          // 如果后端保存失败，仍然保存到 localStorage 作为预览
           localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
+          const currentConfig = useThemeStore.getState().config;
+          useThemeStore.getState().applyTheme(useThemeStore.getState().theme, { ...currentConfig, colorPrimary: colorPrimaryValue });
           message.warning('主题颜色已保存为预览（登录后将同步到服务器）');
         }
       } else {
-        // 未登录：保存到 localStorage 作为预览（不显示提示，静默保存）
+        // 未登录：保存到 localStorage 并应用主题到 store（预览）
         localStorage.setItem(THEME_COLOR_STORAGE_KEY, colorPrimaryValue);
-        // 不显示提示，让用户专注于预览效果
+        useThemeStore.getState().applyTheme('light', { colorPrimary: colorPrimaryValue });
       }
       
       setSelectedColor(colorPrimaryValue);
@@ -171,18 +174,17 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
   };
 
 
+  // 从 themeStore 同步颜色（当其他途径更新主题时）
+  const storeColorPrimary = useThemeStore((s) => s.config.colorPrimary);
+  useEffect(() => {
+    if (storeColorPrimary && storeColorPrimary !== selectedColor) {
+      setSelectedColor(storeColorPrimary);
+    }
+  }, [storeColorPrimary]);
+
   // 组件挂载时加载主题配置
   useEffect(() => {
     loadTheme();
-    
-    // 监听主题更新事件
-    const handleThemeUpdate = () => {
-      loadTheme();
-    };
-    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
-    return () => {
-      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
-    };
   }, []);
 
   const content = (

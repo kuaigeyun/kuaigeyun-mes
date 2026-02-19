@@ -16,7 +16,7 @@ import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { getDocumentRelations } from '../../../services/document-relation';
 import { downloadFile } from '../../../services/common';
 
 // 销售出库单接口定义

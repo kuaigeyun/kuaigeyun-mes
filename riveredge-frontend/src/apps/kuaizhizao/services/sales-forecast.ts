@@ -186,38 +186,7 @@ export async function exportSalesForecasts(params?: SalesForecastListParams): Pr
 }
 
 /**
- * 获取单据关联关系
+ * 单据关联已统一至 document-relation 服务，请使用 getDocumentRelations(documentType, documentId)
+ * @deprecated 使用 document-relation.getDocumentRelations
  */
-export interface DocumentRelation {
-  document_type: string;
-  document_id: number;
-  upstream_documents: Array<{
-    document_type: string;
-    document_id: number;
-    document_code?: string;
-    document_name?: string;
-    status?: string;
-    created_at?: string;
-  }>;
-  downstream_documents: Array<{
-    document_type: string;
-    document_id: number;
-    document_code?: string;
-    document_name?: string;
-    status?: string;
-    created_at?: string;
-  }>;
-  upstream_count: number;
-  downstream_count: number;
-}
-
-export async function getDocumentRelations(
-  documentType: string,
-  documentId: number
-): Promise<DocumentRelation> {
-  return apiRequest<DocumentRelation>(
-    `/apps/kuaizhizao/documents/${documentType}/${documentId}/relations`,
-    { method: 'GET' }
-  );
-}
 

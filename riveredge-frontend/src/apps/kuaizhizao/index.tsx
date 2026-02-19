@@ -5,12 +5,9 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 
-// 计划管理页面
+// 计划管理页面（MRP/LRP 已合并为统一需求计算 demand-computation）
 import DemandManagementPage from './pages/plan-management/demand-management';
 import DemandComputationPage from './pages/plan-management/demand-computation';
-// TODO: MRP和LRP已合并为统一需求计算，相关页面已删除
-// import MRPComputationPage from './pages/plan-management/mrp-computation';
-// import LRPComputationPage from './pages/plan-management/lrp-computation';
 import ProductionPlansPage from './pages/plan-management/production-plans';
 import SchedulingPage from './pages/plan-management/scheduling';
 
@@ -25,6 +22,7 @@ import SOPViewerKioskPage from './pages/production-execution/sop-viewer/kiosk';
 import DrawingViewerKioskPage from './pages/production-execution/drawing-viewer/kiosk';
 import ProgramViewerKioskPage from './pages/production-execution/program-viewer/kiosk';
 import ReworkOrdersPage from './pages/production-execution/rework-orders';
+// 委外管理：已统一整合至 OutsourceManagementPage，包含工序委外(OutsourceOrder)与委外工单(OutsourceWorkOrder)功能
 // import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
 // import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
 import OutsourceManagementPage from './pages/production-execution/outsource-management';
@@ -105,9 +103,6 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
       <Route path="plan-management/demand-computation" element={<DemandComputationPage />} />
-      {/* TODO: MRP和LRP路由已移除，已合并为统一需求计算 */}
-      {/* <Route path="plan-management/mrp-computation" element={<MRPComputationPage />} /> */}
-      {/* <Route path="plan-management/lrp-computation" element={<LRPComputationPage />} /> */}
       <Route path="plan-management/production-plans" element={<ProductionPlansPage />} />
       <Route path="plan-management/scheduling" element={<SchedulingPage />} />
 
@@ -127,7 +122,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/drawing-viewer/kiosk" element={<DrawingViewerKioskPage />} />
       <Route path="production-execution/program-viewer/kiosk" element={<ProgramViewerKioskPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
-      {/* 合并后的委外管理页面 */}
+      {/* 委外管理：整合工序委外与委外工单，路由 /outsource-management */}
       <Route path="production-execution/outsource-management" element={<OutsourceManagementPage />} />
       <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
       <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />

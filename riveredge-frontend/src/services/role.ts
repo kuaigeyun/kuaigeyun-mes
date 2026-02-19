@@ -14,12 +14,14 @@ import { apiRequest } from './api';
  * 权限信息接口
  */
 export interface Permission {
+  id: number;
   uuid: string;
   name: string;
   code: string;
   description?: string;
   resource: string;
   action: string;
+  permission_type: string;
   is_system: boolean;
   tenant_id: number;
   created_at: string;

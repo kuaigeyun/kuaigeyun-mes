@@ -14,6 +14,7 @@ import { getUserPreference } from '../../services/userPreference';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 import { useConfigStore } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { useThemeStore } from '../../stores/themeStore';
 import { getUserInfo, getTenantId } from '../../utils/auth';
 
 /**
@@ -167,10 +168,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
-  // 标签栏背景色状态
-  const [tabsBgColorState, setTabsBgColorState] = useState<string | undefined>(() => {
-    return (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-  });
+  // 从 themeStore 订阅标签栏背景色（单一数据源，无需事件监听）
+  const storeTabsBgColor = useThemeStore((s) => s.resolved.tabsBgColor);
+  const storeIsDark = useThemeStore((s) => s.resolved.isDark);
 
   /**
    * 根据路径或完整 tabKey 获取标签标题（key 可能含 query，标题按 pathname 查找）
@@ -830,22 +830,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     };
   }, [tabs, checkScrollability]);
 
-  // 监听主题更新事件，实时更新标签栏背景色
-  useEffect(() => {
-    const handleThemeUpdate = () => {
-      // 延迟一下，确保全局变量已经更新
-      setTimeout(() => {
-        const customBgColor = (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-        setTabsBgColorState(customBgColor);
-      }, 0);
-    };
-
-    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
-    return () => {
-      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
-    };
-  }, []);
-
   /**
    * 计算颜色的亮度值
    * @param color - 颜色值（十六进制或 rgb/rgba 格式）
@@ -882,47 +866,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return 255; // 默认返回浅色
   };
 
-  // 使用 Ant Design 原生方式判断是否为深色模式
-  // 通过检查 token 中的背景色值来判断（深色模式下 colorBgContainer 通常是深色）
-  // 更可靠的方法：检查 colorBgContainer 的亮度值
-  const isDarkMode = useMemo(() => {
-    const bgColor = token.colorBgContainer;
-    const brightness = calculateColorBrightness(bgColor);
-    // 如果亮度小于 128，认为是深色模式
-    return brightness < 128;
-  }, [token.colorBgContainer]);
-
   // 计算标签栏背景色（支持透明度）
   const tabsBgColor = useMemo(() => {
-    // 深色模式下，不使用自定义背景色，使用默认背景色
-    if (isDarkMode) {
-      return token.colorBgContainer;
-    }
-    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
-    const customBgColor = tabsBgColorState || (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-    return customBgColor || token.colorBgContainer;
-  }, [tabsBgColorState, token.colorBgContainer, isDarkMode]);
+    if (storeIsDark) return token.colorBgContainer;
+    return storeTabsBgColor || token.colorBgContainer;
+  }, [storeTabsBgColor, token.colorBgContainer, storeIsDark]);
 
-  // 根据标签栏背景色计算文字颜色（参考左侧菜单栏的实现）
+  // 根据标签栏背景色计算文字颜色
   const tabsTextColor = useMemo(() => {
-    // 深色模式下，使用深色模式的默认文字颜色
-    if (isDarkMode) {
-      return 'var(--ant-colorText)';
-    }
+    if (storeIsDark) return 'var(--ant-colorText)';
 
-    // 浅色模式下，检查是否有自定义背景色
-    const customBgColor = tabsBgColorState || (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+    const customBgColor = storeTabsBgColor;
 
     if (customBgColor) {
-      // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
-      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
       return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
-    } else {
-      // 如果没有自定义背景色（使用默认背景色），使用默认文字颜色
-      return 'var(--ant-colorText)';
     }
-  }, [tabsBgColorState, isDarkMode]);
+    return 'var(--ant-colorText)';
+  }, [storeTabsBgColor, storeIsDark]);
 
   /** 当前是否为 HMI/生产终端类页面（需使用专用内容容器：左右 16px padding + 系统圆角） */
   const isHMIPage = useMemo(() => {

@@ -1,0 +1,58 @@
+/**
+ * 工单与返工单 API
+ */
+
+import { apiRequest } from '../../../services/api';
+
+export const workOrderApi = {
+  list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
+  create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
+  update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'PUT', data }),
+  delete: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'DELETE' }),
+  get: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'GET' }),
+  release: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, { method: 'POST' }),
+  revoke: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' }),
+  complete: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST' }),
+  split: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data }),
+  getOperations: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'GET' }),
+  updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),
+  startOperation: async (workOrderId: string, operationId: number) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),
+  dispatchOperation: async (workOrderId: string, operationId: number, data: any) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data }),
+  freeze: async (id: string, data: { freeze_reason: string }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/freeze`, { method: 'POST', data }),
+  unfreeze: async (id: string, data?: { unfreeze_reason?: string }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/unfreeze`, { method: 'POST', data: data || {} }),
+  setPriority: async (id: string, data: { priority: string }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/priority`, { method: 'PUT', data }),
+  batchSetPriority: async (data: { work_order_ids: number[]; priority: string }) =>
+    apiRequest('/apps/kuaizhizao/work-orders/batch-priority', { method: 'PUT', data }),
+  batchUpdateDates: async (updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>) =>
+    apiRequest('/apps/kuaizhizao/work-orders/batch-update-dates', { method: 'PUT', data: { updates } }),
+  merge: async (data: { work_order_ids: number[]; remarks?: string }) =>
+    apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data }),
+  generateQRCode: async (workOrderId: string, workOrderCode: string, workOrderName: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateWorkOrder({
+      work_order_uuid: workOrderId,
+      work_order_code: workOrderCode,
+      material_code: workOrderName,
+    });
+  },
+  getPrintUrl: (id: string, templateUuid?: string) => {
+    const params = new URLSearchParams({ response_format: 'html' });
+    if (templateUuid) params.set('template_uuid', templateUuid);
+    return `/api/v1/apps/kuaizhizao/work-orders/${id}/print?${params}`;
+  },
+};
+
+export const reworkOrderApi = {
+  list: async (params?: any) => apiRequest('/apps/kuaizhizao/rework-orders', { method: 'GET', params }),
+  create: async (data: any) => apiRequest('/apps/kuaizhizao/rework-orders', { method: 'POST', data }),
+  update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'PUT', data }),
+  delete: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'DELETE' }),
+  get: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'GET' }),
+  createFromWorkOrder: async (workOrderId: string, data: any) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/rework`, { method: 'POST', data }),
+};

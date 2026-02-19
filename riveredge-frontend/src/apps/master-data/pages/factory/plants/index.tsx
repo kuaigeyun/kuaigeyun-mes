@@ -15,7 +15,7 @@ import type { Plant, PlantCreate, PlantUpdate } from '../../../types/factory';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { downloadFile } from '../../../../kuaizhizao/services/common';
+import { downloadFile } from '../../../../../utils';
 
 /**
  * 厂区管理列表页面组件

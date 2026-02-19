@@ -73,6 +73,27 @@ async def get_permission_list(
     )
 
 
+@router.get("/metadata")
+async def get_permission_metadata(
+    current_user: User = Depends(soil_get_current_user),
+):
+    """
+    获取权限元数据（模块分组、资源列表等），供前端构建权限树使用。
+    """
+    from core.config.permission_modules import (
+        PERMISSION_MODULE_MAP,
+        PERMISSION_MODULE_NAMES,
+    )
+
+    return {
+        "modules": [
+            {"key": k, "resources": v, "name": PERMISSION_MODULE_NAMES.get(k, k)}
+            for k, v in PERMISSION_MODULE_MAP.items()
+        ],
+        "module_names": PERMISSION_MODULE_NAMES,
+    }
+
+
 @router.get("/{permission_uuid}", response_model=PermissionResponse)
 async def get_permission(
     permission_uuid: str,

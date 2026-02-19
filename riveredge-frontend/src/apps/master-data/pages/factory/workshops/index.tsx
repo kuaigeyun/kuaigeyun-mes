@@ -17,7 +17,7 @@ const safeOptions = (options: any): any[] => {
   return [];
 };
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider } from 'antd';
-import { downloadFile } from '../../../../kuaizhizao/services/common';
+import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';

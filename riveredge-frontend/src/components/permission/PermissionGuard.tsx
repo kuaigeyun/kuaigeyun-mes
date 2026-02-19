@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { useModel } from '@umijs/max';
+import { useGlobalStore } from '../../stores/globalStore';
 import { hasPermission, hasAnyPermission, hasAllPermissions } from '../../utils/permission';
 
 export interface PermissionGuardProps {
@@ -42,26 +42,25 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   fallback = null,
   children,
 }) => {
-  const { initialState } = useModel('@@initialState');
-  const user = initialState?.currentUser;
+  const currentUser = useGlobalStore((s) => s.currentUser);
 
   let hasAccess = false;
 
   // 检查单个权限
   if (permission) {
-    hasAccess = hasPermission(user, permission);
+    hasAccess = hasPermission(currentUser, permission);
   }
   // 检查任意一个权限
   else if (anyPermission && anyPermission.length > 0) {
-    hasAccess = hasAnyPermission(user, anyPermission);
+    hasAccess = hasAnyPermission(currentUser, anyPermission);
   }
   // 检查所有权限
   else if (allPermissions && allPermissions.length > 0) {
-    hasAccess = hasAllPermissions(user, allPermissions);
+    hasAccess = hasAllPermissions(currentUser, allPermissions);
   }
   // 检查资源和操作
   else if (resource && action) {
-    hasAccess = hasPermission(user, `${resource}:${action}`);
+    hasAccess = hasPermission(currentUser, `${resource}:${action}`);
   }
   // 如果没有指定任何权限检查，默认显示
   else {

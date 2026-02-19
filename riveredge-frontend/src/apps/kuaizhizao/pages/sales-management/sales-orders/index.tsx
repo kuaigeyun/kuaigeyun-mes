@@ -15,6 +15,7 @@ import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Sele
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { AmountDisplay } from '../../../../../components/permission';
 import {
   listSalesOrders,
   getSalesOrder,
@@ -70,8 +71,22 @@ const OrderItemsExpandedRow: React.FC<{ orderId: number }> = ({ orderId }) => {
     { title: '规格', dataIndex: 'material_spec', key: 'material_spec', width: 100, ellipsis: true },
     { title: '单位', dataIndex: 'material_unit', key: 'material_unit', width: 60 },
     { title: '需求数量', dataIndex: 'required_quantity', key: 'required_quantity', width: 90, align: 'right' as const },
-    { title: '单价', dataIndex: 'unit_price', key: 'unit_price', width: 90, align: 'right' as const },
-    { title: '金额', dataIndex: 'item_amount', key: 'item_amount', width: 100, align: 'right' as const },
+    { 
+      title: '单价', 
+      dataIndex: 'unit_price', 
+      key: 'unit_price', 
+      width: 90, 
+      align: 'right' as const, 
+      render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> 
+    },
+    { 
+      title: '金额', 
+      dataIndex: 'item_amount', 
+      key: 'item_amount', 
+      width: 100, 
+      align: 'right' as const, 
+      render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> 
+    },
     { title: '交货日期', dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
   ];
   return (
@@ -1146,7 +1161,7 @@ const SalesOrdersPage: React.FC = () => {
                             const items = getFieldValue('items') ?? [];
                             const row = items[index];
                             const amt = (Number(row?.required_quantity) || 0) * (Number(row?.unit_price) || 0);
-                            return <span>{amt != null ? `¥${amt.toLocaleString()}` : '-'}</span>;
+                            return <AmountDisplay resource="sales_order" value={amt} />;
                           }}
                         </AntForm.Item>
                       ),
@@ -1332,8 +1347,8 @@ const SalesOrdersPage: React.FC = () => {
                     { title: '物料规格', dataIndex: 'material_spec', width: 120 },
                     { title: '单位', dataIndex: 'material_unit', width: 80 },
                     { title: '数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
-                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
-                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
+                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
                     { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
                     { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const, render: (text) => text || 0 },
                     { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const, render: (text) => text || 0 },

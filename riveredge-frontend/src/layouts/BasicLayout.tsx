@@ -78,6 +78,7 @@ import { getSiteSetting } from '../services/siteSetting';
 import { getFilePreview } from '../services/file';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
+import { useThemeStore } from '../stores/themeStore';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -988,17 +989,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const siteLogo = siteLogoUrl;
 
-  // 监听站点设置更新事件，刷新站点设置查询
-  useEffect(() => {
-    const handleSiteSettingUpdate = () => {
-      queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
-    };
-
-    window.addEventListener('siteThemeUpdated', handleSiteSettingUpdate);
-    return () => {
-      window.removeEventListener('siteThemeUpdated', handleSiteSettingUpdate);
-    };
-  }, [queryClient]);
+  // 站点设置更新由 site-settings 等页面保存时直接 invalidateQueries，不再依赖 siteThemeUpdated
 
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
   // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
@@ -1381,97 +1372,35 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return 255; // 默认返回浅色
   };
 
-  // 使用 Ant Design 原生方式判断是否为深色模式
-  // 通过检查 token 中的背景色值来判断（深色模式下 colorBgContainer 通常是深色）
-  // 更可靠的方法：检查 colorBgContainer 的亮度值
-  const isDarkMode = React.useMemo(() => {
-    const bgColor = token.colorBgContainer;
-    const brightness = calculateColorBrightness(bgColor);
-    // 如果亮度小于 128，认为是深色模式
-    return brightness < 128;
-  }, [token.colorBgContainer]);
+  // 从 themeStore 订阅主题相关状态（单一数据源，无需事件监听）
+  // 注意：必须分别订阅，避免选择器返回新对象导致无限重渲染
+  const storeSiderBg = useThemeStore((s) => s.resolved.siderBgColor);
+  const storeHeaderBg = useThemeStore((s) => s.resolved.headerBgColor);
+  const isDarkMode = useThemeStore((s) => s.resolved.isDark);
 
-  // 菜单栏背景色状态（用于响应主题更新）
-  const [siderBgColorState, setSiderBgColorState] = useState<string | undefined>(() => {
-    return (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-  });
-
-  // 顶栏背景色状态（用于响应主题更新）
-  const [headerBgColorState, setHeaderBgColorState] = useState<string | undefined>(() => {
-    return (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-  });
-
-  // 监听主题更新事件，实时更新菜单栏和顶栏背景色
-  const themeUpdateTimeoutRef = useRef<NodeJS.Timeout>();
-  
   useEffect(() => {
-    const handleThemeUpdate = () => {
-      // 防抖处理：清除之前的定时器
-      if (themeUpdateTimeoutRef.current) {
-        clearTimeout(themeUpdateTimeoutRef.current);
-      }
-      
-      // 延迟执行，合并短时间内的多次更新
-      themeUpdateTimeoutRef.current = setTimeout(() => {
-        const customSiderBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-        const customHeaderBgColor = (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-        
-        // 使用函数式更新确保拿到最新状态，且避免不必要的重渲染（如果值未变）
-        setSiderBgColorState((prev) => prev !== customSiderBgColor ? customSiderBgColor : prev);
-        setHeaderBgColorState((prev) => prev !== customHeaderBgColor ? customHeaderBgColor : prev);
-
-        // 固定使用 MIX 布局模式
-        (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
-      }, 50); // 增加延迟到 50ms 以确保所有样式计算完成
-    };
-
-    // 初始执行一次
-    handleThemeUpdate();
-
-    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
-    // 新增监听 theme-applied 事件，确保 App.tsx 初始化完成后能及时更新
-    window.addEventListener('theme-applied', handleThemeUpdate);
-    
-    return () => {
-      if (themeUpdateTimeoutRef.current) {
-        clearTimeout(themeUpdateTimeoutRef.current);
-      }
-      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
-      window.removeEventListener('theme-applied', handleThemeUpdate);
-    };
+    (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
   }, []);
 
   // 计算菜单栏背景色和对应的文字颜色
   const siderBgColor = React.useMemo(() => {
-    // 深色模式下，不使用自定义背景色，使用默认背景色
-    if (isDarkMode) {
-      return token.colorBgContainer;
-    }
-    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
-    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-    return customBgColor || token.colorBgContainer;
-  }, [siderBgColorState, token.colorBgContainer, isDarkMode]);
+    if (isDarkMode) return token.colorBgContainer;
+    return storeSiderBg || token.colorBgContainer;
+  }, [storeSiderBg, token.colorBgContainer, isDarkMode]);
 
   // 计算顶栏背景色（支持透明度）
   const headerBgColor = React.useMemo(() => {
-    // 深色模式下，不使用自定义背景色，使用默认背景色
-    if (isDarkMode) {
-      return token.colorBgContainer;
-    }
-    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
-    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-    return customBgColor || token.colorBgContainer;
-  }, [headerBgColorState, token.colorBgContainer, isDarkMode]);
+    if (isDarkMode) return token.colorBgContainer;
+    return storeHeaderBg || token.colorBgContainer;
+  }, [storeHeaderBg, token.colorBgContainer, isDarkMode]);
 
   // 根据顶栏背景色计算文字颜色（参考左侧菜单栏的实现）
   const headerTextColor = React.useMemo(() => {
-    // 深色模式下，使用深色模式的默认文字颜色
     if (isDarkMode) {
       return 'var(--ant-colorText)';
     }
 
-    // 浅色模式下，检查是否有自定义背景色
-    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+    const customBgColor = storeHeaderBg;
 
     if (customBgColor) {
       // 如果有自定义背景色，根据背景色亮度计算文字颜色
@@ -1482,7 +1411,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 如果没有自定义背景色（使用默认背景色），使用默认文字颜色
       return 'var(--ant-colorText)';
     }
-  }, [headerBgColorState, isDarkMode]);
+  }, [storeHeaderBg, isDarkMode]);
 
   // 判断显示模式：浅色模式浅色背景
   const isLightModeLightBg = React.useMemo(() => {
@@ -1497,18 +1426,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 浅色模式下，检查是否有自定义背景色
-    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+    const customBgColor = storeSiderBg;
 
     if (customBgColor) {
-      // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
-      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
       return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
-    } else {
-      // 如果没有自定义背景色（使用默认背景色），按浅色背景处理，使用深色文字
-      return 'var(--ant-colorText)';
     }
-  }, [siderBgColorState, isDarkMode]);
+    return 'var(--ant-colorText)';
+  }, [storeSiderBg, isDarkMode]);
 
   /**
    * 检查锁屏状态，如果已锁定则重定向到锁屏页

@@ -9,6 +9,7 @@ from tortoise.expressions import Q
 
 from core.models.permission import Permission, PermissionType
 from core.models.role import Role
+from core.models.role_permission import RolePermission
 from infra.exceptions.exceptions import NotFoundError
 
 
@@ -72,23 +73,22 @@ class PermissionService:
         total = await query.count()
         permissions = await query.offset((page - 1) * page_size).limit(page_size).all()
         
-        # ⚠️ 修复：暂时注释掉多对多关系查询，避免数据库字段不存在错误
-        # TODO: 后续需要通过数据库迁移正确建立多对多关系后，再启用此查询
-        # 获取关联的角色数量
+        # 获取关联的角色数量（通过 RolePermission 中间表）
         result = []
         for permission in permissions:
-            # ⚠️ 临时修复：暂时不查询角色数量，避免多对多关系查询错误
-            # 多对多关系查询需要正确的中间表字段，当前数据库结构可能不完整
-            # role_count = await Role.filter(
-            #     permissions__id=permission.id,
-            #     tenant_id=tenant_id,
-            #     deleted_at__isnull=True
-            # ).count()
-            
-            # 临时方案：使用 0 作为默认值，或者通过其他方式获取（如直接查询中间表）
-            # 如果需要显示角色数量，可以通过详情接口获取
-            role_count = 0
-            
+            rp_role_ids = await RolePermission.filter(
+                permission_id=permission.id
+            ).values_list("role_id", flat=True)
+            role_count = (
+                await Role.filter(
+                    id__in=rp_role_ids,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).count()
+                if rp_role_ids
+                else 0
+            )
+
             result.append({
                 "uuid": permission.uuid,
                 "name": permission.name,

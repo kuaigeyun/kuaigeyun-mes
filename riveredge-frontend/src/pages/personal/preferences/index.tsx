@@ -10,11 +10,10 @@ import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-des
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Slider, Form, Row, Col, Divider, Typography } from 'antd';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
+import { useThemeStore } from '../../../stores/themeStore';
 import { getLanguageList, Language } from '../../../services/language';
 import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
 import i18n from '../../../config/i18n';
-
-const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
 
 /** 将 ColorPicker 的值规范为 hex 字符串 */
 function normalizeColor(value: any, defaultVal: string = ''): string {
@@ -148,21 +147,10 @@ const UserPreferencesPage: React.FC = () => {
    */
   const handleSubmit = async (values: any) => {
     try {
-      // 在保存期间设置标志，阻止 userPreferenceUpdated 事件触发额外渲染
-      // (updatePreferences 内部会 dispatch userPreferenceUpdated，但我们想只在最后统一应用一次主题)
-      (window as any).__RIVEREDGE_THEME_SAVING__ = true;
-      
-      await updatePreferences(values);
-      
-      (window as any).__RIVEREDGE_THEME_SAVING__ = false;
-      
-      messageApi.success('偏好设置更新成功');
-
-      // 若包含主题配置，同步到本地并触发主题应用（与主题编辑面板一致）
+      // 若包含主题配置，先应用到 themeStore（单一数据源），再持久化到 API
       const tc = values.theme_config;
       if (tc) {
-        const fullThemeConfig = {
-          theme: values.theme || 'light',
+        const mergedConfig = {
           colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
           borderRadius: tc.borderRadius ?? 6,
           fontSize: tc.fontSize ?? 14,
@@ -171,15 +159,15 @@ const UserPreferencesPage: React.FC = () => {
           headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
           tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
         };
-        localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(fullThemeConfig));
+        useThemeStore.getState().applyTheme((values.theme as 'light' | 'dark' | 'auto') || 'light', mergedConfig);
         if (values.tabs_persistence !== undefined) {
           localStorage.setItem('riveredge_tabs_persistence', String(!!values.tabs_persistence));
         }
-        // 一次性触发 siteThemeUpdated，app.tsx 只需应用一次
-        window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-          detail: { themeConfig: fullThemeConfig },
-        }));
       }
+
+      await updatePreferences(values);
+
+      messageApi.success('偏好设置更新成功');
 
       // 如果语言变更，重新加载用户语言和翻译内容
       if (values.language && values.language !== i18n.language) {
@@ -187,7 +175,6 @@ const UserPreferencesPage: React.FC = () => {
         await refreshTranslations();
       }
     } catch (error: any) {
-      (window as any).__RIVEREDGE_THEME_SAVING__ = false;
       messageApi.error(error.message || '更新失败');
     }
   };

@@ -3,6 +3,7 @@ import { App, Form, InputNumber, Button, Space, Row, Col, ColorPicker, Tooltip }
 import { SaveOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../../stores/configStore';
+import { useThemeStore } from '../../../stores/themeStore';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { Color } from 'antd/es/color-picker';
 
@@ -44,9 +45,7 @@ const SystemParametersPage: React.FC = () => {
       const values = await form.validateFields();
       await updateConfigs(values);
       message.success(t('pages.system.parameters.saveSuccess', '保存成功'));
-      
-      // 触发主题更新事件，通知 BasicLayout 刷新配置
-      window.dispatchEvent(new Event('siteThemeUpdated'));
+      useThemeStore.getState().initFromApi();
       
       // 提示用户某些设置可能需要刷新页面才能生效
       message.info(t('pages.system.parameters.saveInfo', '部分设置（如主题色、页面大小）可能需要刷新页面才能完全生效'));
