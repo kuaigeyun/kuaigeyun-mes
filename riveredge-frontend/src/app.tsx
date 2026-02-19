@@ -33,8 +33,8 @@ if (typeof window !== 'undefined') {
   (window as any).__ANTD_MESSAGE__ = null;
 }
 
-// 权限守卫组件
-const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// 权限守卫组件（memo 阻断上层频繁重渲染的级联）
+const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const location = useLocation();
   const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
 
@@ -84,12 +84,16 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次，使用 initializedRef 确保只执行一次
 
-  // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
-  // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
-  const publicPaths = ['/login', '/debug/'];
-  // 平台登录页是公开的，但其他平台页面需要登录
-  const isInfraLoginPage = location.pathname === '/infra/login';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
+  // 公开页面：根路径、登录、初始化向导等，无需鉴权即可访问
+  const pathname = location.pathname;
+  const isPublicPath = pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname === '/infra/login' ||
+    pathname.startsWith('/lock-screen') ||
+    pathname.startsWith('/init/') ||
+    pathname.startsWith('/debug/') ||
+    pathname.startsWith('/qrcode/');
+  const isInfraLoginPage = pathname === '/infra/login';
 
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
@@ -162,8 +166,13 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [isError, error, setCurrentUser]);
 
   useEffect(() => {
+    // 公开页面不拉取用户信息，直接清除 loading，避免登录页循环加载
+    if (isPublicPath) {
+      setLoading(false);
+      return;
+    }
     setLoading(isLoading);
-  }, [isLoading, setLoading]);
+  }, [isLoading, isPublicPath, setLoading]);
 
   // 引入 useConfigStore
   const { fetchConfigs, getConfig, initialized: configInitialized } = useConfigStore();
@@ -321,13 +330,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return null;
   }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken]);
 
-  // ⚠️ 关键修复：移除所有条件返回，确保每次渲染都调用相同数量的 Hook
-  // 使用状态变量控制渲染内容
+  // ⚠️ 关键修复：公开页面且无 token 时，直接渲染，跳过 loading/redirect，避免登录页循环加载
+  if (isPublicPath && !hasToken) {
+    return <>{children}</>;
+  }
+
   const shouldBypassAuth = isMasterDataPath || isDebugPath;
-  const shouldShowLoading = loading || isLoading;
+  const shouldShowLoading = !isPublicPath && (loading || isLoading);
   const shouldRedirect = redirectTarget !== null;
 
-  // 根据状态决定渲染内容
   if (shouldBypassAuth) {
     return <>{children}</>;
   }
@@ -350,7 +361,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return <>{children}</>;
-};
+});
 
 /**
  * ⚠️ 关键：必须定义在 App 函数外部（模块级别）
@@ -384,10 +395,11 @@ const AppContent: React.FC = () => {
     }
   }, [touchScreen.isTouchScreenMode]);
 
+  const routesElement = React.useMemo(() => <MainRoutes />, []);
   return (
     <ErrorBoundary>
       <AuthGuard>
-        <MainRoutes />
+        {routesElement}
       </AuthGuard>
     </ErrorBoundary>
   );
@@ -396,7 +408,9 @@ const AppContent: React.FC = () => {
 // 主应用组件
 export default function App() {
 
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const initFromApi = useThemeStore((s) => s.initFromApi);
+  const themeInitialized = useThemeStore((s) => s.initialized);
   const subscribeToSystemTheme = useThemeStore((s) => s.subscribeToSystemTheme);
   const themeMode = useThemeStore((s) => s.theme);
 
@@ -413,6 +427,14 @@ export default function App() {
     });
   }, [initFromApi]);
 
+  // 退出后重新登录时，clearForLogout 会将 initialized 置为 false，
+  // 需在用户登录成功后重新拉取主题偏好，无需刷新页面
+  useEffect(() => {
+    if (currentUser && getToken() && !themeInitialized) {
+      initFromApi();
+    }
+  }, [currentUser, themeInitialized, initFromApi]);
+
   // 监听系统主题变化（当 theme=auto 时）
   useEffect(() => {
     return subscribeToSystemTheme();
@@ -420,10 +442,10 @@ export default function App() {
 
 
   const resolved = useThemeStore((s) => s.resolved);
-  const finalThemeConfig = {
-    algorithm: resolved.algorithm,
-    token: resolved.token,
-  };
+  const finalThemeConfig = React.useMemo(
+    () => ({ algorithm: resolved.algorithm, token: resolved.token }),
+    [resolved.algorithm, resolved.token]
+  );
 
   return (
     <ConfigProvider theme={finalThemeConfig}>

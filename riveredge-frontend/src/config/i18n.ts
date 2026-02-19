@@ -9,6 +9,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getTranslations } from '../services/language';
 import { getUserPreference } from '../services/userPreference';
+import { getToken } from '../utils/auth';
 
 // 默认语言包（本地静态文件，作为后备）
 import zhCN from '../locales/zh-CN';
@@ -95,9 +96,14 @@ i18n
  * 加载用户选择的语言
  * 
  * 从用户偏好设置中读取语言设置，并加载对应的翻译内容
+ * ⚠️ 未登录时不调用需认证的 API，避免 401 触发 window.location 导致登录页无限刷新
  */
 export async function loadUserLanguage(): Promise<void> {
   try {
+    if (!getToken()) {
+      await i18n.changeLanguage('zh-CN');
+      return;
+    }
     // 获取用户偏好设置
     const preference = await getUserPreference().catch((error) => {
       // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）

@@ -51,10 +51,11 @@ export default function LoginPage() {
   const { setCurrentUser } = useGlobalStore();
 
   // 获取平台设置（公开接口）
-  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useQuery({
+  const { data: platformSettings, isLoading: isLoadingPlatformSettings, failureCount, status } = useQuery({
     queryKey: ['platformSettingsPublic'],
     queryFn: getPlatformSettingsPublic,
     staleTime: 5 * 60 * 1000, // 5分钟缓存
+    retry: false, // 后端不可达时不无限重试，避免长时间 loading
   });
 
   // 从缓存读取平台设置作为初始值，避免闪烁
@@ -114,9 +115,8 @@ export default function LoginPage() {
   // 加载LOGO URL
   useEffect(() => {
     const loadLogo = async () => {
-      // 如果正在加载平台设置，先隐藏LOGO，避免显示默认值
+      // 平台设置加载中时不阻塞默认 logo 显示，避免 API 不可达时长期空白
       if (isLoadingPlatformSettings) {
-        setIsLogoLoaded(false);
         return;
       }
 
@@ -1274,7 +1274,7 @@ export default function LoginPage() {
         className="logo-header"
         style={{
           background: themeColor,
-          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
         }}
       >
@@ -1283,7 +1283,7 @@ export default function LoginPage() {
           alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
           className="logo-img"
           style={{
-            opacity: (isLogoLoaded || logoUrl !== '/img/logo.png') && (!isLoadingPlatformSettings || cachedPlatformName || platformSettings) ? 1 : 0,
+            opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
             transition: 'opacity 0.3s ease-in-out',
           }}
           onError={(e) => {
@@ -1313,7 +1313,7 @@ export default function LoginPage() {
           }}
         />
         <Title level={2} className="logo-title" style={{
-          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
         }}>
           {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
@@ -1329,7 +1329,7 @@ export default function LoginPage() {
       >
         {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left" style={{
-          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
           transition: 'opacity 0.3s ease-in-out',
         }}>
           <img 
@@ -1337,7 +1337,7 @@ export default function LoginPage() {
             alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
             className="logo-img"
             style={{
-              opacity: (isLogoLoaded || logoUrl !== '/img/logo.png') && (!isLoadingPlatformSettings || cachedPlatformName || platformSettings) ? 1 : 0,
+              opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
               transition: 'opacity 0.3s ease-in-out',
             }}
             onError={(e) => {
@@ -1368,7 +1368,7 @@ export default function LoginPage() {
             }}
           />
           <Title level={2} className="logo-title" style={{
-            opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+            opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
             transition: 'opacity 0.3s ease-in-out',
           }}>
             {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
@@ -1422,7 +1422,7 @@ export default function LoginPage() {
         <div className="login-form-wrapper">
           <div className="login-form-header">
             <Title level={2} className="form-title" style={{
-              opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+              opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
               transition: 'opacity 0.3s ease-in-out',
             }}>
               {(platformSettings?.platform_name || cachedPlatformName) ? `欢迎登录 ${platformSettings?.platform_name || cachedPlatformName}` : '欢迎登录'}

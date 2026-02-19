@@ -359,15 +359,14 @@ export async function apiRequest<T = any>(
             // 忽略导入错误
           }
           
-          // 跳转到登录页
-          // 判断当前路径，决定跳转到哪个登录页
+          // 跳转到登录页（若已在登录页则不重定向，避免 401 导致无限刷新循环）
           const currentPath = window.location.pathname;
-          if (currentPath.startsWith('/infra')) {
-            // 平台级路由跳转到平台登录页
-            window.location.href = '/infra/login';
-          } else {
-            // 系统级路由跳转到用户登录页
-            window.location.href = '/login';
+          if (currentPath !== '/login' && currentPath !== '/infra/login') {
+            if (currentPath.startsWith('/infra')) {
+              window.location.href = '/infra/login';
+            } else {
+              window.location.href = '/login';
+            }
           }
           
           const error = new Error('认证已过期，请重新登录') as any;

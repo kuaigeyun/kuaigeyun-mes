@@ -14,17 +14,18 @@
  * - BasicLayout 统一管理，系统级和应用级路由共享同一个布局实例，避免页面刷新
  */
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import BasicLayout from '../layouts/BasicLayout';
-
 // 系统核心路由（不依赖应用加载）
 import SystemRoutes from './SystemRoutes';
 // 应用业务路由（异步加载，隔离错误）
 import AppRoutes from './AppRoutes';
-// 报表/大屏分享页（全屏展示，无需登录）
-import ReportSharedView from '../apps/kuaireport/pages/ReportSharedView';
-import DashboardSharedView from '../apps/kuaireport/pages/DashboardSharedView';
+import PageSkeleton from '../components/page-skeleton';
+
+// 报表/大屏分享页（按需加载，避免 kuaireport 进入主包）
+const ReportSharedView = React.lazy(() => import('../apps/kuaireport/pages/ReportSharedView'));
+const DashboardSharedView = React.lazy(() => import('../apps/kuaireport/pages/DashboardSharedView'));
 
 /**
  * 判断当前路径是否需要 BasicLayout
@@ -78,6 +79,8 @@ const useShouldRenderLayout = (): boolean => {
  * - 系统级和应用级路由：统一包裹 BasicLayout，共享同一个布局实例
  */
 const MainRoutes: React.FC = () => {
+  const location = useLocation();
+  const pathname = location.pathname;
   const shouldRenderLayout = useShouldRenderLayout();
 
   return (
@@ -96,9 +99,9 @@ const MainRoutes: React.FC = () => {
         </BasicLayout>
       ) : (
         <Routes>
-          {/* 报表/大屏分享页 - 全屏展示，无需登录 */}
-          <Route path="/apps/kuaireport/dashboards/shared" element={<DashboardSharedView />} />
-          <Route path="/apps/kuaireport/reports/shared" element={<ReportSharedView />} />
+          {/* 报表/大屏分享页 - 按需加载，全屏展示 */}
+          <Route path="/apps/kuaireport/dashboards/shared" element={<Suspense fallback={<PageSkeleton />}><DashboardSharedView /></Suspense>} />
+          <Route path="/apps/kuaireport/reports/shared" element={<Suspense fallback={<PageSkeleton />}><ReportSharedView /></Suspense>} />
           {/* 公开路由 - 不需要 BasicLayout，直接渲染 SystemRoutes */}
           <Route path="/*" element={<SystemRoutes />} />
         </Routes>

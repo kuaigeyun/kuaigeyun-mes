@@ -16,24 +16,11 @@ import {
   Space,
   Tag,
   Button,
-  App
 } from 'antd';
 import {
   UserOutlined,
-  TeamOutlined,
-  FileTextOutlined,
   SettingOutlined,
-  BellOutlined,
-  ThunderboltOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
-  RightOutlined,
-  ShopOutlined,
-  ExperimentOutlined,
-  DatabaseOutlined,
-  CloudServerOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
   RiseOutlined,
   FallOutlined,
   DollarOutlined,
@@ -42,27 +29,10 @@ import {
   PieChartOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { DashboardTemplate } from '../../../components/layout-templates';
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart as RechartsBarChart,
-  Line,
-  LineChart,
-  Pie,
-  PieChart as RechartsPieChart,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import { Area, Pie } from '@ant-design/charts';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // 模拟数据API
 const fetchSalesData = async () => {
@@ -109,8 +79,6 @@ const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
  * 分析页页面组件
  */
 export default function AnalysisPage() {
-  const { message } = App.useApp();
-  const navigate = useNavigate();
 
   // 获取销售数据
   const { data: salesData, isLoading: salesLoading } = useQuery({
@@ -233,29 +201,21 @@ export default function AnalysisPage() {
             }
             loading={salesLoading}
           >
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={salesData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value, name) => [
-                    name === 'sales' ? `¥${value}` : value,
-                    name === 'sales' ? '销售额' : '订单数'
-                  ]}
-                />
-                <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="sales"
-                  stackId="1"
-                  stroke="#1890ff"
-                  fill="#1890ff"
-                  fillOpacity={0.6}
-                  name="销售额"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div style={{ height: 300 }}>
+              <Area
+                {...({
+                  data: salesData || [],
+                  xField: 'month',
+                  yField: 'sales',
+                  smooth: true,
+                  areaStyle: { fill: '#1890ff', fillOpacity: 0.6 },
+                  color: '#1890ff',
+                  xAxis: { title: { text: '月份' } },
+                  yAxis: { title: { text: '销售额' }, label: { formatter: (v: string) => `¥${v}` } },
+                  tooltip: { formatter: (datum: any) => ({ name: '销售额', value: `¥${datum.sales}` }) },
+                } as any)}
+              />
+            </div>
           </Card>
         </Col>
 
@@ -270,25 +230,17 @@ export default function AnalysisPage() {
             }
             loading={productLoading}
           >
-            <ResponsiveContainer width="100%" height={300}>
-              <RechartsPieChart>
-                <Pie
-                  data={productData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {productData?.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </RechartsPieChart>
-            </ResponsiveContainer>
+            <div style={{ height: 300 }}>
+              <Pie
+                data={productData || []}
+                angleField="value"
+                colorField="name"
+                color={(datum: { color?: string }) => datum.color ?? COLORS[0]}
+                radius={0.8}
+                label={{ type: 'inner', formatter: (_: any, item: any) => `${item.name} ${((item.value / (productData?.reduce((s, d) => s + d.value, 0) || 1)) * 100).toFixed(0)}%` }}
+                tooltip={{ fields: ['name', 'value'], formatter: (datum: any) => ({ name: datum.name, value: datum.value }) }}
+              />
+            </div>
           </Card>
         </Col>
       </Row>
