@@ -39,7 +39,7 @@ import {
 } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, CartesianGrid } from 'recharts';
+import { Pie, Column } from '@ant-design/charts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTenantStatistics } from '../../../services/superadmin';
 // import type { TenantStatistics } from '../../../services/superadmin';
@@ -522,26 +522,17 @@ export default function OperationsDashboard() {
               loading={loading}
             >
               {statusChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {statusChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div style={{ height: 300 }}>
+                  <Pie
+                    data={statusChartData}
+                    angleField="value"
+                    colorField="name"
+                    color={(datum: { name: string }) => statusChartData.find((d) => d.name === datum.name)?.color ?? '#1890ff'}
+                    radius={0.8}
+                    label={{ type: 'outer', formatter: (_: any, item: any) => `${item.name}: ${((item.value / (statusChartData.reduce((s, d) => s + d.value, 0) || 1)) * 100).toFixed(0)}%` }}
+                    tooltip={{ fields: ['name', 'value'] }}
+                  />
+                </div>
               ) : (
                 <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               )}
@@ -558,20 +549,17 @@ export default function OperationsDashboard() {
               loading={loading}
             >
               {planChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={planChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Legend />
-                    <Bar dataKey="value" fill="#1890ff">
-                      {planChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: 300 }}>
+                  <Column
+                    data={planChartData}
+                    xField="name"
+                    yField="value"
+                    color={(datum: { color?: string }) => datum.color ?? '#1890ff'}
+                    columnStyle={{ radius: [0, 4, 4, 0] }}
+                    xAxis={{ label: { autoRotate: true } }}
+                    tooltip={{ fields: ['name', 'value'] }}
+                  />
+                </div>
               ) : (
                 <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               )}

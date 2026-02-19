@@ -146,55 +146,37 @@ export default defineConfig({
   },
   // 构建配置 - 优化性能
   build: {
+    // 单块告警阈值（KB），拆分后各块仍可能较大
+    chunkSizeWarningLimit: 800,
     // 生产环境配置
     sourcemap: process.env.NODE_ENV === 'production' ? false : true, // 生产环境关闭sourcemap，减小体积
     minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
     // 代码分割配置（按依赖类型分割，不按路由分割，避免菜单加载慢）
     rollupOptions: {
       output: {
-        // 手动代码分割策略
+        // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
-          // node_modules 中的依赖单独打包
           if (id.includes('node_modules')) {
-            // React 相关库单独打包
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react';
-            }
-            // Ant Design 相关库单独打包
-            if (id.includes('antd') || id.includes('@ant-design')) {
-              return 'vendor-antd';
-            }
-            // Pro Components 单独打包
-            if (id.includes('@ant-design/pro-components')) {
-              return 'vendor-pro-components';
-            }
-            // 图表库单独打包
-            if (id.includes('@ant-design/charts') || id.includes('recharts')) {
-              return 'vendor-charts';
-            }
-            // UniverJS 表格库单独打包（体积较大，按需加载）
-            if (id.includes('@univerjs')) {
-              return 'vendor-univerjs';
-            }
-            // 其他第三方库
+            // 大体积库优先单独拆分
+            if (id.includes('@univerjs')) return 'vendor-univerjs';
+            if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
+            if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
+            if (id.includes('@pdfme')) return 'vendor-pdfme';
+            if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
+            if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
+            if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react';
+            if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
+            if (id.includes('framer-motion') || id.includes('lottie')) return 'vendor-animation';
             return 'vendor-other';
           }
-          // 应用代码按模块分割（应用级页面可以懒加载）
           if (id.includes('/apps/')) {
-            // 提取应用名称
             const appMatch = id.match(/\/apps\/([^/]+)/);
-            if (appMatch) {
-              return `app-${appMatch[1]}`;
-            }
+            if (appMatch) return `app-${appMatch[1]}`;
           }
-          // 系统级页面单独打包（核心页面立即加载，不懒加载）
-          if (id.includes('/pages/system/')) {
-            return 'pages-system';
-          }
-          // 平台级页面单独打包
-          if (id.includes('/pages/infra/')) {
-            return 'pages-infra';
-          }
+          if (id.includes('/pages/system/')) return 'pages-system';
+          if (id.includes('/pages/infra/')) return 'pages-infra';
+          if (id.includes('/pages/personal/')) return 'pages-personal';
         },
         // 文件命名规则
         chunkFileNames: 'assets/js/[name]-[hash].js',
@@ -273,8 +255,6 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
       'dayjs',
-      'lodash-es',
-      '@jiaminghi/data-view-react',
       '@univerjs/core',
       '@univerjs/design',
       '@univerjs/docs',
