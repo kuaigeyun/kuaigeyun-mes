@@ -223,7 +223,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { token } = useToken();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
   const [currentTime, setCurrentTime] = useState(dayjs());

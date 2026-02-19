@@ -31,7 +31,7 @@ import dayjs from 'dayjs';
  */
 const OperationLogsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OperationLogStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);

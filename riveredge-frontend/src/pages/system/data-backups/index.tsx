@@ -72,7 +72,7 @@ const getBackupScopeText = (scope: string): string => {
  */
 const DataBackupsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = React.useRef<ActionType>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);

@@ -28,7 +28,9 @@ const { Title, Text } = Typography;
 export default function LockScreenPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const { currentUser, unlockScreen, lockedPath } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const unlockScreen = useGlobalStore((s) => s.unlockScreen);
+  const lockedPath = useGlobalStore((s) => s.lockedPath);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);

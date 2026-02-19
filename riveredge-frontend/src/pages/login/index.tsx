@@ -48,7 +48,7 @@ export default function LoginPage() {
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
   // 使用全局状态管理（Zustand状态管理规范）
-  const { setCurrentUser } = useGlobalStore();
+  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
 
   // 获取平台设置（公开接口）
   const { data: platformSettings, isLoading: isLoadingPlatformSettings, failureCount, status } = useQuery({
@@ -647,7 +647,6 @@ export default function LoginPage() {
       useUserPreferenceStore.getState().rehydrateFromStorage();
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
-      window.dispatchEvent(new CustomEvent('user-logged-in'));
       
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
@@ -694,7 +693,6 @@ export default function LoginPage() {
       useUserPreferenceStore.getState().rehydrateFromStorage();
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
-      window.dispatchEvent(new CustomEvent('user-logged-in'));
       
       // 延迟执行消息提示和导航，避免阻塞主线程
       const urlParams = new URL(window.location.href).searchParams;

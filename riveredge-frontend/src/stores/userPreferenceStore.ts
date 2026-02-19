@@ -99,11 +99,6 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
           });
           
           // 触发全局事件通知其他组件（如 App.tsx 的主题加载逻辑）
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-              detail: { preferences: finalPrefs }
-            }));
-          }
         } catch (error) {
           console.warn('Failed to fetch user preferences:', error);
           set({ loading: false, initialized: true });
@@ -171,11 +166,6 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
             preferences: currentPrefs, 
             loading: false 
           });
-          
-          // 触发全局事件通知其他组件
-          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-            detail: { preferences: currentPrefs }
-          }));
           
         } catch (error) {
           console.error('Failed to update user preferences:', error);

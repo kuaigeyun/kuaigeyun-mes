@@ -32,7 +32,7 @@ import ImageCropper from '../../../components/image-cropper';
 const SiteSettingsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
-  const { fetchConfigs } = useConfigStore();
+  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);

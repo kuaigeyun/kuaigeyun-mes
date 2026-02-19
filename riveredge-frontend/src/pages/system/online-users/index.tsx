@@ -87,7 +87,7 @@ const getLastActivityDisplay = (user: OnlineUser): string => {
  */
 const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);

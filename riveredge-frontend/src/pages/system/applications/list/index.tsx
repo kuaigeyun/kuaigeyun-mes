@@ -29,6 +29,7 @@ import {
   ArrowUpOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
+import { useGlobalStore } from '../../../../stores';
 import {
   getApplicationList,
   getApplicationByUuid,
@@ -128,11 +129,7 @@ const ApplicationListPage: React.FC = () => {
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
 
-      // 触发自定义事件，通知菜单立即刷新
-      window.dispatchEvent(new CustomEvent('application-status-changed', {
-        detail: { application: record, isInstalled: true }
-      }));
-
+      useGlobalStore.getState().incrementApplicationMenuVersion();
       console.log(`📢 已触发应用安装事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || '安装失败');
@@ -150,11 +147,7 @@ const ApplicationListPage: React.FC = () => {
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
 
-      // 触发自定义事件，通知菜单立即刷新
-      window.dispatchEvent(new CustomEvent('application-status-changed', {
-        detail: { application: record, isInstalled: false }
-      }));
-
+      useGlobalStore.getState().incrementApplicationMenuVersion();
       console.log(`📢 已触发应用卸载事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || '卸载失败');
@@ -178,10 +171,7 @@ const ApplicationListPage: React.FC = () => {
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
 
-      // 触发自定义事件，通知菜单立即刷新
-      window.dispatchEvent(new CustomEvent('application-status-changed', {
-        detail: { application: record, isActive: checked }
-      }));
+      useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
     }
@@ -200,10 +190,7 @@ const ApplicationListPage: React.FC = () => {
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
 
-      // 触发自定义事件，通知菜单立即刷新
-      window.dispatchEvent(new CustomEvent('application-status-changed', {
-        detail: { application: { ...record, ...updateData } }
-      }));
+      useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
     } finally {
@@ -366,10 +353,7 @@ const ApplicationListPage: React.FC = () => {
                     // 刷新应用列表
                     actionRef.current?.reload();
 
-                    // 触发菜单刷新事件
-                    window.dispatchEvent(new CustomEvent('application-status-changed', {
-                      detail: { application, isActive: application.is_active }
-                    }));
+                    useGlobalStore.getState().incrementApplicationMenuVersion();
                   } else {
                     throw new Error(result.message || '同步失败');
                   }

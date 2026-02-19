@@ -11,7 +11,9 @@ const SystemParametersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm();
-  const { configs, fetchConfigs, updateConfigs } = useConfigStore();
+  const configs = useConfigStore((s) => s.configs);
+  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
+  const updateConfigs = useConfigStore((s) => s.updateConfigs);
   const [activeTabKey, setActiveTabKey] = useState('security');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
