@@ -148,7 +148,14 @@ const UserPreferencesPage: React.FC = () => {
    */
   const handleSubmit = async (values: any) => {
     try {
+      // 在保存期间设置标志，阻止 userPreferenceUpdated 事件触发额外渲染
+      // (updatePreferences 内部会 dispatch userPreferenceUpdated，但我们想只在最后统一应用一次主题)
+      (window as any).__RIVEREDGE_THEME_SAVING__ = true;
+      
       await updatePreferences(values);
+      
+      (window as any).__RIVEREDGE_THEME_SAVING__ = false;
+      
       messageApi.success('偏好设置更新成功');
 
       // 若包含主题配置，同步到本地并触发主题应用（与主题编辑面板一致）
@@ -168,6 +175,7 @@ const UserPreferencesPage: React.FC = () => {
         if (values.tabs_persistence !== undefined) {
           localStorage.setItem('riveredge_tabs_persistence', String(!!values.tabs_persistence));
         }
+        // 一次性触发 siteThemeUpdated，app.tsx 只需应用一次
         window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
           detail: { themeConfig: fullThemeConfig },
         }));
@@ -179,6 +187,7 @@ const UserPreferencesPage: React.FC = () => {
         await refreshTranslations();
       }
     } catch (error: any) {
+      (window as any).__RIVEREDGE_THEME_SAVING__ = false;
       messageApi.error(error.message || '更新失败');
     }
   };

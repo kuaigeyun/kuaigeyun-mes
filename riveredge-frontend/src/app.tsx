@@ -352,6 +352,41 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+/**
+ * ⚠️ 关键：必须定义在 App 函数外部（模块级别）
+ * 若定义在 App 内部，每次 App 重渲染时 React 会认为这是一个全新的组件类型，
+ * 导致整个子树卸载并重挂载，引发无限循环（子组件 fetchPreferences → userPreferenceUpdated → applyThemeConfig → setThemeConfig → App 重渲染 → 子树重挂载 → 循环）。
+ */
+const AppContent: React.FC = () => {
+  const { message } = AntdApp.useApp();
+  const touchScreen = useTouchScreen();
+
+  // 将 message 实例设置到全局，供工具函数使用
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__ANTD_MESSAGE__ = message;
+    }
+  }, [message]);
+
+  // 应用触屏模式样式类
+  React.useEffect(() => {
+    const rootElement = document.documentElement;
+    if (touchScreen.isTouchScreenMode) {
+      rootElement.classList.add('touchscreen-mode');
+    } else {
+      rootElement.classList.remove('touchscreen-mode');
+    }
+  }, [touchScreen.isTouchScreenMode]);
+
+  return (
+    <ErrorBoundary>
+      <AuthGuard>
+        <MainRoutes />
+      </AuthGuard>
+    </ErrorBoundary>
+  );
+};
+
 // 主应用组件
 export default function App() {
 
@@ -457,6 +492,7 @@ export default function App() {
   });
 
   // 加载站点主题配置（从服务器加载，如果失败则使用缓存）
+  // 只返回数据，不触发 React state 更新（避免额外重渲染）
   const loadSiteTheme = async () => {
     try {
       const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
@@ -467,8 +503,6 @@ export default function App() {
 
       // 如果服务器有配置，使用服务器配置；否则使用缓存配置
       const finalConfig = Object.keys(themeConfig).length > 0 ? themeConfig : (cachedThemeConfig ? JSON.parse(cachedThemeConfig) : {});
-
-      setSiteThemeConfig(finalConfig);
 
       // 保存到本地存储（临时方案）
       if (Object.keys(finalConfig).length > 0) {
@@ -484,7 +518,6 @@ export default function App() {
         try {
           const parsedConfig = JSON.parse(cachedThemeConfig);
           if (parsedConfig && typeof parsedConfig === 'object') {
-            setSiteThemeConfig(parsedConfig);
             return parsedConfig;
           }
         } catch (e) {
@@ -589,8 +622,6 @@ export default function App() {
     });
   };
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
-
   // 初始化时加载用户偏好设置和站点主题配置（挂载时若有 token 则执行）
   useEffect(() => {
     const token = getToken();
@@ -611,8 +642,7 @@ export default function App() {
         i18n.changeLanguage(cachedPrefs.language).catch(() => {});
       }
 
-      // 2）后台拉取最新偏好与站点主题，拉取后再应用一次以与服务器一致
-      useUserPreferenceStore.getState().fetchPreferences().catch(() => {});
+      // 2）后台拉取最新偏好与站点主题（通过下面的 Promise.all 统一处理）
 
       Promise.all([
         getUserPreference().catch((error) => {
@@ -670,6 +700,9 @@ export default function App() {
           }
         }
 
+        // 通知 BasicLayout 等子组件主题已就绪，触发一次背景色更新
+        window.dispatchEvent(new CustomEvent('theme-applied'));
+
         // 加载用户选择的语言（异步，不阻塞主题加载）
         loadUserLanguage().catch((err) => {
           console.warn('Failed to load user language during app init:', err);
@@ -706,16 +739,8 @@ export default function App() {
     }
   }, []); // 依赖为空，确保只在挂载时执行
 
-  // 当认证完成（currentUser 就绪）后确保拉取用户偏好，解决首次加载或登录后需刷新才能获取偏好的问题
-  useEffect(() => {
-    const token = getToken();
-    if (!token || !currentUser) return;
-    const { initialized } = useUserPreferenceStore.getState();
-    if (!initialized) {
-      useUserPreferenceStore.getState().rehydrateFromStorage();
-      useUserPreferenceStore.getState().fetchPreferences().catch(() => {});
-    }
-  }, [currentUser]);
+  // 注意：主题初始化已完全在上方 useEffect([], []) 中处理，此处不再重复。
+  // 上方的 useEffect 已经通过 Promise.all 并行拉取站点主题和用户偏好，并在完成后一次性应用。
 
   // 监听系统主题变化（当用户偏好为 auto 时）
   useEffect(() => {
@@ -736,25 +761,39 @@ export default function App() {
   }, [userPreference?.preferences?.theme]); // 移除 siteThemeConfig 依赖，避免重复触发
 
   useEffect(() => {
-    const handlePreferenceUpdate = async (_event: CustomEvent) => {
-      // 重新加载用户偏好设置
-      try {
-        const preference = await getUserPreference();
-        setUserPreference(preference);
+    // 标记主题是否已完成初始化
+    // 在初始化完成（theme-applied 事件）之前，忽略 userPreferenceUpdated 事件，防止重复渲染
+    let themeInitialized = false;
 
-        // 应用新的主题偏好：合并站点主题与用户偏好中的 theme_config
-        const userTheme = preference?.preferences?.theme || 'light';
-        const userThemeConfig = preference?.preferences?.theme_config;
-        setSiteThemeConfig((currentSiteTheme) => {
-          const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
-            ? { ...currentSiteTheme, ...userThemeConfig }
-            : currentSiteTheme;
-          applyThemeConfig(userTheme, effectiveTheme);
-          return currentSiteTheme;
-        });
-      } catch (error) {
-        console.warn('Failed to reload user preference:', error);
-      }
+    const handleThemeApplied = () => {
+      themeInitialized = true;
+    };
+
+    window.addEventListener('theme-applied', handleThemeApplied);
+
+    const handlePreferenceUpdate = (event: CustomEvent) => {
+      // 初始化完成前，跳过响应，避免 fetchPreferences 触发额外渲染
+      if (!themeInitialized) return;
+      // 偏好保存期间跳过，由 siteThemeUpdated 统一应用主题（避免双重渲染）
+      if ((window as any).__RIVEREDGE_THEME_SAVING__) return;
+
+      // 优先从事件 detail 获取，其次从 store 获取
+      const preferences = event.detail?.preferences || useUserPreferenceStore.getState().preferences;
+      if (!preferences) return;
+
+      // 应用新的主题偏好：合并站点主题与用户偏好中的 theme_config
+      const userTheme = preferences.theme || 'light';
+      // 如果用户偏好是 'auto'，此时我们不一定能立刻根据系统状态，但 applyThemeConfig 会处理
+      const actualTheme = userTheme === 'auto' ? 'light' : userTheme;
+      
+      const userThemeConfig = preferences.theme_config;
+      setSiteThemeConfig((currentSiteTheme) => {
+        const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
+          ? { ...currentSiteTheme, ...userThemeConfig }
+          : currentSiteTheme;
+        applyThemeConfig(actualTheme, effectiveTheme);
+        return currentSiteTheme;
+      });
     };
 
     // 监听站点主题更新事件
@@ -787,6 +826,7 @@ export default function App() {
     window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
     window.addEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
     return () => {
+      window.removeEventListener('theme-applied', handleThemeApplied);
       window.removeEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
       window.removeEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
     };
@@ -796,38 +836,6 @@ export default function App() {
   const finalThemeConfig = themeConfig || {
     algorithm: theme.defaultAlgorithm,
     token: { colorPrimary: '#1890ff' },
-  };
-
-  // ⚠️ 关键修复：创建内部组件来使用 App.useApp() hook，设置全局 message 实例
-  // 这样可以避免 Ant Design 6.0 的警告："Static function can not consume context like dynamic theme"
-  const AppContent: React.FC = () => {
-    const { message } = AntdApp.useApp();
-    const touchScreen = useTouchScreen();
-
-    // 将 message 实例设置到全局，供工具函数使用
-    React.useEffect(() => {
-      if (typeof window !== 'undefined') {
-        (window as any).__ANTD_MESSAGE__ = message;
-      }
-    }, [message]);
-
-    // 应用触屏模式样式类
-    React.useEffect(() => {
-      const rootElement = document.documentElement;
-      if (touchScreen.isTouchScreenMode) {
-        rootElement.classList.add('touchscreen-mode');
-      } else {
-        rootElement.classList.remove('touchscreen-mode');
-      }
-    }, [touchScreen.isTouchScreenMode]);
-
-    return (
-      <ErrorBoundary>
-        <AuthGuard>
-          <MainRoutes />
-        </AuthGuard>
-      </ErrorBoundary>
-    );
   };
 
   return (
