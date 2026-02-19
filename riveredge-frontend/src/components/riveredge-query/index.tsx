@@ -16,7 +16,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
 import { getToken } from '../../utils/auth';
-import { useGlobalStore } from '../../stores';
+import { useGlobalStore, useSavedSearchVersionStore } from '../../stores';
 import { QuickFilters } from './QuickFilters';
 import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterGroup, FilterConfigData } from './types';
@@ -438,7 +438,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const { token } = theme.useToken();
   
   // 获取当前页面路径
@@ -568,10 +568,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         const orderKey = `saved_search_order_shared_${pagePath}`;
       localStorage.setItem(orderKey, JSON.stringify(newOrder));
       
-      // ⭐ 触发自定义事件，通知 QuerySearchButton 更新排序
-      window.dispatchEvent(new CustomEvent('savedSearchOrderChanged', {
-        detail: { pagePath, type: 'shared' }
-      }));
+      useSavedSearchVersionStore.getState().incrementVersion(pagePath);
     }
   }, [pagePath, sharedSearches]);
   
@@ -591,10 +588,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         const orderKey = `saved_search_order_personal_${pagePath}`;
       localStorage.setItem(orderKey, JSON.stringify(newOrder));
       
-      // ⭐ 触发自定义事件，通知 QuerySearchButton 更新排序
-      window.dispatchEvent(new CustomEvent('savedSearchOrderChanged', {
-        detail: { pagePath, type: 'personal' }
-      }));
+      useSavedSearchVersionStore.getState().incrementVersion(pagePath);
     }
   }, [pagePath, personalSearches]);
   
@@ -2469,23 +2463,14 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   
   // ⭐ 排序更新触发器（用于响应弹窗中的拖拽排序）
   const [orderUpdateTrigger, setOrderUpdateTrigger] = useState(0);
-  
-  // ⭐ 监听排序变化事件
+  const savedSearchVersion = useSavedSearchVersionStore((s) => s.versions[pagePath] ?? 0);
+  const prevVersionRef = useRef(0);
   useEffect(() => {
-    const handleOrderChange = (event: CustomEvent) => {
-      const { pagePath: eventPagePath } = event.detail;
-      // 只响应当前页面的排序变化
-      if (eventPagePath === pagePath) {
-        setOrderUpdateTrigger(prev => prev + 1);
-      }
-    };
-    
-    window.addEventListener('savedSearchOrderChanged', handleOrderChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('savedSearchOrderChanged', handleOrderChange as EventListener);
-    };
-  }, [pagePath]);
+    if (savedSearchVersion > prevVersionRef.current) {
+      prevVersionRef.current = savedSearchVersion;
+      setOrderUpdateTrigger((prev) => prev + 1);
+    }
+  }, [savedSearchVersion]);
   
   // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
   const hasToken = !!getToken();

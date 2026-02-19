@@ -51,6 +51,11 @@ export interface GlobalState {
    * 退出登录
    */
   logout: () => void;
+  /**
+   * 应用菜单版本号（应用启用/停用时递增，用于触发菜单刷新）
+   */
+  applicationMenuVersion: number;
+  incrementApplicationMenuVersion: () => void;
 }
 
 /**
@@ -65,6 +70,7 @@ export const useGlobalStore = create<GlobalState>()(
       loading: false,
       isLocked: false,
       lockedPath: undefined,
+      applicationMenuVersion: 0,
       setCurrentUser: (user) => set({ currentUser: user }),
       setLoading: (loading) => set({ loading }),
       lockScreen: (path) => set({ isLocked: true, lockedPath: path }),
@@ -83,6 +89,8 @@ export const useGlobalStore = create<GlobalState>()(
         // ⚠️ 关键修复：不在这里直接跳转，由调用方使用 navigate 进行跳转，避免页面刷新
         // 路由守卫会自动处理重定向到登录页
       },
+      incrementApplicationMenuVersion: () =>
+        set((s) => ({ applicationMenuVersion: (s.applicationMenuVersion ?? 0) + 1 })),
     }),
     {
       name: 'riveredge-global-store',

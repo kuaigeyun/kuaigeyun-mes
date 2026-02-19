@@ -83,7 +83,10 @@ import { useThemeStore } from '../stores/themeStore';
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const loading = useGlobalStore((s) => s.loading);
+  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
+  const setLoading = useGlobalStore((s) => s.setLoading);
   const { t } = useSafeTranslation(); // 使用安全的翻译 hook
 
   // 检查用户类型（平台超级管理员还是系统级用户）
@@ -742,7 +745,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (prefs?.['ui.sidebar_collapsed'] !== undefined) return prefs['ui.sidebar_collapsed'];
     return undefined;
   });
-  const { updatePreferences } = useUserPreferenceStore();
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -768,7 +771,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
-  const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const logout = useGlobalStore((s) => s.logout);
+  const isLocked = useGlobalStore((s) => s.isLocked);
+  const lockScreen = useGlobalStore((s) => s.lockScreen);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
 
   // 获取用户头像 URL（如果有 UUID）
@@ -1121,35 +1127,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return filterMenuByBusinessConfig(applicationMenus, businessConfig ?? undefined);
   }, [applicationMenus, businessConfig]);
 
-  // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
+  // 用户登录后（currentUser 从无到有）清除菜单缓存并触发菜单查询
+  const prevUserIdRef = useRef<number | undefined>();
   useEffect(() => {
-    const handleUserLogin = () => {
-      console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
-      // 清除 localStorage 缓存
-      try {
-        localStorage.removeItem('applicationMenusCache_v2');
-      } catch (error) {
-        // 忽略清除错误
-      }
-      // 清除 React Query 缓存
-      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-      // 使用 requestAnimationFrame 替代 setTimeout，减少延迟（约 16ms 而非 100ms）
-      // 这样可以在下一个渲染帧执行，此时 currentUser 应该已经更新
-      requestAnimationFrame(() => {
-        // 使用 setTimeout 0 确保在 React 状态更新后执行
-        setTimeout(() => {
-          refetchApplicationMenus();
-        }, 0);
-      });
-    };
-
-    // 监听自定义事件（在登录页面触发）
-    window.addEventListener('user-logged-in', handleUserLogin);
-
-    return () => {
-      window.removeEventListener('user-logged-in', handleUserLogin);
-    };
-  }, [queryClient, refetchApplicationMenus]);
+    const userId = currentUser?.id;
+    const justLoggedIn = userId !== undefined && prevUserIdRef.current === undefined;
+    prevUserIdRef.current = userId;
+    if (!justLoggedIn) return;
+    console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
+    try { localStorage.removeItem('applicationMenusCache_v2'); } catch { /* ignore */ }
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    requestAnimationFrame(() => {
+      setTimeout(() => refetchApplicationMenus(), 0);
+    });
+  }, [currentUser?.id, queryClient, refetchApplicationMenus]);
 
 
 
@@ -1176,29 +1167,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
   }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
 
-  // 监听应用状态变更事件，主动刷新菜单
+  const applicationMenuVersion = useGlobalStore((s) => s.applicationMenuVersion ?? 0);
   useEffect(() => {
-    const handleApplicationStatusChange = () => {
-      console.log('🔄 检测到应用状态变更，刷新菜单...');
-      // 清除 localStorage 缓存（需清除 v3，当前使用的缓存键）
-      try {
-        localStorage.removeItem('applicationMenusCache_v3');
-        localStorage.removeItem('applicationMenusCache_v2');
-        localStorage.removeItem('applicationMenusCache');
-      } catch (error) {
-        // 忽略清除错误
-      }
-      // 重新获取菜单
-      refetchApplicationMenus();
-    };
-
-    // 监听自定义事件
-    window.addEventListener('application-status-changed', handleApplicationStatusChange);
-
-    return () => {
-      window.removeEventListener('application-status-changed', handleApplicationStatusChange);
-    };
-  }, [refetchApplicationMenus]);
+    if (applicationMenuVersion === 0) return;
+    console.log('🔄 检测到应用状态变更，刷新菜单...');
+    try {
+      localStorage.removeItem('applicationMenusCache_v3');
+      localStorage.removeItem('applicationMenusCache_v2');
+      localStorage.removeItem('applicationMenusCache');
+    } catch { /* ignore */ }
+    refetchApplicationMenus();
+  }, [applicationMenuVersion, refetchApplicationMenus]);
 
   /**
    * 将 MenuTree 转换为 MenuDataItem

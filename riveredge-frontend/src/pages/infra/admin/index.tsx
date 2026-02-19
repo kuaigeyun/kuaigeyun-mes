@@ -30,7 +30,7 @@ export default function InfraSuperAdminPage() {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { setCurrentUser } = useGlobalStore();
+  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const [activeTabKey, setActiveTabKey] = useState('admin');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);

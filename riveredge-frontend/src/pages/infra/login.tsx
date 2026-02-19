@@ -30,7 +30,7 @@ export default function PlatformLoginPage() {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [form] = Form.useForm<LoginFormData>();
-  const { setCurrentUser } = useGlobalStore();
+  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   
   // 获取平台设置（公开接口）
   const { data: platformSettings } = useQuery({

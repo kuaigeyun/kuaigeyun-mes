@@ -29,7 +29,7 @@ import dayjs from 'dayjs';
  */
 const LoginLogsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<LoginLogStats | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);

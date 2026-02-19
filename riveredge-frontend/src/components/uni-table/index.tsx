@@ -534,8 +534,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 }: UniTableProps<T>) {
   const { message } = App.useApp()
   const { token } = theme.useToken()
-  const { getConfig } = useConfigStore()
-  const { getPreference, updatePreferences } = useUserPreferenceStore()
+  const getConfig = useConfigStore((s) => s.getConfig);
+  const getPreference = useUserPreferenceStore((s) => s.getPreference);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
   // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)

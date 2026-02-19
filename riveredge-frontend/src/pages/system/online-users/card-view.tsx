@@ -31,7 +31,7 @@ const { Text, Paragraph } = Typography;
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);

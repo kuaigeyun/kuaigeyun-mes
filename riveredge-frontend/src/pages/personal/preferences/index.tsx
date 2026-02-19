@@ -55,7 +55,12 @@ const defaultPreferenceValues: Record<string, any> = {
 const UserPreferencesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const formRef = React.useRef<ProFormInstance>();
-  const { preferences, fetchPreferences, updatePreferences, getPreference, loading: storeLoading, initialized } = useUserPreferenceStore();
+  const preferences = useUserPreferenceStore((s) => s.preferences);
+  const fetchPreferences = useUserPreferenceStore((s) => s.fetchPreferences);
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+  const getPreference = useUserPreferenceStore((s) => s.getPreference);
+  const storeLoading = useUserPreferenceStore((s) => s.loading);
+  const initialized = useUserPreferenceStore((s) => s.initialized);
   const [languages, setLanguages] = useState<Language[]>([]);
 
   /**

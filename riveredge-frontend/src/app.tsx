@@ -36,7 +36,10 @@ if (typeof window !== 'undefined') {
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const location = useLocation();
-  const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const loading = useGlobalStore((s) => s.loading);
+  const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
+  const setLoading = useGlobalStore((s) => s.setLoading);
 
   // ⚠️ 关键修复：将所有路径检查移到 Hook 调用之前，避免 Hook 顺序问题
   const isMasterDataPath = location.pathname.startsWith('/apps/master-data');
@@ -175,7 +178,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }, [isLoading, isPublicPath, setLoading]);
 
   // 引入 useConfigStore
-  const { fetchConfigs, getConfig, initialized: configInitialized } = useConfigStore();
+  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
+  const getConfig = useConfigStore((s) => s.getConfig);
+  const configInitialized = useConfigStore((s) => s.initialized);
 
   // 初始化系统配置
   useEffect(() => {

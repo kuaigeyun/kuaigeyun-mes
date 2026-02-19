@@ -36,7 +36,7 @@ const IconItem = ({ icon }: { icon?: string }) => {
 
 const MenuListPage: React.FC = () => {
   const { message: messageApi, modal } = App.useApp();
-  const { currentUser } = useGlobalStore();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const { t } = useTranslation();
   const actionRef = useRef<any>();
   

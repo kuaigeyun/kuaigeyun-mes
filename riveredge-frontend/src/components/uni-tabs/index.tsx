@@ -10,7 +10,6 @@ import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip } from 'antd';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
-import { getUserPreference } from '../../services/userPreference';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 import { useConfigStore } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
@@ -89,8 +88,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return false;
   };
 
-  // 1. 同步初始化持久化配置
-  const [tabsPersistence, setTabsPersistence] = useState<boolean>(getInitialPersistence);
+  // 1. 持久化配置：优先从 store 读取，store 未就绪时从 localStorage 回退
+  const storeTabsPersistence = useUserPreferenceStore((s) => s.preferences?.tabs_persistence);
+  const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
 
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
@@ -360,43 +360,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return null;
     }
   }, [location.pathname, menuConfig, t]);
-
-  /**
-   * 同步用户偏好设置（异步更新，不阻塞 UI）
-   */
-  useEffect(() => {
-    const syncUserPreference = async () => {
-      try {
-        const userPreference = await getUserPreference().catch(() => null);
-        if (userPreference?.preferences?.tabs_persistence !== undefined) {
-          const persistence = userPreference.preferences.tabs_persistence;
-          // 仅当配置不同才更新，避免不必要的重新渲染
-          setTabsPersistence(prev => {
-             if (prev !== persistence) {
-                localStorage.setItem('riveredge_tabs_persistence', String(persistence));
-                return persistence;
-             }
-             return prev;
-          });
-        }
-      } catch (error) {
-        // 忽略错误
-      }
-    };
-    
-    syncUserPreference();
-
-    const handleUserPreferenceUpdated = (event: CustomEvent) => {
-      if (event.detail?.preferences?.tabs_persistence !== undefined) {
-        setTabsPersistence(event.detail.preferences.tabs_persistence);
-      }
-    };
-
-    window.addEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
-    return () => {
-      window.removeEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
-    };
-  }, []);
 
   /** 是否已从异步恢复中加载过标签（避免重复覆盖用户操作） */
   const didRestoreFromSyncRef = useRef(false);
