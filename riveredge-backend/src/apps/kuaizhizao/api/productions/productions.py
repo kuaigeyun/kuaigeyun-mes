@@ -88,7 +88,6 @@ from apps.kuaizhizao.services.finance_service import (
 )
 from apps.kuaizhizao.services.sales_service import (
     SalesForecastService,
-    SalesOrderService,
 )
 # BOM管理已移至master_data APP，不再需要BOMService
 from apps.kuaizhizao.services.planning_service import ProductionPlanningService

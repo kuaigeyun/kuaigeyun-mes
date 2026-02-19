@@ -68,6 +68,9 @@ import { updateUserPreference } from '../services/userPreference';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { getMenuTree, MenuTree } from '../services/menu';
+import { getBusinessConfig } from '../services/businessConfig';
+import type { BusinessConfig } from '../services/businessConfig';
+import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
@@ -1083,6 +1086,49 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     refetchOnReconnect: true, // 网络重连时刷新
   });
 
+  // 获取业务配置（用于菜单按业务模式过滤：未启用的模块/节点对应菜单不显示）
+  const { data: businessConfig } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: false, // 失败时不过滤，保证菜单正常显示
+  });
+
+  /**
+   * 按业务配置递归过滤菜单树：未启用的 module 或 node 对应菜单不显示
+   */
+  const filterMenuByBusinessConfig = (menus: MenuTree[], config: BusinessConfig | null | undefined): MenuTree[] => {
+    if (!config) return menus;
+    const modules = config.modules ?? {};
+    const nodes = config.nodes ?? {};
+
+    return menus
+      .map((menu) => {
+        const businessMeta = getMenuBusinessMeta(menu);
+        if (businessMeta) {
+          if (businessMeta.module !== undefined && modules[businessMeta.module] === false) return null;
+          if (businessMeta.node !== undefined) {
+            const nodeConfig = nodes[businessMeta.node];
+            if (nodeConfig && nodeConfig.enabled === false) return null;
+          }
+        }
+        if (menu.children && menu.children.length > 0) {
+          const filteredChildren = filterMenuByBusinessConfig(menu.children, config);
+          if (filteredChildren.length === 0 && !menu.path) return null;
+          return { ...menu, children: filteredChildren };
+        }
+        return menu;
+      })
+      .filter((m): m is MenuTree => m !== null);
+  };
+
+  // 按业务配置过滤后的应用菜单（配置加载失败时使用原始菜单）
+  const filteredApplicationMenus = useMemo(() => {
+    if (!applicationMenus || applicationMenus.length === 0) return applicationMenus ?? [];
+    return filterMenuByBusinessConfig(applicationMenus, businessConfig ?? undefined);
+  }, [applicationMenus, businessConfig]);
 
   // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
   useEffect(() => {
@@ -1660,12 +1706,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 应用菜单处理逻辑：
     // 1. 应用的名称作为分组标题（不可点击，灰色，小字号）
     // 2. 应用的子菜单提升到主菜单一级（和"仪表盘"、"系统配置"等同一级别）
-    if (applicationMenus && applicationMenus.length > 0) {
+    if (filteredApplicationMenus && filteredApplicationMenus.length > 0) {
       // 收集所有应用菜单项（分组标题 + 子菜单）
       const appMenuItems: MenuDataItem[] = [];
 
-      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序）
-      const sortedApplicationMenus = applicationMenus;
+      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序），已按业务配置过滤
+      const sortedApplicationMenus = filteredApplicationMenus;
 
       // 遍历每个应用，将应用的子菜单提升到主菜单级别
       sortedApplicationMenus.forEach(appMenu => {
@@ -1777,7 +1823,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 因此不再需要过滤第三组的组织管理菜单
 
     return menuItems;
-  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
+  }, [currentUser, filteredApplicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
 
   /**
    * 面包屑专用菜单数据：保留应用菜单的完整层级结构（不 flat 展开）
@@ -1790,9 +1836,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 从系统菜单配置开始（已包含层级结构）
     const items: MenuDataItem[] = [...menuConfig];
 
-    // 将应用菜单以完整层级插入（appMenu 作为父节点，其 children 保持原始树形）
-    if (applicationMenus && applicationMenus.length > 0) {
-      const appMenuItems: MenuDataItem[] = applicationMenus.map(appMenu => {
+    // 将应用菜单以完整层级插入（appMenu 作为父节点，其 children 保持原始树形），已按业务配置过滤
+    if (filteredApplicationMenus && filteredApplicationMenus.length > 0) {
+      const appMenuItems: MenuDataItem[] = filteredApplicationMenus.map(appMenu => {
         // 翻译应用名称：递归找第一个有 path 的子孙节点来提取 appCode
         const findFirstChildPath = (items: any[]): string | null => {
           for (const child of items) {
@@ -1831,7 +1877,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return items;
-  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, t, menuConfig]);
+  }, [currentUser, filteredApplicationMenus, convertMenuTreeToMenuDataItem, t, menuConfig]);
 
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）

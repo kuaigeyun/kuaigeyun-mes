@@ -14,22 +14,26 @@
                 "children": [{
                         "title": "统一需求管理",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
-                        "sort_order": 1
+                        "sort_order": 1,
+                        "meta": {"module": "demand"}
                     },
                     {
                         "title": "需求计算",
                         "path": "/apps/kuaizhizao/plan-management/demand-computation",
-                        "sort_order": 2
+                        "sort_order": 2,
+                        "meta": {"module": "demand"}
                     },
                     {
                         "title": "生产计划",
                         "path": "/apps/kuaizhizao/plan-management/production-plans",
-                        "sort_order": 3
+                        "sort_order": 3,
+                        "meta": {"node": "production_plan", "module": "demand"}
                     },
                     {
                         "title": "排程管理",
                         "path": "/apps/kuaizhizao/plan-management/scheduling",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "meta": {"module": "production"}
                     }
                 ]
             },
@@ -37,25 +41,30 @@
                 "title": "app.kuaizhizao.menu.sales-management",
                 "icon": "chartLine",
                 "sort_order": 2,
+                "meta": {"module": "sales"},
                 "children": [{
                         "title": "销售预测",
                         "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-                        "sort_order": 1
+                        "sort_order": 1,
+                        "meta": {"node": "sales_forecast", "module": "sales"}
                     },
                     {
                         "title": "销售订单",
                         "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                        "sort_order": 2
+                        "sort_order": 2,
+                        "meta": {"node": "sales_order", "module": "sales"}
                     },
                     {
                         "title": "销售发货",
                         "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
-                        "sort_order": 3
+                        "sort_order": 3,
+                        "meta": {"node": "sales_delivery", "module": "sales"}
                     },
                     {
                         "title": "销售退货",
                         "path": "/apps/kuaizhizao/sales-management/sales-returns",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "meta": {"module": "sales"}
                     }
                 ]
             },
@@ -63,25 +72,30 @@
                 "title": "app.kuaizhizao.menu.purchase-management",
                 "icon": "shoppingBag",
                 "sort_order": 3,
+                "meta": {"module": "purchase"},
                 "children": [{
                         "title": "采购申请",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
-                        "sort_order": 1
+                        "sort_order": 1,
+                        "meta": {"node": "purchase_request", "module": "purchase"}
                     },
                     {
                         "title": "采购订单",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
-                        "sort_order": 2
+                        "sort_order": 2,
+                        "meta": {"node": "purchase_order", "module": "purchase"}
                     },
                     {
                         "title": "采购收货",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
-                        "sort_order": 3
+                        "sort_order": 3,
+                        "meta": {"node": "inbound_delivery", "module": "purchase"}
                     },
                     {
                         "title": "采购退货",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "meta": {"module": "purchase"}
                     }
                 ]
             },
@@ -89,64 +103,77 @@
                 "title": "app.kuaizhizao.menu.production-execution",
                 "icon": "activity",
                 "sort_order": 4,
+                "meta": {"module": "production"},
                 "children": [{
                         "title": "工单管理",
                         "path": "/apps/kuaizhizao/production-execution/work-orders",
-                        "sort_order": 1
+                        "sort_order": 1,
+                        "meta": {"node": "work_order", "module": "production"}
                     },
                     {
                         "title": "报工管理",
                         "path": "/apps/kuaizhizao/production-execution/reporting",
-                        "sort_order": 2
+                        "sort_order": 2,
+                        "meta": {"module": "production"}
                     },
                     {
                         "title": "app.kuaizhizao.menu.production-execution.terminal",
                         "path": "/apps/kuaizhizao/production-execution/terminal",
-                        "sort_order": 2.5
+                        "sort_order": 2.5,
+                        "meta": {"module": "production"}
                     },
                     {
                         "title": "报工统计",
                         "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
-                        "sort_order": 3
+                        "sort_order": 3,
+                        "meta": {"module": "production"}
                     },
                     {
                         "title": "返工单",
                         "path": "/apps/kuaizhizao/production-execution/rework-orders",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "meta": {"module": "production"}
                     },
                     {
                         "title": "委外管理",
                         "path": "/apps/kuaizhizao/production-execution/outsource-management",
-                        "sort_order": 5
+                        "sort_order": 5,
+                        "meta": {"module": "production"}
                     },
                     {
                         "title": "app.kuaizhizao.menu.production-execution.exception-management",
                         "icon": "alert-circle",
                         "sort_order": 6,
+                        "meta": {"module": "production"},
                         "children": [{
                                 "title": "缺料异常",
                                 "path": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
-                                "sort_order": 1
+                                "sort_order": 1,
+                                "meta": {"module": "production"}
                             },
                             {
                                 "title": "延期异常",
                                 "path": "/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
-                                "sort_order": 2
+                                "sort_order": 2,
+                                "meta": {"module": "production"}
                             },
                             {
                                 "title": "质量异常",
                                 "path": "/apps/kuaizhizao/production-execution/quality-exceptions",
-                                "sort_order": 3
+                                "sort_order": 3,
+                                "meta": {"module": "production"}
                             },
                             {
                                 "title": "异常处理",
                                 "path": "/apps/kuaizhizao/production-execution/exception-process",
-                                "sort_order": 4
+                                "sort_order": 4,
+                                "meta": {"module": "production"}
                             },
                             {
                                 "title": "异常统计",
                                 "path": "/apps/kuaizhizao/production-execution/exception-statistics",
-                                "sort_order": 5
+                                "sort_order": 5,
+                                "meta": {"module": "production"}
                             }
                         ]
                     }
@@ -156,25 +183,30 @@
                 "title": "app.kuaizhizao.menu.quality-management",
                 "icon": "quality",
                 "sort_order": 5,
+                "meta": {"module": "quality"},
                 "children": [{
                         "title": "来料检验",
                         "path": "/apps/kuaizhizao/quality-management/incoming-inspection",
-                        "sort_order": 1
+                        "sort_order": 1,
+                        "meta": {"node": "quality_inspection", "module": "quality"}
                     },
                     {
                         "title": "过程检验",
                         "path": "/apps/kuaizhizao/quality-management/process-inspection",
-                        "sort_order": 2
+                        "sort_order": 2,
+                        "meta": {"node": "quality_inspection", "module": "quality"}
                     },
                     {
                         "title": "成品检验",
                         "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
-                        "sort_order": 3
+                        "sort_order": 3,
+                        "meta": {"node": "quality_inspection", "module": "quality"}
                     },
                     {
                         "title": "追溯管理",
                         "path": "/apps/kuaizhizao/quality-management/traceability",
-                        "sort_order": 4
+                        "sort_order": 4,
+                        "meta": {"node": "quality_inspection", "module": "quality"}
                     }
                 ]
             },
@@ -182,6 +214,7 @@
                 "title": "app.kuaizhizao.menu.warehouse-management",
                 "icon": "warehouse",
                 "sort_order": 6,
+                "meta": {"module": "warehouse"},
                 "children": [{
                         "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
                         "children": [{
@@ -286,6 +319,7 @@
                 "title": "app.kuaizhizao.menu.cost-management",
                 "icon": "calculator",
                 "sort_order": 7,
+                "meta": {"module": "finance"},
                 "children": [{
                         "title": "成本核算",
                         "path": "/apps/kuaizhizao/cost-management/cost-calculations",
@@ -389,6 +423,7 @@
                 "title": "app.kuaizhizao.menu.finance-management",
                 "icon": "wallet",
                 "sort_order": 9,
+                "meta": {"module": "finance"},
                 "children": [{
                         "title": "app.kuaizhizao.menu.finance-management.receivables-management",
                         "children": [{

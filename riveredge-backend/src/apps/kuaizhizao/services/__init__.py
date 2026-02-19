@@ -39,10 +39,10 @@ from .finance_service import (
 # 采购管理模块
 from .purchase_service import PurchaseService
 
-# 销售管理模块
+# 销售管理模块（SalesOrderService 统一使用 sales_order_service，操作 SalesOrder 表）
+from .sales_order_service import SalesOrderService
 from .sales_service import (
     SalesForecastService,
-    SalesOrderService,
 )
 
 # 统一需求管理模块（新设计）

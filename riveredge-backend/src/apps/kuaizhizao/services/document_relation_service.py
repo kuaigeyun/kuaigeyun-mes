@@ -246,7 +246,7 @@ class DocumentRelationService:
             "document_type": "sales_order",
             "document_id": order.id,
             "document_code": order.order_code,
-            "document_name": order.order_name,
+            "document_name": getattr(order, "order_name", None) or order.order_code,
             "status": order.status,
             "created_at": order.created_at.isoformat() if order.created_at else None
         }]
@@ -443,7 +443,7 @@ class DocumentRelationService:
                         "document_type": "sales_order",
                         "document_id": sales_order.id,
                         "document_code": sales_order.order_code,
-                        "document_name": sales_order.order_name,
+                        "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                         "status": sales_order.status,
                         "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
                     })
@@ -815,7 +815,7 @@ class DocumentRelationService:
                             "document_type": "sales_order",
                             "document_id": sales_order.id,
                             "document_code": sales_order.order_code,
-                            "document_name": sales_order.order_name,
+                            "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
                             "status": sales_order.status,
                             "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
                         })

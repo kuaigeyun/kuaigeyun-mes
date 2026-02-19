@@ -845,28 +845,28 @@ class ApprovalInstanceService:
                 return
 
             if entity_type == "sales_order":
-                # 处理销售订单审批回调
-                # 我们通过 UUID 找到需求的 ID（销售订单目前映射到 Demand）
-                from apps.kuaizhizao.models.demand import Demand
-                demand = await Demand.filter(tenant_id=tenant_id, uuid=entity_uuid).first()
-                if demand:
+                # 处理销售订单审批回调（销售订单存储于 SalesOrder 表）
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+                order = await SalesOrder.filter(tenant_id=tenant_id, uuid=entity_uuid, deleted_at__isnull=True).first()
+                if order:
                     from apps.kuaizhizao.services.sales_order_service import SalesOrderService
                     service = SalesOrderService()
+                    approver_id = approval_instance.submitter_id
                     if approval_instance.status == "approved":
                         await service.approve_sales_order(
                             tenant_id=tenant_id,
-                            sales_order_id=demand.id,
-                            approved_by=approval_instance.submitter_id # 或者使用最后一位审批人
+                            sales_order_id=order.id,
+                            approved_by=approver_id,
                         )
                     elif approval_instance.status == "rejected":
                         await service.reject_sales_order(
                             tenant_id=tenant_id,
-                            sales_order_id=demand.id,
-                            approved_by=approval_instance.submitter_id,
-                            rejection_reason="审批驳回"
+                            sales_order_id=order.id,
+                            approved_by=approver_id,
+                            rejection_reason="审批驳回",
                         )
                     from loguru import logger
-                    logger.info(f"销售订单 {demand.id} 审批回调处理完成: {approval_instance.status}")
+                    logger.info(f"销售订单 {order.id} 审批回调处理完成: {approval_instance.status}")
                     
         except Exception as e:
             from loguru import logger

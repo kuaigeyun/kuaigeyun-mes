@@ -1535,8 +1535,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         if not sales_order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         
-        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单）
-        if sales_order.status not in ["已审核", "已确认"]:
+        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单，兼容中英文状态）
+        audited_ok = ("已审核", "已确认", "AUDITED", "CONFIRMED")
+        if sales_order.status not in audited_ok:
             raise BusinessLogicError("只有已审核或已确认的销售订单才能上拉生成销售出库单")
         
         # 获取订单明细
