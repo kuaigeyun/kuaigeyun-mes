@@ -8,13 +8,12 @@
  * 布局参考文件管理页面设计。
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Button,
   Space,
   Tag,
   Tree,
-  message,
   Modal,
   Popconfirm,
   Input,
@@ -24,6 +23,8 @@ import {
   Tooltip,
   App,
   theme,
+  Select,
+  Flex,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
@@ -34,6 +35,14 @@ import {
   ReloadOutlined,
   SearchOutlined,
   LockOutlined,
+  EyeInvisibleOutlined,
+  SafetyCertificateOutlined,
+  DatabaseOutlined,
+  AppstoreOutlined,
+  CopyOutlined,
+  CheckSquareOutlined,
+  BorderOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
@@ -52,6 +61,12 @@ import {
   Permission,
 } from '../../../services/role';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
+import {
+  PERMISSION_MODULE_NAMES,
+  getModuleByResource,
+  PERMISSION_TEMPLATES,
+  getPermissionUuidsByTemplate,
+} from '../../../configs/permission-modules';
 
 /**
  * 角色权限管理合并页面组件
@@ -81,12 +96,20 @@ const RolesPermissionsPage: React.FC = () => {
   const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
+  const [permissionSearchKeyword, setPermissionSearchKeyword] = useState('');
+  const [permissionTypeFilter, setPermissionTypeFilter] = useState<string>('all');
+  const [permissionTreeExpandedKeys, setPermissionTreeExpandedKeys] = useState<React.Key[]>([]);
 
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [isEditRole, setIsEditRole] = useState(false);
   const [roleFormLoading, setRoleFormLoading] = useState(false);
   const [currentEditRole, setCurrentEditRole] = useState<Role | null>(null);
+  
+  // 复制权限相关状态
+  const [copyModalVisible, setCopyModalVisible] = useState(false);
+  const [sourceRoleUuid, setSourceRoleUuid] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
 
   /**
    * 加载角色列表
@@ -271,12 +294,11 @@ const RolesPermissionsPage: React.FC = () => {
   }, [roleTreeData, roleSearchKeyword]);
 
   /**
-   * 加载所有权限
+   * 加载所有权限（仅拉取数据，树形结构由 useEffect 根据筛选条件构建）
    */
   const loadAllPermissions = async () => {
     try {
       setPermissionsLoading(true);
-      // 后端限制 page_size 最大为 100，需要分页加载所有权限
       let allItems: Permission[] = [];
       let page = 1;
       let hasMore = true;
@@ -284,8 +306,6 @@ const RolesPermissionsPage: React.FC = () => {
       while (hasMore) {
         const response = await getAllPermissions({ page, page_size: 100 });
         allItems = [...allItems, ...response.items];
-
-        // 如果返回的数据少于 page_size，说明已经是最后一页
         if (response.items.length < 100 || allItems.length >= response.total) {
           hasMore = false;
         } else {
@@ -294,57 +314,187 @@ const RolesPermissionsPage: React.FC = () => {
       }
 
       setAllPermissions(allItems);
-
-      // 构建树形数据（按资源分组）
-      const resourceMap: Record<string, Permission[]> = {};
-      allItems.forEach(permission => {
-        if (!resourceMap[permission.resource]) {
-          resourceMap[permission.resource] = [];
-        }
-        resourceMap[permission.resource].push(permission);
-      });
-
-      // 获取资源名称的中文翻译
-      const getResourceName = (resource: string): string => {
-        const translationKey = `permission.resource.${resource}`;
-        const translated = t(translationKey);
-        // 如果翻译不存在，返回原始资源名称（首字母大写）
-        return translated !== translationKey
-          ? translated
-          : resource.charAt(0).toUpperCase() + resource.slice(1).replace(/_/g, ' ');
-      };
-
-      const treeData = Object.keys(resourceMap).map(resource => ({
-        title: (
-          <span>
-            <strong>{getResourceName(resource)}</strong>
-            <Tag color="blue" style={{ marginLeft: 8 }}>
-              {resourceMap[resource].length}
-            </Tag>
-          </span>
-        ),
-        key: `resource-${resource}`,
-        icon: <LockOutlined />,
-        children: resourceMap[resource].map(permission => ({
-          title: (
-            <span>
-              {permission.name}
-              <Tag color="default" style={{ marginLeft: 8, fontSize: '12px' }}>
-                {permission.code}
-              </Tag>
-            </span>
-          ),
-          key: permission.id,
-        })),
-      }));
-
-      setPermissionTreeData(treeData);
     } catch (error: any) {
       messageApi.error(error.message || '加载权限列表失败');
     } finally {
       setPermissionsLoading(false);
     }
   };
+
+  /**
+   * 根据权限列表、搜索关键词、类型筛选构建树形数据
+   */
+  useEffect(() => {
+    if (allPermissions.length === 0) {
+      setPermissionTreeData([]);
+      return;
+    }
+
+    const searchLower = permissionSearchKeyword.toLowerCase().trim();
+    const typeFilter = permissionTypeFilter;
+
+    const filteredItems = allPermissions.filter((p) => {
+      const matchType = typeFilter === 'all' || p.permission_type === typeFilter;
+      const matchSearch =
+        !searchLower ||
+        p.name.toLowerCase().includes(searchLower) ||
+        p.code.toLowerCase().includes(searchLower) ||
+        (p.description && p.description.toLowerCase().includes(searchLower));
+      return matchType && matchSearch;
+    });
+
+    const groupedData: Record<string, Record<string, Permission[]>> = {};
+    filteredItems.forEach((permission) => {
+      const module = getModuleByResource(permission.resource);
+      if (!groupedData[module]) groupedData[module] = {};
+      if (!groupedData[module][permission.resource]) {
+        groupedData[module][permission.resource] = [];
+      }
+      groupedData[module][permission.resource].push(permission);
+    });
+
+    const getResourceName = (resource: string): string => {
+      const translationKey = `permission.resource.${resource}`;
+      const translated = t(translationKey);
+      return translated !== translationKey
+        ? translated
+        : resource.charAt(0).toUpperCase() + resource.slice(1).replace(/_/g, ' ');
+    };
+
+    const getModuleName = (module: string): string =>
+      PERMISSION_MODULE_NAMES[module] || module;
+
+    const expandKeys: React.Key[] = [];
+    const treeData = Object.keys(groupedData).map((module) => {
+      expandKeys.push(`module-${module}`);
+      return {
+        title: (
+          <span style={{ fontWeight: 600, color: token.colorPrimary }}>
+            {getModuleName(module)}
+          </span>
+        ),
+        key: `module-${module}`,
+        icon: <AppstoreOutlined />,
+        children: Object.keys(groupedData[module]).map((resource) => {
+          expandKeys.push(`resource-${resource}`);
+          return {
+            title: (
+              <span>
+                <strong>{getResourceName(resource)}</strong>
+                <Tag color="blue" style={{ marginLeft: 8 }}>
+                  {groupedData[module][resource].length}
+                </Tag>
+              </span>
+            ),
+            key: `resource-${resource}`,
+            icon: <LockOutlined />,
+            children: groupedData[module][resource].map((permission) => ({
+              title: (
+                <Space>
+                  <span>{permission.name}</span>
+                  <Tag color="cyan" style={{ fontSize: '10px' }}>
+                    {permission.code}
+                  </Tag>
+                  {permission.permission_type === 'field' && (
+                    <Tag color="orange" style={{ fontSize: '10px' }}>字段</Tag>
+                  )}
+                  {permission.permission_type === 'data' && (
+                    <Tag color="green" style={{ fontSize: '10px' }}>数据</Tag>
+                  )}
+                </Space>
+              ),
+              key: permission.uuid,
+              icon:
+                permission.permission_type === 'field' ? (
+                  <EyeInvisibleOutlined />
+                ) : permission.permission_type === 'data' ? (
+                  <DatabaseOutlined />
+                ) : (
+                  <SafetyCertificateOutlined />
+                ),
+            })),
+          };
+        }),
+      };
+    });
+
+    setPermissionTreeData(treeData);
+    setPermissionTreeExpandedKeys(expandKeys);
+  }, [allPermissions, permissionSearchKeyword, permissionTypeFilter, t, token.colorPrimary]);
+
+  /**
+   * 当前树中展示的权限 UUID 列表（受搜索和类型筛选影响）
+   */
+  const displayedPermissionUuids = useMemo(() => {
+    const collect: string[] = [];
+    const walk = (nodes: any[]) => {
+      if (!nodes) return;
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          walk(node.children);
+        } else if (typeof node.key === 'string' && !node.key.startsWith('module-') && !node.key.startsWith('resource-')) {
+          collect.push(node.key);
+        }
+      }
+    };
+    walk(permissionTreeData);
+    return collect;
+  }, [permissionTreeData]);
+
+  /**
+   * 批量操作：全选当前展示的权限
+   */
+  const handleSelectAll = useCallback(() => {
+    const currentChecked = new Set(
+      checkedKeys.filter((k) => typeof k === 'string' && !String(k).startsWith('resource-') && !String(k).startsWith('module-'))
+    );
+    displayedPermissionUuids.forEach((uuid) => currentChecked.add(uuid));
+    setCheckedKeys(Array.from(currentChecked));
+  }, [checkedKeys, displayedPermissionUuids]);
+
+  /**
+   * 批量操作：全不选当前展示的权限
+   */
+  const handleSelectNone = useCallback(() => {
+    const toRemove = new Set(displayedPermissionUuids);
+    const kept = checkedKeys.filter(
+      (k) => typeof k === 'string' && !k.startsWith('resource-') && !k.startsWith('module-') && !toRemove.has(k)
+    );
+    setCheckedKeys(kept);
+  }, [checkedKeys, displayedPermissionUuids]);
+
+  /**
+   * 批量操作：反选当前展示的权限
+   */
+  const handleSelectInvert = useCallback(() => {
+    const displayedSet = new Set(displayedPermissionUuids);
+    const currentChecked = new Set(
+      checkedKeys.filter((k) => typeof k === 'string' && !String(k).startsWith('resource-') && !String(k).startsWith('module-'))
+    );
+    const result: string[] = [];
+    displayedSet.forEach((uuid) => {
+      if (!currentChecked.has(uuid)) result.push(uuid);
+    });
+    checkedKeys.forEach((k) => {
+      if (typeof k === 'string' && !displayedSet.has(k) && !k.startsWith('resource-') && !k.startsWith('module-')) {
+        result.push(k);
+      }
+    });
+    setCheckedKeys(result);
+  }, [checkedKeys, displayedPermissionUuids]);
+
+  /**
+   * 应用权限模板
+   */
+  const handleApplyTemplate = useCallback(
+    (templateKey: string) => {
+      const uuids = getPermissionUuidsByTemplate(templateKey, allPermissions);
+      setCheckedKeys(uuids);
+      const template = PERMISSION_TEMPLATES.find((t) => t.key === templateKey);
+      messageApi.success(`已应用模板「${template?.name || templateKey}」，共 ${uuids.length} 个权限，请保存以生效`);
+    },
+    [allPermissions, messageApi]
+  );
 
   /**
    * 处理角色树选择
@@ -370,7 +520,7 @@ const RolesPermissionsPage: React.FC = () => {
 
       // 加载角色的权限
       const rolePermissions = await getRolePermissions(role.uuid);
-      const rolePermissionUuids = rolePermissions.map(p => p.id);
+      const rolePermissionUuids = rolePermissions.map(p => p.uuid);
       setCheckedKeys(rolePermissionUuids);
     } catch (error: any) {
       messageApi.error(error.message || '加载角色权限失败');
@@ -391,7 +541,7 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setSavingPermissions(true);
       const permissionUuids = checkedKeys.filter(
-        key => typeof key === 'string' && !key.startsWith('resource-')
+        key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')
       ) as string[];
 
       await assignPermissions(selectedRole.uuid, permissionUuids);
@@ -444,6 +594,29 @@ const RolesPermissionsPage: React.FC = () => {
       messageApi.error(error.message || '操作失败');
     } finally {
       setRoleFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理从角色复制权限
+   */
+  const handleCopyPermissions = async () => {
+    if (!sourceRoleUuid || !selectedRole) return;
+    
+    try {
+      setCopying(true);
+      const rolePermissions = await getRolePermissions(sourceRoleUuid);
+      const uuids = rolePermissions.map(p => p.uuid);
+      
+      // 更新当前勾选状态（覆盖）
+      setCheckedKeys(uuids);
+      messageApi.success('已从源角色复制权限，请点击保存以生效');
+      setCopyModalVisible(false);
+      setSourceRoleUuid(null);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取源角色权限失败');
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -598,7 +771,13 @@ const RolesPermissionsPage: React.FC = () => {
           </div>
 
           {selectedRole && (
-            <>
+            <Space>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => setCopyModalVisible(true)}
+              >
+                从角色复制
+              </Button>
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
@@ -607,7 +786,7 @@ const RolesPermissionsPage: React.FC = () => {
               >
                 保存权限
               </Button>
-            </>
+            </Space>
           )}
         </div>
 
@@ -632,12 +811,69 @@ const RolesPermissionsPage: React.FC = () => {
                 </Space>
               </div>
               <Divider />
+              {/* 权限树搜索、类型筛选与批量操作 */}
+              <Flex gap="middle" style={{ marginBottom: 16 }} wrap="wrap" align="center">
+                <Input
+                  placeholder="搜索权限（名称、代码、描述）"
+                  prefix={<SearchOutlined />}
+                  value={permissionSearchKeyword}
+                  onChange={(e) => setPermissionSearchKeyword(e.target.value)}
+                  allowClear
+                  style={{ width: 240 }}
+                />
+                <Select
+                  value={permissionTypeFilter}
+                  onChange={setPermissionTypeFilter}
+                  style={{ width: 120 }}
+                  options={[
+                    { value: 'all', label: '全部类型' },
+                    { value: 'function', label: '功能权限' },
+                    { value: 'data', label: '数据权限' },
+                    { value: 'field', label: '字段权限' },
+                  ]}
+                />
+                <Divider type="vertical" />
+                <Space size="small">
+                  <Tooltip title="全选当前展示的权限">
+                    <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
+                      全选
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="取消勾选当前展示的权限">
+                    <Button size="small" icon={<BorderOutlined />} onClick={handleSelectNone}>
+                      全不选
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="反选当前展示的权限">
+                    <Button size="small" icon={<SwapOutlined />} onClick={handleSelectInvert}>
+                      反选
+                    </Button>
+                  </Tooltip>
+                </Space>
+                <Divider type="vertical" />
+                <Select
+                  placeholder="应用权限模板"
+                  style={{ width: 160 }}
+                  allowClear
+                  onChange={(key) => key && handleApplyTemplate(key)}
+                  options={PERMISSION_TEMPLATES.map((t) => ({
+                    value: t.key,
+                    label: t.name + (t.description ? ` (${t.description})` : ''),
+                  }))}
+                />
+              </Flex>
               <Tree
                 checkable
                 checkedKeys={checkedKeys}
-                onCheck={(checked) => setCheckedKeys(checked as React.Key[])}
+                onCheck={(checked) => {
+                  const keys = Array.isArray(checked)
+                    ? checked
+                    : (checked as { checked?: React.Key[] }).checked ?? [];
+                  setCheckedKeys(keys);
+                }}
                 treeData={permissionTreeData}
-                defaultExpandAll
+                expandedKeys={permissionTreeExpandedKeys}
+                onExpand={(keys) => setPermissionTreeExpandedKeys(keys as React.Key[])}
                 showIcon
                 blockNode
               />
@@ -664,7 +900,7 @@ const RolesPermissionsPage: React.FC = () => {
             }}
           >
             <span>
-              已选择 {checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-')).length} 个权限
+              已选择 {checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')).length} 个权限
             </span>
             <span>
               共 {allPermissions.length} 个权限
@@ -713,6 +949,42 @@ const RolesPermissionsPage: React.FC = () => {
             initialValue={true}
           />
         </ProForm>
+      </Modal>
+
+      {/* 复制权限 Modal */}
+      <Modal
+        title="从其他角色复制权限"
+        open={copyModalVisible}
+        onCancel={() => {
+          setCopyModalVisible(false);
+          setSourceRoleUuid(null);
+        }}
+        onOk={handleCopyPermissions}
+        confirmLoading={copying}
+        okButtonProps={{ disabled: !sourceRoleUuid }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>请选择要从中复制权限的角色：</p>
+          <Select
+            placeholder="请选择源角色"
+            style={{ width: '100%' }}
+            onChange={setSourceRoleUuid}
+            value={sourceRoleUuid}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+            }
+            options={roles
+              .filter(r => r.uuid !== selectedRole?.uuid)
+              .map(r => ({
+                label: r.name + ' (' + r.code + ')',
+                value: r.uuid,
+              }))}
+          />
+        </div>
+        <p style={{ color: token.colorTextSecondary, fontSize: '12px' }}>
+          注意：此操作将覆盖当前已勾选的权限，但不会立即保存到数据库。
+        </p>
       </Modal>
     </div>
   );

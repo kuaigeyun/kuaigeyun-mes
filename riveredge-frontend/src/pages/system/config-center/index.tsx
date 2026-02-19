@@ -10,6 +10,7 @@ import { SaveOutlined, ReloadOutlined, SettingOutlined, CodeSandboxOutlined, Con
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { getSiteSetting, updateSiteSetting } from '../../../services/siteSetting';
+import { useThemeStore } from '../../../stores/themeStore';
 import {
   getBusinessConfig,
   batchUpdateProcessParameters,
@@ -207,7 +208,7 @@ const ConfigCenterPage: React.FC = () => {
       }
 
       messageApi.success('保存成功');
-      window.dispatchEvent(new Event('siteThemeUpdated'));
+      useThemeStore.getState().initFromApi();
       messageApi.info('部分设置（如主题色）可能需要刷新页面后生效');
       await loadData();
     } catch (error: any) {

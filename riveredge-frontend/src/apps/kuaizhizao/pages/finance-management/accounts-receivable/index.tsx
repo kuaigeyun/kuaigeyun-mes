@@ -14,7 +14,7 @@ import { DollarOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { financeApi } from '../../../services/production';
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { getDocumentRelations } from '../../../services/document-relation';
 
 // 应收单接口定义
 interface AccountsReceivable {

@@ -8,7 +8,7 @@
  */
 
 import { message } from 'antd';
-import { history } from '@umijs/max';
+import { navigateTo } from './navigation';
 
 /**
  * 快捷操作类型
@@ -337,7 +337,7 @@ export class QuickNavigation {
    */
   static toCreate(module: string, params?: Record<string, any>): void {
     const query = params ? `?${new URLSearchParams(params).toString()}` : '';
-    history.push(`/${module}/create${query}`);
+    navigateTo(`/${module}/create${query}`);
   }
 
   /**
@@ -345,7 +345,7 @@ export class QuickNavigation {
    */
   static toEdit(module: string, id: string | number, params?: Record<string, any>): void {
     const query = params ? `?${new URLSearchParams(params).toString()}` : '';
-    history.push(`/${module}/${id}/edit${query}`);
+    navigateTo(`/${module}/${id}/edit${query}`);
   }
 
   /**
@@ -353,7 +353,7 @@ export class QuickNavigation {
    */
   static toDetail(module: string, id: string | number, params?: Record<string, any>): void {
     const query = params ? `?${new URLSearchParams(params).toString()}` : '';
-    history.push(`/${module}/${id}${query}`);
+    navigateTo(`/${module}/${id}${query}`);
   }
 
   /**
@@ -361,6 +361,6 @@ export class QuickNavigation {
    */
   static toList(module: string, params?: Record<string, any>): void {
     const query = params ? `?${new URLSearchParams(params).toString()}` : '';
-    history.push(`/${module}${query}`);
+    navigateTo(`/${module}${query}`);
   }
 }

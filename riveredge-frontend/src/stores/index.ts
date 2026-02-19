@@ -6,3 +6,5 @@
 
 export { useGlobalStore } from './globalStore';
 export type { GlobalState } from './globalStore';
+export { useThemeStore } from './themeStore';
+export type { ThemeMode, ThemeConfig, ResolvedTheme } from './themeStore';

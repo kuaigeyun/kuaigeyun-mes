@@ -15,7 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { qualityApi, warehouseApi } from '../../../services/production';
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { getDocumentRelations } from '../../../services/document-relation';
 import { downloadFile } from '../../../services/common';
 
 // 来料检验接口定义

@@ -23,7 +23,7 @@ import QRCodeScanPage from '../pages/qrcode/scan';
 import DashboardPage from '../pages/system/dashboard';
 
 import DashboardAnalysisPage from '../pages/system/dashboard/analysis';
-import RolesPage from '../pages/system/roles/list';
+import RolesPermissionsPage from '../pages/system/roles-permissions';
 import PermissionsPage from '../pages/system/permissions/list';
 import DepartmentsPage from '../pages/system/departments/list';
 import PositionsPage from '../pages/system/positions/list';
@@ -120,7 +120,7 @@ const SystemRoutes: React.FC = () => {
 
       {/* 分析页面 */}
       <Route path="/system/dashboard/analysis" element={<DashboardAnalysisPage />} />
-      <Route path="/system/roles" element={<RolesPage />} />
+      <Route path="/system/roles" element={<RolesPermissionsPage />} />
       <Route path="/system/permissions" element={<PermissionsPage />} />
       <Route path="/system/departments" element={<DepartmentsPage />} />
       <Route path="/system/positions" element={<PositionsPage />} />

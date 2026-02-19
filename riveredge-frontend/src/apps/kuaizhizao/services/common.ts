@@ -94,19 +94,9 @@ export async function downloadExportFile(taskId: number): Promise<Blob> {
 
 /**
  * 通用工具函数
+ * downloadFile 已抽离至 src/utils/fileDownload，此处复导以保持向后兼容
  */
-
-// 文件下载工具
-export function downloadFile(blob: Blob, filename: string): void {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-}
+export { downloadFile } from '../../../utils/fileDownload';
 
 // 文件大小格式化
 export function formatFileSize(bytes: number): string {

@@ -102,7 +102,7 @@ import {
   getSalesForecastItems,
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast'
+import { getDocumentRelations } from '../../../services/document-relation'
 import { operationApi, processRouteApi } from '../../../../master-data/services/process'
 import { workshopApi } from '../../../../master-data/services/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'

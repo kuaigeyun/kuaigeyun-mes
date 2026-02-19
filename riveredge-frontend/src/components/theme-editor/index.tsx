@@ -11,6 +11,7 @@ import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
 import { getToken } from '../../utils/auth';
+import { useThemeStore } from '../../stores/themeStore';
 
 const { Text } = Typography;
 
@@ -463,12 +464,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const preferences: Record<string, any> = {
         theme: mode,
       };
+      useThemeStore.getState().applyTheme(mode, {});
       await updateUserPreference({ preferences });
-
-      // 触发用户偏好更新事件
-      window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-        detail: { preferences }
-      }));
 
       message.success('颜色模式已切换');
     } catch (error: any) {
@@ -590,38 +587,33 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             updatedPreferences.theme = values.colorMode;
           }
 
+          useThemeStore.getState().applyTheme(
+            (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
+            themeConfigForPreference
+          );
           await updateUserPreference({ preferences: updatedPreferences });
 
-          // 立即保存到本地存储（必须在保存到后端之后，确保值正确）
-          // 这是最重要的，因为读取时优先从本地存储读取
           localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
-          // 触发用户偏好更新事件，通知 UniTabs 组件更新配置
-          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-            detail: { preferences: updatedPreferences }
-          }));
         } catch (error: any) {
-          // 如果保存失败，降级到本地存储
           localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
-
-          // 即使保存失败，也触发事件通知组件更新（使用本地存储的值）
-          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-            detail: { preferences: { tabs_persistence: tabsPersistenceValue } }
-          }));
         }
       } else {
-        // 用户未登录，保存到本地存储
+        // 用户未登录，仍应用主题到 store（供当前会话使用）
+        useThemeStore.getState().applyTheme(
+          (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
+          {
+            colorPrimary: colorPrimaryValue,
+            borderRadius: values.borderRadius ?? 6,
+            fontSize: values.fontSize ?? 14,
+            compact: !!values.compact,
+            siderBgColor: siderBgColorValue || '',
+            headerBgColor: headerBgColorValue || '',
+            tabsBgColor: tabsBgColorValue || '',
+          }
+        );
         localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
-
-        // 触发事件通知组件更新（使用本地存储的值）
-        window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-          detail: { preferences: { tabs_persistence: tabsPersistenceValue } }
-        }));
       }
 
-      // 无论登录与否，都保存到本地存储作为兜底方案
-      // 重要：这确保了即使 API 失败（如平台管理员无租户上下文），主题也能在本地生效
-      const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
-      localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(themeConfig));
       localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
 
       // 保存站点主题配置
@@ -637,11 +629,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       }
 
       message.success('主题配置已应用');
-
-      // 先触发站点主题更新事件，传递用户最终选择的配置（优先应用）
-      window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-        detail: { themeConfig } // 传递完整配置
-      }));
 
       // 调用回调
       if (onThemeUpdate) {
@@ -718,21 +705,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         ]);
       }
 
-      // 5. 触发全局事件通知应用更新
-      // 通知用户偏好更新（包含主题和标签持久化）
-      window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-        detail: {
-          preferences: {
-            theme: 'light',
-            tabs_persistence: false
-          }
-        }
-      }));
-
-      // 通知站点主体更新
-      window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-        detail: { themeConfig: defaultThemeConfig }
-      }));
+      // 5. 应用主题到 store
+      useThemeStore.getState().applyTheme('light', defaultThemeConfig);
 
       // 6. 应用本地预览
       applyPreviewTheme(defaultThemeConfig, 'light');

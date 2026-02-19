@@ -16,6 +16,7 @@ import {
   updateSiteSetting,
 } from '../../../services/siteSetting';
 import { useConfigStore } from '../../../stores/configStore';
+import { useThemeStore } from '../../../stores/themeStore';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
 import { 
   getDataDictionaryByCode, 
@@ -342,7 +343,7 @@ const SiteSettingsPage: React.FC = () => {
       });
       await updateSiteSetting({ settings: { site_logo: '' } });
       messageApi.success('站点Logo已清除');
-      window.dispatchEvent(new CustomEvent('siteThemeUpdated')); // 触发更新
+      useThemeStore.getState().initFromApi();
     } catch (error: any) {
       messageApi.error(error.message || '清除Logo失败');
     } finally {

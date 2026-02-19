@@ -7,18 +7,18 @@
  * - Ant Design 6.1.0 + Pro Components 2.8.2 (UI组件)
  */
 
-import React, { useEffect, useState } from 'react';
-import { useLocation, Navigate } from 'react-router-dom';
-import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
+import React, { useEffect } from 'react';
+import { useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { setNavigateRef } from './utils/navigation';
+import { App as AntdApp, Spin, ConfigProvider, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, isTokenExpired } from './utils/auth';
 import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
-import { getUserPreference, UserPreference } from './services/userPreference';
-import { getSiteSetting } from './services/siteSetting';
 import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
+import { useThemeStore } from './stores/themeStore';
 import { updateLastActivity, getLastActivityTime } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 // 使用 routes 中的路由配置
@@ -355,11 +355,12 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 /**
  * ⚠️ 关键：必须定义在 App 函数外部（模块级别）
  * 若定义在 App 内部，每次 App 重渲染时 React 会认为这是一个全新的组件类型，
- * 导致整个子树卸载并重挂载，引发无限循环（子组件 fetchPreferences → userPreferenceUpdated → applyThemeConfig → setThemeConfig → App 重渲染 → 子树重挂载 → 循环）。
+ * 导致整个子树卸载并重挂载，引发无限循环。
  */
 const AppContent: React.FC = () => {
   const { message } = AntdApp.useApp();
   const touchScreen = useTouchScreen();
+  const navigate = useNavigate();
 
   // 将 message 实例设置到全局，供工具函数使用
   React.useEffect(() => {
@@ -367,6 +368,11 @@ const AppContent: React.FC = () => {
       (window as any).__ANTD_MESSAGE__ = message;
     }
   }, [message]);
+
+  // 将 navigate 注入到全局，供 QuickNavigation 等工具在非组件上下文中使用
+  React.useEffect(() => {
+    setNavigateRef(navigate);
+  }, [navigate]);
 
   // 应用触屏模式样式类
   React.useEffect(() => {
@@ -390,452 +396,33 @@ const AppContent: React.FC = () => {
 // 主应用组件
 export default function App() {
 
-  const [userPreference, setUserPreference] = useState<UserPreference | null>(null);
-  // 主题配置本地存储键名
-  const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
+  const initFromApi = useThemeStore((s) => s.initFromApi);
+  const subscribeToSystemTheme = useThemeStore((s) => s.subscribeToSystemTheme);
+  const themeMode = useThemeStore((s) => s.theme);
 
-  // 同步从本地存储加载配置
-  const loadThemeFromCache = () => {
-    try {
-      const cached = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-      if (cached) {
-         return JSON.parse(cached);
-      }
-    } catch (e) {
-      console.warn('Failed to parse cached theme config:', e);
+  // 主题初始化（挂载时执行一次）
+  useEffect(() => {
+    useUserPreferenceStore.getState().rehydrateFromStorage();
+    const cachedPrefs = useUserPreferenceStore.getState().preferences;
+    if (cachedPrefs?.language) {
+      i18n.changeLanguage(cachedPrefs.language).catch(() => {});
     }
-    return null;
-  };
-
-  const [_siteThemeConfig, setSiteThemeConfig] = useState<{
-    colorPrimary?: string;
-    borderRadius?: number;
-    fontSize?: number;
-    compact?: boolean;
-    siderBgColor?: string; // 左侧菜单栏背景色（仅浅色模式，支持透明度）
-    headerBgColor?: string; // 顶栏背景色（支持透明度）
-    tabsBgColor?: string; // 标签栏背景色（支持透明度）
-    theme?: string; // 保存的颜色模式
-  } | null>(() => loadThemeFromCache());
-
-  const [themeConfig, setThemeConfig] = useState<{
-    algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm | Array<typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm>;
-    token: {
-      colorPrimary?: string;
-      borderRadius?: number;
-      fontSize?: number;
-    };
-  } | null>(() => {
-    // 初始状态立即计算，避免闪烁
-    const cachedConfig = loadThemeFromCache();
-    if (cachedConfig) {
-      const userTheme = cachedConfig.theme || 'light'; // 默认为浅色
-      
-      // 确定基础算法
-      let baseAlgorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm = theme.defaultAlgorithm;
-      if (userTheme === 'dark') {
-        baseAlgorithm = theme.darkAlgorithm;
-      } else if (userTheme === 'auto') {
-        // 同步检测系统主题
-        if (typeof window !== 'undefined' && window.matchMedia) {
-           const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-           baseAlgorithm = prefersDark ? theme.darkAlgorithm : theme.defaultAlgorithm;
-        }
-      }
-
-      // 紧凑模式
-      const algorithm = cachedConfig.compact
-        ? [baseAlgorithm, theme.compactAlgorithm]
-        : baseAlgorithm;
-
-      // Token
-      const token = {
-        colorPrimary: cachedConfig.colorPrimary || '#1890ff',
-        borderRadius: cachedConfig.borderRadius || 6,
-        fontSize: cachedConfig.fontSize || 14,
-      };
-
-      // 立即设置全局变量，确保子组件渲染时能获取到
-      if (typeof window !== 'undefined') {
-        const isDark = baseAlgorithm === theme.darkAlgorithm || (Array.isArray(algorithm) && algorithm.includes(theme.darkAlgorithm));
-        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-
-        // 只有浅色模式下才设置自定义侧边栏背景
-        if (userTheme === 'light' && cachedConfig.siderBgColor && cachedConfig.siderBgColor.trim() !== '') {
-          (window as any).__RIVEREDGE_SIDER_BG_COLOR__ = cachedConfig.siderBgColor;
-        } else {
-           // 确保清理
-           delete (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-        }
-
-        if (cachedConfig.headerBgColor && cachedConfig.headerBgColor.trim() !== '') {
-          (window as any).__RIVEREDGE_HEADER_BG_COLOR__ = cachedConfig.headerBgColor;
-        } else {
-           delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-        }
-
-        if (cachedConfig.tabsBgColor && cachedConfig.tabsBgColor.trim() !== '') {
-          (window as any).__RIVEREDGE_TABS_BG_COLOR__ = cachedConfig.tabsBgColor;
-        } else {
-           delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-        }
-      }
-
-      return { algorithm, token };
-    }
-    
-    // 默认回退
-    return {
-      algorithm: theme.defaultAlgorithm,
-      token: { colorPrimary: '#1890ff' }
-    };
-  });
-
-  // 加载站点主题配置（从服务器加载，如果失败则使用缓存）
-  // 只返回数据，不触发 React state 更新（避免额外重渲染）
-  const loadSiteTheme = async () => {
-    try {
-      const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-
-      // 从服务器加载主题配置
-      const siteSetting = await getSiteSetting();
-      const themeConfig = siteSetting?.settings?.theme_config || {};
-
-      // 如果服务器有配置，使用服务器配置；否则使用缓存配置
-      const finalConfig = Object.keys(themeConfig).length > 0 ? themeConfig : (cachedThemeConfig ? JSON.parse(cachedThemeConfig) : {});
-
-      // 保存到本地存储（临时方案）
-      if (Object.keys(finalConfig).length > 0) {
-        localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(finalConfig));
-      }
-
-      return finalConfig;
-    } catch (error) {
-      console.warn('Failed to load site theme:', error);
-      // 如果服务器加载失败，尝试使用本地存储
-      const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-      if (cachedThemeConfig) {
-        try {
-          const parsedConfig = JSON.parse(cachedThemeConfig);
-          if (parsedConfig && typeof parsedConfig === 'object') {
-            return parsedConfig;
-          }
-        } catch (e) {
-          console.warn('Failed to parse cached theme config:', e);
-        }
-      }
-      return null;
-    }
-  };
-
-  // 应用主题配置（合并用户偏好和站点设置）
-  const applyThemeConfig = (
-    userThemePreference: string,
-    siteTheme: { colorPrimary?: string; borderRadius?: number; fontSize?: number; compact?: boolean; siderBgColor?: string; headerBgColor?: string; tabsBgColor?: string } | null
-  ) => {
-    // 确定基础算法（用户偏好）
-    let baseAlgorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm = theme.defaultAlgorithm;
-
-    if (userThemePreference === 'dark') {
-      baseAlgorithm = theme.darkAlgorithm;
-    } else if (userThemePreference === 'auto') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      baseAlgorithm = prefersDark ? theme.darkAlgorithm : theme.defaultAlgorithm;
-    } else {
-      baseAlgorithm = theme.defaultAlgorithm;
-    }
-
-    // 如果站点设置了紧凑模式，组合紧凑算法
-    const algorithm = siteTheme?.compact
-      ? [baseAlgorithm, theme.compactAlgorithm]
-      : baseAlgorithm;
-
-    // 构建 token（优先使用站点设置，否则使用默认值）
-    const token: {
-      colorPrimary?: string;
-      borderRadius?: number;
-      fontSize?: number;
-    } = {
-      colorPrimary: siteTheme?.colorPrimary || '#1890ff',
-      borderRadius: siteTheme?.borderRadius || 6,
-      fontSize: siteTheme?.fontSize || 14,
-    };
-
-    // 立即应用主题配置，不使用过渡动画
-    setThemeConfig({ algorithm, token });
-
-    // ⚠️ 关键修复：强制设置文档的 color-scheme，确保滚动条等原生控件颜色正确
-    // 解决“明亮模式不受系统暗黑模式影响”以及“暗黑模式下滚动条不白”的问题
-    const isDark = baseAlgorithm === theme.darkAlgorithm || (Array.isArray(algorithm) && algorithm.includes(theme.darkAlgorithm));
-    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
-
-    // 设置左侧菜单栏背景色（仅浅色模式支持自定义背景色，支持透明度）
-    // 将自定义背景色存储到全局变量，供 BasicLayout 使用
-    if (userThemePreference === 'light' && siteTheme?.siderBgColor !== undefined) {
-      // 仅在浅色模式下应用自定义背景色
-      if (siteTheme.siderBgColor && siteTheme.siderBgColor.trim() !== '') {
-        (window as any).__RIVEREDGE_SIDER_BG_COLOR__ = siteTheme.siderBgColor;
-      } else {
-        // 如果为空字符串，清除自定义背景色（使用默认背景色）
-        delete (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-      }
-    } else {
-      // 深色模式下，清除自定义背景色（使用深色模式的默认背景色）
-      delete (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-    }
-
-    // 设置顶栏背景色（支持透明度，浅色和深色模式都支持）
-    // 将自定义背景色存储到全局变量，供 BasicLayout 使用
-    if (siteTheme?.headerBgColor !== undefined) {
-      if (siteTheme.headerBgColor && siteTheme.headerBgColor.trim() !== '') {
-        (window as any).__RIVEREDGE_HEADER_BG_COLOR__ = siteTheme.headerBgColor;
-      } else {
-        // 如果为空字符串，清除自定义背景色（使用默认背景色）
-        delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-      }
-    } else {
-      delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-    }
-
-    // 设置标签栏背景色（支持透明度，浅色和深色模式都支持）
-    // 将自定义背景色存储到全局变量，供 UniTabs 组件使用
-    if (siteTheme?.tabsBgColor !== undefined) {
-      if (siteTheme.tabsBgColor && siteTheme.tabsBgColor.trim() !== '') {
-        (window as any).__RIVEREDGE_TABS_BG_COLOR__ = siteTheme.tabsBgColor;
-      } else {
-        // 如果为空字符串，清除自定义背景色（使用默认背景色）
-        delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-      }
-    } else {
-      delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-    }
-
-    // 强制立即更新 DOM，清除可能的缓存
-    requestAnimationFrame(() => {
-      // 清除可能的 CSS 变量缓存
-      document.documentElement.style.removeProperty('--ant-colorBgLayout');
-      document.documentElement.style.removeProperty('--ant-colorBgContainer');
-      document.documentElement.style.removeProperty('--ant-colorBgElevated');
-      document.documentElement.style.removeProperty('--ant-colorPrimary');
-      // 强制重新计算样式，清除浏览器缓存
-      void document.documentElement.offsetHeight;
+    initFromApi();
+    loadUserLanguage().catch((err) => {
+      console.warn('Failed to load user language during app init:', err);
     });
-  };
+  }, [initFromApi]);
 
-  // 初始化时加载用户偏好设置和站点主题配置（挂载时若有 token 则执行）
+  // 监听系统主题变化（当 theme=auto 时）
   useEffect(() => {
-    const token = getToken();
+    return subscribeToSystemTheme();
+  }, [themeMode, subscribeToSystemTheme]);
 
-    if (token) {
-      // 1）先同步从当前账户缓存恢复偏好，首帧即生效，避免换账号后需刷新才生效
-      useUserPreferenceStore.getState().rehydrateFromStorage();
-      const cachedPrefs = useUserPreferenceStore.getState().preferences;
-      if (cachedPrefs?.theme != null || (cachedPrefs?.theme_config && Object.keys(cachedPrefs.theme_config).length > 0)) {
-        const userTheme = cachedPrefs.theme || 'light';
-        const userThemeConfig = cachedPrefs.theme_config;
-        const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
-          ? { ...(_siteThemeConfig || {}), ...userThemeConfig }
-          : _siteThemeConfig;
-        applyThemeConfig(userTheme, effectiveTheme);
-      }
-      if (cachedPrefs?.language) {
-        i18n.changeLanguage(cachedPrefs.language).catch(() => {});
-      }
 
-      // 2）后台拉取最新偏好与站点主题（通过下面的 Promise.all 统一处理）
-
-      Promise.all([
-        getUserPreference().catch((error) => {
-          // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）
-          if (error?.response?.status === 401) {
-            console.warn('⚠️ 用户偏好设置加载失败（401），跳过设置');
-            return null;
-          }
-          return null;
-        }),
-        loadSiteTheme().catch(() => null),
-      ]).then(([preference, siteTheme]) => {
-        if (preference) {
-          setUserPreference(preference);
-        }
-
-        // 判断是否有用户偏好设置（检查 theme 是否存在）
-        const hasUserPreference = preference?.preferences?.theme !== undefined && preference?.preferences?.theme !== null;
-
-        if (hasUserPreference) {
-          // 非首次登录：优先使用保存的偏好设置
-          const userTheme = preference.preferences.theme;
-          // 如果用户偏好是 'auto'，默认使用浅色而不是跟随系统
-          const actualTheme = userTheme === 'auto' ? 'light' : userTheme;
-          // 合并站点主题与用户偏好中的 theme_config（偏好设置页/主题配置）
-          const userThemeConfig = preference.preferences.theme_config;
-          const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
-            ? { ...(siteTheme || {}), ...userThemeConfig }
-            : siteTheme;
-          applyThemeConfig(actualTheme, effectiveTheme);
-        } else {
-          // 首次登录或未做偏好设置：检查本地缓存
-          const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-          if (cachedThemeConfig) {
-            try {
-              const parsedConfig = JSON.parse(cachedThemeConfig);
-              if (parsedConfig && typeof parsedConfig === 'object') {
-                // 无偏好设置但有本地缓存：使用本地缓存
-                // 从缓存中获取主题模式，如果没有则使用浅色
-                const cachedTheme = parsedConfig.theme || 'light';
-                const actualTheme = cachedTheme === 'auto' ? 'light' : cachedTheme;
-                applyThemeConfig(actualTheme, parsedConfig);
-              } else {
-                // 缓存格式错误：使用默认主题色+浅色模式
-                applyThemeConfig('light', null);
-              }
-            } catch (e) {
-              console.warn('Failed to parse cached theme config:', e);
-              // 解析失败：使用默认主题色+浅色模式
-              applyThemeConfig('light', null);
-            }
-          } else {
-            // 无偏好设置且无本地缓存：使用默认主题色+浅色模式
-            applyThemeConfig('light', null);
-          }
-        }
-
-        // 通知 BasicLayout 等子组件主题已就绪，触发一次背景色更新
-        window.dispatchEvent(new CustomEvent('theme-applied'));
-
-        // 加载用户选择的语言（异步，不阻塞主题加载）
-        loadUserLanguage().catch((err) => {
-          console.warn('Failed to load user language during app init:', err);
-        });
-      }).catch((error) => {
-        console.warn('Failed to load preferences:', error);
-        // 如果加载失败，尝试使用本地存储的主题配置
-        const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-        if (cachedThemeConfig) {
-          try {
-            const fallbackConfig = JSON.parse(cachedThemeConfig);
-            if (fallbackConfig && typeof fallbackConfig === 'object') {
-              const cachedTheme = fallbackConfig.theme || 'light';
-              const actualTheme = cachedTheme === 'auto' ? 'light' : cachedTheme;
-              applyThemeConfig(actualTheme, fallbackConfig);
-            } else {
-              applyThemeConfig('light', null);
-            }
-          } catch (e) {
-            console.warn('Failed to parse cached theme config:', e);
-            applyThemeConfig('light', null);
-          }
-        } else {
-          // 无缓存：使用默认主题色+浅色模式
-          applyThemeConfig('light', null);
-        }
-        loadUserLanguage().catch((err) => {
-          console.warn('Failed to load user language:', err);
-        });
-      });
-    } else {
-      // 未登录时，忽略所有缓存，强制使用默认色+浅色模式
-      applyThemeConfig('light', null);
-    }
-  }, []); // 依赖为空，确保只在挂载时执行
-
-  // 注意：主题初始化已完全在上方 useEffect([], []) 中处理，此处不再重复。
-  // 上方的 useEffect 已经通过 Promise.all 并行拉取站点主题和用户偏好，并在完成后一次性应用。
-
-  // 监听系统主题变化（当用户偏好为 auto 时）
-  useEffect(() => {
-    if (userPreference?.preferences?.theme === 'auto') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = (e: MediaQueryListEvent) => {
-        const userTheme = e.matches ? 'dark' : 'light';
-        // 使用函数式更新，确保获取最新的 siteThemeConfig
-        setSiteThemeConfig((currentSiteTheme) => {
-          applyThemeConfig(userTheme, currentSiteTheme);
-          return currentSiteTheme;
-        });
-      };
-
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, [userPreference?.preferences?.theme]); // 移除 siteThemeConfig 依赖，避免重复触发
-
-  useEffect(() => {
-    // 标记主题是否已完成初始化
-    // 在初始化完成（theme-applied 事件）之前，忽略 userPreferenceUpdated 事件，防止重复渲染
-    let themeInitialized = false;
-
-    const handleThemeApplied = () => {
-      themeInitialized = true;
-    };
-
-    window.addEventListener('theme-applied', handleThemeApplied);
-
-    const handlePreferenceUpdate = (event: CustomEvent) => {
-      // 初始化完成前，跳过响应，避免 fetchPreferences 触发额外渲染
-      if (!themeInitialized) return;
-      // 偏好保存期间跳过，由 siteThemeUpdated 统一应用主题（避免双重渲染）
-      if ((window as any).__RIVEREDGE_THEME_SAVING__) return;
-
-      // 优先从事件 detail 获取，其次从 store 获取
-      const preferences = event.detail?.preferences || useUserPreferenceStore.getState().preferences;
-      if (!preferences) return;
-
-      // 应用新的主题偏好：合并站点主题与用户偏好中的 theme_config
-      const userTheme = preferences.theme || 'light';
-      // 如果用户偏好是 'auto'，此时我们不一定能立刻根据系统状态，但 applyThemeConfig 会处理
-      const actualTheme = userTheme === 'auto' ? 'light' : userTheme;
-      
-      const userThemeConfig = preferences.theme_config;
-      setSiteThemeConfig((currentSiteTheme) => {
-        const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
-          ? { ...currentSiteTheme, ...userThemeConfig }
-          : currentSiteTheme;
-        applyThemeConfig(actualTheme, effectiveTheme);
-        return currentSiteTheme;
-      });
-    };
-
-    // 监听站点主题更新事件
-    const handleSiteThemeUpdate = async (event: CustomEvent) => {
-      const newThemeConfig = (event as CustomEvent).detail?.themeConfig;
-      if (newThemeConfig) {
-        // 立即更新状态
-        setSiteThemeConfig(newThemeConfig);
-        // 使用函数式更新 userPreference，确保获取最新值
-        setUserPreference((currentPreference) => {
-          const userTheme = currentPreference?.preferences?.theme || 'light';
-          // 立即应用主题配置，不使用缓存
-          applyThemeConfig(userTheme, newThemeConfig);
-          return currentPreference;
-        });
-      } else {
-        // 如果没有传递配置，重新加载（不使用缓存）
-        const siteTheme = await loadSiteTheme();
-        if (siteTheme) {
-          setSiteThemeConfig(siteTheme);
-          setUserPreference((currentPreference) => {
-            const userTheme = currentPreference?.preferences?.theme || 'light';
-            applyThemeConfig(userTheme, siteTheme);
-            return currentPreference;
-          });
-        }
-      }
-    };
-
-    window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
-    window.addEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
-    return () => {
-      window.removeEventListener('theme-applied', handleThemeApplied);
-      window.removeEventListener('userPreferenceUpdated', handlePreferenceUpdate as unknown as EventListener);
-      window.removeEventListener('siteThemeUpdated', handleSiteThemeUpdate as unknown as EventListener);
-    };
-  }, []); // 移除依赖项，避免重复触发和状态覆盖
-
-  // 如果主题配置未加载，使用默认配置（避免闪烁）
-  const finalThemeConfig = themeConfig || {
-    algorithm: theme.defaultAlgorithm,
-    token: { colorPrimary: '#1890ff' },
+  const resolved = useThemeStore((s) => s.resolved);
+  const finalThemeConfig = {
+    algorithm: resolved.algorithm,
+    token: resolved.token,
   };
 
   return (

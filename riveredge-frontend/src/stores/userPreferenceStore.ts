@@ -112,11 +112,10 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
 
       clearForLogout: () => {
         set({ preferences: {}, loading: false, initialized: false });
-        // 偏好缓存按 key 多存一份，不删；主题相关为全局 key，登出时清除避免下一账户沿用
+        // 偏好缓存按 key 多存一份，不删；riveredge_theme_config 由 themeStore.clearForLogout 清除
         // 注意：不清除 riveredge_saved_tabs，以便同一用户再次登录时能恢复标签
         try {
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('riveredge_theme_config');
             localStorage.removeItem('riveredge_tabs_persistence');
           }
         } catch (_) {}

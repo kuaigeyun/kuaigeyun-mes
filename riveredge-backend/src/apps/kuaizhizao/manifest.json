@@ -1,7 +1,7 @@
 {
     "name": "快格轻制造",
     "code": "kuaizhizao",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "轻量级MES系统，专注生产执行核心流程",
     "icon": "production",
     "author": "RiverEdge Team",
@@ -191,14 +191,14 @@
                         "title": "app.kuaizhizao.menu.warehouse-management.analysis-group",
                         "children": [{
                                 "title": "单据节点耗时",
-                                "path": "/apps/kuaizhizao/warehouse-management/document-node-timing",
-                                "permission": "kuaizhizao:document-node-timing:view",
+                                "path": "/apps/kuaizhizao/warehouse-management/document-timing",
+                                "permission": "kuaizhizao:document-timing:view",
                                 "sort_order": 1
                             },
                             {
                                 "title": "单据效率分析",
-                                "path": "/apps/kuaizhizao/warehouse-management/document-efficiency-analysis",
-                                "permission": "kuaizhizao:document-efficiency-analysis:view",
+                                "path": "/apps/kuaizhizao/warehouse-management/document-efficiency",
+                                "permission": "kuaizhizao:document-efficiency:view",
                                 "sort_order": 2
                             },
                             {

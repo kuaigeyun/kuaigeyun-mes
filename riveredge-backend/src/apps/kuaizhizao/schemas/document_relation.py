@@ -71,6 +71,24 @@ class DocumentRelationListResponse(BaseModel):
     downstream: List[DocumentRelationResponse] = Field(default_factory=list, description="下游单据列表")
 
 
+class DocumentRef(BaseModel):
+    """单据引用（用于关联关系API）"""
+    document_type: str = Field(..., description="单据类型")
+    document_id: int = Field(..., description="单据ID")
+    document_code: Optional[str] = Field(None, description="单据编码")
+    document_name: Optional[str] = Field(None, description="单据名称")
+
+
+class GetDocumentRelationsResponse(BaseModel):
+    """获取单据关联关系API响应Schema"""
+    document_type: str = Field(..., description="单据类型")
+    document_id: int = Field(..., description="单据ID")
+    upstream_documents: List[DocumentRef] = Field(default_factory=list, description="上游单据列表")
+    downstream_documents: List[DocumentRef] = Field(default_factory=list, description="下游单据列表")
+    upstream_count: int = Field(0, description="上游单据数量")
+    downstream_count: int = Field(0, description="下游单据数量")
+
+
 class DocumentTraceNode(BaseModel):
     """单据追溯节点"""
     document_type: str = Field(..., description="单据类型")

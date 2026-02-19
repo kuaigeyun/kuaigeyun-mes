@@ -15,7 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { getDocumentRelations } from '../../../services/document-relation';
 import { downloadFile } from '../../../services/common';
 
 // 采购入库单接口定义
