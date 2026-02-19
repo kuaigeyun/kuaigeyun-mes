@@ -116,6 +116,25 @@ class Cache:
         return await cls._redis.delete(key)
 
     @classmethod
+    async def delete_by_pattern(cls, pattern: str) -> int:
+        """
+        按照模式删除缓存
+
+        Args:
+            pattern: 匹配模式，如 "riveredge:menu:*"
+
+        Returns:
+            int: 删除的键数量
+        """
+        if not cls._redis:
+            raise RuntimeError("Redis 未连接，请先调用 connect()")
+
+        keys = await cls._redis.keys(pattern)
+        if keys:
+            return await cls._redis.delete(*keys)
+        return 0
+
+    @classmethod
     async def exists(cls, key: str) -> bool:
         """
         检查缓存是否存在

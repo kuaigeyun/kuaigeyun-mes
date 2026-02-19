@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { Button, message, Spin } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import ChartWidget from '../components/widgets/ChartWidget';
@@ -16,8 +16,9 @@ import 'react-resizable/css/styles.css';
 
 const DashboardView: React.FC = () => {
     const navigate = useNavigate();
+    const { id: idFromParams } = useParams<{ id: string }>();
     const [searchParams] = useSearchParams();
-    const id = searchParams.get('id');
+    const id = idFromParams || searchParams.get('id');
 
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState('');

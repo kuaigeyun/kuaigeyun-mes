@@ -25,10 +25,28 @@ class IntegrationConfigBase(BaseModel):
     @field_validator('type')
     @classmethod
     def validate_type(cls, v: str) -> str:
-        """验证集成类型（含数据源类型：postgresql、mysql、mongodb、api）"""
+        """验证集成类型（含数据源、应用连接器类型）"""
         allowed_types = [
             'OAuth', 'API', 'Webhook', 'Database',
-            'postgresql', 'mysql', 'mongodb', 'api',
+            'postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver',
+            'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks',
+            'elasticsearch', 'api',
+            # 应用连接器：协作
+            'feishu', 'dingtalk', 'wecom',
+            # 应用连接器：ERP
+            'sap', 'kingdee', 'yonyou', 'dsc', 'inspur', 'digiwin_e10',
+            'grasp_erp', 'super_erp', 'chanjet_tplus', 'kingdee_kis',
+            'oracle_netsuite', 'erpnext', 'odoo', 'sunlike_erp',
+            # 应用连接器：PLM/PDM
+            'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
+            # 应用连接器：CRM
+            'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
+            # 应用连接器：OA
+            'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
+            # 应用连接器：IoT
+            'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
+            # 应用连接器：WMS
+            'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
         ]
         if v not in allowed_types:
             raise ValueError(f"集成类型必须是以下之一: {', '.join(allowed_types)}")
@@ -71,6 +89,17 @@ class IntegrationConfigResponse(IntegrationConfigBase):
     updated_at: datetime = Field(..., description="更新时间")
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class TestConfigRequest(BaseModel):
+    """
+    保存前测试连接请求 Schema
+    
+    用于新建/编辑时，在保存前测试连接配置是否有效。
+    不落库，仅验证配置。
+    """
+    type: str = Field(..., description="集成类型：postgresql、mysql、mongodb、api 等")
+    config: Dict[str, Any] = Field(default_factory=dict, description="连接配置（JSON）")
 
 
 class TestConnectionResponse(BaseModel):

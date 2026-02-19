@@ -531,6 +531,18 @@ code {
   }
 }
 
+/* 全局：Modal 确认按钮组默认居左 */
+.ant-modal .ant-modal-footer,
+.ant-modal .ant-pro-form-submitter {
+  display: flex !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ant-modal .ant-modal-footer .ant-space {
+  justify-content: flex-start;
+}
+
 /* 全局：Modal 内表单标题为粗体 */
 .ant-modal .ant-form-item-label > label {
   font-weight: 600;

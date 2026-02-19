@@ -4,9 +4,10 @@
 提供数据集的 CRUD 操作和查询执行功能。
 """
 
+import re
 import time
 import httpx
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from uuid import UUID
 from datetime import datetime
 
@@ -17,6 +18,14 @@ from core.models.integration_config import IntegrationConfig
 from core.models.api import API
 from core.schemas.dataset import DatasetCreate, DatasetUpdate, ExecuteQueryRequest, ExecuteQueryResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+# 应用连接器类型（与 application_connections API 一致）
+APPLICATION_CONNECTOR_TYPES = (
+    "feishu", "dingtalk", "wecom",
+    "sap", "kingdee", "yonyou", "dsc",
+    "teamcenter", "windchill", "dassault_3dx",
+    "salesforce", "xiaoshouyi", "fenxiang",
+)
 
 
 class DatasetService:
@@ -362,18 +371,9 @@ class DatasetService:
         start_time = time.time()
         
         try:
-            # 根据查询类型执行查询
-            if dataset.query_type == 'sql':
-                result = await self._execute_sql_query(
-                    integration_config=integration_config,
-                    query_config=dataset.query_config,
-                    parameters=execute_request.parameters,
-                    limit=execute_request.limit,
-                    offset=execute_request.offset,
-                )
-            elif dataset.query_type == 'api':
-                result = await self._execute_api_query(
-                    tenant_id=tenant_id,
+            # 应用连接器类型：使用 REST 拉取（query_config 含 endpoint、method）
+            if integration_config.type in APPLICATION_CONNECTOR_TYPES:
+                result = await self._execute_app_connector_query(
                     integration_config=integration_config,
                     query_config=dataset.query_config,
                     parameters=execute_request.parameters,
@@ -381,13 +381,34 @@ class DatasetService:
                     offset=execute_request.offset,
                 )
             else:
-                result = {
-                    'success': False,
-                    'data': [],
-                    'total': None,
-                    'columns': None,
-                    'error': f'不支持的查询类型: {dataset.query_type}',
-                }
+                # 兼容历史错误数据：visual 等无效值按 sql 处理
+                qt = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
+                if qt == 'sql':
+                    result = await self._execute_sql_query(
+                        tenant_id=tenant_id,
+                        integration_config=integration_config,
+                        query_config=dataset.query_config,
+                        parameters=execute_request.parameters,
+                        limit=execute_request.limit,
+                        offset=execute_request.offset,
+                    )
+                elif qt == 'api':
+                    result = await self._execute_api_query(
+                        tenant_id=tenant_id,
+                        integration_config=integration_config,
+                        query_config=dataset.query_config,
+                        parameters=execute_request.parameters,
+                        limit=execute_request.limit,
+                        offset=execute_request.offset,
+                    )
+                else:
+                    result = {
+                        'success': False,
+                        'data': [],
+                        'total': None,
+                        'columns': None,
+                        'error': f'不支持的查询类型: {dataset.query_type}',
+                    }
             
             elapsed_time = time.time() - start_time
             
@@ -424,8 +445,49 @@ class DatasetService:
                 error=f'查询执行异常: {str(e)}',
             )
     
+    @staticmethod
+    def _convert_named_params_to_positional(sql: str, params: Dict[str, Any]) -> Tuple[str, list]:
+        """将 :param 占位符转为 asyncpg 的 $1,$2 格式，按 SQL 中首次出现顺序，返回 (sql, args)"""
+        if not params:
+            return sql, []
+        param_names = list(dict.fromkeys(re.findall(r":(\w+)\b", sql)))
+        args = [params[n] for n in param_names]
+        for i, name in enumerate(param_names, 1):
+            sql = re.sub(rf":{re.escape(name)}\b", f"${i}", sql)
+        return sql, args
+
+    @staticmethod
+    def _inject_tenant_filter_sql(sql: str) -> str:
+        """
+        共享库租户隔离：自动在 SQL 中注入 tenant_id = :tenant_id 条件。
+        tenant_id 由系统自动注入，用户无需在 SQL 中指定，也不允许被覆盖。
+        注意：多表 JOIN 时若多表均有 tenant_id 列，可能产生列歧义，可设置 tenant_isolation=false 后手动添加带表别名的条件。
+        """
+        sql = sql.strip()
+        sql_upper = sql.upper()
+        tenant_condition = f"tenant_id = :tenant_id"
+        if "WHERE" in sql_upper:
+            # 已有 WHERE，在 WHERE 后追加 AND tenant_id = :tenant_id
+            sql = re.sub(
+                r"(\bWHERE\b)(\s+)",
+                r"\1 " + tenant_condition + r" AND \2",
+                sql,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        else:
+            # 无 WHERE，在 FROM 子句后、GROUP BY/ORDER BY/LIMIT 前添加
+            match = re.search(r"\b(GROUP BY|ORDER BY|LIMIT)\b", sql_upper)
+            if match:
+                insert_pos = match.start()
+                sql = sql[:insert_pos].rstrip() + " WHERE " + tenant_condition + " " + sql[insert_pos:]
+            else:
+                sql = sql.rstrip().rstrip(";") + " WHERE " + tenant_condition
+        return sql
+
     async def _execute_sql_query(
         self,
+        tenant_id: int,
         integration_config: IntegrationConfig,
         query_config: Dict[str, Any],
         parameters: Optional[Dict[str, Any]] = None,
@@ -435,7 +497,11 @@ class DatasetService:
         """
         执行 SQL 查询
 
+        数据隔离：自动注入 tenant_id 到查询参数，确保 SQL 中可使用 :tenant_id 过滤当前租户数据。
+        若业务表含 tenant_id 列，请在 WHERE 子句中使用 tenant_id = :tenant_id 以实现租户隔离。
+
         Args:
+            tenant_id: 当前租户ID（用于数据隔离）
             integration_config: 数据连接/数据源（IntegrationConfig）
             query_config: 查询配置
             parameters: 查询参数
@@ -478,46 +544,40 @@ class DatasetService:
                     'error': '仅支持 SELECT 查询，禁止执行 DDL、DML 语句',
                 }
 
-            # 合并查询参数
-            query_params = query_config.get('parameters', {})
+            # 共享库租户隔离：默认自动注入 tenant_id 过滤，仅查当前租户。可通过 query_config.tenant_isolation=false 关闭（如每租户独立库）
+            if query_config.get("tenant_isolation", True):
+                sql = self._inject_tenant_filter_sql(sql)
+
+            # 合并查询参数；共享库模式下强制注入 tenant_id（不允许被覆盖）
+            query_params = dict(query_config.get('parameters', {}))
             if parameters:
                 query_params.update(parameters)
+            if query_config.get("tenant_isolation", True):
+                query_params['tenant_id'] = tenant_id  # 强制注入当前租户ID
 
             # 添加 LIMIT 和 OFFSET
             if 'LIMIT' not in sql_upper:
                 sql = f"{sql} LIMIT {limit} OFFSET {offset}"
 
-            # 执行查询（使用 Tortoise ORM 的原始 SQL 查询）
-            from tortoise.backends.asyncpg.client import AsyncpgDBClient
+            # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
+            sql, args = self._convert_named_params_to_positional(sql, query_params)
 
+            # 使用 asyncpg 直接连接执行
+            import asyncpg
             config = integration_config.get_config()
-            host = config.get('host', 'localhost')
-            port = config.get('port', 5432)
-            database = config.get('database', '')
-            user = config.get('user') or config.get('username', '')
-            password = config.get('password', '')
-            
-            # 创建临时连接
-            db_client = AsyncpgDBClient(
-                host=host,
-                port=port,
-                user=user,
-                password=password,
-                database=database,
+            conn = await asyncpg.connect(
+                host=config.get('host', 'localhost'),
+                port=int(config.get('port', 5432)),
+                user=config.get('user') or config.get('username', ''),
+                password=config.get('password', ''),
+                database=config.get('database', ''),
             )
-            
-            await db_client.create_connection()
-            
-            # 执行查询
-            rows = await db_client.execute_query(sql, query_params if query_params else None)
-            
-            # 获取列信息
-            columns = list(rows[0].keys()) if rows else []
-            
-            # 转换为字典列表
-            data = [dict(row) for row in rows]
-            
-            await db_client.close()
+            try:
+                rows = await conn.fetch(sql, *args) if args else await conn.fetch(sql)
+                columns = list(rows[0].keys()) if rows else []
+                data = [dict(row) for row in rows]
+            finally:
+                await conn.close()
             
             return {
                 'success': True,
@@ -534,6 +594,127 @@ class DatasetService:
                 'error': f'SQL 查询执行失败: {str(e)}',
             }
     
+    async def _execute_app_connector_query(
+        self,
+        integration_config: IntegrationConfig,
+        query_config: Dict[str, Any],
+        parameters: Optional[Dict[str, Any]] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        执行应用连接器查询（通用 REST 拉取）
+
+        query_config 需包含: endpoint, method, 可选 params/headers/body/params_mapping
+        协作类（feishu、dingtalk、wecom）与 ERP/PLM/CRM 均使用通用 REST 方式。
+        """
+        try:
+            endpoint = query_config.get("endpoint", "")
+            method = (query_config.get("method") or "GET").upper()
+            if not endpoint:
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": "应用连接器 query_config 需包含 endpoint",
+                }
+            cfg = integration_config.get_config()
+            base_url = (cfg.get("base_url") or cfg.get("url") or "").rstrip("/")
+            if not base_url:
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "error": "应用连接器配置缺少 base_url 或 url",
+                }
+            url = f"{base_url}/{endpoint.lstrip('/')}" if endpoint else base_url
+
+            headers = dict(cfg.get("headers") or {})
+            if cfg.get("auth_type") == "bearer" and cfg.get("token"):
+                headers["Authorization"] = f"Bearer {cfg['token']}"
+            if query_config.get("headers"):
+                headers.update(query_config.get("headers", {}))
+
+            params = dict(query_config.get("params") or {})
+            if parameters:
+                params.update(parameters)
+            params["limit"] = limit
+            params["offset"] = offset
+
+            body = query_config.get("body") or {}
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                if method == "GET":
+                    response = await client.get(url, headers=headers, params=params)
+                elif method == "POST":
+                    response = await client.post(url, headers=headers, params=params, json=body)
+                elif method == "PUT":
+                    response = await client.put(url, headers=headers, params=params, json=body)
+                elif method == "PATCH":
+                    response = await client.patch(url, headers=headers, params=params, json=body)
+                else:
+                    return {
+                        "success": False,
+                        "data": [],
+                        "total": None,
+                        "columns": None,
+                        "error": f"不支持的 HTTP 方法: {method}",
+                    }
+
+                if response.status_code >= 400:
+                    return {
+                        "success": False,
+                        "data": [],
+                        "total": None,
+                        "columns": None,
+                        "error": f"请求失败，状态码: {response.status_code}",
+                    }
+                try:
+                    response_data = response.json()
+                except Exception:
+                    response_data = {"data": response.text}
+                if isinstance(response_data, list):
+                    data = response_data
+                elif isinstance(response_data, dict):
+                    if "data" in response_data:
+                        data = (
+                            response_data["data"]
+                            if isinstance(response_data["data"], list)
+                            else [response_data["data"]]
+                        )
+                    elif "items" in response_data:
+                        data = response_data["items"]
+                    else:
+                        data = [response_data]
+                else:
+                    data = []
+                data = data[offset : offset + limit]
+                columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
+                return {
+                    "success": True,
+                    "data": data,
+                    "total": len(data),
+                    "columns": columns,
+                }
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "data": [],
+                "total": None,
+                "columns": None,
+                "error": "应用连接器请求超时",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "data": [],
+                "total": None,
+                "columns": None,
+                "error": f"应用连接器执行失败: {str(e)}",
+            }
+
     async def _execute_api_query(
         self,
         tenant_id: int,

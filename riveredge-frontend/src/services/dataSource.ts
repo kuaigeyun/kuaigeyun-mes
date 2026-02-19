@@ -137,3 +137,36 @@ export async function testDataSourceConnection(dataSourceUuid: string): Promise<
   };
 }
 
+export interface TestConfigRequest {
+  type: string;
+  config: Record<string, any>;
+}
+
+/**
+ * 保存前测试连接配置（不落库）
+ * 用于新建/编辑数据源时，在保存前验证连接配置是否有效。
+ */
+export async function testDataSourceConfig(data: TestConfigRequest): Promise<TestConnectionResponse> {
+  return apiRequest<TestConnectionResponse>('/core/integration-configs/test-config', {
+    method: 'POST',
+    data,
+  });
+}
+
+export interface SchemaTable {
+  name: string;
+  columns: { name: string; type: string }[];
+}
+
+export interface DataSourceSchemaResponse {
+  tables: SchemaTable[];
+  error?: string;
+}
+
+/**
+ * 获取数据源的表/列元数据（用于图形化查询构建器）
+ */
+export async function getDataSourceSchema(dataSourceUuid: string): Promise<DataSourceSchemaResponse> {
+  return apiRequest<DataSourceSchemaResponse>(`/core/integration-configs/${dataSourceUuid}/schema`);
+}
+

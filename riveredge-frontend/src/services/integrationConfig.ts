@@ -12,7 +12,7 @@ export interface IntegrationConfig {
   tenant_id: number;
   name: string;
   code: string;
-  type: 'OAuth' | 'API' | 'Webhook' | 'Database';
+  type: string; // postgresql|mysql|mongodb|api|feishu|dingtalk|wecom|sap|kingdee|yonyou|dsc|teamcenter|windchill|dassault_3dx|salesforce|xiaoshouyi|fenxiang 等
   description?: string;
   config: Record<string, any>;
   is_active: boolean;
@@ -21,6 +21,12 @@ export interface IntegrationConfig {
   last_error?: string;
   created_at: string;
   updated_at: string;
+}
+
+/** 数据集选择数据连接时的分组选项 */
+export interface DataConnectionGroupOption {
+  label: string;
+  options: { label: string; value: string }[];
 }
 
 export interface IntegrationConfigCreate {
@@ -136,5 +142,67 @@ export async function testConnection(integrationUuid: string): Promise<TestConne
   return apiRequest<TestConnectionResponse>(`/core/integration-configs/${integrationUuid}/test`, {
     method: 'POST',
   });
+}
+
+export interface TestConfigRequest {
+  type: string;
+  config: Record<string, any>;
+}
+
+/**
+ * 保存前测试连接配置（不落库）
+ * 
+ * 用于新建/编辑时，在保存前验证连接配置是否有效。
+ * 
+ * @param data - 包含 type 和 config 的测试请求
+ * @returns 连接测试结果
+ */
+export async function testConfig(data: TestConfigRequest): Promise<TestConnectionResponse> {
+  return apiRequest<TestConnectionResponse>('/core/integration-configs/test-config', {
+    method: 'POST',
+    data,
+  });
+}
+
+/** 类型分组：数据库、API、协作、ERP、PLM、CRM */
+const TYPE_CATEGORIES: Record<string, string[]> = {
+  数据库: ['postgresql', 'mysql', 'mongodb', 'oracle', 'sqlserver', 'redis', 'clickhouse', 'influxdb', 'doris', 'starrocks', 'elasticsearch'],
+  API: ['api'],
+  协作: ['feishu', 'dingtalk', 'wecom'],
+  ERP: ['sap', 'kingdee', 'yonyou', 'dsc', 'inspur', 'digiwin_e10', 'grasp_erp', 'super_erp', 'chanjet_tplus', 'kingdee_kis', 'oracle_netsuite', 'erpnext', 'odoo', 'sunlike_erp'],
+  'PLM/PDM': ['teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm'],
+  CRM: ['salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm'],
+  OA: ['weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa', 'feishu', 'dingtalk', 'wecom'],
+  IoT: ['rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks'],
+  WMS: ['flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms'],
+};
+
+export interface DataConnectionsForDatasetResult {
+  groups: DataConnectionGroupOption[];
+  items: IntegrationConfig[];
+}
+
+/**
+ * 获取数据集可用的数据连接列表（合并数据源 + 应用连接器）
+ * 按类型分组：数据库、API、协作、ERP、PLM、CRM
+ */
+export async function getDataConnectionsForDataset(): Promise<DataConnectionsForDatasetResult> {
+  const items = await getIntegrationConfigList({ skip: 0, limit: 1000 });
+  const byCategory: Record<string, { label: string; value: string }[]> = {};
+  for (const [cat, types] of Object.entries(TYPE_CATEGORIES)) {
+    byCategory[cat] = [];
+    for (const ic of items) {
+      if (types.includes(ic.type)) {
+        byCategory[cat].push({
+          label: `${ic.name} (${ic.code}) - ${ic.type}`,
+          value: ic.uuid,
+        });
+      }
+    }
+  }
+  const groups = Object.entries(byCategory)
+    .filter(([, opts]) => opts.length > 0)
+    .map(([label, options]) => ({ label, options }));
+  return { groups, items };
 }
 

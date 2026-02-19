@@ -22,6 +22,9 @@ import BasicLayout from '../layouts/BasicLayout';
 import SystemRoutes from './SystemRoutes';
 // 应用业务路由（异步加载，隔离错误）
 import AppRoutes from './AppRoutes';
+// 报表/大屏分享页（全屏展示，无需登录）
+import ReportSharedView from '../apps/kuaireport/pages/ReportSharedView';
+import DashboardSharedView from '../apps/kuaireport/pages/DashboardSharedView';
 
 /**
  * 判断当前路径是否需要 BasicLayout
@@ -40,6 +43,8 @@ const useShouldRenderLayout = (): boolean => {
   // 不需要 BasicLayout 的路径列表
   const publicRoutes = ['/', '/login', '/infra/login', '/lock-screen'];
   const publicRoutePrefixes = ['/init/'];
+  // 报表/大屏分享页（全屏展示，无需布局）
+  const sharedViewPaths = ['/apps/kuaireport/dashboards/shared', '/apps/kuaireport/reports/shared'];
 
   // 检查是否是公开路由
   if (publicRoutes.includes(pathname)) {
@@ -48,6 +53,11 @@ const useShouldRenderLayout = (): boolean => {
 
   // 检查是否是公开路由前缀
   if (publicRoutePrefixes.some(prefix => pathname.startsWith(prefix))) {
+    return false;
+  }
+
+  // 分享页全屏展示
+  if (sharedViewPaths.includes(pathname)) {
     return false;
   }
 
@@ -86,8 +96,10 @@ const MainRoutes: React.FC = () => {
         </BasicLayout>
       ) : (
         <Routes>
+          {/* 报表/大屏分享页 - 全屏展示，无需登录 */}
+          <Route path="/apps/kuaireport/dashboards/shared" element={<DashboardSharedView />} />
+          <Route path="/apps/kuaireport/reports/shared" element={<ReportSharedView />} />
           {/* 公开路由 - 不需要 BasicLayout，直接渲染 SystemRoutes */}
-          {/* ⚠️ 注意：SystemRoutes 中的公开路由也不会包裹 BasicLayout */}
           <Route path="/*" element={<SystemRoutes />} />
         </Routes>
       )}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Typography } from 'antd';
+// @ts-ignore
 import { DigitalFlop, ActiveRingChart, WaterLevelPond } from '@jiaminghi/data-view-react';
 
 const { Text } = Typography;

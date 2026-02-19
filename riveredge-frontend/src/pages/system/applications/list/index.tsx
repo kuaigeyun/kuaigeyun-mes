@@ -26,6 +26,7 @@ import {
   TeamOutlined,
   BarChartOutlined,
   ApiOutlined,
+  ArrowUpOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import {
@@ -93,6 +94,10 @@ const ApplicationListPage: React.FC = () => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 升版相关状态
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
 
 
   /**
@@ -206,6 +211,24 @@ const ApplicationListPage: React.FC = () => {
     }
   };
 
+
+
+  /**
+   * 处理应用升版
+   */
+  const handleUpgradeApp = async (record: Application, version: string, changelog: string) => {
+    try {
+      setSubmitting(true);
+      await updateApplication(record.uuid, { version, changelog });
+      messageApi.success('应用升版成功');
+      setUpgradeModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
 
   /**
@@ -371,6 +394,15 @@ const ApplicationListPage: React.FC = () => {
         onClick: () => {
           setEditingApp(application);
           setEditModalVisible(true);
+        },
+      },
+      {
+        key: 'upgrade-app',
+        label: '应用升版',
+        icon: <ArrowUpOutlined />,
+        onClick: () => {
+          setUpgradingApp(application);
+          setUpgradeModalVisible(true);
         },
       },
       {
@@ -561,29 +593,30 @@ const ApplicationListPage: React.FC = () => {
     { title: '应用代码', dataIndex: 'code' },
     { title: '应用描述', dataIndex: 'description' },
     { title: '应用版本', dataIndex: 'version' },
+    { title: '更新日志', dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
     { title: '路由路径', dataIndex: 'route_path' },
     { title: '入口点', dataIndex: 'entry_point' },
     { title: '权限代码', dataIndex: 'permission_code' },
     {
       title: '系统应用',
       dataIndex: 'is_system',
-      render: (value: boolean) => (value ? '是' : '否'),
+      render: (dom: any) => (dom ? '是' : '否'),
     },
     {
       title: '安装状态',
       dataIndex: 'is_installed',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? '已安装' : '未安装'}
+      render: (dom: any) => (
+        <Tag color={dom ? 'success' : 'default'}>
+          {dom ? '已安装' : '未安装'}
         </Tag>
       ),
     },
     {
       title: '启用状态',
       dataIndex: 'is_active',
-      render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'default'}>
-          {value ? '启用' : '禁用'}
+      render: (dom: any) => (
+        <Tag color={dom ? 'success' : 'default'}>
+          {dom ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -796,6 +829,73 @@ const ApplicationListPage: React.FC = () => {
           </div>
           <div style={{ color: '#8c8c8c', fontSize: 12 }}>
             提示：您可以自定义应用显示的名称。点击“恢复默认”将重新应用来自 manifest.json 的原始名称。
+          </div>
+        </form>
+      </Modal>
+
+      {/* 应用升版 Modal */}
+      <Modal
+        title={`应用升版 - ${upgradingApp?.name}`}
+        open={upgradeModalVisible}
+        onCancel={() => setUpgradeModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setUpgradeModalVisible(false)}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" loading={submitting} onClick={() => {
+            const form = document.getElementById('upgrade-app-form') as HTMLFormElement;
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+          }}>
+            保存
+          </Button>
+        ]}
+        destroyOnHidden
+      >
+        <form
+          id="upgrade-app-form"
+          style={{ padding: '20px 0' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const version = formData.get('version') as string;
+            const changelog = formData.get('changelog') as string;
+            if (upgradingApp) {
+              handleUpgradeApp(upgradingApp, version, changelog);
+            }
+          }}
+        >
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>新版本号:</label>
+            <input
+              type="text"
+              name="version"
+              required
+              defaultValue={upgradingApp?.version}
+              placeholder="例如: 1.0.1"
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #d9d9d9'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>更新内容:</label>
+            <textarea
+              name="changelog"
+              placeholder="请输入本次更新的内容..."
+              rows={5}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #d9d9d9'
+              }}
+            />
+          </div>
+          <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+            提示：版本升级后，所有使用该应用的组织都将看到最新的版本和更新内容。
           </div>
         </form>
       </Modal>

@@ -1,8 +1,8 @@
 {
     "name": "报表与看板",
     "code": "kuaireport",
-    "version": "1.0.0",
-    "description": "专业的报表与大屏设计工具",
+    "version": "2.0.0",
+    "description": "自研报表中心与大屏设计工具（弃用 Univer/JimuReport）",
     "icon": "bar-chart",
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaireport/index.tsx",
@@ -12,26 +12,29 @@
         "title": "报表与看板",
         "icon": "bar-chart",
         "path": "/apps/kuaireport",
-        "children": [
-            {
-                "title": "报表中心",
-                "path": "/apps/kuaireport/reports",
-                "permission": "kuaireport:report:view",
-                "sort_order": 1
-            },
-            {
-                "title": "大屏中心",
-                "path": "/apps/kuaireport/dashboards",
-                "permission": "kuaireport:dashboard:view",
-                "sort_order": 2
-            }
-        ]
+        "children": [{
+            "title": "报表与看板",
+            "children": [{
+                    "title": "报表中心",
+                    "path": "/apps/kuaireport/reports",
+                    "permission": "kuaireport:report:view",
+                    "sort_order": 1
+                },
+                {
+                    "title": "大屏中心",
+                    "path": "/apps/kuaireport/dashboards",
+                    "permission": "kuaireport:dashboard:view",
+                    "sort_order": 2
+                }
+            ]
+        }]
     },
     "permissions": [
         "kuaireport:report:view",
         "kuaireport:report:create",
         "kuaireport:report:update",
         "kuaireport:report:delete",
+        "kuaireport:report:system",
         "kuaireport:dashboard:view",
         "kuaireport:dashboard:create",
         "kuaireport:dashboard:update",

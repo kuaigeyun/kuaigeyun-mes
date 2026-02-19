@@ -50,7 +50,9 @@ import PrintTemplatesPage from '../pages/system/print-templates/list';
 import CodeRulesPage from '../pages/system/code-rules/list';
 import DataDictionariesPage from '../pages/system/data-dictionaries/list';
 import DataSourcesPage from '../pages/system/data-sources/list';
+import ApplicationConnectionsPage from '../pages/system/application-connections/list';
 import DatasetsPage from '../pages/system/datasets/list';
+import DatasetDesignerPage from '../pages/system/datasets/designer';
 import DataBackupsPage from '../pages/system/data-backups';
 import CustomFieldsPage from '../pages/system/custom-fields/list';
 import ApiServicesPage from '../pages/system/apis/list';
@@ -147,7 +149,9 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/code-rules" element={<CodeRulesPage />} />
       <Route path="/system/data-dictionaries" element={<DataDictionariesPage />} />
       <Route path="/system/data-sources" element={<DataSourcesPage />} />
+      <Route path="/system/application-connections" element={<ApplicationConnectionsPage />} />
       <Route path="/system/datasets" element={<DatasetsPage />} />
+      <Route path="/system/datasets/designer" element={<DatasetDesignerPage />} />
       <Route path="/system/data-backups" element={<DataBackupsPage />} />
       <Route path="/system/custom-fields" element={<CustomFieldsPage />} />
       <Route path="/system/api-services" element={<ApiServicesPage />} />

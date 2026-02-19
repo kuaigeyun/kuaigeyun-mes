@@ -19,6 +19,11 @@ class Dashboard(BaseModel):
     
     status = fields.CharField(max_length=20, default="DRAFT", description="状态")
     description = fields.TextField(null=True, description="描述")
+
+    # 分享相关
+    is_shared = fields.BooleanField(default=False, description="是否已分享")
+    share_token = fields.CharField(max_length=64, null=True, description="分享令牌（用于公开链接）")
+    share_expires_at = fields.DatetimeField(null=True, description="分享链接过期时间")
     thumbnail = fields.CharField(max_length=500, null=True, description="缩略图URL")
 
     created_by = fields.IntField(null=True, description="创建人ID")

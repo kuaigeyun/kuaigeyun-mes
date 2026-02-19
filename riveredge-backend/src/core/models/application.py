@@ -27,6 +27,7 @@ class Application(BaseModel):
         description: 应用描述
         icon: 应用图标（URL 或路径）
         version: 应用版本
+        changelog: 更新日志（升版记录）
         route_path: 应用路由路径
         entry_point: 应用入口点（前端组件路径或 URL）
         menu_config: 菜单配置（JSON）
@@ -48,6 +49,7 @@ class Application(BaseModel):
     description = fields.TextField(null=True, description="应用描述")
     icon = fields.CharField(max_length=200, null=True, description="应用图标")
     version = fields.CharField(max_length=20, null=True, description="应用版本")
+    changelog = fields.TextField(null=True, description="更新日志（升版记录）")
     
     route_path = fields.CharField(max_length=200, null=True, description="应用路由路径")
     entry_point = fields.CharField(max_length=500, null=True, description="应用入口点")
@@ -103,4 +105,3 @@ class Application(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.name} ({self.code})"
-

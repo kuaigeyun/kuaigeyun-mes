@@ -73,6 +73,8 @@ from core.api.files.files import router as files_router
 from core.api.files.public import router as files_public_router
 from core.api.apis.apis import router as apis_router
 from core.api.data_sources.data_sources import router as data_sources_router
+from core.api.application_connections.application_connections import router as application_connections_router
+from core.api.connector_definitions.connector_definitions import router as connector_definitions_router
 from core.api.datasets.datasets import router as datasets_router
 from core.api.messages.message_configs import router as message_configs_router
 from core.api.messages.message_templates import router as message_templates_router
@@ -637,6 +639,8 @@ app.include_router(integration_configs_router, prefix="/api/v1/core")
 app.include_router(files_router, prefix="/api/v1/core")
 app.include_router(apis_router, prefix="/api/v1/core")
 app.include_router(data_sources_router, prefix="/api/v1/core")
+app.include_router(application_connections_router, prefix="/api/v1/core")
+app.include_router(connector_definitions_router, prefix="/api/v1/core")
 app.include_router(datasets_router, prefix="/api/v1/core")
 app.include_router(message_configs_router, prefix="/api/v1/core")
 app.include_router(message_templates_router, prefix="/api/v1/core")
@@ -674,7 +678,12 @@ app.include_router(performance_router, prefix="/api/v1/core")
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
-# 无需手动注册应用路由
+# kuaireport 静态注册，确保报表/大屏 API 始终可用（动态注册可能因应用未安装而失败）
+try:
+    from apps.kuaireport.api.router import router as kuaireport_router
+    app.include_router(kuaireport_router, prefix="/api/v1/apps/kuaireport")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法加载 kuaireport 路由: {e}")
 
 # Inngest 测试端点 - 暂时禁用
 # @app.post("/api/v1/test/inngest")

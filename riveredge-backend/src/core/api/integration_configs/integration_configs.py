@@ -11,6 +11,7 @@ from core.schemas.integration_config import (
     IntegrationConfigCreate,
     IntegrationConfigUpdate,
     IntegrationConfigResponse,
+    TestConfigRequest,
     TestConnectionResponse,
 )
 from core.services.integration.integration_config_service import IntegrationConfigService
@@ -18,6 +19,30 @@ from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/integration-configs", tags=["IntegrationConfigs"])
+
+
+@router.post("/test-config", response_model=TestConnectionResponse)
+async def test_config(
+    data: TestConfigRequest,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    保存前测试连接配置（不落库）
+    
+    用于新建/编辑数据源时，在保存前验证连接配置是否有效。
+    
+    Args:
+        data: 包含 type 和 config 的测试请求
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        TestConnectionResponse: 连接测试结果
+    """
+    result = await IntegrationConfigService.test_config(
+        type_=data.type,
+        config=data.config,
+    )
+    return TestConnectionResponse(**result)
 
 
 @router.post("", response_model=IntegrationConfigResponse, status_code=status.HTTP_201_CREATED)
@@ -182,6 +207,18 @@ async def delete_integration(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/{uuid}/schema", response_model=dict)
+async def get_schema(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取数据源的表/列元数据（用于图形化查询构建器）
+    目前仅支持 PostgreSQL。
+    """
+    return await IntegrationConfigService.get_schema(tenant_id=tenant_id, uuid=uuid)
 
 
 @router.post("/{uuid}/test", response_model=TestConnectionResponse)

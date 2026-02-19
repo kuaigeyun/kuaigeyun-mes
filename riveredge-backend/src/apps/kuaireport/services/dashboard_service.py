@@ -1,3 +1,5 @@
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional, List, Any, Dict
 from apps.base_service import AppBaseService
 from apps.kuaireport.models.dashboard import Dashboard
@@ -32,3 +34,41 @@ class DashboardService(AppBaseService[Dashboard]):
     async def delete(self, tenant_id: int, id: int) -> bool:
         """删除看板"""
         return await self.delete_with_validation(tenant_id, id, soft_delete=False)
+
+    async def share(
+        self, tenant_id: int, dashboard_id: int, expires_days: Optional[int] = 30
+    ) -> Dict[str, Any]:
+        """生成分享链接"""
+        dashboard = await self.model.get_or_none(tenant_id=tenant_id, id=dashboard_id)
+        if not dashboard:
+            raise NotFoundError("大屏", str(dashboard_id))
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(days=expires_days) if expires_days else None
+        dashboard.is_shared = True
+        dashboard.share_token = token
+        dashboard.share_expires_at = expires_at
+        await dashboard.save()
+        return {
+            "share_token": token,
+            "share_expires_at": expires_at.isoformat() if expires_at else None,
+            "is_shared": True,
+        }
+
+    async def unshare(self, tenant_id: int, dashboard_id: int) -> None:
+        """取消分享"""
+        dashboard = await self.model.get_or_none(tenant_id=tenant_id, id=dashboard_id)
+        if not dashboard:
+            raise NotFoundError("大屏", str(dashboard_id))
+        dashboard.is_shared = False
+        dashboard.share_token = None
+        dashboard.share_expires_at = None
+        await dashboard.save()
+
+    async def get_by_share_token(self, token: str) -> Optional[Dashboard]:
+        """通过分享令牌获取大屏（公开，无需登录）"""
+        dashboard = await self.model.get_or_none(share_token=token)
+        if not dashboard:
+            return None
+        if dashboard.share_expires_at and dashboard.share_expires_at < datetime.utcnow():
+            return None
+        return dashboard

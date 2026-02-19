@@ -15,6 +15,7 @@ export interface Application {
   description?: string;
   icon?: string;
   version?: string;
+  changelog?: string;
   route_path?: string;
   entry_point?: string;
   menu_config?: Record<string, any>;
@@ -35,6 +36,7 @@ export interface ApplicationCreate {
   description?: string;
   icon?: string;
   version?: string;
+  changelog?: string;
   route_path?: string;
   entry_point?: string;
   menu_config?: Record<string, any>;
@@ -51,6 +53,7 @@ export interface ApplicationUpdate {
   description?: string;
   icon?: string;
   version?: string;
+  changelog?: string;
   route_path?: string;
   entry_point?: string;
   menu_config?: Record<string, any>;
