@@ -18,24 +18,26 @@ function getPreferenceStorageKey(): string | null {
 }
 
 /** 自定义 storage：按账户/租户多存一份，互不覆盖 */
-const preferenceStorage = {
-  getItem: (name: string): string | null => {
+const preferenceStorage: any = { // 使用 any 暂时规避类型检查，或者需要导入完整类型
+  getItem: (_name: string) => {
     const key = getPreferenceStorageKey();
     if (!key) return null;
     try {
-      return localStorage.getItem(key);
+      const value = localStorage.getItem(key);
+      return value ? JSON.parse(value) : null;
     } catch {
       return null;
     }
   },
-  setItem: (name: string, value: string): void => {
+  setItem: (_name: string, value: any): void => {
     const key = getPreferenceStorageKey();
     if (!key) return;
     try {
-      localStorage.setItem(key, value);
+      const str = JSON.stringify(value);
+      localStorage.setItem(key, str);
     } catch (_) {}
   },
-  removeItem: (name: string): void => {
+  removeItem: (_name: string): void => {
     const key = getPreferenceStorageKey();
     if (!key) return;
     try {
@@ -89,11 +91,19 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
           const data = await getUserPreference();
           const backendPrefs = data.preferences || {};
           // 仅使用后端数据，保证与当前账户/租户一致，不做跨账户的本地合并
+          const finalPrefs = typeof backendPrefs === 'object' && backendPrefs !== null ? backendPrefs : {};
           set({
-            preferences: typeof backendPrefs === 'object' && backendPrefs !== null ? backendPrefs : {},
+            preferences: finalPrefs,
             loading: false,
             initialized: true,
           });
+          
+          // 触发全局事件通知其他组件（如 App.tsx 的主题加载逻辑）
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+              detail: { preferences: finalPrefs }
+            }));
+          }
         } catch (error) {
           console.warn('Failed to fetch user preferences:', error);
           set({ loading: false, initialized: true });
@@ -116,6 +126,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         const cached = readCachedPreferencesForCurrentUser();
         if (Object.keys(cached).length === 0) return;
         set((s) => ({ ...s, preferences: cached, initialized: true }));
+        // 注意：不在此处 dispatch 事件，app.tsx 的初始化逻辑会直接读取 store 状态
       },
 
       updatePreferences: async (newPrefs) => {

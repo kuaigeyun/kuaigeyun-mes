@@ -14,6 +14,7 @@ import { getUserPreference } from '../../services/userPreference';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 import { useConfigStore } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { getUserInfo, getTenantId } from '../../utils/auth';
 
 /**
  * 标签项接口
@@ -55,20 +56,47 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const location = useLocation();
   const { token } = theme.useToken();
   const { t } = useTranslation(); // 获取翻译函数
-  // 1. 同步初始化持久化配置
-  const [tabsPersistence, setTabsPersistence] = useState<boolean>(() => {
+  // 辅助：同步获取持久化配置（优先读全局标记，缺省时读用户偏好缓存，解决登录后闪烁）
+  const getInitialPersistence = () => {
+    if (typeof window === 'undefined') return false;
     try {
-       const local = localStorage.getItem('riveredge_tabs_persistence');
-       return local === 'true';
+      // 1. 尝试读取全局标记（运行时开关）
+      const local = localStorage.getItem('riveredge_tabs_persistence');
+      if (local !== null) return local === 'true';
+
+      // 2. 尝试从用户偏好存储中读取（解决登出清除全局标记后的首次加载）
+      const userInfo = getUserInfo();
+      if (!userInfo) return false;
+      const tenantId = getTenantId() ?? userInfo?.tenant_id ?? (userInfo as any)?.tenantId;
+      const userId = userInfo?.id ?? (userInfo as any)?.user_id ?? (userInfo as any)?.uuid;
+      
+      if (tenantId != null && userId != null) {
+         const key = `user-preference-storage-${tenantId}-${userId}`;
+         const raw = localStorage.getItem(key);
+         if (raw) {
+            const data = JSON.parse(raw);
+            // 兼容 zustand persist 结构
+            const prefs = data?.state?.preferences ?? data?.preferences;
+            if (prefs && prefs.tabs_persistence !== undefined) {
+               // 同步回写全局标记，避免后续重复解析
+               localStorage.setItem('riveredge_tabs_persistence', String(prefs.tabs_persistence));
+               return Boolean(prefs.tabs_persistence);
+            }
+         }
+      }
     } catch { return false; }
-  });
+    return false;
+  };
+
+  // 1. 同步初始化持久化配置
+  const [tabsPersistence, setTabsPersistence] = useState<boolean>(getInitialPersistence);
 
   // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     if (typeof window === 'undefined') return [];
     
     // 如果未开启持久化，仅返回空（等待后续逻辑添加默认标签）或直接返回默认标签
-    const localPersistence = localStorage.getItem('riveredge_tabs_persistence') === 'true';
+    const localPersistence = getInitialPersistence();
     if (!localPersistence) return [];
 
     try {

@@ -730,32 +730,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const { token } = theme.useToken(); // 获取主题 token
   const { i18n: i18nInstance, t } = useSafeTranslation(); // 获取 i18n 实例和翻译函数（安全的）
   
-  // 引入用户偏好 Store
-  const { preferences, fetchPreferences, initialized, updatePreferences } = useUserPreferenceStore();
-
-  // 初始化用户偏好
-  useEffect(() => {
-    if (!initialized) {
-      fetchPreferences();
-    }
-  }, [initialized, fetchPreferences]);
+  // 精确订阅：只读取 BasicLayout 需要的 sidebar_collapsed 字段
+  // 避免订阅整个 preferences 对象，防止无关偏好更新导致整个布局重渲染
+  const sidebarCollapsedPref = useUserPreferenceStore((s) => {
+    const prefs = s.preferences;
+    if (prefs?.ui?.sidebar_collapsed !== undefined) return prefs.ui.sidebar_collapsed;
+    if (prefs?.['ui.sidebar_collapsed'] !== undefined) return prefs['ui.sidebar_collapsed'];
+    return undefined;
+  });
+  const { updatePreferences } = useUserPreferenceStore();
 
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState<boolean>(false);
-
-  // 监听偏好设置变化，同步侧边栏状态
-  // 使用 useMemo 提取偏好值，避免依赖整个 preferences 对象
-  const sidebarCollapsedPref = useMemo(() => {
-    // 尝试从嵌套结构获取 { ui: { sidebar_collapsed: true } }
-    if (preferences?.ui?.sidebar_collapsed !== undefined) {
-      return preferences.ui.sidebar_collapsed;
-    }
-    // 尝试从扁平结构获取 'ui.sidebar_collapsed'
-    if (preferences?.['ui.sidebar_collapsed'] !== undefined) {
-      return preferences['ui.sidebar_collapsed'];
-    }
-    return undefined;
-  }, [preferences]);
 
   useEffect(() => {
     if (sidebarCollapsedPref !== undefined) {
@@ -1013,7 +999,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
   // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
-  const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
+  const { data: applicationMenus, refetch: refetchApplicationMenus } = useQuery({
     queryKey: ['applicationMenus'],
     queryFn: async () => {
       // 获取菜单数据
@@ -1056,12 +1042,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         const cachedStr = localStorage.getItem('applicationMenusCache_v3') ?? localStorage.getItem('applicationMenusCache_v2');
         if (cachedStr) {
           const cached = JSON.parse(cachedStr);
-          // 检查缓存是否过期（超过5分钟视为过期）和租户是否匹配
+          // 检查缓存是否过期（超过5分钟视为过期）
           const cacheAge = Date.now() - (cached.timestamp || 0);
           const isExpired = cacheAge > 5 * 60 * 1000;
-          const isTenantMatch = cached.tenantId === currentUser?.tenant_id;
+          
+          // 获取当前 Tenant ID，优先使用 currentUser，降级使用本地存储
+          let currentTenantId = currentUser?.tenant_id;
+          if (!currentTenantId) {
+             const savedInfo = getUserInfo();
+             currentTenantId = savedInfo?.tenant_id ?? (savedInfo as any)?.tenantId;
+          }
 
-          if (!isExpired && isTenantMatch && cached.data) {
+          const isTenantMatch = cached.tenantId === currentTenantId;
+
+          // 只要没过期且租户匹配，就使用缓存
+          // 注意：如果 currentTenantId 为空（未登录状态），不应返回缓存，防止显示错误的菜单
+          if (!isExpired && isTenantMatch && currentTenantId && cached.data) {
             return cached.data;
           }
         }
@@ -1118,37 +1114,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
   }, [queryClient, refetchApplicationMenus]);
 
-  // 使用 ref 记录 previous currentUser，用于检测用户从无到有的变化
-  const prevCurrentUserRef = useRef(currentUser);
 
-  // 监听 currentUser 变化，当用户从无到有时主动触发菜单查询
-  // 这解决了登录后菜单不显示的问题
-  useEffect(() => {
-    const prevUser = prevCurrentUserRef.current;
-
-    // 检测用户从无到有的变化（登录场景）
-    const userJustLoggedIn = !prevUser && currentUser;
-
-    // 更新 ref
-    prevCurrentUserRef.current = currentUser;
-
-    if (userJustLoggedIn) {
-      console.log('🔄 检测到用户登录（从无到有），主动触发菜单加载...');
-      // 清除可能存在的旧缓存
-      try {
-        localStorage.removeItem('applicationMenusCache_v2');
-      } catch (error) {
-        // 忽略清除错误
-      }
-      // 由于 currentUser 已经更新，查询应该已经启用（enabled: !!currentUser）
-      // 使用 requestAnimationFrame + setTimeout 0 确保在 React 渲染周期后执行，最小化延迟
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          refetchApplicationMenus();
-        }, 0);
-      });
-    }
-  }, [currentUser, applicationMenus, applicationMenusLoading, refetchApplicationMenus]);
 
   // 监听租户ID变化，清除菜单缓存（确保切换组织时获取最新菜单）
   useEffect(() => {
@@ -1390,23 +1356,42 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   });
 
   // 监听主题更新事件，实时更新菜单栏和顶栏背景色
+  const themeUpdateTimeoutRef = useRef<NodeJS.Timeout>();
+  
   useEffect(() => {
-    const handleThemeUpdate = (event?: any) => {
-      // 延迟一下，确保全局变量已经更新
-      setTimeout(() => {
+    const handleThemeUpdate = () => {
+      // 防抖处理：清除之前的定时器
+      if (themeUpdateTimeoutRef.current) {
+        clearTimeout(themeUpdateTimeoutRef.current);
+      }
+      
+      // 延迟执行，合并短时间内的多次更新
+      themeUpdateTimeoutRef.current = setTimeout(() => {
         const customSiderBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
         const customHeaderBgColor = (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-        setSiderBgColorState(customSiderBgColor);
-        setHeaderBgColorState(customHeaderBgColor);
+        
+        // 使用函数式更新确保拿到最新状态，且避免不必要的重渲染（如果值未变）
+        setSiderBgColorState((prev) => prev !== customSiderBgColor ? customSiderBgColor : prev);
+        setHeaderBgColorState((prev) => prev !== customHeaderBgColor ? customHeaderBgColor : prev);
 
         // 固定使用 MIX 布局模式
         (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
-      }, 0);
+      }, 50); // 增加延迟到 50ms 以确保所有样式计算完成
     };
 
+    // 初始执行一次
+    handleThemeUpdate();
+
     window.addEventListener('siteThemeUpdated', handleThemeUpdate);
+    // 新增监听 theme-applied 事件，确保 App.tsx 初始化完成后能及时更新
+    window.addEventListener('theme-applied', handleThemeUpdate);
+    
     return () => {
+      if (themeUpdateTimeoutRef.current) {
+        clearTimeout(themeUpdateTimeoutRef.current);
+      }
       window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
+      window.removeEventListener('theme-applied', handleThemeUpdate);
     };
   }, []);
 
@@ -3747,7 +3732,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
         }
         .ant-pro-global-header-logo h1{
-        line-height: 30px !important;
+        line-height: 31px !important;
         }
         /* ==================== 顶栏布局调整 ==================== */
         /* 顶栏主容器：左侧 LOGO组 + 分割线 + 面包屑，右侧 操作按钮组 */
