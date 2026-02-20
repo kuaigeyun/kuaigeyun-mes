@@ -1132,6 +1132,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
         }
         .uni-table-pro-table .ant-pro-card {
+          border: 1px solid ${token.colorBorderSecondary} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
           overflow: hidden !important;
@@ -1168,8 +1169,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-fuzzy-search .ant-input-search-button {
           height: 32px !important;
         }
-        /* 搜索框整体：使用主题背景色和边框色，统一圆角 - 最高优先级 */
-        /* 边框颜色与高级搜索按钮容器一致（使用 token.colorBorder） */
+        /* 搜索框整体：边框颜色与 UniTable 容器卡片一致（token.colorBorderSecondary） */
         html body .uni-table-fuzzy-search.ant-input-search,
         html body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html body .uni-table-fuzzy-search .ant-input-group,
@@ -1177,13 +1177,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .pro-table-button-container .uni-table-fuzzy-search,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
-          border: 1px solid ${token.colorBorder} !important;
+          border: 1px solid ${token.colorBorderSecondary} !important;
           border-radius: ${token.borderRadius}px !important;
           overflow: hidden !important;
           background-color: ${token.colorBgContainer} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
         }
-        /* 深色模式下的搜索框样式 - 边框颜色与高级搜索按钮容器一致 */
+        /* 深色模式下的搜索框样式 - 边框颜色与 UniTable 容器卡片一致 */
         html[data-theme="dark"] body .uni-table-fuzzy-search.ant-input-search,
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group,
@@ -1191,7 +1191,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
-          border: 1px solid ${token.colorBorder} !important;
+          border: 1px solid ${token.colorBorderSecondary} !important;
           background-color: ${token.colorBgContainer} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
         }
@@ -1236,7 +1236,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper:focus,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper:focus,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper-focused {
-          border-color: var(--ant-colorBorder) !important;
+          border-color: var(--ant-colorBorderSecondary) !important;
           box-shadow: none !important;
           outline: none !important;
         }
@@ -1244,7 +1244,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper {
           background-color: var(--ant-colorBgContainer) !important;
-          border-color: var(--ant-colorBorder) !important;
+          border-color: var(--ant-colorBorderSecondary) !important;
         }
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input {

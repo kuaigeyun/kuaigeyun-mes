@@ -5,6 +5,7 @@
  * 注意：所有 API 自动过滤当前组织的应用
  */
 
+import { getToken } from '../utils/auth';
 import { apiRequest } from './api';
 
 export interface Application {
@@ -242,7 +243,7 @@ export async function syncApplicationManifest(appCode: string): Promise<{
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
     },
   });

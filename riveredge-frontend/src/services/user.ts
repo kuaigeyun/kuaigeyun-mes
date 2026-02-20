@@ -6,6 +6,7 @@
  */
 
 // 使用 apiRequest 统一处理 HTTP 请求
+import { getToken } from '../utils/auth';
 import { apiRequest } from './api';
 
 /**
@@ -235,7 +236,7 @@ export async function exportUsers(params?: UserListParams): Promise<Blob> {
     {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
       },
     }
   );

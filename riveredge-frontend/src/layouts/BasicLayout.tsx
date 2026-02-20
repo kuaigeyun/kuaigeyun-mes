@@ -74,7 +74,6 @@ import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
-import { getSiteSetting } from '../services/siteSetting';
 import { getFilePreview } from '../services/file';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
@@ -838,42 +837,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   const queryClient = useQueryClient();
 
-  // 获取站点设置
-  // 获取站点设置
-  // 优化：使用 localStorage 缓存，实现同步初始化，避免 LOGO 闪烁
-  const { data: siteSetting } = useQuery({
-    queryKey: ['siteSetting'],
-    queryFn: async () => {
-      const data = await getSiteSetting();
-      // 缓存到 localStorage
-      try {
-        localStorage.setItem('siteSettingCache', JSON.stringify({
-          data,
-          timestamp: Date.now(),
-        }));
-      } catch (e) {
-        console.warn('Failed to cache site settings', e);
-      }
-      return data;
-    },
-    staleTime: 5 * 60 * 1000, // 5 分钟缓存
-    enabled: !!currentUser, // 只在用户登录后获取
-    placeholderData: () => {
-      // 尝试从缓存读取，实现同步渲染
-      try {
-        const cachedStr = localStorage.getItem('siteSettingCache');
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr);
-          // 检查有效期（例如 24 小时，或者更短，视需求而定，这里主要为了首屏不闪烁，数据新鲜度由 useQuery 保证）
-          // 这里不做严格过期检查，优先展示缓存，useQuery 会在后台更新
-          return cached.data;
-        }
-      } catch (e) {
-        // ignore
-      }
-      return undefined;
-    }
-  });
+  // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
+  const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
+  const siteLogoValue = (useConfigStore((s) => (s.getConfig('site_logo', '') as string)?.trim()) || '') || '';
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
@@ -904,34 +870,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return uuidRegex.test(str);
   };
 
-  // 获取站点名称（如果未配置或为空字符串则使用默认值）
-  const siteName = (siteSetting?.settings?.site_name?.trim() || '') || 'RiverEdge SaaS';
-
-  // 获取站点LOGO（支持UUID和URL格式）
-  // 获取站点LOGO（支持UUID和URL格式）
-  // 优化：同步初始化 LOGO URL
+  // 获取站点LOGO（支持UUID和URL格式），同步从 configStore 读取（有 persist 缓存）
   const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
-    // 1. 尝试从站点设置缓存中获取 logo 配置
-    let logoValue = '';
-    try {
-      // 优先看当前内存中的 siteSetting (如果已经被 placeholderData 同步初始化)
-      // 如果 siteSetting 还没来得及初始化（极少情况），尝试直接读 localStorage
-      if (siteSetting?.settings?.site_logo) {
-        logoValue = siteSetting.settings.site_logo.trim();
-      } else {
-        const cachedStr = localStorage.getItem('siteSettingCache');
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr);
-          if (cached.data?.settings?.site_logo) {
-            logoValue = cached.data.settings.site_logo.trim();
-          }
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
+    const logoValue = (useConfigStore.getState().getConfig('site_logo', '') as string)?.trim() || '';
 
-    // 2. 如果有 logo 配置
+    // 如果有 logo 配置
     if (logoValue) {
       // 如果是 UUID，尝试从专门的 logo URL 缓存中读取
       if (isUUID(logoValue)) {
@@ -951,7 +894,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     return '/img/logo.png';
   });
-  const siteLogoValue = siteSetting?.settings?.site_logo?.trim() || '';
 
   // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
   // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
@@ -1795,28 +1737,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 获取当前页面的标题（使用 breadcrumbMenuData，保留完整层级结构）
     const pageTitle = findMenuTitleWithTranslation(location.pathname, breadcrumbMenuData, t);
 
-    // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
-    let currentSiteName = 'RiverEdge SaaS';
-
-    if (siteSetting?.settings?.site_name?.trim()) {
-      // 如果 siteSetting 已加载且有站点名称，使用它并缓存
-      currentSiteName = siteSetting.settings.site_name.trim();
-      try {
-        localStorage.setItem('cachedSiteName', currentSiteName);
-      } catch (error) {
-        // 忽略存储错误
-      }
-    } else {
-      // 如果 siteSetting 未加载或没有站点名称，尝试从缓存读取
-      try {
-        const cachedSiteName = localStorage.getItem('cachedSiteName');
-        if (cachedSiteName) {
-          currentSiteName = cachedSiteName;
-        }
-      } catch (error) {
-        // 忽略读取错误
-      }
-    }
+    // 站点名称统一从 configStore 获取
+    const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
 
     // 设置文档标题，使用站点名称作为后缀
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
@@ -1824,7 +1746,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     } else {
       document.title = `${currentSiteName} - 多组织管理框架`;
     }
-  }, [location.pathname, breadcrumbMenuData, t, siteSetting, currentUser]);
+  }, [location.pathname, breadcrumbMenuData, t, siteName, currentUser]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏

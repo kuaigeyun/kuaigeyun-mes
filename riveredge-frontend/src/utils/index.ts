@@ -5,7 +5,6 @@
  */
 
 export * from './auth';
-export * from './storage';
 export * from './format';
 export * from './fileDownload';
 export * from './pinyin';

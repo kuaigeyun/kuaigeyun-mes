@@ -165,9 +165,6 @@ const UserPreferencesPage: React.FC = () => {
           tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
         };
         useThemeStore.getState().applyTheme((values.theme as 'light' | 'dark' | 'auto') || 'light', mergedConfig);
-        if (values.tabs_persistence !== undefined) {
-          localStorage.setItem('riveredge_tabs_persistence', String(!!values.tabs_persistence));
-        }
       }
 
       await updatePreferences(values);

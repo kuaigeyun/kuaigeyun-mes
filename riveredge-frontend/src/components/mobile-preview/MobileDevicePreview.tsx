@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Select, Space, Button, Tooltip, Segmented, Popover } from 'antd';
-import { MobileOutlined, TabletOutlined, RotateRightOutlined, CloseOutlined, ReloadOutlined, LeftOutlined, ZoomInOutlined } from '@ant-design/icons';
+import { RotateRightOutlined, ReloadOutlined, LeftOutlined, ZoomInOutlined } from '@ant-design/icons';
 
 interface DeviceConfig {
     name: string;
@@ -96,25 +96,19 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
             styles={{ body: { height: Math.min(displayHeight * currentScale + 120, windowSize.height - 100), overflow: 'hidden', background: '#f0f2f5', display: 'flex', flexDirection: 'column', transition: 'height 0.3s ease', position: 'relative' } }}
             footer={null}
             title={
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <Space size="middle" wrap style={{ marginRight: 24 }}>
-                        <Space>
-                            <span style={{ color: '#888' }}>设备模型:</span>
-                            <Select
-                                value={currentDevice.name}
-                                onChange={(val) => setCurrentDevice(DEVICES.find(d => d.name === val) || DEVICES[0])}
-                                options={DEVICES.map(d => ({ label: d.name, value: d.name }))}
-                                style={{ width: 140 }}
-                                size="small"
-                                variant="borderless"
-                                popupMatchSelectWidth={false}
-                            />
-                        </Space>
-                    </Space>
-                    <Button type="text" icon={<CloseOutlined />} onClick={onClose} />
-                </div>
+                <Space>
+                    <span style={{ color: '#888' }}>设备模型:</span>
+                    <Select
+                        value={currentDevice.name}
+                        onChange={(val) => setCurrentDevice(DEVICES.find(d => d.name === val) || DEVICES[0])}
+                        options={DEVICES.map(d => ({ label: d.name, value: d.name }))}
+                        style={{ width: 140 }}
+                        size="small"
+                        variant="borderless"
+                        popupMatchSelectWidth={false}
+                    />
+                </Space>
             }
-            closeIcon={null} // Custom close in title
             maskClosable={false}
         >
             <div style={{

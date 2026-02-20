@@ -7,6 +7,7 @@
  * @date 2025-12-29
  */
 
+import { getToken } from '../../../utils/auth';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -323,7 +324,7 @@ export async function exportReport(reportType: string, params: ReportParams = {}
     const response = await fetch(`/api/v1/apps/kuaizhizao/reports/${reportType}/export?${new URLSearchParams(params as any)}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
       },
     });
