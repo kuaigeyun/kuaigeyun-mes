@@ -9,6 +9,7 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
 
 class PurchaseOrder(BaseModel):
@@ -43,13 +44,13 @@ class PurchaseOrder(BaseModel):
     exchange_rate = fields.DecimalField(max_digits=8, decimal_places=4, default=1, description="汇率")
 
     # 订单状态
-    status = fields.CharField(max_length=20, default="草稿", description="订单状态")
+    status = fields.CharField(max_length=20, default=DocumentStatus.DRAFT.value, description="订单状态")
 
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING.value, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     # 来源信息（用于关联MRP/LRP运算结果）

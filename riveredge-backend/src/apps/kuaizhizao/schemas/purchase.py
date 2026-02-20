@@ -13,6 +13,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+
 # 导入BaseSchema用于兼容性
 from core.schemas.base import BaseSchema
 
@@ -37,7 +39,7 @@ class PurchaseOrderBase(BaseSchema):
     net_amount: Decimal = Field(default=Decimal(0), ge=0, description="净金额")
     currency: str = Field("CNY", max_length=10, description="币种")
     exchange_rate: Decimal = Field(default=Decimal(1), gt=0, description="汇率")
-    status: str = Field("草稿", max_length=20, description="订单状态")
+    status: str = Field(default=DocumentStatus.DRAFT.value, max_length=20, description="订单状态")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_id: Optional[int] = Field(None, description="来源ID")
     notes: Optional[str] = Field(None, description="备注")
@@ -62,7 +64,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_status: str = Field(default=ReviewStatus.PENDING.value, max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

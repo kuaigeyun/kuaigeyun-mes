@@ -9,6 +9,7 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
 
 class SalesForecast(BaseModel):
@@ -30,13 +31,13 @@ class SalesForecast(BaseModel):
     end_date = fields.DateField(description="预测结束日期")
 
     # 状态
-    status = fields.CharField(max_length=20, default="草稿", description="预测状态")
+    status = fields.CharField(max_length=20, default=DocumentStatus.DRAFT.value, description="预测状态")
 
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING.value, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")

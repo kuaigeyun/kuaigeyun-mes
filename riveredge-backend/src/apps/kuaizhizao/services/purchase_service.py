@@ -28,7 +28,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderListResponse, PurchaseOrderItemResponse,
     PurchaseOrderApprove, PurchaseOrderConfirm, PurchaseOrderListParams
 )
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status
 
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
@@ -243,7 +243,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 raise NotFoundError(f"采购订单不存在: {order_id}")
 
             # 只能更新草稿状态的订单
-            if order.status != "草稿":
+            if not is_draft_status(order.status):
                 raise BusinessLogicError("只能更新草稿状态的订单")
 
             # 更新订单头
@@ -316,7 +316,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        if order.status != "草稿":
+        if not is_draft_status(order.status):
             raise BusinessLogicError("只能提交草稿状态的订单")
 
         # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
@@ -327,8 +327,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not audit_required:
             # 无需审核，直接设为已审核
             await order.update_from_dict({
-                'status': DocumentStatus.AUDITED,
-                'review_status': ReviewStatus.APPROVED,
+                'status': DocumentStatus.AUDITED.value,
+                'review_status': ReviewStatus.APPROVED.value,
                 'updated_by': submitted_by
             }).save()
             return await self.get_purchase_order_by_id(tenant_id, order_id)
@@ -357,14 +357,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     demand_type=None
                 )
                 # 状态设置为待审核（审批流程中）
-                status = "待审核"
+                status = DocumentStatus.PENDING_REVIEW.value
             else:
                 # 没有配置审批流程，使用原有逻辑
-                status = "待审核"
+                status = DocumentStatus.PENDING_REVIEW.value
         except Exception as e:
             # 如果启动审批流程失败，记录日志但不影响提交
             logger.warning(f"启动采购订单审批流程失败: {str(e)}，订单ID: {order_id}")
-            status = "待审核"
+            status = DocumentStatus.PENDING_REVIEW.value
 
         await order.update_from_dict({
             'status': status,
@@ -432,18 +432,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'review_time': datetime.now(),
-                    'review_status': "审核驳回",
+                    'review_status': ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
-                    'status': "已驳回",
+                    'status': DocumentStatus.REJECTED.value,
                     'updated_by': approved_by
                 }
             elif result.get("flow_completed"):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'review_time': datetime.now(),
-                    'review_status': "审核通过",
+                    'review_status': ReviewStatus.APPROVED.value,
                     'review_remarks': approve_data.review_remarks,
-                    'status': "已审核",
+                    'status': DocumentStatus.AUDITED.value,
                     'updated_by': approved_by
                 }
             else:
@@ -451,27 +451,29 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 update_dict = {
                     'reviewer_id': approved_by,
                     'review_time': datetime.now(),
-                    'review_status': "审核中" if approve_data.approved else "审核驳回",
+                    'review_status': "审核中" if approve_data.approved else ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
                     'updated_by': approved_by
                 }
                 if not approve_data.approved:
-                    update_dict['status'] = "已驳回"
+                    update_dict['status'] = DocumentStatus.REJECTED.value
         else:
             # 没有启动审批流程，使用原有逻辑
-            if order.review_status != "待审核":
+            from apps.kuaizhizao.constants import REVIEW_STATUS_ALIASES
+            current_review = str(order.review_status or "").strip()
+            if REVIEW_STATUS_ALIASES.get(current_review, current_review) != ReviewStatus.PENDING.value:
                 raise BusinessLogicError("订单已被审核")
 
             update_dict = {
                 'reviewer_id': approved_by,
                 'review_time': datetime.now(),
-                'review_status': "审核通过" if approve_data.approved else "审核驳回",
+                'review_status': ReviewStatus.APPROVED.value if approve_data.approved else ReviewStatus.REJECTED.value,
                 'review_remarks': approve_data.review_remarks,
                 'updated_by': approved_by
             }
 
             if approve_data.approved:
-                update_dict['status'] = "已审核"
+                update_dict['status'] = DocumentStatus.AUDITED.value
 
         await order.update_from_dict(update_dict).save()
 
@@ -504,7 +506,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise BusinessLogicError("只有已审核的订单才能确认")
 
         await order.update_from_dict({
-            'status': "已确认",
+            'status': DocumentStatus.CONFIRMED.value,
             'notes': order.notes + f"\n确认备注：{confirm_data.confirm_remarks or ''}",
             'updated_by': confirmed_by
         }).save()
@@ -527,7 +529,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         # 只能删除草稿状态的订单
-        if order.status != "草稿":
+        if not is_draft_status(order.status):
             raise BusinessLogicError("只能删除草稿状态的订单")
 
         # 删除订单明细
@@ -569,7 +571,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         # 验证采购单存在且已审核
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
-        if order.status not in LEGACY_AUDITED_VALUES + ("已确认",):
+        if order.status not in LEGACY_AUDITED_VALUES:
             raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
         
         # 获取订单明细

@@ -31,6 +31,7 @@ from apps.kuaizhizao.schemas.sales import (
 )
 
 from apps.base_service import AppBaseService
+from apps.kuaizhizao.constants import ReviewStatus
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.user_service import UserService
 
@@ -199,16 +200,19 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
     async def approve_forecast(self, tenant_id: int, forecast_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> SalesForecastResponse:
         """审核销售预测"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, REVIEW_STATUS_ALIASES
+
         async with in_transaction():
             forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
-            if forecast.review_status != '待审核':
+            current_review = str(forecast.review_status or "").strip()
+            if REVIEW_STATUS_ALIASES.get(current_review, current_review) != ReviewStatus.PENDING.value:
                 raise BusinessLogicError("销售预测审核状态不是待审核")
 
             approver_name = await self.get_user_name(approved_by)
 
-            review_status = "驳回" if rejection_reason else "通过"
-            status = "已驳回" if rejection_reason else "已审核"
+            review_status = ReviewStatus.REJECTED.value if rejection_reason else ReviewStatus.APPROVED.value
+            status = DocumentStatus.REJECTED.value if rejection_reason else DocumentStatus.AUDITED.value
 
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                 reviewer_id=approved_by,
@@ -267,22 +271,23 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             NotFoundError: 销售预测不存在
             BusinessLogicError: 销售预测状态不是草稿
         """
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status
+
         async with in_transaction():
             forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             
-            if forecast.status != "草稿":
+            if not is_draft_status(forecast.status):
                 raise BusinessLogicError(f"只有草稿状态的销售预测才能提交，当前状态：{forecast.status}")
             
             # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
             from infra.services.business_config_service import BusinessConfigService
-            from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
             config_service = BusinessConfigService()
             audit_required = await config_service.check_audit_required(tenant_id, "sales_forecast")
 
             if not audit_required:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-                    status=DocumentStatus.AUDITED,
-                    review_status=ReviewStatus.APPROVED,
+                    status=DocumentStatus.AUDITED.value,
+                    review_status=ReviewStatus.APPROVED.value,
                     updated_by=submitted_by
                 )
                 # 无需审核时，提交即审核通过，自动产生 Demand
@@ -293,8 +298,8 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     )
             else:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-                    status="待审核",
-                    review_status="待审核",
+                    status=DocumentStatus.PENDING_REVIEW.value,
+                    review_status=ReviewStatus.PENDING.value,
                     updated_by=submitted_by
                 )
             
@@ -431,8 +436,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 
                 # 设置默认值
                 forecast_data.setdefault('forecast_type', 'MTS')
-                forecast_data.setdefault('status', '草稿')
-                forecast_data.setdefault('review_status', '待审核')
+                from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+                forecast_data.setdefault('status', DocumentStatus.DRAFT.value)
+                forecast_data.setdefault('review_status', ReviewStatus.PENDING.value)
                 
                 # 创建销售预测
                 forecast_create = SalesForecastCreate(**forecast_data)
@@ -551,7 +557,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         # 验证销售预测存在且已审核（兼容枚举与存量中文值）
         from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
         forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-        review_approved = forecast.review_status in ("通过", "APPROVED", "已审核")
+        review_approved = forecast.review_status in ("通过", "APPROVED", ReviewStatus.APPROVED.value, "已审核")
         status_audited = forecast.status in LEGACY_AUDITED_VALUES
         if not review_approved or not status_audited:
             raise BusinessLogicError("只有已审核通过的销售预测才能下推到MRP运算")
@@ -710,16 +716,19 @@ class SalesOrderService(AppBaseService[SalesOrder]):
 
     async def approve_order(self, tenant_id: int, order_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> SalesOrderResponse:
         """审核销售订单"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, REVIEW_STATUS_ALIASES
+
         async with in_transaction():
             order = await self.get_sales_order_by_id(tenant_id, order_id)
 
-            if order.review_status != '待审核':
+            current_review = str(order.review_status or "").strip()
+            if REVIEW_STATUS_ALIASES.get(current_review, current_review) != ReviewStatus.PENDING.value:
                 raise BusinessLogicError("销售订单审核状态不是待审核")
 
             approver_name = await self.get_user_name(approved_by)
 
-            review_status = "驳回" if rejection_reason else "通过"
-            status = "已驳回" if rejection_reason else "已审核"
+            review_status = ReviewStatus.REJECTED.value if rejection_reason else ReviewStatus.APPROVED.value
+            status = DocumentStatus.REJECTED.value if rejection_reason else DocumentStatus.AUDITED.value
 
             await SalesOrder.filter(tenant_id=tenant_id, id=order_id).update(
                 reviewer_id=approved_by,
@@ -739,11 +748,13 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         async with in_transaction():
             order = await self.get_sales_order_by_id(tenant_id, order_id)
 
-            if order.status != '已审核':
+            from apps.kuaizhizao.constants import DocumentStatus, LEGACY_AUDITED_VALUES
+
+            if order.status not in LEGACY_AUDITED_VALUES:
                 raise BusinessLogicError("只有已审核状态的销售订单才能确认")
 
             await SalesOrder.filter(tenant_id=tenant_id, id=order_id).update(
-                status="已确认",
+                status=DocumentStatus.CONFIRMED.value,
                 updated_by=confirmed_by
             )
 
@@ -811,8 +822,11 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         from apps.kuaizhizao.schemas.planning import LRPComputationRequest
         
         # 验证销售订单存在且已审核
+        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, REVIEW_STATUS_ALIASES, ReviewStatus
+
         order = await self.get_sales_order_by_id(tenant_id, order_id)
-        if order.review_status != "通过" or order.status not in ["已审核", "已确认"]:
+        review_ok = REVIEW_STATUS_ALIASES.get(str(order.review_status or "").strip(), order.review_status) == ReviewStatus.APPROVED.value
+        if not review_ok or order.status not in LEGACY_AUDITED_VALUES:
             raise BusinessLogicError("只有已审核通过或已确认的销售订单才能下推到LRP运算")
         
         # 创建LRP运算请求
@@ -867,8 +881,10 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         from decimal import Decimal
         
         # 验证销售订单存在且已审核
+        from apps.kuaizhizao.constants import ORDER_PUSHABLE_STATUSES
+
         order = await self.get_sales_order_by_id(tenant_id, order_id)
-        if order.status not in ["已审核", "已确认", "进行中"]:
+        if order.status not in ORDER_PUSHABLE_STATUSES:
             raise BusinessLogicError("只有已审核、已确认或进行中状态的销售订单才能下推到销售出库")
         
         # 获取订单明细
@@ -1022,13 +1038,15 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         async with in_transaction():
             order = await self.get_sales_order_by_id(tenant_id, order_id)
             
-            if order.status != "草稿":
+            from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status
+
+            if not is_draft_status(order.status):
                 raise BusinessLogicError(f"只有草稿状态的销售订单才能提交，当前状态：{order.status}")
             
             # 更新状态为待审核
             await SalesOrder.filter(tenant_id=tenant_id, id=order_id).update(
-                status="待审核",
-                review_status="待审核",
+                status=DocumentStatus.PENDING_REVIEW.value,
+                review_status=ReviewStatus.PENDING.value,
                 updated_by=submitted_by
             )
             
@@ -1159,8 +1177,9 @@ class SalesOrderService(AppBaseService[SalesOrder]):
                 
                 # 设置默认值
                 order_data.setdefault('order_type', 'MTO')
-                order_data.setdefault('status', '草稿')
-                order_data.setdefault('review_status', '待审核')
+                from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+                order_data.setdefault('status', DocumentStatus.DRAFT.value)
+                order_data.setdefault('review_status', ReviewStatus.PENDING.value)
                 
                 # 创建销售订单
                 from apps.kuaizhizao.schemas.sales import SalesOrderCreate

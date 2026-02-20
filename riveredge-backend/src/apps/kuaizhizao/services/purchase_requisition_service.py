@@ -200,19 +200,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if req.status != "草稿":
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status
+
+        if not is_draft_status(req.status):
             raise BusinessLogicError("只有草稿状态可提交")
 
         # 检查是否需要审核
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
         
         if audit_required:
-            req.status = "待审核"
-            req.review_status = "待审核"
+            req.status = DocumentStatus.PENDING_REVIEW.value
+            req.review_status = ReviewStatus.PENDING.value
             # TODO: 接入真正的工作流引擎
         else:
-            req.status = "已通过"
-            req.review_status = "已通过"
+            req.status = DocumentStatus.AUDITED.value
+            req.review_status = ReviewStatus.APPROVED.value
             
         req.updated_by = submitted_by
         await req.save()
@@ -232,7 +234,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if req.status not in ("已通过", "部分转单"):
+        from apps.kuaizhizao.constants import DocumentStatus, normalize_status
+
+        normalized = normalize_status(req.status)
+        if normalized not in (DocumentStatus.AUDITED.value, DocumentStatus.PARTIAL_CONVERTED.value):
             raise BusinessLogicError("只有已通过或部分转单状态的采购申请可转单")
 
         supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=data.supplier_id)
@@ -282,7 +287,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             order_date=today,
             delivery_date=max_required,
             order_type="标准采购",
-            status="草稿",
+            status=DocumentStatus.DRAFT.value,
             source_type="PurchaseRequisition",
             source_id=requisition_id,
             notes=f"由采购申请{req.requisition_code}转单生成",
@@ -306,7 +311,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
         all_converted = all(i.purchase_order_id for i in all_items)
-        req.status = "全部转单" if all_converted else "部分转单"
+        req.status = DocumentStatus.FULL_CONVERTED.value if all_converted else DocumentStatus.PARTIAL_CONVERTED.value
         await req.save()
 
         return {
@@ -329,7 +334,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if req.status not in ("草稿", "待审核"):
+        from apps.kuaizhizao.constants import is_draft_status, is_pending_review_status
+
+        if not is_draft_status(req.status) and not is_pending_review_status(req.status):
             raise BusinessLogicError("只有草稿或待审核状态可执行紧急采购")
 
         items = await PurchaseRequisitionItem.filter(

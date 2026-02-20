@@ -17,6 +17,13 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import CodeField from '../../../../../components/code-field';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
 import { getDocumentRelations } from '../../../services/document-relation';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import {
+  getStatusDisplay,
+  getReviewStatusDisplay,
+  isDraftStatus,
+  isAuditedStatus,
+} from '../../../constants/documentStatus';
 
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
@@ -75,14 +82,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       render: (status) => {
-        const statusMap = {
-          '草稿': { text: '草稿', color: 'default' },
-          '已审核': { text: '已审核', color: 'processing' },
-          '已确认': { text: '已确认', color: 'success' },
-          '已完成': { text: '已完成', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['草稿'];
+        const config = getStatusDisplay(status);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -91,12 +91,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'review_status',
       width: 100,
       render: (status) => {
-        const statusMap = {
-          '待审核': { text: '待审核', color: 'default' },
-          '审核通过': { text: '审核通过', color: 'success' },
-          '审核驳回': { text: '审核驳回', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待审核'];
+        const config = getReviewStatusDisplay(status);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -147,7 +142,7 @@ const PurchaseOrdersPage: React.FC = () => {
           >
             编辑
           </Button>
-          {record.status === '草稿' && (
+          {isDraftStatus(record.status) && (
             <Button
               type="link"
               size="small"
@@ -158,7 +153,7 @@ const PurchaseOrdersPage: React.FC = () => {
               提交
             </Button>
           )}
-          {record.status === '草稿' && (
+          {isDraftStatus(record.status) && (
             <Button
               type="link"
               size="small"
@@ -169,7 +164,7 @@ const PurchaseOrdersPage: React.FC = () => {
               审核
             </Button>
           )}
-          {(record.status === '已审核' || record.status === '已确认') && (
+          {isAuditedStatus(record.status) && (
             <Button
               type="link"
               size="small"
@@ -180,7 +175,7 @@ const PurchaseOrdersPage: React.FC = () => {
               下推入库
             </Button>
           )}
-          {record.status === '草稿' && (
+          {isDraftStatus(record.status) && (
             <Button
               type="link"
               size="small"
@@ -406,14 +401,7 @@ const PurchaseOrdersPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '草稿': { text: '草稿', color: 'default' },
-          '已审核': { text: '已审核', color: 'processing' },
-          '已确认': { text: '已确认', color: 'success' },
-          '已完成': { text: '已完成', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[String(status || '')] || { text: String(status || '-'), color: 'default' };
+        const config = getStatusDisplay(status);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -421,12 +409,7 @@ const PurchaseOrdersPage: React.FC = () => {
       title: '审核状态',
       dataIndex: 'review_status',
       render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '待审核': { text: '待审核', color: 'default' },
-          '审核通过': { text: '审核通过', color: 'success' },
-          '审核驳回': { text: '审核驳回', color: 'error' },
-        };
-        const config = statusMap[String(status || '')] || { text: String(status || '-'), color: 'default' };
+        const config = getReviewStatusDisplay(status);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -691,15 +674,17 @@ const PurchaseOrdersPage: React.FC = () => {
                   </Col>
                   <Col span={6}>
                     <strong>状态：</strong>
-                    <Tag color={orderDetail.status === '已审核' ? 'success' : 'default'}>
-                      {orderDetail.status}
-                    </Tag>
+                    {(() => {
+                      const config = getStatusDisplay(orderDetail.status);
+                      return <Tag color={config.color}>{config.text}</Tag>;
+                    })()}
                   </Col>
                   <Col span={6}>
                     <strong>审核状态：</strong>
-                    <Tag color={orderDetail.review_status === '审核通过' ? 'success' : 'default'}>
-                      {orderDetail.review_status}
-                    </Tag>
+                    {(() => {
+                      const config = getReviewStatusDisplay(orderDetail.review_status);
+                      return <Tag color={config.color}>{config.text}</Tag>;
+                    })()}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
@@ -827,6 +812,17 @@ const PurchaseOrdersPage: React.FC = () => {
                     />
                   )}
                 </Card>
+              )}
+
+              {/* 操作记录与上下游 */}
+              {orderDetail?.id && (
+                <div style={{ marginBottom: 16 }}>
+                  <DocumentTrackingPanel
+                    documentType="purchase_order"
+                    documentId={orderDetail.id}
+                    onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                  />
+                </div>
               )}
 
               {/* 单据关联 */}

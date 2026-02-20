@@ -9,6 +9,7 @@ Date: 2025-02-01
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
 
 class PurchaseRequisition(BaseModel):
@@ -22,7 +23,7 @@ class PurchaseRequisition(BaseModel):
 
     # 基本信息
     requisition_name = fields.CharField(max_length=200, null=True, description="申请名称")
-    status = fields.CharField(max_length=20, default="草稿", description="状态：草稿/待审核/已驳回/已通过/部分转单/全部转单")
+    status = fields.CharField(max_length=20, default=DocumentStatus.DRAFT.value, description="状态：草稿/待审核/已驳回/已通过/部分转单/全部转单")
     applicant_id = fields.IntField(null=True, description="申请人ID")
     applicant_name = fields.CharField(max_length=100, null=True, description="申请人姓名")
     requisition_date = fields.DateField(null=True, description="申请日期")
@@ -43,7 +44,7 @@ class PurchaseRequisition(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING.value, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")

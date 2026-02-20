@@ -114,6 +114,7 @@ import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestio
 import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
 import WorkOrderPrintModal from './components/WorkOrderPrintModal'
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
 
 interface WorkOrder {
   id?: number
@@ -3016,6 +3017,15 @@ const WorkOrdersPage: React.FC = () => {
                 </Select>
               </Space>
             </div>
+            {workOrderDetail?.id && (
+              <div style={{ padding: '16px 0' }}>
+                <DocumentTrackingPanel
+                  documentType="work_order"
+                  documentId={workOrderDetail.id}
+                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                />
+              </div>
+            )}
             {documentRelations ? (
               <div style={{ padding: '16px 0' }}>
                 <Card title="单据关联">

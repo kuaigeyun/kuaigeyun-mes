@@ -35,6 +35,7 @@ import {
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -1357,6 +1358,17 @@ const SalesOrdersPage: React.FC = () => {
                   rowKey="id"
                   pagination={false}
                   bordered
+                />
+              </div>
+            )}
+
+            {/* 操作记录与上下游 */}
+            {currentSalesOrder?.id && (
+              <div style={{ marginTop: 24 }}>
+                <DocumentTrackingPanel
+                  documentType="sales_order"
+                  documentId={currentSalesOrder.id}
+                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
                 />
               </div>
             )}
