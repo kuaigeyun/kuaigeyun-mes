@@ -88,6 +88,9 @@ class Demand(BaseModel):
     source_type = fields.CharField(max_length=50, null=True, description="来源类型")
     source_code = fields.CharField(max_length=50, null=True, description="来源编码")
     
+    # 优先级（数字越小优先级越高，生产排产时按此排序）
+    priority = fields.IntField(default=5, description="优先级（1=高、5=中、10=低，默认5）")
+
     # 下推信息
     pushed_to_computation = fields.BooleanField(default=False, description="是否已下推到需求计算")
     computation_id = fields.IntField(null=True, description="关联的需求计算ID")

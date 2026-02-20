@@ -425,6 +425,12 @@ class SalesOrderService:
                 status=DemandStatus.AUDITED,
                 updated_by=approved_by,
             )
+            # 审核通过后自动产生 Demand，进入需求池
+            demand = await self._get_linked_demand(tenant_id, sales_order_id)
+            if not demand:
+                await self._create_demand_from_sales_order(
+                    tenant_id, sales_order_id, approved_by
+                )
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def reject_sales_order(
@@ -558,6 +564,7 @@ class SalesOrderService:
             demand_code=order.order_code,
             demand_type="sales_order",
             business_mode="MTO",
+            priority=5,
             demand_name=order.order_code,
             start_date=order.order_date,
             end_date=order.delivery_date,

@@ -18,6 +18,8 @@ from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.demand import Demand
+from apps.kuaizhizao.models.demand_item import DemandItem
 
 from apps.kuaizhizao.schemas.sales import (
     # 销售预测
@@ -122,6 +124,79 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
 
+    async def _get_linked_demand_for_forecast(
+        self, tenant_id: int, forecast_id: int
+    ) -> Optional[Demand]:
+        """获取与销售预测关联的 Demand"""
+        return await Demand.get_or_none(
+            tenant_id=tenant_id,
+            source_type="sales_forecast",
+            source_id=forecast_id,
+            deleted_at__isnull=True,
+        )
+
+    async def _create_demand_from_sales_forecast(
+        self, tenant_id: int, forecast_id: int, created_by: int
+    ) -> Demand:
+        """从 SalesForecast 生成 Demand（source_type=sales_forecast, source_id=预测ID）"""
+        from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+
+        forecast = await SalesForecast.get(id=forecast_id)
+        items = await SalesForecastItem.filter(
+            tenant_id=tenant_id, forecast_id=forecast_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售预测无明细，无法自动产生需求")
+
+        from decimal import Decimal
+        total_qty = sum(Decimal(str(it.forecast_quantity)) for it in items)
+        demand_items = []
+        for it in items:
+            demand_items.append({
+                "material_id": it.material_id,
+                "material_code": it.material_code,
+                "material_name": it.material_name,
+                "material_spec": it.material_spec,
+                "material_unit": it.material_unit,
+                "required_quantity": it.forecast_quantity,
+                "forecast_date": it.forecast_date,
+                "remaining_quantity": it.forecast_quantity,
+                "delivery_status": "待交货",
+            })
+
+        demand = await Demand.create(
+            tenant_id=tenant_id,
+            demand_code=forecast.forecast_code,
+            demand_type="sales_forecast",
+            business_mode="MTS",
+            demand_name=forecast.forecast_name or forecast.forecast_code,
+            start_date=forecast.start_date,
+            end_date=forecast.end_date,
+            forecast_period=forecast.forecast_period,
+            total_quantity=Decimal(str(total_qty)),
+            total_amount=Decimal("0"),
+            status=DemandStatus.AUDITED,
+            review_status=ReviewStatus.APPROVED,
+            reviewer_id=forecast.reviewer_id,
+            reviewer_name=forecast.reviewer_name,
+            review_time=forecast.review_time,
+            priority=5,
+            source_type="sales_forecast",
+            source_id=forecast_id,
+            source_code=forecast.forecast_code,
+            created_by=created_by,
+            updated_by=created_by,
+        )
+        for d in demand_items:
+            await DemandItem.create(
+                tenant_id=tenant_id,
+                demand_id=demand.id,
+                delivered_quantity=Decimal("0"),
+                **d,
+            )
+        logger.info("从销售预测 %s 自动产生需求 %s", forecast.forecast_code, demand.demand_code)
+        return demand
+
     async def approve_forecast(self, tenant_id: int, forecast_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> SalesForecastResponse:
         """审核销售预测"""
         async with in_transaction():
@@ -144,6 +219,14 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 status=status,
                 updated_by=approved_by
             )
+
+            # 审核通过后自动产生 Demand，进入需求池
+            if not rejection_reason:
+                existing_demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+                if not existing_demand:
+                    await self._create_demand_from_sales_forecast(
+                        tenant_id, forecast_id, approved_by
+                    )
 
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
@@ -202,6 +285,12 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.APPROVED,
                     updated_by=submitted_by
                 )
+                # 无需审核时，提交即审核通过，自动产生 Demand
+                demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+                if not demand:
+                    await self._create_demand_from_sales_forecast(
+                        tenant_id, forecast_id, submitted_by
+                    )
             else:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                     status="待审核",
