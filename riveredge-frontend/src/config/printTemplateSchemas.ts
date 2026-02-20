@@ -302,7 +302,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
   },
   delivery_notice: {
     type: 'delivery_notice',
-    name: '发货通知单',
+    name: '送货单',
     fields: [
       { key: 'code', label: '通知单号', type: 'string' },
       { key: 'sales_delivery_code', label: '销售出库单号', type: 'string' },

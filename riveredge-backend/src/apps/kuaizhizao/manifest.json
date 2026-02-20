@@ -12,10 +12,11 @@
         "title": "app.kuaizhizao.name",
         "icon": "production",
         "path": "/apps/kuaizhizao",
-        "children": [{
-                "title": "app.kuaizhizao.menu.sales-management",
-                "icon": "chartLine",
-                "sort_order": 1,
+        "children": [
+            {
+                "title": "app.kuaizhizao.menu.plan-management",
+                "icon": "calendar",
+                "sort_order": 2,
                 "children": [                    {
                         "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
                         "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
@@ -61,9 +62,9 @@
                 ]
             },
             {
-                "title": "app.kuaizhizao.menu.plan-management",
-                "icon": "planning",
-                "sort_order": 2,
+                "title": "app.kuaizhizao.menu.sales-management",
+                "icon": "chartLine",
+                "sort_order": 1,
                 "children": [{
                         "title": "app.kuaizhizao.menu.plan-management.unified-demand-management",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
@@ -92,7 +93,7 @@
             },
             {
                 "title": "app.kuaizhizao.menu.purchase-management",
-                "icon": "shopping",
+                "icon": "shoppingBag",
                 "sort_order": 3,
                 "children": [{
                         "title": "app.kuaizhizao.menu.purchase-management.purchase-requisitions",
@@ -192,8 +193,8 @@
                             },
                             {
                                 "title": "app.kuaizhizao.menu.warehouse-management.inventory",
-                                "path": "/apps/kuaizhizao/warehouse-management/inventory-query",
-                                "permission": "kuaizhizao:inventory-query:view",
+                                "path": "/apps/kuaizhizao/warehouse-management/inventory",
+                                "permission": "kuaizhizao:inventory:view",
                                 "sort_order": 1
                             },
                             {
@@ -204,8 +205,8 @@
                             },
                             {
                                 "title": "app.kuaizhizao.menu.warehouse-management.initial-data",
-                                "path": "/apps/kuaizhizao/warehouse-management/opening-inventory-import",
-                                "permission": "kuaizhizao:opening-inventory-import:view",
+                                "path": "/apps/kuaizhizao/warehouse-management/initial-data",
+                                "permission": "kuaizhizao:initial-data:view",
                                 "sort_order": 4
                             },
                             {
@@ -244,7 +245,7 @@
             },
             {
                 "title": "app.kuaizhizao.menu.quality-management",
-                "icon": "check-circle",
+                "icon": "quality",
                 "sort_order": 5,
                 "children": [{
                         "title": "app.kuaizhizao.menu.quality-management.incoming-inspection",
@@ -393,7 +394,7 @@
             },
             {
                 "title": "app.kuaizhizao.menu.equipment-management",
-                "icon": "tool",
+                "icon": "wrench",
                 "sort_order": 6,
                 "children": [{
                         "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
@@ -420,7 +421,8 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.equipment-management.ops-maintenance",
-                        "children": [{
+                        "children": [
+                            {
                                 "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
                                 "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
                                 "permission": "kuaizhizao:equipment-fault:view",
@@ -439,42 +441,13 @@
                                 "sort_order": 3
                             },
                             {
-                                "title": "app.kuaizhizao.menu.tooling-management.usage",
-                                "path": "/apps/kuaizhizao/equipment-management/tool-usage",
-                                "permission": "kuaizhizao:tool-usage:view",
-                                "sort_order": 4
-                            },
-                            {
                                 "title": "app.kuaizhizao.menu.equipment-management.equipment-status",
                                 "path": "/apps/kuaizhizao/equipment-management/equipment-status",
                                 "permission": "kuaizhizao:equipment-status:view",
-                                "sort_order": 5
+                                "sort_order": 4
                             }
                         ],
                         "sort_order": 2
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.equipment-management.calibration-management",
-                        "children": [{
-                                "title": "app.kuaizhizao.menu.equipment-management.equipment-calibration",
-                                "path": "/apps/kuaizhizao/equipment-management/equipment-calibration",
-                                "permission": "kuaizhizao:equipment-calibration:view",
-                                "sort_order": 1
-                            },
-                            {
-                                "title": "app.kuaizhizao.menu.equipment-management.molds-calibration",
-                                "path": "/apps/kuaizhizao/equipment-management/mold-calibration",
-                                "permission": "kuaizhizao:mold-calibration:view",
-                                "sort_order": 2
-                            },
-                            {
-                                "title": "app.kuaizhizao.menu.tooling-management.calibration",
-                                "path": "/apps/kuaizhizao/equipment-management/tool-calibration",
-                                "permission": "kuaizhizao:tool-calibration:view",
-                                "sort_order": 3
-                            }
-                        ],
-                        "sort_order": 3
                     }
                 ]
             },
@@ -482,9 +455,11 @@
                 "title": "app.kuaizhizao.menu.finance-management",
                 "icon": "wallet",
                 "sort_order": 9,
-                "children": [{
+                "children": [
+                    {
                         "title": "app.kuaizhizao.menu.finance-management.receivables-management",
-                        "children": [{
+                        "children": [
+                            {
                                 "title": "app.kuaizhizao.menu.finance-management.receivables",
                                 "path": "/apps/kuaizhizao/finance-management/receivables",
                                 "permission": "kuaizhizao:receivable:view",
@@ -497,7 +472,7 @@
                                 "sort_order": 2
                             },
                             {
-                                "title": "app.kuaizhizao.menu.finance-management.receipt-records",
+                                "title": "app.kuaizhizao.menu.finance-management.receipts",
                                 "path": "/apps/kuaizhizao/finance-management/receipts",
                                 "permission": "kuaizhizao:receipt:view",
                                 "sort_order": 3
@@ -507,7 +482,8 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.finance-management.payables-management",
-                        "children": [{
+                        "children": [
+                            {
                                 "title": "app.kuaizhizao.menu.finance-management.payables",
                                 "path": "/apps/kuaizhizao/finance-management/payables",
                                 "permission": "kuaizhizao:payable:view",
@@ -520,7 +496,7 @@
                                 "sort_order": 2
                             },
                             {
-                                "title": "app.kuaizhizao.menu.finance-management.payment-records",
+                                "title": "app.kuaizhizao.menu.finance-management.payments",
                                 "path": "/apps/kuaizhizao/finance-management/payments",
                                 "permission": "kuaizhizao:payment:view",
                                 "sort_order": 3
@@ -620,6 +596,8 @@
         "kuaizhizao:accounts-receivable:delete",
         "kuaizhizao:accounts-receivable:receipt",
         "kuaizhizao:accounts-receivable:approve",
+        "kuaizhizao:receipt:view",
+        "kuaizhizao:payment:view",
         "kuaizhizao:inventory-report:view",
         "kuaizhizao:inventory-report:create",
         "kuaizhizao:inventory-report:update",
@@ -641,6 +619,7 @@
         "kuaizhizao:reporting:update",
         "kuaizhizao:reporting:delete",
         "kuaizhizao:inventory:view",
+        "kuaizhizao:initial-data:view",
         "kuaizhizao:inbound:view",
         "kuaizhizao:inbound:create",
         "kuaizhizao:inbound:update",

@@ -408,9 +408,10 @@ export default function LoginPage() {
       }
       // 如果不填写组织代码，tenant_id 为 undefined，将注册到默认组织
 
-      // 临时跳过验证码验证（待短信服务完全接入后启用）
-      // TODO: 实现真实的验证码验证逻辑
+      // TODO(登录): 短信服务接入后，在此调用后端验证 phone_verification_code
+      // 当前：验证码为空时跳过；非空时仅做格式校验
       if (!values.phone_verification_code || values.phone_verification_code.trim() === '') {
+        // 验证码未填写，跳过（待短信服务启用后移除）
       } else {
         // 这里可以添加简单的格式验证
         if (!/^\d{6}$/.test(values.phone_verification_code)) {
@@ -2208,7 +2209,7 @@ export default function LoginPage() {
                     label="短信验证码"
                     colProps={{ span: 12 }}
                     rules={[
-                      { required: false, message: '请输入短信验证码' }, // 临时设为非必填
+                      { required: false, message: '请输入短信验证码' }, // TODO(登录): 短信服务接入后改为必填
                       { pattern: /^\d{6}$/, message: '验证码格式不正确' },
                     ]}
                     fieldProps={{

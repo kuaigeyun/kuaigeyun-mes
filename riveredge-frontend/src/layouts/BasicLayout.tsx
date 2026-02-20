@@ -66,10 +66,8 @@ import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
-import { getMenuTree, MenuTree } from '../services/menu';
-import { getBusinessConfig } from '../services/businessConfig';
-import type { BusinessConfig } from '../services/businessConfig';
-import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
+import { MenuTree } from '../services/menu';
+import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl } from '../utils/avatar';
@@ -306,6 +304,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/approval-instances': ManufacturingIcons.checkCircle, // 审批实例 - 使用检查圆圈图标
       '/system/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
       '/system/print-templates': ManufacturingIcons.fileText, // 打印模板 - 使用文件文本图标
+      '/system/report-templates': ManufacturingIcons.chartBar, // 报表模板 - 使用柱状图图标
       '/system/print-devices': ManufacturingIcons.printer, // 打印设备 - 使用打印机图标
       '/personal': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
       '/personal/profile': ManufacturingIcons.user, // 个人资料 - 使用用户图标
@@ -331,10 +330,13 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/warehouse-management': ManufacturingIcons.warehouse, // 仓储管理 - 使用仓库图标
       '/apps/kuaizhizao/quality-management': ManufacturingIcons.quality, // 质量管理 - 使用质量图标
       '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
-      '/apps/kuaizhizao/equipment-management': ManufacturingIcons.machine, // 设备管理 - 使用机器图标
+      '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
       '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
+      '/apps/kuaireport': ManufacturingIcons.chartBar, // 报表与看板 - 柱状图
+      '/apps/kuaireport/reports': ManufacturingIcons.chartBar, // 报表中心
+      '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
     };
 
     // 精确路径匹配
@@ -371,11 +373,15 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Warehouse Management': ManufacturingIcons.warehouse,
     'Quality Management': ManufacturingIcons.quality,
     'Cost Management': ManufacturingIcons.calculator,
-    'Equipment Management': ManufacturingIcons.machine,
+    'Equipment Management': ManufacturingIcons.wrench,
     'Finance Management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
     // 基础数据管理相关
     '仓库数据': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标
     'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
+    'Report Center': ManufacturingIcons.chartBar, // 报表中心
+    'Dashboard Center': ManufacturingIcons.layoutDashboard, // 大屏中心
+    '报表中心': ManufacturingIcons.chartBar,
+    '大屏中心': ManufacturingIcons.layoutDashboard,
     // ... 其他常见的英文名称可以在这里添加
   };
 
@@ -389,341 +395,89 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
 };
 
 /**
- * 菜单配置函数
- *
- * 按照菜单分组架构设计：
- * 【第一组】固定仪表盘 - 平台级、系统级、应用级都可见
- * 【第二组】应用菜单（插件式加载）- 根据用户权限和已安装插件动态加载
- * 【第三组】系统配置 - 平台级、系统级、应用级可见
- *   └─ 用户管理（分组标题，不可点击）
- *      ├─ 部门管理（第1优先级）
- *      ├─ 职位管理（第2优先级）
- *      ├─ 角色权限管理（第3优先级，包含角色和权限管理）
- *      └─ 账户管理（第4优先级）
- * 【第四组】运营中心 - 仅平台级管理员可见
- * 
- * @param t - i18n 翻译函数
- * @returns 菜单配置数组
+ * 平台级 + 系统级菜单配置（原有写法，硬编码）
+ * 仅应用级 APP 使用数据库统一源（manifest 同步 → core_menus）
  */
 const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
-  // ==================== 【第一组】固定仪表盘 ====================
-  // 可见范围：平台级、系统级、应用级 都可见
   {
     path: '/system/dashboard',
     name: t('menu.dashboard'),
     icon: getMenuIcon(t('menu.dashboard'), '/system/dashboard'),
     children: [
-      {
-        path: '/system/dashboard/workplace',
-        name: t('menu.dashboard.workplace'),
-        icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace'),
-      },
-      {
-        path: '/system/dashboard/analysis',
-        name: t('menu.dashboard.analysis'),
-        icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis'),
-      },
+      { path: '/system/dashboard/workplace', name: t('menu.dashboard.workplace'), icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace') },
+      { path: '/system/dashboard/analysis', name: t('menu.dashboard.analysis'), icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis') },
     ],
   },
-
-  // ==================== 【第二组】应用菜单（插件式加载） ====================
-  // 可见范围：根据用户权限和已安装插件动态加载
-  // 注意：插件式的菜单按分组菜单设计，应用的名称作为分组名，不可点击，只显示
-  // 插件里的菜单直接显示到左侧菜单
-  // TODO: 后续从插件系统动态加载应用菜单
-  // 占位的 MES 菜单已移除
-
-  // ==================== 【第三组】系统菜单 ====================
-  // 可见范围：平台级、系统级、应用级 可见
-  // 注意：组织管理已移除，组织管理在平台级运营中心进行管理
   {
     path: '/system',
     name: t('menu.system'),
     icon: getMenuIcon(t('menu.system'), '/system'),
     children: [
-      // 核心配置分组标题
-      {
-        key: 'core-config-group',
-        type: 'group',
-        name: t('menu.group.core-config'),
-        label: t('menu.group.core-config'),
-        className: 'riveredge-menu-group-title',
-        children: [
-          {
-            path: '/system/applications',
-            name: t('menu.system.applications'),
-            icon: getMenuIcon(t('menu.system.applications'), '/system/applications'),
-          },
-          {
-            path: '/system/menus',
-            name: t('menu.system.menus'),
-            icon: getMenuIcon(t('menu.system.menus'), '/system/menus'),
-          },
-          {
-            path: '/system/site-settings',
-            name: t('menu.system.site-settings'),
-            icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
-          },
-          {
-            path: '/system/config-center',
-            name: t('menu.system.config-center'),
-            icon: getMenuIcon(t('menu.system.config-center'), '/system/config-center'),
-          },
-          {
-            path: '/system/data-dictionaries',
-            name: t('menu.system.data-dictionaries'),
-            icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'),
-          },
-          {
-            path: '/system/languages',
-            name: t('menu.system.languages'),
-            icon: getMenuIcon(t('menu.system.languages'), '/system/languages'),
-          },
-          {
-            path: '/system/code-rules',
-            name: t('menu.system.code-rules'),
-            icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
-          },
-          {
-            path: '/system/custom-fields',
-            name: t('menu.system.custom-fields'),
-            icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'),
-          },
-        ],
-      },
-      // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
-      {
-        key: 'user-management-group',
-        type: 'group',
-        name: t('menu.group.user-management'),
-        label: t('menu.group.user-management'),
-        className: 'riveredge-menu-group-title',
-        children: [
-          {
-            path: '/system/departments',
-            name: t('menu.system.departments'),
-            icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
-          },
-          {
-            path: '/system/positions',
-            name: t('menu.system.positions'),
-            icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
-          },
-          {
-            path: '/system/roles',
-            name: t('menu.system.roles-permissions'),
-            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
-          },
-          {
-            path: '/system/users',
-            name: t('menu.system.users'),
-            icon: getMenuIcon(t('menu.system.users'), '/system/users'),
-          },
-        ],
-      },
-      // 数据中心分组：文件管理 → 接口管理 → 数据源管理 → 应用连接器 → 数据集管理
-      {
-        key: 'data-center-group',
-        type: 'group',
-        name: t('menu.group.data-center'),
-        label: t('menu.group.data-center'),
-        className: 'riveredge-menu-group-title',
-        children: [
-          {
-            path: '/system/files',
-            name: t('menu.system.files'),
-            icon: getMenuIcon(t('menu.system.files'), '/system/files'),
-          },
-          {
-            path: '/system/apis',
-            name: t('menu.system.apis'),
-            icon: getMenuIcon(t('menu.system.apis'), '/system/apis'),
-          },
-          {
-            path: '/system/data-sources',
-            name: t('menu.system.data-sources'),
-            icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'),
-          },
-          {
-            path: '/system/application-connections',
-            name: t('menu.system.application-connections'),
-            icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'),
-          },
-          {
-            path: '/system/datasets',
-            name: t('menu.system.datasets'),
-            icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'),
-          },
-        ],
-      },
-      // 流程管理分组标题
-      {
-        key: 'process-management-group',
-        type: 'group',
-        name: t('menu.group.process-management'),
-        label: t('menu.group.process-management'),
-        className: 'riveredge-menu-group-title',
-        children: [
-          {
-            path: '/system/approval-processes',
-            name: t('menu.system.approval-processes'),
-            icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'),
-            children: [
-              {
-                path: '/system/approval-processes/designer',
-                name: t('path.system.approval-processes.designer'),
-                hideInMenu: true,
-              },
-            ],
-          },
-          {
-            path: '/system/approval-instances',
-            name: t('menu.system.approval-instances'),
-            icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'),
-          },
-          {
-            path: '/system/messages/template',
-            name: t('menu.system.messages.template'),
-            icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'),
-          },
-          {
-            path: '/system/messages/config',
-            name: t('menu.system.messages.config'),
-            icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'),
-          },
-          {
-            path: '/system/scripts',
-            name: t('menu.system.scripts'),
-            icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts'),
-          },
-          {
-            path: '/system/scheduled-tasks',
-            name: t('menu.system.scheduled-tasks'),
-            icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks'),
-          },
-          {
-            path: '/system/print-devices',
-            name: t('menu.system.print-devices'),
-            icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'),
-          },
-          {
-            path: '/system/print-templates',
-            name: t('menu.system.print-templates'),
-            icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
-            children: [
-              {
-                path: '/system/print-templates/design',
-                name: t('path.system.print-templates.design'),
-                hideInMenu: true,
-              },
-            ],
-          },
-        ],
-      },
-      {
-        path: '/personal',
-        name: t('menu.personal'),
-        icon: getMenuIcon(t('menu.personal'), '/personal'),
-        children: [
-          {
-            path: '/personal/profile',
-            name: t('menu.personal.profile'),
-            icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile'),
-          },
-          {
-            path: '/personal/preferences',
-            name: t('menu.personal.preferences'),
-            icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences'),
-          },
-          {
-            path: '/personal/messages',
-            name: t('menu.personal.messages'),
-            icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages'),
-          },
-          {
-            path: '/personal/tasks',
-            name: t('menu.personal.tasks'),
-            icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
-          },
-        ],
-      },
-      // 监控运维分组标题
-      {
-        key: 'monitoring-ops-group',
-        type: 'group',
-        name: t('menu.group.monitoring-ops'),
-        label: t('menu.group.monitoring-ops'),
-        className: 'riveredge-menu-group-title',
-        children: [
-          {
-            path: '/system/operation-logs',
-            name: t('menu.system.operation-logs'),
-            icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'),
-          },
-          {
-            path: '/system/login-logs',
-            name: t('menu.system.login-logs'),
-            icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'),
-          },
-          {
-            path: '/system/online-users',
-            name: t('menu.system.online-users'),
-            icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'),
-          },
-          {
-            path: '/system/data-backups',
-            name: t('menu.system.data-backups'),
-            icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'),
-          },
-        ],
-      },
+      { key: 'core-config-group', type: 'group', name: t('menu.group.core-config'), label: t('menu.group.core-config'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/applications', name: t('menu.system.applications'), icon: getMenuIcon(t('menu.system.applications'), '/system/applications') },
+        { path: '/system/menus', name: t('menu.system.menus'), icon: getMenuIcon(t('menu.system.menus'), '/system/menus') },
+        { path: '/system/site-settings', name: t('menu.system.site-settings'), icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings') },
+        { path: '/system/config-center', name: t('menu.system.config-center'), icon: getMenuIcon(t('menu.system.config-center'), '/system/config-center') },
+        { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries') },
+        { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages') },
+        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules') },
+        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields') },
+      ]},
+      { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments') },
+        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions') },
+        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles') },
+        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users') },
+      ]},
+      { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files') },
+        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis') },
+        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources') },
+        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections') },
+        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets') },
+      ]},
+      { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
+        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances') },
+        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template') },
+        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config') },
+        { path: '/system/scripts', name: t('menu.system.scripts'), icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts') },
+        { path: '/system/scheduled-tasks', name: t('menu.system.scheduled-tasks'), icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks') },
+        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices') },
+        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
+      ]},
+      { key: 'monitoring-ops-group', type: 'group', name: t('menu.group.monitoring-ops'), label: t('menu.group.monitoring-ops'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs') },
+        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs') },
+        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users') },
+        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups') },
+      ]},
     ],
   },
-
-  // ==================== 【第四组】运营中心 ====================
-  // 可见范围：仅平台级管理员可见
   {
-    // 父菜单不设置 path，避免与子菜单路径冲突
+    path: '/personal',
+    name: t('menu.personal'),
+    icon: getMenuIcon(t('menu.personal'), '/personal'),
+    children: [
+      { path: '/personal/profile', name: t('menu.personal.profile'), icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile') },
+      { path: '/personal/preferences', name: t('menu.personal.preferences'), icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences') },
+      { path: '/personal/messages', name: t('menu.personal.messages'), icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages') },
+      { path: '/personal/tasks', name: t('menu.personal.tasks'), icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks') },
+    ],
+  },
+  {
     name: t('menu.infra'),
     icon: getMenuIcon(t('menu.infra'), '/infra/operation'),
     children: [
-      {
-        path: '/infra/operation',
-        name: t('menu.infra.operation'),
-        icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation'),
-      },
-      {
-        path: '/infra/tenants',
-        name: t('menu.infra.tenants'),
-        icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants'),
-      },
-      {
-        path: '/infra/packages',
-        name: t('menu.infra.packages'),
-        icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages'),
-      },
-      {
-        path: '/infra/monitoring',
-        name: t('menu.infra.monitoring'),
-        icon: getMenuIcon(t('menu.infra.monitoring'), '/infra/monitoring'),
-      },
-      {
-        path: '/infra/inngest',
-        name: t('menu.infra.inngest'),
-        icon: getMenuIcon(t('menu.infra.inngest'), '/infra/inngest'),
-      },
-      {
-        path: '/infra/admin',
-        name: t('menu.infra.admin'),
-        icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin'),
-      },
+      { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
+      { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
+      { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
+      { path: '/infra/monitoring', name: t('menu.infra.monitoring'), icon: getMenuIcon(t('menu.infra.monitoring'), '/infra/monitoring') },
+      { path: '/infra/inngest', name: t('menu.infra.inngest'), icon: getMenuIcon(t('menu.infra.inngest'), '/infra/inngest') },
+      { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },
 ];
-
-/**
- * 用户菜单项
- */
 
 /**
  * 基础布局组件
@@ -939,188 +693,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 站点设置更新由 site-settings 等页面保存时直接 invalidateQueries，不再依赖 siteThemeUpdated
 
-  // 获取应用菜单（仅获取已安装且启用的应用的菜单）
-  // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
-  const { data: applicationMenus, refetch: refetchApplicationMenus } = useQuery({
-    queryKey: ['applicationMenus'],
-    queryFn: async () => {
-      // 获取菜单数据
-      const menuData = await getMenuTree({ is_active: true });
-      // 只返回应用菜单（application_uuid 不为空）
-      const appMenusRaw = menuData.filter(menu => menu.application_uuid);
-      // 按 application_uuid 去重，避免同一应用出现多次（清除缓存后可能出现的异常）
-      const seenAppUuids = new Set<string>();
-      const appMenus = appMenusRaw.filter(menu => {
-        const uuid = menu.application_uuid;
-        if (!uuid) return false;
-        if (seenAppUuids.has(uuid)) return false;
-        seenAppUuids.add(uuid);
-        return true;
-      });
-
-      // 更新 localStorage 缓存（包含时间戳，用于判断是否过期）
-      try {
-        const cacheData = {
-          data: appMenus,
-          timestamp: Date.now(),
-          tenantId: currentUser?.tenant_id, // 添加租户ID，确保不同租户的缓存不冲突
-        };
-        localStorage.setItem('applicationMenusCache_v3', JSON.stringify(cacheData));
-        localStorage.removeItem('applicationMenusCache_v2'); // 清除旧版本缓存
-        localStorage.removeItem('applicationMenusCache');
-      } catch (error) {
-        // 忽略存储错误（localStorage 可能已满或被禁用）
-        console.warn('保存应用菜单缓存失败:', error);
-      }
-
-      return appMenus;
-    },
-    enabled: !!currentUser, // 只在用户登录后加载
-    staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000, // 开发环境30秒缓存，生产环境5分钟缓存
-    gcTime: 10 * 60 * 1000, // 缓存保留时间10分钟
-    placeholderData: () => {
-      // 使用缓存数据作为占位符，避免闪烁（优先 v3，兼容 v2）
-      try {
-        const cachedStr = localStorage.getItem('applicationMenusCache_v3') ?? localStorage.getItem('applicationMenusCache_v2');
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr);
-          // 检查缓存是否过期（超过5分钟视为过期）
-          const cacheAge = Date.now() - (cached.timestamp || 0);
-          const isExpired = cacheAge > 5 * 60 * 1000;
-          
-          // 获取当前 Tenant ID，优先使用 currentUser，降级使用本地存储
-          let currentTenantId = currentUser?.tenant_id;
-          if (!currentTenantId) {
-             const savedInfo = getUserInfo();
-             currentTenantId = savedInfo?.tenant_id ?? (savedInfo as any)?.tenantId;
-          }
-
-          const isTenantMatch = cached.tenantId === currentTenantId;
-
-          // 只要没过期且租户匹配，就使用缓存
-          // 注意：如果 currentTenantId 为空（未登录状态），不应返回缓存，防止显示错误的菜单
-          if (!isExpired && isTenantMatch && currentTenantId && cached.data) {
-            return cached.data;
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-      return []; // Return empty array instead of undefined to match expected type
-    },
-    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
-    refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新（避免频繁刷新）
-    refetchOnMount: (query) => {
-      // 智能刷新策略：
-      // 1. 如果查询从未执行过（首次启用），总是刷新
-      // 2. 如果数据过期，刷新
-      if (!query.state.data || query.isStale()) {
-        return true;
-      }
-
-      // 如果有缓存数据且未过期，不刷新
-      // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
-      return false;
-    },
-    refetchOnReconnect: true, // 网络重连时刷新
-  });
-
-  // 获取业务配置（用于菜单按业务模式过滤：未启用的模块/节点对应菜单不显示）
-  const { data: businessConfig } = useQuery({
-    queryKey: ['businessConfig'],
-    queryFn: getBusinessConfig,
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    retry: false, // 失败时不过滤，保证菜单正常显示
-  });
-
-  /**
-   * 按业务配置递归过滤菜单树：未启用的 module 或 node 对应菜单不显示
-   */
-  const filterMenuByBusinessConfig = (menus: MenuTree[], config: BusinessConfig | null | undefined): MenuTree[] => {
-    if (!config) return menus;
-    const modules = config.modules ?? {};
-    const nodes = config.nodes ?? {};
-
-    return menus
-      .map((menu) => {
-        const businessMeta = getMenuBusinessMeta(menu);
-        if (businessMeta) {
-          if (businessMeta.module !== undefined && modules[businessMeta.module] === false) return null;
-          if (businessMeta.node !== undefined) {
-            const nodeConfig = nodes[businessMeta.node];
-            if (nodeConfig && nodeConfig.enabled === false) return null;
-          }
-        }
-        if (menu.children && menu.children.length > 0) {
-          const filteredChildren = filterMenuByBusinessConfig(menu.children, config);
-          if (filteredChildren.length === 0 && !menu.path) return null;
-          return { ...menu, children: filteredChildren };
-        }
-        return menu;
-      })
-      .filter((m): m is MenuTree => m !== null);
-  };
-
-  // 按业务配置过滤后的应用菜单（配置加载失败时使用原始菜单）
-  const filteredApplicationMenus = useMemo(() => {
-    if (!applicationMenus || applicationMenus.length === 0) return applicationMenus ?? [];
-    return filterMenuByBusinessConfig(applicationMenus, businessConfig ?? undefined);
-  }, [applicationMenus, businessConfig]);
-
-  // 用户登录后（currentUser 从无到有）清除菜单缓存并触发菜单查询
-  const prevUserIdRef = useRef<number | undefined>();
-  useEffect(() => {
-    const userId = currentUser?.id;
-    const justLoggedIn = userId !== undefined && prevUserIdRef.current === undefined;
-    prevUserIdRef.current = userId;
-    if (!justLoggedIn) return;
-    console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
-    try { localStorage.removeItem('applicationMenusCache_v2'); } catch { /* ignore */ }
-    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-    requestAnimationFrame(() => {
-      setTimeout(() => refetchApplicationMenus(), 0);
-    });
-  }, [currentUser?.id, queryClient, refetchApplicationMenus]);
-
-
-
-  // 监听租户ID变化，清除菜单缓存（确保切换组织时获取最新菜单）
-  useEffect(() => {
-    if (currentUser?.tenant_id) {
-      // 检查缓存中的租户ID是否与当前租户ID匹配
-      try {
-        const cachedStr = localStorage.getItem('applicationMenusCache');
-        if (cachedStr) {
-          const cached = JSON.parse(cachedStr);
-          // 如果租户ID不匹配，清除缓存并重新加载
-          if (cached.tenantId !== currentUser.tenant_id) {
-            console.log('🔄 检测到租户ID变化，清除菜单缓存并重新加载...');
-            localStorage.removeItem('applicationMenusCache_v2');
-            queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-            // 主动触发菜单查询
-            refetchApplicationMenus();
-          }
-        }
-      } catch (error) {
-        // 忽略解析错误
-      }
-    }
-  }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
-
-  const applicationMenuVersion = useGlobalStore((s) => s.applicationMenuVersion ?? 0);
-  useEffect(() => {
-    if (applicationMenuVersion === 0) return;
-    console.log('🔄 检测到应用状态变更，刷新菜单...');
-    try {
-      localStorage.removeItem('applicationMenusCache_v3');
-      localStorage.removeItem('applicationMenusCache_v2');
-      localStorage.removeItem('applicationMenusCache');
-    } catch { /* ignore */ }
-    refetchApplicationMenus();
-  }, [applicationMenuVersion, refetchApplicationMenus]);
-
   /**
    * 将 MenuTree 转换为 MenuDataItem
    * 支持应用菜单的国际化翻译
@@ -1178,6 +750,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 快格轻制造应用图标映射
           'planning': ManufacturingIcons.calendar, // 计划管理使用日历图标
           'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
+          'bar-chart': ManufacturingIcons.chartBar, // 报表与看板 - 柱状图
+          'chartBar': ManufacturingIcons.chartBar,
+          'layoutDashboard': ManufacturingIcons.layoutDashboard, // 大屏中心
         };
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
@@ -1251,8 +826,48 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menuItem.path = undefined; // 明确设置为 undefined
     }
 
+    // 从 meta 同步 type、className、hideInMenu（数据库系统菜单入库后使用）
+    const meta = (menu as { meta?: Record<string, any> }).meta;
+    if (meta) {
+      if (meta.type === 'group') menuItem.type = 'group';
+      if (meta.className) menuItem.className = meta.className;
+      if (meta.hideInMenu === true) menuItem.hideInMenu = true;
+    }
+
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
+
+  const {
+    sidebarMenuData: filteredMenuData,
+    breadcrumbMenuData,
+    refetch: refetchApplicationMenus,
+  } = useUnifiedMenuData({
+    getSystemMenuConfig: () => getMenuConfig(t),
+    convertMenuTreeToMenuDataItem,
+    t,
+    collapsed,
+  });
+  // 用户登录后清除菜单缓存并触发菜单查询
+  const prevUserIdRef = useRef<number | undefined>();
+  useEffect(() => {
+    const userId = currentUser?.id;
+    const justLoggedIn = userId !== undefined && prevUserIdRef.current === undefined;
+    prevUserIdRef.current = userId;
+    if (!justLoggedIn) return;
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    requestAnimationFrame(() => setTimeout(() => refetchApplicationMenus(), 0));
+  }, [currentUser?.id, queryClient, refetchApplicationMenus]);
+
+  // 监听租户ID变化，刷新菜单（React Query 按 queryKey 缓存，切换租户需 invalidate）
+  const prevTenantIdRef = useRef<number | undefined>();
+  useEffect(() => {
+    const tid = currentUser?.tenant_id;
+    if (tid !== undefined && prevTenantIdRef.current !== undefined && prevTenantIdRef.current !== tid) {
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      refetchApplicationMenus();
+    }
+    prevTenantIdRef.current = tid;
+  }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
 
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
@@ -1540,191 +1155,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
   }, [isDarkMode, isLightModeLightBg]); // 当主题或背景色变化时重新设置
 
-  // 获取翻译后的菜单配置（与 applicationMenus 合并后由 filteredMenuData 提供给面包屑、标题、UniTabs）
-  const menuConfig = useMemo(() => getMenuConfig(t), [t]);
-
-  const filteredMenuData = useMemo(() => {
-    if (!currentUser) return [];
-
-    let menuItems = [...menuConfig];
-
-    // 【第二组】应用菜单：从后端动态加载
-    // 应用菜单处理逻辑：
-    // 1. 应用的名称作为分组标题（不可点击，灰色，小字号）
-    // 2. 应用的子菜单提升到主菜单一级（和"仪表盘"、"系统配置"等同一级别）
-    if (filteredApplicationMenus && filteredApplicationMenus.length > 0) {
-      // 收集所有应用菜单项（分组标题 + 子菜单）
-      const appMenuItems: MenuDataItem[] = [];
-
-      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序），已按业务配置过滤
-      const sortedApplicationMenus = filteredApplicationMenus;
-
-      // 遍历每个应用，将应用的子菜单提升到主菜单级别
-      sortedApplicationMenus.forEach(appMenu => {
-        if (appMenu.children && appMenu.children.length > 0) {
-          // 1. 先添加应用名称作为分组标题（仅在菜单展开时显示）
-          // 使用 Ant Design 原生的 type: 'group' 来创建分组标题（与系统级菜单保持一致）
-          // 注意：即使子菜单已经提升到主菜单级别，group 仍然需要 children 才能被渲染
-          // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
-          // 菜单收起时不显示分组标题
-          if (!collapsed) {
-            // 翻译应用名称（递归找第一个有 path 的子孙节点来提取 appCode）
-            const findFirstAppPath = (items: any[]): string | null => {
-              for (const child of items) {
-                if (child?.path) return child.path;
-                if (child?.children?.length > 0) {
-                  const found = findFirstAppPath(child.children);
-                  if (found) return found;
-                }
-              }
-              return null;
-            };
-            const firstChildPath = findFirstAppPath(appMenu.children);
-            let translatedAppName = appMenu.name; // 默认使用数据库中的名称
-
-            // 优先从路径提取应用 code 并使用翻译 key
-            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
-              const appCode = extractAppCodeFromPath(firstChildPath);
-              if (appCode) {
-                // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
-                const appNameKey = `app.${appCode}.name`;
-                const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
-
-                // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
-                if (appNameTranslated && appNameTranslated !== appNameKey) {
-                  translatedAppName = appNameTranslated;
-                }
-              }
-            }
-
-            // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
-            if (translatedAppName === appMenu.name) {
-              translatedAppName = translateMenuName(appMenu.name, t, firstChildPath ?? undefined);
-            }
-
-            const groupTitle: MenuDataItem = {
-              name: translatedAppName,
-              label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
-              key: `app-group-${appMenu.uuid}`,
-              type: 'group', // 使用原生 group 类型
-              className: 'menu-group-title-app app-menu-container-start', // 用于样式识别和容器开始标记
-              icon: undefined,
-              children: [
-                // 创建一个隐藏的占位子菜单项，确保 group 能被渲染
-                {
-                  key: `app-group-placeholder-${appMenu.uuid}`,
-                  name: '', // 空名称，不显示
-                  path: undefined,
-                  style: { display: 'none' },
-                },
-              ],
-            };
-            appMenuItems.push(groupTitle);
-          }
-
-          // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
-          appMenu.children.forEach(childMenu => {
-            // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
-            // 注意：应用菜单的子菜单也需要使用应用菜单翻译逻辑，递归处理子菜单时也会传递 isAppMenu=true
-            const converted = convertMenuTreeToMenuDataItem(childMenu, true);
-            // 为应用菜单项添加特殊的 className，用于 CSS 容器样式
-            if (converted.className) {
-              converted.className = `${converted.className} app-menu-item`;
-            } else {
-              converted.className = 'app-menu-item';
-            }
-            appMenuItems.push(converted);
-          });
-        }
-      });
-
-      // 插入到第二组位置（在仪表盘之后，系统菜单之前）
-      // 注意：分割线通过 CSS 添加，不通过菜单项
-      menuItems.splice(1, 0, ...appMenuItems);
-    }
-
-    // 【第四组】运营中心：仅平台级管理员可见
-    // 根据路径过滤，而不是名称（因为名称可能已翻译）
-    if (!currentUser.is_infra_admin) {
-      // 过滤掉运营中心菜单（通过检查是否有 /infra/operation 路径的子菜单来判断）
-      menuItems = menuItems.filter(item => {
-        // 如果菜单有子菜单，检查是否包含运营中心相关的路径
-        if (item.children) {
-          const hasInfraOperation = item.children.some(child =>
-            child.path?.startsWith('/infra/operation') ||
-            child.path?.startsWith('/infra/tenants') ||
-            child.path?.startsWith('/infra/packages') ||
-            child.path?.startsWith('/infra/monitoring') ||
-            child.path?.startsWith('/infra/inngest') ||
-            child.path?.startsWith('/infra/admin')
-          );
-          return !hasInfraOperation;
-        }
-        // 如果菜单没有子菜单，保留它（不是运营中心菜单）
-        return true;
-      });
-    }
-
-    // 注意：组织管理已从第三组移除，移至运营中心（第四组）
-    // 因此不再需要过滤第三组的组织管理菜单
-
-    return menuItems;
-  }, [currentUser, filteredApplicationMenus, convertMenuTreeToMenuDataItem, collapsed, t, menuConfig]);
-
-  /**
-   * 面包屑专用菜单数据：保留应用菜单的完整层级结构（不 flat 展开）
-   * filteredMenuData 为侧边栏渲染而 flat 展开了应用菜单子项，导致面包屑丢失父级层级。
-   * 这里单独维护一份保留树形结构的数据，专供面包屑使用。
-   */
-  const breadcrumbMenuData = useMemo(() => {
-    if (!currentUser) return [];
-
-    // 从系统菜单配置开始（已包含层级结构）
-    const items: MenuDataItem[] = [...menuConfig];
-
-    // 将应用菜单以完整层级插入（appMenu 作为父节点，其 children 保持原始树形），已按业务配置过滤
-    if (filteredApplicationMenus && filteredApplicationMenus.length > 0) {
-      const appMenuItems: MenuDataItem[] = filteredApplicationMenus.map(appMenu => {
-        // 翻译应用名称：递归找第一个有 path 的子孙节点来提取 appCode
-        const findFirstChildPath = (items: any[]): string | null => {
-          for (const child of items) {
-            if (child?.path) return child.path;
-            if (child?.children?.length > 0) {
-              const found = findFirstChildPath(child.children);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-        const firstChildPath = findFirstChildPath(appMenu.children || []);
-        let translatedAppName = appMenu.name;
-        if (firstChildPath?.startsWith('/apps/')) {
-          const appCode = extractAppCodeFromPath(firstChildPath);
-          if (appCode) {
-            const appNameKey = `app.${appCode}.name`;
-            const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
-            if (appNameTranslated && appNameTranslated !== appNameKey) {
-              translatedAppName = appNameTranslated;
-            }
-          }
-        }
-
-
-        // 将每个 appMenu 作为父节点，其 children 保持完整层级
-        return {
-          ...convertMenuTreeToMenuDataItem(appMenu, true),
-          name: translatedAppName,
-          key: `breadcrumb-app-${appMenu.uuid}`,
-        };
-      });
-
-      // 插入到仪表盘之后
-      items.splice(1, 0, ...appMenuItems);
-    }
-
-    return items;
-  }, [currentUser, filteredApplicationMenus, convertMenuTreeToMenuDataItem, t, menuConfig]);
-
   /**
    * 根据当前路径设置文档标题（浏览器标签页标题）
    */
@@ -1860,18 +1290,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setTechStackModalOpen(true);
         break;
       case 'clear-menu-cache':
-        // 清除菜单缓存：localStorage + React Query，并重新拉取
-        try {
-          localStorage.removeItem('applicationMenusCache_v3');
-          localStorage.removeItem('applicationMenusCache_v2');
-          localStorage.removeItem('applicationMenusCache');
-          // 先移除查询缓存，再拉取，避免旧数据与新数据混合导致菜单重复
-          queryClient.removeQueries({ queryKey: ['applicationMenus'] });
-          refetchApplicationMenus();
-          message.success(t('ui.clearCacheSuccess'));
-        } catch (e) {
-          message.error(t('ui.clearCacheError'));
-        }
+        queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
+        refetchApplicationMenus();
+        message.success(t('ui.clearCacheSuccess'));
         break;
       case 'logout':
         logout();

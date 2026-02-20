@@ -1,5 +1,5 @@
 /**
- * 发货通知单管理页面
+ * 送货单管理页面
  *
  * 在销售出库前/后向客户发送发货通知，记录物流信息
  *
@@ -128,7 +128,7 @@ const DeliveryNoticesPage: React.FC = () => {
       setNoticeDetail(detail as DeliveryNoticeDetail);
       setDetailDrawerVisible(true);
     } catch {
-      messageApi.error('获取发货通知单详情失败');
+      messageApi.error('获取送货单详情失败');
     }
   };
 
@@ -449,7 +449,7 @@ const DeliveryNoticesPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建交货通知"
+          createButtonText="新建送货单"
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
@@ -557,7 +557,7 @@ const DeliveryNoticesPage: React.FC = () => {
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
-        title="从数据集同步交货通知"
+        title="从数据集同步送货单"
       />
     </>
   );

@@ -38,6 +38,8 @@ export interface MultiTabListPageTemplateProps {
     padding?: number | string;
     /** 页面头部内容（如图标、标题、操作按钮等），显示在卡片上方 */
     header?: ReactNode;
+    /** 标签栏右侧附加内容（如操作按钮），显示在 Tab 标题栏右侧 */
+    tabBarExtraContent?: ReactNode;
 }
 
 /**
@@ -52,6 +54,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     style,
     padding = 16,
     header,
+    tabBarExtraContent,
 }) => {
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
@@ -66,6 +69,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
                 tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
                 activeTabKey={activeTabKey}
                 onTabChange={onTabChange}
+                tabBarExtraContent={tabBarExtraContent}
                 styles={{ body: { padding } }}
             >
                 {currentTab?.children}

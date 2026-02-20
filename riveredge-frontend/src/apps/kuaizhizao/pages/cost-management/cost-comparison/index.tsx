@@ -137,6 +137,7 @@ const CostComparisonPage: React.FC = () => {
   return (
     <PageContainer
       title="成本对比"
+      contentStyle={{ padding: 0 }}
       extra={[
         <Button
           key="compare"
@@ -150,7 +151,7 @@ const CostComparisonPage: React.FC = () => {
     >
       {/* 对比结果展示 */}
       {result && (
-        <Card title="对比结果" style={{ marginBottom: 16 }}>
+        <Card title="对比结果" style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
           <ProDescriptions
             bordered
             column={2}

@@ -22,9 +22,14 @@ import InitWizardPage from '../pages/init/wizard';
 import TemplateSelectPage from '../pages/init/template-select';
 import QRCodeScanPage from '../pages/qrcode/scan';
 
-// 懒加载包装
+// 懒加载包装（默认骨架屏）
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+);
+
+// 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
+const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton variant="dashboard" />}><LazyComponent /></Suspense>
 );
 
 // 系统级页面（按需加载）
@@ -105,8 +110,8 @@ const SystemRoutes: React.FC = () => (
     <Route path="/qrcode/scan" element={<QRCodeScanPage />} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
-    <Route path="/system/dashboard/workplace" element={withSuspense(DashboardPage)} />
-    <Route path="/system/dashboard/analysis" element={withSuspense(DashboardAnalysisPage)} />
+    <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
+    <Route path="/system/dashboard/analysis" element={withDashboardSuspense(DashboardAnalysisPage)} />
     <Route path="/system/roles" element={withSuspense(RolesPermissionsPage)} />
     <Route path="/system/permissions" element={withSuspense(PermissionsPage)} />
     <Route path="/system/departments" element={withSuspense(DepartmentsPage)} />

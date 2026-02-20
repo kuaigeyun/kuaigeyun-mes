@@ -471,7 +471,7 @@ class DemandComputationService:
 
         try:
             async with in_transaction():
-                # 失败状态重试时，先删除可能存在的旧明细（事务回滚应已清理，此处兜底）
+                # 失败重试时清理旧明细：理论上事务回滚已清理，此处为防御性保证重试从干净状态开始
                 if computation.computation_status == "失败":
                     await DemandComputationItem.filter(
                         tenant_id=tenant_id,

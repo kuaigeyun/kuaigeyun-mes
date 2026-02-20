@@ -238,6 +238,7 @@ export const ManufacturingIcons = {
   grid: getLucideIcon('Grid'),
   layout: getLucideIcon('Layout'),
   'layout-grid': getLucideIcon('LayoutGrid'),
+  layoutDashboard: getLucideIcon('LayoutDashboard'), // 大屏/看板布局
   target: getLucideIcon('Target'),
   award: getLucideIcon('Award'),
   star: getLucideIcon('Star'),

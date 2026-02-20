@@ -389,7 +389,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "page_name": "发货通知",
         "page_path": "/apps/kuaizhizao/sales-management/delivery-notices",
         "code_field": "notice_code",
-        "code_field_label": "发货通知单编码",
+        "code_field_label": "送货单编码",
         "module": "快格轻制造",
         "module_icon": "tool",
         "auto_generate": True,

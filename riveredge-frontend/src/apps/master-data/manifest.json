@@ -122,23 +122,13 @@
                         "title": "app.master-data.menu.process.engineering-bom",
                         "path": "/apps/master-data/process/engineering-bom",
                         "permission": "master-data:process:engineering-bom:view",
-                        "sort_order": 4,
-                        "children": [{
-                            "title": "app.master-data.menu.process.engineering-bom.designer",
-                            "path": "/apps/master-data/process/engineering-bom/designer",
-                            "hideInMenu": true
-                        }]
+                        "sort_order": 4
                     },
                     {
                         "title": "app.master-data.menu.process.sop",
                         "path": "/apps/master-data/process/sop",
                         "permission": "master-data:process:sop:view",
-                        "sort_order": 5,
-                        "children": [{
-                            "title": "app.master-data.menu.process.sop.designer",
-                            "path": "/apps/master-data/process/sop/designer",
-                            "hideInMenu": true
-                        }]
+                        "sort_order": 5
                     }
                 ]
             },

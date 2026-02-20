@@ -1,5 +1,5 @@
 """
-发货通知单管理 API 路由模块
+送货单管理 API 路由模块
 
 在销售出库前/后向客户发送发货通知，记录物流信息。
 
@@ -29,13 +29,13 @@ delivery_notice_service = DeliveryNoticeService()
 router = APIRouter(prefix="/delivery-notices", tags=["Kuaige Zhizao - Delivery Notice"])
 
 
-@router.post("", response_model=DeliveryNoticeResponse, summary="创建发货通知单")
+@router.post("", response_model=DeliveryNoticeResponse, summary="创建送货单")
 async def create_delivery_notice(
     notice_data: DeliveryNoticeCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """创建发货通知单，通知单编码自动生成"""
+    """创建送货单，通知单编码自动生成"""
     try:
         return await delivery_notice_service.create_delivery_notice(
             tenant_id=tenant_id,
@@ -43,14 +43,14 @@ async def create_delivery_notice(
             created_by=current_user.id,
         )
     except Exception as e:
-        logger.error("创建发货通知单失败: %s", e)
+        logger.error("创建送货单失败: %s", e)
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="创建发货通知单失败",
+            detail="创建送货单失败",
         )
 
 
-@router.get("", response_model=List[DeliveryNoticeListResponse], summary="获取发货通知单列表")
+@router.get("", response_model=List[DeliveryNoticeListResponse], summary="获取送货单列表")
 async def list_delivery_notices(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -61,7 +61,7 @@ async def list_delivery_notices(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取发货通知单列表"""
+    """获取送货单列表"""
     return await delivery_notice_service.list_delivery_notices(
         tenant_id=tenant_id,
         skip=skip,
@@ -73,13 +73,13 @@ async def list_delivery_notices(
     )
 
 
-@router.get("/{notice_id}", response_model=DeliveryNoticeWithItemsResponse, summary="获取发货通知单详情")
+@router.get("/{notice_id}", response_model=DeliveryNoticeWithItemsResponse, summary="获取送货单详情")
 async def get_delivery_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取发货通知单详情（含明细）"""
+    """获取送货单详情（含明细）"""
     try:
         return await delivery_notice_service.get_delivery_notice_by_id(
             tenant_id=tenant_id,
@@ -89,14 +89,14 @@ async def get_delivery_notice(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/{notice_id}", response_model=DeliveryNoticeResponse, summary="更新发货通知单")
+@router.put("/{notice_id}", response_model=DeliveryNoticeResponse, summary="更新送货单")
 async def update_delivery_notice(
     notice_id: int = Path(..., description="通知单ID"),
     notice_data: DeliveryNoticeUpdate = ...,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """更新发货通知单，仅待发送状态可更新"""
+    """更新送货单，仅待发送状态可更新"""
     try:
         return await delivery_notice_service.update_delivery_notice(
             tenant_id=tenant_id,
@@ -110,13 +110,13 @@ async def update_delivery_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/{notice_id}", summary="删除发货通知单")
+@router.delete("/{notice_id}", summary="删除送货单")
 async def delete_delivery_notice(
     notice_id: int = Path(..., description="通知单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """删除发货通知单，仅待发送状态可删除"""
+    """删除送货单，仅待发送状态可删除"""
     try:
         await delivery_notice_service.delete_delivery_notice(
             tenant_id=tenant_id,
@@ -148,7 +148,7 @@ async def send_delivery_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{notice_id}/print", summary="打印发货通知单")
+@router.get("/{notice_id}/print", summary="打印送货单")
 async def print_delivery_notice(
     notice_id: int = Path(..., description="通知单ID"),
     template_code: Optional[str] = Query(None),
@@ -158,7 +158,7 @@ async def print_delivery_notice(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """打印发货通知单"""
+    """打印送货单"""
     from apps.kuaizhizao.services.print_service import DocumentPrintService
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,

@@ -1,5 +1,5 @@
 """
-发货通知单模型
+送货单模型
 
 在销售出库前/后向客户发送发货通知，记录物流方式、运单号、预计送达等信息，不直接动库存。
 
@@ -13,7 +13,7 @@ from core.models.base import BaseModel
 
 class DeliveryNotice(BaseModel):
     """
-    发货通知单
+    送货单
 
     用于在销售出库前/后向客户发送发货通知，记录物流信息
     """
@@ -54,7 +54,7 @@ class DeliveryNotice(BaseModel):
 
     class Meta:
         table = "apps_kuaizhizao_delivery_notices"
-        table_description = "快格轻制造 - 发货通知单"
+        table_description = "快格轻制造 - 送货单"
         indexes = [
             ("tenant_id",),
             ("notice_code",),
