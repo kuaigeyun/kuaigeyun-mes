@@ -36,8 +36,11 @@ import PurchaseReturnsPage from './pages/purchase-management/purchase-returns';
 // 销售管理页面
 // TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理
 import SalesForecastsPage from './pages/sales-management/sales-forecasts';
+import QuotationsPage from './pages/sales-management/quotations';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
 import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
+import DeliveryNoticesPage from './pages/sales-management/delivery-notices';
+import SampleTrialsPage from './pages/sales-management/sample-trials';
 import SalesReturnsPage from './pages/sales-management/sales-returns';
 
 // 质量管理页面
@@ -71,16 +74,13 @@ import PayableDetailPage from './pages/finance-management/payables/detail';
 import ReceivableListPage from './pages/finance-management/receivables';
 import ReceivableDetailPage from './pages/finance-management/receivables/detail';
 
-// 报表分析页面
-import InventoryReportPage from './pages/reports/inventory-report';
-import ProductionReportPage from './pages/reports/production-report';
-import QualityReportPage from './pages/reports/quality-report';
-
 // 仓储管理页面
 import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
-import FinishedGoodsInboundPage from './pages/warehouse-management/finished-goods-inventory';
-import SalesOutboundPage from './pages/warehouse-management/sales-outbound';
+import OtherInboundPage from './pages/warehouse-management/other-inbound';
+import OtherOutboundPage from './pages/warehouse-management/other-outbound';
+import MaterialBorrowsPage from './pages/warehouse-management/material-borrows';
+import MaterialReturnsPage from './pages/warehouse-management/material-returns';
 import InitialDataImportPage from './pages/warehouse-management/initial-data';
 import OutboundPage from './pages/warehouse-management/outbound';
 import CustomerMaterialRegistrationPage from './pages/warehouse-management/customer-material-registration';
@@ -133,8 +133,11 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 销售管理路由 */}
       {/* TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理 */}
       <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
+      <Route path="sales-management/quotations" element={<QuotationsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
       <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
+      <Route path="sales-management/delivery-notices" element={<DeliveryNoticesPage />} />
+      <Route path="sales-management/sample-trials" element={<SampleTrialsPage />} />
       <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
       
       <Route path="production-execution/work-orders/:id/kiosk" element={<WorkOrderDetailKioskPage />} />
@@ -180,17 +183,14 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="finance-management/receivables/:id" element={<ReceivableDetailPage />} />
       <Route path="finance-management/receipts" element={<ReceivableListPage />} />
 
-      {/* 报表分析路由 */}
-      <Route path="reports/inventory-report" element={<InventoryReportPage />} />
-      <Route path="reports/production-report" element={<ProductionReportPage />} />
-      <Route path="reports/quality-report" element={<QualityReportPage />} />
-
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />
       <Route path="warehouse-management/inventory-query" element={<InventoryPage />} />
       <Route path="warehouse-management/inbound" element={<InboundPage />} />
-      <Route path="warehouse-management/product-inbound" element={<FinishedGoodsInboundPage />} />
-      <Route path="warehouse-management/sales-outbound" element={<SalesOutboundPage />} />
+      <Route path="warehouse-management/other-inbound" element={<OtherInboundPage />} />
+      <Route path="warehouse-management/other-outbound" element={<OtherOutboundPage />} />
+      <Route path="warehouse-management/material-borrows" element={<MaterialBorrowsPage />} />
+      <Route path="warehouse-management/material-returns" element={<MaterialReturnsPage />} />
       <Route path="warehouse-management/outbound" element={<OutboundPage />} />
       <Route path="warehouse-management/customer-material-registration" element={<CustomerMaterialRegistrationPage />} />
       <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />

@@ -14,11 +14,16 @@ from .outsource_service import OutsourceService
 # 仓储管理模块
 from .warehouse_service import (
     ProductionPickingService,
+    ProductionReturnService,
     FinishedGoodsReceiptService,
     SalesDeliveryService,
     SalesReturnService,
     PurchaseReceiptService,
     PurchaseReturnService,
+    OtherInboundService,
+    OtherOutboundService,
+    MaterialBorrowService,
+    MaterialReturnService,
 )
 
 # 质量管理模块
@@ -41,6 +46,7 @@ from .purchase_service import PurchaseService
 
 # 销售管理模块（SalesOrderService 统一使用 sales_order_service，操作 SalesOrder 表）
 from .sales_order_service import SalesOrderService
+from .quotation_service import QuotationService
 from .sales_service import (
     SalesForecastService,
 )
@@ -64,11 +70,16 @@ __all__ = [
 
     # 仓储管理模块
     'ProductionPickingService',
+    'ProductionReturnService',
     'FinishedGoodsReceiptService',
     'SalesDeliveryService',
     'SalesReturnService',
     'PurchaseReceiptService',
     'PurchaseReturnService',
+    'OtherInboundService',
+    'OtherOutboundService',
+    'MaterialBorrowService',
+    'MaterialReturnService',
 
     # 质量管理模块
     'IncomingInspectionService',
@@ -87,6 +98,7 @@ __all__ = [
     # 销售管理模块
     'SalesForecastService',
     'SalesOrderService',
+    'QuotationService',
 
     # 统一需求管理模块（新设计）
     'DemandService',

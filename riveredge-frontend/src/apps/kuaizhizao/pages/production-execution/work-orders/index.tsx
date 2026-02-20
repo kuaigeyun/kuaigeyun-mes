@@ -2596,7 +2596,7 @@ const WorkOrdersPage: React.FC = () => {
                   ]}
                 />
               </ConfigProvider>
-              <Divider vertical style={{ margin: 0, height: 20 }} />
+              <Divider orientation="vertical" style={{ margin: 0, height: 20 }} />
               <Space size="small" wrap={false}>
                 <Button
                   size="small"
@@ -2955,7 +2955,7 @@ const WorkOrdersPage: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <Divider vertical />
+                <Divider orientation="vertical" />
                 <Button
                   type="primary"
                   onClick={() => handleCreateRework(workOrderDetail!)}

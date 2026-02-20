@@ -103,6 +103,7 @@ class PlatformSettingsService:
             create_data = PlatformSettingsCreate(
                 platform_name=data.platform_name or "RiverEdge SaaS Framework",
                 platform_logo=data.platform_logo,
+                favicon=data.favicon,
                 platform_description=data.platform_description,
                 platform_contact_email=data.platform_contact_email,
                 platform_contact_phone=data.platform_contact_phone,

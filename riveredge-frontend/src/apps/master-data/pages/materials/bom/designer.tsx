@@ -1328,13 +1328,12 @@ const BOMDesignerPage: React.FC = () => {
                 top: 12,
                 zIndex: 10,
                 padding: '12px 16px',
-                background: 'rgba(255,255,255,0.95)',
+                background: '#ffffff',
                 borderRadius: 8,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                 fontSize: 12,
                 color: '#333',
                 border: '1px solid rgba(0,0,0,0.05)',
-                backdropFilter: 'blur(4px)',
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1419,13 +1418,12 @@ const BOMDesignerPage: React.FC = () => {
               bottom: 12,
               zIndex: 10,
               padding: '10px 14px',
-              background: 'rgba(255,255,255,0.95)',
+              background: '#ffffff',
               borderRadius: 8,
               boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
               fontSize: 12,
               color: '#333',
               border: '1px solid rgba(0,0,0,0.05)',
-              backdropFilter: 'blur(4px)',
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 12 }}>物料来源</div>

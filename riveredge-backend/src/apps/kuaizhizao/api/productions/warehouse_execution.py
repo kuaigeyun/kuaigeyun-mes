@@ -8,7 +8,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -17,11 +17,16 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError, Not
 
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
+    ProductionReturnService,
     FinishedGoodsReceiptService,
     SalesDeliveryService,
     SalesReturnService,
     PurchaseReceiptService,
     PurchaseReturnService,
+    OtherInboundService,
+    OtherOutboundService,
+    MaterialBorrowService,
+    MaterialReturnService,
 )
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
@@ -44,6 +49,13 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionPickingCreate,
     ProductionPickingResponse,
     ProductionPickingListResponse,
+    ProductionReturnCreate,
+    ProductionReturnUpdate,
+    ProductionReturnResponse,
+    ProductionReturnListResponse,
+    ProductionReturnWithItemsResponse,
+    ProductionReturnItemCreate,
+    ProductionReturnItemUpdate,
     FinishedGoodsReceiptCreate,
     FinishedGoodsReceiptResponse,
     SalesDeliveryCreate,
@@ -54,6 +66,26 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReceiptResponse,
     PurchaseReturnCreate,
     PurchaseReturnResponse,
+    OtherInboundCreate,
+    OtherInboundUpdate,
+    OtherInboundResponse,
+    OtherInboundListResponse,
+    OtherInboundWithItemsResponse,
+    OtherOutboundCreate,
+    OtherOutboundUpdate,
+    OtherOutboundResponse,
+    OtherOutboundListResponse,
+    OtherOutboundWithItemsResponse,
+    MaterialBorrowCreate,
+    MaterialBorrowUpdate,
+    MaterialBorrowResponse,
+    MaterialBorrowListResponse,
+    MaterialBorrowWithItemsResponse,
+    MaterialReturnCreate,
+    MaterialReturnUpdate,
+    MaterialReturnResponse,
+    MaterialReturnListResponse,
+    MaterialReturnWithItemsResponse,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -231,6 +263,595 @@ async def confirm_production_picking(
         picking_id=picking_id,
         confirmed_by=current_user.id
     )
+
+
+# ============ 生产退料管理 API ============
+
+@router.post("/production-returns", response_model=ProductionReturnResponse, summary="创建生产退料单")
+async def create_production_return(
+    return_data: ProductionReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """创建生产退料单"""
+    return await ProductionReturnService().create_production_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/production-returns", response_model=List[ProductionReturnListResponse], summary="获取生产退料单列表")
+async def list_production_returns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    picking_id: Optional[int] = Query(None, description="领料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ProductionReturnListResponse]:
+    """获取生产退料单列表"""
+    return await ProductionReturnService().list_production_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+        picking_id=picking_id
+    )
+
+
+@router.get("/production-returns/{return_id}", response_model=ProductionReturnWithItemsResponse, summary="获取生产退料单详情")
+async def get_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnWithItemsResponse:
+    """获取生产退料单详情（含明细）"""
+    return await ProductionReturnService().get_production_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.put("/production-returns/{return_id}", response_model=ProductionReturnResponse, summary="更新生产退料单")
+async def update_production_return(
+    return_id: int,
+    return_data: ProductionReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """更新生产退料单"""
+    return await ProductionReturnService().update_production_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=return_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/production-returns/{return_id}", summary="删除生产退料单")
+async def delete_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除生产退料单"""
+    await ProductionReturnService().delete_production_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+    return {"success": True}
+
+
+@router.post("/production-returns/{return_id}/confirm", response_model=ProductionReturnResponse, summary="确认退料")
+async def confirm_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """确认生产退料"""
+    return await ProductionReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.get("/production-returns/{return_id}/print", summary="打印生产退料单")
+async def print_production_return(
+    return_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印生产退料单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="production_return",
+        document_id=return_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 其他入库单 API ============
+
+@router.post("/other-inbounds", response_model=OtherInboundResponse, summary="创建其他入库单")
+async def create_other_inbound(
+    inbound_data: OtherInboundCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建其他入库单"""
+    return await OtherInboundService().create_other_inbound(
+        tenant_id=tenant_id,
+        inbound_data=inbound_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/other-inbounds", response_model=List[OtherInboundListResponse], summary="获取其他入库单列表")
+async def list_other_inbounds(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他入库单列表"""
+    return await OtherInboundService().list_other_inbounds(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        reason_type=reason_type,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/other-inbounds/{inbound_id}", response_model=OtherInboundWithItemsResponse, summary="获取其他入库单详情")
+async def get_other_inbound(
+    inbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他入库单详情（含明细）"""
+    return await OtherInboundService().get_other_inbound_by_id(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id
+    )
+
+
+@router.put("/other-inbounds/{inbound_id}", response_model=OtherInboundResponse, summary="更新其他入库单")
+async def update_other_inbound(
+    inbound_id: int,
+    inbound_data: OtherInboundUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新其他入库单"""
+    return await OtherInboundService().update_other_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        inbound_data=inbound_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/other-inbounds/{inbound_id}", summary="删除其他入库单")
+async def delete_other_inbound(
+    inbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除其他入库单"""
+    await OtherInboundService().delete_other_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id
+    )
+
+
+@router.post("/other-inbounds/{inbound_id}/confirm", response_model=OtherInboundResponse, summary="确认入库")
+async def confirm_other_inbound(
+    inbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认其他入库"""
+    return await OtherInboundService().confirm_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.get("/other-inbounds/{inbound_id}/print", summary="打印其他入库单")
+async def print_other_inbound(
+    inbound_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印其他入库单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="other_inbound",
+        document_id=inbound_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 其他出库单 API ============
+
+@router.post("/other-outbounds", response_model=OtherOutboundResponse, summary="创建其他出库单")
+async def create_other_outbound(
+    outbound_data: OtherOutboundCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建其他出库单"""
+    return await OtherOutboundService().create_other_outbound(
+        tenant_id=tenant_id,
+        outbound_data=outbound_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/other-outbounds", response_model=List[OtherOutboundListResponse], summary="获取其他出库单列表")
+async def list_other_outbounds(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他出库单列表"""
+    return await OtherOutboundService().list_other_outbounds(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        reason_type=reason_type,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/other-outbounds/{outbound_id}", response_model=OtherOutboundWithItemsResponse, summary="获取其他出库单详情")
+async def get_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他出库单详情（含明细）"""
+    return await OtherOutboundService().get_other_outbound_by_id(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id
+    )
+
+
+@router.put("/other-outbounds/{outbound_id}", response_model=OtherOutboundResponse, summary="更新其他出库单")
+async def update_other_outbound(
+    outbound_id: int,
+    outbound_data: OtherOutboundUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新其他出库单"""
+    return await OtherOutboundService().update_other_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        outbound_data=outbound_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/other-outbounds/{outbound_id}", summary="删除其他出库单")
+async def delete_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除其他出库单"""
+    await OtherOutboundService().delete_other_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id
+    )
+
+
+@router.post("/other-outbounds/{outbound_id}/confirm", response_model=OtherOutboundResponse, summary="确认出库")
+async def confirm_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认其他出库"""
+    return await OtherOutboundService().confirm_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.get("/other-outbounds/{outbound_id}/print", summary="打印其他出库单")
+async def print_other_outbound(
+    outbound_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印其他出库单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="other_outbound",
+        document_id=outbound_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 借料单 API ============
+
+@router.post("/material-borrows", response_model=MaterialBorrowResponse, summary="创建借料单")
+async def create_material_borrow(
+    borrow_data: MaterialBorrowCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建借料单"""
+    return await MaterialBorrowService().create_material_borrow(
+        tenant_id=tenant_id,
+        borrow_data=borrow_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/material-borrows", response_model=List[MaterialBorrowListResponse], summary="获取借料单列表")
+async def list_material_borrows(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取借料单列表"""
+    return await MaterialBorrowService().list_material_borrows(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/material-borrows/{borrow_id}", response_model=MaterialBorrowWithItemsResponse, summary="获取借料单详情")
+async def get_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取借料单详情（含明细）"""
+    return await MaterialBorrowService().get_material_borrow_by_id(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id
+    )
+
+
+@router.put("/material-borrows/{borrow_id}", response_model=MaterialBorrowResponse, summary="更新借料单")
+async def update_material_borrow(
+    borrow_id: int,
+    borrow_data: MaterialBorrowUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新借料单"""
+    return await MaterialBorrowService().update_material_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        borrow_data=borrow_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/material-borrows/{borrow_id}", summary="删除借料单")
+async def delete_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除借料单"""
+    await MaterialBorrowService().delete_material_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id
+    )
+
+
+@router.post("/material-borrows/{borrow_id}/confirm", response_model=MaterialBorrowResponse, summary="确认借出")
+async def confirm_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认借出"""
+    return await MaterialBorrowService().confirm_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.get("/material-borrows/{borrow_id}/print", summary="打印借料单")
+async def print_material_borrow(
+    borrow_id: int,
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印借料单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="material_borrow",
+        document_id=borrow_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 还料单 API ============
+
+@router.post("/material-returns", response_model=MaterialReturnResponse, summary="创建还料单")
+async def create_material_return(
+    return_data: MaterialReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建还料单"""
+    return await MaterialReturnService().create_material_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/material-returns", response_model=List[MaterialReturnListResponse], summary="获取还料单列表")
+async def list_material_returns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    borrow_id: Optional[int] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取还料单列表"""
+    return await MaterialReturnService().list_material_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        borrow_id=borrow_id,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/material-returns/{return_id}", response_model=MaterialReturnWithItemsResponse, summary="获取还料单详情")
+async def get_material_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取还料单详情（含明细）"""
+    return await MaterialReturnService().get_material_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.put("/material-returns/{return_id}", response_model=MaterialReturnResponse, summary="更新还料单")
+async def update_material_return(
+    return_id: int,
+    return_data: MaterialReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新还料单"""
+    return await MaterialReturnService().update_material_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=return_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/material-returns/{return_id}", summary="删除还料单")
+async def delete_material_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除还料单"""
+    await MaterialReturnService().delete_material_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.post("/material-returns/{return_id}/confirm", response_model=MaterialReturnResponse, summary="确认归还")
+async def confirm_material_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认归还"""
+    return await MaterialReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.get("/material-returns/{return_id}/print", summary="打印还料单")
+async def print_material_return(
+    return_id: int,
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印还料单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="material_return",
+        document_id=return_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 # ============ 成品入库管理 API ============

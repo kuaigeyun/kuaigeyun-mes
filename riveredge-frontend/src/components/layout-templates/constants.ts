@@ -319,7 +319,7 @@ export const HMI_DESIGN_TOKENS = {
   BG_GRADIENT_SIDEBAR: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
   /** 主内容面板外发光 */
   PANEL_GLOW: '0 0 40px rgba(22,119,255,0.06), 0 4px 24px rgba(0,0,0,0.2)',
-  /** 毛玻璃背景色（配合 backdrop-filter: blur(12px)） */
+  /** 深色面板背景（扁平化，无毛玻璃） */
   PANEL_FROSTED: 'rgba(0,8,20,0.75)',
   /** 指标卡/内容卡阴影 */
   CARD_SHADOW: '0 4px 16px rgba(0,0,0,0.2)',

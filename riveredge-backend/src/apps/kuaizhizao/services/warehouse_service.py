@@ -17,6 +17,8 @@ from loguru import logger
 
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
+from apps.kuaizhizao.models.production_return import ProductionReturn
+from apps.kuaizhizao.models.production_return_item import ProductionReturnItem
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
@@ -27,6 +29,14 @@ from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+from apps.kuaizhizao.models.other_inbound import OtherInbound
+from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
+from apps.kuaizhizao.models.other_outbound import OtherOutbound
+from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
+from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
+from apps.kuaizhizao.models.material_return import MaterialReturn
+from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
 
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
@@ -47,6 +57,23 @@ from apps.kuaizhizao.schemas.warehouse import (
     # 采购入库单
     PurchaseReceiptCreate, PurchaseReceiptUpdate, PurchaseReceiptResponse,
     PurchaseReceiptItemCreate, PurchaseReceiptItemUpdate, PurchaseReceiptItemResponse,
+    # 生产退料单
+    ProductionReturnCreate, ProductionReturnUpdate, ProductionReturnResponse,
+    ProductionReturnListResponse, ProductionReturnWithItemsResponse,
+    ProductionReturnItemCreate, ProductionReturnItemUpdate, ProductionReturnItemResponse,
+    # 其他入库/出库单
+    OtherInboundCreate, OtherInboundUpdate, OtherInboundResponse, OtherInboundListResponse,
+    OtherInboundWithItemsResponse, OtherInboundItemCreate, OtherInboundItemUpdate,
+    OtherInboundItemResponse,
+    OtherOutboundCreate, OtherOutboundUpdate, OtherOutboundResponse, OtherOutboundListResponse,
+    OtherOutboundWithItemsResponse, OtherOutboundItemCreate, OtherOutboundItemUpdate,
+    OtherOutboundItemResponse,
+    MaterialBorrowCreate, MaterialBorrowUpdate, MaterialBorrowResponse, MaterialBorrowListResponse,
+    MaterialBorrowWithItemsResponse, MaterialBorrowItemCreate, MaterialBorrowItemUpdate,
+    MaterialBorrowItemResponse,
+    MaterialReturnCreate, MaterialReturnUpdate, MaterialReturnResponse, MaterialReturnListResponse,
+    MaterialReturnWithItemsResponse, MaterialReturnItemCreate, MaterialReturnItemUpdate,
+    MaterialReturnItemResponse,
 )
 
 from apps.base_service import AppBaseService
@@ -286,6 +313,141 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         
         return results
 
+
+class ProductionReturnService(AppBaseService[ProductionReturn]):
+    """生产退料单服务"""
+
+    def __init__(self):
+        super().__init__(ProductionReturn)
+
+    async def create_production_return(
+        self,
+        tenant_id: int,
+        return_data: ProductionReturnCreate,
+        created_by: int
+    ) -> ProductionReturnResponse:
+        """创建生产退料单"""
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "PRODUCTION_RETURN_CODE", prefix=f"PR{today}")
+
+            dump = return_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "return_code"})
+            if return_data.return_code:
+                code = return_data.return_code
+
+            ret = await ProductionReturn.create(
+                tenant_id=tenant_id,
+                return_code=code,
+                created_by=created_by,
+                **dump
+            )
+
+            items = getattr(return_data, "items", None) or []
+            for item_data in items:
+                await ProductionReturnItem.create(
+                    tenant_id=tenant_id,
+                    return_id=ret.id,
+                    **item_data.model_dump(exclude_unset=True)
+                )
+
+            return ProductionReturnResponse.model_validate(ret)
+
+    async def get_production_return_by_id(
+        self,
+        tenant_id: int,
+        return_id: int
+    ) -> ProductionReturnWithItemsResponse:
+        """根据ID获取生产退料单（含明细）"""
+        ret = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+        if not ret:
+            raise NotFoundError(f"生产退料单不存在: {return_id}")
+
+        items = await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+        response = ProductionReturnWithItemsResponse.model_validate(ret)
+        response.items = [ProductionReturnItemResponse.model_validate(i) for i in items]
+        return response
+
+    async def list_production_returns(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters
+    ) -> List[ProductionReturnListResponse]:
+        """获取生产退料单列表"""
+        query = ProductionReturn.filter(tenant_id=tenant_id)
+        if filters.get("status"):
+            query = query.filter(status=filters["status"])
+        if filters.get("work_order_id"):
+            query = query.filter(work_order_id=filters["work_order_id"])
+        if filters.get("picking_id"):
+            query = query.filter(picking_id=filters["picking_id"])
+
+        rets = await query.offset(skip).limit(limit).order_by("-created_at")
+        return [ProductionReturnListResponse.model_validate(r) for r in rets]
+
+    async def update_production_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        return_data: ProductionReturnUpdate,
+        updated_by: int
+    ) -> ProductionReturnResponse:
+        """更新生产退料单"""
+        async with in_transaction():
+            await self.get_production_return_by_id(tenant_id, return_id)
+            dump = return_data.model_dump(exclude_unset=True, exclude={"return_code"})
+            dump["updated_by"] = updated_by
+            await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(**dump)
+            return ProductionReturnResponse.model_validate(
+                await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+            )
+
+    async def delete_production_return(self, tenant_id: int, return_id: int) -> bool:
+        """删除生产退料单"""
+        ret = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+        if not ret:
+            raise NotFoundError(f"生产退料单不存在: {return_id}")
+        if ret.status not in ("待退料", "已取消"):
+            raise BusinessLogicError("只能删除待退料或已取消状态的生产退料单")
+
+        await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            is_active=False,
+            deleted_at=datetime.now()
+        )
+        return True
+
+    async def confirm_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        confirmed_by: int
+    ) -> ProductionReturnResponse:
+        """确认退料"""
+        async with in_transaction():
+            ret = await self.get_production_return_by_id(tenant_id, return_id)
+            if ret.status != "待退料":
+                raise BusinessLogicError("只有待退料状态的生产退料单才能确认退料")
+
+            returner_name = await self.get_user_name(confirmed_by)
+            await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status="已退料",
+                returner_id=confirmed_by,
+                returner_name=returner_name,
+                return_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+            for item in ret.items:
+                await ProductionReturnItem.filter(
+                    tenant_id=tenant_id,
+                    id=item.id
+                ).update(status="已退料", return_time=datetime.now())
+
+            # TODO: 更新库存（增加仓库库存）
+            return ProductionReturnResponse.model_validate(
+                await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+            )
 
 
 class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
@@ -2086,4 +2248,610 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
             return updated_return
+
+
+class OtherInboundService(AppBaseService[OtherInbound]):
+    """其他入库单服务"""
+
+    def __init__(self):
+        super().__init__(OtherInbound)
+
+    async def create_other_inbound(
+        self,
+        tenant_id: int,
+        inbound_data: OtherInboundCreate,
+        created_by: int
+    ) -> OtherInboundResponse:
+        """创建其他入库单"""
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "OTHER_INBOUND_CODE", prefix=f"OI{today}")
+
+            dump = inbound_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "inbound_code"})
+            if inbound_data.inbound_code:
+                code = inbound_data.inbound_code
+
+            inbound = await OtherInbound.create(
+                tenant_id=tenant_id,
+                inbound_code=code,
+                created_by=created_by,
+                **dump
+            )
+
+            items = getattr(inbound_data, "items", None) or []
+            total_quantity = Decimal(0)
+            total_amount = Decimal(0)
+            for item_data in items:
+                qty = Decimal(str(item_data.inbound_quantity))
+                price = Decimal(str(item_data.unit_price))
+                amt = qty * price
+                await OtherInboundItem.create(
+                    tenant_id=tenant_id,
+                    inbound_id=inbound.id,
+                    inbound_quantity=qty,
+                    unit_price=price,
+                    total_amount=amt,
+                    **item_data.model_dump(exclude_unset=True, exclude={"inbound_quantity", "unit_price", "total_amount"})
+                )
+                total_quantity += qty
+                total_amount += amt
+
+            await OtherInbound.filter(tenant_id=tenant_id, id=inbound.id).update(
+                total_quantity=total_quantity,
+                total_amount=total_amount
+            )
+            inbound = await OtherInbound.get(tenant_id=tenant_id, id=inbound.id)
+            return OtherInboundResponse.model_validate(inbound)
+
+    async def get_other_inbound_by_id(
+        self,
+        tenant_id: int,
+        inbound_id: int
+    ) -> OtherInboundWithItemsResponse:
+        """根据ID获取其他入库单（含明细）"""
+        inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
+        if not inbound:
+            raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+
+        items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+        response = OtherInboundWithItemsResponse.model_validate(inbound)
+        response.items = [OtherInboundItemResponse.model_validate(i) for i in items]
+        return response
+
+    async def list_other_inbounds(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters
+    ) -> List[OtherInboundListResponse]:
+        """获取其他入库单列表"""
+        query = OtherInbound.filter(tenant_id=tenant_id)
+        if filters.get("status"):
+            query = query.filter(status=filters["status"])
+        if filters.get("reason_type"):
+            query = query.filter(reason_type=filters["reason_type"])
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=filters["warehouse_id"])
+
+        inbounds = await query.offset(skip).limit(limit).order_by("-created_at")
+        return [OtherInboundListResponse.model_validate(r) for r in inbounds]
+
+    async def update_other_inbound(
+        self,
+        tenant_id: int,
+        inbound_id: int,
+        inbound_data: OtherInboundUpdate,
+        updated_by: int
+    ) -> OtherInboundResponse:
+        """更新其他入库单"""
+        async with in_transaction():
+            await self.get_other_inbound_by_id(tenant_id, inbound_id)
+            dump = inbound_data.model_dump(exclude_unset=True, exclude={"inbound_code"})
+            dump["updated_by"] = updated_by
+            await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(**dump)
+            return OtherInboundResponse.model_validate(
+                await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+            )
+
+    async def delete_other_inbound(self, tenant_id: int, inbound_id: int) -> bool:
+        """删除其他入库单"""
+        inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
+        if not inbound:
+            raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+        if inbound.status not in ("待入库", "已取消"):
+            raise BusinessLogicError("只能删除待入库或已取消状态的其他入库单")
+
+        await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+            is_active=False,
+            deleted_at=datetime.now()
+        )
+        return True
+
+    async def confirm_inbound(
+        self,
+        tenant_id: int,
+        inbound_id: int,
+        confirmed_by: int
+    ) -> OtherInboundResponse:
+        """确认入库"""
+        async with in_transaction():
+            inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
+            if inbound.status != "待入库":
+                raise BusinessLogicError("只有待入库状态的其他入库单才能确认入库")
+
+            receiver_name = await self.get_user_name(confirmed_by)
+            await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+                status="已入库",
+                receiver_id=confirmed_by,
+                receiver_name=receiver_name,
+                receipt_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+            for item in inbound.items:
+                await OtherInboundItem.filter(
+                    tenant_id=tenant_id,
+                    id=item.id
+                ).update(status="已入库", receipt_time=datetime.now())
+
+            # TODO: 更新库存（增加仓库库存）
+            return OtherInboundResponse.model_validate(
+                await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+            )
+
+
+class OtherOutboundService(AppBaseService[OtherOutbound]):
+    """其他出库单服务"""
+
+    def __init__(self):
+        super().__init__(OtherOutbound)
+
+    async def create_other_outbound(
+        self,
+        tenant_id: int,
+        outbound_data: OtherOutboundCreate,
+        created_by: int
+    ) -> OtherOutboundResponse:
+        """创建其他出库单"""
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "OTHER_OUTBOUND_CODE", prefix=f"OO{today}")
+
+            dump = outbound_data.model_dump(exclude_unset=True, exclude={"created_by", "items", "outbound_code"})
+            if outbound_data.outbound_code:
+                code = outbound_data.outbound_code
+
+            outbound = await OtherOutbound.create(
+                tenant_id=tenant_id,
+                outbound_code=code,
+                created_by=created_by,
+                **dump
+            )
+
+            items = getattr(outbound_data, "items", None) or []
+            total_quantity = Decimal(0)
+            total_amount = Decimal(0)
+            for item_data in items:
+                qty = Decimal(str(item_data.outbound_quantity))
+                price = Decimal(str(item_data.unit_price))
+                amt = qty * price
+                await OtherOutboundItem.create(
+                    tenant_id=tenant_id,
+                    outbound_id=outbound.id,
+                    outbound_quantity=qty,
+                    unit_price=price,
+                    total_amount=amt,
+                    **item_data.model_dump(exclude_unset=True, exclude={"outbound_quantity", "unit_price", "total_amount"})
+                )
+                total_quantity += qty
+                total_amount += amt
+
+            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound.id).update(
+                total_quantity=total_quantity,
+                total_amount=total_amount
+            )
+            outbound = await OtherOutbound.get(tenant_id=tenant_id, id=outbound.id)
+            return OtherOutboundResponse.model_validate(outbound)
+
+    async def get_other_outbound_by_id(
+        self,
+        tenant_id: int,
+        outbound_id: int
+    ) -> OtherOutboundWithItemsResponse:
+        """根据ID获取其他出库单（含明细）"""
+        outbound = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=outbound_id)
+        if not outbound:
+            raise NotFoundError(f"其他出库单不存在: {outbound_id}")
+
+        items = await OtherOutboundItem.filter(tenant_id=tenant_id, outbound_id=outbound_id).all()
+        response = OtherOutboundWithItemsResponse.model_validate(outbound)
+        response.items = [OtherOutboundItemResponse.model_validate(i) for i in items]
+        return response
+
+    async def list_other_outbounds(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters
+    ) -> List[OtherOutboundListResponse]:
+        """获取其他出库单列表"""
+        query = OtherOutbound.filter(tenant_id=tenant_id)
+        if filters.get("status"):
+            query = query.filter(status=filters["status"])
+        if filters.get("reason_type"):
+            query = query.filter(reason_type=filters["reason_type"])
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=filters["warehouse_id"])
+
+        outbounds = await query.offset(skip).limit(limit).order_by("-created_at")
+        return [OtherOutboundListResponse.model_validate(r) for r in outbounds]
+
+    async def update_other_outbound(
+        self,
+        tenant_id: int,
+        outbound_id: int,
+        outbound_data: OtherOutboundUpdate,
+        updated_by: int
+    ) -> OtherOutboundResponse:
+        """更新其他出库单"""
+        async with in_transaction():
+            await self.get_other_outbound_by_id(tenant_id, outbound_id)
+            dump = outbound_data.model_dump(exclude_unset=True, exclude={"outbound_code"})
+            dump["updated_by"] = updated_by
+            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(**dump)
+            return OtherOutboundResponse.model_validate(
+                await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+            )
+
+    async def delete_other_outbound(self, tenant_id: int, outbound_id: int) -> bool:
+        """删除其他出库单"""
+        outbound = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=outbound_id)
+        if not outbound:
+            raise NotFoundError(f"其他出库单不存在: {outbound_id}")
+        if outbound.status not in ("待出库", "已取消"):
+            raise BusinessLogicError("只能删除待出库或已取消状态的其他出库单")
+
+        await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
+            is_active=False,
+            deleted_at=datetime.now()
+        )
+        return True
+
+    async def confirm_outbound(
+        self,
+        tenant_id: int,
+        outbound_id: int,
+        confirmed_by: int
+    ) -> OtherOutboundResponse:
+        """确认出库"""
+        async with in_transaction():
+            outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
+            if outbound.status != "待出库":
+                raise BusinessLogicError("只有待出库状态的其他出库单才能确认出库")
+
+            deliverer_name = await self.get_user_name(confirmed_by)
+            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
+                status="已出库",
+                deliverer_id=confirmed_by,
+                deliverer_name=deliverer_name,
+                delivery_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+            for item in outbound.items:
+                await OtherOutboundItem.filter(
+                    tenant_id=tenant_id,
+                    id=item.id
+                ).update(status="已出库", delivery_time=datetime.now())
+
+            # TODO: 更新库存（扣减库存）
+            return OtherOutboundResponse.model_validate(
+                await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+            )
+
+
+class MaterialBorrowService(AppBaseService[MaterialBorrow]):
+    """借料单服务"""
+
+    def __init__(self):
+        super().__init__(MaterialBorrow)
+
+    async def create_material_borrow(
+        self,
+        tenant_id: int,
+        borrow_data: MaterialBorrowCreate,
+        created_by: int
+    ) -> MaterialBorrowResponse:
+        """创建借料单"""
+        async with in_transaction():
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "MATERIAL_BORROW_CODE", prefix=f"MB{today}")
+
+            dump = borrow_data.model_dump(exclude_unset=True, exclude={"items", "borrow_code"})
+            if borrow_data.borrow_code:
+                code = borrow_data.borrow_code
+
+            borrow = await MaterialBorrow.create(
+                tenant_id=tenant_id,
+                borrow_code=code,
+                created_by=created_by,
+                **dump
+            )
+
+            items = getattr(borrow_data, "items", None) or []
+            total_quantity = Decimal(0)
+            for item_data in items:
+                qty = Decimal(str(item_data.borrow_quantity))
+                await MaterialBorrowItem.create(
+                    tenant_id=tenant_id,
+                    borrow_id=borrow.id,
+                    borrow_quantity=qty,
+                    returned_quantity=Decimal(0),
+                    **item_data.model_dump(exclude_unset=True, exclude={"borrow_quantity", "returned_quantity"})
+                )
+                total_quantity += qty
+
+            await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow.id).update(total_quantity=total_quantity)
+            borrow = await MaterialBorrow.get(tenant_id=tenant_id, id=borrow.id)
+            return MaterialBorrowResponse.model_validate(borrow)
+
+    async def get_material_borrow_by_id(
+        self,
+        tenant_id: int,
+        borrow_id: int
+    ) -> MaterialBorrowWithItemsResponse:
+        """根据ID获取借料单（含明细）"""
+        borrow = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=borrow_id, deleted_at__isnull=True)
+        if not borrow:
+            raise NotFoundError(f"借料单不存在: {borrow_id}")
+
+        items = await MaterialBorrowItem.filter(tenant_id=tenant_id, borrow_id=borrow_id).all()
+        response = MaterialBorrowWithItemsResponse.model_validate(borrow)
+        response.items = [MaterialBorrowItemResponse.model_validate(i) for i in items]
+        return response
+
+    async def list_material_borrows(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters
+    ) -> List[MaterialBorrowListResponse]:
+        """获取借料单列表"""
+        query = MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if filters.get("status"):
+            query = query.filter(status=filters["status"])
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=filters["warehouse_id"])
+
+        borrows = await query.offset(skip).limit(limit).order_by("-created_at")
+        return [MaterialBorrowListResponse.model_validate(r) for r in borrows]
+
+    async def update_material_borrow(
+        self,
+        tenant_id: int,
+        borrow_id: int,
+        borrow_data: MaterialBorrowUpdate,
+        updated_by: int
+    ) -> MaterialBorrowResponse:
+        """更新借料单"""
+        borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
+        if borrow.status != "待借出":
+            raise BusinessLogicError("只能更新待借出状态的借料单")
+
+        async with in_transaction():
+            dump = borrow_data.model_dump(exclude_unset=True, exclude={"borrow_code"})
+            dump["updated_by"] = updated_by
+            await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(**dump)
+            return MaterialBorrowResponse.model_validate(
+                await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
+            )
+
+    async def delete_material_borrow(self, tenant_id: int, borrow_id: int) -> bool:
+        """删除借料单"""
+        borrow = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=borrow_id, deleted_at__isnull=True)
+        if not borrow:
+            raise NotFoundError(f"借料单不存在: {borrow_id}")
+        if borrow.status != "待借出":
+            raise BusinessLogicError("只能删除待借出状态的借料单")
+
+        await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
+    async def confirm_borrow(
+        self,
+        tenant_id: int,
+        borrow_id: int,
+        confirmed_by: int
+    ) -> MaterialBorrowResponse:
+        """确认借出"""
+        async with in_transaction():
+            borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
+            if borrow.status != "待借出":
+                raise BusinessLogicError("只有待借出状态的借料单才能确认借出")
+
+            borrower_name = await self.get_user_name(confirmed_by)
+            await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
+                status="已借出",
+                borrower_id=confirmed_by,
+                borrower_name=borrower_name,
+                borrow_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+            for item in borrow.items:
+                await MaterialBorrowItem.filter(
+                    tenant_id=tenant_id,
+                    id=item.id
+                ).update(status="已借出", borrow_time=datetime.now())
+
+            # TODO: 更新库存（扣减仓库库存）
+            return MaterialBorrowResponse.model_validate(
+                await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
+            )
+
+
+class MaterialReturnService(AppBaseService[MaterialReturn]):
+    """还料单服务"""
+
+    def __init__(self):
+        super().__init__(MaterialReturn)
+
+    async def create_material_return(
+        self,
+        tenant_id: int,
+        return_data: MaterialReturnCreate,
+        created_by: int
+    ) -> MaterialReturnResponse:
+        """创建还料单"""
+        async with in_transaction():
+            borrow = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=return_data.borrow_id, deleted_at__isnull=True)
+            if not borrow:
+                raise NotFoundError(f"借料单不存在: {return_data.borrow_id}")
+
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "MATERIAL_RETURN_CODE", prefix=f"MR{today}")
+
+            dump = return_data.model_dump(exclude_unset=True, exclude={"items", "return_code", "borrow_code"})
+            if return_data.return_code:
+                code = return_data.return_code
+
+            return_obj = await MaterialReturn.create(
+                tenant_id=tenant_id,
+                return_code=code,
+                borrow_id=borrow.id,
+                borrow_code=borrow.borrow_code,
+                created_by=created_by,
+                **dump
+            )
+
+            items = getattr(return_data, "items", None) or []
+            total_quantity = Decimal(0)
+            for item_data in items:
+                qty = Decimal(str(item_data.return_quantity))
+                await MaterialReturnItem.create(
+                    tenant_id=tenant_id,
+                    return_id=return_obj.id,
+                    return_quantity=qty,
+                    **item_data.model_dump(exclude_unset=True, exclude={"return_quantity"})
+                )
+                total_quantity += qty
+
+            await MaterialReturn.filter(tenant_id=tenant_id, id=return_obj.id).update(total_quantity=total_quantity)
+            return_obj = await MaterialReturn.get(tenant_id=tenant_id, id=return_obj.id)
+            return MaterialReturnResponse.model_validate(return_obj)
+
+    async def get_material_return_by_id(
+        self,
+        tenant_id: int,
+        return_id: int
+    ) -> MaterialReturnWithItemsResponse:
+        """根据ID获取还料单（含明细）"""
+        return_obj = await MaterialReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+        if not return_obj:
+            raise NotFoundError(f"还料单不存在: {return_id}")
+
+        items = await MaterialReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
+        response = MaterialReturnWithItemsResponse.model_validate(return_obj)
+        response.items = [MaterialReturnItemResponse.model_validate(i) for i in items]
+        return response
+
+    async def list_material_returns(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        **filters
+    ) -> List[MaterialReturnListResponse]:
+        """获取还料单列表"""
+        query = MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if filters.get("status"):
+            query = query.filter(status=filters["status"])
+        if filters.get("borrow_id"):
+            query = query.filter(borrow_id=filters["borrow_id"])
+        if filters.get("warehouse_id"):
+            query = query.filter(warehouse_id=filters["warehouse_id"])
+
+        returns = await query.offset(skip).limit(limit).order_by("-created_at")
+        return [MaterialReturnListResponse.model_validate(r) for r in returns]
+
+    async def update_material_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        return_data: MaterialReturnUpdate,
+        updated_by: int
+    ) -> MaterialReturnResponse:
+        """更新还料单"""
+        return_obj = await self.get_material_return_by_id(tenant_id, return_id)
+        if return_obj.status != "待归还":
+            raise BusinessLogicError("只能更新待归还状态的还料单")
+
+        async with in_transaction():
+            dump = return_data.model_dump(exclude_unset=True, exclude={"return_code"})
+            dump["updated_by"] = updated_by
+            await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(**dump)
+            return MaterialReturnResponse.model_validate(
+                await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
+            )
+
+    async def delete_material_return(self, tenant_id: int, return_id: int) -> bool:
+        """删除还料单"""
+        return_obj = await MaterialReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+        if not return_obj:
+            raise NotFoundError(f"还料单不存在: {return_id}")
+        if return_obj.status != "待归还":
+            raise BusinessLogicError("只能删除待归还状态的还料单")
+
+        await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
+    async def confirm_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        confirmed_by: int
+    ) -> MaterialReturnResponse:
+        """确认归还"""
+        async with in_transaction():
+            return_obj = await self.get_material_return_by_id(tenant_id, return_id)
+            if return_obj.status != "待归还":
+                raise BusinessLogicError("只有待归还状态的还料单才能确认归还")
+
+            returner_name = await self.get_user_name(confirmed_by)
+            await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status="已归还",
+                returner_id=confirmed_by,
+                returner_name=returner_name,
+                return_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+            for item in return_obj.items:
+                await MaterialReturnItem.filter(
+                    tenant_id=tenant_id,
+                    id=item.id
+                ).update(status="已归还", return_time=datetime.now())
+
+            # 更新借料单明细的已归还数量
+            for item in return_obj.items:
+                borrow_item = await MaterialBorrowItem.get_or_none(
+                    tenant_id=tenant_id,
+                    borrow_id=return_obj.borrow_id,
+                    material_id=item.material_id
+                )
+                if borrow_item:
+                    new_returned = (borrow_item.returned_quantity or Decimal(0)) + Decimal(str(item.return_quantity))
+                    await MaterialBorrowItem.filter(tenant_id=tenant_id, id=borrow_item.id).update(
+                        returned_quantity=new_returned
+                    )
+
+            # TODO: 更新库存（增加仓库库存）
+            return MaterialReturnResponse.model_validate(
+                await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
+            )
 

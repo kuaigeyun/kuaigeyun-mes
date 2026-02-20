@@ -2151,7 +2151,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             </div>
           </div>
           
-          <Divider orientation={"left" as any} style={{ margin: '24px 0' }}>
+          <Divider titlePlacement="left" style={{ margin: '24px 0' }}>
             <Typography.Text strong>实际使用示例</Typography.Text>
           </Divider>
           

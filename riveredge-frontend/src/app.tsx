@@ -19,6 +19,8 @@ import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
 import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
+import { getPlatformSettingsPublic } from './services/platformSettings';
+import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
 import { updateLastActivity, getLastActivityTime } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
@@ -400,6 +402,13 @@ const AppContent: React.FC = () => {
       rootElement.classList.remove('touchscreen-mode');
     }
   }, [touchScreen.isTouchScreenMode]);
+
+  // 应用平台 Favicon（从平台设置加载）
+  React.useEffect(() => {
+    getPlatformSettingsPublic()
+      .then((settings) => applyFavicon(settings?.favicon))
+      .catch(() => {});
+  }, []);
 
   const routesElement = React.useMemo(() => <MainRoutes />, []);
   return (

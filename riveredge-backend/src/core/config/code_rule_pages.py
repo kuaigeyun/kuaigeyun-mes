@@ -33,12 +33,13 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
     "kuaizhizao-sales-order": "XS",             # 销售
+    "kuaizhizao-quotation": "BJ",              # 报价
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
+    "kuaizhizao-sample-trial": "ST",           # 样品试用
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
     "kuaizhizao-warehouse-finished-goods-inbound": "CPRK",  # 成品入库
-    "kuaizhizao-warehouse-sales-outbound": "XSCK",  # 销售出库
     "kuaizhizao-quality-incoming-inspection": "LLJY",   # 来料检验
     "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
@@ -348,6 +349,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     },
     # 快格轻制造 - 销售管理
     {
+        "page_code": "kuaizhizao-quotation",
+        "page_name": "报价单",
+        "page_path": "/apps/kuaizhizao/sales-management/quotations",
+        "code_field": "quotation_code",
+        "code_field_label": "报价单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QUOTATION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-sales-order",
         "page_name": "销售订单",
         "page_path": "/apps/kuaizhizao/sales-management/sales-orders",
@@ -369,6 +382,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "SALES_DELIVERY_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-delivery-notice",
+        "page_name": "发货通知",
+        "page_path": "/apps/kuaizhizao/sales-management/delivery-notices",
+        "code_field": "notice_code",
+        "code_field_label": "发货通知单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DELIVERY_NOTICE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-sample-trial",
+        "page_name": "样品试用",
+        "page_path": "/apps/kuaizhizao/sales-management/sample-trials",
+        "code_field": "trial_code",
+        "code_field_label": "样品试用单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SAMPLE_TRIAL_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -396,6 +433,66 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-warehouse-production-return",
+        "page_name": "生产退料",
+        "page_path": "/apps/kuaizhizao/warehouse-management/production-returns",
+        "code_field": "return_code",
+        "code_field_label": "退料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PRODUCTION_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-other-inbound",
+        "page_name": "其他入库",
+        "page_path": "/apps/kuaizhizao/warehouse-management/other-inbound",
+        "code_field": "inbound_code",
+        "code_field_label": "入库单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OTHER_INBOUND_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-other-outbound",
+        "page_name": "其他出库",
+        "page_path": "/apps/kuaizhizao/warehouse-management/other-outbound",
+        "code_field": "outbound_code",
+        "code_field_label": "出库单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OTHER_OUTBOUND_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-material-borrow",
+        "page_name": "借料单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/material-borrows",
+        "code_field": "borrow_code",
+        "code_field_label": "借料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MATERIAL_BORROW_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-material-return",
+        "page_name": "还料单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/material-returns",
+        "code_field": "return_code",
+        "code_field_label": "还料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MATERIAL_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
         "page_name": "成品入库",
         "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
@@ -405,18 +502,6 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "FINISHED_GOODS_RECEIPT_CODE",
-        "allow_manual_edit": True,
-    },
-    {
-        "page_code": "kuaizhizao-warehouse-sales-outbound",
-        "page_name": "销售出库",
-        "page_path": "/apps/kuaizhizao/warehouse-management/sales-outbound",
-        "code_field": "delivery_code",
-        "code_field_label": "销售出库单编码",
-        "module": "快格轻制造",
-        "module_icon": "tool",
-        "auto_generate": True,
-        "rule_code": "SALES_OUTBOUND_CODE",
         "allow_manual_edit": True,
     },
     # 快格轻制造 - 质量管理

@@ -105,7 +105,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       centered
       rootClassName="kiosk-modal-terminal-bg"
       styles={{
-        mask: { backdropFilter: 'blur(10px)', backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+        mask: { backgroundColor: 'rgba(0, 0, 0, 0.5)' },
         body: { padding: '24px', background: '#1a1a1a' }
       }}
     >

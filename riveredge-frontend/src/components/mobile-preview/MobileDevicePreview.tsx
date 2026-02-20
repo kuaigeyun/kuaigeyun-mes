@@ -179,15 +179,14 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
                 bottom: 24,
                 left: '50%',
                 transform: 'translateX(-50%)',
-                background: 'rgba(255, 255, 255, 0.8)',
-                backdropFilter: 'blur(10px)',
+                background: '#ffffff',
                 padding: '8px 16px',
                 borderRadius: 24,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                 display: 'flex',
                 gap: 16,
                 zIndex: 1000,
-                border: '1px solid rgba(255,255,255,0.5)'
+                border: '1px solid rgba(0,0,0,0.08)'
             }}>
                 <Tooltip title="后退 (Back)">
                     <Button

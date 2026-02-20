@@ -30,6 +30,8 @@ from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHi
 # 仓储管理模块
 from .production_picking import ProductionPicking
 from .production_picking_item import ProductionPickingItem
+from .production_return import ProductionReturn
+from .production_return_item import ProductionReturnItem
 from .finished_goods_receipt import FinishedGoodsReceipt
 from .finished_goods_receipt_item import FinishedGoodsReceiptItem
 from .sales_delivery import SalesDelivery
@@ -40,6 +42,14 @@ from .purchase_receipt import PurchaseReceipt
 from .purchase_receipt_item import PurchaseReceiptItem
 from .purchase_return import PurchaseReturn
 from .purchase_return_item import PurchaseReturnItem
+from .other_inbound import OtherInbound
+from .other_inbound_item import OtherInboundItem
+from .other_outbound import OtherOutbound
+from .other_outbound_item import OtherOutboundItem
+from .material_borrow import MaterialBorrow
+from .material_borrow_item import MaterialBorrowItem
+from .material_return import MaterialReturn
+from .material_return_item import MaterialReturnItem
 from .replenishment_suggestion import ReplenishmentSuggestion
 from .line_side_inventory import LineSideInventory
 from .backflush_record import BackflushRecord
@@ -65,6 +75,12 @@ from .sales_forecast import SalesForecast
 from .sales_forecast_item import SalesForecastItem
 from .sales_order import SalesOrder
 from .sales_order_item import SalesOrderItem
+from .quotation import Quotation
+from .quotation_item import QuotationItem
+from .delivery_notice import DeliveryNotice
+from .delivery_notice_item import DeliveryNoticeItem
+from .sample_trial import SampleTrial
+from .sample_trial_item import SampleTrialItem
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem
@@ -130,6 +146,8 @@ __all__ = [
     # 仓储管理模块
     'ProductionPicking',
     'ProductionPickingItem',
+    'ProductionReturn',
+    'ProductionReturnItem',
     'FinishedGoodsReceipt',
     'FinishedGoodsReceiptItem',
     'SalesDelivery',
@@ -140,6 +158,14 @@ __all__ = [
     'PurchaseReceiptItem',
     'PurchaseReturn',
     'PurchaseReturnItem',
+    'OtherInbound',
+    'OtherInboundItem',
+    'OtherOutbound',
+    'OtherOutboundItem',
+    'MaterialBorrow',
+    'MaterialBorrowItem',
+    'MaterialReturn',
+    'MaterialReturnItem',
     'ReplenishmentSuggestion',
     'LineSideInventory',
     'BackflushRecord',
@@ -166,7 +192,13 @@ __all__ = [
     'SalesForecastItem',
     'SalesOrder',
     'SalesOrderItem',
-    
+    'Quotation',
+    'QuotationItem',
+    'DeliveryNotice',
+    'DeliveryNoticeItem',
+    'SampleTrial',
+    'SampleTrialItem',
+
     # 统一需求管理模块（新设计）
     'Demand',
     'DemandItem',

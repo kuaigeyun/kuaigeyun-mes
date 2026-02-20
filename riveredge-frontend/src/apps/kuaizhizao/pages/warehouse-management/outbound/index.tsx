@@ -343,7 +343,7 @@ const OutboundPage: React.FC = () => {
         )}
         {outboundType === 'sales' && (
           <CodeField
-            pageCode="kuaizhizao-warehouse-sales-outbound"
+            pageCode="kuaizhizao-sales-delivery"
             name="delivery_code"
             label="销售出库单编码"
             required={true}

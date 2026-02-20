@@ -12,7 +12,7 @@ interface TextWidgetProps {
 }
 
 const TextWidget: React.FC<TextWidgetProps> = ({ type, content, style, config = {}, props = {} }) => {
-    const blurStyle = props.blur ? { backdropFilter: `blur(${props.blur}px)`, background: 'rgba(255,255,255,0.05)' } : {};
+    const blurStyle = {}; // 扁平化：不再使用毛玻璃效果
     const mainColor = props.color || config.color || '#fff';
     switch (type) {
         case 'title':

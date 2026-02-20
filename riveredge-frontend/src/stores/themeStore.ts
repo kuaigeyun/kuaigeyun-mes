@@ -109,6 +109,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     set({ theme: themeMode, config: mergedConfig, resolved });
 
     document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', resolved.isDark ? 'dark' : 'light');
   };
 
   const syncFromPreferences = (preferences: Record<string, any>) => {
@@ -126,6 +127,12 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     ? mergeConfig({}, cached.theme_config as Partial<ThemeConfig>)
     : { ...DEFAULT_CONFIG };
   const initialResolved = computeResolved(initialTheme, initialConfig);
+
+  // 初始化时同步设置 document 属性，确保首屏渲染时 data-theme 已正确
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.colorScheme = initialResolved.isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', initialResolved.isDark ? 'dark' : 'light');
+  }
 
   return {
     theme: initialTheme,

@@ -335,7 +335,6 @@ class DefaultValuesService:
         # 快格轻制造 - 仓储管理
         "kuaizhizao-warehouse-inbound": "PM",  # Production Material (生产领料)
         "kuaizhizao-warehouse-finished-goods-inbound": "FGR",  # Finished Goods Receipt (成品入库)
-        "kuaizhizao-warehouse-sales-outbound": "SOB",
         # 快格轻制造 - 质量管理
         "kuaizhizao-quality-incoming-inspection": "II",
         "kuaizhizao-quality-process-inspection": "QI",  # Quality Inspection (过程检验)

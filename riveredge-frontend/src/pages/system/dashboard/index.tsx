@@ -73,7 +73,8 @@ import {
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
-import { getUserPreference, updateUserPreference } from '../../../services/userPreference';
+import { getUserPreference } from '../../../services/userPreference';
+import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
@@ -418,9 +419,13 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // 更新用户偏好设置
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+
+  // 更新用户偏好设置（通过 store 统一入口，避免与 userPreferenceStore 不同步）
   const updatePreferenceMutation = useMutation({
-    mutationFn: (data: { preferences: Record<string, any> }) => updateUserPreference(data),
+    mutationFn: async (prefs: Record<string, any>) => {
+      await updatePreferences(prefs);
+    },
     onSuccess: () => {
       message.success('快捷操作配置已保存');
       refetchUserPreference();
@@ -518,10 +523,7 @@ export default function DashboardPage() {
     }));
 
     updatePreferenceMutation.mutate({
-      preferences: {
-        ...userPreference?.preferences,
-        dashboard_quick_actions: quickActions,
-      },
+      dashboard_quick_actions: quickActions,
     });
   };
 
@@ -984,9 +986,8 @@ export default function DashboardPage() {
                 { menu_uuid: 'work-orders', menu_name: '工单管理', menu_path: '/apps/kuaizhizao/production-execution/work-orders', menu_icon: <FileTextOutlined />, sort_order: 0 },
                 { menu_uuid: 'inventory', menu_name: '库存管理', menu_path: '/apps/kuaizhizao/warehouse-management/inventory', menu_icon: <DatabaseOutlined />, sort_order: 1 },
                 { menu_uuid: 'quality', menu_name: '质量管理', menu_path: '/apps/kuaizhizao/quality-management', menu_icon: <SafetyOutlined />, sort_order: 2 },
-                { menu_uuid: 'reports', menu_name: '报表分析', menu_path: '/apps/kuaizhizao/reports', menu_icon: <BarChartOutlined />, sort_order: 3 },
-                { menu_uuid: 'equipment', menu_name: '设备管理', menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 4 },
-                { menu_uuid: 'plan', menu_name: '计划管理', menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 5 },
+                { menu_uuid: 'equipment', menu_name: '设备管理', menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 3 },
+                { menu_uuid: 'plan', menu_name: '计划管理', menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 4 },
               ];
               
               return defaultEntries;
@@ -997,15 +998,7 @@ export default function DashboardPage() {
             }, [menuTree])}
             showConfig={true}
             onSave={async (items: QuickEntryItem[]) => {
-              // 保存到用户偏好设置
-              const currentPreferences = userPreference?.preferences || {};
-              await updateUserPreference({
-                preferences: {
-                  ...currentPreferences,
-                  dashboard_quick_entries: items,
-                },
-              });
-              // 刷新用户偏好设置
+              await updatePreferences({ dashboard_quick_entries: items });
               queryClient.invalidateQueries({ queryKey: ['dashboard-user-preference'] });
             }}
             renderMenuIcon={(menuUuid: string) => {

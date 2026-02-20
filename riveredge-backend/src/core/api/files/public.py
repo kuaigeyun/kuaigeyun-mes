@@ -41,7 +41,7 @@ async def get_file_preview_public(
     """
     try:
         # 只允许访问公开资源分类
-        allowed_categories = ['platform-logo', 'site-logo']
+        allowed_categories = ['platform-logo', 'site-logo', 'platform-favicon']
         if category not in allowed_categories:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

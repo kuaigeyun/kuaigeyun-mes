@@ -54,6 +54,11 @@ class PlatformSettings(Model):
         null=True,
         description="平台Logo URL"
     )
+    favicon = fields.CharField(
+        max_length=500,
+        null=True,
+        description="网站 Favicon URL（浏览器标签页图标）"
+    )
     platform_description = fields.TextField(
         null=True,
         description="平台描述"

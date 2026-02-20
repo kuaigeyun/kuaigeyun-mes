@@ -23,7 +23,7 @@ function toPercent(value: number, max?: number): number {
 
 const IndicatorWidget: React.FC<IndicatorWidgetProps> = ({ type, title, value, unit, config = {}, props = {} }) => {
     const mainColor = props.color || '#00f2ff';
-    const blurStyle = props.blur ? { backdropFilter: `blur(${props.blur}px)`, background: 'rgba(255,255,255,0.05)' } : {};
+    const blurStyle = {}; // 扁平化：不再使用毛玻璃效果
 
     switch (type) {
         case 'number':

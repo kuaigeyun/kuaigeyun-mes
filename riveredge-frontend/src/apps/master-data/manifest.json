@@ -9,33 +9,33 @@
     "route_path": "/apps/master-data",
     "sort_order": 10,
     "menu_config": {
-        "title": "基础数据管理",
+        "title": "app.master-data.name",
         "icon": "database",
         "path": "/apps/master-data",
         "children": [{
-                "title": "工厂数据",
+                "title": "app.master-data.menu.factory",
                 "icon": "factory",
                 "sort_order": 1,
                 "children": [{
-                        "title": "厂区管理",
+                        "title": "app.master-data.menu.factory.plants",
                         "path": "/apps/master-data/factory/plants",
                         "permission": "master-data:factory:plant:view",
                         "sort_order": 0
                     },
                     {
-                        "title": "车间管理",
+                        "title": "app.master-data.menu.factory.workshops",
                         "path": "/apps/master-data/factory/workshops",
                         "permission": "master-data:factory:workshop:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "产线管理",
+                        "title": "app.master-data.menu.factory.production-lines",
                         "path": "/apps/master-data/factory/production-lines",
                         "permission": "master-data:factory:production-line:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "工位管理",
+                        "title": "app.master-data.menu.factory.workstations",
                         "path": "/apps/master-data/factory/workstations",
                         "permission": "master-data:factory:workstation:view",
                         "sort_order": 3
@@ -43,23 +43,23 @@
                 ]
             },
             {
-                "title": "仓库数据",
+                "title": "app.master-data.menu.warehouse",
                 "icon": "archive",
                 "sort_order": 2,
                 "children": [{
-                        "title": "仓库管理",
+                        "title": "app.master-data.menu.warehouse.warehouses",
                         "path": "/apps/master-data/warehouse/warehouses",
                         "permission": "master-data:warehouse:warehouse:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "库区管理",
+                        "title": "app.master-data.menu.warehouse.storage-areas",
                         "path": "/apps/master-data/warehouse/storage-areas",
                         "permission": "master-data:warehouse:storage-area:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "库位管理",
+                        "title": "app.master-data.menu.warehouse.storage-locations",
                         "path": "/apps/master-data/warehouse/storage-locations",
                         "permission": "master-data:warehouse:storage-location:view",
                         "sort_order": 3
@@ -67,29 +67,29 @@
                 ]
             },
             {
-                "title": "物料数据",
+                "title": "app.master-data.menu.materials",
                 "icon": "package",
                 "sort_order": 3,
                 "children": [{
-                        "title": "变体属性",
+                        "title": "app.master-data.menu.materials.variant-attributes",
                         "path": "/apps/master-data/materials/variant-attributes",
                         "permission": "master-data:material:variant-attribute:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "物料管理",
+                        "title": "app.master-data.menu.materials.management",
                         "path": "/apps/master-data/materials",
                         "permission": "master-data:material:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "批号管理",
+                        "title": "app.master-data.menu.materials.batches",
                         "path": "/apps/master-data/materials/batches",
                         "permission": "master-data:material:batch:view",
                         "sort_order": 3
                     },
                     {
-                        "title": "序列号管理",
+                        "title": "app.master-data.menu.materials.serials",
                         "path": "/apps/master-data/materials/serials",
                         "permission": "master-data:material:serial:view",
                         "sort_order": 5
@@ -97,45 +97,45 @@
                 ]
             },
             {
-                "title": "工艺数据",
+                "title": "app.master-data.menu.process",
                 "icon": "workflow",
                 "sort_order": 4,
                 "children": [{
-                        "title": "不良品类型",
+                        "title": "app.master-data.menu.process.defect-types",
                         "path": "/apps/master-data/process/defect-types",
                         "permission": "master-data:process:defect-type:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "工序",
+                        "title": "app.master-data.menu.process.operations",
                         "path": "/apps/master-data/process/operations",
                         "permission": "master-data:process:operation:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "工艺路线",
+                        "title": "app.master-data.menu.process.routes",
                         "path": "/apps/master-data/process/routes",
                         "permission": "master-data:process:route:view",
                         "sort_order": 3
                     },
                     {
-                        "title": "物料清单BOM",
+                        "title": "app.master-data.menu.process.engineering-bom",
                         "path": "/apps/master-data/process/engineering-bom",
                         "permission": "master-data:process:engineering-bom:view",
                         "sort_order": 4,
                         "children": [{
-                            "title": "BOM设计",
+                            "title": "app.master-data.menu.process.engineering-bom.designer",
                             "path": "/apps/master-data/process/engineering-bom/designer",
                             "hideInMenu": true
                         }]
                     },
                     {
-                        "title": "标准操作SOP",
+                        "title": "app.master-data.menu.process.sop",
                         "path": "/apps/master-data/process/sop",
                         "permission": "master-data:process:sop:view",
                         "sort_order": 5,
                         "children": [{
-                            "title": "SOP设计",
+                            "title": "app.master-data.menu.process.sop.designer",
                             "path": "/apps/master-data/process/sop/designer",
                             "hideInMenu": true
                         }]
@@ -143,17 +143,17 @@
                 ]
             },
             {
-                "title": "供应链数据",
+                "title": "app.master-data.menu.supply-chain",
                 "icon": "truck",
                 "sort_order": 5,
                 "children": [{
-                        "title": "客户",
+                        "title": "app.master-data.menu.supply-chain.customers",
                         "path": "/apps/master-data/supply-chain/customers",
                         "permission": "master-data:supply-chain:customer:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "供应商",
+                        "title": "app.master-data.menu.supply-chain.suppliers",
                         "path": "/apps/master-data/supply-chain/suppliers",
                         "permission": "master-data:supply-chain:supplier:view",
                         "sort_order": 2
@@ -161,17 +161,17 @@
                 ]
             },
             {
-                "title": "绩效数据",
+                "title": "app.master-data.menu.performance",
                 "icon": "analytics",
                 "sort_order": 6,
                 "children": [{
-                        "title": "假期设置",
+                        "title": "app.master-data.menu.performance.holidays",
                         "path": "/apps/master-data/performance/holidays",
                         "permission": "master-data:performance:holiday:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "技能管理",
+                        "title": "app.master-data.menu.performance.skills",
                         "path": "/apps/master-data/performance/skills",
                         "permission": "master-data:performance:skill:view",
                         "sort_order": 2

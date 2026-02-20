@@ -1029,11 +1029,9 @@ const WorkOrdersKioskPage: React.FC = () => {
                     <div
                         style={{
                             width: 500,
-                            background: HMI_DESIGN_TOKENS.PANEL_FROSTED,
-                            backdropFilter: 'blur(12px)',
-                            WebkitBackdropFilter: 'blur(12px)',
+                            background: 'rgba(0, 12, 28, 0.95)',
                             borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-                            boxShadow: HMI_DESIGN_TOKENS.PANEL_GLOW,
+                            boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW,
                             border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
                             padding: HMI_DESIGN_TOKENS.SECTION_GAP,
                         }}
@@ -1239,7 +1237,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         呼叫
                     </Button>
 
-                    <Divider vertical style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
+                    <Divider orientation="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
 
                     <Button
                         icon={<HistoryOutlined />}
