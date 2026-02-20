@@ -33,6 +33,7 @@ import { createDemandComputation } from '../../../services/demand-computation';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -923,6 +924,17 @@ const DemandManagementPage: React.FC = () => {
                   pagination={false}
                   bordered
                   rowKey="id"
+                />
+              </div>
+            )}
+
+            {/* 操作记录与上下游 */}
+            {currentDemand.id && (
+              <div style={{ marginTop: 24 }}>
+                <DocumentTrackingPanel
+                  documentType="demand"
+                  documentId={currentDemand.id}
+                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
                 />
               </div>
             )}

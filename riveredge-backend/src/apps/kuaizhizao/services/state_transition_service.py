@@ -2,6 +2,7 @@
 状态流转服务模块
 
 提供状态流转管理的业务逻辑，支持状态机模式管理需求状态。
+优先从 StateTransitionRule 数据库加载规则，无规则时使用内置默认（demand/work_order 等）。
 
 Author: Luigi Lu
 Date: 2025-01-14
@@ -12,8 +13,17 @@ from datetime import datetime
 from loguru import logger
 
 from apps.kuaizhizao.models.state_transition import StateTransitionRule, StateTransitionLog
+from apps.kuaizhizao.constants import STATE_ALIASES, DocumentStatus
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from tortoise.transactions import in_transaction
+
+
+def _normalize_state(state: str) -> str:
+    """状态归一化：中文/别名 -> 标准枚举值"""
+    if not state:
+        return state
+    s = str(state).strip()
+    return STATE_ALIASES.get(s, s)
 
 
 class StateTransitionService:
@@ -60,6 +70,25 @@ class StateTransitionService:
         {"from": "released", "to": "cancelled", "description": "取消工单"},
         {"from": "in_progress", "to": "cancelled", "description": "取消工单"},
     ]
+
+    # 标准审核类单据默认流转（销售订单、采购订单、销售预测等，使用 DocumentStatus）
+    DEFAULT_AUDIT_DOCUMENT_TRANSITIONS = [
+        {"from": DocumentStatus.DRAFT.value, "to": DocumentStatus.PENDING_REVIEW.value, "description": "提交审核"},
+        {"from": DocumentStatus.PENDING_REVIEW.value, "to": DocumentStatus.AUDITED.value, "description": "审核通过"},
+        {"from": DocumentStatus.PENDING_REVIEW.value, "to": DocumentStatus.REJECTED.value, "description": "审核驳回"},
+        {"from": DocumentStatus.REJECTED.value, "to": DocumentStatus.DRAFT.value, "description": "重新编辑"},
+        {"from": DocumentStatus.PENDING_REVIEW.value, "to": DocumentStatus.DRAFT.value, "description": "撤回"},
+    ]
+
+    # 按单据类型映射默认流转规则（无 DB 规则时使用）
+    DEFAULT_TRANSITIONS_BY_ENTITY: Dict[str, List[Dict[str, str]]] = {
+        "demand": DEFAULT_DEMAND_TRANSITIONS,
+        "work_order": DEFAULT_WORK_ORDER_TRANSITIONS,
+        "sales_order": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
+        "sales_forecast": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
+        "purchase_order": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
+        "purchase_requisition": DEFAULT_AUDIT_DOCUMENT_TRANSITIONS,
+    }
     
     async def can_transition(
         self,
@@ -95,17 +124,15 @@ class StateTransitionService:
         if rule:
             # 有规则，检查权限（TODO: 实现权限检查）
             return True
-        
-        # 如果没有规则，检查默认规则
-        if entity_type == "demand":
-            for transition in self.DEFAULT_DEMAND_TRANSITIONS:
-                if transition["from"] == from_state and transition["to"] == to_state:
+
+        # 无 DB 规则时，使用内置默认（支持更多单据类型）
+        transitions = self.DEFAULT_TRANSITIONS_BY_ENTITY.get(entity_type)
+        if transitions:
+            nf, nt = _normalize_state(from_state), _normalize_state(to_state)
+            for t in transitions:
+                if _normalize_state(t["from"]) == nf and _normalize_state(t["to"]) == nt:
                     return True
-        elif entity_type == "work_order":
-            for transition in self.DEFAULT_WORK_ORDER_TRANSITIONS:
-                if transition["from"] == from_state and transition["to"] == to_state:
-                    return True
-        
+
         return False
     
     async def transition_state(
@@ -245,25 +272,18 @@ class StateTransitionService:
                 "required_role": rule.required_role,
             })
         
-        # 如果没有规则，使用默认规则
+        # 如果没有规则，使用默认规则（支持更多单据类型）
         if not result:
-            if entity_type == "demand":
-                for transition in self.DEFAULT_DEMAND_TRANSITIONS:
-                    if transition["from"] == current_state:
+            transitions = self.DEFAULT_TRANSITIONS_BY_ENTITY.get(entity_type)
+            if transitions:
+                nc = _normalize_state(current_state)
+                for t in transitions:
+                    if _normalize_state(t["from"]) == nc:
                         result.append({
-                            "to_state": transition["to"],
-                            "description": transition["description"],
+                            "to_state": t["to"],
+                            "description": t["description"],
                             "required_permission": None,
                             "required_role": None,
                         })
-            elif entity_type == "work_order":
-                for transition in self.DEFAULT_WORK_ORDER_TRANSITIONS:
-                    if transition["from"] == current_state:
-                        result.append({
-                            "to_state": transition["to"],
-                            "description": transition["description"],
-                            "required_permission": None,
-                            "required_role": None,
-                        })
-        
+
         return result
