@@ -17,7 +17,7 @@ import {
   getSamplePreviewVariables,
   getArrayTableTemplates,
   TemplateVariableItem,
-} from '../../../../configs/printTemplateSchemas';
+} from '../../../../config/printTemplateSchemas';
 import {
   EMPTY_PDFME_TEMPLATE,
   PAPER_PRESETS,

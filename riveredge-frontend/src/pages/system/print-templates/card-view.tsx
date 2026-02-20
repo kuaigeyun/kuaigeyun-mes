@@ -20,7 +20,7 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSamplePreviewVariables } from '../../../configs/printTemplateSchemas';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSamplePreviewVariables } from '../../../config/printTemplateSchemas';
 import { isPdfmeTemplate } from '../../../utils/pdfmeTemplateUtils';
 import PdfmePreview from '../../../components/pdfme-doc/preview';
 import { EMPTY_PDFME_TEMPLATE_JSON } from '../../../components/pdfme-doc/constants';

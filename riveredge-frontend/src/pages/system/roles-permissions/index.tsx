@@ -66,7 +66,7 @@ import {
   getModuleByResource,
   PERMISSION_TEMPLATES,
   getPermissionUuidsByTemplate,
-} from '../../../configs/permission-modules';
+} from '../../../config/permission-modules';
 
 /**
  * 角色权限管理合并页面组件

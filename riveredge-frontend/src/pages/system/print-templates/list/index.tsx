@@ -26,7 +26,7 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../configs/printTemplateSchemas';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
 import { EMPTY_PDFME_TEMPLATE_JSON, DEFAULT_WORK_ORDER_PDFME_TEMPLATE } from '../../../../components/pdfme-doc/constants';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';

@@ -8,7 +8,7 @@ import {
 } from '../../../../../../services/printTemplate';
 import { handleError } from '../../../../../../utils/errorHandler';
 import { apiRequest } from '../../../../../../services/api';
-import { DOCUMENT_TYPE_TO_CODE } from '../../../../../../configs/printTemplateSchemas';
+import { DOCUMENT_TYPE_TO_CODE } from '../../../../../../config/printTemplateSchemas';
 import { mapWorkOrderToTemplateVariables } from '../../../../../../utils/printTemplateDataMapper';
 import { isPdfmeTemplate, variablesToPdfmeInputs, sanitizeTemplate } from '../../../../../../utils/pdfmeTemplateUtils';
 import { generate } from '@pdfme/generator';
