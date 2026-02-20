@@ -60,6 +60,7 @@ export interface Demand {
   source_id?: number;
   source_type?: string;
   source_code?: string;
+  priority?: number;
   pushed_to_computation?: boolean;
   computation_id?: number;
   computation_code?: string;

@@ -68,6 +68,9 @@ class DemandBase(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+
+    # 优先级（数字越小优先级越高，生产排产时按此排序）
+    priority: int = Field(5, ge=1, le=10, description="优先级（1=高、5=中、10=低）")
     
     notes: Optional[str] = Field(None, description="备注")
     
@@ -145,6 +148,7 @@ class DemandUpdate(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    priority: Optional[int] = Field(None, ge=1, le=10, description="优先级（1=高、5=中、10=低）")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -163,6 +167,9 @@ class DemandResponse(DemandBase):
     source_id: Optional[int] = Field(None, description="来源ID")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_code: Optional[str] = Field(None, max_length=50, description="来源编码")
+
+    # 优先级
+    priority: int = Field(5, description="优先级（1=高、5=中、10=低）")
     
     # 下推信息
     pushed_to_computation: bool = Field(False, description="是否已下推到需求计算")

@@ -12,25 +12,24 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select } from 'antd';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
   listDemands,
   getDemand,
-  createDemand,
   updateDemand,
   submitDemand,
   approveDemand,
   rejectDemand,
-  batchCreateDemands,
   pushDemandToComputation,
   Demand,
   DemandItem,
   DemandStatus,
   ReviewStatus,
 } from '../../../services/demand';
+import { createDemandComputation } from '../../../services/demand-computation';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
@@ -56,6 +55,7 @@ const DemandManagementPage: React.FC = () => {
   const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>(
     urlDemandType || 'sales_forecast'
   );
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // 当 URL 参数变化时，更新需求类型
   useEffect(() => {
@@ -65,14 +65,8 @@ const DemandManagementPage: React.FC = () => {
   }, [urlDemandType]);
 
   /**
-   * 处理新建需求
+   * 需求由销售订单/销售预测审核通过后自动产生，不再支持手动新建
    */
-  const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentId(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-  };
 
   /**
    * 处理编辑需求
@@ -128,26 +122,51 @@ const DemandManagementPage: React.FC = () => {
   };
 
   /**
-   * 处理提交表单
+   * 处理提交表单（仅用于编辑，如修改优先级）
    */
   const handleSubmit = async (values: any) => {
+    if (!isEdit || !currentId) return;
     try {
-      values.demand_type = demandType;
-      values.business_mode = demandType === 'sales_forecast' ? 'MTS' : 'MTO';
-
-      if (isEdit && currentId) {
-        await updateDemand(currentId, values);
-        messageApi.success('需求更新成功');
-      } else {
-        await createDemand(values);
-        messageApi.success('需求创建成功');
-      }
+      await updateDemand(currentId, values);
+      messageApi.success('需求更新成功');
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
     }
+  };
+
+  /**
+   * 合并多选需求进行计算
+   */
+  const handleMergeComputation = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要合并计算的需求');
+      return;
+    }
+    const ids = selectedRowKeys.map(k => Number(k)).filter(n => !isNaN(n));
+    if (ids.length === 0) return;
+    Modal.confirm({
+      title: '合并需求计算',
+      content: `确定将选中的 ${ids.length} 个需求合并进行需求计算吗？合并计算将保留各需求来源追溯。`,
+      onOk: async () => {
+        try {
+          const payload = ids.length === 1
+            ? { demand_id: ids[0], computation_type: 'MRP' as const, computation_params: {} }
+            : { demand_ids: ids, computation_type: 'MRP' as const, computation_params: {} };
+          const computation = await createDemandComputation(payload);
+          messageApi.success('合并计算任务已创建');
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+          if (computation?.id) {
+            window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
+          }
+        } catch (error: any) {
+          messageApi.error(error?.message || '创建合并计算失败');
+        }
+      },
+    });
   };
 
   /**
@@ -186,129 +205,6 @@ const DemandManagementPage: React.FC = () => {
         }
       },
     });
-  };
-
-  /**
-   * 处理批量导入
-   */
-  const handleImport = async (data: any[][]) => {
-    if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
-      return;
-    }
-
-    try {
-      // 第一行是表头，从第二行开始是数据
-      const headers = data[0];
-      const rows = data.slice(1);
-
-      // 字段映射（表头名称 -> 字段名）
-      const fieldMap: Record<string, string> = {
-        '需求类型': 'demand_type',
-        '需求名称': 'demand_name',
-        '业务模式': 'business_mode',
-        '开始日期': 'start_date',
-        '结束日期': 'end_date',
-        '预测周期': 'forecast_period',
-        '客户ID': 'customer_id',
-        '客户名称': 'customer_name',
-        '客户联系人': 'customer_contact',
-        '客户电话': 'customer_phone',
-        '订单日期': 'order_date',
-        '交货日期': 'delivery_date',
-        '销售员ID': 'salesman_id',
-        '销售员姓名': 'salesman_name',
-        '收货地址': 'shipping_address',
-        '发货方式': 'shipping_method',
-        '付款条件': 'payment_terms',
-        '备注': 'notes',
-      };
-
-      // 转换数据
-      const demands: Partial<Demand>[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.every(cell => !cell || cell.toString().trim() === '')) {
-          continue; // 跳过空行
-        }
-
-        const demand: any = {
-          status: DemandStatus.DRAFT,
-          review_status: ReviewStatus.PENDING,
-        };
-
-        // 映射字段
-        for (let j = 0; j < headers.length && j < row.length; j++) {
-          const header = headers[j]?.toString().trim();
-          const value = row[j]?.toString().trim();
-
-          if (!header || !value) continue;
-
-          const fieldName = fieldMap[header];
-          if (fieldName) {
-            // 处理日期字段
-            if (fieldName.includes('date') || fieldName.includes('period')) {
-              demand[fieldName] = value;
-            }
-            // 处理数字字段
-            else if (fieldName.includes('_id')) {
-              demand[fieldName] = value ? parseInt(value, 10) : null;
-            }
-            // 处理枚举字段
-            else if (fieldName === 'demand_type') {
-              demand[fieldName] = value === '销售预测' ? 'sales_forecast' :
-                value === '销售订单' ? 'sales_order' : value;
-            }
-            else if (fieldName === 'business_mode') {
-              demand[fieldName] = value.toUpperCase();
-            }
-            // 其他字段直接赋值
-            else {
-              demand[fieldName] = value;
-            }
-          }
-        }
-
-        // 根据需求类型设置业务模式
-        if (demand.demand_type === 'sales_forecast' && !demand.business_mode) {
-          demand.business_mode = 'MTS';
-        } else if (demand.demand_type === 'sales_order' && !demand.business_mode) {
-          demand.business_mode = 'MTO';
-        }
-
-        demands.push(demand);
-      }
-
-      if (demands.length === 0) {
-        messageApi.warning('没有有效的数据行');
-        return;
-      }
-
-      // 调用批量创建API
-      const result = await batchCreateDemands(demands);
-
-      if (result.failure_count === 0) {
-        messageApi.success(`批量导入成功！成功导入 ${result.success_count} 条需求`);
-        actionRef.current?.reload();
-      } else {
-        messageApi.warning(
-          `批量导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
-        );
-        // 显示错误详情
-        if (result.errors && result.errors.length > 0) {
-          const errorMessages = result.errors
-            .slice(0, 10) // 只显示前10个错误
-            .map(err => `第 ${err.row} 行: ${err.error}`)
-            .join('\n');
-          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
-        }
-        if (result.success_count > 0) {
-          actionRef.current?.reload();
-        }
-      }
-    } catch (error: any) {
-      messageApi.error(`批量导入失败: ${error.message || '未知错误'}`);
-    }
   };
 
   /**
@@ -397,6 +293,51 @@ const DemandManagementPage: React.FC = () => {
       valueEnum: {
         'MTS': { text: '按库存生产', status: 'Processing' },
         'MTO': { text: '按订单生产', status: 'Success' },
+      },
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      width: 100,
+      render: (val: number | undefined, record: Demand) => (
+        <Select
+          size="small"
+          value={val ?? 5}
+          options={[
+            { label: '高 (1)', value: 1 },
+            { label: '中 (5)', value: 5 },
+            { label: '低 (10)', value: 10 },
+          ]}
+          onChange={async (v) => {
+            if (record.id == null) return;
+            try {
+              await updateDemand(record.id, { priority: v });
+              messageApi.success('优先级已更新');
+              actionRef.current?.reload();
+            } catch (e: any) {
+              messageApi.error(e?.message || '更新失败');
+            }
+          }}
+          style={{ width: 90 }}
+        />
+      ),
+    },
+    {
+      title: '来源',
+      dataIndex: ['source_type', 'source_code'],
+      width: 160,
+      ellipsis: true,
+      render: (_: unknown, record: Demand) => {
+        const st = record.source_type;
+        const sc = record.source_code;
+        if (!st && !sc) return '-';
+        const label =
+          st === 'sales_order' ? '销售订单' :
+          st === 'sales_forecast' ? '销售预测' :
+          st === 'sample_trial' ? '样件试制' :
+          st === 'quotation' ? '报价单' :
+          st || '';
+        return sc ? `${label} ${sc}` : label || '-';
       },
     },
     {
@@ -594,65 +535,35 @@ const DemandManagementPage: React.FC = () => {
           }}
           rowKey="id"
           showAdvancedSearch={true}
-          showCreateButton={true}
-          onCreate={handleCreate}
+          showCreateButton={false}
           showEditButton={true}
           onEdit={handleEdit}
           showDeleteButton={true}
           onDelete={handleDelete}
-          showImportButton={true}
-          onImport={handleImport}
-          importHeaders={[
-            '需求类型',
-            '需求名称',
-            '业务模式',
-            '开始日期',
-            '结束日期',
-            '预测周期',
-            '客户ID',
-            '客户名称',
-            '客户联系人',
-            '客户电话',
-            '订单日期',
-            '交货日期',
-            '销售员ID',
-            '销售员姓名',
-            '收货地址',
-            '发货方式',
-            '付款条件',
-            '备注',
-          ]}
-          importExampleRow={[
-            '销售预测',
-            '2026年1月销售预测',
-            'MTS',
-            '2026-01-01',
-            '2026-01-31',
-            '2026-01',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '',
-            '批量导入示例',
-          ]}
+          showImportButton={false}
+          enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
+          afterSearchButtons={
+            <Button
+              type="primary"
+              icon={<MergeCellsOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleMergeComputation}
+            >
+              合并计算
+            </Button>
+          }
         />
       </ListPageTemplate>
 
-      {/* 新建/编辑 Modal */}
+      {/* 编辑需求 Modal（需求由销售订单/销售预测审核通过后自动产生，仅支持编辑如优先级） */}
       <Modal
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
-        title={isEdit ? '编辑需求' : '新建需求'}
+        title="编辑需求"
         width={900}
         footer={null}
-        destroyOnHidden
+        destroyOnClose
       >
         <ProForm
           formRef={formRef}
@@ -664,13 +575,23 @@ const DemandManagementPage: React.FC = () => {
                 <Space>
                   <Button onClick={() => setModalVisible(false)}>取消</Button>
                   <Button type="primary" onClick={() => formRef.current?.submit()}>
-                    {isEdit ? '更新' : '创建'}
+                    更新
                   </Button>
                 </Space>
               </div>
             ),
           }}
         >
+          <ProFormSelect
+            name="priority"
+            label="优先级"
+            options={[
+              { label: '高 (1)', value: 1 },
+              { label: '中 (5)', value: 5 },
+              { label: '低 (10)', value: 10 },
+            ]}
+            fieldProps={{ style: { width: 120 } }}
+          />
           <ProFormSelect
             name="demand_type"
             label="需求类型"
