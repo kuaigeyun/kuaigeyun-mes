@@ -1,0 +1,21 @@
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+#
+# 类型说明:
+#   feat:     新功能
+#   fix:      Bug 修复
+#   docs:     文档更新
+#   style:    代码格式（不影响功能）
+#   refactor: 代码重构
+#   test:     测试相关
+#   chore:    构建/工具相关
+#   perf:     性能优化
+#
+# 示例:
+#   feat(tenant): 添加租户管理功能
+#   fix(auth): 修复登录 Token 过期问题
+#   docs(api): 更新 API 文档
+

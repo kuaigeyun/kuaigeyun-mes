@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Select, InputNumber, Switch, Tag } from 'antd';
+import { Button, Space, Form, Select, InputNumber, Switch, Tag, theme } from 'antd';
 import { EditOutlined, LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -87,8 +87,11 @@ MemoizedMindMap.displayName = 'MemoizedMindMap';
 /**
  * BOM可视化设计器页面组件
  */
+const { useToken } = theme;
+
 const BOMDesignerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1336,7 +1339,7 @@ const BOMDesignerPage: React.FC = () => {
                 border: '1px solid rgba(0,0,0,0.05)',
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${token.colorBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>操作指南</span>
                 <Space>
                   <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>快捷键</span>
@@ -1380,7 +1383,7 @@ const BOMDesignerPage: React.FC = () => {
                  <span>编辑物料</span>
               </div>
 
-              <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px dashed #f0f0f0', color: '#666', fontSize: 11 }}>
+              <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}`, color: '#666', fontSize: 11 }}>
                  <div>• 拖拽左侧 <DragOutlined /> 手柄可移动节点</div>
                  <div>• 快捷键需在画布聚焦时生效</div>
               </div>

@@ -9,7 +9,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormSelect, ProFormList, ProFormGroup, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Tag, Form, Space, Divider, Card } from 'antd';
+import { App, Button, Tag, Form, Space, Divider, Card, theme } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ColumnWidthOutlined, UserOutlined, TeamOutlined, ControlOutlined, SendOutlined, ForkOutlined } from '@ant-design/icons';
 import { getUserList } from '../../../../services/user';
 import { getRoleList } from '../../../../services/role';
@@ -25,11 +25,14 @@ import {
 } from '../../../../services/approvalProcess';
 import { CanvasPageTemplate, CANVAS_GRID_STYLE } from '../../../../components/layout-templates';
 
+const { useToken } = theme;
+
 /**
  * 审批节点组件
  */
 const ApprovalNode: React.FC<NodeProps> = ({ data }) => {
   const { t } = useTranslation();
+  const { token } = useToken();
   const isHorizontal = data?.layoutDirection === 'horizontal';
   const approvalType = data?.approvalType || 'OR';
   
@@ -47,7 +50,7 @@ const ApprovalNode: React.FC<NodeProps> = ({ data }) => {
       }}
     >
       <Handle type="target" position={isHorizontal ? Position.Left : Position.Top} style={{ background: '#1890ff' }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid #f0f0f0', paddingBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid ${token.colorBorder}`, paddingBottom: 6 }}>
         <span style={{ fontWeight: '600', fontSize: 14 }}>{data?.label || t('pages.approval.designer.label')}</span>
         <Tag color={approvalType === 'AND' ? 'orange' : 'blue'} style={{ marginRight: 0, fontSize: '10px', zoom: 0.85 }}>
           {approvalType === 'AND' ? t('pages.approval.designer.andSign') : t('pages.approval.designer.orSign')}
@@ -80,6 +83,7 @@ const ApprovalNode: React.FC<NodeProps> = ({ data }) => {
  */
 const CCNode: React.FC<NodeProps> = ({ data }) => {
   const { t } = useTranslation();
+  const { token } = useToken();
   const isHorizontal = data?.layoutDirection === 'horizontal';
   
   return (
@@ -96,7 +100,7 @@ const CCNode: React.FC<NodeProps> = ({ data }) => {
       }}
     >
       <Handle type="target" position={isHorizontal ? Position.Left : Position.Top} style={{ background: '#722ed1' }} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid #f0f0f0', paddingBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderBottom: `1px solid ${token.colorBorder}`, paddingBottom: 6 }}>
         <span style={{ fontWeight: '600', fontSize: 14, color: '#722ed1' }}>
           <SendOutlined style={{ marginRight: 6 }} />
           {data?.label || t('pages.approval.designer.ccNode')}
@@ -204,6 +208,7 @@ const EndNode: React.FC<NodeProps> = ({ data }) => {
 const ApprovalProcessDesignerPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const processUuid = searchParams.get('uuid');
@@ -770,7 +775,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
             </div>
             )}
 
-            <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 16, paddingTop: 16 }}>
+            <div style={{ borderTop: `1px solid ${token.colorBorder}`, marginTop: 16, paddingTop: 16 }}>
               <Button
                 danger
                 icon={<DeleteOutlined />}

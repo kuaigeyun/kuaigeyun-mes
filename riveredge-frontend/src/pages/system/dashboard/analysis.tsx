@@ -16,6 +16,7 @@ import {
   Space,
   Tag,
   Button,
+  theme,
 } from 'antd';
 import {
   UserOutlined,
@@ -33,6 +34,7 @@ import { DashboardTemplate } from '../../../components/layout-templates';
 import { Area, Pie } from '@ant-design/charts';
 
 const { Text } = Typography;
+const { useToken } = theme;
 
 // 模拟数据API
 const fetchSalesData = async () => {
@@ -79,6 +81,7 @@ const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
  * 分析页页面组件
  */
 export default function AnalysisPage() {
+  const { token } = useToken();
 
   // 获取销售数据
   const { data: salesData, isLoading: salesLoading } = useQuery({
@@ -264,7 +267,7 @@ export default function AnalysisPage() {
                   key={index}
                   style={{
                     padding: '12px 0',
-                    borderBottom: index < (topProducts?.length || 0) - 1 ? '1px solid #f0f0f0' : 'none',
+                    borderBottom: index < (topProducts?.length || 0) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                     display: 'flex',
                     alignItems: 'flex-start',
                   }}

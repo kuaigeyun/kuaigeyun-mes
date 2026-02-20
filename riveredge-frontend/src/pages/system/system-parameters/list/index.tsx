@@ -569,25 +569,33 @@ const SystemParameterListPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建参数
-            </Button>,
-            <Button
-              key="batch-delete"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={handleBatchDelete}
-            >
-              批量删除
-            </Button>,
-          ]}
+          showCreateButton
+          createButtonText="新建参数"
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
+          showImportButton
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            const res = await getSystemParameterList({ page: 1, page_size: 10000 });
+            let items = type === 'currentPage' && pageData?.length ? pageData : res.items;
+            if (type === 'selected' && keys?.length) {
+              items = res.items.filter((d) => keys.includes(d.uuid));
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `system-parameters-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
+          }}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,

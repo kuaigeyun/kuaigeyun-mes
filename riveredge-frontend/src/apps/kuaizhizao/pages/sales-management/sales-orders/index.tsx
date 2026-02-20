@@ -14,6 +14,7 @@ import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDat
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
@@ -172,6 +173,7 @@ const SalesOrdersPage: React.FC = () => {
   const [customersLoading, setCustomersLoading] = useState(false);
   // 新建时预览的订单编码（用于提交时判断是否需正式占号）
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
 
   /**
    * 加载物料列表
@@ -379,6 +381,29 @@ const SalesOrdersPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload: Partial<SalesOrder> = {
+          order_date: row.order_date || row.orderDate,
+          delivery_date: row.delivery_date || row.deliveryDate,
+          customer_id: row.customer_id ?? row.customerId,
+          customer_name: row.customer_name || row.customerName,
+          total_amount: row.total_amount ?? row.totalAmount,
+          status: row.status || '草稿',
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await createSalesOrder(payload);
+        successCount += 1;
+      }
+      messageApi.success(`已同步 ${successCount} 条销售订单`);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    }
   };
 
   /**
@@ -901,6 +926,7 @@ const SalesOrdersPage: React.FC = () => {
             rowExpandable: (record) => record.id != null,
           }}
           showCreateButton={true}
+          createButtonText="新建销售订单"
           onCreate={handleCreate}
           showEditButton={false}
           showDeleteButton={true}
@@ -908,6 +934,34 @@ const SalesOrdersPage: React.FC = () => {
           onDelete={handleDelete}
           showImportButton={true}
           onImport={handleImport}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listSalesOrders({ skip: 0, limit: 10000 });
+              let items = (res as any).data || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: SalesOrder) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `sales-orders-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           importHeaders={[
             '订单日期',
             '交货日期',
@@ -1382,6 +1436,13 @@ const SalesOrdersPage: React.FC = () => {
           </>
         )}
       </Drawer>
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步销售订单"
+      />
     </>
   );
 };

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Tag, Space, Button, Drawer, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, Collapse, Divider } from 'antd';
+import { App, Card, Tag, Space, Button, Drawer, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, Collapse, Divider, theme } from 'antd';
 import { EyeOutlined, CheckOutlined, ReloadOutlined, BellOutlined, SearchOutlined, MailOutlined, MessageOutlined, NotificationOutlined, MobileOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
@@ -26,12 +26,14 @@ dayjs.extend(relativeTime);
 const { Text, Paragraph } = Typography;
 const { Search } = Input;
 const { Panel } = Collapse;
+const { useToken } = theme;
 
 /**
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<UserMessage[]>([]);
   const [stats, setStats] = useState<UserMessageStats | null>(null);
@@ -398,7 +400,7 @@ const CardView: React.FC = () => {
                                 </Space>
                               </div>
                               
-                              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text type="secondary" style={{ fontSize: 12 }}>渠道：</Text>

@@ -9,7 +9,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Modal, Input, Form, Space, Typography, Tooltip, Card } from 'antd';
+import { App, Popconfirm, Button, Tag, Modal, Input, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -38,6 +38,7 @@ dayjs.extend(relativeTime);
 dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 获取模板类型图标和颜色
@@ -108,6 +109,7 @@ const extractVariables = (content: string): string[] => {
  */
 const PrintTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -455,7 +457,7 @@ const PrintTemplateListPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
@@ -740,23 +742,40 @@ const PrintTemplateListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
+          createButtonText="新建打印模板"
           onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           toolBarRender={() => [
-            <Button
-              key="createSample"
-              onClick={createSampleWorkOrderTemplate}
-            >
+            <Button key="createSample" onClick={createSampleWorkOrderTemplate}>
               一键生成工单模板
             </Button>,
-            <Button
-              key="batchDelete"
-              danger
-              onClick={handleBatchDelete}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量删除
-            </Button>,
           ]}
+          showImportButton
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: PrintTemplate[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getPrintTemplateByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              items = await getPrintTemplateList({ skip: 0, limit: 10000 });
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `print-templates-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
+          }}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,

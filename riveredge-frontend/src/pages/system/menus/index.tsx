@@ -449,10 +449,44 @@ const MenuListPage: React.FC = () => {
             rowKey="uuid"
             columns={columns}
             request={loadData}
-            showCreateButton={false}
+            showCreateButton
+            createButtonText="新建菜单"
+            onCreate={() => handleCreate()}
+            showDeleteButton
+            onDelete={handleBatchDelete}
+            deleteButtonText="批量删除"
+            enableRowSelection
+            onRowSelectionChange={setSelectedRowKeys}
+            showImportButton={false}
+            showExportButton={true}
+            onExport={async (type, keys, pageData) => {
+              const flattenTree = (nodes: any[]): Menu[] =>
+                nodes.flatMap((n) => {
+                  const { children, ...rest } = n;
+                  return [rest as Menu, ...(children ? flattenTree(children) : [])];
+                });
+              let items: Menu[] = [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = flattenTree(pageData);
+              } else if (type === 'selected' && keys?.length) {
+                items = allMenus.filter((d) => keys.includes(d.uuid));
+              } else {
+                items = allMenus;
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `menus-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            }}
             toolBarRender={() => [
-                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => handleCreate()}>新建菜单</Button>,
-                <Button key="batchDelete" danger icon={<DeleteOutlined />} onClick={handleBatchDelete} disabled={selectedRowKeys.length === 0}>批量删除</Button>,
                  <Button
                     key="toggleExpand"
                     onClick={() => {
@@ -470,10 +504,6 @@ const MenuListPage: React.FC = () => {
              expandable={{
                 expandedRowKeys,
                 onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
-            }}
-            rowSelection={{
-                selectedRowKeys,
-                onChange: (keys) => setSelectedRowKeys(keys),
             }}
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch={true}

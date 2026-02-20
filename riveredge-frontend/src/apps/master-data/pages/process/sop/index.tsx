@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Divider } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Divider, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
@@ -22,8 +22,11 @@ import type { ISchema } from '@formily/core';
 /**
  * 标准操作SOP管理列表页面组件
  */
+const { useToken } = theme;
+
 const SOPPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
@@ -738,7 +741,7 @@ const SOPPage: React.FC = () => {
                     ]}
                   />
 
-                  <div style={{ marginTop: 16, padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+                  <div style={{ marginTop: 16, padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: `1px solid ${token.colorBorder}` }}>
                     <div style={{ color: '#8c8c8c', fontSize: 12 }}>
                       提示：附件字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
                     </div>

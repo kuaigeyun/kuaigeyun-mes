@@ -1157,23 +1157,6 @@ const CustomFieldListPage: React.FC = () => {
                       {selectedPage.pagePath}
                     </div>
                   </div>
-                  <Space>
-                    <Button
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      onClick={handleCreate}
-                    >
-                      新建字段
-                    </Button>
-                    <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      disabled={selectedRowKeys.length === 0}
-                      onClick={handleBatchDelete}
-                    >
-                      批量删除
-                    </Button>
-                  </Space>
                 </div>
 
                 {/* 字段列表 */}
@@ -1232,11 +1215,46 @@ const CustomFieldListPage: React.FC = () => {
                       defaultPageSize: 20,
                       showSizeChanger: true,
                     }}
+                    showAdvancedSearch={true}
                     showCreateButton
+                    createButtonText="新建字段"
                     onCreate={handleCreate}
-                    rowSelection={{
-                      selectedRowKeys,
-                      onChange: setSelectedRowKeys,
+                    enableRowSelection
+                    onRowSelectionChange={setSelectedRowKeys}
+                    showDeleteButton
+                    onDelete={handleBatchDelete}
+                    deleteButtonText="批量删除"
+                    showImportButton={false}
+                    showExportButton={true}
+                    onExport={async (type, keys, pageData) => {
+                      if (!selectedPage) return;
+                      try {
+                        const res = await getCustomFieldList({
+                          page: 1,
+                          page_size: 10000,
+                          table_name: selectedPage.tableName,
+                        });
+                        let items = res.items || [];
+                        if (type === 'currentPage' && pageData?.length) {
+                          items = pageData;
+                        } else if (type === 'selected' && keys?.length) {
+                          items = items.filter((d) => keys.includes(d.uuid));
+                        }
+                        if (items.length === 0) {
+                          messageApi.warning('暂无数据可导出');
+                          return;
+                        }
+                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `custom-fields-${selectedPage.tableName}-${new Date().toISOString().slice(0, 10)}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        messageApi.success(`已导出 ${items.length} 条记录`);
+                      } catch (error: any) {
+                        messageApi.error(error?.message || '导出失败');
+                      }
                     }}
                   />
                 </div>

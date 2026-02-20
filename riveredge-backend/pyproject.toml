@@ -115,7 +115,7 @@ markers = [
 ]
 
 [tool.aerich]
-tortoise_orm = "migrations.aerich_config.TORTOISE_ORM"
+tortoise_orm = "infra.infrastructure.database.database.TORTOISE_ORM"
 location = "./migrations"
 src_folder = "./src"
 

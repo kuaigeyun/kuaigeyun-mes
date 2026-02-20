@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Space, Empty, Spin, Drawer, FloatButton, Badge, message } from 'antd';
+import { Card, List, Tag, Button, Space, Empty, Spin, Drawer, FloatButton, Badge, message, theme } from 'antd';
 import { BulbOutlined, CloseOutlined, RightOutlined, CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
 import './index.less';
@@ -32,12 +32,15 @@ interface AISuggestionsProps {
   onActionClick?: (action: string) => void;
 }
 
+const { useToken } = theme;
+
 const AISuggestions: React.FC<AISuggestionsProps> = ({
   scene,
   context,
   displayMode = 'float',
   onActionClick,
 }) => {
+  const { token } = useToken();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -233,7 +236,7 @@ const SuggestionsList: React.FC<SuggestionsListProps> = ({
           <List.Item
             style={{
               padding: '12px 0',
-              borderBottom: '1px solid #f0f0f0',
+              borderBottom: `1px solid ${token.colorBorder}`,
             }}
           >
             <List.Item.Meta

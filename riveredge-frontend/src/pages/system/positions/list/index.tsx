@@ -363,20 +363,12 @@ const PositionListPage: React.FC = () => {
             showQuickJumper: true,
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-              新建职位
-            </Button>,
-            <Button
-              key="batch-delete"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={handleBatchDelete}
-            >
-              批量删除
-            </Button>,
-          ]}
+          showCreateButton
+          createButtonText="新建职位"
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,

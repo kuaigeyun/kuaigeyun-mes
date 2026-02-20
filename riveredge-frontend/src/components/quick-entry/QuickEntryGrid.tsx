@@ -130,18 +130,17 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
     setSelectedMenuKeys(newItems.map(item => item.menu_uuid));
   };
 
-  // 生成渐变色（根据索引生成不同颜色，颜色稍微淡一点）
+  // 生成渐变色（根据索引生成不同颜色，使用不透明实色）
   const generateGradient = (index: number): string => {
-    // 使用更淡的颜色，通过降低饱和度和添加透明度
     const gradients = [
-      'linear-gradient(135deg, rgba(102, 126, 234, 0.7) 0%, rgba(118, 75, 162, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(240, 147, 251, 0.7) 0%, rgba(245, 87, 108, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(79, 172, 254, 0.7) 0%, rgba(0, 242, 254, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(67, 233, 123, 0.7) 0%, rgba(56, 249, 215, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(250, 112, 154, 0.7) 0%, rgba(254, 225, 64, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(48, 207, 208, 0.7) 0%, rgba(51, 8, 103, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(168, 237, 234, 0.7) 0%, rgba(254, 214, 227, 0.6) 100%)',
-      'linear-gradient(135deg, rgba(255, 154, 158, 0.7) 0%, rgba(254, 207, 239, 0.6) 100%)',
+      'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',      // 紫色 - 工单管理
+      'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',    // 粉紫 - 库存管理
+      'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',     // 蓝色 - 质量管理
+      'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',     // 绿色 - 设备管理
+      'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',     // 粉黄 - 计划管理
+      'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',     // 青紫
+      'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',     // 薄荷粉
+      'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',     // 珊瑚粉
     ];
     return gradients[index % gradients.length];
   };

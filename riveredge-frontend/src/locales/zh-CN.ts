@@ -344,7 +344,9 @@ export default {
   'app.kuaizhizao.menu.equipment-management.maintenance-reminders': '维护提醒',
   'app.kuaizhizao.menu.equipment-management.molds': '模具台账',
   'app.kuaizhizao.menu.equipment-management.molds-calibration': '模具校验',
+  'app.kuaizhizao.menu.equipment-management.mold-calibration': '模具校验', // 路径回退：mold-calibration
   'app.kuaizhizao.menu.equipment-management.equipment-calibration': '设备校验',
+  'app.kuaizhizao.menu.equipment-management.tool-calibration': '工装校验', // 路径回退：tool-calibration
   'app.kuaizhizao.menu.equipment-management.equipment-status': '设备状态',
   'app.kuaizhizao.menu.equipment-management.asset-ledger': '资产台账',
   'app.kuaizhizao.menu.equipment-management.ops-maintenance': '运营维护',

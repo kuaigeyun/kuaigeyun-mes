@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Layout, Card, Button, Space, message, Tabs, Divider } from 'antd';
+import { Layout, Card, Button, Space, message, Tabs, Divider, theme } from 'antd';
 import { SaveOutlined, EyeOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
 import { DndContext, DragOverlay, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
@@ -20,6 +20,7 @@ import Preview from './preview';
 import { TableComponent, ChartComponent, TextComponent, ImageComponent, SystemConfigComponent, CoreConfigComponent, BusinessConfigComponent } from './components';
 
 const { Sider, Content } = Layout;
+const { useToken } = theme;
 
 /**
  * 报表组件类型
@@ -74,6 +75,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
   onPreview,
   dataSchema,
 }) => {
+  const { token } = useToken();
   const [config, setConfig] = useState<ReportConfig>(
     initialConfig || {
       version: '1.0',
@@ -226,7 +228,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
     >
       <Layout style={{ height: '100%' }}>
         {/* 左侧组件库 */}
-        <Sider width={200} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
+        <Sider width={200} style={{ background: '#fff', borderRight: `1px solid ${token.colorBorder}` }}>
           <Card title="组件库" size="small" style={{ height: '100%' }}>
             <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ fontWeight: 'bold', marginBottom: 8 }}>基础组件</div>
@@ -309,7 +311,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
         </Content>
 
         {/* 右侧属性配置面板 */}
-        <Sider width={300} style={{ background: '#fff', borderLeft: '1px solid #f0f0f0' }}>
+        <Sider width={300} style={{ background: '#fff', borderLeft: `1px solid ${token.colorBorder}` }}>
           <PropertyPanel
             selectedComponent={selectedComponent}
             onUpdate={handleComponentUpdate}

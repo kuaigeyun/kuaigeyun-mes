@@ -525,25 +525,13 @@ const DepartmentListPage: React.FC = () => {
         rowKey="uuid"
         columns={columns}
         request={loadData}
-        showCreateButton={false}
+        showCreateButton
+        createButtonText="新建部门"
+        onCreate={() => handleCreate()}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteButtonText="批量删除"
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => handleCreate()}
-          >
-            新建部门
-          </Button>,
-          <Button
-            key="batchDelete"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={handleBatchDelete}
-            disabled={selectedRowKeys.length === 0}
-          >
-            批量删除
-          </Button>,
           <Button
             key="toggleExpand"
             onClick={() => {

@@ -542,6 +542,32 @@ const DemandManagementPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listDemands({ skip: 0, limit: 10000 });
+              let items = res.data || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: Demand) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `demands-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
           afterSearchButtons={

@@ -439,7 +439,7 @@ const ApplicationListPage: React.FC = () => {
               justifyContent: 'center',
               backgroundColor: application.is_active && application.is_installed ? '#f0f9ff' : '#fafafa',
               padding: '16px',
-              borderBottom: '1px solid #f0f0f0',
+              borderBottom: `1px solid ${themeToken.colorBorder}`,
             }}
           >
             <div
@@ -551,7 +551,7 @@ const ApplicationListPage: React.FC = () => {
                   fontSize: 12,
                   color: '#8c8c8c',
                   paddingTop: 8,
-                  borderTop: '1px solid #f0f0f0',
+                  borderTop: `1px solid ${themeToken.colorBorder}`,
                 }}
               >
                 <span>代码: {application.code}</span>
@@ -667,6 +667,34 @@ const ApplicationListPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const apiParams: any = { skip: 0, limit: 10000 };
+              const allData = await getApplicationList(apiParams);
+              let items = allData || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `applications-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           pagination={{
             defaultPageSize: 12,
             showSizeChanger: true,

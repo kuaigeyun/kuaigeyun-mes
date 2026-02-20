@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message } from 'antd';
+import { Layout, Menu, Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message, theme } from 'antd';
 import {
     PlusOutlined,
     BarChartOutlined,
@@ -18,10 +18,12 @@ import { getSystemReports, getMyReports, deleteReport, shareReport, mountReportT
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
+const { useToken } = theme;
 
 type Tab = 'system' | 'my';
 
 const ReportCenter: React.FC = () => {
+    const { token } = useToken();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<Tab>('system');
     const [reports, setReports] = useState<any[]>([]);
@@ -102,7 +104,7 @@ const ReportCenter: React.FC = () => {
     return (
         <Layout style={{ minHeight: 'calc(100vh - 56px)', background: '#f5f5f5' }}>
             {/* 左侧分类导航 */}
-            <Sider width={200} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
+            <Sider width={200} style={{ background: '#fff', borderRight: `1px solid ${token.colorBorder}` }}>
                 <div style={{ padding: '16px 16px 8px', fontWeight: 600, color: '#333' }}>
                     <BarChartOutlined style={{ marginRight: 8 }} />
                     报表中心

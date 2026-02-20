@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, theme } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -50,8 +50,11 @@ interface OutboundOrderItem {
   notes?: string;
 }
 
+const { useToken } = theme;
+
 const OutboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -437,7 +440,7 @@ const OutboundPage: React.FC = () => {
                     <div key={item.id} style={{
                       padding: '12px',
                       marginBottom: '8px',
-                      border: '1px solid #f0f0f0',
+                      border: `1px solid ${token.colorBorder}`,
                       borderRadius: '4px'
                     }}>
                       <p><strong>物料编码：</strong>{item.material_code}</p>

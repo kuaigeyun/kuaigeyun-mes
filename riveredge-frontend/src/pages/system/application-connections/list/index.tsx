@@ -299,6 +299,42 @@ const ApplicationConnectionsListPage: React.FC = () => {
     }
   };
 
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的应用连接器');
+      return;
+    }
+    Modal.confirm({
+      title: `确定要删除选中的 ${selectedRowKeys.length} 个应用连接器吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let done = 0;
+          let fail = 0;
+          for (const uuid of selectedRowKeys) {
+            try {
+              await deleteApplicationConnection(String(uuid));
+              done++;
+            } catch {
+              fail++;
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+          } else {
+            messageApi.success(`已删除 ${done} 个应用连接器`);
+          }
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
   const handleTestConnectionInForm = async () => {
     try {
       const values = await formRef.current?.validateFields();
@@ -654,7 +690,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     { title: '应用连接名称', dataIndex: 'name', width: 180, fixed: 'left' },
     { title: '应用连接代码', dataIndex: 'code', width: 140 },
     {
-      title: '类型',
+      title: '连接器类型',
       dataIndex: 'type',
       width: 120,
       render: (_, record) => {
@@ -679,6 +715,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>{record.is_active ? '启用' : '禁用'}</Tag>
       ),
+    },
+    {
+      title: '最后连接时间',
+      dataIndex: 'last_connected_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: '操作',
@@ -726,7 +778,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     { title: '应用连接名称', dataIndex: 'name' },
     { title: '应用连接代码', dataIndex: 'code' },
     {
-      title: '类型',
+      title: '连接器类型',
       dataIndex: 'type',
       render: (v: string) => {
         const info = getTypeInfo(v);
@@ -755,8 +807,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (v: boolean) => <Badge status={v ? 'success' : 'default'} text={v ? '已连接' : '未连接'} />,
     },
     { title: '启用状态', dataIndex: 'is_active', render: (v: boolean) => <Tag color={v ? 'success' : 'default'}>{v ? '启用' : '禁用'}</Tag> },
-    { title: '最后连接', dataIndex: 'last_connected_at', valueType: 'dateTime' },
+    { title: '最后连接时间', dataIndex: 'last_connected_at', valueType: 'dateTime' },
     { title: '最后错误', dataIndex: 'last_error', render: (v: string) => v ? <Tag color="error">{v}</Tag> : '-' },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -799,6 +853,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [

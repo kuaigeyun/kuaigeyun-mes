@@ -25,6 +25,7 @@ import {
   Drawer,
   Input,
   Typography,
+  Modal,
 } from 'antd'
 import {
   EditOutlined,
@@ -107,6 +108,7 @@ const keyValueListToObject = (
 const APIListPage: React.FC = () => {
   const { message: messageApi } = App.useApp()
   const actionRef = useRef<ActionType>(null)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   // Modal 相关状态（创建/编辑接口）
   const [modalVisible, setModalVisible] = useState(false)
@@ -205,6 +207,45 @@ const APIListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败')
     }
+  }
+
+  /**
+   * 批量删除接口（系统接口会由后端拒绝）
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的接口')
+      return
+    }
+    Modal.confirm({
+      title: `确定要删除选中的 ${selectedRowKeys.length} 个接口吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let done = 0
+          let fail = 0
+          for (const uuid of selectedRowKeys) {
+            try {
+              await deleteAPI(String(uuid))
+              done++
+            } catch {
+              fail++
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个（系统接口不可删除）`)
+          } else {
+            messageApi.success(`已删除 ${done} 个接口`)
+          }
+          setSelectedRowKeys([])
+          actionRef.current?.reload()
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败')
+        }
+      },
+    })
   }
 
   /**
@@ -488,6 +529,11 @@ const APIListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           showCreateButton
           onCreate={handleCreate}
           createButtonText="新建接口"

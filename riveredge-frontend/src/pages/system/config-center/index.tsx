@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input } from 'antd';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, theme } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, CodeSandboxOutlined, ControlOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -24,6 +24,7 @@ import type { Color } from 'antd/es/color-picker';
 
 const { Sider, Content } = Layout;
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /** 从 business_config 提取 parameters 下的值到扁平 key */
 function flattenBusinessParams(parameters: Record<string, Record<string, any>>): Record<string, any> {
@@ -68,6 +69,7 @@ function toSiteSettings(flat: Record<string, any>, siteParamKeys: string[]): Rec
 
 const ConfigCenterPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const [activeMainTab, setActiveMainTab] = useState<string>(tabFromUrl === 'graph' ? 'graph' : 'parameters');
@@ -229,7 +231,7 @@ const ConfigCenterPage: React.FC = () => {
           padding: '16px 0',
         }}
       >
-        <div style={{ padding: '0 16px 16px', borderBottom: '1px solid #f0f0f0', marginBottom: 8 }}>
+        <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
           <Space>
             <SettingOutlined style={{ fontSize: 18 }} />
             <Text strong>参数分类</Text>

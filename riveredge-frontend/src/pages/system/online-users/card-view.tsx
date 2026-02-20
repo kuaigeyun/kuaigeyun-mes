@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Avatar, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip } from 'antd';
+import { App, Card, Avatar, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, theme } from 'antd';
 import { EyeOutlined, LogoutOutlined, ReloadOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
@@ -25,12 +25,14 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<OnlineUser[]>([]);
@@ -232,7 +234,7 @@ const CardView: React.FC = () => {
               </Col>
             </Row>
             {Object.keys(stats.by_tenant).length > 0 && (
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
                 <Text type="secondary" style={{ marginRight: 8 }}>按组织统计：</Text>
                 <Space wrap>
                   {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
@@ -316,7 +318,7 @@ const CardView: React.FC = () => {
                         </div>
                       )}
                       
-                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>

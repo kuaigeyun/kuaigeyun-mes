@@ -27,6 +27,7 @@ import {
   DownOutlined,
   TabletOutlined,
   QuestionCircleOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
 import { QuerySearchButton } from '../riveredge-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
@@ -326,6 +327,20 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     currentPageData?: T[]
   ) => void
   /**
+   * 是否显示同步按钮（默认：false）
+   * 用于从数据集同步数据，仅业务主数据/单据类页面使用
+   */
+  showSyncButton?: boolean
+  /**
+   * 同步按钮点击回调
+   * 可选择数据集并从其他系统同步数据
+   */
+  onSync?: () => void
+  /**
+   * 同步按钮文案（默认：'同步'）
+   */
+  syncButtonText?: string
+  /**
    * 是否显示新建按钮（默认：false）
    */
   showCreateButton?: boolean
@@ -489,7 +504,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   headerTitle,
   headerActions,
   rowKey = 'id',
-  showAdvancedSearch = false, // 默认不显示高级搜索，使用高级搜索来实现搜索
+  showAdvancedSearch = true, // 默认显示高级搜索
   beforeSearchButtons,
   afterSearchButtons,
   enableRowSelection = false,
@@ -508,6 +523,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   autoGenerateImportConfig = true,
   showExportButton = true,
   onExport,
+  showSyncButton = false,
+  onSync,
+  syncButtonText = '同步',
   showCreateButton = false,
   onCreate,
   createButtonText = '新建',
@@ -924,11 +942,30 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return headerActions
     }
 
-    // 新建按钮
+    // 新建按钮（第一位）
     if (showCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate}>
           {createButtonText}
+        </Button>
+      )
+    }
+
+    // 批量删除按钮（第二位）
+    if (showDeleteButton && onDelete) {
+      actions.push(
+        <Button
+          key="delete"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => {
+            if (selectedRowKeys.length > 0) {
+              onDelete(selectedRowKeys)
+            }
+          }}
+          disabled={selectedRowKeys.length === 0}
+        >
+          {deleteButtonText}
         </Button>
       )
     }
@@ -951,26 +988,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    // 删除按钮（需要选中至少一行，文案可配置为「批量删除」等）
-    if (showDeleteButton && onDelete) {
-      actions.push(
-        <Button
-          key="delete"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => {
-            if (selectedRowKeys.length > 0) {
-              onDelete(selectedRowKeys)
-            }
-          }}
-          disabled={selectedRowKeys.length === 0}
-        >
-          {deleteButtonText}
-        </Button>
-      )
-    }
-
-    // 处理用户自定义的toolBarRender（当作右侧/最后面的按钮）
+    // 处理用户自定义的toolBarRender（其它按钮）
     if (restProps.toolBarRender) {
       // 这里需要模拟toolBarRender的参数
       const mockAction = { reload: actionRef.current?.reload } as any
@@ -984,6 +1002,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       } else if (userResult) {
         actions.push(userResult)
       }
+    }
+
+    // 合并 toolBarActions（兼容历史用法，与 toolBarRender 等效）
+    if (toolBarActions.length > 0) {
+      actions.push(...toolBarActions)
     }
 
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
@@ -1019,6 +1042,34 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
         >
           导入
+        </Button>
+      )
+    }
+
+    // 同步按钮（导入与导出之间，橙色系）
+    if (showSyncButton) {
+      actions.push(
+        <Button
+          key="sync"
+          icon={<SyncOutlined />}
+          onClick={() => (onSync ? onSync() : message.warning('请配置 onSync 回调函数'))}
+          style={{
+            backgroundColor: token.colorWarningBg || token.colorFillTertiary,
+            border: 'none',
+            color: token.colorWarning,
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor =
+              token.colorWarningBgHover || token.colorFillSecondary
+            e.currentTarget.style.color = token.colorWarningHover || token.colorWarning
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor =
+              token.colorWarningBg || token.colorFillTertiary
+            e.currentTarget.style.color = token.colorWarning
+          }}
+        >
+          {syncButtonText}
         </Button>
       )
     }
@@ -1673,7 +1724,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 minHeight: '400px',
                 background: '#fafafa',
                 borderRadius: '8px',
-                border: '1px solid #f0f0f0',
+                border: `1px solid ${token.colorBorder}`,
               }}
             >
               {helpViewConfig?.content ?? (

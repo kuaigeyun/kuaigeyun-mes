@@ -408,27 +408,36 @@ const ScriptListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          toolBarRender={() => [
-            <Button
-              key="batch-delete"
-              danger
-              onClick={handleBatchDelete}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量删除
-            </Button>,
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建
-            </Button>,
-          ]}
+          showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建脚本"
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
+          showImportButton
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            const allData = await getScriptList({ skip: 0, limit: 10000 });
+            let items = type === 'currentPage' && pageData?.length ? pageData : allData;
+            if (type === 'selected' && keys?.length) {
+              items = allData.filter((d) => keys.includes(d.uuid));
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `scripts-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
+          }}
           search={{
             labelWidth: 'auto',
-            showAdvancedSearch: true,
           }}
         />
       </ListPageTemplate>
