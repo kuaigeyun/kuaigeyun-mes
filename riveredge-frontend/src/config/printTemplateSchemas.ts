@@ -379,7 +379,6 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'created_at', label: '创建时间', type: 'date' },
     ],
   },
-  // 通用演示字段（会被合并到所有单据类型中）
   common: {
     type: 'common',
     name: '通用',
@@ -396,13 +395,11 @@ export const getSchemaByType = (type: string): TemplateSchema | undefined => {
   return PRINT_TEMPLATE_SCHEMAS[type];
 };
 
-/** 关联业务单据选项，用于新建/编辑模板时选择 */
 export const DOCUMENT_TYPE_OPTIONS = Object.entries(PRINT_TEMPLATE_SCHEMAS).map(([value, schema]) => ({
   label: schema.name,
   value,
 }));
 
-/** 单据类型到模板代码的映射，与后端 DOCUMENT_TEMPLATE_CODES 一致 */
 export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   work_order: 'WORK_ORDER_PRINT',
   material: 'MATERIAL_PRINT',
@@ -423,26 +420,18 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   sample_trial: 'SAMPLE_TRIAL_PRINT',
 };
 
-/** 变量项：key 用于插入，label 用于展示 */
 export interface TemplateVariableItem {
   key: string;
   label: string;
 }
 
-/**
- * 根据字段类型生成预览用示例值
- */
-const getSampleValueByType = (type: string, key: string, label?: string): any => {
+const getSampleValueByType = (type: string, key: string, label?: string): unknown => {
   const l = label || '';
   const k = key.toLowerCase();
-
-  // 特殊类型处理
   if (k.includes('qrcode')) return 'SAMPLE-QR-001';
   if (k.includes('barcode')) return '1234567890';
   if (type === 'image') return 'https://placehold.co/400x400/f0f2f5/a8b1bd?text=Image';
   if (type === 'signature') return 'https://placehold.co/200x100/f0f2f5/a8b1bd?text=Signature';
-
-  // 语义化匹配：根据 Label 或 Key 判断业务含义
   if (l.includes('日期') || l.includes('时间') || k.includes('date') || k.includes('time')) {
     return dayjs().format('YYYY-MM-DD HH:mm');
   }
@@ -464,8 +453,6 @@ const getSampleValueByType = (type: string, key: string, label?: string): any =>
   if (l.includes('备注') || k.includes('remark')) {
     return '无';
   }
-
-  // 基础类型后备
   switch (type) {
     case 'number': return 888;
     case 'boolean': return true;
@@ -473,31 +460,22 @@ const getSampleValueByType = (type: string, key: string, label?: string): any =>
   }
 };
 
-/**
- * 根据单据类型生成预览用示例变量数据，用于设计器预览时替换 {{variable}}
- */
 export const getSamplePreviewVariables = (type: string): Record<string, unknown> => {
   const schema = getSchemaByType(type);
   const result: Record<string, unknown> = {};
-
-  // 1. 注入全局内置变量 (用于页眉页脚预览)
   result['print_user'] = '系统管理员';
   result['print_time'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
   result['dateTime'] = dayjs().format('YYYY-MM-DD HH:mm:ss');
   result['date'] = dayjs().format('YYYY-MM-DD');
   result['company_name'] = 'RiverEdge 智能制造演示环境';
   result['document_type_label'] = type;
-
   if (!schema) return result;
-
   const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;
   const allFields = [...schema.fields, ...commonFields];
-
   for (const field of allFields) {
     if (field.type === 'array' && field.children?.length) {
       const arrKey = field.key;
       const sampleItems: Record<string, unknown>[] = [];
-      // 生成 3 条模拟明细数据
       for (let i = 0; i < 3; i++) {
         const item: Record<string, unknown> = {};
         for (const child of field.children) {
@@ -514,7 +492,6 @@ export const getSamplePreviewVariables = (type: string): Record<string, unknown>
   return result;
 };
 
-/** 表格型数组模板配置：用于生成可插入的表格占位符 */
 export interface ArrayTableTemplateConfig {
   arrayKey: string;
   label: string;
@@ -522,7 +499,6 @@ export interface ArrayTableTemplateConfig {
   columns: { key: string; label: string }[];
 }
 
-/** 各单据类型下可插入的表格模板 */
 const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
   work_order: [
     {
@@ -540,16 +516,10 @@ const ARRAY_TABLE_TEMPLATES: Record<string, ArrayTableTemplateConfig[]> = {
   ],
 };
 
-/**
- * 获取可插入的表格型模板列表
- */
 export const getArrayTableTemplates = (type: string): ArrayTableTemplateConfig[] => {
   return ARRAY_TABLE_TEMPLATES[type] || [];
 };
 
-/**
- * 生成表格型数据的插入文本（表头 + 变量占位符行）
- */
 export const getArrayTableInsertText = (config: ArrayTableTemplateConfig): string => {
   const sep = ' | ';
   const header = config.columns.map((c) => c.label).join(sep);
@@ -565,38 +535,24 @@ export const getArrayTableInsertText = (config: ArrayTableTemplateConfig): strin
   return lines.join('\r\n') + '\r\n';
 };
 
-/**
- * 获取可用于模板插入的变量列表（扁平化，支持嵌套如 operations.0.operation_name）
- */
 export const getTemplateVariableItems = (type: string): TemplateVariableItem[] => {
   const schema = getSchemaByType(type);
   if (!schema) return [];
-
   const items: TemplateVariableItem[] = [];
   const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;
   const allFields = [...schema.fields, ...commonFields];
-
   for (const field of allFields) {
     if (field.type === 'array' && field.children?.length) {
       for (const child of field.children) {
-        items.push({ 
-          key: child.key, 
-          label: child.label 
-        });
+        items.push({ key: child.key, label: child.label });
       }
     } else {
-      items.push({ 
-        key: field.key, 
-        label: field.label 
-      });
+      items.push({ key: field.key, label: field.label });
     }
   }
   return items;
 };
 
-/**
- * 根据中文标签反查对应的英文变量 Key
- */
 export const getKeyByLabel = (label: string): string | undefined => {
   for (const group of Object.values(PRINT_TEMPLATE_SCHEMAS)) {
     for (const field of group.fields) {
