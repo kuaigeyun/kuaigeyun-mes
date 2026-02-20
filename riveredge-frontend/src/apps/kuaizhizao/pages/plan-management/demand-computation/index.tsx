@@ -20,7 +20,6 @@ import {
 } from '@ant-design/pro-components'
 import {
   App,
-  Alert,
   Button,
   Tag,
   Space,
@@ -603,22 +602,7 @@ const DemandComputationPage: React.FC = () => {
   const canDirectWO = planningConfig?.can_direct_generate_work_order !== false
 
   return (
-    <ListPageTemplate
-      title="统一需求计算"
-      description="按需求来源自动选择计算模式（按预测/按订单），统一管理需求计算结果"
-    >
-      {planningConfig && (
-        <Alert
-          type="info"
-          showIcon
-          title={
-            canDirectWO
-              ? '当前模式：可直连生成工单，也可经生产计划。适合小批量、急单快速响应。'
-              : '当前模式：需经生产计划生成工单。请先「转生产计划」，再在生产计划中执行转工单。'
-          }
-          style={{ marginBottom: 16 }}
-        />
-      )}
+    <ListPageTemplate>
       <UniTable<DemandComputation>
         actionRef={actionRef}
         columns={columns}

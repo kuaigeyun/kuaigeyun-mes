@@ -42,7 +42,7 @@ export const MobileQRCode: React.FC = () => {
 
     const content = (
         <div style={{ textAlign: 'center', padding: '12px 16px', width: 232 }}>
-            <div style={{ marginBottom: 12, background: 'white', padding: 8, borderRadius: 4, border: '1px solid #f0f0f0' }}>
+            <div style={{ marginBottom: 12, background: 'white', padding: 8, borderRadius: 4, border: `1px solid ${token.colorBorder}` }}>
                 <QRCodeSVG value={mobileUrl} size={180} />
             </div>
             <Space direction="vertical" size={8} style={{ width: '100%' }}>

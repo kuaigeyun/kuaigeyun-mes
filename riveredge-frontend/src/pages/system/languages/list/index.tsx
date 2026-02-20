@@ -527,28 +527,46 @@ const LanguageListPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建语言"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await getLanguageList({ page: 1, page_size: 10000 });
+              let items = res.items || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `languages-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
           toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建语言
-            </Button>,
-            <Button
-              key="batch-delete"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={handleBatchDelete}
-            >
-              批量删除
-            </Button>,
             <Button
               key="initialize"
               icon={<SettingOutlined />}
@@ -558,10 +576,6 @@ const LanguageListPage: React.FC = () => {
               加载系统语言
             </Button>,
           ]}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
         />
       </ListPageTemplate>
 

@@ -1304,7 +1304,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           style={{ 
             flex: '3', 
             paddingRight: 16, 
-            borderRight: '1px solid #f0f0f0', 
+            borderRight: `1px solid ${token.colorBorder}`, 
             display: 'flex', 
             flexDirection: 'column',
             overflow: 'hidden',
@@ -1470,7 +1470,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           maxWidth: '320px',
           paddingLeft: 16, 
           paddingRight: 16, 
-          borderRight: '1px solid #f0f0f0', 
+          borderRight: `1px solid ${token.colorBorder}`, 
           display: 'flex', 
           flexDirection: 'column',
           overflow: 'hidden',

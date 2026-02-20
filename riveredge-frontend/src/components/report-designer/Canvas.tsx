@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { theme } from 'antd';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { CANVAS_GRID_STYLE } from '../layout-templates';
@@ -24,7 +25,10 @@ export interface CanvasProps {
 /**
  * 画布组件
  */
+const { useToken } = theme;
+
 const Canvas: React.FC<CanvasProps> = ({ id, children, components }) => {
+  const { token } = useToken();
   const { setNodeRef, isOver } = useDroppable({
     id,
   });
@@ -36,7 +40,7 @@ const Canvas: React.FC<CanvasProps> = ({ id, children, components }) => {
         minHeight: '600px',
         ...(isOver ? { background: '#e6f7ff' } : { ...CANVAS_GRID_STYLE, backgroundColor: '#fff' }),
         position: 'relative',
-        border: isOver ? '2px dashed #1890ff' : '1px solid #f0f0f0',
+        border: isOver ? '2px dashed #1890ff' : `1px solid ${token.colorBorder}`,
         transition: 'all 0.2s',
       }}
     >

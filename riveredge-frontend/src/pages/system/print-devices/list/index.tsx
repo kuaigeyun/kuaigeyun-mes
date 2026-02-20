@@ -8,7 +8,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Space, Badge, Typography, Tooltip, Card } from 'antd';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Space, Badge, Typography, Tooltip, Card, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -35,6 +35,7 @@ dayjs.extend(relativeTime);
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 获取设备类型图标和颜色
@@ -105,6 +106,7 @@ const getDeviceStatus = (device: PrintDevice): {
  */
 const PrintDeviceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allDevices, setAllDevices] = useState<PrintDevice[]>([]); // 用于统计
@@ -448,7 +450,7 @@ const PrintDeviceListPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>在线状态：</Text>
@@ -727,19 +729,40 @@ const PrintDeviceListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
+          createButtonText="新建打印设备"
           onCreate={handleCreate}
-          headerActions={
-            <Button
-              danger
-              onClick={handleBatchDelete}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量删除
-            </Button>
-          }
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
+          }}
+          showImportButton
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: PrintDevice[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getPrintDeviceByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              items = await getPrintDeviceList({ skip: 0, limit: 10000 });
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `print-devices-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
           }}
           viewTypes={['table', 'help']}
           defaultViewType="table"

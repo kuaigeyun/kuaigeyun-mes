@@ -13,6 +13,7 @@ import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -60,6 +61,7 @@ const MaterialBorrowsPage: React.FC = () => {
   const [borrowDetail, setBorrowDetail] = useState<MaterialBorrowDetail | null>(null);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [materialList, setMaterialList] = useState<any[]>([]);
@@ -164,6 +166,47 @@ const MaterialBorrowsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${keys.length} 条借料单吗？`,
+      onOk: async () => {
+        try {
+          for (const k of keys) {
+            await warehouseApi.materialBorrow.delete(String(k));
+          }
+          messageApi.success(`已删除 ${keys.length} 条借料单`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload = {
+          warehouse_id: row.warehouse_id ?? row.warehouseId,
+          warehouse_name: row.warehouse_name || row.warehouseName,
+          borrower_name: row.borrower_name || row.borrowerName,
+          status: row.status || '待借出',
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await warehouseApi.materialBorrow.create(payload);
+        successCount += 1;
+      }
+      messageApi.success(`已同步 ${successCount} 条借料单`);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    }
   };
 
   const handlePrint = async (record: MaterialBorrow) => {
@@ -274,9 +317,44 @@ const MaterialBorrowsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          showAdvancedSearch
+          showAdvancedSearch={true}
           showCreateButton
+          createButtonText="新建借料单"
           onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const response = await warehouseApi.materialBorrow.list({ skip: 0, limit: 10000 });
+              const rawData = Array.isArray(response) ? response : response?.items || response?.data || [];
+              let items = rawData;
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `material-borrows-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           request={async (params) => {
             try {
               const response = await warehouseApi.materialBorrow.list({
@@ -293,7 +371,6 @@ const MaterialBorrowsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
@@ -370,6 +447,13 @@ const MaterialBorrowsPage: React.FC = () => {
           <Input.TextArea rows={2} />
         </Form.Item>
       </FormModalTemplate>
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步借料单"
+      />
     </>
   );
 };

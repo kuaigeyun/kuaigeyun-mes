@@ -451,13 +451,43 @@ const ApprovalInstanceListPage: React.FC = () => {
             };
           }}
           rowKey="uuid"
+          showAdvancedSearch={true}
           toolBarRender={() => []}
           search={{
             labelWidth: 'auto',
             showAdvancedSearch: true,
           }}
-          showCreateButton={true}
+          showCreateButton
+          createButtonText="发起审批"
           onCreate={handleSubmit}
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await getApprovalInstanceList({ skip: 0, limit: 10000 });
+              const items = Array.isArray(res) ? res : [];
+              let toExport = items;
+              if (type === 'currentPage' && pageData?.length) {
+                toExport = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                toExport = items.filter((d: any) => keys.includes(d.uuid));
+              }
+              if (toExport.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `approval-instances-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${toExport.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           kanbanViewConfig={{

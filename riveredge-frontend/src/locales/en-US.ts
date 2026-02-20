@@ -337,7 +337,9 @@ export default {
   'app.kuaizhizao.menu.equipment-management.maintenance-reminders': 'Maint. Reminders',
   'app.kuaizhizao.menu.equipment-management.molds': 'Mold Ledger',
   'app.kuaizhizao.menu.equipment-management.molds-calibration': 'Mold Calibration',
+  'app.kuaizhizao.menu.equipment-management.mold-calibration': 'Mold Calibration', // path fallback
   'app.kuaizhizao.menu.equipment-management.equipment-calibration': 'Equip. Calibration',
+  'app.kuaizhizao.menu.equipment-management.tool-calibration': 'Tool Calibration', // path fallback
   'app.kuaizhizao.menu.equipment-management.equipment-status': 'Equip. Status',
   'app.kuaizhizao.menu.equipment-management.asset-ledger': 'Asset Ledger',
   'app.kuaizhizao.menu.equipment-management.ops-maintenance': 'Operations & Maint.',

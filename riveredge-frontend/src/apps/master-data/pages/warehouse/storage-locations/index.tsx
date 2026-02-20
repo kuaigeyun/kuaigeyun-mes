@@ -144,18 +144,20 @@ const StorageLocationsPage: React.FC = () => {
   /**
    * 处理批量删除库位
    */
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const toDelete = keys ?? selectedRowKeys;
+    if (toDelete.length === 0) {
       messageApi.warning('请至少选择一条记录');
       return;
     }
 
     try {
-      const uuids = selectedRowKeys.map(key => String(key));
+      const uuids = toDelete.map(key => String(key));
       const result = await storageLocationApi.batchDelete(uuids);
       
       if (result.success) {
         messageApi.success(result.message || '批量删除成功');
+        setSelectedRowKeys([]);
       } else {
         messageApi.warning(result.message || '部分删除失败');
       }
@@ -860,41 +862,27 @@ const StorageLocationsPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showAdvancedSearch={true}
+        showCreateButton
+        createButtonText="新建储位"
+        onCreate={handleCreate}
+        enableRowSelection
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={(keys) => {
+          if (keys.length === 0) return;
+          Modal.confirm({
+            title: '确定要批量删除选中的储位吗？',
+            content: `将删除 ${keys.length} 个储位，删除后无法恢复，请谨慎操作。`,
+            okText: '确定',
+            cancelText: '取消',
+            okType: 'danger',
+            onOk: async () => await handleBatchDelete(keys),
+          });
+        }}
+        deleteButtonText="批量删除"
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建库位
-          </Button>,
-          <Popconfirm
-            key="batchDelete"
-            title="确定要批量删除选中的库位吗？"
-            description={`将删除 ${selectedRowKeys.length} 个库位，删除后无法恢复，请谨慎操作。`}
-            onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
-            disabled={selectedRowKeys.length === 0}
-          >
-            <Button
-              type="default"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-            >
-              批量删除
-            </Button>
-          </Popconfirm>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
         }}
       />
       </ListPageTemplate>

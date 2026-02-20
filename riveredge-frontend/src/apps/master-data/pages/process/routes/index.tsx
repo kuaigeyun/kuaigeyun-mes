@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProForm } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col, Spin, Empty, Alert, Table } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col, Spin, Empty, Alert, Table, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined, BranchesOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -23,6 +23,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 const PAGE_CODE = 'master-data-process-route';
+const { useToken } = theme;
 
 /**
  * 工序项接口
@@ -72,6 +73,7 @@ interface SortableOperationItemProps {
  * 可拖拽的工序项组件
  */
 const SortableOperationItem: React.FC<SortableOperationItemProps> = ({ operation, onDelete }) => {
+  const { token } = useToken();
   const {
     attributes,
     listeners,
@@ -96,7 +98,7 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({ operation
         gap: 12,
         padding: '12px 16px',
         background: '#fff',
-        border: '1px solid #f0f0f0',
+        border: `1px solid ${token.colorBorder}`,
         borderRadius: '6px',
         cursor: 'grab',
         transition: 'all 0.2s',

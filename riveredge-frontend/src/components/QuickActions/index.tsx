@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Button, Dropdown, Menu, Space, Tooltip, Modal } from 'antd';
+import { Button, Dropdown, Menu, Space, Tooltip, Modal, theme } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
@@ -91,6 +91,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
   size = 'middle',
   type = 'default',
 }) => {
+  const { token } = theme.useToken();
   const [recentActions, setRecentActions] = useState<QuickActionConfig[]>([]);
   const [historyVisible, setHistoryVisible] = useState(false);
 
@@ -181,7 +182,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
           ) : (
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {history.map((item, index) => (
-                <li key={index} style={{ marginBottom: 8, padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <li key={index} style={{ marginBottom: 8, padding: '8px 0', borderBottom: `1px solid ${token.colorBorder}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>
                       <strong>{item.action}</strong> - {item.module}

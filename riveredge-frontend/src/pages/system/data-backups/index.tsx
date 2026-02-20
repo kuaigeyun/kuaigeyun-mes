@@ -8,7 +8,7 @@
 import React, { useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip } from 'antd';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme } from 'antd';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -27,6 +27,7 @@ import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
+const { useToken } = theme;
 
 /**
  * 格式化文件大小
@@ -72,6 +73,7 @@ const getBackupScopeText = (scope: string): string => {
  */
 const DataBackupsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = React.useRef<ActionType>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -301,7 +303,7 @@ const DataBackupsPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>
@@ -585,8 +587,40 @@ const DataBackupsPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
+          showAdvancedSearch={true}
           showCreateButton
+          createButtonText="新建备份"
           onCreate={() => setCreateModalVisible(true)}
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              let items: DataBackup[] = [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else {
+                const res = await getBackups({ page: 1, page_size: 10000 });
+                items = res.items;
+                if (type === 'selected' && keys?.length) {
+                  items = items.filter((d) => keys.includes(d.uuid));
+                }
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `data-backups-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           cardViewConfig={{

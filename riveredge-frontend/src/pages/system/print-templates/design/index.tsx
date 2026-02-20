@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { App, Button, Form, Input, InputNumber, Modal, Select, Space, Typography, Upload } from 'antd';
+import { App, Button, Form, Input, InputNumber, Modal, Select, Space, Typography, Upload, theme } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, SaveOutlined, SettingOutlined, FilePdfOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import PdfmeDesigner, { PdfmeDesignerRef } from '../../../../components/pdfme-doc/designer';
 import PdfmePreview from '../../../../components/pdfme-doc/preview';
@@ -56,8 +56,11 @@ function isTemplateEmpty(template: Template): boolean {
   return !schemas || schemas.length === 0;
 }
 
+const { useToken } = theme;
+
 const PrintTemplateDesignPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -328,7 +331,7 @@ const PrintTemplateDesignPage: React.FC = () => {
               padding: '10px 12px',
               background: isUsed ? '#fafafa' : '#fff',
               border: '1px solid',
-              borderColor: isUsed ? '#e8e8e8' : '#f0f0f0',
+              borderColor: isUsed ? token.colorBorderSecondary : token.colorBorder,
               borderRadius: 6,
               cursor: isUsed ? 'default' : 'pointer',
               transition: 'all 0.2s',
@@ -345,7 +348,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             }}
             onMouseLeave={(e) => {
               if (!isUsed) {
-                e.currentTarget.style.borderColor = '#f0f0f0';
+                e.currentTarget.style.borderColor = token.colorBorder;
                 e.currentTarget.style.boxShadow = 'none';
               }
             }}
@@ -375,7 +378,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         </div>
       )}
     </div>
-  ), [filteredVariables, usedKeys, handleAddVariable]);
+  ), [filteredVariables, usedKeys, handleAddVariable, token]);
 
 
 

@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Spin, message } from 'antd';
+import { Card, Button, Spin, message, theme } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { ReportConfig, ReportComponent } from './index';
 import { TableComponent, ChartComponent, TextComponent, ImageComponent } from './components';
@@ -29,7 +29,10 @@ export interface PreviewProps {
 /**
  * 报表预览组件
  */
+const { useToken } = theme;
+
 const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true, externalData }) => {
+  const { token } = useToken();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Record<string, any>>({});
 
@@ -153,7 +156,7 @@ const Preview: React.FC<PreviewProps> = ({ config, showRefresh = true, externalD
                 top: component.y,
                 width: component.width,
                 height: component.height,
-                border: '1px solid #f0f0f0',
+                border: `1px solid ${token.colorBorder}`,
                 padding: '8px',
               }}
             >

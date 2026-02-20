@@ -179,7 +179,7 @@ git clone <repository-url>
 cd riveredge
 
 # 一键启动（需预先配置数据库等环境）
-./Launch.sh
+./Launch.dev.sh
 ```
 
 详细的环境配置、数据库迁移、前后端启动说明请参见项目文档。
@@ -189,7 +189,7 @@ cd riveredge
 ## 📞 联系我们
 
 - **产品官网**：（待补充）
-- **技术文档**：`docs/` 目录（含 [菜单同步与缓存说明](docs/菜单同步与缓存说明.md)）
+- **技术文档**：`docs/` 目录（含 [项目规范](docs/CONVENTIONS.md)）
 - **问题反馈**：通过项目 Issue 或内部渠道提交
 
 ---

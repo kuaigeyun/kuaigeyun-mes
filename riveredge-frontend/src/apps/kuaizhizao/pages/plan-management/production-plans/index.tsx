@@ -9,9 +9,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ModalForm, ProFormText, ProFormSelect, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Alert, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 import { useRequest } from 'ahooks';
@@ -63,8 +64,11 @@ interface ProductionPlanItem {
   notes?: string;
 }
 
+const { useToken } = theme;
+
 const ProductionPlansPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -72,6 +76,7 @@ const ProductionPlansPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
   const [currentPlan, setCurrentPlan] = useState<ProductionPlan | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<ProductionPlan>[] = [
@@ -256,10 +261,53 @@ const ProductionPlansPage: React.FC = () => {
     });
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${keys.length} 条生产计划吗？`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          for (const k of keys) {
+            await planningApi.productionPlan.delete(String(k));
+          }
+          messageApi.success(`已删除 ${keys.length} 条生产计划`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+          refreshStats();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload = {
+          plan_code: row.plan_code || row.planCode,
+          plan_name: row.plan_name || row.planName,
+          plan_type: row.plan_type || row.planType || 'MRP',
+          plan_start_date: row.plan_start_date || row.planStartDate,
+          plan_end_date: row.plan_end_date || row.planEndDate,
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await planningApi.productionPlan.create(payload);
+        successCount += 1;
+      }
+      messageApi.success(`已同步 ${successCount} 条生产计划`);
+      actionRef.current?.reload();
+      refreshStats();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    }
+  };
+
   return (
     <ListPageTemplate
-      title="生产计划"
-      description="计划层：将需求计算结果转为可执行计划，可调整后再执行转工单"
       statCards={[
         {
           title: '总计划数',
@@ -287,20 +335,48 @@ const ProductionPlansPage: React.FC = () => {
         },
       ]}
     >
-      {planningConfig?.production_plan_audit_required && (
-        <Alert
-          type="info"
-          showIcon
-          title="当前配置要求计划审核通过后才能执行。请先将计划状态改为「已审核」，再执行转工单。"
-          style={{ marginBottom: 16 }}
-        />
-      )}
       <UniTable
           headerTitle="生产计划管理"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建生产计划"
+          onCreate={() => setCreateModalVisible(true)}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await planningApi.productionPlan.list({ skip: 0, limit: 10000 });
+              let items = Array.isArray(res) ? res : ((res as any)?.data || []);
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: ProductionPlan) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `production-plans-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           request={async (params) => {
             const list = await planningApi.productionPlan.list({
               skip: (params.current! - 1) * params.pageSize!,
@@ -309,26 +385,10 @@ const ProductionPlansPage: React.FC = () => {
               status: params.status,
               plan_code: params.plan_code,
             });
-            return {
-              data: list,
-              success: true,
-              total: list.length >= params.pageSize! ? (params.current! * params.pageSize! + 1) : (params.current! - 1) * params.pageSize! + list.length,
-            };
+            const data = Array.isArray(list) ? list : ((list as any)?.data || []);
+            const total = (list as any)?.total ?? (Array.isArray(list) && list.length >= params.pageSize! ? (params.current! * params.pageSize! + 1) : (params.current! - 1) * params.pageSize! + data.length);
+            return { data, success: true, total };
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setCreateModalVisible(true)}
-            >
-              新建生产计划
-            </Button>,
-          ]}
           scroll={{ x: 1200 }}
         />
 
@@ -441,7 +501,7 @@ const ProductionPlansPage: React.FC = () => {
                 title={<Space><BarChartOutlined /> 智能排程建议与资源负荷</Space>} 
                 style={{ marginBottom: 16 }} 
                 size="small" 
-                headStyle={{ background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}
+                headStyle={{ background: '#fafafa', borderBottom: `1px solid ${token.colorBorder}` }}
               >
                 <div style={{ padding: '8px 4px' }}>
                    <Row gutter={12}>
@@ -450,7 +510,7 @@ const ProductionPlansPage: React.FC = () => {
                         const load = off === 0 ? 95 : (off === 1 ? 40 : 20);
                         return (
                           <Col span={6} key={off}>
-                            <div style={{ background: '#fff', border: '1px solid #f0f0f0', padding: '10px', borderRadius: 6 }}>
+                            <div style={{ background: '#fff', border: `1px solid ${token.colorBorder}`, padding: '10px', borderRadius: 6 }}>
                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>{dateStr} 负荷预期</div>
                                <div style={{ margin: '4px 0', fontSize: 18, fontWeight: 'bold', color: load > 80 ? '#cf1322' : '#000' }}>
                                  {load}%
@@ -541,6 +601,13 @@ const ProductionPlansPage: React.FC = () => {
             </div>
           ) : null
         }
+      />
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步生产计划"
       />
     </ListPageTemplate>
   );

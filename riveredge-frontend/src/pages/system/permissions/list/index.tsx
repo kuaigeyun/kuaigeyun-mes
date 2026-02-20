@@ -175,17 +175,15 @@ const PermissionListPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建权限"
+          onCreate={handleCreate}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
             showQuickJumper: true,
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" onClick={handleCreate}>
-              新建权限
-            </Button>,
-          ]}
           showImportButton={true}
           onImport={handleImport}
           showExportButton={true}

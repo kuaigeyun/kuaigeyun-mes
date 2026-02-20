@@ -1,0 +1,446 @@
+# RiverEdge SaaS 多组织框架 - Cursor Rules
+
+## ⚠️ 核心规则
+
+### 环境要求
+1. **终端环境**: 严禁使用CMD和PowerShell，必须使用Git Bash作为默认终端
+2. **编码规范**: 所有文件和操作必须使用UTF-8编码
+3. **操作安全**: 所有操作都需要考虑失败后的回退策略和清理措施
+4. **执行原则**: 不要臆测用户想法，只执行用户明确指定的操作
+
+## 📋 项目概述
+
+RiverEdge 是基于多租户 SaaS 架构的企业级应用框架，采用前后端分离设计，支持动态应用管理和插件化扩展。
+
+**技术栈**: Python 3.11+ (FastAPI) + React 18+ (TypeScript) + PostgreSQL + Redis
+
+## 🎯 核心原则
+
+### 架构分层
+- **平台级 (infra/)**: 平台运营管理，超级管理员使用
+- **系统级 (core/)**: 组织系统管理，组织管理员和普通用户使用
+- **应用级 (apps/)**: 业务应用功能，业务用户使用
+
+### 开发规范
+- **命名统一**: 遵循层级化命名规范
+- **注释完整**: 中文注释，解释"为什么"而非"是什么"
+- **错误统一**: 使用自定义异常类和统一错误响应格式
+- **代码质量**: 通过ESLint、Ruff、MyPy等工具保证质量
+
+## 🔧 后端开发规范 (Python)
+
+### 命名规范
+
+#### 目录和文件
+```
+# 平台级 (infra/)
+├── api/                    # 平台级 API 路由
+├── models/                 # 平台级数据模型
+├── schemas/                # 平台级数据验证
+├── services/               # 平台级业务服务
+├── domain/                 # 平台级领域逻辑
+└── config/                 # 平台级配置
+
+# 系统级 (core/)
+├── api/                    # 系统级 API 路由
+├── models/                 # 系统级数据模型
+├── schemas/                # 系统级数据验证
+├── services/               # 系统级业务服务
+├── middleware/             # 系统级中间件
+└── utils/                  # 工具函数
+
+# 应用级 (apps/)
+├── {app_code}/            # 业务应用
+│   ├── api/               # 应用 API
+│   ├── models/            # 应用数据模型
+│   ├── schemas/           # 应用数据验证
+│   └── services/          # 应用业务逻辑
+```
+
+#### 变量和函数
+- **snake_case**: 函数名、变量名、方法名
+- **PascalCase**: 类名、异常类名
+- **UPPER_CASE**: 常量
+- **kebab-case**: URL路径、API端点
+
+#### 示例
+```python
+# ✅ 正确命名
+class UserService:
+    def get_user_by_id(self, user_id: int) -> User:
+        pass
+
+    def create_user(self, user_data: dict) -> User:
+        pass
+
+# ❌ 错误命名
+class userService:  # 应该 PascalCase
+    def GetUserById():  # 应该 snake_case
+        pass
+```
+
+### 文件头注释规范
+
+**每个Python文件必须包含文件头注释**：
+
+```python
+"""
+用户模型模块
+
+提供用户数据模型定义，包括用户基本信息、状态管理等。
+
+Author: Luigi Lu
+Date: 2025-12-26  # 使用系统当前日期
+"""
+
+from tortoise.models import Model
+from tortoise import fields
+```
+
+### 错误处理规范
+
+#### 使用自定义异常类
+```python
+from core.exceptions import ValidationError, NotFoundError
+
+# ✅ 正确使用
+def get_user(user_id: int):
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise NotFoundError("用户不存在")
+    return user
+
+# ❌ 避免直接使用 HTTPException
+def get_user_wrong(user_id: int):
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+```
+
+#### 统一错误响应格式
+```json
+{
+  "code": 404,
+  "message": "用户不存在",
+  "detail": "请求的用户ID: 123 不存在"
+}
+```
+
+## 🎨 前端开发规范 (TypeScript/React)
+
+### 命名规范
+
+#### 组件和文件
+- **PascalCase**: React组件、TypeScript类型、接口
+- **camelCase**: 变量、函数、方法、属性
+- **kebab-case**: 文件名、目录名、URL路径
+
+#### 示例
+```typescript
+// ✅ 正确命名
+interface UserProfile {
+  userId: number;
+  userName: string;
+}
+
+const UserManagement: React.FC = () => {
+  const [userList, setUserList] = useState<UserProfile[]>([]);
+
+  const handleUserUpdate = (userId: number) => {
+    // 处理用户更新逻辑
+  };
+
+  return <div>User Management Component</div>;
+};
+
+// ❌ 错误命名
+interface userProfile {  // 应该 PascalCase
+  userid: number;        // 应该 camelCase
+}
+
+const usermanagement = () => {  // 应该 PascalCase
+  const handleuserupdate = () => {  // 应该 camelCase
+  };
+};
+```
+
+### 图标使用规范
+
+本项目**仅使用以下两个图标库**，禁止引入 react-icons 或其他图标库：
+
+1. **@ant-design/icons**
+   - 用于：与 antd / Pro Components 配套的图标（如 ProTable、ProForm 所需的图标）
+   - 示例：`UserOutlined`, `SettingOutlined`, `PlusOutlined`
+
+2. **lucide-react**
+   - 用于：通用业务图标，风格统一、图标丰富
+   - 示例：`User`, `Settings`, `Plus`, `ChevronDown`
+
+**规则**：
+- 新代码**必须**从上述两个库中选择图标
+- 优先使用 `lucide-react`（风格更统一）；若 antd/Pro 组件强依赖 `@ant-design/icons` 则使用后者
+- 存量 react-icons 引用可在重构时逐步替换，不强制一次性迁移
+
+### 页面开发标准模板
+
+#### 列表页面结构
+```typescript
+// pages/{module}/list/index.tsx
+const ListPage: React.FC = () => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentId, setCurrentId] = useState<number | null>(null);
+
+  // 新建 - 使用 Modal
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentId(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  // 编辑 - 使用 Modal
+  const handleEdit = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      setIsEdit(true);
+      setCurrentId(id);
+      setModalVisible(true);
+      // 加载数据到表单
+      const data = await loadData(id);
+      formRef.current?.setFieldsValue(data);
+    }
+  };
+
+  // 详情查看 - 使用 Drawer
+  const handleDetail = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      setCurrentId(id);
+      setDrawerVisible(true);
+    }
+  };
+
+  return (
+    <>
+      <UniTable
+        onCreate={handleCreate}
+        onEdit={handleEdit}
+        onDetail={handleDetail}
+        onDelete={handleDelete}
+      />
+      <Modal
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        title={isEdit ? "编辑" : "新建"}
+      >
+        <Form ref={formRef}>
+          {/* 表单内容 */}
+        </Form>
+      </Modal>
+      <Drawer
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        title="详情"
+      >
+        {/* 详情内容 */}
+      </Drawer>
+    </>
+  );
+};
+```
+
+## 📝 注释规范
+
+### 后端注释 (Python)
+```python
+"""
+用户服务模块
+
+提供用户相关的业务逻辑处理，包括用户创建、更新、删除等操作。
+
+Author: Luigi Lu
+Date: 2025-12-26
+"""
+
+class UserService:
+    """
+    用户服务类
+
+    处理用户相关的所有业务逻辑
+    """
+
+    async def get_user_by_id(self, user_id: int) -> User:
+        """
+        根据用户ID获取用户信息
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            User: 用户对象
+
+        Raises:
+            NotFoundError: 用户不存在时抛出
+        """
+        # 获取用户，如果不存在抛出异常
+        user = await User.get_or_none(id=user_id)
+        if not user:
+            raise NotFoundError(f"用户不存在: {user_id}")
+        return user
+```
+
+### 前端注释 (TypeScript)
+```typescript
+/**
+ * 用户管理页面
+ *
+ * 提供用户列表展示、新建、编辑、删除等功能
+ *
+ * @author Luigi Lu
+ * @date 2025-12-26
+ */
+
+interface UserManagementProps {
+  /** 是否显示高级功能 */
+  showAdvanced?: boolean;
+}
+
+const UserManagement: React.FC<UserManagementProps> = ({ showAdvanced = false }) => {
+  // 用户列表状态
+  const [userList, setUserList] = useState<User[]>([]);
+
+  /**
+   * 处理用户更新
+   * @param userId 用户ID
+   * @param userData 用户数据
+   */
+  const handleUserUpdate = async (userId: number, userData: Partial<User>) => {
+    try {
+      await updateUser(userId, userData);
+      message.success('用户更新成功');
+      // 刷新用户列表
+      await loadUserList();
+    } catch (error) {
+      message.error('用户更新失败');
+      console.error('Update user error:', error);
+    }
+  };
+
+  return (
+    <div>
+      {/* 用户列表 */}
+      <Table
+        dataSource={userList}
+        columns={columns}
+        onEdit={handleUserUpdate}
+      />
+    </div>
+  );
+};
+```
+
+## 🔄 Git 工作流规范
+
+### 分支策略
+```
+main (生产分支) ← release/*, hotfix/*
+  ↑
+develop (开发分支) ← feature/*, fix/*
+```
+
+### 提交信息格式 (Conventional Commits)
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+#### 提交类型
+- **feat**: 新功能
+- **fix**: Bug修复
+- **docs**: 文档更新
+- **style**: 代码格式调整
+- **refactor**: 代码重构
+- **test**: 测试相关
+- **chore**: 构建工具或辅助工具的变动
+
+#### 示例
+```bash
+# ✅ 正确格式
+feat(user): 添加用户注册功能
+
+- 实现用户邮箱注册
+- 添加邮箱验证功能
+- 更新用户模型字段
+
+Closes #123
+
+# ❌ 错误格式
+添加用户注册功能
+fix bug
+update code
+```
+
+### 分支命名规范
+- `feature/user-registration`: 功能分支
+- `fix/login-validation`: 修复分支
+- `hotfix/security-patch`: 热修复分支
+- `release/v1.2.0`: 发布分支
+
+## 🛠️ 代码质量工具
+
+### 后端工具配置
+```toml
+# pyproject.toml
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.mypy]
+python_version = "3.11"
+```
+
+### 前端工具配置
+```json
+// package.json
+{
+  "eslintConfig": {
+    "extends": ["react-app", "@typescript-eslint/recommended"],
+    "rules": {
+      "@typescript-eslint/no-unused-vars": "error",
+      "@typescript-eslint/explicit-function-return-type": "warn"
+    }
+  }
+}
+```
+
+## ⚠️ 重要提醒
+
+### 严格遵守规范
+- **命名规范**: 必须遵循层级化命名规则
+- **注释规范**: 所有代码必须有完整中文注释
+- **错误处理**: 统一使用自定义异常类
+- **Git规范**: 必须使用规范的提交信息格式
+
+### 开发环境要求
+- **Python**: 3.11+ (禁止使用其他版本)
+- **Node.js**: 22.0+
+- **Git**: 最新稳定版
+- **IDE**: VSCode with Python/TypeScript extensions
+
+### 质量保证
+- **代码审查**: 所有PR必须经过Code Review
+- **测试覆盖**: 核心功能必须有单元测试
+- **CI/CD**: 必须通过所有自动化检查
+
+---
+
+**最后更新**: 2025-12-26

@@ -78,6 +78,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { UniTable } from '../../../../../components/uni-table'
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal'
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -469,6 +470,7 @@ const WorkOrdersPage: React.FC = () => {
 
   // 打印相关状态
   const [printModalVisible, setPrintModalVisible] = useState(false)
+  const [syncModalVisible, setSyncModalVisible] = useState(false)
   const [currentWorkOrderForPrint, setCurrentWorkOrderForPrint] = useState<any>(null)
 
   /** 解析工艺路线的 operation_sequence，兼容多种格式（与工艺路线编辑页保存格式对接） */
@@ -875,7 +877,7 @@ const WorkOrdersPage: React.FC = () => {
                 </div>
               )}
               {/* 派工信息 */}
-              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e8e8e8' }}>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
                 <div style={{ marginBottom: 4 }}>
                   <strong>负责人：</strong>
                   {operation.assigned_worker_name || <span style={{ color: '#ccc' }}>未分配</span>}
@@ -1097,6 +1099,27 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理删除工单
    */
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0
+      for (const row of rows) {
+        const payload = {
+          work_order_code: row.work_order_code || row.workOrderCode,
+          plan_code: row.plan_code || row.planCode,
+          material_code: row.material_code || row.materialCode,
+          planned_quantity: row.planned_quantity ?? row.plannedQuantity,
+          status: row.status || 'draft',
+        }
+        await workOrderApi.create(payload)
+        successCount += 1
+      }
+      messageApi.success(`已同步 ${successCount} 条工单`)
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败')
+    }
+  }
+
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
       title: '确认删除',
@@ -2367,10 +2390,41 @@ const WorkOrdersPage: React.FC = () => {
               }
             }
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
+          showCreateButton
+          createButtonText="新建工单"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const response = await workOrderApi.list({ skip: 0, limit: 10000 })
+              let items = Array.isArray(response) ? response : (response as any)?.data || (response as any)?.items || []
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: WorkOrder) => d.id != null && keys.includes(d.id))
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出')
+                return
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `work-orders-${new Date().toISOString().slice(0, 10)}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+              messageApi.success(`已导出 ${items.length} 条记录`)
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败')
+            }
           }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           expandable={{
             expandedRowKeys,
             onExpandedRowsChange: keys => setExpandedRowKeys([...keys]),
@@ -2386,9 +2440,6 @@ const WorkOrdersPage: React.FC = () => {
               onClick={handleBatchGenerateQRCode}
             >
               批量生成二维码
-            </Button>,
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-              新建工单
             </Button>,
             <Button
               key="batchPriority"
@@ -2912,7 +2963,7 @@ const WorkOrdersPage: React.FC = () => {
           <>
             {/* 操作按钮区域 */}
             <div
-              style={{ padding: '16px 0', borderBottom: '1px solid #f0f0f0', marginBottom: '16px' }}
+              style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}
             >
               <Space wrap>
                 {/* 状态显示和流转 */}
@@ -4086,6 +4137,13 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </FormModalTemplate>
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步工单"
+      />
     </>
   )
 }

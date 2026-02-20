@@ -8,7 +8,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -32,6 +32,7 @@ dayjs.extend(relativeTime);
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 获取集成类型图标和颜色
@@ -86,6 +87,7 @@ const getConnectionStatus = (integration: IntegrationConfig): { status: 'success
  */
 const IntegrationConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allIntegrations, setAllIntegrations] = useState<IntegrationConfig[]>([]); // 用于统计
@@ -399,7 +401,7 @@ const IntegrationConfigListPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
@@ -685,32 +687,41 @@ const IntegrationConfigListPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建集成配置"
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建连接
-            </Button>,
-            <Button
-              key="wizard"
-              icon={<ThunderboltOutlined />}
-              onClick={() => setWizardVisible(true)}
-            >
+            <Button key="wizard" icon={<ThunderboltOutlined />} onClick={() => setWizardVisible(true)}>
               通过向导创建
             </Button>,
-            <Button
-              key="batch-delete"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={handleBatchDelete}
-            >
-              批量删除
-            </Button>,
           ]}
+          showImportButton
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: IntegrationConfig[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getIntegrationConfigByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              items = await getIntegrationConfigList({ skip: 0, limit: 10000 });
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `integration-configs-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success('导出成功');
+          }}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,

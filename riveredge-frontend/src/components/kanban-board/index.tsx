@@ -22,10 +22,11 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card, Badge, Empty, Typography, Space } from 'antd';
+import { Card, Badge, Empty, Typography, Space, theme } from 'antd';
 import { HolderOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
+const { useToken } = theme;
 
 /**
  * 看板列配置
@@ -177,6 +178,7 @@ const KanbanColumn: React.FC<{
   showCount?: boolean;
   renderHeader?: (column: KanbanColumn) => React.ReactNode;
 }> = ({ column, cardProps, showCount, renderHeader }) => {
+  const { token } = useToken();
   const idField = cardProps.idField || 'id';
 
   return (
@@ -202,7 +204,7 @@ const KanbanColumn: React.FC<{
           style={{
             marginBottom: 12,
             paddingBottom: 12,
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: `1px solid ${token.colorBorder}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',

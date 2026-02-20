@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, message, Card } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message, Card, Modal } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -190,6 +190,45 @@ const EquipmentListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
     }
+  };
+
+  /**
+   * 批量删除设备
+   */
+  const handleBatchDelete = (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning('请先选择要删除的设备');
+      return;
+    }
+    Modal.confirm({
+      title: `确定要删除选中的 ${keys.length} 个设备吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let done = 0;
+          let fail = 0;
+          for (const uuid of keys) {
+            try {
+              await deleteEquipment(String(uuid));
+              done++;
+            } catch {
+              fail++;
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+          } else {
+            messageApi.success(`已删除 ${done} 个设备`);
+          }
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
   };
 
   /**
@@ -393,6 +432,41 @@ const EquipmentListPage: React.FC = () => {
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建设备"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await getEquipmentList({ skip: 0, limit: 10000 });
+              let items = res.items || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `equipment-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
@@ -408,14 +482,7 @@ const EquipmentListPage: React.FC = () => {
             >
               批量生成二维码
             </Button>,
-            <Button key="create" type="primary" onClick={handleCreate}>
-              新建设备
-            </Button>,
           ]}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
         />
       </ListPageTemplate>
 

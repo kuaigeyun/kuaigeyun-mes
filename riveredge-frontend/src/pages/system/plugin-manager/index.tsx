@@ -9,7 +9,7 @@ import {
   ProColumns,
   ActionType,
 } from '@ant-design/pro-components';
-import { Button, message, Tag, Space, Popconfirm, Card, Alert, Tooltip } from 'antd';
+import { Button, message, Tag, Space, Popconfirm, Card, Tooltip } from 'antd';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate } from '../../../components/layout-templates';
 import {
@@ -249,24 +249,6 @@ const PluginManagerPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <Card>
-        <Alert
-          message="插件管理系统"
-          description={
-            <div>
-              <p>通过插件管理系统，您可以：</p>
-              <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                <li>自动发现 apps 目录下的所有插件应用</li>
-                <li>动态注册新发现的插件到数据库</li>
-                <li>实时启用/停用插件，无需重启服务</li>
-                <li>查看插件状态和错误信息</li>
-              </ul>
-            </div>
-          }
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-
         <UniTable<PluginInfo>
           headerTitle="插件管理"
           actionRef={actionRef}
@@ -275,6 +257,35 @@ const PluginManagerPage: React.FC = () => {
           columns={columns}
           search={false}
           pagination={false}
+          showAdvancedSearch={false}
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const data = await fetchPlugins();
+              const items = (data?.data || []) as any[];
+              let toExport = items;
+              if (type === 'currentPage' && pageData?.length) {
+                toExport = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                toExport = items.filter((d) => keys.includes(d.code));
+              }
+              if (toExport.length === 0) {
+                message.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `plugins-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              message.success(`已导出 ${toExport.length} 条记录`);
+            } catch (error: any) {
+              message.error('导出失败');
+            }
+          }}
           toolBarActions={[
             <Button
               key="discover"
@@ -294,23 +305,6 @@ const PluginManagerPage: React.FC = () => {
             </Button>,
           ]}
         />
-
-        <div style={{ marginTop: 16 }}>
-          <Alert
-            message="使用说明"
-            description={
-              <div>
-                <p><strong>插件发现：</strong>点击"发现插件"按钮，系统会扫描 apps 目录并注册新发现的插件。</p>
-                <p><strong>插件启用：</strong>点击"启用"按钮可立即启用插件，启用后插件功能立即可用。</p>
-                <p><strong>插件停用：</strong>点击"停用"按钮可立即停用插件，停用后插件功能将不再可用。</p>
-                <p><strong>注意：</strong>插件的启用/停用会立即生效，无需重启服务。</p>
-              </div>
-            }
-            type="warning"
-            showIcon
-            style={{ fontSize: '12px' }}
-          />
-        </div>
       </Card>
     </ListPageTemplate>
   );

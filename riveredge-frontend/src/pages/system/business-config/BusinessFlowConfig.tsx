@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { FlowEditor } from '@ant-design/pro-flow';
-import { Layout, Form, Switch, Select, Button, Space, Typography, message, Alert, Card, Popconfirm } from 'antd';
+import { Layout, Form, Switch, Select, Button, Space, Typography, message, Alert, Card, Popconfirm, theme } from 'antd';
 import {
     DeleteOutlined,
     ShopOutlined,
@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import type { ConfigTemplate, ComplexityPreset } from '../../../services/businessConfig';
 import { getBusinessConfig, updateNodesConfig, deleteConfigTemplate, getComplexityPresets, applyComplexityPreset } from '../../../services/businessConfig';
+import { useThemeStore } from '../../../stores/themeStore';
 
 import { Background, BackgroundVariant, MarkerType } from 'reactflow';
 import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
@@ -20,6 +21,7 @@ import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
 const { Content, Sider } = Layout;
 
 const { Text } = Typography;
+const { useToken } = theme;
 const { Option } = Select;
 
 /**
@@ -33,6 +35,8 @@ interface BusinessFlowConfigProps {
 }
 
 const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplate, templates = [], onRefreshTemplates }) => {
+    const { token } = useToken();
+    const isDark = useThemeStore((s) => s.resolved.isDark);
     const [selectedNode, setSelectedNode] = useState<any>(null);
     const [form] = Form.useForm();
     const [scale, setScale] = useState<'small' | 'medium' | 'large'>('medium');
@@ -56,18 +60,34 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         return () => document.removeEventListener('contextmenu', handler, true);
     }, []);
 
-    // Node Style Helper
-    const getNodeStyle = (enabled: boolean, auditRequired: boolean) => ({
-        background: enabled ? '#fff' : '#fafafa',
-        border: enabled
-            ? (auditRequired ? '1px solid #1890ff' : '1px solid #52c41a')
-            : '1px dashed #d9d9d9',
-        borderRadius: '8px',
-        padding: '10px',
-        boxShadow: enabled ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
-        opacity: enabled ? 1 : 0.6,
-        width: 180,
-    });
+    // Node Style Helper（深色模式下使用适配 token，减少白底强对比、提升连线可见度）
+    const getNodeStyle = React.useCallback((enabled: boolean, auditRequired: boolean) => {
+        if (isDark) {
+            return {
+                background: enabled ? token.colorBgContainer : token.colorFillQuaternary,
+                border: enabled
+                    ? (auditRequired ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorSuccess}`)
+                    : `1px dashed ${token.colorBorder}`,
+                borderRadius: '8px',
+                padding: '10px',
+                boxShadow: enabled ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+                opacity: enabled ? 1 : 0.6,
+                width: 180,
+                color: token.colorText,
+            };
+        }
+        return {
+            background: enabled ? '#fff' : '#fafafa',
+            border: enabled
+                ? (auditRequired ? '1px solid #1890ff' : '1px solid #52c41a')
+                : '1px dashed #d9d9d9',
+            borderRadius: '8px',
+            padding: '10px',
+            boxShadow: enabled ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+            opacity: enabled ? 1 : 0.6,
+            width: 180,
+        };
+    }, [isDark, token]);
 
     // Initial Mock Data Structure for Graph (will be updated or merged)
     const initialNodes = [
@@ -143,21 +163,37 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         },
     ];
 
-    const initialEdges = [
-        { id: 'e_cust_so', source: 'customer', target: 'sales_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e1', source: 'sales_order', target: 'sales_delivery', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e2', source: 'sales_order', target: 'inventory_check', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e3', source: 'sales_order', target: 'production_plan', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e_bom_pp', source: 'bom', target: 'production_plan', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e_pp_wo', source: 'production_plan', target: 'work_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e_wo_qi', source: 'work_order', target: 'quality_inspection', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e4', source: 'production_plan', target: 'purchase_request', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e_pr_po', source: 'purchase_request', target: 'purchase_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-        { id: 'e_po_id', source: 'purchase_order', target: 'inbound_delivery', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+    const baseEdges = [
+        { id: 'e_cust_so', source: 'customer', target: 'sales_order', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e1', source: 'sales_order', target: 'sales_delivery', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e2', source: 'sales_order', target: 'inventory_check', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e3', source: 'sales_order', target: 'production_plan', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_bom_pp', source: 'bom', target: 'production_plan', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_pp_wo', source: 'production_plan', target: 'work_order', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_wo_qi', source: 'work_order', target: 'quality_inspection', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e4', source: 'production_plan', target: 'purchase_request', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_pr_po', source: 'purchase_request', target: 'purchase_order', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_po_id', source: 'purchase_order', target: 'inbound_delivery', type: 'smoothstep' as const, markerEnd: { type: MarkerType.ArrowClosed } },
     ];
 
+    const edges = useMemo(() => {
+        if (isDark) {
+            return baseEdges.map((e) => ({ ...e, style: { stroke: token.colorTextSecondary } }));
+        }
+        return baseEdges;
+    }, [isDark, token.colorTextSecondary]);
+
     const [nodes, setNodes] = useState(initialNodes);
-    const [edges] = useState(initialEdges); // Edges change is not supported yet
+
+    // 主题切换时重新应用节点样式
+    useEffect(() => {
+        setNodes((prev) =>
+            prev.map((n) => ({
+                ...n,
+                style: getNodeStyle(n.data.enabled, n.data.auditRequired),
+            }))
+        );
+    }, [getNodeStyle]);
 
     // Handle Node Click
     const handleNodeClick = (_e: any, node: any) => {
@@ -548,7 +584,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
         }
     };
 
-    // 选中的节点添加光晕效果
+    // 选中的节点添加光晕效果（深色模式使用 token）
     const displayNodes = useMemo(
         () =>
             nodes.map((node) => ({
@@ -557,12 +593,12 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                     selectedNode?.id === node.id
                         ? {
                               ...node.style,
-                              boxShadow: '0 0 0 2px #1890ff, 0 0 16px 6px rgba(24, 144, 255, 0.35)',
-                              border: '2px solid #1890ff',
+                              boxShadow: `0 0 0 2px ${token.colorPrimary}, 0 0 16px 6px ${token.colorPrimary}40`,
+                              border: `2px solid ${token.colorPrimary}`,
                           }
                         : node.style,
             })),
-        [nodes, selectedNode]
+        [nodes, selectedNode, token.colorPrimary]
     );
 
     const renderToolbox = () => (
@@ -578,8 +614,8 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                                 styles={{ body: { padding: '6px 12px' } }}
                                 style={{
                                     cursor: 'pointer',
-                                    border: isSelected ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                                    background: isSelected ? '#e6f4ff' : '#fafafa'
+                                    border: isSelected ? `2px solid ${token.colorPrimary}` : `1px solid ${token.colorBorder}`,
+                                    background: isSelected ? token.colorPrimaryBg : token.colorFillQuaternary,
                                 }}
                                 onClick={() => {
                                     setSelectedNode(item);
@@ -669,9 +705,9 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     };
 
     return (
-        <Layout style={{ height: 'calc(100vh - 218px)', border: '1px solid #f0f0f0' }}>
+        <Layout style={{ height: 'calc(100vh - 218px)', border: `1px solid ${token.colorBorder}` }}>
             {/* Top Toolbar */}
-            <div style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorder}`, padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Space>
                     <Space size={8}>
                         <Text strong>业务模式：</Text>
@@ -739,10 +775,10 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                 </Space>
             </div>
             <Layout style={{ height: 'calc(100% - 64px)' }}>
-                <Sider width={200} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
+                <Sider width={200} theme={isDark ? 'dark' : 'light'} style={{ borderRight: `1px solid ${token.colorBorder}` }}>
                     {renderToolbox()}
                 </Sider>
-                <Content style={{ position: 'relative', background: '#fff' }}>
+                <Content style={{ position: 'relative', background: token.colorBgLayout }}>
                     <FlowEditor
                         flowProps={{
                             nodes: displayNodes,
@@ -754,10 +790,15 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                         miniMap={true}
                         devtools={false}
                     >
-                        <Background variant={BackgroundVariant.Dots} gap={CANVAS_GRID_REACTFLOW.gap} size={CANVAS_GRID_REACTFLOW.size} color={CANVAS_GRID_REACTFLOW.color} />
+                        <Background
+                            variant={BackgroundVariant.Dots}
+                            gap={CANVAS_GRID_REACTFLOW.gap}
+                            size={CANVAS_GRID_REACTFLOW.size}
+                            color={isDark ? 'rgba(255,255,255,0.15)' : CANVAS_GRID_REACTFLOW.color}
+                        />
                     </FlowEditor>
                 </Content>
-                <Sider width={300} theme="light" style={{ borderLeft: '1px solid #f0f0f0' }}>
+                <Sider width={300} theme={isDark ? 'dark' : 'light'} style={{ borderLeft: `1px solid ${token.colorBorder}` }}>
                     {renderPropertiesPanel()}
                 </Sider>
             </Layout>

@@ -49,28 +49,28 @@
                         "meta": { "module": "sales" }
                     },
                     {
+                        "title": "app.kuaizhizao.menu.sales-management.sample-trials",
+                        "path": "/apps/kuaizhizao/sales-management/sample-trials",
+                        "sort_order": 2,
+                        "meta": { "module": "sales" }
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.sales-management.sales-forecasts",
                         "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-                        "sort_order": 2,
+                        "sort_order": 3,
                         "meta": { "node": "sales_forecast", "module": "sales" }
                     },
                     {
                         "title": "app.kuaizhizao.menu.sales-management.sales-orders",
                         "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                        "sort_order": 3,
+                        "sort_order": 4,
                         "meta": { "node": "sales_order", "module": "sales" }
                     },
                     {
                         "title": "app.kuaizhizao.menu.sales-management.sales-deliveries",
                         "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
-                        "sort_order": 4,
-                        "meta": { "node": "sales_delivery", "module": "sales" }
-                    },
-                    {
-                        "title": "app.kuaizhizao.menu.sales-management.sales-returns",
-                        "path": "/apps/kuaizhizao/sales-management/sales-returns",
                         "sort_order": 5,
-                        "meta": { "module": "sales" }
+                        "meta": { "node": "sales_delivery", "module": "sales" }
                     },
                     {
                         "title": "app.kuaizhizao.menu.sales-management.delivery-notices",
@@ -79,8 +79,8 @@
                         "meta": { "module": "sales" }
                     },
                     {
-                        "title": "app.kuaizhizao.menu.sales-management.sample-trials",
-                        "path": "/apps/kuaizhizao/sales-management/sample-trials",
+                        "title": "app.kuaizhizao.menu.sales-management.sales-returns",
+                        "path": "/apps/kuaizhizao/sales-management/sales-returns",
                         "sort_order": 7,
                         "meta": { "module": "sales" }
                     }

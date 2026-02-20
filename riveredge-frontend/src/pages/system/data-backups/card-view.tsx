@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Progress, Divider } from 'antd';
+import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Progress, Divider, theme } from 'antd';
 import { EyeOutlined, DeleteOutlined, ReloadOutlined, CloudDownloadOutlined, SettingOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 格式化文件大小
@@ -41,6 +42,7 @@ const formatFileSize = (bytes?: number): string => {
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [backups, setBackups] = useState<DataBackup[]>([]);
@@ -357,7 +359,7 @@ const CardView: React.FC = () => {
                         </Space>
                       </div>
                       
-                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>

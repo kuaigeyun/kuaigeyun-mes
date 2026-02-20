@@ -8,7 +8,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal } from 'antd';
+import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal, theme } from 'antd';
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -34,6 +34,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
+const { useToken } = theme;
 
 /**
  * 获取数据源类型图标和颜色
@@ -111,6 +112,7 @@ const getConnectionStatus = (dataSource: DataSource): { status: 'success' | 'err
  */
 const DataSourceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -250,6 +252,45 @@ const DataSourceListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
     }
+  };
+
+  /**
+   * 批量删除数据源
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的数据源');
+      return;
+    }
+    Modal.confirm({
+      title: `确定要删除选中的 ${selectedRowKeys.length} 个数据源吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let done = 0;
+          let fail = 0;
+          for (const uuid of selectedRowKeys) {
+            try {
+              await deleteDataSource(String(uuid));
+              done++;
+            } catch {
+              fail++;
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+          } else {
+            messageApi.success(`已删除 ${done} 个数据源`);
+          }
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
   };
 
   /**
@@ -460,7 +501,7 @@ const DataSourceListPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
@@ -517,7 +558,7 @@ const DataSourceListPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '数据源类型',
+      title: '连接器类型',
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
@@ -666,7 +707,7 @@ const DataSourceListPage: React.FC = () => {
       dataIndex: 'code',
     },
     {
-      title: '数据源类型',
+      title: '连接器类型',
       dataIndex: 'type',
       render: (value: any) => {
         const typeInfo = getTypeInfo(value);
@@ -830,6 +871,9 @@ const DataSourceListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [

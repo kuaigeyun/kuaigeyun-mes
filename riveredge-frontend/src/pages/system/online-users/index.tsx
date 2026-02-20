@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Avatar, Tag, Space, message, Popconfirm, Button, Badge, Typography, Tooltip } from 'antd';
+import { App, Card, Avatar, Tag, Space, message, Popconfirm, Button, Badge, Typography, Tooltip, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -26,6 +26,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 
 const { Text } = Typography;
+const { useToken } = theme;
 
 /**
  * 获取用户状态
@@ -87,6 +88,7 @@ const getLastActivityDisplay = (user: OnlineUser): string => {
  */
 const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
@@ -251,7 +253,7 @@ const OnlineUsersPage: React.FC = () => {
           </Space>
         </div>
         
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             {user.email && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -449,7 +451,34 @@ const OnlineUsersPage: React.FC = () => {
           }}
           rowKey="user_id"
           showAdvancedSearch={true}
-          toolBarActions={[
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await getOnlineUsers();
+              let items = res.items || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => keys.includes(d.user_id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `online-users-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          toolBarRender={() => [
             <Button key="refresh" onClick={loadStats}>
               <BarChartOutlined /> 刷新统计
             </Button>,

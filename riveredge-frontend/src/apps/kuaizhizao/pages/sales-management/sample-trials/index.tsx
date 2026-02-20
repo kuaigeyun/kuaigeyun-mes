@@ -13,6 +13,7 @@ import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -64,6 +65,8 @@ const SampleTrialsPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [createOutboundModalVisible, setCreateOutboundModalVisible] = useState(false);
   const [createOutboundTrialId, setCreateOutboundTrialId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const outboundFormRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
@@ -185,6 +188,47 @@ const SampleTrialsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${keys.length} 条样品试用单吗？`,
+      onOk: async () => {
+        try {
+          for (const k of keys) {
+            await sampleTrialApi.delete(String(k));
+          }
+          messageApi.success(`已删除 ${keys.length} 条样品试用单`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload = {
+          customer_id: row.customer_id ?? row.customerId,
+          customer_name: row.customer_name || row.customerName,
+          trial_purpose: row.trial_purpose,
+          status: row.status || '草稿',
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await sampleTrialApi.create(payload);
+        successCount += 1;
+      }
+      messageApi.success(`已同步 ${successCount} 条样品试用单`);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    }
   };
 
   const handleConvertToOrder = (record: SampleTrial) => {
@@ -433,9 +477,44 @@ const SampleTrialsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          showAdvancedSearch
+          showAdvancedSearch={true}
           showCreateButton
+          createButtonText="新建样品试用"
           onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const response = await sampleTrialApi.list({ skip: 0, limit: 10000 });
+              const rawData = Array.isArray(response) ? response : response?.items || response?.data || [];
+              let items = rawData;
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = rawData.filter((d: SampleTrial) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `sample-trials-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           request={async (params) => {
             try {
               const response = await sampleTrialApi.list({
@@ -520,6 +599,13 @@ const SampleTrialsPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步样品试用"
+      />
     </>
   );
 };

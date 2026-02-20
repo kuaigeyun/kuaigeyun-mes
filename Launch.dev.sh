@@ -6,9 +6,9 @@
 # Linux/Mac: 默认同时启动 Web + 手机端
 #
 # 快速启动选项:
-#   ./Launch.sh fast    - 最快启动，强制静默
-#   ./Launch.sh mobile  - 手机端启动（前端监听 0.0.0.0，同网段手机可访问）
-#   QUIET=true ./Launch.sh  - 静默启动
+#   ./Launch.dev.sh fast    - 最快启动，强制静默
+#   ./Launch.dev.sh mobile  - 手机端启动（前端监听 0.0.0.0，同网段手机可访问）
+#   QUIET=true ./Launch.dev.sh  - 静默启动
 #   ./fast-start.sh        - 快速启动脚本别名
 
 set -e  # 遇到错误立即退出
@@ -1908,15 +1908,15 @@ main() {
         
         # Windows: 如果未启动手机端，给予提示
         if [ "$LAUNCH_MOBILE" != "true" ] && [ -d "riveredge-mobile" ]; then
-            echo "提示: 如需启动手机端 App，请运行: ./Launch.sh mobile"
+            echo "提示: 如需启动手机端 App，请运行: ./Launch.dev.sh mobile"
             echo
         fi
 
         echo "管理命令:"
-        echo "  查看状态:    ./Launch.sh status"
-        echo "  停止服务:    ./Launch.sh stop"
-        echo "  重启服务:    ./Launch.sh restart"
-        echo "  获取帮助:    ./Launch.sh help"
+        echo "  查看状态:    ./Launch.dev.sh status"
+        echo "  停止服务:    ./Launch.dev.sh stop"
+        echo "  重启服务:    ./Launch.dev.sh restart"
+        echo "  获取帮助:    ./Launch.dev.sh help"
         echo
         echo "日志文件:"
         echo "  后端日志:    .logs/backend.log"
@@ -1928,7 +1928,7 @@ main() {
         echo
         echo "提示:"
         echo "  服务将在后台持续运行"
-        echo "  如需停止，请使用 ./Launch.sh stop"
+        echo "  如需停止，请使用 ./Launch.dev.sh stop"
         echo "  首次访问可能需要等待前端完全编译"
         echo
         echo "=================================================================================="

@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Alert, Button, Tag, Space, Card, Modal } from 'antd';
+import { App, Button, Tag, Space, Card, Modal } from 'antd';
 import { ScheduleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
@@ -186,12 +186,6 @@ const SchedulingPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Alert
-        type="info"
-        showIcon
-        title="MRP/LRP 运算结果请前往「需求计算」页面查看和操作。本页仅对已有工单进行排产。"
-        style={{ marginBottom: 16 }}
-      />
       <UniTable
         headerTitle="待排产工单"
         actionRef={actionRef}

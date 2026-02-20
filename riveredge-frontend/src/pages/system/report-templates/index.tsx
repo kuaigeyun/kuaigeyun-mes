@@ -352,11 +352,39 @@ const ReportTemplatesPage: React.FC = () => {
             };
           }
         }}
+        showCreateButton
+        createButtonText="新建报表模板"
         onCreate={handleCreate}
         onEdit={handleEdit}
         onDetail={handleDetail}
         onDelete={handleDelete}
         showAdvancedSearch={true}
+        showImportButton={false}
+        showExportButton={true}
+        onExport={async (type, _keys, pageData) => {
+          try {
+            const result = await apiRequest('/core/reports/templates', {
+              method: 'GET',
+              params: { skip: 0, limit: 10000 },
+            });
+            const items = Array.isArray(result) ? result : [];
+            const toExport = type === 'currentPage' && pageData?.length ? pageData : items;
+            if (toExport.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `report-templates-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success(`已导出 ${toExport.length} 条记录`);
+          } catch (error: any) {
+            messageApi.error('导出失败');
+          }
+        }}
       />
 
       {/* 表单Modal */}

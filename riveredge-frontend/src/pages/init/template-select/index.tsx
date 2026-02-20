@@ -8,19 +8,21 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Tag, Button, Space, Typography, Modal, message, Spin, Descriptions, Empty, App } from 'antd';
+import { Card, Tag, Button, Space, Typography, Modal, message, Spin, Descriptions, Empty, App, theme } from 'antd';
 import { FileTextOutlined, CheckCircleOutlined, EyeOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { getIndustryTemplateList, getIndustryTemplateById, applyIndustryTemplate, type IndustryTemplate } from '../../../services/industryTemplate';
 import { getTenantId } from '../../../utils/auth';
 
 const { Text, Paragraph, Title } = Typography;
+const { useToken } = theme;
 
 /**
  * 行业模板选择页面组件
  */
 const TemplateSelectPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const tenantId = getTenantId();
 
@@ -163,7 +165,7 @@ const TemplateSelectPage: React.FC = () => {
             </Paragraph>
           )}
 
-          <div style={{ paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+          <div style={{ paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
             <Space orientation="vertical" size="small" style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>

@@ -166,6 +166,45 @@ const DatasetListPage: React.FC = () => {
   };
 
   /**
+   * 批量删除数据集
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的数据集');
+      return;
+    }
+    Modal.confirm({
+      title: `确定要删除选中的 ${selectedRowKeys.length} 个数据集吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let done = 0;
+          let fail = 0;
+          for (const uuid of selectedRowKeys) {
+            try {
+              await deleteDataset(String(uuid));
+              done++;
+            } catch {
+              fail++;
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+          } else {
+            messageApi.success(`已删除 ${done} 个数据集`);
+          }
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理复制数据集（创建副本后跳转设计器）
    */
   const handleCopy = async (record: Dataset) => {
@@ -471,6 +510,9 @@ const DatasetListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [

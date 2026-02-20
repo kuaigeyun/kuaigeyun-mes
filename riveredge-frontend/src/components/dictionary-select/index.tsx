@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Select, Modal, Input, message, App } from 'antd';
+import { Select, Modal, Input, message, App, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProFormSelect } from '@ant-design/pro-components';
 import {
@@ -19,6 +19,7 @@ import {
 } from '../../services/dataDictionary';
 
 const { TextArea } = Input;
+const { useToken } = theme;
 
 /**
  * 数据字典选择组件属性
@@ -65,6 +66,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   formRef,
 }) => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -210,7 +212,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
           <div
             style={{
               padding: '8px',
-              borderTop: '1px solid #f0f0f0',
+              borderTop: `1px solid ${token.colorBorder}`,
               cursor: 'pointer',
             }}
             onClick={() => {

@@ -7,11 +7,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, message, Space, Drawer, Form, Input } from 'antd';
+import { Button, message, Space, Drawer, Form, Input, theme } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 
 const { TextArea } = Input;
+const { useToken } = theme;
 import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
 import { ReactFlowProvider, Handle, Position } from 'reactflow';
@@ -125,6 +126,7 @@ const EndNode: React.FC<NodeProps> = () => {
  */
 const ESOPDesignerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sopUuid = searchParams.get('uuid');
@@ -475,7 +477,7 @@ const ESOPDesignerPage: React.FC = () => {
         {/* 表单配置（仅对步骤节点和检查节点显示） */}
         {selectedNode && (selectedNode.type === 'step' || selectedNode.type === 'check') && (
           <div style={{ marginTop: 24 }}>
-            <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${token.colorBorder}` }}>
               <strong>表单配置</strong>
               <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
                 为当前节点配置表单字段，这些字段将在执行该步骤时显示给用户填写

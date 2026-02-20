@@ -581,7 +581,7 @@ export default function DashboardPage() {
       <Card
         style={{
           marginTop: 0,
-          marginBottom: 24,
+          marginBottom: 22,
           flexShrink: 0,
           background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary}dd 100%)`,
           border: 'none',
@@ -654,7 +654,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* 生产指标 - 参考设计 */}
-      <div style={{ marginBottom: 24, flexShrink: 0 }}>
+      <div style={{ marginBottom: 22, flexShrink: 0 }}>
         {/* 左侧 TIPS + 右侧时间范围筛选器 */}
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col flex="1" style={{ minWidth: 0 }}>
@@ -1049,7 +1049,7 @@ export default function DashboardPage() {
                     key={item.id}
                     style={{
                       padding: '12px 0',
-                      borderBottom: index < productionBroadcast.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      borderBottom: index < productionBroadcast.length - 1 ? `1px solid ${token.colorBorder}` : 'none',
                       cursor: 'pointer',
                     }}
                     onClick={() => {
@@ -1146,7 +1146,7 @@ export default function DashboardPage() {
                               key={index}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                borderBottom: index < Math.min(todos.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'flex-start',
@@ -1159,7 +1159,7 @@ export default function DashboardPage() {
                             >
                               <Avatar
                                 style={{
-                                  backgroundColor: '#f0f0f0',
+                                  backgroundColor: token.colorFillTertiary,
                                   marginRight: 12,
                                   flexShrink: 0,
                                 }}
@@ -1217,7 +1217,7 @@ export default function DashboardPage() {
                               key={index}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.filter(t => t.type === 'work_order').length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                borderBottom: index < Math.min(todos.filter(t => t.type === 'work_order').length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -1244,7 +1244,7 @@ export default function DashboardPage() {
                               key={index}
                               style={{
                                 padding: '12px 0',
-                                borderBottom: index < Math.min(todos.filter(t => t.type === 'exception').length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                borderBottom: index < Math.min(todos.filter(t => t.type === 'exception').length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                                 cursor: 'pointer',
                               }}
                               onClick={() => item.link && navigate(item.link)}
@@ -1307,7 +1307,7 @@ export default function DashboardPage() {
                     key={index}
                     style={{
                       padding: '12px 0',
-                      borderBottom: index < Math.min(notifications.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                      borderBottom: index < Math.min(notifications.length, 5) - 1 ? `1px solid ${token.colorBorder}` : 'none',
                       cursor: 'pointer',
                     }}
                     onClick={async () => {

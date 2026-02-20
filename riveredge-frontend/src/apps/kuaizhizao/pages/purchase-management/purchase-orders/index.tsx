@@ -13,6 +13,7 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline,
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
@@ -49,6 +50,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
   const [approvalRecords, setApprovalRecords] = useState<ApprovalRecord[]>([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
@@ -315,6 +317,50 @@ const PurchaseOrdersPage: React.FC = () => {
     });
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${keys.length} 条采购订单吗？`,
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          for (const k of keys) {
+            await deletePurchaseOrder(Number(k));
+          }
+          messageApi.success(`已删除 ${keys.length} 条采购订单`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload: Partial<PurchaseOrder> = {
+          order_date: row.order_date || row.orderDate,
+          delivery_date: row.delivery_date || row.deliveryDate,
+          supplier_id: row.supplier_id ?? row.supplierId,
+          supplier_name: row.supplier_name || row.supplierName,
+          total_amount: row.total_amount ?? row.totalAmount,
+          status: row.status || '草稿',
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await createPurchaseOrder(payload);
+        successCount += 1;
+      }
+      messageApi.success(`已同步 ${successCount} 条采购订单`);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    }
+  };
+
   // 处理编辑
   const handleEdit = async (record: PurchaseOrder) => {
     try {
@@ -491,6 +537,42 @@ const PurchaseOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建采购订单"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          showImportButton={false}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listPurchaseOrders({ skip: 0, limit: 10000 });
+              let items = res.data || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
           request={async (params) => {
             try {
               const response = await listPurchaseOrders({
@@ -514,20 +596,6 @@ const PurchaseOrdersPage: React.FC = () => {
               };
             }
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建采购订单
-            </Button>,
-          ]}
           scroll={{ x: 1400 }}
         />
       </ListPageTemplate>
@@ -888,6 +956,13 @@ const PurchaseOrdersPage: React.FC = () => {
             </div>
           )
         }
+      />
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title="从数据集同步采购订单"
       />
     </>
   );

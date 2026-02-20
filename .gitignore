@@ -1,0 +1,68 @@
+# RiverEdge - 运行必需忽略（依赖/构建/缓存/敏感/运行时）
+# 仅保留影响运行与安全的规则，其余文件可纳入版本控制
+
+# 依赖与虚拟环境
+node_modules/
+venv/
+venv*/
+.venv
+.pnp
+.pnp.js
+
+# Python 字节码与包
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+
+# 构建输出
+dist/
+**/dev-dist/
+build/
+.next/
+out/
+.vite/
+*.tsbuildinfo
+
+# 敏感配置
+.env
+.env.local
+.env.*.local
+
+# 日志、进程、本地数据库
+logs/
+.logs/
+*.log
+*.pid
+*.db
+*.sqlite
+*.sqlite3
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# 临时与系统
+*.tmp
+*.temp
+*.bak
+.DS_Store
+Thumbs.db
+
+# IDE（保留可共享的 settings/extensions）
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# 上传
+**/uploads/

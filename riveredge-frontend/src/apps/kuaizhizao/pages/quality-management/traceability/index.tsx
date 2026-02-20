@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
-import { Input, Card, Space, Select, Empty, Spin, message, Drawer, Descriptions, Tag, Button } from 'antd';
+import { Input, Card, Space, Select, Empty, Spin, message, Drawer, Descriptions, Tag, Button, theme } from 'antd';
 import { useRequest } from 'ahooks';
 import { api } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
 import { FlowGraph } from '@ant-design/graphs';
 
+const { useToken } = theme;
+
 const TraceabilityPage: React.FC = () => {
     const { t } = useTranslation();
+    const { token } = useToken();
     const [searchParams, setSearchParams] = useState<{ batch_no: string, direction: string }>({
         batch_no: '',
         direction: 'both'
@@ -124,7 +127,7 @@ const TraceabilityPage: React.FC = () => {
                     />
                 </Space>
 
-                <div style={{ minHeight: 600, border: '1px solid #f0f0f0', position: 'relative', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ minHeight: 600, border: `1px solid ${token.colorBorder}`, position: 'relative', borderRadius: 8, overflow: 'hidden' }}>
                     {loading && <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 100 }}><Spin size="large" /></div>}
 
                     {!data && !loading && <Empty description={t('pages.traceability.empty', { defaultValue: '请输入批次号进行查询' })} style={{ paddingTop: 150 }} />}

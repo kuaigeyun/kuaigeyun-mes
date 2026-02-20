@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Progress, Alert, Collapse, Divider } from 'antd';
+import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Progress, Alert, Collapse, Divider, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, LinkOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import {
@@ -25,12 +25,14 @@ dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
 const { Panel } = Collapse;
+const { useToken } = theme;
 
 /**
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = useToken();
   const [loading, setLoading] = useState(false);
   const [integrationConfigs, setIntegrationConfigs] = useState<IntegrationConfig[]>([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -264,7 +266,7 @@ const CardView: React.FC = () => {
             </Col>
           </Row>
           {Object.keys(stats.byType).length > 0 && (
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
               <Text type="secondary" style={{ marginRight: 8 }}>按类型统计：</Text>
               <Space wrap>
                 {Object.entries(stats.byType).map(([type, count]) => {
@@ -382,7 +384,7 @@ const CardView: React.FC = () => {
                                 </Space>
                               </div>
                               
-                              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
