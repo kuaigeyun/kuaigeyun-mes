@@ -17,6 +17,7 @@ class PlatformSettingsBase(BaseSchema):
     """平台设置基础schema"""
     platform_name: str = Field(..., max_length=200, description="平台名称")
     platform_logo: Optional[str] = Field(None, max_length=500, description="平台Logo URL")
+    favicon: Optional[str] = Field(None, max_length=500, description="网站 Favicon URL（浏览器标签页图标）")
     platform_description: Optional[str] = Field(None, description="平台描述")
     platform_contact_email: Optional[str] = Field(None, max_length=255, description="平台联系邮箱")
     platform_contact_phone: Optional[str] = Field(None, max_length=50, description="平台联系电话")
@@ -36,6 +37,7 @@ class PlatformSettingsUpdate(BaseSchema):
     """平台设置更新schema"""
     platform_name: Optional[str] = Field(None, max_length=200, description="平台名称")
     platform_logo: Optional[str] = Field(None, max_length=500, description="平台Logo URL")
+    favicon: Optional[str] = Field(None, max_length=500, description="网站 Favicon URL（浏览器标签页图标）")
     platform_description: Optional[str] = Field(None, description="平台描述")
     platform_contact_email: Optional[str] = Field(None, max_length=255, description="平台联系邮箱")
     platform_contact_phone: Optional[str] = Field(None, max_length=50, description="平台联系电话")

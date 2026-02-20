@@ -13,12 +13,17 @@ from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.production_picking import ProductionPicking
+from apps.kuaizhizao.models.production_return import ProductionReturn
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.models.quotation import Quotation
+from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.mrp_result import MRPResult
@@ -40,13 +45,18 @@ class DocumentRelationService:
         "demand": {"model": Demand, "code_field": "demand_code", "name_field": "demand_name"},
         "sales_forecast": {"model": SalesForecast, "code_field": "forecast_code", "name_field": "forecast_name"},
         "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": "order_name"},
+        "quotation": {"model": Quotation, "code_field": "quotation_code", "name_field": None},
+        "material_borrow": {"model": MaterialBorrow, "code_field": "borrow_code", "name_field": None},
+        "material_return": {"model": MaterialReturn, "code_field": "return_code", "name_field": None},
         "mrp_result": {"model": MRPResult, "code_field": None, "name_field": None},
         "lrp_result": {"model": LRPResult, "code_field": None, "name_field": None},
         "work_order": {"model": WorkOrder, "code_field": "code", "name_field": "name"},
         "production_picking": {"model": ProductionPicking, "code_field": "picking_code", "name_field": None},
+        "production_return": {"model": ProductionReturn, "code_field": "return_code", "name_field": None},
         "reporting_record": {"model": ReportingRecord, "code_field": "reporting_code", "name_field": None},
         "finished_goods_receipt": {"model": FinishedGoodsReceipt, "code_field": "receipt_code", "name_field": None},
         "sales_delivery": {"model": SalesDelivery, "code_field": "delivery_code", "name_field": None},
+        "delivery_notice": {"model": DeliveryNotice, "code_field": "notice_code", "name_field": None},
         "purchase_order": {"model": PurchaseOrder, "code_field": "order_code", "name_field": "order_name"},
         "purchase_receipt": {"model": PurchaseReceipt, "code_field": "receipt_code", "name_field": None},
         "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
@@ -95,6 +105,21 @@ class DocumentRelationService:
             upstream_documents = []
             downstream_documents = await self._get_sales_order_downstream(tenant_id, document_id)
 
+        elif document_type == "quotation":
+            # 报价单的下游：销售订单（转订单后）
+            upstream_documents = []
+            downstream_documents = await self._get_quotation_downstream(tenant_id, document_id)
+
+        elif document_type == "material_borrow":
+            # 借料单的下游：还料单
+            upstream_documents = []
+            downstream_documents = await self._get_material_borrow_downstream(tenant_id, document_id)
+
+        elif document_type == "material_return":
+            # 还料单的上游：借料单
+            upstream_documents = await self._get_material_return_upstream(tenant_id, document_id)
+            downstream_documents = []
+
         elif document_type == "mrp_result":
             # MRP运算结果的上游：销售预测，下游：工单、采购单
             upstream_documents = await self._get_mrp_result_upstream(tenant_id, document_id)
@@ -111,9 +136,14 @@ class DocumentRelationService:
             downstream_documents = await self._get_work_order_downstream(tenant_id, document_id)
 
         elif document_type == "production_picking":
-            # 生产领料的上游：工单，下游：报工记录
+            # 生产领料的上游：工单，下游：报工记录、生产退料
             upstream_documents = await self._get_production_picking_upstream(tenant_id, document_id)
             downstream_documents = await self._get_production_picking_downstream(tenant_id, document_id)
+
+        elif document_type == "production_return":
+            # 生产退料的上游：工单、生产领料，下游：无
+            upstream_documents = await self._get_production_return_upstream(tenant_id, document_id)
+            downstream_documents = []
 
         elif document_type == "finished_goods_receipt":
             # 成品入库的上游：工单、报工记录，下游：销售出库单
@@ -156,9 +186,14 @@ class DocumentRelationService:
             downstream_documents = []
 
         elif document_type == "sales_delivery":
-            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单
+            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单、发货通知单
             upstream_documents = await self._get_sales_delivery_upstream(tenant_id, document_id)
             downstream_documents = await self._get_sales_delivery_downstream(tenant_id, document_id)
+
+        elif document_type == "delivery_notice":
+            # 发货通知单的上游：销售出库单、销售订单
+            upstream_documents = await self._get_delivery_notice_upstream(tenant_id, document_id)
+            downstream_documents = []
 
         return {
             "document_type": document_type,
@@ -344,6 +379,45 @@ class DocumentRelationService:
             "status": work_order.status,
             "created_at": work_order.created_at.isoformat() if work_order.created_at else None
         }]
+
+    async def _get_production_return_upstream(
+        self,
+        tenant_id: int,
+        return_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取生产退料的上游单据（工单、生产领料）"""
+        ret = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+        if not ret:
+            return []
+
+        upstream = []
+
+        # 工单
+        work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=ret.work_order_id)
+        if work_order:
+            upstream.append({
+                "document_type": "work_order",
+                "document_id": work_order.id,
+                "document_code": work_order.code,
+                "document_name": work_order.name,
+                "status": work_order.status,
+                "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+            })
+
+        # 领料单
+        if ret.picking_id:
+            picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=ret.picking_id)
+            if picking:
+                upstream.append({
+                    "document_type": "production_picking",
+                    "document_id": picking.id,
+                    "document_code": picking.picking_code,
+                    "document_name": None,
+                    "status": picking.status,
+                    "created_at": picking.created_at.isoformat() if picking.created_at else None
+                })
+
+        return upstream
 
     async def _get_finished_goods_receipt_upstream(
         self,
@@ -761,8 +835,24 @@ class DocumentRelationService:
         tenant_id: int,
         delivery_id: int
     ) -> List[Dict[str, Any]]:
-        """获取销售出库单的下游单据（应收单）"""
+        """获取销售出库单的下游单据（应收单、发货通知单）"""
         downstream = []
+
+        # 查找关联的发货通知单
+        notices = await DeliveryNotice.filter(
+            tenant_id=tenant_id,
+            sales_delivery_id=delivery_id,
+            deleted_at__isnull=True
+        ).limit(10)
+        for notice in notices:
+            downstream.append({
+                "document_type": "delivery_notice",
+                "document_id": notice.id,
+                "document_code": notice.notice_code,
+                "document_name": None,
+                "status": notice.status,
+                "created_at": notice.created_at.isoformat() if notice.created_at else None,
+            })
 
         # 通过source_type和source_id查找应收单
         receivables = await Receivable.filter(
@@ -1028,6 +1118,113 @@ class DocumentRelationService:
 
         return downstream
 
+    async def _get_quotation_downstream(
+        self,
+        tenant_id: int,
+        quotation_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取报价单的下游单据（转订单后的销售订单）"""
+        downstream = []
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if quotation and quotation.sales_order_id:
+            downstream.append({
+                "document_type": "sales_order",
+                "document_id": quotation.sales_order_id,
+                "document_code": quotation.sales_order_code,
+                "document_name": None,
+                "status": None,
+                "created_at": None,
+            })
+        return downstream
+
+    async def _get_material_borrow_downstream(
+        self,
+        tenant_id: int,
+        borrow_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取借料单的下游单据（还料单）"""
+        downstream = []
+        returns = await MaterialReturn.filter(
+            tenant_id=tenant_id, borrow_id=borrow_id, deleted_at__isnull=True
+        ).limit(10)
+        for r in returns:
+            downstream.append({
+                "document_type": "material_return",
+                "document_id": r.id,
+                "document_code": r.return_code,
+                "document_name": None,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        return downstream
+
+    async def _get_delivery_notice_upstream(
+        self,
+        tenant_id: int,
+        notice_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取发货通知单的上游单据（销售出库单、销售订单）"""
+        upstream = []
+        notice = await DeliveryNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            return upstream
+        if notice.sales_delivery_id:
+            delivery = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=notice.sales_delivery_id
+            )
+            if delivery:
+                upstream.append({
+                    "document_type": "sales_delivery",
+                    "document_id": delivery.id,
+                    "document_code": delivery.delivery_code,
+                    "document_name": None,
+                    "status": delivery.status,
+                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None,
+                })
+        if notice.sales_order_id:
+            order = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, id=notice.sales_order_id
+            )
+            if order:
+                upstream.append({
+                    "document_type": "sales_order",
+                    "document_id": order.id,
+                    "document_code": order.order_code,
+                    "document_name": order.order_name,
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat() if order.created_at else None,
+                })
+        return upstream
+
+    async def _get_material_return_upstream(
+        self,
+        tenant_id: int,
+        return_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取还料单的上游单据（借料单）"""
+        upstream = []
+        return_obj = await MaterialReturn.get_or_none(
+            tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+        )
+        if return_obj and return_obj.borrow_id:
+            borrow = await MaterialBorrow.get_or_none(
+                tenant_id=tenant_id, id=return_obj.borrow_id, deleted_at__isnull=True
+            )
+            if borrow:
+                upstream.append({
+                    "document_type": "material_borrow",
+                    "document_id": borrow.id,
+                    "document_code": borrow.borrow_code,
+                    "document_name": None,
+                    "status": borrow.status,
+                    "created_at": borrow.created_at.isoformat() if borrow.created_at else None,
+                })
+        return upstream
+
     async def _get_mrp_result_downstream(
         self,
         tenant_id: int,
@@ -1205,12 +1402,27 @@ class DocumentRelationService:
         tenant_id: int,
         picking_id: int
     ) -> List[Dict[str, Any]]:
-        """获取生产领料的下游单据（报工记录）"""
+        """获取生产领料的下游单据（报工记录、生产退料）"""
         picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=picking_id)
         if not picking:
             return []
 
         downstream = []
+
+        # 生产退料单
+        production_returns = await ProductionReturn.filter(
+            tenant_id=tenant_id,
+            picking_id=picking_id
+        ).limit(10)
+        for ret in production_returns:
+            downstream.append({
+                "document_type": "production_return",
+                "document_id": ret.id,
+                "document_code": ret.return_code,
+                "document_name": None,
+                "status": ret.status,
+                "created_at": ret.created_at.isoformat() if ret.created_at else None
+            })
 
         # 报工记录
         reporting_records = await ReportingRecord.filter(

@@ -64,7 +64,6 @@ import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
-import { updateUserPreference } from '../services/userPreference';
 import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { getMenuTree, MenuTree } from '../services/menu';
@@ -334,7 +333,6 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.machine, // 设备管理 - 使用机器图标
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
-      '/apps/kuaizhizao/reports': ManufacturingIcons.analytics, // 报表分析 - 使用分析图标
       '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
     };
@@ -776,7 +774,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const lockScreen = useGlobalStore((s) => s.lockScreen);
   // 头像 URL：优先从缓存读取以消除首屏闪烁，再异步拉取最新
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-  const [avatarLoaded, setAvatarLoaded] = useState(false);
 
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
@@ -785,7 +782,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
 
       if (avatarUuid) {
-        // 先使用缓存，避免闪烁
         const cached = getCachedAvatarUrl(avatarUuid);
         if (cached) setAvatarUrl(cached);
 
@@ -801,7 +797,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           setAvatarUrl(undefined);
         }
       } else {
-        // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
         let foundAvatar = false;
         if (currentUser) {
           try {
@@ -817,7 +812,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
           } catch (error) {
-            // 静默失败，不影响其他功能
+            // 静默失败
           }
         }
 
@@ -826,15 +821,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     if (currentUser) {
-      setAvatarLoaded(false);
       loadAvatarUrl();
     }
   }, [currentUser]);
-
-  // avatarUrl 变化时重置 loaded 状态
-  useEffect(() => {
-    setAvatarLoaded(false);
-  }, [avatarUrl]);
 
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
@@ -2193,15 +2182,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 从后端加载翻译内容
       await refreshTranslations();
 
-      // 更新用户偏好设置
+      // 通过 store 更新用户偏好，保持与 userPreferenceStore 同步
       try {
-        await updateUserPreference({
-          preferences: {
-            language: languageCode,
-          },
-        });
+        await updatePreferences({ language: languageCode });
       } catch (error) {
-        // 如果更新偏好设置失败，不影响语言切换
         console.warn('更新用户偏好设置失败:', error);
       }
 
@@ -2210,7 +2194,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       console.error('切换语言失败:', error);
       message.error(error?.message || t('common.switchLanguageFailed'));
     }
-  }, []);
+  }, [updatePreferences]);
 
   /**
    * 构建语言切换下拉菜单
@@ -3119,8 +3103,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header,
         .ant-pro-layout .ant-layout-header {
           background: ${headerBgColor} !important;
-          backdrop-filter: blur(8px) !important;
-          -webkit-backdrop-filter: blur(8px) !important;
           border-bottom: 1px solid ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)'} !important;
         }
         /* ==================== 顶栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
@@ -3443,12 +3425,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border: none;
         }
         /* 租户选择器样式 - 胶囊型，与搜索框一致 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper {
           padding: 0;
           transition: none !important;
         }
         /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 根据显示模式统一 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper > span {
           display: inline-block;
           padding: 4px 12px;
           border-radius: 16px !important;
@@ -3461,8 +3445,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector {
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-selector {
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
@@ -3470,21 +3457,74 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           height: 32px !important;
         }
-        /* 租户选择器文字颜色 - 根据显示模式统一 */
+        /* 租户选择器文字颜色 - 根据显示模式统一，深色背景时强制浅色 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
+        /* 深色顶栏下组织选择器强制浅色文字（通过 data-header-light-text 标记，覆盖 Ant Design 默认） */
+        /* Ant Design 6 使用 --select-color 控制文字颜色，需覆盖该变量 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
+        .ant-pro-global-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select,
+        .tenant-selector-select-light-text .ant-select {
+          --select-color: rgba(255, 255, 255, 0.85) !important;
+          color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-item,
+        /* Ant Design 6 新结构：content-value、content、placeholder */
+        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-content-value,
+        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-content,
+        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-placeholder,
+        .tenant-selector-select-light-text .ant-select .ant-select-content-value,
+        .tenant-selector-select-light-text .ant-select .ant-select-content,
+        .tenant-selector-select-light-text .ant-select .ant-select-placeholder,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-placeholder,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-placeholder,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search-input,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search-input,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selection-search,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] > span,
+        /* 兜底：Select 内部所有文字元素；或通过组件内 className 标记 */
+        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector,
+        .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-selector *,
+        .tenant-selector-select-light-text .ant-select .ant-select-selector,
+        .tenant-selector-select-light-text .ant-select .ant-select-selector * {
+          color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-arrow,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-arrow,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix .anticon,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper[data-header-light-text="true"] .ant-select .ant-select-suffix .anticon,
+        .tenant-selector-select-light-text .ant-select .ant-select-suffix,
+        .tenant-selector-select-light-text .ant-select .ant-select-suffix .anticon {
+          color: rgba(255, 255, 255, 0.65) !important;
+        }
         /* 租户选择器箭头图标颜色 - 根据显示模式统一 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)'} !important;
         }
         /* 租户选择器所有状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
           background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
@@ -3492,25 +3532,33 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 租户选择器 hover 和 focused 状态下的文字颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selection-item,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         /* 租户选择器内部输入框样式 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
           background: transparent !important;
         }
         /* 租户选择器文字左右边距 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
           padding-left: 6px !important;
           padding-right: 18px !important;
         }
         /* 租户选择器切换图标样式 - 确保在右侧 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
           right: 8px !important;
         }
         /* 禁用租户选择器 wrapper 的 hover 效果 */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
         }
         /* 搜索框样式 - 根据显示模式统一 */
@@ -3548,6 +3596,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: transparent !important;
           border: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        /* 顶栏消息、手机预览等下拉框：统一无箭头、对齐 */
+        .header-actions-dropdown.ant-dropdown {
+          padding: 0 !important;
+        }
+        .header-actions-dropdown .ant-dropdown-arrow {
+          display: none !important;
         }
         .ant-pro-global-header{
           margin-inline: 0 !important;
@@ -4001,6 +4056,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               key="notifications"
               placement="bottomRight"
               trigger={['click']}
+              arrow={false}
+              overlayClassName="header-actions-dropdown"
               open={messageDropdownOpen}
               onOpenChange={(open) => {
                 setMessageDropdownOpen(open);
@@ -4035,16 +4092,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         alignItems: 'center',
                       }}
                     >
-                      <Typography.Text strong style={{ fontSize: 16 }}>
-                        消息通知
+                      <Space size={8} align="center">
+                        <Typography.Text strong style={{ fontSize: 16 }}>
+                          消息通知
+                        </Typography.Text>
                         {unreadCount > 0 && (
                           <Badge
                             count={unreadCount}
                             size="small"
-                            style={{ marginLeft: 8 }}
                           />
                         )}
-                      </Typography.Text>
+                      </Space>
                       <Button
                         type="link"
                         size="small"
@@ -4243,13 +4301,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <div
                 key="tenant"
                 className="tenant-selector-wrapper"
+                data-header-light-text={!isLightModeLightBg}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   marginLeft: 4,
                 }}
               >
-                <TenantSelector />
+                <TenantSelector headerLightText={!isLightModeLightBg} />
               </div>
             );
           }
@@ -4278,22 +4337,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  <span
-                    style={{
-                      position: 'relative',
-                      width: 24,
-                      height: 24,
-                      flexShrink: 0,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {/* 占位：始终显示首字母，避免闪烁 */}
+                  {avatarUrl ? (
+                    <Avatar
+                      size={24}
+                      src={avatarUrl}
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    />
+                  ) : (
                     <Avatar
                       size={24}
                       style={{
                         backgroundColor: token.colorPrimary,
+                        flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -4303,26 +4363,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     >
                       {getAvatarText(currentUser.full_name, currentUser.username)}
                     </Avatar>
-                    {/* 图片加载完成后淡入，避免突兀切换 */}
-                    {avatarUrl && (
-                      <img
-                        src={avatarUrl}
-                        alt=""
-                        onLoad={() => setAvatarLoaded(true)}
-                        onError={() => setAvatarLoaded(false)}
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          borderRadius: '50%',
-                          objectFit: 'cover',
-                          width: 24,
-                          height: 24,
-                          opacity: avatarLoaded ? 1 : 0,
-                          transition: 'opacity 0.2s ease',
-                        }}
-                      />
-                    )}
-                  </span>
+                  )}
                   <span
                     style={{
                       fontSize: 14,

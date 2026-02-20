@@ -15,6 +15,71 @@ export const warehouseApi = {
     quickPick: async (workOrderId: string) =>
       apiRequest('/apps/kuaizhizao/production-pickings/quick-pick', { method: 'POST', params: { work_order_id: workOrderId } }),
   },
+  productionReturn: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'POST', data }),
+    update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'PUT', data }),
+    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'DELETE' }),
+    get: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}`, { method: 'GET' }),
+    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/production-returns/${id}/confirm`, { method: 'POST' }),
+    print: async (id: string, templateUuid?: string) =>
+      apiRequest(`/apps/kuaizhizao/production-returns/${id}/print`, {
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+  },
+  otherInbound: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-inbounds', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/other-inbounds', { method: 'POST', data }),
+    update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'PUT', data }),
+    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'DELETE' }),
+    get: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}`, { method: 'GET' }),
+    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/confirm`, { method: 'POST' }),
+    print: async (id: string, templateUuid?: string) =>
+      apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/print`, {
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+  },
+  otherOutbound: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-outbounds', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/other-outbounds', { method: 'POST', data }),
+    update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/other-outbounds/${id}`, { method: 'PUT', data }),
+    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/other-outbounds/${id}`, { method: 'DELETE' }),
+    get: async (id: string) => apiRequest(`/apps/kuaizhizao/other-outbounds/${id}`, { method: 'GET' }),
+    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/other-outbounds/${id}/confirm`, { method: 'POST' }),
+    print: async (id: string, templateUuid?: string) =>
+      apiRequest(`/apps/kuaizhizao/other-outbounds/${id}/print`, {
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+  },
+  materialBorrow: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/material-borrows', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/material-borrows', { method: 'POST', data }),
+    update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/material-borrows/${id}`, { method: 'PUT', data }),
+    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/material-borrows/${id}`, { method: 'DELETE' }),
+    get: async (id: string) => apiRequest(`/apps/kuaizhizao/material-borrows/${id}`, { method: 'GET' }),
+    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/material-borrows/${id}/confirm`, { method: 'POST' }),
+    print: async (id: string, templateUuid?: string) =>
+      apiRequest(`/apps/kuaizhizao/material-borrows/${id}/print`, {
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+  },
+  materialReturn: {
+    list: async (params?: any) => apiRequest('/apps/kuaizhizao/material-returns', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaizhizao/material-returns', { method: 'POST', data }),
+    update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'PUT', data }),
+    delete: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'DELETE' }),
+    get: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'GET' }),
+    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}/confirm`, { method: 'POST' }),
+    print: async (id: string, templateUuid?: string) =>
+      apiRequest(`/apps/kuaizhizao/material-returns/${id}/print`, {
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+  },
   finishedGoodsReceipt: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/finished-goods-receipts', { method: 'GET', params }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/finished-goods-receipts', { method: 'POST', data }),

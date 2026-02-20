@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import Field
 from core.schemas.base import BaseSchema
 
@@ -103,6 +103,106 @@ class ProductionPickingItemResponse(ProductionPickingItemBase):
 
     class Config:
         from_attributes = True
+
+
+# === 生产退料单 ===
+
+class ProductionReturnBase(BaseSchema):
+    """生产退料单基础schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退料单编码（可选，不提供则自动生成）")
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., max_length=50, description="工单编码")
+    picking_id: Optional[int] = Field(None, description="领料单ID")
+    picking_code: Optional[str] = Field(None, max_length=50, description="领料单编码")
+    workshop_id: Optional[int] = Field(None, description="车间ID")
+    workshop_name: Optional[str] = Field(None, max_length=100, description="车间名称")
+    warehouse_id: int = Field(..., description="退料目标仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="退料目标仓库名称")
+    status: str = Field("待退料", max_length=20, description="退料状态")
+    returner_id: Optional[int] = Field(None, description="退料人ID")
+    returner_name: Optional[str] = Field(None, max_length=100, description="退料人姓名")
+    return_time: Optional[datetime] = Field(None, description="退料时间")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class ProductionReturnCreate(ProductionReturnBase):
+    """生产退料单创建schema"""
+    items: Optional[List["ProductionReturnItemCreate"]] = Field(None, description="退料明细列表")
+
+
+class ProductionReturnUpdate(ProductionReturnBase):
+    """生产退料单更新schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退料单编码")
+
+
+class ProductionReturnResponse(ProductionReturnBase):
+    """生产退料单响应schema"""
+    id: int = Field(..., description="退料单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class ProductionReturnListResponse(ProductionReturnResponse):
+    """生产退料单列表响应schema（简化版）"""
+    pass
+
+
+# === 生产退料单明细 ===
+
+class ProductionReturnItemBase(BaseSchema):
+    """生产退料单明细基础schema"""
+    picking_item_id: Optional[int] = Field(None, description="领料单明细ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    return_quantity: float = Field(..., gt=0, description="退料数量")
+    warehouse_id: int = Field(..., description="仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    status: str = Field("待退料", max_length=20, description="退料状态")
+    return_time: Optional[datetime] = Field(None, description="实际退料时间")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class ProductionReturnItemCreate(ProductionReturnItemBase):
+    """生产退料单明细创建schema"""
+    pass
+
+
+class ProductionReturnItemUpdate(ProductionReturnItemBase):
+    """生产退料单明细更新schema"""
+    pass
+
+
+class ProductionReturnItemResponse(ProductionReturnItemBase):
+    """生产退料单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    return_id: int = Field(..., description="退料单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class ProductionReturnWithItemsResponse(ProductionReturnResponse):
+    """生产退料单详情响应（含明细）"""
+    items: List[ProductionReturnItemResponse] = Field(default_factory=list, description="退料明细列表")
 
 
 # === 成品入库单 ===
@@ -631,3 +731,401 @@ class PurchaseReturnItemResponse(PurchaseReturnItemBase):
 
     class Config:
         from_attributes = True
+
+
+# === 其他入库单 ===
+
+OtherInboundReasonType = Literal["盘盈", "样品", "报废", "其他"]
+
+
+class OtherInboundBase(BaseSchema):
+    """其他入库单基础schema"""
+    inbound_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，不提供则自动生成）")
+    reason_type: OtherInboundReasonType = Field(..., description="原因类型：盘盈/样品/报废/其他")
+    reason_desc: Optional[str] = Field(None, description="原因说明")
+    warehouse_id: int = Field(..., description="入库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="入库仓库名称")
+    receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
+    receiver_id: Optional[int] = Field(None, description="入库人ID")
+    receiver_name: Optional[str] = Field(None, max_length=100, description="入库人姓名")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    status: str = Field("待入库", max_length=20, description="入库状态")
+    total_quantity: float = Field(0, ge=0, description="总入库数量")
+    total_amount: float = Field(0, ge=0, description="总金额")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class OtherInboundCreate(OtherInboundBase):
+    """其他入库单创建schema"""
+    items: Optional[List["OtherInboundItemCreate"]] = Field(None, description="入库明细列表")
+
+
+class OtherInboundUpdate(OtherInboundBase):
+    """其他入库单更新schema"""
+    inbound_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+
+
+class OtherInboundResponse(OtherInboundBase):
+    """其他入库单响应schema"""
+    id: int = Field(..., description="入库单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class OtherInboundListResponse(OtherInboundResponse):
+    """其他入库单列表响应schema（简化版）"""
+    pass
+
+
+# === 其他入库单明细 ===
+
+class OtherInboundItemBase(BaseSchema):
+    """其他入库单明细基础schema"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    inbound_quantity: float = Field(..., gt=0, description="入库数量")
+    unit_price: float = Field(0, ge=0, description="单价")
+    total_amount: float = Field(0, ge=0, description="金额")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    status: str = Field("待入库", max_length=20, description="入库状态")
+    receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class OtherInboundItemCreate(OtherInboundItemBase):
+    """其他入库单明细创建schema"""
+    pass
+
+
+class OtherInboundItemUpdate(OtherInboundItemBase):
+    """其他入库单明细更新schema"""
+    pass
+
+
+class OtherInboundItemResponse(OtherInboundItemBase):
+    """其他入库单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    inbound_id: int = Field(..., description="入库单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class OtherInboundWithItemsResponse(OtherInboundResponse):
+    """其他入库单详情响应（含明细）"""
+    items: List[OtherInboundItemResponse] = Field(default_factory=list, description="入库明细列表")
+
+
+# === 其他出库单 ===
+
+OtherOutboundReasonType = Literal["盘亏", "样品", "报废", "其他"]
+
+
+class OtherOutboundBase(BaseSchema):
+    """其他出库单基础schema"""
+    outbound_code: Optional[str] = Field(None, max_length=50, description="出库单编码（可选，不提供则自动生成）")
+    reason_type: OtherOutboundReasonType = Field(..., description="原因类型：盘亏/样品/报废/其他")
+    reason_desc: Optional[str] = Field(None, description="原因说明")
+    warehouse_id: int = Field(..., description="出库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
+    delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
+    deliverer_id: Optional[int] = Field(None, description="出库人ID")
+    deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    status: str = Field("待出库", max_length=20, description="出库状态")
+    total_quantity: float = Field(0, ge=0, description="总出库数量")
+    total_amount: float = Field(0, ge=0, description="总金额")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class OtherOutboundCreate(OtherOutboundBase):
+    """其他出库单创建schema"""
+    items: Optional[List["OtherOutboundItemCreate"]] = Field(None, description="出库明细列表")
+
+
+class OtherOutboundUpdate(OtherOutboundBase):
+    """其他出库单更新schema"""
+    outbound_code: Optional[str] = Field(None, max_length=50, description="出库单编码")
+
+
+class OtherOutboundResponse(OtherOutboundBase):
+    """其他出库单响应schema"""
+    id: int = Field(..., description="出库单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class OtherOutboundListResponse(OtherOutboundResponse):
+    """其他出库单列表响应schema（简化版）"""
+    pass
+
+
+# === 其他出库单明细 ===
+
+class OtherOutboundItemBase(BaseSchema):
+    """其他出库单明细基础schema"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    outbound_quantity: float = Field(..., gt=0, description="出库数量")
+    unit_price: float = Field(0, ge=0, description="单价")
+    total_amount: float = Field(0, ge=0, description="金额")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    status: str = Field("待出库", max_length=20, description="出库状态")
+    delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class OtherOutboundItemCreate(OtherOutboundItemBase):
+    """其他出库单明细创建schema"""
+    pass
+
+
+class OtherOutboundItemUpdate(OtherOutboundItemBase):
+    """其他出库单明细更新schema"""
+    pass
+
+
+class OtherOutboundItemResponse(OtherOutboundItemBase):
+    """其他出库单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    outbound_id: int = Field(..., description="出库单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class OtherOutboundWithItemsResponse(OtherOutboundResponse):
+    """其他出库单详情响应（含明细）"""
+    items: List[OtherOutboundItemResponse] = Field(default_factory=list, description="出库明细列表")
+
+
+# === 借料单 ===
+
+
+class MaterialBorrowBase(BaseSchema):
+    """借料单基础schema"""
+    borrow_code: Optional[str] = Field(None, max_length=50, description="借料单编码（可选，不提供则自动生成）")
+    warehouse_id: int = Field(..., description="借出仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="借出仓库名称")
+    borrower_id: Optional[int] = Field(None, description="借料人ID")
+    borrower_name: Optional[str] = Field(None, max_length=100, description="借料人姓名")
+    department: Optional[str] = Field(None, max_length=100, description="部门")
+    expected_return_date: Optional[datetime] = Field(None, description="预计归还日期")
+    borrow_time: Optional[datetime] = Field(None, description="实际借出时间")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    status: str = Field("待借出", max_length=20, description="借料状态")
+    total_quantity: float = Field(0, ge=0, description="总借出数量")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MaterialBorrowCreate(MaterialBorrowBase):
+    """借料单创建schema"""
+    items: Optional[List["MaterialBorrowItemCreate"]] = Field(None, description="借料明细列表")
+
+
+class MaterialBorrowUpdate(MaterialBorrowBase):
+    """借料单更新schema"""
+    borrow_code: Optional[str] = Field(None, max_length=50, description="借料单编码")
+
+
+class MaterialBorrowResponse(MaterialBorrowBase):
+    """借料单响应schema"""
+    id: int = Field(..., description="借料单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialBorrowListResponse(MaterialBorrowResponse):
+    """借料单列表响应schema"""
+    pass
+
+
+# === 借料单明细 ===
+
+
+class MaterialBorrowItemBase(BaseSchema):
+    """借料单明细基础schema"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    borrow_quantity: float = Field(..., gt=0, description="借出数量")
+    returned_quantity: float = Field(0, ge=0, description="已归还数量")
+    warehouse_id: int = Field(..., description="仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    status: str = Field("待借出", max_length=20, description="借料状态")
+    borrow_time: Optional[datetime] = Field(None, description="实际借出时间")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MaterialBorrowItemCreate(MaterialBorrowItemBase):
+    """借料单明细创建schema"""
+    pass
+
+
+class MaterialBorrowItemUpdate(MaterialBorrowItemBase):
+    """借料单明细更新schema"""
+    pass
+
+
+class MaterialBorrowItemResponse(MaterialBorrowItemBase):
+    """借料单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    borrow_id: int = Field(..., description="借料单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialBorrowWithItemsResponse(MaterialBorrowResponse):
+    """借料单详情响应（含明细）"""
+    items: List[MaterialBorrowItemResponse] = Field(default_factory=list, description="借料明细列表")
+
+
+# === 还料单 ===
+
+
+class MaterialReturnBase(BaseSchema):
+    """还料单基础schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="还料单编码（可选，不提供则自动生成）")
+    borrow_id: int = Field(..., description="借料单ID")
+    borrow_code: str = Field(..., max_length=50, description="借料单编码")
+    warehouse_id: int = Field(..., description="归还仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="归还仓库名称")
+    returner_id: Optional[int] = Field(None, description="归还人ID")
+    returner_name: Optional[str] = Field(None, max_length=100, description="归还人姓名")
+    return_time: Optional[datetime] = Field(None, description="实际归还时间")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    status: str = Field("待归还", max_length=20, description="还料状态")
+    total_quantity: float = Field(0, ge=0, description="总归还数量")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MaterialReturnCreate(MaterialReturnBase):
+    """还料单创建schema"""
+    items: Optional[List["MaterialReturnItemCreate"]] = Field(None, description="还料明细列表")
+
+
+class MaterialReturnUpdate(MaterialReturnBase):
+    """还料单更新schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="还料单编码")
+
+
+class MaterialReturnResponse(MaterialReturnBase):
+    """还料单响应schema"""
+    id: int = Field(..., description="还料单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialReturnListResponse(MaterialReturnResponse):
+    """还料单列表响应schema"""
+    pass
+
+
+# === 还料单明细 ===
+
+
+class MaterialReturnItemBase(BaseSchema):
+    """还料单明细基础schema"""
+    borrow_item_id: Optional[int] = Field(None, description="借料单明细ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    return_quantity: float = Field(..., gt=0, description="归还数量")
+    warehouse_id: int = Field(..., description="仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    status: str = Field("待归还", max_length=20, description="还料状态")
+    return_time: Optional[datetime] = Field(None, description="实际归还时间")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class MaterialReturnItemCreate(MaterialReturnItemBase):
+    """还料单明细创建schema"""
+    pass
+
+
+class MaterialReturnItemUpdate(MaterialReturnItemBase):
+    """还料单明细更新schema"""
+    pass
+
+
+class MaterialReturnItemResponse(MaterialReturnItemBase):
+    """还料单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    return_id: int = Field(..., description="还料单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialReturnWithItemsResponse(MaterialReturnResponse):
+    """还料单详情响应（含明细）"""
+    items: List[MaterialReturnItemResponse] = Field(default_factory=list, description="还料明细列表")

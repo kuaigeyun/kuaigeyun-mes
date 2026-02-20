@@ -17,6 +17,9 @@ from .purchase_requisitions.purchase_requisitions import router as purchase_requ
 from .demands.demands import router as demand_router
 from .demand_computations.demand_computations import router as demand_computation_router
 from .sales_orders.sales_orders import router as sales_order_router
+from .quotations.quotations import router as quotation_router
+from .delivery_notices.delivery_notices import router as delivery_notice_router
+from .sample_trials.sample_trials import router as sample_trial_router
 from .approval_flows.approval_flows import router as approval_flow_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
@@ -63,6 +66,9 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 
 # 注册子路由
 router.include_router(sales_order_router)  # 销售订单管理（独立API）- 优先匹配
+router.include_router(quotation_router)  # 报价单管理
+router.include_router(delivery_notice_router)  # 发货通知单管理
+router.include_router(sample_trial_router)  # 样品试用单管理
 router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(purchase_requisition_router)

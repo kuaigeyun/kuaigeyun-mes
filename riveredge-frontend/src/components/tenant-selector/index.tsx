@@ -14,10 +14,15 @@ import { getUserInfo, setTenantId, getTenantId } from '../../utils/auth';
 
 const { Option } = Select;
 
+interface TenantSelectorProps {
+  /** 顶栏为深色背景时传 true，用于强制浅色文字 */
+  headerLightText?: boolean;
+}
+
 /**
  * 组织选择器组件
  */
-const TenantSelector: React.FC = () => {
+const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const { token } = theme.useToken();
   const userInfo = getUserInfo();
   const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
@@ -50,7 +55,10 @@ const TenantSelector: React.FC = () => {
   // 如果是平台超级管理员，显示组织选择器
   if (isInfraSuperAdmin) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center' }}
+        className={headerLightText ? 'tenant-selector-select-light-text' : undefined}
+      >
         {isLoading ? (
           <Spin size="small" />
         ) : (
@@ -80,6 +88,7 @@ const TenantSelector: React.FC = () => {
 
   // 如果是系统级用户，显示当前组织名称（带胶囊型背景）
   const tenantName = userInfo?.tenant_name || '未知组织';
+  const spanColor = headerLightText ? 'rgba(255, 255, 255, 0.85)' : token.colorText;
   return (
     <span
       style={{
@@ -87,7 +96,7 @@ const TenantSelector: React.FC = () => {
         padding: '4px 12px',
         borderRadius: '16px',
         backgroundColor: token.colorFillTertiary,
-        color: token.colorText,
+        color: spanColor,
         fontSize: 14,
         fontWeight: 500,
         height: 32,

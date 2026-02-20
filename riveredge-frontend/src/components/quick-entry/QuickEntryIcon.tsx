@@ -1,10 +1,7 @@
 /**
- * iOS风格快捷入口图标组件
- * 
- * 实现iOS 26液态玻璃效果（glassmorphism）
- * 
- * Author: Luigi Lu
- * Date: 2026-01-21
+ * 扁平化快捷入口图标组件
+ *
+ * 统一设计风格，无液态玻璃/毛玻璃效果
  */
 
 import React from 'react';
@@ -28,7 +25,7 @@ export interface QuickEntryIconProps {
 }
 
 /**
- * iOS风格快捷入口图标组件
+ * 扁平化快捷入口图标组件
  */
 export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   icon,
@@ -40,8 +37,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
 }) => {
   const { token } = useToken();
 
-  // 液态玻璃背景：主题色原色（无透明）+ 毛玻璃高光
-  const glassBackground = gradient || `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary} 100%)`;
+  const bgColor = gradient || token.colorPrimary;
 
   return (
     <div
@@ -56,70 +52,38 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       }}
       onClick={onClick}
     >
-      {/* 液态玻璃效果图标容器（frosted glass + 高光） */}
+      {/* 扁平图标容器 */}
       <div
         style={{
           width: '64px',
           height: '64px',
-          borderRadius: '16px',
-          background: glassBackground,
-          backdropFilter: 'blur(16px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.5)',
-          boxShadow: `
-            0 8px 32px 0 rgba(0, 0, 0, 0.08),
-            inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-            inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
-          `,
+          borderRadius: '12px',
+          background: bgColor,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'all 0.2s ease',
           position: 'relative',
           overflow: 'hidden',
           marginBottom: '6px',
         }}
         onMouseEnter={(e) => {
           if (onClick) {
-            e.currentTarget.style.transform = 'scale(1.05) translateY(-2px)';
-            e.currentTarget.style.boxShadow = `
-              0 12px 40px 0 rgba(0, 0, 0, 0.12),
-              inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-              inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
-            `;
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.16)';
           }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1) translateY(0)';
-          e.currentTarget.style.boxShadow = `
-            0 8px 32px 0 rgba(0, 0, 0, 0.08),
-            inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-            inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
-          `;
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.12)';
         }}
       >
-        {/* 液态玻璃高光效果 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '50%',
-            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, transparent 100%)',
-            borderRadius: '16px 16px 0 0',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        />
-
-        {/* 图标 - 白色原色，无透明 */}
+        {/* 图标 */}
         <div
           style={{
             fontSize: '24px',
             color: '#ffffff',
-            filter: 'none',
-            zIndex: 2,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -152,7 +116,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
               justifyContent: 'center',
               cursor: 'pointer',
               zIndex: 10,
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
@@ -169,7 +133,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         )}
       </div>
 
-      {/* 标题文字（在图标外部下方） */}
+      {/* 标题文字 */}
       <div
         style={{
           fontSize: '12px',

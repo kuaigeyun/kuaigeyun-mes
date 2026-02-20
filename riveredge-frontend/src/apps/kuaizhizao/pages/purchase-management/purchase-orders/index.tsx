@@ -776,7 +776,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   {/* 审批记录时间线 */}
                   {approvalRecords.length > 0 && (
                     <div>
-                      <Divider orientation="left">审批记录</Divider>
+                      <Divider titlePlacement="left">审批记录</Divider>
                       <Timeline
                         items={approvalRecords.map((record) => {
                           const isPassed = record.approval_result === '通过';

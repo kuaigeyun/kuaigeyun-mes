@@ -965,7 +965,7 @@ const SuperAdminTenantList: React.FC = () => {
         [TenantStatus.SUSPENDED]: { text: '已暂停' },
       },
       render: (_, record) => {
-        const statusInfo = statusTagMap[record.status];
+        const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
@@ -981,7 +981,7 @@ const SuperAdminTenantList: React.FC = () => {
         [TenantPlan.ENTERPRISE]: { text: '企业版' },
       },
       render: (_, record) => {
-        const planInfo = planTagMap[record.plan];
+        const planInfo = planTagMap[record.plan] ?? { color: 'default', text: record.plan ?? '-' };
         return <Tag color={planInfo.color}>{planInfo.text}</Tag>;
       },
     },
@@ -1207,7 +1207,7 @@ const SuperAdminTenantList: React.FC = () => {
               title: '状态',
               dataIndex: 'status',
               render: (_, record) => {
-                const statusInfo = statusTagMap[record.status];
+                const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
                 return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
               },
             },
@@ -1215,7 +1215,7 @@ const SuperAdminTenantList: React.FC = () => {
               title: '套餐',
               dataIndex: 'plan',
               render: (_, record) => {
-                const planInfo = planTagMap[record.plan];
+                const planInfo = planTagMap[record.plan] ?? { color: 'default', text: record.plan ?? '-' };
                 return <Tag color={planInfo.color}>{planInfo.text}</Tag>;
               },
             },

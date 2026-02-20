@@ -457,11 +457,10 @@ export default function LockScreenPage() {
 
         <div
           style={{
-            background: 'rgba(255, 255, 255, 0.85)',
+            background: '#ffffff',
             borderRadius: '16px',
             padding: '32px 16px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
             width: '100%',
           }}
         >

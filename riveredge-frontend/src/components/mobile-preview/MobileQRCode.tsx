@@ -1,7 +1,7 @@
 import React from 'react';
 import { MobileDevicePreview } from './MobileDevicePreview';
 import { QRCodeSVG } from 'qrcode.react';
-import { Popover, Button, Space, Typography, Tooltip, Input, Collapse } from 'antd';
+import { Dropdown, Button, Space, Typography, Tooltip, Input, Collapse, theme } from 'antd';
 import { MobileOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +9,7 @@ const { Text } = Typography;
 
 export const MobileQRCode: React.FC = () => {
     const { t } = useTranslation();
+    const { token } = theme.useToken();
     const [ip, setIp] = React.useState<string>('');
     const [previewOpen, setPreviewOpen] = React.useState(false);
 
@@ -40,7 +41,7 @@ export const MobileQRCode: React.FC = () => {
     const mobileUrl = getMobileUrl();
 
     const content = (
-        <div style={{ textAlign: 'center', padding: 8, width: 260 }}>
+        <div style={{ textAlign: 'center', padding: '12px 16px', width: 232 }}>
             <div style={{ marginBottom: 12, background: 'white', padding: 8, borderRadius: 4, border: '1px solid #f0f0f0' }}>
                 <QRCodeSVG value={mobileUrl} size={180} />
             </div>
@@ -98,23 +99,37 @@ export const MobileQRCode: React.FC = () => {
         </div>
     );
 
+    const dropdownContent = (
+        <div
+            style={{
+                width: 232,
+                backgroundColor: token.colorBgElevated,
+                borderRadius: token.borderRadiusLG,
+                boxShadow: token.boxShadowSecondary,
+                overflow: 'hidden',
+            }}
+        >
+            {content}
+        </div>
+    );
+
     return (
         <>
-            <Popover
-                content={content}
-                title={null}
-                trigger="click"
+            <Dropdown
+                dropdownRender={() => dropdownContent}
+                trigger={['click']}
                 placement="bottomRight"
-                styles={{ body: { padding: 16 } }}
+                arrow={false}
+                overlayClassName="header-actions-dropdown"
             >
                 <Tooltip title={t('common.mobileExperience', '移动端体验')}>
                     <Button
                         type="text"
-                        size="small" // Align size with other header buttons (usually small or default depending on layout, here small seems safe based on previous code)
+                        size="small"
                         icon={<MobileOutlined />}
                     />
                 </Tooltip>
-            </Popover>
+            </Dropdown>
 
             <MobileDevicePreview
                 open={previewOpen}

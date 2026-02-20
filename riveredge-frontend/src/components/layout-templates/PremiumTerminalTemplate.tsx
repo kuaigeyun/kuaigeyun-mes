@@ -213,7 +213,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                   ))
                 : <span className="header-station-segment header-station-segment-current">未绑定</span>}
             </div>
-            <Divider type="vertical" className="header-divider-v" />
+            <Divider orientation="vertical" className="header-divider-v" />
             <div className="header-operator-block">
               <span className="header-operator-avatar">
                 {operatorAvatar ? (

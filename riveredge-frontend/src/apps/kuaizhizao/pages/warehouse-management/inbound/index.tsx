@@ -1,33 +1,38 @@
 /**
  * 入库管理页面
  *
- * 提供入库单的管理功能，支持多种入库类型：采购入库、生产入库、退货入库、初始入库等。
+ * 提供入库单的管理功能，支持多种入库类型：采购入库、成品入库（产品入库）、生产退料等。
  */
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 
-// 统一的入库单接口（结合采购入库和成品入库）
+// 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
   id?: number;
   tenant_id?: number;
   receipt_code?: string;
-  receipt_type?: 'purchase' | 'finished_goods'; // 入库类型
+  return_code?: string;
+  receipt_type?: 'purchase' | 'finished_goods' | 'production_return';
   status?: string;
   receipt_date?: string;
+  return_time?: string;
   supplier_id?: number;
   supplier_name?: string;
   work_order_id?: number;
   work_order_code?: string;
+  picking_code?: string;
   warehouse_id?: number;
   warehouse_name?: string;
+  workshop_name?: string;
   received_by?: string;
+  returner_name?: string;
   total_quantity?: number;
   total_items?: number;
   notes?: string;
@@ -75,37 +80,69 @@ const InboundPage: React.FC = () => {
    */
   const handleDetail = async (record: InboundOrder) => {
     try {
-      let detailData;
+      let detailData: any;
       if (record.receipt_type === 'purchase') {
         detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
       } else if (record.receipt_type === 'finished_goods') {
         detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'production_return') {
+        detailData = await warehouseApi.productionReturn.get(record.id!.toString());
       }
-      setCurrentOrder(detailData);
-      setDetailDrawerVisible(true);
+      if (detailData) {
+        setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
+        setDetailDrawerVisible(true);
+      }
     } catch (error) {
       messageApi.error('获取入库单详情失败');
     }
   };
 
   /**
-   * 处理确认入库
+   * 处理确认入库/退料
    */
   const handleConfirm = async (record: InboundOrder) => {
+    const code = record.receipt_code || record.return_code || '';
+    const title = record.receipt_type === 'production_return' ? '确认退料' : '确认入库';
+    const content = record.receipt_type === 'production_return'
+      ? `确定要确认退料单 "${code}" 吗？确认后将更新库存。`
+      : `确定要确认入库单 "${code}" 吗？确认后将更新库存。`;
     Modal.confirm({
-      title: '确认入库',
-      content: `确定要确认入库单 "${record.receipt_code}" 吗？确认后将更新库存。`,
+      title,
+      content,
       onOk: async () => {
         try {
           if (record.receipt_type === 'purchase') {
             await warehouseApi.purchaseReceipt.confirm(record.id!.toString());
           } else if (record.receipt_type === 'finished_goods') {
             await warehouseApi.finishedGoodsReceipt.confirm(record.id!.toString());
+          } else if (record.receipt_type === 'production_return') {
+            await warehouseApi.productionReturn.confirm(record.id!.toString());
           }
-          messageApi.success('入库确认成功，库存已更新');
+          messageApi.success(record.receipt_type === 'production_return' ? '退料确认成功' : '入库确认成功，库存已更新');
           actionRef.current?.reload();
         } catch (error) {
-          messageApi.error('入库确认失败');
+          messageApi.error(record.receipt_type === 'production_return' ? '退料确认失败' : '入库确认失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理删除（仅生产退料支持）
+   */
+  const handleDelete = async (record: InboundOrder) => {
+    if (record.receipt_type !== 'production_return') return;
+    const code = record.return_code || record.receipt_code || '';
+    Modal.confirm({
+      title: '删除退料单',
+      content: `确定要删除退料单 "${code}" 吗？`,
+      onOk: async () => {
+        try {
+          await warehouseApi.productionReturn.delete(record.id!.toString());
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
         }
       },
     });
@@ -116,11 +153,12 @@ const InboundPage: React.FC = () => {
    */
   const columns: ProColumns<InboundOrder>[] = [
     {
-      title: '入库单号',
-      dataIndex: 'receipt_code',
+      title: '单号',
+      dataIndex: ['receipt_code', 'return_code'],
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, record) => record.receipt_code || record.return_code,
     },
     {
       title: '入库类型',
@@ -129,17 +167,24 @@ const InboundPage: React.FC = () => {
       valueEnum: {
         purchase: { text: '采购入库', status: 'processing' },
         finished_goods: { text: '成品入库', status: 'success' },
+        production_return: { text: '生产退料', status: 'warning' },
       },
     },
     {
       title: '状态',
       dataIndex: 'status',
       width: 100,
-      valueEnum: {
-        '草稿': { text: '草稿', status: 'default' },
-        '已确认': { text: '已确认', status: 'processing' },
-        '已完成': { text: '已完成', status: 'success' },
-        '已取消': { text: '已取消', status: 'error' },
+      render: (status: any, record) => {
+        const enumMap: Record<string, { text: string; status: string }> = {
+          '草稿': { text: '草稿', status: 'default' },
+          '已确认': { text: '已确认', status: 'processing' },
+          '已完成': { text: '已完成', status: 'success' },
+          '已取消': { text: '已取消', status: 'error' },
+          '待退料': { text: '待退料', status: 'default' },
+          '已退料': { text: '已退料', status: 'success' },
+        };
+        const config = enumMap[status as string] || { text: status || '-', status: 'default' };
+        return <Tag color={config.status === 'success' ? 'success' : config.status === 'error' ? 'error' : config.status === 'processing' ? 'processing' : 'default'}>{config.text}</Tag>;
       },
     },
     {
@@ -149,10 +194,11 @@ const InboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '工单号',
-      dataIndex: 'work_order_code',
-      width: 120,
+      title: '工单/领料单',
+      dataIndex: ['work_order_code', 'picking_code'],
+      width: 140,
       ellipsis: true,
+      render: (_, record) => [record.work_order_code, record.picking_code].filter(Boolean).join(' / ') || '-',
     },
     {
       title: '入库数量',
@@ -174,15 +220,16 @@ const InboundPage: React.FC = () => {
     },
     {
       title: '操作员',
-      dataIndex: 'received_by',
+      dataIndex: ['received_by', 'returner_name'],
       width: 100,
       ellipsis: true,
+      render: (_, record) => record.received_by || record.returner_name || '-',
     },
     {
-      title: '入库日期',
-      dataIndex: 'receipt_date',
-      valueType: 'date',
-      width: 120,
+      title: '日期',
+      dataIndex: ['receipt_date', 'return_time'],
+      width: 160,
+      render: (_, record) => record.receipt_date || record.return_time || '-',
     },
     {
       title: '创建时间',
@@ -192,7 +239,7 @@ const InboundPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 120,
+      width: 180,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -204,16 +251,29 @@ const InboundPage: React.FC = () => {
           >
             详情
           </Button>
-          {record.status === 'draft' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
-            >
-              确认
-            </Button>
+          {(record.status === 'draft' || record.status === '待退料') && (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleConfirm(record)}
+                style={{ color: '#52c41a' }}
+              >
+                {record.receipt_type === 'production_return' ? '确认退料' : '确认'}
+              </Button>
+              {record.receipt_type === 'production_return' && (
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDelete(record)}
+                >
+                  删除
+                </Button>
+              )}
+            </>
           )}
         </Space>
       ),
@@ -242,49 +302,46 @@ const InboundPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params) => {
           try {
-            // 并行获取采购入库单和成品入库单
-            const [purchaseReceipts, finishedGoodsReceipts] = await Promise.all([
-              warehouseApi.purchaseReceipt.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-              }),
-              warehouseApi.finishedGoodsReceipt.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-              }),
+            const skip = ((params.current || 1) - 1) * (params.pageSize || 20);
+            const limit = params.pageSize || 20;
+            const listParams = { skip, limit, ...params };
+
+            // 并行获取采购入库单、成品入库单、生产退料单
+            const [purchaseReceipts, finishedGoodsReceipts, productionReturns] = await Promise.all([
+              warehouseApi.purchaseReceipt.list(listParams),
+              warehouseApi.finishedGoodsReceipt.list(listParams),
+              warehouseApi.productionReturn.list(listParams),
             ]);
 
-            // 合并并转换数据格式
-            const purchaseData = purchaseReceipts.data?.map(item => ({
+            const purchaseData = (purchaseReceipts.data ?? purchaseReceipts.items ?? [])?.map((item: any) => ({
               ...item,
               receipt_type: 'purchase' as const,
             })) || [];
 
-            const finishedData = finishedGoodsReceipts.data?.map(item => ({
+            const finishedData = (finishedGoodsReceipts.data ?? finishedGoodsReceipts.items ?? [])?.map((item: any) => ({
               ...item,
               receipt_type: 'finished_goods' as const,
             })) || [];
 
-            // 合并两个数据源
-            const combinedData = [...purchaseData, ...finishedData];
+            const returnData = (Array.isArray(productionReturns) ? productionReturns : (productionReturns.data ?? productionReturns.items ?? []))?.map((item: any) => ({
+              ...item,
+              receipt_type: 'production_return' as const,
+              receipt_code: item.return_code,
+            })) || [];
 
-            // 按创建时间排序
+            const combinedData = [...purchaseData, ...finishedData, ...returnData];
             combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+            const total = (purchaseReceipts.total ?? purchaseData.length) + (finishedGoodsReceipts.total ?? finishedData.length) + (productionReturns?.total ?? returnData.length);
 
             return {
               data: combinedData,
               success: true,
-              total: (purchaseReceipts.total || 0) + (finishedGoodsReceipts.total || 0),
+              total,
             };
           } catch (error) {
             messageApi.error('获取入库单列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
+            return { data: [], success: false, total: 0 };
           }
         }}
         rowSelection={{
@@ -385,7 +442,7 @@ const InboundPage: React.FC = () => {
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={`入库单详情 - ${currentOrder?.receipt_code || ''}`}
+        title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH}
@@ -394,18 +451,19 @@ const InboundPage: React.FC = () => {
           currentOrder ? (
             <div style={{ padding: '16px 0' }}>
               <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <p><strong>入库单号：</strong>{currentOrder.receipt_code}</p>
-                <p><strong>入库类型：</strong>
+                <p><strong>单号：</strong>{currentOrder.receipt_code || currentOrder.return_code}</p>
+                <p><strong>类型：</strong>
                   <Tag color={
-                    currentOrder.receipt_type === 'purchase' ? 'processing' : 'success'
+                    currentOrder.receipt_type === 'purchase' ? 'processing' :
+                      currentOrder.receipt_type === 'finished_goods' ? 'success' : 'warning'
                   }>
-                    {currentOrder.receipt_type === 'purchase' ? '采购入库' : '成品入库'}
+                    {currentOrder.receipt_type === 'purchase' ? '采购入库' : currentOrder.receipt_type === 'finished_goods' ? '成品入库' : '生产退料'}
                   </Tag>
                 </p>
                 <p><strong>状态：</strong>
                   <Tag color={
-                    currentOrder.status === '已完成' ? 'success' :
-                      currentOrder.status === '已确认' ? 'processing' :
+                    (currentOrder.status === '已完成' || currentOrder.status === '已退料') ? 'success' :
+                      (currentOrder.status === '已确认' || currentOrder.status === '待退料') ? 'processing' :
                         currentOrder.status === '已取消' ? 'error' : 'default'
                   }>
                     {currentOrder.status}
@@ -417,30 +475,45 @@ const InboundPage: React.FC = () => {
                 {currentOrder.work_order_code && (
                   <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
                 )}
-                <p><strong>入库仓库：</strong>{currentOrder.warehouse_name}</p>
-                <p><strong>入库日期：</strong>{currentOrder.receipt_date}</p>
-                <p><strong>操作员：</strong>{currentOrder.received_by}</p>
+                {currentOrder.picking_code && (
+                  <p><strong>领料单号：</strong>{currentOrder.picking_code}</p>
+                )}
+                {currentOrder.workshop_name && (
+                  <p><strong>车间：</strong>{currentOrder.workshop_name}</p>
+                )}
+                <p><strong>仓库：</strong>{currentOrder.warehouse_name}</p>
+                <p><strong>日期：</strong>{currentOrder.receipt_date || currentOrder.return_time}</p>
+                <p><strong>操作员：</strong>{currentOrder.received_by || currentOrder.returner_name}</p>
                 {currentOrder.notes && (
                   <p><strong>备注：</strong>{currentOrder.notes}</p>
                 )}
               </Card>
 
-              {/* 入库单明细 */}
+              {/* 入库/退料明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
-                <Card title="入库明细">
-                  {currentOrder.items.map((item) => (
-                    <div key={item.id} style={{
-                      padding: '12px',
-                      marginBottom: '8px',
-                      border: '1px solid #f0f0f0',
-                      borderRadius: '4px'
-                    }}>
-                      <p><strong>物料编码：</strong>{item.material_code}</p>
-                      <p><strong>物料名称：</strong>{item.material_name}</p>
-                      <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
-                      {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
-                    </div>
-                  ))}
+                <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    pagination={false}
+                    columns={currentOrder.receipt_type === 'production_return'
+                      ? [
+                          { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                          { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                          { title: '单位', dataIndex: 'material_unit', width: 60 },
+                          { title: '退料数量', dataIndex: 'return_quantity', width: 100, align: 'right' as const },
+                          { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
+                          { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                        ]
+                      : [
+                          { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                          { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                          { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' as const },
+                          { title: '单位', dataIndex: 'unit', width: 60 },
+                        ]
+                    }
+                    dataSource={currentOrder.items}
+                  />
                 </Card>
               )}
             </div>

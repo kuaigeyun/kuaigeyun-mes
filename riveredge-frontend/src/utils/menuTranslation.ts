@@ -82,6 +82,15 @@ export function translateAppMenuItemName(
 ): string {
   if (!name) return '';
 
+  // 1. 若 name 本身是翻译 key（如 app.kuaizhizao.menu.warehouse-management.inbound-group），优先直接翻译
+  // 修复：分组菜单的 title 为 i18n key 时，此前被路径推导逻辑覆盖，导致二级菜单均显示父级名称
+  if (name.includes('.') && !name.startsWith('/')) {
+    const directTranslated = t(name, { defaultValue: name });
+    if (directTranslated !== name && directTranslated.trim() !== '') {
+      return directTranslated;
+    }
+  }
+
   let appCode = extractAppCodeFromPath(path);
   let relativePath: string | null = null;
 

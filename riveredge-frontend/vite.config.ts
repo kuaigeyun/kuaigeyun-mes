@@ -13,15 +13,11 @@ import type { ProxyOptions } from 'vite'
 // src 目录路径（src 目录）
 const srcPath = resolve(__dirname, 'src')
 
-// static 目录路径（指向前端项目的 static）
-const publicDir = resolve(__dirname, 'static')
-
-
 export default defineConfig({
+  base: '/',
   // ⚠️ 优化：设置根目录为src目录，因为index.html在src目录下
   root: srcPath, // src目录
-  // 指定 static 目录
-  publicDir: publicDir,
+  publicDir: resolve(__dirname, 'static'),
   // 服务器配置 - 优化稳定性
   server: {
     // 使用 0.0.0.0 监听所有接口，确保 localhost 和 127.0.0.1 均可访问
@@ -212,8 +208,6 @@ export default defineConfig({
         drop_debugger: true, // 移除debugger
       },
     } : undefined,
-    // 块大小警告阈值（500KB）
-    chunkSizeWarningLimit: 500,
   },
   plugins: [
     // React 插件 - 优化 Fast Refresh 和 HMR

@@ -62,6 +62,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* 使用 Ant Design 主题变量，支持深色模式 */
   background-color: var(--ant-colorBgLayout);
+  /* 滚动限制在 ant-layout-content 内，禁止 body 出现滚动条，避免 Dropdown/Select 关闭时滚动条闪现 */
+  overflow: hidden;
 }
 
 #root {

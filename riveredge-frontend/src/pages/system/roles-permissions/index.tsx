@@ -832,7 +832,7 @@ const RolesPermissionsPage: React.FC = () => {
                     { value: 'field', label: '字段权限' },
                   ]}
                 />
-                <Divider type="vertical" />
+                <Divider orientation="vertical" />
                 <Space size="small">
                   <Tooltip title="全选当前展示的权限">
                     <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
@@ -850,7 +850,7 @@ const RolesPermissionsPage: React.FC = () => {
                     </Button>
                   </Tooltip>
                 </Space>
-                <Divider type="vertical" />
+                <Divider orientation="vertical" />
                 <Select
                   placeholder="应用权限模板"
                   style={{ width: 160 }}

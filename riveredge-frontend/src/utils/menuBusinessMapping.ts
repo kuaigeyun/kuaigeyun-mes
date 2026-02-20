@@ -49,10 +49,8 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'traceability': { node: 'quality_inspection', module: 'quality' },
   // 仓储管理（按 module 即可）
   'inbound': { module: 'warehouse' },
-  'product-inbound': { module: 'warehouse' },
   'customer-material-registration': { module: 'warehouse' },
   'outbound': { module: 'warehouse' },
-  'sales-outbound': { module: 'warehouse' },
   'line-side-warehouse': { module: 'warehouse' },
   'backflush-records': { module: 'warehouse' },
   'inventory': { module: 'warehouse' },

@@ -202,7 +202,7 @@ const DashboardDesigner: React.FC = () => {
                 padding: '0 16px',
                 gap: '16px'
             }}>
-                <Space split={<Divider type="vertical" style={{ borderColor: '#303030' }} />}>
+                <Space split={<Divider orientation="vertical" style={{ borderColor: '#303030' }} />}>
                     <Space>
                         <Button size="small" ghost icon={<AreaChartOutlined />} title="对齐" />
                         <Button size="small" ghost icon={<TableOutlined />} title="辅助网格" />

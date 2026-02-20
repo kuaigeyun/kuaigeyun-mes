@@ -23,6 +23,7 @@ import {
 } from '../../../../services/platformSettings';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
+import { applyFavicon } from '../../../../utils/favicon';
 
 /**
  * 平台设置页面组件
@@ -38,6 +39,12 @@ export default function PlatformSettingsPage() {
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
 
+  // Favicon 上传相关状态
+  const [faviconFileList, setFaviconFileList] = useState<UploadFile[]>([]);
+  const [faviconUrl, setFaviconUrl] = useState<string | undefined>(undefined);
+  const [faviconCropModalVisible, setFaviconCropModalVisible] = useState(false);
+  const [selectedFaviconFile, setSelectedFaviconFile] = useState<File | null>(null);
+
   // 获取平台设置信息
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platformSettings'],
@@ -47,10 +54,12 @@ export default function PlatformSettingsPage() {
   // 更新平台设置
   const updateMutation = useMutation({
     mutationFn: (data: PlatformSettingsUpdateRequest) => updatePlatformSettings(data),
-    onSuccess: () => {
+    onSuccess: (data) => {
       messageApi.success('平台设置更新成功');
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
       queryClient.invalidateQueries({ queryKey: ['platformSettingsPublic'] });
+      // 立即应用 Favicon
+      applyFavicon(data.favicon).catch(() => {});
     },
     onError: (error: any) => {
       messageApi.error(error?.message || '平台设置更新失败');
@@ -63,6 +72,41 @@ export default function PlatformSettingsPage() {
   const isUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
+  };
+
+  /**
+   * 加载 Favicon 预览 URL
+   */
+  const loadFaviconPreview = async (faviconValue: string | undefined) => {
+    if (!faviconValue || !faviconValue.trim()) {
+      setFaviconUrl(undefined);
+      setFaviconFileList([]);
+      return;
+    }
+    if (isUUID(faviconValue.trim())) {
+      try {
+        const previewInfo = await getFilePreview(faviconValue.trim());
+        setFaviconUrl(previewInfo.preview_url);
+        setFaviconFileList([{
+          uid: faviconValue.trim(),
+          name: 'Favicon',
+          status: 'done',
+          url: previewInfo.preview_url,
+        }]);
+      } catch (error) {
+        console.error('获取 Favicon 预览 URL 失败:', error);
+        setFaviconUrl(undefined);
+        setFaviconFileList([]);
+      }
+    } else {
+      setFaviconUrl(faviconValue.trim());
+      setFaviconFileList([{
+        uid: faviconValue.trim(),
+        name: 'Favicon',
+        status: 'done',
+        url: faviconValue.trim(),
+      }]);
+    }
   };
 
   /**
@@ -109,6 +153,7 @@ export default function PlatformSettingsPage() {
       form.setFieldsValue({
         platform_name: settings.platform_name,
         platform_logo: settings.platform_logo,
+        favicon: settings.favicon,
         platform_description: settings.platform_description,
         platform_contact_email: settings.platform_contact_email,
         platform_contact_phone: settings.platform_contact_phone,
@@ -121,6 +166,8 @@ export default function PlatformSettingsPage() {
       
       // 加载LOGO预览
       loadLogoPreview(settings.platform_logo);
+      // 加载 Favicon 预览
+      loadFaviconPreview(settings.favicon);
     }
   }, [settings, form]);
 
@@ -229,6 +276,84 @@ export default function PlatformSettingsPage() {
   };
 
   /**
+   * 处理 Favicon 文件选择
+   */
+  const handleFaviconFileSelect: UploadProps['beforeUpload'] = (file) => {
+    if (!file.type.startsWith('image/')) {
+      messageApi.error('请选择图片文件');
+      return false;
+    }
+    setSelectedFaviconFile(file);
+    setFaviconCropModalVisible(true);
+    return false;
+  };
+
+  /**
+   * 处理 Favicon 剪裁确认
+   */
+  const handleFaviconCropConfirm = async (croppedImageBlob: Blob) => {
+    try {
+      const croppedFile = new File([croppedImageBlob], selectedFaviconFile?.name || 'favicon.png', {
+        type: 'image/png',
+        lastModified: Date.now(),
+      });
+      const localPreviewUrl = URL.createObjectURL(croppedFile);
+      setFaviconUrl(localPreviewUrl);
+      setFaviconCropModalVisible(false);
+      setSelectedFaviconFile(null);
+      const response: FileUploadResponse = await uploadFile(croppedFile, {
+        category: 'platform-favicon',
+        description: '平台 Favicon',
+      });
+      if (response.uuid) {
+        form.setFieldsValue({ favicon: response.uuid });
+        let previewUrl: string | undefined;
+        try {
+          const previewInfo = await getFilePreview(response.uuid);
+          URL.revokeObjectURL(localPreviewUrl);
+          previewUrl = previewInfo.preview_url;
+        } catch {
+          console.error('获取 Favicon 预览 URL 失败');
+          previewUrl = localPreviewUrl;
+        }
+        setFaviconUrl(previewUrl);
+        setFaviconFileList([{
+          uid: response.uuid,
+          name: response.original_name,
+          status: 'done',
+          url: previewUrl,
+        }]);
+        messageApi.success('Favicon 上传成功');
+      } else {
+        URL.revokeObjectURL(localPreviewUrl);
+        setFaviconUrl(undefined);
+        messageApi.error('Favicon 上传失败');
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || 'Favicon 上传失败');
+      setFaviconUrl(undefined);
+    }
+  };
+
+  /**
+   * 处理 Favicon 剪裁取消
+   */
+  const handleFaviconCropCancel = () => {
+    setFaviconCropModalVisible(false);
+    setSelectedFaviconFile(null);
+  };
+
+  /**
+   * 清除 Favicon
+   */
+  const handleClearFavicon = () => {
+    form.setFieldsValue({ favicon: undefined });
+    setFaviconUrl(undefined);
+    setFaviconFileList([]);
+    messageApi.success('Favicon 已清除');
+  };
+
+  /**
    * 处理保存
    */
   const handleSave = async (values: PlatformSettingsUpdateRequest) => {
@@ -309,6 +434,59 @@ export default function PlatformSettingsPage() {
               <ProFormText
                 name="platform_logo"
                 placeholder="或直接输入Logo URL"
+                fieldProps={{
+                  maxLength: 500,
+                }}
+                style={{ marginTop: 8 }}
+              />
+            </Space>
+          </ProForm.Item>
+
+          <ProForm.Item
+            name="favicon"
+            label="Favicon"
+            tooltip="上传图片作为浏览器标签页图标，建议尺寸 32x32 或 64x64 像素，支持 UUID 和 URL 两种格式"
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {faviconUrl && (
+                <div style={{ marginBottom: 8 }}>
+                  <img
+                    src={faviconUrl}
+                    alt="Favicon"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      objectFit: 'contain',
+                      border: '1px solid #d9d9d9',
+                      borderRadius: '4px',
+                      padding: '4px',
+                    }}
+                  />
+                </div>
+              )}
+              <Space>
+                <Upload
+                  beforeUpload={handleFaviconFileSelect}
+                  fileList={faviconFileList}
+                  maxCount={1}
+                  accept="image/*"
+                  showUploadList={false}
+                >
+                  <Button icon={<UploadOutlined />}>上传 Favicon</Button>
+                </Upload>
+                {faviconUrl && (
+                  <Button
+                    icon={<DeleteOutlined />}
+                    danger
+                    onClick={handleClearFavicon}
+                  >
+                    清除 Favicon
+                  </Button>
+                )}
+              </Space>
+              <ProFormText
+                name="favicon"
+                placeholder="或直接输入 Favicon URL"
                 fieldProps={{
                   maxLength: 500,
                 }}
@@ -440,6 +618,14 @@ export default function PlatformSettingsPage() {
         defaultShape="rect"
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
+      />
+      <ImageCropper
+        open={faviconCropModalVisible}
+        title="剪裁 Favicon（建议正方形）"
+        image={selectedFaviconFile}
+        defaultShape="rect"
+        onCancel={handleFaviconCropCancel}
+        onConfirm={handleFaviconCropConfirm}
       />
     </ListPageTemplate>
   );
