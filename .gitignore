@@ -55,11 +55,12 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# IDE（保留可共享的 settings/extensions）
+# IDE、本地配置、文档归档（不推远程）
 .idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
+.vscode/
+docs/
+.cursorrules
+.gitmessage
 *.swp
 *.swo
 *~
