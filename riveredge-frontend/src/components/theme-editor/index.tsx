@@ -9,7 +9,7 @@ import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, Con
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
-import { getUserPreference, updateUserPreference } from '../../services/userPreference';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
 import { useThemeStore } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
@@ -282,13 +282,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setLoading(true);
 
       // 并行加载站点主题配置和用户偏好设置
-      const [siteSetting, userPreference] = await Promise.all([
+      const [siteSetting] = await Promise.all([
         getSiteSetting().catch(() => null),
-        getUserPreference().catch(() => null),
+        useUserPreferenceStore.getState().fetchPreferences(),
       ]);
 
       const themeConfig = siteSetting?.settings?.theme_config || {};
       const legacyThemeColor = siteSetting?.settings?.theme_color;
+      const userPreference = { preferences: useUserPreferenceStore.getState().preferences };
 
       // 获取用户颜色模式偏好（浅色/深色/跟随系统）
       const userThemeMode = userPreference?.preferences?.theme || 'light';
@@ -445,19 +446,12 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
    */
   const handleColorModeChange = async (mode: 'light' | 'dark' | 'auto') => {
     try {
-      // 更新表单值
       form.setFieldValue('colorMode', mode);
       setColorMode(mode);
-
-      // 立即应用预览
       applyPreviewTheme(form.getFieldsValue(), mode);
 
-      // 立即保存用户颜色模式偏好
-      const preferences: Record<string, any> = {
-        theme: mode,
-      };
+      // applyTheme 会更新 themeStore 并持久化到 userPreferenceStore
       useThemeStore.getState().applyTheme(mode, {});
-      await updateUserPreference({ preferences });
 
       message.success('颜色模式已切换');
     } catch (error: any) {
@@ -548,58 +542,29 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         themeConfig.tabsBgColor = '';
       }
 
-      // 保存标签栏持久化配置
-      // 如果用户已登录，保存到用户偏好设置；否则保存到本地存储
+      const themeConfigForPreference = {
+        colorPrimary: colorPrimaryValue,
+        borderRadius: values.borderRadius ?? 6,
+        fontSize: values.fontSize ?? 14,
+        compact: !!values.compact,
+        siderBgColor: siderBgColorValue || '',
+        headerBgColor: headerBgColorValue || '',
+        tabsBgColor: tabsBgColorValue || '',
+      };
+
       const hasToken = !!getToken();
-
       if (hasToken) {
-        // 用户已登录，保存到用户偏好设置（与偏好设置页结构一致，便于同步展示）
-        try {
-          const currentPreference = await getUserPreference().catch(() => null);
-          const currentPreferences = currentPreference?.preferences || {};
-
-          // 构建与偏好设置页一致的 theme_config，便于顶栏个性化主题与偏好设置双向同步
-          const themeConfigForPreference = {
-            colorPrimary: colorPrimaryValue,
-            borderRadius: values.borderRadius ?? 6,
-            fontSize: values.fontSize ?? 14,
-            compact: !!values.compact,
-            siderBgColor: siderBgColorValue || '',
-            headerBgColor: headerBgColorValue || '',
-            tabsBgColor: tabsBgColorValue || '',
-          };
-
-          // 合并更新：保留现有偏好，同步主题相关与 theme_config
-          const updatedPreferences: Record<string, any> = {
-            ...currentPreferences,
-            tabs_persistence: tabsPersistenceValue,
-            theme_config: themeConfigForPreference,
-          };
-          if (values.colorMode) {
-            updatedPreferences.theme = values.colorMode;
-          }
-
-          useThemeStore.getState().applyTheme(
-            (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
-            themeConfigForPreference
-          );
-          await updateUserPreference({ preferences: updatedPreferences });
-        } catch (error: any) {
-          // ignore
-        }
+        // 用户已登录：通过 updatePreferences 持久化，app 内订阅会同步 themeStore
+        await useUserPreferenceStore.getState().updatePreferences({
+          theme: (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
+          theme_config: themeConfigForPreference,
+          tabs_persistence: tabsPersistenceValue,
+        });
       } else {
-        // 用户未登录，仍应用主题到 store（供当前会话使用）
+        // 用户未登录：仅应用主题到 store（供当前会话使用）
         useThemeStore.getState().applyTheme(
           (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
-          {
-            colorPrimary: colorPrimaryValue,
-            borderRadius: values.borderRadius ?? 6,
-            fontSize: values.fontSize ?? 14,
-            compact: !!values.compact,
-            siderBgColor: siderBgColorValue || '',
-            headerBgColor: headerBgColorValue || '',
-            tabsBgColor: tabsBgColorValue || '',
-          }
+          themeConfigForPreference
         );
       }
 
@@ -674,13 +639,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 4. 更新服务器配置（如果已登录）
       const token = getToken();
       if (token) {
-        // 等待更新完成，确保后续同步获取的是新配置
         await Promise.all([
-          updateUserPreference({
-            preferences: {
-              theme: 'light',
-              tabs_persistence: false,
-            }
+          useUserPreferenceStore.getState().updatePreferences({
+            theme: 'light',
+            tabs_persistence: false,
+            theme_config: defaultThemeConfig,
           }).catch(err => console.warn('Failed to reset user preferences:', err)),
           updateSiteSetting({
             settings: {

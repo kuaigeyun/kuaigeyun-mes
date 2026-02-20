@@ -14,6 +14,7 @@ import { App as AntdApp, Spin, ConfigProvider, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, isTokenExpired } from './utils/auth';
+import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
 import { useConfigStore } from './stores/configStore';
@@ -120,9 +121,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   useEffect(() => {
     if (userData) {
       setCurrentUser(userData);
-      // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name（如果后端返回）
-      // 注意：如果后端没有返回 tenant_name，需要根据 tenant_id 查询租户信息
       setUserInfo(userData);
+      // 尽早预取头像 URL，与 BasicLayout 的请求复用，缩短顶栏头像显示延迟
+      if (userData.avatar) prefetchAvatarUrl(userData.avatar);
     }
   }, [userData, setCurrentUser]);
 
@@ -430,7 +431,21 @@ export default function App() {
     loadUserLanguage().catch((err) => {
       console.warn('Failed to load user language during app init:', err);
     });
+    // 尽早预取头像 URL，缩短顶栏头像显示延迟
+    const userInfo = getUserInfo();
+    const avatarUuid = (userInfo as any)?.avatar;
+    if (avatarUuid) prefetchAvatarUrl(avatarUuid);
   }, [initFromApi]);
+
+  // 当 userPreferenceStore.preferences 变化时，同步主题到 themeStore（偏好设置页、theme-editor 等通过 updatePreferences 更新后生效）
+  useEffect(() => {
+    const unsub = useUserPreferenceStore.subscribe((state) => {
+      if (state.preferences && Object.keys(state.preferences).length > 0) {
+        useThemeStore.getState().syncFromPreferences(state.preferences);
+      }
+    });
+    return unsub;
+  }, []);
 
   // 退出后重新登录时，clearForLogout 会将 initialized 置为 false，
   // 需在用户登录成功后重新拉取主题偏好，无需刷新页面

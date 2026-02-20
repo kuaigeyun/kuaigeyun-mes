@@ -73,7 +73,7 @@ import type { BusinessConfig } from '../services/businessConfig';
 import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
-import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl } from '../utils/avatar';
 import { getFilePreview } from '../services/file';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
@@ -774,7 +774,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const logout = useGlobalStore((s) => s.logout);
   const isLocked = useGlobalStore((s) => s.isLocked);
   const lockScreen = useGlobalStore((s) => s.lockScreen);
+  // 头像 URL：优先从缓存读取以消除首屏闪烁，再异步拉取最新
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
 
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
@@ -783,6 +785,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
 
       if (avatarUuid) {
+        // 先使用缓存，避免闪烁
+        const cached = getCachedAvatarUrl(avatarUuid);
+        if (cached) setAvatarUrl(cached);
+
         try {
           const url = await getAvatarUrl(avatarUuid);
           if (url) {
@@ -802,6 +808,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const { getUserProfile } = await import('../services/userProfile');
             const profile = await getUserProfile();
             if (profile.avatar) {
+              const cached = getCachedAvatarUrl(profile.avatar);
+              if (cached) setAvatarUrl(cached);
               const url = await getAvatarUrl(profile.avatar);
               if (url) {
                 setAvatarUrl(url);
@@ -813,17 +821,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
         }
 
-        // 只有在确实没有找到头像时才清空
-        if (!foundAvatar) {
-          setAvatarUrl(undefined);
-        }
+        if (!foundAvatar) setAvatarUrl(undefined);
       }
     };
 
     if (currentUser) {
+      setAvatarLoaded(false);
       loadAvatarUrl();
     }
   }, [currentUser]);
+
+  // avatarUrl 变化时重置 loaded 状态
+  useEffect(() => {
+    setAvatarLoaded(false);
+  }, [avatarUrl]);
 
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
@@ -4267,23 +4278,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  {avatarUrl ? (
-                    <Avatar
-                      size={24}
-                      src={avatarUrl}
-                      style={{
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    />
-                  ) : (
+                  <span
+                    style={{
+                      position: 'relative',
+                      width: 24,
+                      height: 24,
+                      flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {/* 占位：始终显示首字母，避免闪烁 */}
                     <Avatar
                       size={24}
                       style={{
                         backgroundColor: token.colorPrimary,
-                        flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -4291,10 +4301,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         fontWeight: 500,
                       }}
                     >
-                      {/* 显示首字母（优先全名，否则用户名） */}
                       {getAvatarText(currentUser.full_name, currentUser.username)}
                     </Avatar>
-                  )}
+                    {/* 图片加载完成后淡入，避免突兀切换 */}
+                    {avatarUrl && (
+                      <img
+                        src={avatarUrl}
+                        alt=""
+                        onLoad={() => setAvatarLoaded(true)}
+                        onError={() => setAvatarLoaded(false)}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          width: 24,
+                          height: 24,
+                          opacity: avatarLoaded ? 1 : 0,
+                          transition: 'opacity 0.2s ease',
+                        }}
+                      />
+                    )}
+                  </span>
                   <span
                     style={{
                       fontSize: 14,

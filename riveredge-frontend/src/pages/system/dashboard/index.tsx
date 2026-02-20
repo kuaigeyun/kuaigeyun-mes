@@ -591,18 +591,28 @@ export default function DashboardPage() {
         <Row align="middle" justify="space-between">
           <Col flex="auto">
             <Space size="large">
-              <Avatar 
-                size={64} 
-                src={avatarUrl}
-                style={{ 
-                  backgroundColor: avatarUrl ? 'transparent' : '#ffffff',
-                  color: token.colorPrimary,
-                  fontSize: 24,
-                  fontWeight: 'bold',
+              <span
+                style={{
+                  display: 'inline-flex',
+                  padding: 4,
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15), inset 0 0 0 2px rgba(255, 255, 255, 0.5)',
                 }}
               >
-                {!avatarUrl && getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
-              </Avatar>
+                <Avatar
+                  size={64}
+                  src={avatarUrl}
+                  style={{
+                    backgroundColor: avatarUrl ? 'transparent' : '#ffffff',
+                    color: token.colorPrimary,
+                    fontSize: 24,
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {!avatarUrl && getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
+                </Avatar>
+              </span>
               <div>
                 <Title 
                   level={3} 

@@ -61,6 +61,19 @@ function readCachedPreferencesForCurrentUser(): Record<string, any> {
   }
 }
 
+/** 从缓存中提取主题配置，供 themeStore 合并逻辑使用 */
+export function getThemeFromPreferenceCache(): { theme: string; theme_config: Record<string, any> } | null {
+  const prefs = readCachedPreferencesForCurrentUser();
+  if (!prefs || Object.keys(prefs).length === 0) return null;
+  const theme = prefs.theme;
+  const theme_config = prefs.theme_config;
+  if (!theme && (!theme_config || Object.keys(theme_config || {}).length === 0)) return null;
+  return {
+    theme: theme || 'light',
+    theme_config: (theme_config && typeof theme_config === 'object') ? theme_config : {},
+  };
+}
+
 interface UserPreferenceState {
   preferences: Record<string, any>;
   loading: boolean;

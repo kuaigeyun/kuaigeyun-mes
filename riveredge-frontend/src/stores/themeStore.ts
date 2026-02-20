@@ -1,17 +1,18 @@
 /**
- * 主题状态 Store
+ * 主题状态 Store（派生层）
  *
- * 单一数据源，集中管理主题模式与配置。
+ * 从 userPreferenceStore 读取主题，合并站点默认，计算 resolved 供 ConfigProvider 使用。
+ * 主题数据源：userPreferenceStore.preferences（theme / theme_config）
  * 解析顺序：站点配置 <- 用户偏好 <- 默认值
  */
 
 import { create } from 'zustand';
 import { theme } from 'antd';
 import { getSiteSetting } from '../services/siteSetting';
-import { getUserPreference } from '../services/userPreference';
 import { getToken } from '../utils/auth';
+import { useUserPreferenceStore } from './userPreferenceStore';
+import { getThemeFromPreferenceCache } from './userPreferenceStore';
 
-const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
 const DEFAULT_CONFIG = {
   colorPrimary: '#1890ff',
   borderRadius: 6,
@@ -94,6 +95,7 @@ interface ThemeState {
   initialized: boolean;
   initFromApi: () => Promise<void>;
   applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
+  syncFromPreferences: (preferences: Record<string, any>) => void;
   subscribeToSystemTheme: () => () => void;
   clearForLogout: () => void;
 }
@@ -109,9 +111,20 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
   };
 
-  const fallback = readFallbackFromStorage();
-  const initialTheme = (fallback?.theme as ThemeMode) || 'light';
-  const initialConfig = fallback?.config ?? { ...DEFAULT_CONFIG };
+  const syncFromPreferences = (preferences: Record<string, any>) => {
+    if (!preferences || typeof preferences !== 'object') return;
+    const userTheme = (preferences.theme as ThemeMode) || 'light';
+    const userConfig = (preferences.theme_config || {}) as Partial<ThemeConfig>;
+    const mergedConfig = mergeConfig({}, userConfig);
+    doApplyTheme(userTheme, mergedConfig);
+  };
+
+  // 初始值：优先从 userPreferenceStore 缓存读取，否则用默认
+  const cached = getThemeFromPreferenceCache();
+  const initialTheme = (cached?.theme as ThemeMode) || 'light';
+  const initialConfig = cached?.theme_config
+    ? mergeConfig({}, cached.theme_config as Partial<ThemeConfig>)
+    : { ...DEFAULT_CONFIG };
   const initialResolved = computeResolved(initialTheme, initialConfig);
 
   return {
@@ -122,26 +135,30 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
     initFromApi: async () => {
       if (!getToken()) {
-        const fallback = readFallbackFromStorage();
-        if (fallback) {
-          doApplyTheme(fallback.theme as ThemeMode, fallback.config);
+        const cachedTheme = getThemeFromPreferenceCache();
+        const siteSetting = await getSiteSetting().catch(() => null);
+        const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
+        if (cachedTheme) {
+          const merged = mergeConfig(siteConfig as ThemeConfig, cachedTheme.theme_config as Partial<ThemeConfig>);
+          doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
         } else {
-          doApplyTheme('light', DEFAULT_CONFIG);
+          const merged = mergeConfig(siteConfig as ThemeConfig, null);
+          doApplyTheme('light', merged);
         }
         set({ initialized: true });
         return;
       }
 
       try {
-        const [siteSetting, userPreference] = await Promise.all([
+        const [siteSetting] = await Promise.all([
           getSiteSetting().catch(() => null),
-          getUserPreference().catch(() => null),
+          useUserPreferenceStore.getState().fetchPreferences(),
         ]);
 
         const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
-        const userPrefs = userPreference?.preferences;
-        const userTheme = (userPrefs?.theme as ThemeMode) || 'light';
-        const userConfig = (userPrefs?.theme_config || {}) as Partial<ThemeConfig>;
+        const prefs = useUserPreferenceStore.getState().preferences || {};
+        const userTheme = (prefs?.theme as ThemeMode) || 'light';
+        const userConfig = (prefs?.theme_config || {}) as Partial<ThemeConfig>;
 
         const mergedConfig = mergeConfig(siteConfig as ThemeConfig, userConfig);
         doApplyTheme(userTheme, mergedConfig);
@@ -149,19 +166,37 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         set({ initialized: true });
       } catch (e) {
         console.warn('Theme init failed:', e);
-        const fallback = readFallbackFromStorage();
-        if (fallback) {
-          doApplyTheme(fallback.theme as ThemeMode, fallback.config);
+        const cachedTheme = getThemeFromPreferenceCache();
+        const siteSetting = await getSiteSetting().catch(() => null);
+        const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
+        if (cachedTheme) {
+          const merged = mergeConfig(siteConfig as ThemeConfig, cachedTheme.theme_config as Partial<ThemeConfig>);
+          doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
         } else {
-          doApplyTheme('light', DEFAULT_CONFIG);
+          const merged = mergeConfig(siteConfig as ThemeConfig, null);
+          doApplyTheme('light', merged);
         }
         set({ initialized: true });
       }
     },
 
     applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
-      doApplyTheme(themeMode, configOverride);
+      const { config } = get();
+      const mergedConfig = mergeConfig(config, configOverride ?? null);
+      doApplyTheme(themeMode, mergedConfig);
+
+      if (getToken()) {
+        useUserPreferenceStore
+          .getState()
+          .updatePreferences({
+            theme: themeMode,
+            theme_config: mergedConfig,
+          })
+          .catch((err) => console.warn('Failed to persist theme:', err));
+      }
     },
+
+    syncFromPreferences,
 
     subscribeToSystemTheme: () => {
       const { theme: mode } = get();
@@ -177,7 +212,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
     clearForLogout: () => {
       try {
-        localStorage.removeItem(THEME_CONFIG_STORAGE_KEY);
+        localStorage.removeItem('riveredge_theme_config');
       } catch (_) {}
       set({
         theme: 'light',
@@ -189,17 +224,3 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     },
   };
 });
-
-function readFallbackFromStorage(): { theme: string; config: ThemeConfig } | null {
-  try {
-    const raw = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const themeMode = parsed.theme || 'light';
-    const config = mergeConfig({}, parsed as Partial<ThemeConfig>);
-    return { theme: themeMode, config };
-  } catch {
-    return null;
-  }
-}

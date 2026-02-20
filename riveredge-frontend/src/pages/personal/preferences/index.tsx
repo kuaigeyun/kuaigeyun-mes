@@ -10,7 +10,6 @@ import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-des
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Slider, Form, Row, Col, Divider, Typography } from 'antd';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
-import { useThemeStore } from '../../../stores/themeStore';
 import { getLanguageList, Language } from '../../../services/language';
 import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
 import i18n from '../../../config/i18n';
@@ -152,19 +151,22 @@ const UserPreferencesPage: React.FC = () => {
    */
   const handleSubmit = async (values: any) => {
     try {
-      // 若包含主题配置，先应用到 themeStore（单一数据源），再持久化到 API
+      // 规范化 theme_config 中的颜色值
       const tc = values.theme_config;
       if (tc) {
-        const mergedConfig = {
-          colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
-          borderRadius: tc.borderRadius ?? 6,
-          fontSize: tc.fontSize ?? 14,
-          compact: !!tc.compact,
-          siderBgColor: normalizeColor(tc.siderBgColor, '') || '',
-          headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
-          tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
+        values = {
+          ...values,
+          theme_config: {
+            ...tc,
+            colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
+            borderRadius: tc.borderRadius ?? 6,
+            fontSize: tc.fontSize ?? 14,
+            compact: !!tc.compact,
+            siderBgColor: normalizeColor(tc.siderBgColor, '') || '',
+            headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
+            tabsBgColor: normalizeColor(tc.tabsBgColor, '') || '',
+          },
         };
-        useThemeStore.getState().applyTheme((values.theme as 'light' | 'dark' | 'auto') || 'light', mergedConfig);
       }
 
       await updatePreferences(values);

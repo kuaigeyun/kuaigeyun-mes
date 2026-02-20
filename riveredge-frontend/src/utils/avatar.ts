@@ -1,44 +1,93 @@
 /**
  * 头像工具函数
- * 
+ *
  * 提供统一的头像显示逻辑：
  * - 如果用户上传过头像，显示图片头像
  * - 如果未上传过，显示文字头像（首字母）
+ * - 支持 URL 缓存，减少重复请求和首屏闪烁
  */
 
-import { getFilePreview, getFileDownloadUrl } from '../services/file';
+import { getFilePreview } from '../services/file';
+
+const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
+const AVATAR_CACHE_TTL_MS = 30 * 60 * 1000; // 30 分钟
+
+function getAvatarCacheKey(avatarUuid: string): string {
+  return `${AVATAR_CACHE_PREFIX}${avatarUuid}`;
+}
+
+/** 从缓存读取头像 URL（含 TTL 校验） */
+export function getCachedAvatarUrl(avatarUuid: string | undefined): string | undefined {
+  if (!avatarUuid || typeof window === 'undefined') return undefined;
+  try {
+    const raw = localStorage.getItem(getAvatarCacheKey(avatarUuid));
+    if (!raw) return undefined;
+    const { url, ts } = JSON.parse(raw);
+    if (!url || typeof ts !== 'number') return undefined;
+    if (Date.now() - ts > AVATAR_CACHE_TTL_MS) return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 写入头像 URL 缓存 */
+export function setCachedAvatarUrl(avatarUuid: string | undefined, url: string | undefined): void {
+  if (!avatarUuid || typeof window === 'undefined') return;
+  try {
+    if (!url) {
+      localStorage.removeItem(getAvatarCacheKey(avatarUuid));
+      return;
+    }
+    localStorage.setItem(getAvatarCacheKey(avatarUuid), JSON.stringify({ url, ts: Date.now() }));
+  } catch (_) {}
+}
+
+/** 进行中的请求，避免同一 UUID 重复拉取 */
+const inFlightMap = new Map<string, Promise<string | undefined>>();
 
 /**
  * 获取头像预览 URL
- * 
- * 优先使用预览 API，如果失败则回退到下载 URL
- * 
+ *
+ * 优先使用缓存；同 UUID 并发请求会复用同一 Promise，避免重复拉取
+ *
  * @param avatarUuid - 头像文件 UUID
- * @returns 预览 URL 或下载 URL，如果获取失败返回 undefined
+ * @returns 预览 URL 或 undefined
  */
 export async function getAvatarUrl(avatarUuid: string | undefined): Promise<string | undefined> {
-  if (!avatarUuid) {
-    return undefined;
+  if (!avatarUuid) return undefined;
+
+  const cached = getCachedAvatarUrl(avatarUuid);
+  if (cached) return cached;
+
+  let promise = inFlightMap.get(avatarUuid);
+  if (!promise) {
+    promise = (async () => {
+      try {
+        const previewInfo = await getFilePreview(avatarUuid);
+        const previewUrl = previewInfo.preview_url;
+        if (previewUrl) {
+          setCachedAvatarUrl(avatarUuid, previewUrl);
+          return previewUrl;
+        }
+        return undefined;
+      } catch (error) {
+        console.error('获取头像预览 URL 失败:', error);
+        return undefined;
+      } finally {
+        inFlightMap.delete(avatarUuid);
+      }
+    })();
+    inFlightMap.set(avatarUuid, promise);
   }
-  
-  try {
-    const previewInfo = await getFilePreview(avatarUuid);
-    const previewUrl = previewInfo.preview_url;
-    
-    // 验证预览 URL 格式（应该是包含 token 的下载 URL）
-    if (previewUrl && previewUrl.includes('/download?token=')) {
-      return previewUrl;
-    } else {
-      return previewUrl; // 仍然返回，让浏览器尝试加载
-    }
-  } catch (error) {
-    console.error('获取头像预览 URL 失败:', error);
-    
-    // 如果预览 API 失败（通常是组织上下文问题），尝试获取文件信息后构造下载 URL
-    // 但这种方式需要 token，而预览 API 失败通常意味着权限问题
-    // 所以这里直接返回 undefined，让前端显示文字头像
-    return undefined;
-  }
+  return promise;
+}
+
+/** 预取头像 URL，供应用启动时尽早调用以缩短首屏显示延迟 */
+export function prefetchAvatarUrl(avatarUuid: string | undefined): void {
+  if (!avatarUuid) return;
+  if (getCachedAvatarUrl(avatarUuid)) return;
+  getAvatarUrl(avatarUuid).catch(() => {});
 }
 
 /**
