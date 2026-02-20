@@ -122,19 +122,25 @@ export function translateAppMenuItemName(
 
 
   if (appCode && relativePath) {
-    const menuKey = `app.${appCode}.menu.${relativePath.replace(/\//g, '.')}`;
+    // 约定：path 末段 = i18n key 末段，path 推导直接命中 locale
+    const pathKey = relativePath.replace(/\//g, '.');
+    const menuKey = `app.${appCode}.menu.${pathKey}`;
     const translated = t(menuKey, { defaultValue: '' });
     if (translated && translated !== menuKey && translated.trim() !== '') {
       return translated;
     }
 
-    // 尝试第一段作为分组 fallback
-    const firstSegment = relativePath.split('/')[0];
-    const groupKey = `app.${appCode}.menu.${firstSegment}`;
-    const groupTranslated = t(groupKey, { defaultValue: '' });
-    if (groupTranslated && groupTranslated !== groupKey && groupTranslated.trim() !== '') {
-      return groupTranslated;
+    const lastSegment = relativePath.split('/').pop() || '';
+    if (lastSegment) {
+      const segmentKey = `path.${lastSegment}`;
+      const segmentTranslated = t(segmentKey, { defaultValue: '' });
+      if (segmentTranslated && segmentTranslated !== segmentKey && segmentTranslated.trim() !== '') {
+        return segmentTranslated;
+      }
     }
+
+    // ⚠️ 禁止：有 path 的叶子项绝不能 fallback 到父级 key，否则会错误显示父级名称
+    // 原逻辑用 firstSegment(groupKey) 导致 "收款记录" 显示成 "财务管理"
   }
 
   // 回退到通用翻译

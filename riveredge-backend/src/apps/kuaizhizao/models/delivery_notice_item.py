@@ -1,7 +1,7 @@
 """
-发货通知单明细模型
+送货单明细模型
 
-记录发货通知单中每个物料的详细信息。
+记录送货单中每个物料的详细信息。
 
 Author: RiverEdge Team
 Date: 2026-02-19
@@ -13,9 +13,9 @@ from core.models.base import BaseModel
 
 class DeliveryNoticeItem(BaseModel):
     """
-    发货通知单明细
+    送货单明细
 
-    用于记录发货通知单中每个物料的详细信息
+    用于记录送货单中每个物料的详细信息
     """
     tenant_id = fields.IntField(description="租户ID")
     notice_id = fields.IntField(description="通知单ID")
@@ -36,7 +36,7 @@ class DeliveryNoticeItem(BaseModel):
 
     class Meta:
         table = "apps_kuaizhizao_delivery_notice_items"
-        table_description = "快格轻制造 - 发货通知单明细"
+        table_description = "快格轻制造 - 送货单明细"
         indexes = [
             ("tenant_id", "notice_id"),
             ("material_id",),

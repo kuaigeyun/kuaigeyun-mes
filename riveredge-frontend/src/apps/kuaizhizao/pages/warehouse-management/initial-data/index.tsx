@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { App, Card, Steps, Button, Space, DatePicker } from 'antd';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { ImportOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniImport } from '../../../../../components/uni-import';
 import { 
@@ -141,7 +142,7 @@ const InitialDataImportPage: React.FC = () => {
       title: '期初库存导入',
       description: '导入快照时间点的库存数据',
       content: (
-        <Card>
+        <div>
           <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>快照时间点</h3>
@@ -176,14 +177,14 @@ const InitialDataImportPage: React.FC = () => {
               </Button>
             </div>
           </Space>
-        </Card>
+        </div>
       ),
     },
     {
       title: '在制品导入',
       description: '导入快照时间点的在制品数据',
       content: (
-        <Card>
+        <div>
           <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>导入数据</h3>
@@ -204,14 +205,14 @@ const InitialDataImportPage: React.FC = () => {
               </Button>
             </div>
           </Space>
-        </Card>
+        </div>
       ),
     },
     {
       title: '应收应付导入',
       description: '导入快照时间点的应收应付数据',
       content: (
-        <Card>
+        <div>
           <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>导入数据</h3>
@@ -232,22 +233,20 @@ const InitialDataImportPage: React.FC = () => {
               </Button>
             </div>
           </Space>
-        </Card>
+        </div>
       ),
     },
     {
       title: '完成',
       description: '期初数据导入完成',
       content: (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
-            <h2>期初数据导入完成！</h2>
-            <p style={{ color: '#666', marginTop: 16 }}>
-              所有期初数据已成功导入系统，您可以开始使用系统进行业务操作。
-            </p>
-          </div>
-        </Card>
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
+          <h2>期初数据导入完成！</h2>
+          <p style={{ color: '#666', marginTop: 16 }}>
+            所有期初数据已成功导入系统，您可以开始使用系统进行业务操作。
+          </p>
+        </div>
       ),
     },
   ];
@@ -258,8 +257,8 @@ const InitialDataImportPage: React.FC = () => {
   }));
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
+    <ListPageTemplate>
+      <Card styles={{ body: { padding: 16 } }}>
         <Steps current={currentStep} items={stepItems} style={{ marginBottom: 32 }} />
         
         <div style={{ minHeight: 400, marginBottom: 24 }}>
@@ -307,7 +306,7 @@ const InitialDataImportPage: React.FC = () => {
         headers={['类型', '客户编码', '供应商编码', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
         exampleRow={['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001']}
       />
-    </div>
+    </ListPageTemplate>
   );
 };
 

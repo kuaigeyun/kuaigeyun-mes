@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message, theme } from 'antd';
+import { Button, Card, Row, Col, Tag, Typography, Space, Empty, Spin, message } from 'antd';
 import {
     PlusOutlined,
     BarChartOutlined,
@@ -13,22 +13,129 @@ import {
     MenuOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { Modal, InputNumber } from 'antd';
+import { Modal } from 'antd';
+import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { getSystemReports, getMyReports, deleteReport, shareReport, mountReportToMenu } from '../services/kuaireport';
 
-const { Sider, Content } = Layout;
-const { Title, Text } = Typography;
-const { useToken } = theme;
+const { Text } = Typography;
 
-type Tab = 'system' | 'my';
+type TabKey = 'system' | 'my';
+
+interface ReportGridProps {
+    reports: any[];
+    loading: boolean;
+    activeTab: TabKey;
+    onView: (report: any) => void;
+    onShare: (report: any) => void;
+    onMount: (report: any) => void;
+    onEdit: (report: any) => void;
+    onDelete: (id: number) => void;
+}
+
+const statusColor: Record<string, string> = {
+    PUBLISHED: 'green',
+    DRAFT: 'orange',
+};
+
+const ReportGrid: React.FC<ReportGridProps> = ({
+    reports,
+    loading,
+    activeTab,
+    onView,
+    onShare,
+    onMount,
+    onEdit,
+    onDelete,
+}) => {
+    if (loading) {
+        return (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                <Spin size="large" />
+            </div>
+        );
+    }
+    if (reports.length === 0) {
+        return (
+            <Empty
+                description={activeTab === 'my' ? '还没有自定义报表，点击右上角新建' : '暂无系统报表'}
+                style={{ marginTop: 60 }}
+            />
+        );
+    }
+    return (
+        <Row gutter={[16, 16]}>
+            {reports.map((report: any) => (
+                <Col key={report.id} xs={24} sm={12} md={8} lg={6}>
+                    <Card
+                        hoverable
+                        size="small"
+                        actions={[
+                            <EyeOutlined
+                                key="view"
+                                title="查看"
+                                onClick={() => onView(report)}
+                            />,
+                            <ShareAltOutlined
+                                key="share"
+                                title="分享"
+                                onClick={() => onShare(report)}
+                            />,
+                            <MenuOutlined
+                                key="menu"
+                                title="挂载到菜单"
+                                onClick={() => onMount(report)}
+                            />,
+                            ...(activeTab === 'my'
+                                ? [
+                                      <EditOutlined
+                                          key="edit"
+                                          title="编辑"
+                                          onClick={() => onEdit(report)}
+                                      />,
+                                      <DeleteOutlined
+                                          key="delete"
+                                          title="删除"
+                                          style={{ color: '#ff4d4f' }}
+                                          onClick={() => onDelete(report.id)}
+                                      />,
+                                  ]
+                                : []),
+                        ]}
+                    >
+                        <Card.Meta
+                            avatar={<BarChartOutlined style={{ fontSize: 24, color: '#1677ff' }} />}
+                            title={
+                                <Space>
+                                    <Text ellipsis style={{ maxWidth: 120 }}>
+                                        {report.name}
+                                    </Text>
+                                    <Tag color={statusColor[report.status] ?? 'default'} style={{ margin: 0 }}>
+                                        {report.status === 'PUBLISHED' ? '已发布' : '草稿'}
+                                    </Tag>
+                                </Space>
+                            }
+                            description={
+                                <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                                    {report.description || report.code}
+                                </Text>
+                            }
+                        />
+                    </Card>
+                </Col>
+            ))}
+        </Row>
+    );
+};
 
 const ReportCenter: React.FC = () => {
-    const { token } = useToken();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<Tab>('system');
+    const [activeTab, setActiveTab] = useState<TabKey>('system');
     const [reports, setReports] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    const [shareModal, setShareModal] = useState<{ visible: boolean; report: any; link?: string }>({ visible: false, report: null });
+    const [shareModal, setShareModal] = useState<{ visible: boolean; report: any; link?: string }>({
+        visible: false,
+        report: null,
+    });
     const [mountModal, setMountModal] = useState<{ visible: boolean; report: any }>({ visible: false, report: null });
 
     useEffect(() => {
@@ -49,7 +156,9 @@ const ReportCenter: React.FC = () => {
             .finally(() => {
                 if (!cancelled) setLoading(false);
             });
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [activeTab]);
 
     const handleDelete = async (id: number) => {
@@ -83,139 +192,81 @@ const ReportCenter: React.FC = () => {
         }
     };
 
-    const menuItems = [
+    const tabItems = [
         {
             key: 'system',
-            icon: <AppstoreOutlined />,
-            label: '系统报表',
+            label: (
+                <Space>
+                    <AppstoreOutlined />
+                    系统报表
+                </Space>
+            ),
+            children: (
+                <ReportGrid
+                    reports={reports}
+                    loading={loading}
+                    activeTab="system"
+                    onView={(r) => navigate(`../reports/${r.id}`)}
+                    onShare={handleShare}
+                    onMount={(r) => setMountModal({ visible: true, report: r })}
+                    onEdit={(r) => navigate(`../reports/${r.id}/edit`)}
+                    onDelete={handleDelete}
+                />
+            ),
         },
         {
             key: 'my',
-            icon: <UserOutlined />,
-            label: '我的报表',
+            label: (
+                <Space>
+                    <UserOutlined />
+                    我的报表
+                </Space>
+            ),
+            children: (
+                <ReportGrid
+                    reports={reports}
+                    loading={loading}
+                    activeTab="my"
+                    onView={(r) => navigate(`../reports/${r.id}`)}
+                    onShare={handleShare}
+                    onMount={(r) => setMountModal({ visible: true, report: r })}
+                    onEdit={(r) => navigate(`../reports/${r.id}/edit`)}
+                    onDelete={handleDelete}
+                />
+            ),
         },
     ];
 
-    const statusColor: Record<string, string> = {
-        PUBLISHED: 'green',
-        DRAFT: 'orange',
-    };
+    const tabBarExtraContent = (
+        <Space>
+            <Button
+                type="default"
+                icon={<DatabaseOutlined />}
+                onClick={() => navigate('/system/data-sources')}
+            >
+                管理数据源
+            </Button>
+            {activeTab === 'my' && (
+                <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate('../reports/new')}
+                >
+                    新建报表
+                </Button>
+            )}
+        </Space>
+    );
 
     return (
-        <Layout style={{ minHeight: 'calc(100vh - 56px)', background: '#f5f5f5' }}>
-            {/* 左侧分类导航 */}
-            <Sider width={200} style={{ background: '#fff', borderRight: `1px solid ${token.colorBorder}` }}>
-                <div style={{ padding: '16px 16px 8px', fontWeight: 600, color: '#333' }}>
-                    <BarChartOutlined style={{ marginRight: 8 }} />
-                    报表中心
-                </div>
-                <Menu
-                    mode="inline"
-                    selectedKeys={[activeTab]}
-                    items={menuItems}
-                    onClick={({ key }) => setActiveTab(key as Tab)}
-                    style={{ border: 'none' }}
-                />
-            </Sider>
-
-            {/* 右侧内容区 */}
-            <Content style={{ padding: '24px' }}>
-                {/* 顶部操作栏 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <Title level={4} style={{ margin: 0 }}>
-                        {activeTab === 'system' ? '系统报表' : '我的报表'}
-                    </Title>
-                    <Space>
-                        <Button
-                            type="default"
-                            icon={<DatabaseOutlined />}
-                            onClick={() => navigate('/system/data-sources')}
-                        >
-                            管理数据源
-                        </Button>
-                        {activeTab === 'my' && (
-                            <Button
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() => navigate('../reports/new')}
-                            >
-                                新建报表
-                            </Button>
-                        )}
-                    </Space>
-                </div>
-
-                <>
-                        {loading ? (
-                            <div style={{ textAlign: 'center', padding: '60px 0' }}>
-                                <Spin size="large" />
-                            </div>
-                        ) : reports.length === 0 ? (
-                            <Empty
-                                description={activeTab === 'my' ? '还没有自定义报表，点击右上角新建' : '暂无系统报表'}
-                                style={{ marginTop: 60 }}
-                            />
-                        ) : (
-                            <Row gutter={[16, 16]}>
-                                {reports.map((report: any) => (
-                                    <Col key={report.id} xs={24} sm={12} md={8} lg={6}>
-                                        <Card
-                                            hoverable
-                                            size="small"
-                                            actions={[
-                                                <EyeOutlined
-                                                    key="view"
-                                                    title="查看"
-                                                    onClick={() => navigate(`../reports/${report.id}`)}
-                                                />,
-                                                <ShareAltOutlined
-                                                    key="share"
-                                                    title="分享"
-                                                    onClick={() => handleShare(report)}
-                                                />,
-                                                <MenuOutlined
-                                                    key="menu"
-                                                    title="挂载到菜单"
-                                                    onClick={() => setMountModal({ visible: true, report })}
-                                                />,
-                                                ...(activeTab === 'my' ? [
-                                                    <EditOutlined
-                                                        key="edit"
-                                                        title="编辑"
-                                                        onClick={() => navigate(`../reports/${report.id}/edit`)}
-                                                    />,
-                                                    <DeleteOutlined
-                                                        key="delete"
-                                                        title="删除"
-                                                        style={{ color: '#ff4d4f' }}
-                                                        onClick={() => handleDelete(report.id)}
-                                                    />,
-                                                ] : []),
-                                            ]}
-                                        >
-                                            <Card.Meta
-                                                avatar={<BarChartOutlined style={{ fontSize: 24, color: '#1677ff' }} />}
-                                                title={
-                                                    <Space>
-                                                        <Text ellipsis style={{ maxWidth: 120 }}>{report.name}</Text>
-                                                        <Tag color={statusColor[report.status] ?? 'default'} style={{ margin: 0 }}>
-                                                            {report.status === 'PUBLISHED' ? '已发布' : '草稿'}
-                                                        </Tag>
-                                                    </Space>
-                                                }
-                                                description={
-                                                    <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-                                                        {report.description || report.code}
-                                                    </Text>
-                                                }
-                                            />
-                                        </Card>
-                                    </Col>
-                                ))}
-                            </Row>
-                        )}
-                </>
-            </Content>
+        <>
+            <MultiTabListPageTemplate
+                activeTabKey={activeTab}
+                onTabChange={(key) => setActiveTab(key as TabKey)}
+                tabs={tabItems}
+                tabBarExtraContent={tabBarExtraContent}
+                padding={16}
+            />
 
             <Modal
                 title="分享报表"
@@ -225,7 +276,9 @@ const ReportCenter: React.FC = () => {
             >
                 {shareModal.link && (
                     <div>
-                        <p style={{ marginBottom: 8 }}>分享链接（复制后发送给他人，无需登录即可查看）：</p>
+                        <p style={{ marginBottom: 8 }}>
+                            分享链接（复制后发送给他人，无需登录即可查看）：
+                        </p>
                         <input
                             readOnly
                             value={shareModal.link}
@@ -250,7 +303,13 @@ const ReportCenter: React.FC = () => {
                 title="挂载到菜单"
                 open={mountModal.visible}
                 onCancel={() => setMountModal({ visible: false, report: null })}
-                onOk={() => mountModal.report && handleMountToMenu(mountModal.report, (document.getElementById('mount-menu-name') as HTMLInputElement)?.value)}
+                onOk={() =>
+                    mountModal.report &&
+                    handleMountToMenu(
+                        mountModal.report,
+                        (document.getElementById('mount-menu-name') as HTMLInputElement)?.value
+                    )
+                }
                 okText="确定挂载"
             >
                 {mountModal.report && (
@@ -265,7 +324,7 @@ const ReportCenter: React.FC = () => {
                     </div>
                 )}
             </Modal>
-        </Layout>
+        </>
     );
 };
 

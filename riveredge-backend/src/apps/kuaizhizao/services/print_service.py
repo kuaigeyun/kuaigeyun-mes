@@ -235,7 +235,7 @@ class DocumentPrintService:
             from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
             document = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
-                raise NotFoundError(f"发货通知单不存在: {document_id}")
+                raise NotFoundError(f"送货单不存在: {document_id}")
             return await self._format_delivery_notice_data(document)
         
         elif document_type == "sample_trial":
@@ -584,7 +584,7 @@ class DocumentPrintService:
         }
 
     async def _format_delivery_notice_data(self, notice) -> Dict[str, Any]:
-        """格式化发货通知单数据"""
+        """格式化送货单数据"""
         from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
         items = await DeliveryNoticeItem.filter(tenant_id=notice.tenant_id, notice_id=notice.id).all()
         items_data = [

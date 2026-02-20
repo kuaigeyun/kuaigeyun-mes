@@ -1,7 +1,7 @@
 """
-创建发货通知单表
+创建送货单表
 
-阶段五：发货通知单 - 在销售出库前/后向客户发送发货通知
+阶段五：送货单 - 在销售出库前/后向客户发送发货通知
 
 Author: RiverEdge Team
 Date: 2026-02-19
@@ -15,7 +15,7 @@ RUN_IN_TRANSACTION = True
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- ============================================
-        -- 1. 创建发货通知单表
+        -- 1. 创建送货单表
         -- ============================================
         CREATE TABLE IF NOT EXISTS "apps_kuaizhizao_delivery_notices" (
             "uuid" VARCHAR(36) NOT NULL,
@@ -55,10 +55,10 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_delivery_notices_customer_id" ON "apps_kuaizhizao_delivery_notices" ("customer_id");
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_delivery_notices_status" ON "apps_kuaizhizao_delivery_notices" ("status");
 
-        COMMENT ON TABLE "apps_kuaizhizao_delivery_notices" IS '快格轻制造 - 发货通知单';
+        COMMENT ON TABLE "apps_kuaizhizao_delivery_notices" IS '快格轻制造 - 送货单';
 
         -- ============================================
-        -- 2. 创建发货通知单明细表
+        -- 2. 创建送货单明细表
         -- ============================================
         CREATE TABLE IF NOT EXISTS "apps_kuaizhizao_delivery_notice_items" (
             "uuid" VARCHAR(36) NOT NULL,
@@ -83,7 +83,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_delivery_notice_items_notice_id" ON "apps_kuaizhizao_delivery_notice_items" ("notice_id");
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaizh_delivery_notice_items_material_id" ON "apps_kuaizhizao_delivery_notice_items" ("material_id");
 
-        COMMENT ON TABLE "apps_kuaizhizao_delivery_notice_items" IS '快格轻制造 - 发货通知单明细';
+        COMMENT ON TABLE "apps_kuaizhizao_delivery_notice_items" IS '快格轻制造 - 送货单明细';
     """
 
 

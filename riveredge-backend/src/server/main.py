@@ -344,58 +344,43 @@ async def health_check():
         "service": "riveredge-backend"
     }
 
-# 手动重新加载应用路由（调试用）
-@app.post("/debug/reload-apps")
-async def debug_reload_apps():
-    """
-    手动重新加载应用路由（调试用）
+# 调试端点：仅开发环境可用，生产环境不注册
+def _is_debug_allowed() -> bool:
+    env = os.getenv("ENVIRONMENT", "development")
+    debug = os.getenv("DEBUG", "false").lower() == "true"
+    return env == "development" or debug
 
-    这是一个临时的调试端点，用于测试应用路由重新加载功能。
-    """
-    from core.services.application.application_registry_service import ApplicationRegistryService
 
-    try:
-        await ApplicationRegistryService.reload_apps()
-        return {
-            "status": "success",
-            "message": "应用路由重新加载完成",
-        }
-    except Exception as e:
-        logger.error(f"应用路由重新加载失败: {e}")
-        return {
-            "status": "error",
-            "message": f"应用路由重新加载失败: {str(e)}",
-        }
-
-# 初始化应用数据（临时调试用）
-@app.post("/debug/init-apps")
-async def debug_init_apps():
-    """
-    初始化应用数据（调试用）
-
-    扫描插件目录并注册应用到数据库。
-    """
-    from core.services.application.application_service import ApplicationService
-
-    try:
-        # 使用租户ID 1
-        tenant_id = 1
-        apps = await ApplicationService.scan_and_register_plugins(tenant_id)
-
-        # 重新加载应用路由
+if _is_debug_allowed():
+    @app.post("/debug/reload-apps")
+    async def debug_reload_apps():
+        """手动重新加载应用路由（仅开发环境可用）"""
         from core.services.application.application_registry_service import ApplicationRegistryService
-        await ApplicationRegistryService.reload_apps()
 
-        return {
-            "status": "success",
-            "message": f"应用初始化完成，共注册了 {len(apps)} 个应用",
-            "apps": [{"code": app["code"], "name": app["name"]} for app in apps]
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"应用初始化失败: {str(e)}",
-        }
+        try:
+            await ApplicationRegistryService.reload_apps()
+            return {"status": "success", "message": "应用路由重新加载完成"}
+        except Exception as e:
+            logger.error(f"应用路由重新加载失败: {e}")
+            return {"status": "error", "message": f"应用路由重新加载失败: {str(e)}"}
+
+    @app.post("/debug/init-apps")
+    async def debug_init_apps():
+        """扫描插件目录并注册应用到数据库（仅开发环境可用）"""
+        from core.services.application.application_service import ApplicationService
+        from core.services.application.application_registry_service import ApplicationRegistryService
+
+        try:
+            tenant_id = 1
+            apps = await ApplicationService.scan_and_register_plugins(tenant_id)
+            await ApplicationRegistryService.reload_apps()
+            return {
+                "status": "success",
+                "message": f"应用初始化完成，共注册了 {len(apps)} 个应用",
+                "apps": [{"code": app["code"], "name": app["name"]} for app in apps]
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"应用初始化失败: {str(e)}"}
 
 # 测试路由注册（调试用）
 @app.post("/debug/test-route-registration")

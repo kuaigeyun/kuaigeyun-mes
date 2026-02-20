@@ -24,23 +24,13 @@ class CustomFieldPageDiscoveryService:
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
-        获取插件目录路径
+        获取插件目录路径（统一使用前端 manifest 为单一来源）
         
         Returns:
-            Path: 插件目录路径
+            Path: 插件目录路径（riveredge-frontend/src/apps）
         """
-        # 使用与 ApplicationService 相同的方法获取插件目录
-        # 这样可以确保路径计算的一致性
-        current_file = Path(__file__).resolve()  # 使用绝对路径
-        # riveredge-backend/src/core/services/custom_field/custom_field_page_discovery.py
-        # -> riveredge-backend/src/core/services/custom_field/
-        # -> riveredge-backend/src/core/services/
-        # -> riveredge-backend/src/core/
-        # -> riveredge-backend/src/
-        # -> riveredge-backend/src/apps
-        backend_src_dir = current_file.parent.parent.parent.parent  # riveredge-backend/src
-        plugins_dir = backend_src_dir / "apps"
-        return plugins_dir
+        from core.services.application.application_service import ApplicationService
+        return ApplicationService._get_plugins_directory()
     
     @staticmethod
     def _scan_app_manifests() -> List[Dict[str, Any]]:

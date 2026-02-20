@@ -79,6 +79,7 @@ import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText } from '../../../utils/avatar';
 import { useGlobalStore } from '../../../stores';
 import { getUserInfo } from '../../../utils/auth';
+import { getUserByUuid } from '../../../services/user';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import * as LucideIcons from 'lucide-react';
 
@@ -268,6 +269,17 @@ export default function DashboardPage() {
     : currentUser?.is_tenant_admin || userInfo?.is_tenant_admin
     ? '组织管理员' 
     : '普通用户';
+
+  // 获取用户详情（部门/职位/角色），仅租户用户有 uuid
+  const { data: userDetail } = useQuery({
+    queryKey: ['user-detail', (currentUser as any)?.uuid],
+    queryFn: () => getUserByUuid((currentUser as any).uuid),
+    enabled: !!(currentUser as any)?.uuid && !((currentUser as any)?.is_infra_admin),
+  });
+  const deptName = userDetail?.department?.name;
+  const positionName = userDetail?.position?.name;
+  const roleNames = userDetail?.roles?.map((r) => r.name).filter(Boolean) || [];
+  const deptPositionRole = [deptName, positionName, roleNames.length ? roleNames.join('、') : null].filter(Boolean).join(' / ');
 
   // 加载用户头像 - 使用与 BasicLayout 和 LockScreen 相同的逻辑
   useEffect(() => {
@@ -626,13 +638,18 @@ export default function DashboardPage() {
                 >
                   {getGreeting()}，{userName}
                 </Title>
-                <Space size="middle">
+                <Space size="middle" wrap>
                   <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14 }}>
                     {currentTime.format('YYYY年MM月DD日 dddd')}
                   </Text>
                   <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14, fontWeight: 500 }}>
                     {currentTime.format('HH:mm:ss')}
                   </Text>
+                  {deptPositionRole && (
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 14 }}>
+                      {deptPositionRole}
+                    </Text>
+                  )}
                   <Tag color="rgba(255, 255, 255, 0.2)" style={{ color: '#ffffff', border: 'none' }}>
                     {userRole}
                   </Tag>

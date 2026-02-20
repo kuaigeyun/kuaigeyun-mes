@@ -1,5 +1,5 @@
 """
-发货通知单服务模块
+送货单服务模块
 
 在销售出库前/后向客户发送发货通知，记录物流信息。不直接动库存。
 
@@ -28,7 +28,7 @@ from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
 
 class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
-    """发货通知单服务"""
+    """送货单服务"""
 
     def __init__(self):
         super().__init__(DeliveryNotice)
@@ -39,7 +39,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         notice_data: DeliveryNoticeCreate,
         created_by: int
     ) -> DeliveryNoticeResponse:
-        """创建发货通知单"""
+        """创建送货单"""
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "DELIVERY_NOTICE_CODE", prefix=f"DN{today}")
@@ -84,10 +84,10 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         tenant_id: int,
         notice_id: int
     ) -> DeliveryNoticeWithItemsResponse:
-        """根据ID获取发货通知单（含明细）"""
+        """根据ID获取送货单（含明细）"""
         notice = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
-            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+            raise NotFoundError(f"送货单不存在: {notice_id}")
 
         items = await DeliveryNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         response = DeliveryNoticeWithItemsResponse.model_validate(notice)
@@ -101,7 +101,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         limit: int = 20,
         **filters
     ) -> List[DeliveryNoticeListResponse]:
-        """获取发货通知单列表"""
+        """获取送货单列表"""
         query = DeliveryNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -122,10 +122,10 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         notice_data: DeliveryNoticeUpdate,
         updated_by: int
     ) -> DeliveryNoticeResponse:
-        """更新发货通知单"""
+        """更新送货单"""
         notice = await self.get_delivery_notice_by_id(tenant_id, notice_id)
         if notice.status != "待发送":
-            raise BusinessLogicError("只能更新待发送状态的发货通知单")
+            raise BusinessLogicError("只能更新待发送状态的送货单")
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
@@ -136,12 +136,12 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             )
 
     async def delete_delivery_notice(self, tenant_id: int, notice_id: int) -> bool:
-        """删除发货通知单"""
+        """删除送货单"""
         notice = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
-            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+            raise NotFoundError(f"送货单不存在: {notice_id}")
         if notice.status != "待发送":
-            raise BusinessLogicError("只能删除待发送状态的发货通知单")
+            raise BusinessLogicError("只能删除待发送状态的送货单")
 
         await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=datetime.now())
         return True
@@ -155,7 +155,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         """发送通知（标记为已发送，可对接邮件/短信/打印）"""
         notice = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
-            raise NotFoundError(f"发货通知单不存在: {notice_id}")
+            raise NotFoundError(f"送货单不存在: {notice_id}")
         if notice.status != "待发送":
             raise BusinessLogicError("只有待发送状态的通知单才能发送")
 

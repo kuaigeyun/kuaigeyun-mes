@@ -1,19 +1,22 @@
 import React, { useRef } from 'react';
-import { PageContainer, ProTable, ProColumns, ActionType } from '@ant-design/pro-components';
-import { Space, Tag, Button } from 'antd';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Space } from 'antd';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable, ReceivableListParams } from '../../../types/finance/receivable';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const { message: messageApi } = App.useApp();
     const { t } = useTranslation();
     const navigate = useNavigate();
 
     const columns: ProColumns<Receivable>[] = [
         {
-            title: t('app.kuaizhizao.common.code', { defaultValue: 'Code' }),
+            title: t('app.kuaizhizao.common.code', { defaultValue: '编码' }),
             dataIndex: 'receivable_code',
             width: 150,
             fixed: 'left',
@@ -50,7 +53,7 @@ const ReceivableList: React.FC = () => {
                 <span style={{ color: record.remaining_amount > 0 ? 'red' : 'inherit', fontWeight: 'bold' }}>
                     {_}
                 </span>
-            )
+            ),
         },
         {
             title: '到期日期',
@@ -86,42 +89,72 @@ const ReceivableList: React.FC = () => {
             render: (_, record) => (
                 <Space>
                     <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}`)}>详情</a>
-                    {record.remaining_amount > 0 && <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}/receipt`)}>收款</a>}
+                    {record.remaining_amount > 0 && (
+                        <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}/receipt`)}>收款</a>
+                    )}
                 </Space>
             ),
         },
     ];
 
     return (
-        <PageContainer
-            header={{
-                title: '应收对账',
-                breadcrumb: {},
-            }}
-        >
-            <ProTable<Receivable, ReceivableListParams>
-                headerTitle="应收单列表"
+        <ListPageTemplate>
+            <UniTable<Receivable>
+                headerTitle="应收账款"
                 actionRef={actionRef}
-                rowKey="id"
-                search={{
-                    labelWidth: 120,
-                }}
-                request={async (params) => {
-                    const { current, pageSize, ...rest } = params;
-                    const res = await receivableService.listReceivables({
+                columns={columns}
+                request={async (params, sort, _filter, searchFormValues) => {
+                    const { current, pageSize } = params;
+                    const apiParams: ReceivableListParams = {
                         skip: ((current || 1) - 1) * (pageSize || 20),
                         limit: pageSize || 20,
-                        ...rest,
-                    });
-                    return {
-                        data: res.items,
-                        total: res.total,
-                        success: true,
                     };
+                    if (searchFormValues?.status) apiParams.status = searchFormValues.status;
+                    if (searchFormValues?.customer_id) apiParams.customer_id = searchFormValues.customer_id;
+
+                    try {
+                        const res = await receivableService.listReceivables(apiParams);
+                        return {
+                            data: res.items || [],
+                            total: res.total || 0,
+                            success: true,
+                        };
+                    } catch (error: any) {
+                        messageApi.error(error?.message || '获取列表失败');
+                        return { data: [], total: 0, success: false };
+                    }
                 }}
-                columns={columns}
+                rowKey="id"
+                showCreateButton={false}
+                showAdvancedSearch={true}
+                showExportButton
+                onExport={async (type, keys, pageData) => {
+                    try {
+                        const res = await receivableService.listReceivables({ skip: 0, limit: 10000 });
+                        let items = res.items || [];
+                        if (type === 'currentPage' && pageData?.length) {
+                            items = pageData;
+                        } else if (type === 'selected' && keys?.length) {
+                            items = items.filter((d: Receivable) => d.id != null && keys.includes(d.id));
+                        }
+                        if (items.length === 0) {
+                            messageApi.warning('暂无数据可导出');
+                            return;
+                        }
+                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `receivables-${new Date().toISOString().slice(0, 10)}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        messageApi.success(`已导出 ${items.length} 条记录`);
+                    } catch (error: any) {
+                        messageApi.error(error?.message || '导出失败');
+                    }
+                }}
             />
-        </PageContainer>
+        </ListPageTemplate>
     );
 };
 

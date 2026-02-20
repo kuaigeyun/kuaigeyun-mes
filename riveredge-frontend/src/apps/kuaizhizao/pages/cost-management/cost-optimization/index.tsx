@@ -144,6 +144,7 @@ const CostOptimizationPage: React.FC = () => {
   return (
     <PageContainer
       title="成本优化建议"
+      contentStyle={{ padding: 0 }}
       extra={[
         <Button
           key="suggestions-single"
@@ -164,7 +165,7 @@ const CostOptimizationPage: React.FC = () => {
     >
       {/* 优化建议结果展示 */}
       {result && (
-        <Card title="优化建议结果" style={{ marginBottom: 16 }}>
+        <Card title="优化建议结果" style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
           {mode === 'single' && result.material_code && (
             <ProDescriptions
               bordered

@@ -139,6 +139,12 @@ export async function updateDashboard(id: string | number, data: any) {
     });
 }
 
+export async function deleteDashboard(id: string | number) {
+    return apiRequest(`/apps/kuaireport/dashboards/${id}`, {
+        method: 'DELETE',
+    });
+}
+
 /** 生成大屏分享链接 */
 export async function shareDashboard(id: number, expiresDays = 30) {
     return apiRequest<{ share_token: string; share_expires_at?: string; is_shared: boolean }>(`/apps/kuaireport/dashboards/${id}/share`, {

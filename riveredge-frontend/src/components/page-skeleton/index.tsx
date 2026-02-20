@@ -9,16 +9,26 @@
 
 import React from 'react';
 import { Skeleton } from 'antd';
+import { PAGE_SPACING } from '../layout-templates/constants';
+
+export interface PageSkeletonProps {
+  /** 工作台/分析页等使用 DashboardTemplate 的页面需传入 'dashboard'，与模板边距一致 */
+  variant?: 'default' | 'dashboard';
+}
 
 /**
  * 页面骨架屏组件
  *
  * 提供统一的页面加载占位效果。
- * 边距为 0，与 uni-tabs 内容区保持一致（uni-tabs 已提供 0 16px 16px 16px 的 padding）。
+ * - default: 无内边距，适用于多数列表/表单页
+ * - dashboard: 边距 0 16px 16px 16px，仅工作台/分析页使用，与 DashboardTemplate 一致
  */
-const PageSkeleton: React.FC = () => {
+const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
+  const padding = variant === 'dashboard'
+    ? `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`
+    : 0;
   return (
-    <div style={{ padding: 0 }}>
+    <div style={{ padding }}>
       {/* 页面标题骨架 */}
       <Skeleton.Input
         active

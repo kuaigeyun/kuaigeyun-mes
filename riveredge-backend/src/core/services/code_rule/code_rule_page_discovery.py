@@ -25,17 +25,16 @@ class CodeRulePageDiscoveryService:
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
-        获取插件目录路径
+        获取插件目录路径（统一使用前端 manifest 为单一来源）
         
         Returns:
-            Path: 插件目录路径
+            Path: 插件目录路径（riveredge-frontend/src/apps）
         """
-        # 获取项目根目录（从当前文件位置向上查找）
-        current_file = Path(__file__)
-        # 从 core/services/code_rule/ 向上到项目根目录
-        project_root = current_file.parent.parent.parent.parent
-        plugins_dir = project_root / "src" / "apps"
-        
+        current_file = Path(__file__).resolve()
+        # riveredge-backend/src/core/services/code_rule/ -> ... -> riveredge-backend/
+        backend_root = current_file.parent.parent.parent.parent.parent
+        project_root = backend_root.parent
+        plugins_dir = project_root / "riveredge-frontend" / "src" / "apps"
         return plugins_dir
     
     @staticmethod
@@ -138,10 +137,14 @@ class CodeRulePageDiscoveryService:
     @staticmethod
     def get_all_pages() -> List[Dict[str, Any]]:
         """
-        获取所有编码规则页面配置（包含服务发现和硬编码回退）
+        获取所有编码规则页面配置（服务发现 + 弹性回退）
         
-        优先使用服务发现，如果服务发现失败或返回空列表，则回退到硬编码配置。
-        结果缓存 5 分钟，减少重复文件扫描。
+        数据源优先级：
+        1. 主源：从各应用 manifest.json 的 code_rule_pages 发现（单一数据源）
+        2. 回退：仅当发现失败或返回空时使用 core.config.code_rule_pages
+        
+        回退为弹性设计，非临时补丁。若生产环境频繁触发回退，应排查 manifest 配置。
+        结果缓存 5 分钟。
         
         Returns:
             List[Dict[str, Any]]: 页面配置列表

@@ -1,5 +1,5 @@
 """
-发货通知单数据验证schema
+送货单数据验证schema
 
 在销售出库前/后向客户发送发货通知，记录物流信息。
 
@@ -13,10 +13,10 @@ from pydantic import Field
 from core.schemas.base import BaseSchema
 
 
-# === 发货通知单 ===
+# === 送货单 ===
 
 class DeliveryNoticeBase(BaseSchema):
-    """发货通知单基础schema"""
+    """送货单基础schema"""
     notice_code: Optional[str] = Field(None, max_length=50, description="通知单编码（可选，不提供则自动生成）")
     sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID")
     sales_delivery_code: Optional[str] = Field(None, max_length=50, description="销售出库单编码")
@@ -35,17 +35,17 @@ class DeliveryNoticeBase(BaseSchema):
 
 
 class DeliveryNoticeCreate(DeliveryNoticeBase):
-    """发货通知单创建schema"""
+    """送货单创建schema"""
     items: Optional[List["DeliveryNoticeItemCreate"]] = Field(None, description="通知明细列表")
 
 
 class DeliveryNoticeUpdate(DeliveryNoticeBase):
-    """发货通知单更新schema"""
+    """送货单更新schema"""
     notice_code: Optional[str] = Field(None, max_length=50, description="通知单编码")
 
 
 class DeliveryNoticeResponse(DeliveryNoticeBase):
-    """发货通知单响应schema"""
+    """送货单响应schema"""
     id: int = Field(..., description="通知单ID")
     tenant_id: int = Field(..., description="租户ID")
     sent_at: Optional[datetime] = Field(None, description="发送时间")
@@ -60,14 +60,14 @@ class DeliveryNoticeResponse(DeliveryNoticeBase):
 
 
 class DeliveryNoticeListResponse(DeliveryNoticeResponse):
-    """发货通知单列表响应schema"""
+    """送货单列表响应schema"""
     pass
 
 
-# === 发货通知单明细 ===
+# === 送货单明细 ===
 
 class DeliveryNoticeItemBase(BaseSchema):
-    """发货通知单明细基础schema"""
+    """送货单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -81,17 +81,17 @@ class DeliveryNoticeItemBase(BaseSchema):
 
 
 class DeliveryNoticeItemCreate(DeliveryNoticeItemBase):
-    """发货通知单明细创建schema"""
+    """送货单明细创建schema"""
     pass
 
 
 class DeliveryNoticeItemUpdate(DeliveryNoticeItemBase):
-    """发货通知单明细更新schema"""
+    """送货单明细更新schema"""
     pass
 
 
 class DeliveryNoticeItemResponse(DeliveryNoticeItemBase):
-    """发货通知单明细响应schema"""
+    """送货单明细响应schema"""
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
     notice_id: int = Field(..., description="通知单ID")
@@ -103,5 +103,5 @@ class DeliveryNoticeItemResponse(DeliveryNoticeItemBase):
 
 
 class DeliveryNoticeWithItemsResponse(DeliveryNoticeResponse):
-    """发货通知单详情响应（含明细）"""
+    """送货单详情响应（含明细）"""
     items: List[DeliveryNoticeItemResponse] = Field(default_factory=list, description="通知明细列表")

@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Popconfirm, Space } from 'antd';
 import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice } from '../../../types/finance/invoice';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 
@@ -13,7 +13,15 @@ const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [activeTabKey, setActiveTabKey] = useState<string>('all');
+  const location = useLocation();
+  const initialTab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
+  const [activeTabKey, setActiveTabKey] = useState<string>(initialTab);
+
+  useEffect(() => {
+    const tab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
+    setActiveTabKey(tab);
+    actionRef.current?.reload();
+  }, [location.pathname]);
 
   const columns: ProColumns<Invoice>[] = [
     {

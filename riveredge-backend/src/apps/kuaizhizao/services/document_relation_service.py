@@ -186,12 +186,12 @@ class DocumentRelationService:
             downstream_documents = []
 
         elif document_type == "sales_delivery":
-            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单、发货通知单
+            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单、送货单
             upstream_documents = await self._get_sales_delivery_upstream(tenant_id, document_id)
             downstream_documents = await self._get_sales_delivery_downstream(tenant_id, document_id)
 
         elif document_type == "delivery_notice":
-            # 发货通知单的上游：销售出库单、销售订单
+            # 送货单的上游：销售出库单、销售订单
             upstream_documents = await self._get_delivery_notice_upstream(tenant_id, document_id)
             downstream_documents = []
 
@@ -835,10 +835,10 @@ class DocumentRelationService:
         tenant_id: int,
         delivery_id: int
     ) -> List[Dict[str, Any]]:
-        """获取销售出库单的下游单据（应收单、发货通知单）"""
+        """获取销售出库单的下游单据（应收单、送货单）"""
         downstream = []
 
-        # 查找关联的发货通知单
+        # 查找关联的送货单
         notices = await DeliveryNotice.filter(
             tenant_id=tenant_id,
             sales_delivery_id=delivery_id,
@@ -1165,7 +1165,7 @@ class DocumentRelationService:
         tenant_id: int,
         notice_id: int
     ) -> List[Dict[str, Any]]:
-        """获取发货通知单的上游单据（销售出库单、销售订单）"""
+        """获取送货单的上游单据（销售出库单、销售订单）"""
         upstream = []
         notice = await DeliveryNotice.get_or_none(
             tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True

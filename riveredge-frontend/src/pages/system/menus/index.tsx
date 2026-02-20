@@ -8,7 +8,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect } from '@ant-design/pro-components';
-import { EditOutlined, DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, EyeOutlined, SyncOutlined } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
@@ -24,6 +24,7 @@ import {
 } from '../../../services/menu';
 import { getApplicationList } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { translateAppMenuItemName } from '../../../utils/menuTranslation';
 
@@ -38,7 +39,14 @@ const MenuListPage: React.FC = () => {
   const { message: messageApi, modal } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const actionRef = useRef<any>();
+
+  /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
+  const refreshLayoutMenus = () => {
+    useGlobalStore.getState().incrementApplicationMenuVersion();
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+  };
   
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -202,6 +210,7 @@ const MenuListPage: React.FC = () => {
     try {
       await deleteMenu(record.uuid);
       messageApi.success('删除成功');
+      refreshLayoutMenus();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
@@ -221,9 +230,9 @@ const MenuListPage: React.FC = () => {
     selectedRowKeys.forEach(key => {
         const menu = allMenus.find(m => m.uuid === key);
         if (menu) {
-            // 通过查 allMenus 里是否有 parent_uuid === key 来判断
-            const hasChildren = allMenus.some(m => m.parent_uuid === menu.uuid);
-            if (hasChildren) {
+            if (menu.application_uuid) {
+                cannotDeleteNames.push(menu.name + '(应用菜单)');
+            } else if (allMenus.some(m => m.parent_uuid === menu.uuid)) {
                 cannotDeleteNames.push(menu.name);
             } else {
                 canDeleteKeys.push(menu.uuid);
@@ -232,7 +241,7 @@ const MenuListPage: React.FC = () => {
     });
 
     if (cannotDeleteNames.length > 0) {
-        messageApi.warning(`以下菜单包含子菜单，无法批量删除: ${cannotDeleteNames.join(', ')}`);
+        messageApi.warning(`以下菜单无法删除: ${cannotDeleteNames.join(', ')}`);
         return;
     }
 
@@ -244,6 +253,7 @@ const MenuListPage: React.FC = () => {
              await Promise.all(canDeleteKeys.map(key => deleteMenu(key)));
              messageApi.success('批量删除成功');
              setSelectedRowKeys([]);
+             refreshLayoutMenus();
              actionRef.current?.reload();
          } catch (e: any) {
              messageApi.error(e.message || '批量删除失败');
@@ -313,6 +323,7 @@ const MenuListPage: React.FC = () => {
             messageApi.success('创建成功');
         }
         setModalVisible(false);
+        refreshLayoutMenus();
         actionRef.current?.reload();
     } catch (error: any) {
         messageApi.error(error.message || '操作失败');
@@ -385,8 +396,8 @@ const MenuListPage: React.FC = () => {
             </Tag>
         )
     },
-        {
-      title: '外部链接',
+    {
+        title: '外部链接',
       dataIndex: 'is_external',
       width: 100,
       hideInSearch: true,
@@ -395,26 +406,49 @@ const MenuListPage: React.FC = () => {
       ),
     },
     {
+        title: '来源',
+        dataIndex: 'application_uuid',
+        width: 100,
+        hideInSearch: true,
+        render: (_, record) =>
+          record.application_uuid ? (
+            <Tooltip title={t('menu.system.appMenuSyncTip', { defaultValue: '应用菜单由 manifest 同步，在应用中心同步菜单可更新' })}>
+              <Tag color="blue" icon={<SyncOutlined />}>
+                {t('menu.system.appMenu', { defaultValue: '应用' })}
+              </Tag>
+            </Tooltip>
+          ) : (
+            <Tag>{t('menu.system.systemMenu', { defaultValue: '系统' })}</Tag>
+          ),
+    },
+    {
         title: '操作',
         valueType: 'option',
         width: 220,
         fixed: 'right',
-        render: (_, record) => (
+        render: (_, record) => {
+            const isAppMenu = !!record.application_uuid;
+            const deleteCheck = checkCanDelete(record);
+            const canDelete = !isAppMenu && deleteCheck.can;
+            return (
             <Space size="small">
                 <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>查看</Button>
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
                 <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>添加子项</Button>
-                 <Popconfirm
+                <Popconfirm
                     title="确定删除?"
                     onConfirm={() => handleDelete(record)}
-                    disabled={!checkCanDelete(record).can}
-                 >
-                     <Tooltip title={checkCanDelete(record).reason}>
-                        <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!checkCanDelete(record).can}>删除</Button>
-                     </Tooltip>
-                 </Popconfirm>
+                    disabled={!canDelete}
+                >
+                    <Tooltip title={isAppMenu ? t('menu.system.appMenuDeleteDisabled', { defaultValue: '应用菜单不可删除，请在应用中心同步更新' }) : deleteCheck.reason}>
+                        <span>
+                            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>删除</Button>
+                        </span>
+                    </Tooltip>
+                </Popconfirm>
             </Space>
-        )
+            );
+        }
     }
   ];
 

@@ -570,16 +570,17 @@ const DemandManagementPage: React.FC = () => {
           }}
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
-          afterSearchButtons={
+          toolBarActions={[
             <Button
+              key="merge-computation"
               type="primary"
               icon={<MergeCellsOutlined />}
               disabled={selectedRowKeys.length === 0}
               onClick={handleMergeComputation}
             >
               合并计算
-            </Button>
-          }
+            </Button>,
+          ]}
         />
       </ListPageTemplate>
 

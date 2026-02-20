@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { PageContainer } from '@ant-design/pro-components';
-import { Input, Card, Space, Select, Empty, Spin, message, Drawer, Descriptions, Tag, Button, theme } from 'antd';
+import { Input, Space, Select, Empty, Spin, message, Drawer, Descriptions, Tag, Button, theme } from 'antd';
 import { useRequest } from 'ahooks';
 import { api } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
@@ -106,9 +105,9 @@ const TraceabilityPage: React.FC = () => {
     };
 
     return (
-        <PageContainer title={t('app.kuaizhizao.menu.quality-management.traceability')}>
-            <Card>
-                <Space style={{ marginBottom: 24 }}>
+        /* 单层 padding：margin -16 抵消 UniTabs 内容区自带 padding，仅保留内部 16px */
+        <div style={{ margin: -16, padding: 16 }}>
+            <Space style={{ marginBottom: 16 }}>
                     <Input.Search
                         placeholder={t('pages.traceability.searchPlaceholder', { defaultValue: '请输入批次号 / 条码' })}
                         enterButton
@@ -136,7 +135,6 @@ const TraceabilityPage: React.FC = () => {
                         <FlowGraph {...config} />
                     )}
                 </div>
-            </Card>
 
             <Drawer
                 title={t('pages.traceability.details', { defaultValue: '详情信息' })}
@@ -178,7 +176,7 @@ const TraceabilityPage: React.FC = () => {
                     </div>
                 )}
             </Drawer>
-        </PageContainer>
+        </div>
     );
 };
 

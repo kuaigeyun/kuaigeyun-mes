@@ -644,21 +644,17 @@ class ApplicationService:
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
-        获取插件目录路径
+        获取插件目录路径（统一使用前端 manifest 为单一来源）
         
         Returns:
-            Path: 插件目录路径（src/apps）
+            Path: 插件目录路径（riveredge-frontend/src/apps）
         """
-        # 插件现在放在 src/apps/ 目录下
-        current_file = Path(__file__).resolve()  # 使用绝对路径
-        # riveredge-backend/src/core/services/application/application_service.py
-        # -> riveredge-backend/src/core/services/application/
-        # -> riveredge-backend/src/core/services/
-        # -> riveredge-backend/src/core/
-        # -> riveredge-backend/src/
-        # -> riveredge-backend/src/apps
-        backend_src_dir = current_file.parent.parent.parent.parent  # riveredge-backend/src
-        plugins_dir = backend_src_dir / "apps"
+        current_file = Path(__file__).resolve()
+        # riveredge-backend/src/core/services/application/ -> ... -> riveredge-backend/
+        backend_root = current_file.parent.parent.parent.parent.parent  # riveredge-backend/
+        project_root = backend_root.parent  # 项目根目录
+        # 菜单系统来源简化：仅使用前端 manifest 目录，与 sync-manifest API 一致
+        plugins_dir = project_root / "riveredge-frontend" / "src" / "apps"
         return plugins_dir
     
     @staticmethod

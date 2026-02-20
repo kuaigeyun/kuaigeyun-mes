@@ -67,7 +67,7 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 # 注册子路由
 router.include_router(sales_order_router)  # 销售订单管理（独立API）- 优先匹配
 router.include_router(quotation_router)  # 报价单管理
-router.include_router(delivery_notice_router)  # 发货通知单管理
+router.include_router(delivery_notice_router)  # 送货单管理
 router.include_router(sample_trial_router)  # 样品试用单管理
 router.include_router(production_router)
 router.include_router(purchase_router)
