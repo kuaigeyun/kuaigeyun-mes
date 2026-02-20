@@ -94,6 +94,7 @@ from core.api.user_messages.user_messages import router as user_messages_router
 from core.api.user_tasks.user_tasks import router as user_tasks_router
 from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.operation_logs.operation_logs import router as operation_logs_router
+from core.api.document_tracking import router as document_tracking_router
 from core.api.login_logs.login_logs import router as login_logs_router
 from core.api.online_users.online_users import router as online_users_router
 from core.api.help_documents.help_documents import router as help_documents_router
@@ -661,6 +662,7 @@ app.include_router(user_messages_router, prefix="/api/v1/personal")
 app.include_router(user_tasks_router, prefix="/api/v1/personal")
 app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(operation_logs_router, prefix="/api/v1/core")
+app.include_router(document_tracking_router, prefix="/api/v1/core")
 app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
