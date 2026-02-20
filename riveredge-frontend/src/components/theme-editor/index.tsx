@@ -12,6 +12,7 @@ import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
 import { getToken } from '../../utils/auth';
 import { useThemeStore } from '../../stores/themeStore';
+import { clearTabsData } from '../../stores/tabsStorage';
 
 const { Text } = Typography;
 
@@ -316,19 +317,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       const currentBorderRadius = themeConfig.borderRadius ?? token.borderRadius ?? 6;
       const currentFontSize = themeConfig.fontSize ?? token.fontSize ?? 14;
 
-      // 读取标签栏持久化配置：优先从本地存储读取，其次从用户偏好设置读取，默认关闭
-      let tabsPersistence = false;
-
-      // 优先从本地存储读取
-      const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
-      if (localTabsPersistence !== null) {
-        tabsPersistence = localTabsPersistence === 'true';
-      } else if (userPreference?.preferences && 'tabs_persistence' in userPreference.preferences) {
-        // 如果本地存储没有，从用户偏好设置读取
-        tabsPersistence = Boolean(userPreference.preferences.tabs_persistence);
-        // 同步到本地存储
-        localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistence));
-      }
+      // 标签栏持久化配置：统一从用户偏好读取
+      const tabsPersistence = userPreference?.preferences && 'tabs_persistence' in userPreference.preferences
+        ? Boolean(userPreference.preferences.tabs_persistence)
+        : false;
 
 
       // 设置表单初始值
@@ -592,10 +584,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             themeConfigForPreference
           );
           await updateUserPreference({ preferences: updatedPreferences });
-
-          localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
         } catch (error: any) {
-          localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
+          // ignore
         }
       } else {
         // 用户未登录，仍应用主题到 store（供当前会话使用）
@@ -611,10 +601,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             tabsBgColor: tabsBgColorValue || '',
           }
         );
-        localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
       }
-
-      localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
 
       // 保存站点主题配置
       const settings: Record<string, any> = {
@@ -682,9 +669,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 3. 清除相关本地存储
       const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
       localStorage.removeItem(THEME_CONFIG_STORAGE_KEY);
-      localStorage.removeItem('riveredge_tabs_persistence');
-      localStorage.removeItem('riveredge_saved_tabs');
-      localStorage.removeItem('riveredge_saved_active_key');
+      clearTabsData();
 
       // 4. 更新服务器配置（如果已登录）
       const token = getToken();

@@ -5,7 +5,7 @@
  */
 
 // 使用 Fetch API 进行 HTTP 请求
-import { clearAuth } from '../utils/auth';
+import { clearAuth, getToken } from '../utils/auth';
 import { updateLastActivity } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
 
@@ -13,17 +13,6 @@ import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
  * API 基础 URL
  */
 export const API_BASE_URL = '/api/v1';
-
-/**
- * 获取认证 Token
- * 
- * @returns JWT Token 或 null
- */
-function getAuthToken(): string | null {
-  const token = localStorage.getItem('token');
-  // 注意：不在这里输出警告，警告在 apiRequest 中统一处理（区分公开接口和需要认证的接口）
-  return token;
-}
 
 /**
  * 获取当前选择的组织ID
@@ -157,7 +146,7 @@ export async function apiRequest<T = any>(
   // ========== 重写：简化 Token 和 Tenant ID 获取逻辑 ==========
   
   // 1. 获取 Token（公开接口不需要）
-  const token = !isPublicEndpoint ? localStorage.getItem('token') : null;
+  const token = !isPublicEndpoint ? getToken() : null;
   
   // 调试日志：检查 Token（已禁用以减少控制台输出）
   // if (!isPublicEndpoint) {

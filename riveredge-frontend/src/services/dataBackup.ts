@@ -4,6 +4,7 @@
  * 提供数据备份的查询、创建、恢复和删除功能。
  */
 
+import { getToken } from '../utils/auth';
 import { apiRequest } from './api';
 
 export interface DataBackup {
@@ -104,7 +105,7 @@ export async function deleteBackup(uuid: string): Promise<void> {
  * 下载备份文件（返回 Blob，用于触发浏览器下载）
  */
 export async function downloadBackup(uuid: string): Promise<Blob> {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   const tenantId = localStorage.getItem('tenant_id');
   const url = `/api/v1/core/data-backups/${uuid}/download`;
   const headers: Record<string, string> = {};

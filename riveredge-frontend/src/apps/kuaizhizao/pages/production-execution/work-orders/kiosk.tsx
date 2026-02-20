@@ -34,6 +34,7 @@ import BarcodePrintModal from './components/BarcodePrintModal';
 import ProcessInspectionModal from './components/ProcessInspectionModal';
 import NumericKeypad from './components/NumericKeypad';
 import DocumentCenter, { type DocumentCenterTabKey } from './components/DocumentCenter';
+import { getToken } from '../../../../../utils/auth';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 
@@ -1056,7 +1057,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 userInfo?.avatar 
                     ? (userInfo.avatar.startsWith('http') 
                         ? userInfo.avatar 
-                        : `/api/v1/core/files/${userInfo.avatar}/download?access_token=${localStorage.getItem('token') || ''}`)
+                        : `/api/v1/core/files/${userInfo.avatar}/download?access_token=${getToken() || ''}`)
                     : (userInfo?.username ? `https://api.dicebear.com/7.x/initials/svg?seed=${userInfo.username}` : undefined)
             }
             operatorRole={userInfo?.is_tenant_admin ? '管理员' : '操作员'}

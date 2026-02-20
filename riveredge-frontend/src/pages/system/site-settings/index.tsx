@@ -6,7 +6,6 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -31,7 +30,6 @@ import ImageCropper from '../../../components/image-cropper';
  */
 const SiteSettingsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const queryClient = useQueryClient();
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -378,10 +376,8 @@ const SiteSettingsPage: React.FC = () => {
       await updateSiteSetting({ settings });
       messageApi.success('保存成功');
 
-      // 刷新 configStore 使日期格式等配置立即生效
+      // 刷新 configStore 使日期格式、站点名称、LOGO 等配置立即生效（BasicLayout 等从 configStore 读取）
       await fetchConfigs();
-      // 使其他使用 siteSetting 的组件（如 BasicLayout）获取最新数据
-      queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
       // 重新加载设置
       await loadSiteSetting();
     } catch (error: any) {

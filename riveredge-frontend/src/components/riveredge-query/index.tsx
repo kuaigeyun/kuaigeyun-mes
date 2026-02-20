@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
 import { getToken } from '../../utils/auth';
 import { useGlobalStore, useSavedSearchVersionStore } from '../../stores';
+import { getSavedSearchOrder, setSavedSearchOrder } from '../../stores/savedSearchOrderStorage';
 import { QuickFilters } from './QuickFilters';
 import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterGroup, FilterConfigData } from './types';
@@ -503,19 +504,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     let orderedShared = shared;
 
     // 使用状态中的排序，如果状态为空则从localStorage读取
-    const currentPersonalOrder = personalOrder.length > 0 ? personalOrder :
-      (() => {
-    const personalOrderKey = `saved_search_order_personal_${pagePath}`;
-        const stored = localStorage.getItem(personalOrderKey);
-        return stored ? JSON.parse(stored) as number[] : [];
-      })();
-
-    const currentSharedOrder = sharedOrder.length > 0 ? sharedOrder :
-      (() => {
-    const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
-        const stored = localStorage.getItem(sharedOrderKey);
-        return stored ? JSON.parse(stored) as number[] : [];
-      })();
+    const currentPersonalOrder = personalOrder.length > 0 ? personalOrder : getSavedSearchOrder(pagePath, 'personal');
+    const currentSharedOrder = sharedOrder.length > 0 ? sharedOrder : getSavedSearchOrder(pagePath, 'shared');
     
     if (currentPersonalOrder.length > 0) {
       try {
@@ -561,13 +551,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       const newIndex = sharedSearches.findIndex((item) => item.id === over.id);
       const newOrder = arrayMove(sharedSearches.map(item => item.id), oldIndex, newIndex);
 
-      // 更新状态（触发重新计算）
       setSharedOrder(newOrder);
-        
-        // 保存排序到 localStorage
-        const orderKey = `saved_search_order_shared_${pagePath}`;
-      localStorage.setItem(orderKey, JSON.stringify(newOrder));
-      
+      setSavedSearchOrder(pagePath, 'shared', newOrder);
       useSavedSearchVersionStore.getState().incrementVersion(pagePath);
     }
   }, [pagePath, sharedSearches]);
@@ -581,13 +566,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       const newIndex = personalSearches.findIndex((item) => item.id === over.id);
       const newOrder = arrayMove(personalSearches.map(item => item.id), oldIndex, newIndex);
 
-      // 更新状态（触发重新计算）
       setPersonalOrder(newOrder);
-        
-        // 保存排序到 localStorage
-        const orderKey = `saved_search_order_personal_${pagePath}`;
-      localStorage.setItem(orderKey, JSON.stringify(newOrder));
-      
+      setSavedSearchOrder(pagePath, 'personal', newOrder);
       useSavedSearchVersionStore.getState().incrementVersion(pagePath);
     }
   }, [pagePath, personalSearches]);
@@ -2507,18 +2487,13 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     const sharedPinned = allPinned.filter((item) => item.is_shared);
     const personalPinned = allPinned.filter((item) => !item.is_shared);
     
-    // 从 localStorage 获取排序
-    const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
-    const personalOrderKey = `saved_search_order_personal_${pagePath}`;
+    const sharedOrderRaw = getSavedSearchOrder(pagePath, 'shared');
+    const personalOrderRaw = getSavedSearchOrder(pagePath, 'personal');
     
-    const sharedOrder = localStorage.getItem(sharedOrderKey);
-    const personalOrder = localStorage.getItem(personalOrderKey);
-    
-    // 排序共享钉住条件
     let orderedShared: SavedSearch[] = [];
-    if (sharedOrder) {
+    if (sharedOrderRaw.length > 0) {
       try {
-        const order = JSON.parse(sharedOrder) as number[];
+        const order = sharedOrderRaw;
         const ordered = order
           .map((id) => sharedPinned.find((item) => item.id === id))
           .filter((item): item is SavedSearch => item !== undefined);
@@ -2531,11 +2506,10 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
       orderedShared = sharedPinned;
     }
     
-    // 排序个人钉住条件
     let orderedPersonal: SavedSearch[] = [];
-    if (personalOrder) {
+    if (personalOrderRaw.length > 0) {
       try {
-        const order = JSON.parse(personalOrder) as number[];
+        const order = personalOrderRaw;
         const ordered = order
           .map((id) => personalPinned.find((item) => item.id === id))
           .filter((item): item is SavedSearch => item !== undefined);
@@ -2793,7 +2767,9 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           style={{
             backgroundColor: token.colorFillTertiary,
             color: token.colorPrimary,
-            height: '32px',
+            height: '31px',
+            boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
+            borderRadius: token.borderRadius,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = token.colorFillSecondary;
@@ -2814,7 +2790,9 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           style={{
             backgroundColor: token.colorFillTertiary,
             color: token.colorTextSecondary,
-            height: '32px',
+            height: '31px',
+            boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
+            borderRadius: token.borderRadius,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = token.colorFillSecondary;

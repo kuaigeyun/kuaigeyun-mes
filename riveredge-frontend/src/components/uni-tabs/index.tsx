@@ -14,6 +14,7 @@ import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 import { useConfigStore } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
 import { getUserInfo, getTenantId } from '../../utils/auth';
 
 /**
@@ -56,36 +57,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const location = useLocation();
   const { token } = theme.useToken();
   const { t } = useTranslation(); // 获取翻译函数
-  // 辅助：同步获取持久化配置（优先读全局标记，缺省时读用户偏好缓存，解决登录后闪烁）
+  // 辅助：同步获取持久化配置（从用户偏好存储读取，store 未就绪时从 persist 缓存回退）
   const getInitialPersistence = () => {
     if (typeof window === 'undefined') return false;
     try {
-      // 1. 尝试读取全局标记（运行时开关）
-      const local = localStorage.getItem('riveredge_tabs_persistence');
-      if (local !== null) return local === 'true';
-
-      // 2. 尝试从用户偏好存储中读取（解决登出清除全局标记后的首次加载）
       const userInfo = getUserInfo();
       if (!userInfo) return false;
       const tenantId = getTenantId() ?? userInfo?.tenant_id ?? (userInfo as any)?.tenantId;
       const userId = userInfo?.id ?? (userInfo as any)?.user_id ?? (userInfo as any)?.uuid;
-      
-      if (tenantId != null && userId != null) {
-         const key = `user-preference-storage-${tenantId}-${userId}`;
-         const raw = localStorage.getItem(key);
-         if (raw) {
-            const data = JSON.parse(raw);
-            // 兼容 zustand persist 结构
-            const prefs = data?.state?.preferences ?? data?.preferences;
-            if (prefs && prefs.tabs_persistence !== undefined) {
-               // 同步回写全局标记，避免后续重复解析
-               localStorage.setItem('riveredge_tabs_persistence', String(prefs.tabs_persistence));
-               return Boolean(prefs.tabs_persistence);
-            }
-         }
-      }
-    } catch { return false; }
-    return false;
+      if (tenantId == null || userId == null) return false;
+      const key = `user-preference-storage-${tenantId}-${userId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      const prefs = data?.state?.preferences ?? data?.preferences;
+      return prefs && prefs.tabs_persistence !== undefined ? Boolean(prefs.tabs_persistence) : false;
+    } catch {
+      return false;
+    }
   };
 
   // 1. 持久化配置：优先从 store 读取，store 未就绪时从 localStorage 回退
@@ -101,51 +90,45 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (!localPersistence) return [];
 
     try {
-      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
-      if (savedTabs) {
-        const parsedTabs: TabItem[] = JSON.parse(savedTabs);
-        if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
-           const isInfraPage = location.pathname.startsWith('/infra');
+      const parsedTabs = getSavedTabs();
+      if (parsedTabs.length > 0) {
+        const isInfraPage = location.pathname.startsWith('/infra');
            
-           // 根据当前页面类型过滤标签
-           const validTabs = parsedTabs.filter((tab) => {
-             if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
-             if (isInfraPage) return tab.path.startsWith('/infra');
-             return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
-           });
+        const validTabs = parsedTabs.filter((tab) => {
+          if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+          if (isInfraPage) return tab.path.startsWith('/infra');
+          return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
+        });
 
-           // 确保默认标签存在
-           if (validTabs.length > 0) {
-              if (isInfraPage) {
-                 const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
-                 if (!hasOperation) {
-                    const opPath = '/infra/operation';
-                    // 同步获取标题
-                    const opTitle = findMenuTitleWithTranslation(opPath, menuConfig, t);
-                    validTabs.unshift({
-                        key: opPath,
-                        path: opPath,
-                        label: opTitle,
-                        closable: false,
-                        pinned: false
-                    });
-                 }
-              } else {
-                 const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
-                 if (!hasWorkplace) {
-                     const wpPath = '/system/dashboard/workplace';
-                     const wpTitle = findMenuTitleWithTranslation(wpPath, menuConfig, t);
-                     validTabs.unshift({
-                        key: wpPath,
-                        path: wpPath,
-                        label: wpTitle,
-                        closable: false,
-                        pinned: false
-                    });
-                 }
-              }
-              return validTabs;
-           }
+        if (validTabs.length > 0) {
+          if (isInfraPage) {
+            const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
+            if (!hasOperation) {
+              const opPath = '/infra/operation';
+              const opTitle = findMenuTitleWithTranslation(opPath, menuConfig, t);
+              validTabs.unshift({
+                key: opPath,
+                path: opPath,
+                label: opTitle,
+                closable: false,
+                pinned: false,
+              });
+            }
+          } else {
+            const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
+            if (!hasWorkplace) {
+              const wpPath = '/system/dashboard/workplace';
+              const wpTitle = findMenuTitleWithTranslation(wpPath, menuConfig, t);
+              validTabs.unshift({
+                key: wpPath,
+                path: wpPath,
+                label: wpTitle,
+                closable: false,
+                pinned: false,
+              });
+            }
+          }
+          return validTabs;
         }
       }
     } catch (e) { console.warn('Failed to load tabs from cache', e); }
@@ -330,10 +313,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const loadTabsFromStorage = useCallback((): TabItem[] | null => {
     if (typeof window === 'undefined') return null;
     try {
-      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
-      if (!savedTabs) return null;
-      const parsedTabs: TabItem[] = JSON.parse(savedTabs);
-      if (!Array.isArray(parsedTabs) || parsedTabs.length === 0) return null;
+      const parsedTabs = getSavedTabs();
+      if (!parsedTabs.length) return null;
 
       const isInfraPage = location.pathname.startsWith('/infra');
       const validTabs = parsedTabs.filter((tab) => {
@@ -376,7 +357,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
       setTabs(restored);
-      const savedActive = typeof window !== 'undefined' ? localStorage.getItem('riveredge_saved_active_key') : null;
+      const savedActive = getSavedActiveKey();
       if (savedActive && restored.some((tab) => tab.key === savedActive)) {
         setActiveKey(savedActive);
       }
@@ -394,11 +375,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
     try {
-      localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
+      setSavedTabs(tabs);
       if (activeKey && !activeKey.startsWith('/apps/')) {
-        localStorage.setItem('riveredge_saved_active_key', activeKey);
+        setSavedActiveKey(activeKey);
       }
-    } catch (error) {
+    } catch {
+      // ignore
     }
   }, [tabs, activeKey, tabsPersistence]);
 
