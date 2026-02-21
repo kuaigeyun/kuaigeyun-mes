@@ -15,6 +15,8 @@ import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Sele
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -858,14 +860,20 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
-      valueEnum: {
-        [SalesOrderStatus.DRAFT]: { text: '草稿', status: 'Default' },
-        '已提交': { text: '已提交', status: 'Processing' }, // TBD if this state exists in backend
-        [SalesOrderStatus.AUDITED]: { text: '已审核', status: 'Success' },
-        [SalesOrderStatus.CONFIRMED]: { text: '已生效', status: 'Success' },
-        '已完成': { text: '已完成', status: 'Success' },
-        '已取消': { text: '已取消', status: 'Error' },
+      width: 200,
+      render: (_: unknown, record: SalesOrder) => {
+        const lifecycle = getSalesOrderLifecycle(record);
+        const mainStages = lifecycle.mainStages ?? [];
+        if (mainStages.length === 0) return <UniLifecycle {...lifecycle} />;
+        return (
+          <UniLifecycleStepper
+            steps={mainStages}
+            status={lifecycle.status}
+            nodeSize={36}
+            showLabels={false}
+            innerFontSize={9}
+          />
+        );
       },
     },
     {
@@ -1479,6 +1487,33 @@ const SalesOrdersPage: React.FC = () => {
                       {record.review_status}
                     </Tag>
                   ),
+                },
+                {
+                  title: '生命周期',
+                  key: 'lifecycle',
+                  span: 2,
+                  render: (_, record) => {
+                    const lifecycle = getSalesOrderLifecycle(record);
+                    const mainStages = lifecycle.mainStages ?? [];
+                    const subStages = lifecycle.subStages ?? [];
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {mainStages.length > 0 && (
+                          <div>
+                            <UniLifecycleStepper steps={mainStages} status={lifecycle.status} showLabels />
+                          </div>
+                        )}
+                        {subStages.length > 0 && (
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                              执行中 · 全链路
+                            </div>
+                            <UniLifecycleStepper steps={subStages} showLabels />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  },
                 },
                 {
                   title: '备注',
