@@ -73,6 +73,15 @@ fi
 # 设置Python路径
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
+# 启动前执行数据库迁移，确保最新表结构可用
+echo "执行数据库迁移..."
+uv run aerich upgrade
+if [ $? -ne 0 ]; then
+    echo "错误：数据库迁移失败，已停止启动。"
+    exit 1
+fi
+echo ""
+
 # 启动服务（启用热重载，监控 src 目录）
 # 使用 UV 运行，自动使用 .venv 虚拟环境
 # 主机和端口从环境变量读取（HOST 和 PORT），未设置时使用配置文件默认值

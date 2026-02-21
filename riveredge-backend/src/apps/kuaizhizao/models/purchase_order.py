@@ -60,6 +60,9 @@ class PurchaseOrder(BaseModel):
     # 备注
     notes = fields.TextField(null=True, description="备注")
 
+    # 附件
+    attachments = fields.JSONField(null=True, description="附件列表")
+
     # 关联订单行
     items: fields.ReverseRelation["PurchaseOrderItem"]
 

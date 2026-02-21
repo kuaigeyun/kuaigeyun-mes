@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Tag, Space, message, Button } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
@@ -30,6 +31,7 @@ import dayjs from 'dayjs';
  * 操作日志页面组件
  */
 const OperationLogsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
@@ -95,13 +97,14 @@ const OperationLogsPage: React.FC = () => {
   };
 
   /**
-   * 格式化操作模块名称（使其更友好）
+   * 格式化操作模块名称（与侧栏应用名唯一来源一致：应用根使用 locale app.${code}.name）
    */
   const formatModuleName = (module: string | undefined): string => {
     if (!module) return '-';
-    // 将技术性路径转换为友好名称
+    // 应用根模块使用 locale 统一来源
+    if (module === 'apps/master-data') return t('app.master-data.name');
+    // 其余技术路径的友好名称
     const moduleMap: Record<string, string> = {
-      'apps/master-data': '基础数据',
       'apps/master-data/factory': '工厂管理',
       'apps/master-data/warehouse': '仓库管理',
       'apps/master-data/material': '物料管理',

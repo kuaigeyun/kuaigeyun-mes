@@ -93,15 +93,14 @@ async def list_code_rule_pages():
     获取编码规则功能页面配置列表
     
     返回系统中所有有编码字段的功能页面配置，用于在编码规则页面展示和配置。
-    通过服务发现机制自动从应用的 manifest.json 中提取页面配置。
+    以 core.config.code_rule_pages.CODE_RULE_PAGES 为唯一数据源，保证列表完整
+    （各应用 manifest 中若未配置 code_rule_pages 会导致发现结果不全，故不再优先使用发现）。
     
     Returns:
         List[CodeRulePageConfigResponse]: 功能页面配置列表
     """
-    from core.services.code_rule.code_rule_page_discovery import CodeRulePageDiscoveryService
-    
-    # 使用服务发现获取页面配置
-    pages = CodeRulePageDiscoveryService.get_all_pages()
+    # 使用后端完整配置作为唯一数据源，确保编码规则页面列表完整
+    pages = CODE_RULE_PAGES
     return [CodeRulePageConfigResponse(**page) for page in pages]
 
 
@@ -114,7 +113,7 @@ async def get_page_config(
     获取指定页面的编码规则配置
     
     根据页面代码获取编码规则配置，包括是否自动生成、是否允许手动填写等。
-    通过服务发现机制自动从应用的 manifest.json 中查找页面配置。
+    从 core.config.code_rule_pages.CODE_RULE_PAGES 中查找。
     
     Args:
         page_code: 页面代码（如：kuaizhizao-sales-order）
@@ -126,18 +125,13 @@ async def get_page_config(
     Raises:
         HTTPException: 当页面不存在时抛出
     """
-    from core.services.code_rule.code_rule_page_discovery import CodeRulePageDiscoveryService
-    
-    # 使用服务发现获取所有页面配置
-    all_pages = CodeRulePageDiscoveryService.get_all_pages()
-    
-    # 查找页面配置
+    # 从完整配置中查找页面
     page_config = None
-    for page in all_pages:
+    for page in CODE_RULE_PAGES:
         if page.get("page_code") == page_code:
             page_config = page.copy()
             break
-    
+
     if not page_config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

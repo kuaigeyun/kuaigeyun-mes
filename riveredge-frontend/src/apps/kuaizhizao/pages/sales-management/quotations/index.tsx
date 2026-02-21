@@ -9,11 +9,16 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined } from '@ant-design/icons';
+import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
+import { customerApi } from '../../../../master-data/services/supply-chain';
+import { UniImport } from '../../../../../components/uni-import';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
   listQuotations,
@@ -23,12 +28,11 @@ import {
   deleteQuotation,
   convertQuotationToOrder,
   Quotation,
-  QuotationItem,
 } from '../../../services/quotation';
-import { customerApi } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   草稿: { text: '草稿', color: 'default' },
@@ -43,38 +47,36 @@ const QuotationsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [quotationDetail, setQuotationDetail] = useState<Quotation | null>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
 
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [materialList, setMaterialList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{
-    material_id: number;
-    material_code: string;
-    material_name: string;
-    material_spec?: string;
-    material_unit: string;
-    quote_quantity: number;
-    unit_price: number;
-    delivery_date?: string;
-    notes?: string;
-  }>>([]);
+  const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [cust, mat] = await Promise.all([
-          customerApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
+        const [custRes, matRes] = await Promise.all([
+          apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
+          apiRequest<unknown>('/apps/master-data/materials', { params: { limit: 1000, is_active: true } }),
         ]);
-        setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        const custList = Array.isArray(custRes) ? custRes : (custRes as any)?.data ?? (custRes as any)?.items ?? [];
+        const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
+        setCustomerList(Array.isArray(custList) ? custList : []);
+        setMaterialList(Array.isArray(matList) ? matList : []);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'load', hypothesisId: 'H5_H6_H7_H8', location: 'quotations/index.tsx:load', message: 'customer/material API result', data: { custIsArray: Array.isArray(custRes), matIsArray: Array.isArray(matRes), custListLen: Array.isArray(custList) ? custList.length : 0, matListLen: Array.isArray(matList) ? matList.length : 0, custResKeys: custRes && typeof custRes === 'object' ? Object.keys(custRes as object) : [], matResKeys: matRes && typeof matRes === 'object' ? Object.keys(matRes as object) : [], firstCustId: Array.isArray(custList) && custList[0] != null ? (custList[0] as any).id ?? (custList[0] as any).customer_id : undefined, firstMatId: Array.isArray(matList) && matList[0] != null ? (matList[0] as any).id ?? (matList[0] as any).material_id : undefined }, timestamp: Date.now() }) }).catch(() => {});
+        // #endregion
       } catch (e) {
         console.error('加载客户/物料失败', e);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'load', hypothesisId: 'H5_H7', location: 'quotations/index.tsx:load catch', message: 'customer/material load failed', data: { errMessage: (e as Error)?.message, errName: (e as Error)?.name }, timestamp: Date.now() }) }).catch(() => {});
+        // #endregion
       }
     };
     load();
@@ -113,7 +115,7 @@ const QuotationsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
           {record.status === '草稿' && (
             <>
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
@@ -129,12 +131,14 @@ const QuotationsPage: React.FC = () => {
     },
   ];
 
-  const handleDetail = async (record: Quotation) => {
+  const handleDetail = async (id: number) => {
     try {
-      const detail = await getQuotation(record.id!, true);
-      setQuotationDetail(detail);
-      setDetailDrawerVisible(true);
-    } catch {
+      const res = await getQuotation(id);
+      if (res) {
+        setQuotationDetail(res);
+        setDetailDrawerVisible(true);
+      }
+    } catch (e: any) {
       messageApi.error('获取报价单详情失败');
     }
   };
@@ -143,18 +147,8 @@ const QuotationsPage: React.FC = () => {
     try {
       const detail = await getQuotation(record.id!, true);
       setQuotationDetail(detail);
-      setFormItems((detail.items || []).map((it) => ({
-        material_id: it.material_id!,
-        material_code: it.material_code || '',
-        material_name: it.material_name || '',
-        material_spec: it.material_spec,
-        material_unit: it.material_unit || '',
-        quote_quantity: Number(it.quote_quantity) || 0,
-        unit_price: Number(it.unit_price) || 0,
-        delivery_date: it.delivery_date,
-        notes: it.notes,
-      })));
       formRef.current?.setFieldsValue({
+        quotation_code: detail.quotation_code,
         quotation_date: detail.quotation_date ? dayjs(detail.quotation_date) : undefined,
         valid_until: detail.valid_until ? dayjs(detail.valid_until) : undefined,
         delivery_date: detail.delivery_date ? dayjs(detail.delivery_date) : undefined,
@@ -167,9 +161,20 @@ const QuotationsPage: React.FC = () => {
         shipping_method: detail.shipping_method,
         payment_terms: detail.payment_terms,
         notes: detail.notes,
+        items: (detail.items || []).map((it) => ({
+          material_id: it.material_id!,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_spec: it.material_spec,
+          material_unit: it.material_unit || '',
+          quote_quantity: Number(it.quote_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+          delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
+          notes: it.notes,
+        })),
       });
       setEditingId(record.id!);
-      setEditModalVisible(true);
+      setModalVisible(true);
     } catch {
       messageApi.error('获取报价单详情失败');
     }
@@ -191,6 +196,46 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
+  const handleItemImport = (data: any[][]) => {
+    const rows = data.slice(2);
+    const newItems = rows
+      .map((row) => {
+        const materialCode = String(row[0] || '').trim();
+        const spec = String(row[1] || '').trim();
+        const unit = String(row[2] || '').trim();
+        const quantity = parseFloat(row[3]) || 0;
+        const price = parseFloat(row[4]) || 0;
+        const deliveryDate = row[5];
+
+        if (!materialCode) return null;
+
+        const material = materialList.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
+        
+        return {
+          material_id: material?.id ?? material?.material_id,
+          material_code: material?.main_code ?? material?.mainCode ?? material?.code ?? materialCode,
+          material_name: material?.name ?? material?.material_name ?? '',
+          material_spec: material?.specification ?? material?.material_spec ?? spec,
+          material_unit: material?.base_unit ?? material?.baseUnit ?? material?.material_unit ?? unit,
+          quote_quantity: quantity,
+          unit_price: price,
+          delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
+        };
+      })
+      .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id !== undefined || it.material_code !== ''));
+
+    if (newItems.length === 0) {
+      messageApi.warning('未检测到有效数据（请确保物料编码不为空）');
+      return;
+    }
+
+    const currentItems = formRef.current?.getFieldValue('items') || [];
+    formRef.current?.setFieldsValue({
+      items: [...currentItems, ...newItems],
+    });
+    messageApi.success(`成功导入 ${newItems.length} 条明细`);
+  };
+
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
     Modal.confirm({
@@ -202,7 +247,6 @@ const QuotationsPage: React.FC = () => {
             await deleteQuotation(Number(k));
           }
           messageApi.success(`已删除 ${keys.length} 条报价单`);
-          setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '批量删除失败');
@@ -275,47 +319,59 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
-    setFormItems([]);
+  const handleCreate = async () => {
     formRef.current?.resetFields();
-    setCreateModalVisible(true);
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, {
-      material_id: 0,
-      material_code: '',
-      material_name: '',
-      material_unit: '',
-      quote_quantity: 1,
-      unit_price: 0,
-    }]);
-  };
-
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_spec: m.spec || m.material_spec,
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
-    };
-    setFormItems(updated);
+    formRef.current?.setFieldsValue({ items: [] });
+    setEditingId(null);
+    setPreviewCode(null);
+    const autoEnabled = isAutoGenerateEnabled('kuaizhizao-quotation');
+    const ruleCode = getPageRuleCode('kuaizhizao-quotation');
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'handleCreate', hypothesisId: 'H1_H2', location: 'quotations/index.tsx:handleCreate', message: 'auto code config', data: { autoEnabled, ruleCode, pageCode: 'kuaizhizao-quotation' }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
+    if (autoEnabled) {
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
+        } catch (e) {
+          console.warn('报价单编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      }
+    }
+    setModalVisible(true);
   };
 
   const submitCreate = async (values: any) => {
-    const validItems = formItems.filter((it) => it.material_id && it.quote_quantity > 0);
+    const validItems = (values.items || []).filter((it: any) => it.material_id && it.quote_quantity > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
       throw new Error('请至少添加一条有效明细');
     }
+    let quotationCode = values.quotation_code;
+    const submitAutoEnabled = isAutoGenerateEnabled('kuaizhizao-quotation');
+    const submitRuleCode = getPageRuleCode('kuaizhizao-quotation');
+    const willCallGenerate = submitAutoEnabled && submitRuleCode && (quotationCode === previewCode || !quotationCode);
+    if (submitAutoEnabled) {
+      if (submitRuleCode && (quotationCode === previewCode || !quotationCode)) {
+        try {
+          const codeResponse = await generateCode({ rule_code: submitRuleCode });
+          quotationCode = codeResponse.code;
+        } catch (e) {
+          console.warn('报价单编码正式生成失败，使用当前值:', e);
+        }
+      }
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'submitCreate', hypothesisId: 'H3', location: 'quotations/index.tsx:submitCreate', message: 'quotation code before create', data: { quotationCode, previewCode, submitAutoEnabled, submitRuleCode, willCallGenerate, customerListLen: customerList.length, customer_id: values.customer_id }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
-    const customerName = cust?.name || cust?.customer_name || values.customer_name || '';
+    const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
     await createQuotation({
+      quotation_code: quotationCode || undefined,
       quotation_date: values.quotation_date?.format('YYYY-MM-DD'),
       valid_until: values.valid_until?.format('YYYY-MM-DD'),
       delivery_date: values.delivery_date?.format('YYYY-MM-DD'),
@@ -328,7 +384,7 @@ const QuotationsPage: React.FC = () => {
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
       notes: values.notes,
-      items: validItems.map((it) => ({
+      items: validItems.map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code,
         material_name: it.material_name,
@@ -336,24 +392,24 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
-        delivery_date: it.delivery_date,
+        delivery_date: it.delivery_date ? (dayjs.isDayjs(it.delivery_date) ? it.delivery_date.format('YYYY-MM-DD') : it.delivery_date) : undefined,
         notes: it.notes,
       })),
     });
     messageApi.success('创建成功');
-    setCreateModalVisible(false);
+    setModalVisible(false);
     actionRef.current?.reload();
   };
 
   const submitEdit = async (values: any) => {
     if (!editingId) return;
-    const validItems = formItems.filter((it) => it.material_id && it.quote_quantity > 0);
+    const validItems = (values.items || []).filter((it: any) => it.material_id && it.quote_quantity > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
-    const customerName = cust?.name || cust?.customer_name || values.customer_name || '';
+    const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
     await updateQuotation(editingId, {
       quotation_date: values.quotation_date?.format('YYYY-MM-DD'),
       valid_until: values.valid_until?.format('YYYY-MM-DD'),
@@ -367,7 +423,7 @@ const QuotationsPage: React.FC = () => {
       shipping_method: values.shipping_method,
       payment_terms: values.payment_terms,
       notes: values.notes,
-      items: validItems.map((it) => ({
+      items: validItems.map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code,
         material_name: it.material_name,
@@ -375,12 +431,12 @@ const QuotationsPage: React.FC = () => {
         material_unit: it.material_unit,
         quote_quantity: it.quote_quantity,
         unit_price: it.unit_price,
-        delivery_date: it.delivery_date,
+        delivery_date: it.delivery_date ? (dayjs.isDayjs(it.delivery_date) ? it.delivery_date.format('YYYY-MM-DD') : it.delivery_date) : undefined,
         notes: it.notes,
       })),
     });
     messageApi.success('更新成功');
-    setEditModalVisible(false);
+    setModalVisible(false);
     setEditingId(null);
     actionRef.current?.reload();
   };
@@ -413,77 +469,314 @@ const QuotationsPage: React.FC = () => {
     { title: '关联销售订单', dataIndex: 'sales_order_code' },
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
-
   const formItemContent = (
     <>
-      <Form.Item name="customer_id" label="客户" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择客户"
-          showSearch
-          optionFilterProp="label"
-          options={customerList.map((c: any) => ({
-            value: c.id ?? c.customer_id,
-            label: `${c.code || ''} ${c.name || c.customer_name || ''}`.trim(),
-          }))}
-          onChange={(_, opt: any) => {
-            const c = customerList.find((x: any) => (x.id ?? x.customer_id) === opt?.value);
-            if (c) {
-              formRef.current?.setFieldsValue({
-                customer_name: c.name || c.customer_name,
-                customer_contact: c.contact || c.customer_contact,
-                customer_phone: c.phone || c.customer_phone,
-              });
-            }
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="quotation_code"
+            label="报价单编号"
+            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? '编码将根据编码规则自动生成，可修改' : '请输入报价单编号'}
+            fieldProps={{ disabled: !!editingId }}
+          />
+        </Col>
+        <Col span={12}>
+          <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
+            <UniDropdown
+              placeholder="请选择客户"
+              showSearch
+              allowClear
+              style={{ width: '100%' }}
+              options={customerList.map((c: any) => ({
+                value: c.id ?? c.customer_id,
+                label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
+              }))}
+              onChange={(value, option: any) => {
+                const c = customerList.find((x: any) => (x.id ?? x.customer_id) === value);
+                if (c) {
+                  formRef.current?.setFieldsValue({
+                    customer_name: c.name ?? c.customer_name,
+                    customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
+                    customer_phone: c.phone ?? c.customer_phone,
+                  });
+                }
+              }}
+              quickCreate={{
+                label: '快速新建',
+                onClick: () => setCustomerCreateVisible(true),
+              }}
+              advancedSearch={{
+                label: '高级搜索',
+                fields: [
+                  { name: 'code', label: '客户编码' },
+                  { name: 'name', label: '客户名称' },
+                  { name: 'contactPerson', label: '联系人' },
+                ],
+                onSearch: async (values) => {
+                  const list = await customerApi.list({ limit: 200, skip: 0 });
+                  let filtered = list;
+                  if (values.code?.trim()) {
+                    const k = values.code.trim().toLowerCase();
+                    filtered = filtered.filter((c: any) => (c.code ?? '').toLowerCase().includes(k));
+                  }
+                  if (values.name?.trim()) {
+                    const k = values.name.trim().toLowerCase();
+                    filtered = filtered.filter((c: any) => (c.name ?? '').toLowerCase().includes(k));
+                  }
+                  if (values.contactPerson?.trim()) {
+                    const k = values.contactPerson.trim().toLowerCase();
+                    filtered = filtered.filter((c: any) => (c.contactPerson ?? '').toLowerCase().includes(k));
+                  }
+                  return filtered.map((c: any) => ({
+                    value: c.id ?? c.uuid,
+                    label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id ?? c.uuid),
+                  }));
+                },
+              }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker
+            name="quotation_date"
+            label="报价日期"
+            rules={[{ required: true }]}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker
+            name="valid_until"
+            label="有效期至"
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker
+            name="delivery_date"
+            label="预计交货日期"
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="customer_contact" label="联系人" />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="customer_phone" label="电话" />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="salesman_name" label="销售员" />
+        </Col>
+        <Col span={12}>
+          <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="shipping_method" label="发货方式" />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="payment_terms" label="付款条件" />
+        </Col>
+      </Row>
+      <ProFormText name="customer_name" hidden />
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+            <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+            物料明细
+          </span>
+          <Button 
+            size="small" 
+            icon={<ImportOutlined />} 
+            onClick={() => setImportModalVisible(true)}
+          >
+            导入明细
+          </Button>
+        </div>
+        <ProForm.Item name="items" noStyle rules={[{ required: true, message: '请至少添加一条明细' }]}>
+          <Form.List name="items">
+          {(fields, { add, remove }) => {
+            const orderDetailColumns = [
+              {
+                title: '物料',
+                dataIndex: 'material_id',
+                width: 200,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
+                    <Select
+                      placeholder="请选择物料"
+                      style={{ width: '100%' }}
+                      showSearch
+                      allowClear
+                      size="small"
+                      optionFilterProp="label"
+                      options={materialList.map((m: any) => ({
+                        value: m.id ?? m.material_id,
+                        label: `${m.main_code ?? m.mainCode ?? m.code ?? ''} - ${m.name ?? m.material_name ?? ''}`.trim() || String(m.id ?? m.material_id),
+                      }))}
+                      onChange={(v) => {
+                        const m = materialList.find((x: any) => (x.id ?? x.material_id) === v);
+                        if (m) {
+                          const items = formRef.current?.getFieldValue('items') || [];
+                          items[index] = {
+                            ...items[index],
+                            material_id: m.id ?? m.material_id,
+                            material_code: m.main_code ?? m.mainCode ?? m.code ?? m.material_code ?? '',
+                            material_name: m.name ?? m.material_name ?? '',
+                            material_spec: m.specification ?? m.material_spec ?? '',
+                            material_unit: m.base_unit ?? m.baseUnit ?? m.material_unit ?? '',
+                          };
+                          formRef.current?.setFieldsValue({ items });
+                        }
+                      }}
+                    />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '规格',
+                dataIndex: 'material_spec',
+                width: 120,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                    <Input placeholder="规格" size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '单位',
+                dataIndex: 'material_unit',
+                width: 80,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                    <Input placeholder="单位" size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '数量',
+                dataIndex: 'quote_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'quote_quantity']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
+                    <InputNumber placeholder="数量" min={0.01} precision={2} style={{ width: '100%' }} size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '单价',
+                dataIndex: 'unit_price',
+                width: 100,
+                align: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                    <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '金额',
+                width: 110,
+                align: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                    {({ getFieldValue }: any) => {
+                      const items = getFieldValue('items') ?? [];
+                      const row = items[index];
+                      const amt = (Number(row?.quote_quantity) || 0) * (Number(row?.unit_price) || 0);
+                      return <AmountDisplay resource="sales_order" value={amt} />;
+                    }}
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '交货日期',
+                dataIndex: 'delivery_date',
+                width: 120,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'delivery_date']} style={{ margin: 0 }}>
+                    <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '备注',
+                dataIndex: 'notes',
+                width: 120,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                    <Input placeholder="备注" size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '操作',
+                width: 70,
+                fixed: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                    删除
+                  </Button>
+                ),
+              },
+            ];
+            const totalWidth = orderDetailColumns.reduce((s, c) => s + (c.width as number || 0), 0);
+            return (
+              <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+                <style>{`
+                  .quotation-detail-table .ant-table-thead > tr > th {
+                    background-color: var(--ant-color-fill-alter) !important;
+                    font-weight: 600;
+                  }
+                  .quotation-detail-table .ant-table {
+                    border-top: 1px solid var(--ant-color-border);
+                  }
+                  .quotation-detail-table .ant-table-tbody > tr > td {
+                    border-bottom: 1px solid var(--ant-color-border);
+                  }
+                `}</style>
+                <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                  <Table
+                    className="quotation-detail-table"
+                    size="small"
+                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                    rowKey="key"
+                    pagination={false}
+                    columns={orderDetailColumns}
+                    scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                    style={{ width: '100%', margin: 0 }}
+                    footer={() => (
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          add({
+                            material_id: undefined,
+                            material_code: '',
+                            material_name: '',
+                            material_spec: '',
+                            material_unit: '',
+                            quote_quantity: 0,
+                            unit_price: 0,
+                            delivery_date: undefined,
+                            notes: '',
+                          });
+                        }}
+                        block
+                      >
+                        添加明细
+                      </Button>
+                    )}
+                  />
+                </div>
+              </div>
+            );
           }}
-        />
-      </Form.Item>
-      <Form.Item name="quotation_date" label="报价日期" rules={[{ required: true }]}>
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="valid_until" label="有效期至">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="delivery_date" label="预计交货日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="customer_name" hidden><Input /></Form.Item>
-      <Form.Item name="customer_contact" label="联系人"><Input /></Form.Item>
-      <Form.Item name="customer_phone" label="电话"><Input /></Form.Item>
-      <Form.Item name="salesman_name" label="销售员"><Input /></Form.Item>
-      <Form.Item name="shipping_address" label="收货地址"><Input.TextArea rows={2} /></Form.Item>
-      <Form.Item name="shipping_method" label="发货方式"><Input /></Form.Item>
-      <Form.Item name="payment_terms" label="付款条件"><Input /></Form.Item>
-      <Form.Item label="明细">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-          {formItems.map((it, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                placeholder="物料"
-                style={{ width: 220 }}
-                showSearch
-                optionFilterProp="label"
-                options={materialList.map((m: any) => ({
-                  value: m.id ?? m.material_id,
-                  label: `${m.mainCode || m.code || ''} ${m.name || ''}`.trim(),
-                }))}
-                onChange={(v) => onMaterialSelect(idx, v)}
-                value={it.material_id || undefined}
-              />
-              <InputNumber placeholder="数量" min={0.01} value={it.quote_quantity} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], quote_quantity: v ?? 0 }; setFormItems(u);
-              }} />
-              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-              }} />
-              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-            </div>
-          ))}
-        </Space>
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <Input.TextArea rows={2} />
-      </Form.Item>
+        </Form.List>
+        </ProForm.Item>
+      </div>
+      <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
     </>
   );
 
@@ -500,7 +793,6 @@ const QuotationsPage: React.FC = () => {
           createButtonText="新建报价单"
           onCreate={handleCreate}
           enableRowSelection
-          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
           showImportButton={false}
@@ -564,7 +856,7 @@ const QuotationsPage: React.FC = () => {
         dataSource={quotationDetail || {}}
         extra={
           quotationDetail?.status !== '已转订单' && quotationDetail?.status !== '已拒绝' && (
-            <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转为销售订单</Button>
+            <Button type="primary" icon={<SwapOutlined />} onClick={() => quotationDetail && handleConvert(quotationDetail)}>转为销售订单</Button>
           )
         }
       >
@@ -589,34 +881,78 @@ const QuotationsPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
 
-      <FormModalTemplate
-        title="新建报价单"
-        open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        formRef={formRef}
-        onFinish={submitCreate}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        initialValues={{ quotation_date: dayjs() }}
+      <Modal
+        open={modalVisible}
+        onCancel={() => { setModalVisible(false); setEditingId(null); }}
+        title={editingId != null ? '编辑报价单' : '新建报价单'}
+        width={1200}
+        footer={null}
+        destroyOnHidden
       >
-        {formItemContent}
-      </FormModalTemplate>
+        <ProForm
+          formRef={formRef}
+          layout="vertical"
+          initialValues={editingId == null ? { quotation_date: dayjs() } : undefined}
+          onValuesChange={(changed, all) => {
+            if ('customer_id' in changed && changed.customer_id != null) {
+              const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
+              if (c) {
+                formRef.current?.setFieldsValue({
+                  customer_name: c.name ?? c.customer_name,
+                  customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
+                  customer_phone: c.phone ?? c.customer_phone,
+                });
+              }
+            }
+          }}
+          onFinish={async (values) => {
+            if (editingId != null) await submitEdit(values);
+            else await submitCreate(values);
+          }}
+          submitter={{
+            searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
+            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); } },
+            render: (_, dom) => (
+              <div style={{ textAlign: 'left', marginTop: 16 }}>
+                <Space>{dom}</Space>
+              </div>
+            ),
+          }}
+        >
+          {formItemContent}
+        </ProForm>
+      </Modal>
 
-      <FormModalTemplate
-        title="编辑报价单"
-        open={editModalVisible}
-        onClose={() => { setEditModalVisible(false); setEditingId(null); }}
-        formRef={formRef}
-        onFinish={submitEdit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-      >
-        {formItemContent}
-      </FormModalTemplate>
+      <CustomerFormModal
+        open={customerCreateVisible}
+        onClose={() => setCustomerCreateVisible(false)}
+        editUuid={null}
+        onSuccess={(customer) => {
+          setCustomerList((prev) => [...prev, customer]);
+          formRef.current?.setFieldsValue({
+            customer_id: customer.id,
+            customer_name: customer.name,
+            customer_contact: customer.contactPerson,
+            customer_phone: customer.phone,
+          });
+          setCustomerCreateVisible(false);
+        }}
+      />
 
       <SyncFromDatasetModal
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
         title="从数据集同步报价单"
+      />
+
+      <UniImport
+        visible={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        onConfirm={handleItemImport}
+        title="导入报价明细"
+        headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
+        exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
       />
     </>
   );

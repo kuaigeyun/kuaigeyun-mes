@@ -19,6 +19,7 @@ from core.schemas.user import (
 )
 from core.services.user.user_service import UserService
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_access
 from core.api.deps.service_helpers import get_user_service_with_fallback
 from core.services.interfaces.service_interface import UserServiceInterface
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -81,12 +82,11 @@ async def _user_to_response(user) -> UserResponse:
             "code": user.position.code,
         }
         position_uuid = user.position.uuid
-    roles_data = []
-    if user.roles:
-        roles_data = [
-            {"uuid": r.uuid, "name": r.name, "code": r.code}
-            for r in user.roles
-        ]
+    roles_list = await user.roles.all()
+    roles_data = [
+        {"uuid": r.uuid, "name": r.name, "code": r.code}
+        for r in roles_list
+    ]
     return model_to_response(
         user,
         UserResponse,
@@ -112,6 +112,7 @@ class UserImportRequest(BaseModel):
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     data: UserCreateRequest,
+    _auth: object = Depends(require_access("system.user", "create")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     user_service: Any = Depends(get_user_service_with_fallback),
@@ -180,13 +181,12 @@ async def create_user(
                 "code": user.position.code
             }
 
-        roles_data = []
-        if user.roles:
-            roles_data = [{
-                "uuid": role.uuid,
-                "name": role.name,
-                "code": role.code
-            } for role in user.roles]
+        roles_list = await user.roles.all()
+        roles_data = [{
+            "uuid": role.uuid,
+            "name": role.name,
+            "code": role.code
+        } for role in roles_list]
 
         # 转换为响应格式
         return model_to_response(
@@ -220,6 +220,7 @@ async def get_user_list(
     position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
+    _auth: object = Depends(require_access("system.user", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     user_service: Any = Depends(get_user_service_with_fallback),  # ⚠️ 第三阶段改进：依赖注入
@@ -305,6 +306,7 @@ async def get_user_list(
 @router.get("/{user_uuid}", response_model=UserResponse)
 async def get_user_detail(
     user_uuid: str,
+    _auth: object = Depends(require_access("system.user", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -342,6 +344,7 @@ async def get_user_detail(
 async def update_user(
     user_uuid: str,
     data: UserUpdate,
+    _auth: object = Depends(require_access("system.user", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -385,6 +388,7 @@ async def update_user(
 @router.delete("/{user_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_uuid: str,
+    _auth: object = Depends(require_access("system.user", "delete")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -525,4 +529,3 @@ async def export_users(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
-

@@ -14,8 +14,9 @@ import { getMenuTree, type MenuTree } from '../services/menu';
 import { getBusinessConfig } from '../services/businessConfig';
 import type { BusinessConfig } from '../services/businessConfig';
 import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
-import { extractAppCodeFromPath } from '../utils/menuTranslation';
+import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
+import { hasAnyPermission } from '../utils/permission';
 
 /** 与 BasicLayout 保持一致，确保缓存共享 */
 const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
@@ -49,6 +50,30 @@ function filterMenuByBusinessConfig(
       return menu;
     })
     .filter((m): m is MenuTree => m !== null);
+}
+
+function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDataItem[] {
+  return items
+    .map((item) => {
+      const permissionCodes = (item as any).permissionCodes as string[] | undefined;
+      if (permissionCodes && permissionCodes.length > 0) {
+        if (!hasAnyPermission(currentUser, permissionCodes)) {
+          return null;
+        }
+      }
+
+      if (!item.children || item.children.length === 0) {
+        return item;
+      }
+
+      const nextChildren = filterMenuByPermission(item.children as MenuDataItem[], currentUser);
+      if (nextChildren.length === 0 && !item.path) {
+        return null;
+      }
+
+      return { ...item, children: nextChildren };
+    })
+    .filter((m): m is MenuDataItem => m !== null);
 }
 
 export interface UseUnifiedMenuDataOptions {
@@ -157,15 +182,8 @@ export function useUnifiedMenuData(
             return null;
           };
           const firstPath = findFirstAppPath(appMenu.children);
-          let appName = appMenu.name;
-          if (firstPath?.startsWith('/apps/')) {
-            const code = extractAppCodeFromPath(firstPath);
-            if (code) {
-              const key = `app.${code}.name`;
-              const tr = t(key, { defaultValue: appMenu.name });
-              if (tr && tr !== key) appName = tr;
-            }
-          }
+          const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
+          const appName = code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name;
           appMenuItems.push({
             name: appName,
             label: appName,
@@ -200,7 +218,7 @@ export function useUnifiedMenuData(
         return true;
       });
     }
-    return items;
+    return filterMenuByPermission(items, currentUser);
   }, [
     currentUser,
     systemMenuConfig,
@@ -226,15 +244,8 @@ export function useUnifiedMenuData(
           return null;
         };
         const firstPath = findFirst(appMenu.children || []);
-        let appName = appMenu.name;
-        if (firstPath?.startsWith('/apps/')) {
-          const code = extractAppCodeFromPath(firstPath);
-          if (code) {
-            const key = `app.${code}.name`;
-            const tr = t(key, { defaultValue: appMenu.name });
-            if (tr && tr !== key) appName = tr;
-          }
-        }
+        const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
+        const appName = code ? getAppDisplayName(code, t, appMenu.name) : appMenu.name;
         return {
           ...convertMenuTreeToMenuDataItem(appMenu, true),
           name: appName,
@@ -243,7 +254,7 @@ export function useUnifiedMenuData(
       });
       items.splice(1, 0, ...appItems);
     }
-    return items;
+    return filterMenuByPermission(items, currentUser);
   }, [
     currentUser,
     systemMenuConfig,

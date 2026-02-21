@@ -9,16 +9,19 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
+import { ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface SampleTrial {
   id?: number;
@@ -60,9 +63,9 @@ const SampleTrialsPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [trialDetail, setTrialDetail] = useState<SampleTrialDetail | null>(null);
 
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [createOutboundModalVisible, setCreateOutboundModalVisible] = useState(false);
   const [createOutboundTrialId, setCreateOutboundTrialId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -72,7 +75,6 @@ const SampleTrialsPage: React.FC = () => {
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; trial_quantity: number; unit_price: number }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -148,15 +150,8 @@ const SampleTrialsPage: React.FC = () => {
   const handleEdit = async (record: SampleTrial) => {
     try {
       const detail = await sampleTrialApi.get(record.id!.toString()) as SampleTrialDetail;
-      setFormItems((detail.items || []).map((it: any) => ({
-        material_id: it.material_id,
-        material_code: it.material_code || '',
-        material_name: it.material_name || '',
-        material_unit: it.material_unit || '',
-        trial_quantity: Number(it.trial_quantity) || 0,
-        unit_price: Number(it.unit_price) || 0,
-      })));
       formRef.current?.setFieldsValue({
+        trial_code: detail.trial_code,
         customer_id: detail.customer_id,
         customer_name: detail.customer_name,
         customer_contact: detail.customer_contact,
@@ -166,9 +161,17 @@ const SampleTrialsPage: React.FC = () => {
         trial_period_end: detail.trial_period_end ? dayjs(detail.trial_period_end) : undefined,
         status: detail.status,
         notes: detail.notes,
+        items: (detail.items || []).map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          trial_quantity: Number(it.trial_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+        })),
       });
       setEditingId(record.id!);
-      setEditModalVisible(true);
+      setModalVisible(true);
     } catch {
       messageApi.error('获取详情失败');
     }
@@ -291,15 +294,33 @@ const SampleTrialsPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
-    setFormItems([]);
+  const handleCreate = async () => {
     formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({ items: [] });
     setEditingId(null);
-    setCreateModalVisible(true);
+    setPreviewCode(null);
+    if (isAutoGenerateEnabled('kuaizhizao-sample-trial')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ trial_code: preview ?? '' });
+        } catch (e) {
+          console.warn('样品试用单编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      }
+    }
+    setModalVisible(true);
   };
 
+  const getValidItems = (values: any) =>
+    (values.items || []).filter((it: any) => it.material_id && (it.trial_quantity ?? 0) > 0);
+
   const handleCreateSubmit = async (values: any) => {
-    const validItems = formItems.filter((it) => it.material_id && it.trial_quantity > 0);
+    const validItems = getValidItems(values);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -309,8 +330,21 @@ const SampleTrialsPage: React.FC = () => {
       messageApi.error('请选择客户');
       throw new Error('请选择客户');
     }
+    let trialCode = values.trial_code;
+    if (isAutoGenerateEnabled('kuaizhizao-sample-trial')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
+      if (ruleCode && (trialCode === previewCode || !trialCode)) {
+        try {
+          const codeResponse = await generateCode({ rule_code: ruleCode });
+          trialCode = codeResponse.code;
+        } catch (e) {
+          console.warn('样品试用单编码正式生成失败，使用当前值:', e);
+        }
+      }
+    }
     try {
       await sampleTrialApi.create({
+        trial_code: trialCode || undefined,
         customer_id: values.customer_id,
         customer_name: cust.name || cust.customer_name || cust.code,
         customer_contact: values.customer_contact,
@@ -320,7 +354,7 @@ const SampleTrialsPage: React.FC = () => {
         trial_period_end: values.trial_period_end ? dayjs(values.trial_period_end).format('YYYY-MM-DD') : undefined,
         status: values.status || '草稿',
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
           material_name: it.material_name,
@@ -330,7 +364,7 @@ const SampleTrialsPage: React.FC = () => {
         })),
       });
       messageApi.success('创建成功');
-      setCreateModalVisible(false);
+      setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -340,7 +374,7 @@ const SampleTrialsPage: React.FC = () => {
 
   const handleEditSubmit = async (values: any) => {
     if (!editingId) return;
-    const validItems = formItems.filter((it) => it.material_id && it.trial_quantity > 0);
+    const validItems = getValidItems(values);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -357,7 +391,7 @@ const SampleTrialsPage: React.FC = () => {
         trial_period_end: values.trial_period_end ? dayjs(values.trial_period_end).format('YYYY-MM-DD') : undefined,
         status: values.status || '草稿',
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
           material_name: it.material_name,
@@ -367,7 +401,8 @@ const SampleTrialsPage: React.FC = () => {
         })),
       });
       messageApi.success('更新成功');
-      setEditModalVisible(false);
+      setModalVisible(false);
+      setEditingId(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');
@@ -375,22 +410,18 @@ const SampleTrialsPage: React.FC = () => {
     }
   };
 
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', trial_quantity: 1, unit_price: 0 }]);
-  };
-
-  const onMaterialSelect = (idx: number, materialId: number) => {
+  const onMaterialSelectForItem = (index: number, materialId: number) => {
     const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
     if (!m) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
+    const items = formRef.current?.getFieldValue('items') || [];
+    items[index] = {
+      ...items[index],
       material_id: m.id || m.material_id,
       material_code: m.mainCode || m.code || m.material_code || '',
       material_name: m.name || m.material_name || '',
       material_unit: m.baseUnit || m.material_unit || m.unit || '',
     };
-    setFormItems(updated);
+    formRef.current?.setFieldsValue({ items });
   };
 
   const detailColumns: ProDescriptionsItemProps<SampleTrialDetail>[] = [
@@ -414,58 +445,152 @@ const SampleTrialsPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
-  const renderForm = (onFinish: (values: any) => Promise<void>) => (
+  const sampleTrialFormContent = (
     <>
-      <Form.Item name="customer_id" label="客户" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择客户"
-          options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
-          onChange={(v) => {
-            const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-            if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="trial_code"
+            label="试用单号"
+            placeholder={isAutoGenerateEnabled('kuaizhizao-sample-trial') ? '编码将根据编码规则自动生成，可修改' : '请输入试用单号'}
+            fieldProps={{ disabled: !!editingId }}
+          />
+        </Col>
+        <Col span={12}>
+          <ProFormSelect
+            name="customer_id"
+            label="客户"
+            rules={[{ required: true, message: '请选择客户' }]}
+            placeholder="请选择客户"
+            fieldProps={{
+              style: { width: '100%' },
+              options: customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code })),
+              onChange: (v: number) => {
+                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
+              },
+            }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
+        </Col>
+        <Col span={6}>
+          <ProFormText name="customer_phone" label="电话" placeholder="电话" />
+        </Col>
+        <Col span={12}>
+          <ProFormText name="trial_purpose" label="试用目的" placeholder="试用目的" />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker name="trial_period_start" label="试用开始日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+        <Col span={6}>
+          <ProFormDatePicker name="trial_period_end" label="试用结束日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+      </Row>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+            <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+            明细
+          </span>
+        </div>
+        <ProForm.Item name="items" noStyle rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条明细' }]}>
+          <Form.List name="items">
+          {(fields, { add, remove }) => {
+            const cols = [
+              {
+                title: '物料',
+                dataIndex: 'material_id',
+                width: 220,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
+                    <Select
+                      placeholder="请选择物料"
+                      style={{ width: '100%' }}
+                      showSearch
+                      allowClear
+                      size="small"
+                      options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} - ${m.name || ''}` }))}
+                      onChange={(id) => onMaterialSelectForItem(index, id as number)}
+                    />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '数量',
+                dataIndex: 'trial_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'trial_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number' as const, min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                    <InputNumber placeholder="数量" min={0.01} precision={2} style={{ width: '100%' }} size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '单价',
+                dataIndex: 'unit_price',
+                width: 100,
+                align: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Form.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                    <InputNumber placeholder="单价" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '操作',
+                width: 70,
+                fixed: 'right' as const,
+                render: (_: any, __: any, index: number) => (
+                  <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                    删除
+                  </Button>
+                ),
+              },
+            ];
+            const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+            return (
+              <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+                <style>{`
+                  .sample-trial-detail-table .ant-table-thead > tr > th {
+                    background-color: var(--ant-color-fill-alter) !important;
+                    font-weight: 600;
+                  }
+                  .sample-trial-detail-table .ant-table { border-top: 1px solid var(--ant-color-border); }
+                  .sample-trial-detail-table .ant-table-tbody > tr > td { border-bottom: 1px solid var(--ant-color-border); }
+                `}</style>
+                <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                  <Table
+                    className="sample-trial-detail-table"
+                    size="small"
+                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                    rowKey="key"
+                    pagination={false}
+                    columns={cols}
+                    scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                    style={{ width: '100%', margin: 0 }}
+                    footer={() => (
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={() => add({ material_id: undefined, material_code: '', material_name: '', material_unit: '', trial_quantity: 1, unit_price: 0 })}
+                        block
+                      >
+                        添加明细
+                      </Button>
+                    )}
+                  />
+                </div>
+              </div>
+            );
           }}
-        />
-      </Form.Item>
-      <Form.Item name="customer_contact" label="联系人">
-        <Input placeholder="联系人" />
-      </Form.Item>
-      <Form.Item name="customer_phone" label="电话">
-        <Input placeholder="电话" />
-      </Form.Item>
-      <Form.Item name="trial_purpose" label="试用目的">
-        <Input placeholder="试用目的" />
-      </Form.Item>
-      <Form.Item name="trial_period_start" label="试用开始日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="trial_period_end" label="试用结束日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item label="明细">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-          {formItems.map((it, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                placeholder="物料"
-                style={{ width: 200 }}
-                options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                onChange={(v) => onMaterialSelect(idx, v)}
-              />
-              <InputNumber placeholder="数量" min={0.01} value={it.trial_quantity} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], trial_quantity: v ?? 0 }; setFormItems(u);
-              }} />
-              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-              }} />
-              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-            </div>
-          ))}
-        </Space>
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <Input.TextArea rows={2} />
-      </Form.Item>
+        </Form.List>
+        </ProForm.Item>
+      </div>
+      <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
     </>
   );
 
@@ -561,27 +686,34 @@ const SampleTrialsPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
 
-      <FormModalTemplate
-        title="新建样品试用单"
-        open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        formRef={formRef}
-        onFinish={handleCreateSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+      <Modal
+        open={modalVisible}
+        onCancel={() => { setModalVisible(false); setEditingId(null); }}
+        title={editingId != null ? '编辑样品试用单' : '新建样品试用单'}
+        width={1200}
+        footer={null}
+        destroyOnHidden
       >
-        {renderForm(handleCreateSubmit)}
-      </FormModalTemplate>
-
-      <FormModalTemplate
-        title="编辑样品试用单"
-        open={editModalVisible}
-        onClose={() => setEditModalVisible(false)}
-        formRef={formRef}
-        onFinish={handleEditSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-      >
-        {renderForm(handleEditSubmit)}
-      </FormModalTemplate>
+        <ProForm
+          formRef={formRef}
+          layout="vertical"
+          onFinish={async (values) => {
+            if (editingId != null) await handleEditSubmit(values);
+            else await handleCreateSubmit(values);
+          }}
+          submitter={{
+            searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
+            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); } },
+            render: (_, dom) => (
+              <div style={{ textAlign: 'left', marginTop: 16 }}>
+                <Space>{dom}</Space>
+              </div>
+            ),
+          }}
+        >
+          {sampleTrialFormContent}
+        </ProForm>
+      </Modal>
 
       <Modal
         title="创建样品出库"

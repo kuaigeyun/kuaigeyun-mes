@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormTreeSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Card, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -40,10 +40,12 @@ const UserListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [deptTreeData, setDeptTreeData] = useState<DepartmentTreeItem[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const [roleUuidsDraft, setRoleUuidsDraft] = useState<string[]>([]);
+  const formRef = useRef<ProFormInstance>();
 
 
   // Modal 相关状态（创建/编辑）
@@ -128,9 +130,6 @@ const UserListPage: React.FC = () => {
       try {
         // 加载部门选项
         const deptResponse = await getDepartmentTree();
-        // 缓存树数据用于选择
-        setDeptTreeData(deptResponse.items);
-        
         const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
           const options: Array<{ label: string; value: string }> = [];
           items.forEach(item => {
@@ -145,7 +144,7 @@ const UserListPage: React.FC = () => {
           });
           return options;
         };
-        // setDepartmentOptions(buildDeptOptions(deptResponse.items));
+        setDepartmentOptions(buildDeptOptions(deptResponse.items));
 
         // 加载职位选项
         const posResponse = await getPositionList({ page_size: 100 });
@@ -173,6 +172,7 @@ const UserListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentUserUuid(null);
+    setRoleUuidsDraft([]);
     setFormInitialValues({
       is_active: true,
       is_tenant_admin: false,
@@ -189,6 +189,8 @@ const UserListPage: React.FC = () => {
       setCurrentUserUuid(record.uuid);
       
       const detail = await getUserByUuid(record.uuid);
+      const editRoleUuids = detail.roles?.map(r => r.uuid) || [];
+      setRoleUuidsDraft(editRoleUuids);
       setFormInitialValues({
         username: detail.username,
         email: detail.email,
@@ -196,7 +198,7 @@ const UserListPage: React.FC = () => {
         phone: detail.phone,
         department_uuid: detail.department_uuid,
         position_uuid: detail.position_uuid,
-        role_uuids: detail.roles?.map(r => r.uuid) || [],
+        role_uuids: editRoleUuids,
         is_active: detail.is_active,
         is_tenant_admin: detail.is_tenant_admin,
       });
@@ -290,9 +292,28 @@ const UserListPage: React.FC = () => {
       // 移除确认密码字段，后端不需要这个字段
       const submitData = { ...values };
       delete submitData.confirmPassword;
+      if (!submitData.password) {
+        delete submitData.password;
+      }
+
+      // 规范化角色字段：编辑模式下必须显式携带 role_uuids，否则后端会跳过角色更新
+      const latestRoleValue = formRef.current?.getFieldValue?.('role_uuids');
+      const draftRoleValue = roleUuidsDraft;
+      const rawRoleValue =
+        (Array.isArray(draftRoleValue) ? draftRoleValue : undefined) ??
+        submitData.role_uuids ??
+        latestRoleValue ??
+        (isEdit ? formInitialValues?.role_uuids : undefined);
+      const normalizedRoleUuids = (Array.isArray(rawRoleValue) ? rawRoleValue : rawRoleValue != null ? [rawRoleValue] : [])
+        .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
+        .filter(Boolean);
+      // 编辑时始终携带 role_uuids；新建时仅在有选择时携带
+      if (isEdit || normalizedRoleUuids.length > 0 || rawRoleValue !== undefined) {
+        submitData.role_uuids = normalizedRoleUuids;
+      }
 
       if (isEdit && currentUserUuid) {
-        await updateUser(currentUserUuid, submitData as UpdateUserData);
+        const updated = await updateUser(currentUserUuid, submitData as UpdateUserData);
         messageApi.success('更新成功');
       } else {
         if (!submitData.password) {
@@ -457,10 +478,10 @@ const UserListPage: React.FC = () => {
       dataIndex: 'department_uuid',
       width: 150,
       ellipsis: true,
-      valueType: 'treeSelect',
+      valueType: 'select',
       fieldProps: {
-        treeData: deptTreeData,
-        fieldNames: { label: 'name', value: 'uuid' },
+        options: departmentOptions,
+        showSearch: true,
       },
       render: (_, record) => record.department?.name || '-',
     },
@@ -719,11 +740,13 @@ const UserListPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setFormInitialValues(undefined);
+          setRoleUuidsDraft([]);
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
+        formRef={formRef}
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <ProFormText
@@ -809,23 +832,13 @@ const UserListPage: React.FC = () => {
           }}
           colProps={{ span: 12 }}
         />
-        <ProFormTreeSelect
+        <ProFormSelect
           name="department_uuid"
           label="部门"
           placeholder="请选择部门"
           allowClear
-          fieldProps={{
-            showSearch: true,
-            filterTreeNode: true,
-            treeNodeFilterProp: 'name',
-            fieldNames: {
-              label: 'name',
-              value: 'uuid',
-              children: 'children',
-            },
-            treeData: deptTreeData,
-            // treeDefaultExpandAll: true,
-          }}
+          options={departmentOptions}
+          fieldProps={{ showSearch: true }}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
@@ -846,6 +859,12 @@ const UserListPage: React.FC = () => {
           fieldProps={{
             mode: 'multiple',
             showSearch: true,
+            onChange: (value: any) => {
+              const next = (Array.isArray(value) ? value : [value])
+                .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
+                .filter(Boolean);
+              setRoleUuidsDraft(next);
+            },
           }}
           colProps={{ span: 24 }}
         />
@@ -892,4 +911,3 @@ const UserListPage: React.FC = () => {
 };
 
 export default UserListPage;
-

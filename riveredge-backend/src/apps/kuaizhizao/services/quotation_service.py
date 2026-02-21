@@ -104,6 +104,8 @@ class QuotationService:
         """生成报价单编码"""
         from core.config.code_rule_pages import CODE_RULE_PAGES
         from core.services.business.code_generation_service import CodeGenerationService
+        from pathlib import Path
+        import json
 
         rule_code = next(
             (
@@ -120,18 +122,47 @@ class QuotationService:
                 if hasattr(quotation_date, "isoformat")
                 else str(quotation_date)
             )
+        generated = None
         if rule_code:
             try:
-                return await CodeGenerationService.generate_code(
+                generated = await CodeGenerationService.generate_code(
                     tenant_id=tenant_id,
                     rule_code=rule_code,
                     context=context or None,
                 )
             except Exception as e:
-                logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
-        today = datetime.now().strftime("%Y%m%d")
-        import uuid
-        return f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
+                from infra.exceptions.exceptions import ValidationError
+                if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
+                    from core.services.default.default_values_service import DefaultValuesService
+                    created = await DefaultValuesService.ensure_code_rule_for_page(
+                        tenant_id, "kuaizhizao-quotation"
+                    )
+                    if created:
+                        try:
+                            generated = await CodeGenerationService.generate_code(
+                                tenant_id=tenant_id,
+                                rule_code=rule_code,
+                                context=context or None,
+                            )
+                        except Exception as e2:
+                            logger.warning("报价单编码规则补建后生成仍失败，使用备用格式: %s", e2)
+                    else:
+                        logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
+                else:
+                    logger.warning("报价单编码规则生成失败，使用备用格式: %s", e)
+        if generated is None:
+            today = datetime.now().strftime("%Y%m%d")
+            import uuid
+            generated = f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
+        # #region agent log
+        try:
+            log_path = Path(__file__).resolve().parents[5] / "debug-f6a036.log"
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "f6a036", "hypothesisId": "H4", "location": "quotation_service:_generate_quotation_code", "message": "backend generate code", "data": {"rule_code": rule_code, "generated": generated}, "timestamp": __import__("time").time() * 1000}, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        return generated
 
     async def create_quotation(
         self,
@@ -140,10 +171,22 @@ class QuotationService:
         created_by: int,
     ) -> QuotationResponse:
         """创建报价单"""
+        from pathlib import Path
+        import json
+        received_code = getattr(quotation_data, "quotation_code", None) or (quotation_data.quotation_code if hasattr(quotation_data, "quotation_code") else None)
+        will_generate = not received_code
         if not quotation_data.quotation_code:
             quotation_data.quotation_code = await self._generate_quotation_code(
                 tenant_id, quotation_data.quotation_date
             )
+        # #region agent log
+        try:
+            log_path = Path(__file__).resolve().parents[5] / "debug-f6a036.log"
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "f6a036", "hypothesisId": "H3_H4", "location": "quotation_service:create_quotation", "message": "create_quotation code", "data": {"received_code": received_code, "will_generate": will_generate, "final_code": quotation_data.quotation_code}, "timestamp": __import__("time").time() * 1000}, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
 
         async with in_transaction():
             q_dict = quotation_data.model_dump(exclude={"items"})

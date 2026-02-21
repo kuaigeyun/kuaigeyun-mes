@@ -43,6 +43,7 @@ class PurchaseOrderBase(BaseSchema):
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_id: Optional[int] = Field(None, description="来源ID")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PurchaseOrderCreate(PurchaseOrderBase):
@@ -55,6 +56,7 @@ class PurchaseOrderUpdate(PurchaseOrderBase):
     """采购订单更新Schema"""
     order_code: Optional[str] = Field(None, max_length=50, description="订单编码")
     items: Optional[List["PurchaseOrderItemUpdate"]] = Field(None, description="订单明细")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PurchaseOrderResponse(PurchaseOrderBase):

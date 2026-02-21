@@ -47,8 +47,9 @@ class SalesForecastBase(BaseSchema):
 
 class SalesForecastCreate(SalesForecastBase):
     """销售预测创建schema"""
+    forecast_code: Optional[str] = Field(None, max_length=50, description="预测编码（不填则后端按编码规则生成）")
     items: Optional[List["SalesForecastItemCreate"]] = Field(None, description="预测明细列表")
-    
+
     @model_validator(mode='after')
     def validate_items(self):
         """验证预测明细"""

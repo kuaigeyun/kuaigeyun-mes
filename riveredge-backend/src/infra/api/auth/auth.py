@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
 from loguru import logger
 
-from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse
+from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse, BatchAccessCheckRequest, AccessCheckResult
 from infra.services.auth_service import AuthService
 from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant
 from infra.api.deps.services import get_auth_service_with_fallback
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
@@ -171,6 +172,39 @@ async def get_current_user_info(
     return CurrentUserResponse(**user_info)
 
 
+@router.post("/check-access", response_model=list[AccessCheckResult])
+async def check_access(
+    data: BatchAccessCheckRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量权限检查接口。
+    """
+    from core.services.authorization.access_control_service import AccessControlService
+
+    results: list[AccessCheckResult] = []
+    for item in data.checks:
+        decision = await AccessControlService.check_access(
+            user_id=current_user.id,
+            tenant_id=tenant_id,
+            resource=item.resource,
+            action=item.action,
+            is_infra_admin=bool(getattr(current_user, "is_infra_admin", False) or getattr(current_user, "_is_infra_superadmin", False)),
+            is_tenant_admin=bool(getattr(current_user, "is_tenant_admin", False)),
+            check_abac=data.check_abac,
+        )
+        results.append(
+            AccessCheckResult(
+                resource=item.resource,
+                action=item.action,
+                allowed=decision.allowed,
+                reason=decision.reason,
+            )
+        )
+    return results
+
+
 @router.post("/logout")
 async def logout():
     """
@@ -310,4 +344,3 @@ async def send_verification_code(data: SendVerificationCodeRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="验证码发送失败，请稍后重试"
         )
-

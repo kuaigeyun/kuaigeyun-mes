@@ -116,11 +116,11 @@ export const MobileQRCode: React.FC = () => {
     return (
         <>
             <Dropdown
-                dropdownRender={() => dropdownContent}
+                popupRender={() => dropdownContent}
                 trigger={['click']}
                 placement="bottomRight"
                 arrow={false}
-                overlayClassName="header-actions-dropdown"
+                classNames={{ root: 'header-actions-dropdown' }}
             >
                 <Tooltip title={t('common.mobileExperience', '移动端体验')}>
                     <Button

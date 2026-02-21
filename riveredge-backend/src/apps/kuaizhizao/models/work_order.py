@@ -127,8 +127,9 @@ class WorkOrder(BaseModel):
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
 
-    # 备注
+    # 备注和附件
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 创建更新信息
     created_by = fields.IntField(description="创建人ID")

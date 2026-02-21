@@ -1,0 +1,85 @@
+
+-----
+
+WeasyPrint could not import some external libraries. Please carefully follow the installation steps before reporting an issue:
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting 
+
+-----
+
+清理历史单据...
+Traceback (most recent call last):
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\windows_events.py", line 485, in finish_recv
+    return ov.getresult()
+           ^^^^^^^^^^^^^^
+OSError: [WinError 64] 指定的网络名不再可用。
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\proactor_events.py", line 282, in _loop_reading
+    length = fut.result()
+             ^^^^^^^^^^^^
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\windows_events.py", line 837, in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\windows_events.py", line 489, in finish_recv
+    raise ConnectionResetError(*exc.args)
+ConnectionResetError: [WinError 64] 指定的网络名不再可用。
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\dev\riveredge\riveredge-backend\src\setup_sandbox_orm.py", line 173, in <module>
+    asyncio.run(setup())
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Kuaige\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 650, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\src\setup_sandbox_orm.py", line 27, in setup
+    await conn.execute_query("DELETE FROM apps_kuaizhizao_work_orders WHERE tenant_id = $1", [tenant_id])
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\base_postgres\client.py", line 34, in _translate_exceptions
+    return await self._translate_exceptions(func, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\asyncpg\client.py", line 87, in _translate_exceptions
+    return await func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\asyncpg\client.py", line 134, in execute_query
+    async with self.acquire_connection() as connection:
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\base\client.py", line 326, in __aenter__
+    await self.ensure_connection()
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\base\client.py", line 322, in ensure_connection
+    await self.client.create_connection(with_db=True)
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\asyncpg\client.py", line 59, in create_connection
+    self._pool = await self.create_pool(password=self.password, **self._template)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\tortoise\backends\asyncpg\client.py", line 70, in create_pool
+    return await asyncpg.create_pool(None, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\pool.py", line 439, in _async__init__
+    await self._initialize()
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\pool.py", line 466, in _initialize
+    await first_ch.connect()
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\pool.py", line 153, in connect
+    self._con = await self._pool._get_new_connection()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\pool.py", line 538, in _get_new_connection
+    con = await self._connect(
+          ^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\dev\riveredge\riveredge-backend\.venv\Lib\site-packages\asyncpg\connect_utils.py", line 1102, in __connect_addr
+    await connected
+asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation

@@ -28,7 +28,7 @@ import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
-import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation } from '../utils/menuTranslation';
+import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -75,6 +75,25 @@ import { getFilePreview } from '../services/file';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
+import { getMenuBadgeCounts } from '../services/dashboard';
+
+/** 左侧菜单 path 与业务单据未完成数量 key 的映射（用于数量徽标） */
+const MENU_BADGE_PATH_KEY: Record<string, string> = {
+  '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
+  '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
+  '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'exception',
+  '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'exception',
+  '/apps/kuaizhizao/production-execution/quality-exceptions': 'exception',
+  '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
+  '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
+  '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
+  '/apps/kuaizhizao/quality-management/incoming-inspection': 'quality_inspection',
+  '/apps/kuaizhizao/quality-management/process-inspection': 'quality_inspection',
+  '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'quality_inspection',
+  '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
+  '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
+  '/apps/kuaizhizao/equipment-management/molds': 'mold',
+};
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -149,6 +168,12 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
+          tenant_name: savedUserInfo.tenant_name,
+          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
+          permission_version: savedUserInfo.permission_version || 1,
+          department: savedUserInfo.department,
+          position: savedUserInfo.position,
+          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
         };
         setCurrentUser(restoredUser);
 
@@ -398,7 +423,11 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
  * 平台级 + 系统级菜单配置（原有写法，硬编码）
  * 仅应用级 APP 使用数据库统一源（manifest 同步 → core_menus）
  */
-const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
+type PermissionMenuDataItem = MenuDataItem & {
+  permissionCodes?: string[];
+};
+
+const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => [
   {
     path: '/system/dashboard',
     name: t('menu.dashboard'),
@@ -424,10 +453,10 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
         { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields') },
       ]},
       { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments') },
-        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions') },
-        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles') },
-        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users') },
+        { path: '/system/departments', name: t('menu.system.departments'), icon: getMenuIcon(t('menu.system.departments'), '/system/departments'), permissionCodes: ['system.department:read', 'system.department:update'] },
+        { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions'), permissionCodes: ['system.position:read', 'system.position:update'] },
+        { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'), permissionCodes: ['system.role:read', 'system.role:update'] },
+        { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system.user:read', 'system.user:update'] },
       ]},
       { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
         { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files') },
@@ -818,6 +847,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu))
         : undefined,
     };
+    if (menu.permission_code) {
+      (menuItem as any).permissionCodes = [menu.permission_code];
+    }
 
     // 如果菜单没有 path，说明是分组标题，需要特殊处理
     if (!menu.path && menu.children && menu.children.length > 0) {
@@ -847,6 +879,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     t,
     collapsed,
   });
+
+  const { data: menuBadgeCounts = {} } = useQuery({
+    queryKey: ['menuBadgeCounts'],
+    queryFn: getMenuBadgeCounts,
+    enabled: !!currentUser?.id,
+    staleTime: 60 * 1000,
+  });
+
   // 用户登录后清除菜单缓存并触发菜单查询
   const prevUserIdRef = useRef<number | undefined>();
   useEffect(() => {
@@ -1564,15 +1604,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return calculateSelectedKeys(filteredMenuData, location.pathname);
   }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
 
-  // 当路径变化时，如果新路径需要展开之前手动收起的菜单，则清除这些菜单的收起状态
-  // 这样可以确保当用户导航到新页面时，相关的菜单会自动展开
+  // 仅当「路径」变化时，为新路径的父级菜单清除收起状态，使新页面所在分组能自动展开。
+  // 不依赖 requiredOpenKeys，避免其引用变化时误执行、把用户刚收起的上级菜单重新展开（标准行为：任意菜单都可收起）。
   useEffect(() => {
-    // 如果当前路径需要展开的菜单中有被用户手动收起的，则清除这些菜单的收起状态
     const shouldReopenKeys = requiredOpenKeys.filter(key => userClosedKeys.includes(key));
     if (shouldReopenKeys.length > 0) {
       setUserClosedKeys(prev => prev.filter(key => !shouldReopenKeys.includes(key)));
     }
-  }, [location.pathname, requiredOpenKeys]); // 只在路径变化时执行
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅路径变化时执行；requiredOpenKeys 同帧已更新
+  }, [location.pathname]);
 
 
   /**
@@ -2406,6 +2446,30 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important; /* 减小上下 padding */
           margin: 0 !important;
           line-height: 1.2 !important;
+        }
+        /* 左侧菜单小徽标：报表 / 大屏 / 业务未完成数量 */
+        .menu-item-badge {
+          flex-shrink: 0;
+          font-size: 10px;
+          line-height: 1.2;
+          padding: 0 4px;
+          border-radius: 2px;
+          font-weight: 500;
+        }
+        .menu-item-badge-report {
+          background: var(--ant-colorPrimaryBg);
+          color: var(--ant-colorPrimary);
+        }
+        .menu-item-badge-dashboard {
+          background: var(--ant-colorInfoBg);
+          color: var(--ant-colorInfo);
+        }
+        .menu-item-badge-count.ant-badge .ant-badge-count {
+          font-size: 10px;
+          line-height: 14px;
+          min-width: 14px;
+          height: 14px;
+          padding: 0 4px;
         }
         /* 使用 ProLayout 原生收起按钮，保持原生行为 */
         /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */
@@ -3479,7 +3543,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               placement="bottomRight"
               trigger={['click']}
               arrow={false}
-              overlayClassName="header-actions-dropdown"
+              classNames={{ root: 'header-actions-dropdown' }}
               open={messageDropdownOpen}
               onOpenChange={(open) => {
                 setMessageDropdownOpen(open);
@@ -3875,24 +3939,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
           // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
           if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
-            // 确保应用菜单分组标题使用最新的翻译（在渲染时重新翻译，确保语言切换后能正确显示）
-            // 从第一个子菜单的路径中提取应用 code，然后直接使用翻译 key
+            // 应用名唯一来源：仅用 locale 的 app.${appCode}.name，与 useUnifiedMenuData 一致
             const firstChildPath = item.children?.[0]?.path;
-            let groupTitle = item.name || item.label || '';
-
-            // 如果第一个子菜单路径存在且是应用菜单路径，直接从路径提取应用 code 并使用翻译 key
-            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
-              const appCode = extractAppCodeFromPath(firstChildPath);
-              if (appCode) {
-                // 直接使用翻译 key app.{app-code}.name 进行翻译，不依赖 item.name 的值
-                // 这样可以确保无论 item.name 是什么值（中文或英文），都能根据当前语言正确翻译
-                const appNameKey = `app.${appCode}.name`;
-                const appNameTranslated = t(appNameKey, { defaultValue: groupTitle });
-                if (appNameTranslated && appNameTranslated !== appNameKey) {
-                  groupTitle = appNameTranslated;
-                }
-              }
-            }
+            const fallback = item.name || item.label || '';
+            const appCode = firstChildPath ? extractAppCodeFromPath(firstChildPath) : null;
+            const groupTitle = appCode ? getAppDisplayName(appCode, t, fallback) : fallback;
 
             return (
               <div
@@ -3972,17 +4023,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
 
-            // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
+            // 左侧菜单小徽标：报表类显示「报表」、大屏类显示「大屏」、业务单据显示未完成数量
+            const path = item.path as string;
+            const isReport = path.startsWith('/apps/kuaireport/reports');
+            const isDashboard = path.startsWith('/apps/kuaireport/dashboards');
+            const badgeKey = MENU_BADGE_PATH_KEY[path];
+            const businessCount = badgeKey ? (menuBadgeCounts[badgeKey] ?? 0) : 0;
+            const badgeEl =
+              isReport ? (
+                <span className="menu-item-badge menu-item-badge-report">报表</span>
+              ) : isDashboard ? (
+                <span className="menu-item-badge menu-item-badge-dashboard">大屏</span>
+              ) : businessCount > 0 ? (
+                <Badge count={businessCount} size="small" className="menu-item-badge-count" />
+              ) : null;
+
             return (
               <div
                 onClick={(e) => {
-                  // 阻止事件冒泡到 Menu，防止 Menu 的默认链接行为
                   e.stopPropagation();
                 }}
                 style={{ display: 'block', width: '100%' }}
               >
-                <Link to={item.path} style={{ display: 'block', width: '100%' }}>
-                  {finalDom}
+                <Link to={item.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 6 }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{finalDom}</span>
+                  {badgeEl}
                 </Link>
               </div>
             );
@@ -4018,4 +4083,3 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     </>
   );
 }
-

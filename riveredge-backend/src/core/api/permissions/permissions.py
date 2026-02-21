@@ -14,7 +14,9 @@ from core.schemas.permission import (
     PermissionListItem,
 )
 from core.services.authorization.permission_service import PermissionService
+from core.services.authorization.permission_sync_service import PermissionSyncService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_access
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
@@ -31,6 +33,7 @@ async def get_permission_list(
     code: Optional[str] = Query(None, description="权限代码筛选"),
     resource: Optional[str] = Query(None, description="资源筛选"),
     permission_type: Optional[str] = Query(None, description="权限类型筛选"),
+    _auth: object = Depends(require_access("system.permission", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -51,6 +54,9 @@ async def get_permission_list(
     Returns:
         PermissionListResponse: 权限列表响应
     """
+    # 先同步权限定义（强制同步），保证列表含应用级菜单权限，避免角色「全选」后仍看不到应用菜单
+    await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+
     result = await PermissionService.get_permission_list(
         tenant_id=tenant_id,
         page=page,
@@ -75,6 +81,7 @@ async def get_permission_list(
 
 @router.get("/metadata")
 async def get_permission_metadata(
+    _auth: object = Depends(require_access("system.permission", "read")),
     current_user: User = Depends(soil_get_current_user),
 ):
     """
@@ -97,6 +104,7 @@ async def get_permission_metadata(
 @router.get("/{permission_uuid}", response_model=PermissionResponse)
 async def get_permission(
     permission_uuid: str,
+    _auth: object = Depends(require_access("system.permission", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -137,4 +145,3 @@ async def get_permission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-

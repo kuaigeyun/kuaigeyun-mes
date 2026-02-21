@@ -23,6 +23,7 @@ import {
   ProFormSwitch,
   ProForm,
   ProFormGroup,
+  ProFormUploadButton,
 } from '@ant-design/pro-components'
 import {
   App,
@@ -116,6 +117,7 @@ import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
 import WorkOrderPrintModal from './components/WorkOrderPrintModal'
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
+import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 
 interface WorkOrder {
   id?: number
@@ -614,6 +616,7 @@ const WorkOrdersPage: React.FC = () => {
           planned_end_date: detail.planned_end_date,
           allow_operation_jump: detail.allow_operation_jump ?? false,
           remarks: detail.remarks,
+          attachments: (detail as any).attachments || [],
         })
       }, 100)
     } catch (error) {
@@ -1142,6 +1145,20 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      // 处理附件
+      const formAttachments = values.attachments || [];
+      values.attachments = formAttachments.map((f: any) => {
+        if (f.response) {
+          if (Array.isArray(f.response) && f.response.length > 0) {
+            return { uid: f.response[0].uuid, name: f.response[0].original_name, status: 'done', url: getFileDownloadUrl(f.response[0].uuid) };
+          }
+          if (f.response.uuid) {
+            return { uid: f.response.uuid, name: f.response.original_name, status: 'done', url: getFileDownloadUrl(f.response.uuid) };
+          }
+        }
+        return { uid: f.uid, name: f.name, status: 'done', url: f.url };
+      });
+
       // 物料来源验证（核心功能，新增）
       if (values.product_id && selectedMaterialSourceInfo) {
         if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
@@ -2814,6 +2831,27 @@ const WorkOrdersPage: React.FC = () => {
           placeholder="可选"
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
+        />
+        <ProFormUploadButton
+          name="attachments"
+          label="附件"
+          max={10}
+          colProps={{ span: 24 }}
+          fieldProps={{
+            multiple: true,
+            customRequest: async (options) => {
+              try {
+                const res = await uploadMultipleFiles([options.file as File], { category: 'work_order_attachments' });
+                if (options.onSuccess) {
+                  options.onSuccess(res[0], options.file as any);
+                }
+              } catch (err) {
+                if (options.onError) {
+                  options.onError(err as any);
+                }
+              }
+            }
+          }}
         />
       </FormModalTemplate>
 

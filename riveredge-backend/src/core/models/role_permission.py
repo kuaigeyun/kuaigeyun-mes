@@ -23,8 +23,18 @@ class RolePermission(Model):
     """
     
     id = fields.IntField(pk=True, description="关联ID（主键）")
-    role_id = fields.IntField(description="角色ID（外键，关联 core_roles）")
-    permission_id = fields.IntField(description="权限ID（外键，关联 core_permissions）")
+    role = fields.ForeignKeyField(
+        "models.Role",
+        related_name="role_permissions",
+        on_delete=fields.CASCADE,
+        description="角色（外键，关联 core_roles）",
+    )
+    permission = fields.ForeignKeyField(
+        "models.Permission",
+        related_name="role_permissions",
+        on_delete=fields.CASCADE,
+        description="权限（外键，关联 core_permissions）",
+    )
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     
     class Meta:
@@ -32,6 +42,8 @@ class RolePermission(Model):
         模型元数据
         """
         table = "core_role_permissions"
+        app = "models"
+        default_connection = "default"
         unique_together = [("role_id", "permission_id")]
         indexes = [
             ("role_id",),
@@ -41,4 +53,3 @@ class RolePermission(Model):
     def __str__(self):
         """字符串表示"""
         return f"RolePermission(role_id={self.role_id}, permission_id={self.permission_id})"
-

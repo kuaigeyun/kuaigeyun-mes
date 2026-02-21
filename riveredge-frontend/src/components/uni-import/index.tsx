@@ -5,7 +5,7 @@
  * 已从 Luckysheet 迁移到 Univer Sheet
  */
 
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useEffect, useRef, useState } from 'react';
 import { Modal, Button, Space, App, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 
@@ -108,6 +108,17 @@ export const UniImport: React.FC<UniImportProps> = ({
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
+
+  // 全屏时禁止 body 滚动，避免出现滚动条
+  useEffect(() => {
+    if (visible && isFullscreen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [visible, isFullscreen]);
 
   /**
    * 初始化 Univer Sheet
@@ -771,42 +782,68 @@ export const UniImport: React.FC<UniImportProps> = ({
       {/* Univer Sheet 基本样式 */}
       {visible && (
         <style>{`
+          .uni-import-modal .ant-modal-title {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            width: 100% !important;
+            padding-right: 0px !important; /* 避开右侧的关闭按钮 */
+          }
           .ant-modal-body {
-            padding: 16px 0 !important;
+            padding: 8px 0 !important;
           }
           #${containerIdRef.current} {
             width: 100%;
             height: 100%;
             border-radius: 0px;
           }
+          /* 全屏时禁止 modal 产生滚动条 */
+          .uni-import-modal-fullscreen.ant-modal-wrap {
+            overflow: hidden !important;
+          }
+          .uni-import-modal-fullscreen.ant-modal {
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            padding-bottom: 0 !important;
+          }
+          .uni-import-modal-fullscreen .ant-modal-content {
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+          .uni-import-modal-fullscreen .ant-modal-body {
+            overflow: hidden !important;
+            flex: 1 !important;
+            min-height: 0 !important;
+          }
         `}</style>
       )}
       <Modal
+        className={`uni-import-modal${isFullscreen ? ' uni-import-modal-fullscreen' : ''}`}
         title={
-          <div style={{
-            position: 'relative',
-            paddingRight: '100px',
-          }}>
+          <>
             <span>{title}</span>
             <Button
               size="small"
               icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-              onClick={toggleFullscreen}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
               style={{
-                position: 'absolute',
-                right: 24,
-                top: 8,
-                transform: 'translateY(-50%)',
-                borderRadius: '16px', // 胶囊型圆角
-                height: '28px',
-                lineHeight: '28px',
-                padding: '0 12px',
-                fontSize: '13px',
+                borderRadius: '16px',
+                height: '32px',
+                padding: '0 10px',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                marginRight: -10, // 微调使其更靠近关闭按钮但留有余地
               }}
             >
               {isFullscreen ? '退出全屏' : '全屏'}
             </Button>
-          </div>
+          </>
         }
         open={visible}
         onCancel={onCancel}
@@ -839,9 +876,6 @@ export const UniImport: React.FC<UniImportProps> = ({
           paddingBottom: 0,
         } : {}}
         styles={{
-          content: {
-            boxShadow: `0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)`,
-          },
           body: {
             padding: '16px',
             height: isFullscreen ? 'calc(100vh - 130px)' : `${height}px`,

@@ -40,10 +40,16 @@ export interface CurrentUser {
   username: string;
   email?: string;
   full_name?: string;
+  avatar?: string;
   is_infra_admin?: boolean;
   is_tenant_admin?: boolean;
   tenant_id?: number;
   tenant_name?: string; // ⚠️ 关键修复：添加租户名称字段
   is_active?: boolean;
+  permissions?: string[];
+  permission_version?: number;
+  department?: { uuid: string; name: string };
+  position?: { uuid: string; name: string };
+  roles?: Array<{ uuid: string; name: string; code: string }>;
 }
 

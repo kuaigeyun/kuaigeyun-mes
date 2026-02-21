@@ -5,15 +5,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerApi } from '../../../services/supply-chain';
-import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import type { Customer, CustomerCreate, CustomerUpdate } from '../../../types/supply-chain';
+import { CustomerFormModal } from '../../../components/CustomerFormModal';
+import type { Customer } from '../../../types/supply-chain';
 
 /**
  * 客户管理列表页面组件
@@ -21,7 +20,6 @@ import type { Customer, CustomerCreate, CustomerUpdate } from '../../../types/su
 const CustomersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -32,64 +30,22 @@ const CustomersPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑客户）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
-
-  const PAGE_CODE = 'master-data-supply-chain-customer';
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
   /**
    * 处理新建客户
    */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentCustomerUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
-
-    if (isAutoGenerateEnabled(PAGE_CODE)) {
-      const ruleCode = getPageRuleCode(PAGE_CODE);
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          setPreviewCode(codeResponse.code);
-          formRef.current?.setFieldsValue({ code: codeResponse.code });
-        } catch (e) {
-          setPreviewCode(null);
-        }
-      } else {
-        setPreviewCode(null);
-      }
-    } else {
-      setPreviewCode(null);
-    }
   };
 
   /**
    * 处理编辑客户
    */
-  const handleEdit = async (record: Customer) => {
-    try {
-      setIsEdit(true);
-      setCurrentCustomerUuid(record.uuid);
-      setPreviewCode(null);
-      setModalVisible(true);
-      const detail = await customerApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        shortName: detail.shortName,
-        contactPerson: detail.contactPerson,
-        phone: detail.phone,
-        email: detail.email,
-        address: detail.address,
-        category: detail.category,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取客户详情失败');
-    }
+  const handleEdit = (record: Customer) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
   };
 
   /**
@@ -179,51 +135,9 @@ const CustomersPage: React.FC = () => {
     setCustomerDetail(null);
   };
 
-  /**
-   * 处理提交表单（创建/更新客户）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-
-      if (isEdit && currentCustomerUuid) {
-        await customerApi.update(currentCustomerUuid, values as CustomerUpdate);
-        messageApi.success('更新成功');
-      } else {
-        if (isAutoGenerateEnabled(PAGE_CODE)) {
-          const ruleCode = getPageRuleCode(PAGE_CODE);
-          const currentCode = values.code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (e) {
-              // 继续使用表单中的编码
-            }
-          }
-        }
-        if (values.isActive === undefined) {
-          values.isActive = true;
-        }
-        await customerApi.create(values as CustomerCreate);
-        messageApi.success('创建成功');
-      }
-
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
   const handleCloseModal = () => {
     setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
+    setEditUuid(null);
   };
 
   /**
@@ -474,106 +388,12 @@ const CustomersPage: React.FC = () => {
       />
 
       {/* 创建/编辑客户 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑客户' : '新建客户'}
+      <CustomerFormModal
         open={modalVisible}
         onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-        layout="vertical"
-        grid={true}
-      >
-          <ProFormText
-            name="code"
-            label="客户编码"
-            placeholder={isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入客户编码'}
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入客户编码' },
-              { max: 50, message: '客户编码不能超过50个字符' },
-            ]}
-            fieldProps={{ style: { textTransform: 'uppercase' } }}
-            extra={!isEdit && isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑。' : undefined}
-          />
-          <ProFormText
-            name="name"
-            label="客户名称"
-            placeholder="请输入客户名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入客户名称' },
-              { max: 200, message: '客户名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="shortName"
-            label="简称"
-            placeholder="请输入简称"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '简称不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="contactPerson"
-            label="联系人"
-            placeholder="请输入联系人"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '联系人不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="phone"
-            label="电话"
-            placeholder="请输入电话"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 20, message: '电话不能超过20个字符' },
-            ]}
-          />
-          <ProFormText
-            name="email"
-            label="邮箱"
-            placeholder="请输入邮箱"
-            colProps={{ span: 12 }}
-            rules={[
-              { type: 'email', message: '请输入有效的邮箱地址' },
-              { max: 100, message: '邮箱不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="category"
-            label="分类"
-            placeholder="请输入分类"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 50, message: '分类不能超过50个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="address"
-            label="地址"
-            placeholder="请输入地址"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 3,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-            initialValue={true}
-          />
-      </FormModalTemplate>
+        editUuid={editUuid}
+        onSuccess={() => actionRef.current?.reload()}
+      />
     </>
   );
 };

@@ -17,6 +17,7 @@ import {
   Tag,
   theme,
   Menu,
+  Image,
 } from 'antd'
 import {
   EditOutlined,
@@ -59,6 +60,7 @@ import type {
 } from '../../types/material'
 import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
+import { getFileDownloadUrl } from '../../../../services/file'
 
 
 /**
@@ -631,6 +633,30 @@ const MaterialsManagementPage: React.FC = () => {
         title: '物料名称',
         dataIndex: 'name',
         width: 200,
+      },
+      {
+        title: '产品图片',
+        dataIndex: 'images',
+        width: 100,
+        hideInSearch: true,
+        render: (_, record) => {
+          const images = (record as any).images || [];
+          if (images.length > 0) {
+            const firstImage = images[0];
+            const url = firstImage.url || getFileDownloadUrl(firstImage.uid || firstImage.uuid);
+            return (
+              <Image
+                src={url}
+                alt={firstImage.name || '图片'}
+                width={40}
+                height={40}
+                style={{ objectFit: 'cover', borderRadius: 4 }}
+                preview={{ src: url }}
+              />
+            );
+          }
+          return '-';
+        },
       },
       {
         title: '物料分组',

@@ -112,6 +112,7 @@ class SalesOrderBase(BaseSchema):
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
     
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class SalesOrderCreate(SalesOrderBase):
@@ -144,6 +145,7 @@ class SalesOrderUpdate(BaseSchema):
     shipping_method: Optional[str] = Field(None, max_length=50)
     payment_terms: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
     items: Optional[List[SalesOrderItemCreate]] = None
 
 

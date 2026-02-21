@@ -143,14 +143,11 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     initFromApi: async () => {
       if (!getToken()) {
         const cachedTheme = getThemeFromPreferenceCache();
-        const siteSetting = await getSiteSetting().catch(() => null);
-        const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
         if (cachedTheme) {
-          const merged = mergeConfig(siteConfig as ThemeConfig, cachedTheme.theme_config as Partial<ThemeConfig>);
+          const merged = mergeConfig({}, cachedTheme.theme_config as Partial<ThemeConfig>);
           doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
         } else {
-          const merged = mergeConfig(siteConfig as ThemeConfig, null);
-          doApplyTheme('light', merged);
+          doApplyTheme('light', { ...DEFAULT_CONFIG });
         }
         set({ initialized: true });
         return;
@@ -174,14 +171,11 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       } catch (e) {
         console.warn('Theme init failed:', e);
         const cachedTheme = getThemeFromPreferenceCache();
-        const siteSetting = await getSiteSetting().catch(() => null);
-        const siteConfig = (siteSetting?.settings?.theme_config || {}) as Partial<ThemeConfig>;
         if (cachedTheme) {
-          const merged = mergeConfig(siteConfig as ThemeConfig, cachedTheme.theme_config as Partial<ThemeConfig>);
+          const merged = mergeConfig({}, cachedTheme.theme_config as Partial<ThemeConfig>);
           doApplyTheme((cachedTheme.theme as ThemeMode) || 'light', merged);
         } else {
-          const merged = mergeConfig(siteConfig as ThemeConfig, null);
-          doApplyTheme('light', merged);
+          doApplyTheme('light', { ...DEFAULT_CONFIG });
         }
         set({ initialized: true });
       }

@@ -171,6 +171,7 @@ class Material(BaseModel):
     description = fields.TextField(null=True, description="描述")
     brand = fields.CharField(max_length=100, null=True, description="品牌")
     model = fields.CharField(max_length=100, null=True, description="型号")
+    images = fields.JSONField(null=True, description="产品图片列表")
     
     # 关联关系（ForeignKeyField 会自动创建 group_id 字段）
     group = fields.ForeignKeyField(

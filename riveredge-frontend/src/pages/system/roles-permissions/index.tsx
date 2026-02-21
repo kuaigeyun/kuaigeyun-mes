@@ -361,6 +361,45 @@ const RolesPermissionsPage: React.FC = () => {
         : resource.charAt(0).toUpperCase() + resource.slice(1).replace(/_/g, ' ');
     };
 
+    const getActionName = (action?: string): string => {
+      if (!action) return '';
+      const key = `permission.action.${action.toLowerCase()}`;
+      const translated = t(key);
+      if (translated !== key) return translated;
+      return action;
+    };
+
+    const getScopeName = (scope?: string): string => {
+      if (!scope) return '';
+      const key = `permission.scope.${scope.toLowerCase()}`;
+      const translated = t(key);
+      if (translated !== key) return translated;
+      return scope;
+    };
+
+    const getPermissionDisplayName = (permission: Permission): string => {
+      const codeParts = (permission.code || '').split(':').filter(Boolean);
+      const resource = permission.resource || codeParts[0] || '';
+      const action = permission.action || codeParts[1] || '';
+      const resourceName = getResourceName(resource);
+      const actionName = getActionName(action);
+
+      if (permission.permission_type === 'function') {
+        if (actionName && resourceName) return `${actionName}${resourceName}`;
+        return permission.name;
+      }
+
+      if (permission.permission_type === 'data') {
+        const scope =
+          codeParts.find((part) => ['all', 'department', 'self'].includes(part.toLowerCase())) || '';
+        const scopeName = getScopeName(scope);
+        if (scopeName && resourceName) return `${resourceName}${scopeName}数据`;
+        return permission.name;
+      }
+
+      return permission.name;
+    };
+
     const getModuleName = (module: string): string =>
       PERMISSION_MODULE_NAMES[module] || module;
 
@@ -391,7 +430,7 @@ const RolesPermissionsPage: React.FC = () => {
             children: groupedData[module][resource].map((permission) => ({
               title: (
                 <Space>
-                  <span>{permission.name}</span>
+                  <span>{getPermissionDisplayName(permission)}</span>
                   <Tag color="cyan" style={{ fontSize: '10px' }}>
                     {permission.code}
                   </Tag>
@@ -834,7 +873,7 @@ const RolesPermissionsPage: React.FC = () => {
                 />
                 <Divider orientation="vertical" />
                 <Space size="small">
-                  <Tooltip title="全选当前展示的权限">
+                  <Tooltip title="全选当前筛选条件下的权限，保存后生效">
                     <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
                       全选
                     </Button>

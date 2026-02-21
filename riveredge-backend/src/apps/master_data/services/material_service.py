@@ -48,6 +48,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "description": getattr(material, "description", None),
         "brand": getattr(material, "brand", None),
         "model": getattr(material, "model", None),
+        "images": getattr(material, "images", None),
         "is_active": getattr(material, "is_active", True),
         "defaults": getattr(material, "defaults", None),
         "source_type": getattr(material, "source_type", None),
