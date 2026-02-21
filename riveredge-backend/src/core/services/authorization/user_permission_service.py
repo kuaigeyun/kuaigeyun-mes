@@ -7,15 +7,16 @@ Author: Luigi Lu
 Date: 2026-01-27
 """
 
-from typing import List, Set, Optional
-from tortoise.expressions import Q
+from typing import List, Set
 
 from core.models.user_role import UserRole
 from core.models.role_permission import RolePermission
 from core.models.role import Role
 from core.models.permission import Permission
+from core.services.authorization.permission_version_service import PermissionVersionService
 from infra.models.user import User
 from infra.exceptions.exceptions import AuthorizationError
+from infra.infrastructure.cache.cache_manager import cache_manager
 
 
 class UserPermissionService:
@@ -24,6 +25,9 @@ class UserPermissionService:
     
     提供用户权限检查功能，基于RBAC模型。
     """
+
+    ADMIN_ROLE_CODES = {"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"}
+    ADMIN_ROLE_NAME = "系统管理员"
     
     @staticmethod
     async def get_user_permissions(
@@ -42,39 +46,53 @@ class UserPermissionService:
         Returns:
             Set[str]: 权限代码集合
         """
+        version = await PermissionVersionService.get_version(tenant_id=tenant_id, user_id=user_id)
+        cache_key = f"{tenant_id}:{user_id}:v{version}:inactive:{int(include_inactive_roles)}"
+        cached = await cache_manager.get("permissions", cache_key)
+        if isinstance(cached, list):
+            return set(cached)
+
         # 获取用户的所有角色（通过UserRole关联表）
-        # 注意：UserRole表可能没有tenant_id字段，需要通过role的tenant_id过滤
         user_roles_query = UserRole.filter(user_id=user_id)
-        
-        # 通过role的tenant_id过滤
-        user_roles = await user_roles_query.prefetch_related('role').all()
-        
+        user_roles = await user_roles_query.prefetch_related("role").all()
+
         # 过滤出当前租户的角色
         user_roles = [ur for ur in user_roles if ur.role and ur.role.tenant_id == tenant_id]
-        
+
         if not include_inactive_roles:
-            # 只获取激活的角色
             user_roles = [ur for ur in user_roles if ur.role.is_active]
-        
+
         if not user_roles:
+            await cache_manager.set("permissions", cache_key, [], ttl=1800)
             return set()
-        
-        # 获取所有角色的权限
+
         role_ids = [ur.role_id for ur in user_roles]
-        
-        # 获取角色权限关联（RolePermission表可能没有tenant_id字段，需要通过permission的tenant_id过滤）
         role_permissions_query = RolePermission.filter(role_id__in=role_ids)
-        role_permissions = await role_permissions_query.prefetch_related('permission').all()
-        
-        # 过滤出当前租户的权限
+        role_permissions = await role_permissions_query.prefetch_related("permission").all()
         role_permissions = [rp for rp in role_permissions if rp.permission and rp.permission.tenant_id == tenant_id]
-        
-        # 提取权限代码
+
         permission_codes = set()
         for rp in role_permissions:
             if rp.permission and rp.permission.deleted_at is None:
                 permission_codes.add(rp.permission.code)
-        
+
+        # 拥有「系统管理员」角色时始终合并租户下全部权限，与组织管理员行为一致，保证应用级菜单等全部可见
+        has_admin_role = any(
+            ur.role
+            and (
+                (ur.role.code or "").strip().upper() in UserPermissionService.ADMIN_ROLE_CODES
+                or (ur.role.name or "").strip() == UserPermissionService.ADMIN_ROLE_NAME
+            )
+            for ur in user_roles
+        )
+        if has_admin_role:
+            all_permissions = await Permission.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            permission_codes |= {p.code for p in all_permissions if p.code}
+
+        await cache_manager.set("permissions", cache_key, sorted(permission_codes), ttl=1800)
         return permission_codes
     
     @staticmethod

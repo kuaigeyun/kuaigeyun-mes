@@ -133,6 +133,22 @@ export default {
   'permission.resource.site_setting': '站点设置',
   'permission.resource.language': '语言',
   'permission.resource.integration_config': '集成配置',
+  'permission.action.create': '新建',
+  'permission.action.read': '查看',
+  'permission.action.view': '查看',
+  'permission.action.update': '编辑',
+  'permission.action.delete': '删除',
+  'permission.action.assign': '分配',
+  'permission.action.manage': '管理',
+  'permission.action.approve': '审批',
+  'permission.action.submit': '提交',
+  'permission.action.export': '导出',
+  'permission.action.import': '导入',
+  'permission.action.execute': '执行',
+  'permission.action.sync': '同步',
+  'permission.scope.all': '全部',
+  'permission.scope.department': '本部门',
+  'permission.scope.self': '本人',
 
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
@@ -289,7 +305,7 @@ export default {
 
   // 应用名称翻译（符合中国中小企业叫法）
   'app.kuaizhizao.name': '快格轻制造',
-  'app.master-data.name': '基础数据',
+  'app.master-data.name': '基础数据管理',
 
   // 快格轻制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
@@ -409,8 +425,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.line-side-warehouse': '线边仓管理',
   'app.kuaizhizao.menu.warehouse-management.backflush-records': '倒冲记录',
 
-  // 基础数据应用菜单翻译
-  'app.master-data.name': '基础数据管理',
+  // 基础数据应用菜单翻译（应用名已在上方 app.master-data.name 统一为「基础数据」）
   'app.master-data.menu.factory': '工厂数据',
   'app.master-data.menu.factory.plants': '厂区管理',
   'app.master-data.menu.factory.workshops': '车间管理',

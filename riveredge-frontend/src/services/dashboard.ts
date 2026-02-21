@@ -109,6 +109,20 @@ export async function getDashboard(): Promise<DashboardResponse> {
 }
 
 /**
+ * 左侧菜单业务单据未完成数量（用于报表/大屏/业务单据小徽标）
+ * key 与菜单 path 映射见 BasicLayout 中的 MENU_BADGE_PATH_KEY
+ */
+export type MenuBadgeCounts = Record<string, number>;
+
+export async function getMenuBadgeCounts(): Promise<MenuBadgeCounts> {
+  try {
+    return await apiRequest<MenuBadgeCounts>('/apps/kuaizhizao/dashboard/menu-badge-counts');
+  } catch {
+    return {};
+  }
+}
+
+/**
  * 通知项接口
  */
 export interface NotificationItem {

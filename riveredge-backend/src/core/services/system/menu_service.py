@@ -803,4 +803,11 @@ class MenuService:
             from loguru import logger
             logger.warning(f"清除菜单缓存失败: {e}")
 
+        # 菜单同步后强制同步权限到 core_permissions，保证角色权限页「全部权限」含应用级菜单权限
+        try:
+            from core.services.authorization.permission_sync_service import PermissionSyncService
+            await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+        except Exception as e:
+            logger.warning(f"菜单同步后权限同步失败: {e}")
+
         return created_count

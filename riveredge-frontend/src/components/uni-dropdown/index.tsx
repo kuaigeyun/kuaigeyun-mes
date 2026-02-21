@@ -1,0 +1,132 @@
+/**
+ * UniDropdown - 管理型下拉增强组件
+ *
+ * 在 Select 下拉列表下方增加「快速新建」「高级搜索」入口，可复用、可配置。
+ * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
+ */
+
+import React, { useState, useCallback } from 'react';
+import { Select, theme } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import type { SelectProps } from 'antd';
+import type { QuickCreateConfig, AdvancedSearchConfig } from './types';
+import { AdvancedSearchModal } from './AdvancedSearchModal';
+
+export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender'> {
+  /** 快速新建配置，不传则不显示 */
+  quickCreate?: QuickCreateConfig;
+  /** 高级搜索配置，不传则不显示 */
+  advancedSearch?: AdvancedSearchConfig;
+}
+
+export const UniDropdown: React.FC<UniDropdownProps> = ({
+  quickCreate,
+  advancedSearch,
+  onChange,
+  ...selectProps
+}) => {
+  const { token } = theme.useToken();
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+
+  const handleAdvancedSearchSelect = useCallback(
+    (value: any, label: string) => {
+      onChange?.(value, { value, label });
+      setAdvancedSearchOpen(false);
+    },
+    [onChange]
+  );
+
+  const popupRender = useCallback(
+    (menu: React.ReactElement) => {
+      const hasFooter = quickCreate || advancedSearch;
+      if (!hasFooter) {
+        return menu;
+      }
+      const footerStyle: React.CSSProperties = {
+        borderTop: `1px solid ${token.colorBorder}`,
+        padding: '4px 0',
+        background: token.colorBgContainer,
+      };
+      const itemStyle: React.CSSProperties = {
+        padding: '6px 12px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 12,
+        color: token.colorTextSecondary,
+      };
+      return (
+        <>
+          {menu}
+          <div style={footerStyle}>
+            {quickCreate && (
+              <div
+                role="button"
+                tabIndex={0}
+                style={itemStyle}
+                onClick={() => quickCreate.onClick()}
+                onKeyDown={(e) => e.key === 'Enter' && quickCreate.onClick()}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = token.colorFillTertiary;
+                  e.currentTarget.style.color = token.colorText;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = token.colorTextSecondary;
+                }}
+              >
+                <PlusOutlined />
+                {quickCreate.label ?? '快速新建'}
+              </div>
+            )}
+            {advancedSearch && (
+              <div
+                role="button"
+                tabIndex={0}
+                style={itemStyle}
+                onClick={() => setAdvancedSearchOpen(true)}
+                onKeyDown={(e) => e.key === 'Enter' && setAdvancedSearchOpen(true)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = token.colorFillTertiary;
+                  e.currentTarget.style.color = token.colorText;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = token.colorTextSecondary;
+                }}
+              >
+                <SearchOutlined />
+                {advancedSearch.label ?? '高级搜索'}
+              </div>
+            )}
+          </div>
+        </>
+      );
+    },
+    [quickCreate, advancedSearch, token]
+  );
+
+  return (
+    <>
+      <Select
+        {...selectProps}
+        onChange={onChange}
+        popupRender={popupRender}
+      />
+      {advancedSearch && (
+        <AdvancedSearchModal
+          open={advancedSearchOpen}
+          onClose={() => setAdvancedSearchOpen(false)}
+          title={advancedSearch.label ?? '高级搜索'}
+          fields={advancedSearch.fields}
+          onSearch={advancedSearch.onSearch}
+          onSelect={handleAdvancedSearchSelect}
+        />
+      )}
+    </>
+  );
+};
+
+export type { QuickCreateConfig, AdvancedSearchConfig, AdvancedSearchField } from './types';
+export { AdvancedSearchModal } from './AdvancedSearchModal';

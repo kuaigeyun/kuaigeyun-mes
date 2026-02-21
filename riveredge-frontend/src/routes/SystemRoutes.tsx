@@ -8,9 +8,12 @@
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Modal } from 'antd';
 import PageSkeleton from '../components/page-skeleton';
+import { useGlobalStore } from '../stores/globalStore';
+import { hasAnyPermission } from '../utils/permission';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
@@ -31,6 +34,38 @@ const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentTy
 const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton variant="dashboard" />}><LazyComponent /></Suspense>
 );
+
+const withPermission = (
+  element: React.ReactElement,
+  permissionCodes?: string[],
+) => {
+  if (!permissionCodes || permissionCodes.length === 0) {
+    return element;
+  }
+  return <RoutePermissionGuard permissionCodes={permissionCodes}>{element}</RoutePermissionGuard>;
+};
+
+const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: React.ReactNode }> = ({
+  permissionCodes,
+  children,
+}) => {
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const denied = !hasAnyPermission(currentUser, permissionCodes);
+  const notifiedRef = useRef(false);
+  useEffect(() => {
+    if (denied && !notifiedRef.current) {
+      notifiedRef.current = true;
+      Modal.warning({
+        title: '无权限访问',
+        content: `缺少权限：${permissionCodes.join(' / ')}`,
+      });
+    }
+  }, [denied, permissionCodes]);
+  if (denied) {
+    return <PageSkeleton />;
+  }
+  return <>{children}</>;
+};
 
 // 系统级页面（按需加载）
 const DashboardPage = React.lazy(() => import('../pages/system/dashboard'));
@@ -112,16 +147,16 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
     <Route path="/system/dashboard/analysis" element={withDashboardSuspense(DashboardAnalysisPage)} />
-    <Route path="/system/roles" element={withSuspense(RolesPermissionsPage)} />
-    <Route path="/system/permissions" element={withSuspense(PermissionsPage)} />
-    <Route path="/system/departments" element={withSuspense(DepartmentsPage)} />
-    <Route path="/system/positions" element={withSuspense(PositionsPage)} />
+    <Route path="/system/roles" element={withPermission(withSuspense(RolesPermissionsPage), ['system.role:read', 'system.role:update'])} />
+    <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system.permission:read', 'system.permission:update'])} />
+    <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system.department:read', 'system.department:update'])} />
+    <Route path="/system/positions" element={withPermission(withSuspense(PositionsPage), ['system.position:read', 'system.position:update'])} />
     <Route path="/system/equipment" element={withSuspense(EquipmentPage)} />
     <Route path="/system/equipment/:uuid/trace" element={withSuspense(EquipmentTracePage)} />
     <Route path="/system/maintenance-plans" element={withSuspense(MaintenancePlansPage)} />
     <Route path="/system/equipment-faults" element={withSuspense(EquipmentFaultsPage)} />
     <Route path="/system/molds" element={withSuspense(MoldsPage)} />
-    <Route path="/system/users" element={withSuspense(UsersPage)} />
+    <Route path="/system/users" element={withPermission(withSuspense(UsersPage), ['system.user:read', 'system.user:update'])} />
     <Route path="/system/user-profile" element={withSuspense(UserProfilePage)} />
     <Route path="/system/languages" element={withSuspense(LanguagesPage)} />
     <Route path="/system/site-settings" element={withSuspense(SiteSettingsPage)} />

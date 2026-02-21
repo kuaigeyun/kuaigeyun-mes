@@ -328,6 +328,7 @@ class DefaultValuesService:
         "kuaizhizao-purchase-receipt": "PREC",
         "kuaizhizao-purchase-return": "PRT",
         # 快格轻制造 - 销售管理
+        "kuaizhizao-quotation": "BJ",  # 报价单
         "kuaizhizao-sales-order": "SO",
         "kuaizhizao-sales-delivery": "SD",
         "kuaizhizao-sales-forecast": "SF",
@@ -488,7 +489,52 @@ class DefaultValuesService:
         
         logger.info(f"为组织 {tenant_id} 创建了 {len(created_rules)} 个默认编码规则")
         return created_rules
-    
+
+    @staticmethod
+    async def ensure_code_rule_for_page(tenant_id: int, page_code: str) -> bool:
+        """
+        确保指定页面的编码规则存在，若不存在则创建（用于已有组织补建缺失规则）。
+        
+        Returns:
+            True 表示新建了规则，False 表示规则已存在未创建。
+        """
+        from core.schemas.code_rule import CodeRuleCreate
+
+        page_config = next((p for p in CODE_RULE_PAGES if p.get("page_code") == page_code), None)
+        if not page_config:
+            return False
+        rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        if existing:
+            return False
+        page_name = page_config.get("page_name", page_code)
+        abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(
+            page_code
+        ) or "".join([p[0].upper() for p in page_code.split("-")[-2:]])[:4]
+        rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation)
+        is_business = DefaultValuesService._is_business_document(page_code)
+        rule_name = f"{page_name}编码规则"
+        description = (
+            f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
+            if is_business
+            else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
+        )
+        try:
+            rule_data = CodeRuleCreate(
+                name=rule_name,
+                code=rule_code,
+                rule_components=rule_components,
+                description=description,
+                is_system=True,
+                is_active=True,
+            )
+            await CodeRuleService.create_rule(tenant_id, rule_data)
+            logger.info(f"为组织 {tenant_id} 补建编码规则: {rule_code} ({page_name})")
+            return True
+        except Exception as e:
+            logger.warning(f"为组织 {tenant_id} 补建编码规则 {rule_code} 失败: {e}")
+            return False
+
     @staticmethod
     async def create_default_system_parameters(tenant_id: int) -> List[Dict[str, Any]]:
         """

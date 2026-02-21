@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Select, Form as AntForm, DatePicker } from 'antd';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Select, Form as AntForm, DatePicker, Row, Col } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -35,6 +35,8 @@ import type { DocumentRelationData } from '../../../../../components/document-re
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import dayjs from 'dayjs';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /** 销售预测状态 */
 const SalesForecastStatus = {
@@ -98,6 +100,7 @@ const SalesForecastsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentForecast, setCurrentForecast] = useState<SalesForecast | null>(null);
@@ -138,11 +141,26 @@ const SalesForecastsPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
-    setModalVisible(true);
+    setPreviewCode(null);
     formRef.current?.resetFields();
+    if (isAutoGenerateEnabled('kuaizhizao-sales-forecast')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ forecast_code: preview ?? '' });
+        } catch (e) {
+          console.warn('销售预测编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      }
+    }
+    setModalVisible(true);
   };
 
   const handleEdit = async (keys: React.Key[]) => {
@@ -159,6 +177,7 @@ const SalesForecastsPage: React.FC = () => {
         forecast_date: it.forecast_date ? dayjs(it.forecast_date) : undefined,
       }));
       formRef.current?.setFieldsValue({
+        forecast_code: data.forecast_code,
         forecast_name: data.forecast_name,
         forecast_type: data.forecast_type ?? 'MTS',
         forecast_period: data.forecast_period,
@@ -247,6 +266,22 @@ const SalesForecastsPage: React.FC = () => {
         messageApi.warning('请填写完整的预测明细（物料、数量、预测日期）');
         return;
       }
+      let forecastCode: string | undefined;
+      if (!isEdit) {
+        forecastCode = values.forecast_code;
+        if (isAutoGenerateEnabled('kuaizhizao-sales-forecast')) {
+          const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
+          if (ruleCode && (forecastCode === previewCode || !forecastCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              forecastCode = codeResponse.code;
+            } catch (e) {
+              console.warn('销售预测编码正式生成失败，使用当前值:', e);
+            }
+          }
+        }
+        if (!forecastCode) forecastCode = undefined;
+      }
       const basePayload = {
         forecast_name: values.forecast_name,
         forecast_type: values.forecast_type ?? 'MTS',
@@ -259,7 +294,7 @@ const SalesForecastsPage: React.FC = () => {
         await updateSalesForecast(currentId, { ...basePayload, items });
         messageApi.success('更新成功');
       } else {
-        await createSalesForecast({ ...basePayload, forecast_code: 'AUTO', items } as SalesForecast);
+        await createSalesForecast({ ...basePayload, forecast_code: forecastCode, items } as SalesForecast);
         messageApi.success('创建成功');
       }
       setModalVisible(false);
@@ -501,7 +536,7 @@ const SalesForecastsPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         title={isEdit ? '编辑销售预测' : '新建销售预测'}
-        width={1000}
+        width={1200}
         footer={null}
         destroyOnHidden
       >
@@ -510,34 +545,45 @@ const SalesForecastsPage: React.FC = () => {
           onFinish={handleSave}
           layout="vertical"
           submitter={{
+            searchConfig: { submitText: isEdit ? '更新' : '提交', resetText: '取消' },
+            resetButtonProps: { onClick: () => setModalVisible(false) },
             render: (_, dom) => (
-              <div style={{ textAlign: 'right', marginTop: 16 }}>
-                <Space>
-                  <Button onClick={() => setModalVisible(false)}>取消</Button>
-                  {dom}
-                </Space>
+              <div style={{ textAlign: 'left', marginTop: 16 }}>
+                <Space>{dom}</Space>
               </div>
             ),
           }}
         >
-          <ProFormText name="forecast_name" label="预测名称" placeholder="请输入预测名称" rules={[{ required: true }]} />
-          <ProFormSelect
-            name="forecast_type"
-            label="预测类型"
-            initialValue="MTS"
-            options={[{ label: 'MTS', value: 'MTS' }]}
-            fieldProps={{ disabled: true }}
-          />
-          <ProFormText name="forecast_period" label="预测周期" placeholder="如 2026-01" rules={[{ required: true }]} />
-          <ProFormDatePicker name="start_date" label="开始日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true }]} />
-          <ProFormDatePicker name="end_date" label="结束日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true }]} />
-          <ProFormTextArea name="notes" label="备注" placeholder="选填" />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormText
+                name="forecast_code"
+                label="预测编码"
+                placeholder={isAutoGenerateEnabled('kuaizhizao-sales-forecast') ? '编码将根据编码规则自动生成，可修改' : '请输入预测编码'}
+                fieldProps={{ disabled: isEdit }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText name="forecast_name" label="预测名称" placeholder="请输入预测名称" rules={[{ required: true }]} />
+            </Col>
+            <Col span={6}>
+              <ProFormText name="forecast_period" label="预测周期" placeholder="如 2026-01" rules={[{ required: true }]} />
+            </Col>
+            <Col span={6}>
+              <ProFormDatePicker name="start_date" label="开始日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true }]} />
+            </Col>
+            <Col span={6}>
+              <ProFormDatePicker name="end_date" label="结束日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true }]} />
+            </Col>
+          </Row>
 
-          <ProForm.Item
-            label="预测明细"
-            required
-            style={{ width: '100%', minWidth: 0 }}
-          >
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+                <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+                预测明细
+              </span>
+            </div>
             <ProForm.Item name="items" noStyle rules={[{ type: 'array' as const, min: 1, message: '请至少添加一条预测明细' }]}>
               <AntForm.List name="items">
                 {(fields, { add, remove }) => {
@@ -638,15 +684,24 @@ const SalesForecastsPage: React.FC = () => {
                   const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
                   return (
                     <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
-                      <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <style>{`
+                        .sales-forecast-detail-table .ant-table-thead > tr > th {
+                          background-color: var(--ant-color-fill-alter) !important;
+                          font-weight: 600;
+                        }
+                        .sales-forecast-detail-table .ant-table { border-top: 1px solid var(--ant-color-border); }
+                        .sales-forecast-detail-table .ant-table-tbody > tr > td { border-bottom: 1px solid var(--ant-color-border); }
+                      `}</style>
+                      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
                         <Table
+                          className="sales-forecast-detail-table"
                           size="small"
                           dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
                           rowKey="key"
                           pagination={false}
                           columns={cols}
                           scroll={{ x: totalWidth }}
-                          style={{ width: totalWidth, margin: 0 }}
+                          style={{ width: '100%', margin: 0 }}
                           footer={() => (
                             <Button
                               type="dashed"
@@ -678,7 +733,8 @@ const SalesForecastsPage: React.FC = () => {
                 }}
               </AntForm.List>
             </ProForm.Item>
-          </ProForm.Item>
+          </div>
+          <ProFormTextArea name="notes" label="备注" placeholder="选填" fieldProps={{ rows: 2 }} />
         </ProForm>
       </Modal>
 

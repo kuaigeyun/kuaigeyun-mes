@@ -23,8 +23,18 @@ class UserRole(Model):
     """
     
     id = fields.IntField(pk=True, description="关联ID（主键）")
-    user_id = fields.IntField(description="用户ID（外键，关联 core_users）")
-    role_id = fields.IntField(description="角色ID（外键，关联 core_roles）")
+    user = fields.ForeignKeyField(
+        "models.User",
+        related_name="user_roles",
+        on_delete=fields.CASCADE,
+        description="用户（外键，关联 core_users）",
+    )
+    role = fields.ForeignKeyField(
+        "models.Role",
+        related_name="user_roles",
+        on_delete=fields.CASCADE,
+        description="角色（外键，关联 core_roles）",
+    )
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     
     class Meta:
@@ -32,6 +42,8 @@ class UserRole(Model):
         模型元数据
         """
         table = "core_user_roles"
+        app = "models"
+        default_connection = "default"
         unique_together = [("user_id", "role_id")]
         indexes = [
             ("user_id",),
@@ -41,4 +53,3 @@ class UserRole(Model):
     def __str__(self):
         """字符串表示"""
         return f"UserRole(user_id={self.user_id}, role_id={self.role_id})"
-

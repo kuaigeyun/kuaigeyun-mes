@@ -68,8 +68,9 @@ class WorkOrderBase(BaseModel):
     qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
     unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
 
-    # 备注
+    # 备注和附件
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class WorkOrderCreate(WorkOrderBase):
@@ -125,6 +126,7 @@ class WorkOrderUpdate(BaseModel):
     qualified_quantity: Optional[Decimal] = Field(None, description="合格数量")
     unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class WorkOrderResponse(WorkOrderBase):

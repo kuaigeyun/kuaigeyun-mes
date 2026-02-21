@@ -9,6 +9,21 @@
 
 import { CurrentUser } from '../types/api';
 
+const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'];
+const SYSTEM_ADMIN_ROLE_NAME = '系统管理员';
+
+/**
+ * 判断用户是否拥有「系统管理员」角色（与后端判定一致，用于菜单等前端权限展示）
+ */
+function isSystemAdminRole(user: CurrentUser | undefined): boolean {
+  if (!user?.roles?.length) return false;
+  return user.roles.some(
+    (r) =>
+      SYSTEM_ADMIN_ROLE_CODES.includes((r.code || '').trim().toUpperCase()) ||
+      (r.name || '').trim() === SYSTEM_ADMIN_ROLE_NAME
+  );
+}
+
 /**
  * 检查用户是否具有指定权限
  * 
@@ -21,8 +36,8 @@ export function hasPermission(user: CurrentUser | undefined, permissionCode: str
     return false;
   }
 
-  // 组织管理员或平台管理员默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin) {
+  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
+  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
     return true;
   }
 
@@ -50,8 +65,8 @@ export function hasAnyPermission(
     return false;
   }
 
-  // 组织管理员或平台管理员默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin) {
+  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
+  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
     return true;
   }
 
@@ -78,8 +93,8 @@ export function hasAllPermissions(
     return false;
   }
 
-  // 组织管理员或平台管理员默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin) {
+  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
+  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
     return true;
   }
 

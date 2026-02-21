@@ -16,7 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, useImperative
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
-import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency } from '@ant-design/pro-components';
+import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton } from '@ant-design/pro-components';
 import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit, MaterialCodeMapping } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
@@ -35,6 +35,7 @@ import { testGenerateCode } from '../../../services/codeRule';
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import SmartSuggestionFloatPanel from '../../../components/smart-suggestion-float-panel';
+import { getFileDownloadUrl, uploadMultipleFiles } from '../../../services/file';
 
 const { Panel } = Collapse;
 
@@ -441,6 +442,21 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           loadExternalSystemCodes(material.uuid);
         }
         
+        // 处理图片预填
+        const materialImages = (material as any).images || [];
+        if (materialImages.length > 0) {
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({
+              images: materialImages.map((uuid: string) => ({
+                uid: uuid,
+                name: '图片',
+                status: 'done',
+                url: getFileDownloadUrl(uuid),
+              }))
+            });
+          }, 100);
+        }
+        
         // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
         // 将默认值转换为表单字段格式（对象数组转换为 ID 数组）
         const materialDefaults = (material as any).defaults;
@@ -728,6 +744,17 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
       
+      // 处理图片上传结果
+      const formImages = values.images || [];
+      const imageUuids = formImages.map((file: any) => {
+        const response = file.response;
+        if (response) {
+          if (Array.isArray(response) && response.length > 0) return response[0].uuid;
+          if (response.uuid) return response.uuid;
+        }
+        return file.uid;
+      });
+      
       // 组装完整的数据，将驼峰命名转换为蛇形命名
       const { defaults: _defaults, ...restValues } = values;
       const submitData: any = {
@@ -747,6 +774,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         brand: restValues.brand,
         model: restValues.model,
         is_active: restValues.isActive,
+        images: imageUuids.length > 0 ? imageUuids : null,
         // 部门编码
         department_codes: departmentCodes.length > 0 ? departmentCodes.map(code => ({
           code_type: code.code_type,
@@ -1592,6 +1620,29 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       </Col>
       <Col span={6}>
         <ProFormSwitch name="isActive" label="是否启用" />
+      </Col>
+      <Col span={24}>
+        <ProFormUploadButton
+          name="images"
+          label="物料图片"
+          max={5}
+          fieldProps={{
+            multiple: true,
+            listType: "picture-card",
+            customRequest: async (options) => {
+              try {
+                const res = await uploadMultipleFiles([options.file as File], { category: 'material_images' });
+                if (options.onSuccess) {
+                  options.onSuccess(res[0], options.file as any);
+                }
+              } catch (err) {
+                if (options.onError) {
+                  options.onError(err as any);
+                }
+              }
+            }
+          }}
+        />
       </Col>
       <Col span={24}>
         <ProFormTextArea

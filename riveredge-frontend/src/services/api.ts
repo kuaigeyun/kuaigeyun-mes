@@ -203,24 +203,12 @@ export async function apiRequest<T = any>(
   if (token && !isPublicEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;
     // console.log('✅ apiRequest: 添加 Authorization 头');
-  } else if (!isPublicEndpoint) {
-    console.error('❌ apiRequest: Token 缺失，无法添加 Authorization 头', {
-      url,
-      isPublicEndpoint,
-      token: token ? 'exists' : 'null',
-    });
   }
   
   // X-Tenant-ID（所有非公开接口都需要添加，因为后端所有需要租户上下文的API都需要这个请求头）
   if (!isPublicEndpoint && tenantId) {
     headers['X-Tenant-ID'] = tenantId;
     // console.log('✅ apiRequest: 添加 X-Tenant-ID 头:', tenantId);
-  } else if (!isPublicEndpoint && !tenantId) {
-    console.warn('⚠️ apiRequest: 租户ID缺失，可能影响请求', {
-      url,
-      isPublicEndpoint,
-      tenantId: tenantId ? 'exists' : 'null',
-    });
   }
   
   // 5. 验证必需信息（需要认证的接口必须有 Token）
@@ -370,13 +358,15 @@ export async function apiRequest<T = any>(
           data?.detail ||
           data?.message ||
           (data?.success === false && data?.error?.message ? data.error.message : '');
-        console.error('❌ 400 错误详情:', {
-          url,
-          errorDetail,
-          fullResponse: data,
-          localStorage_tenant_id: localStorage.getItem('tenant_id'),
-          user_info: localStorage.getItem('user_info'),
-        });
+        if (import.meta.env.DEV) {
+          console.error('❌ 400 错误详情:', {
+            url,
+            errorDetail,
+            fullResponse: data,
+            localStorage_tenant_id: localStorage.getItem('tenant_id'),
+            user_info: localStorage.getItem('user_info'),
+          });
+        }
         
         if (errorDetail.includes('组织上下文未设置') || errorDetail.includes('tenant')) {
           // 尝试再次获取 tenant_id
@@ -536,4 +526,3 @@ export const api = {
     return apiRequest<T>(url, { ...options, method: 'PATCH', data });
   },
 };
-

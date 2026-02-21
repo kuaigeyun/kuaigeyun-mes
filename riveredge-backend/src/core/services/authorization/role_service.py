@@ -11,6 +11,7 @@ from core.models.role import Role
 from core.models.permission import Permission
 from core.models.user_role import UserRole
 from core.schemas.role import RoleCreate, RoleUpdate
+from core.services.authorization.permission_version_service import PermissionVersionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -24,6 +25,17 @@ class RoleService:
     提供角色的 CRUD 操作和权限分配功能。
     """
     
+    @staticmethod
+    def _is_admin_system_role(role: Role) -> bool:
+        """
+        判断是否为“系统管理员”角色（允许管理权限）。
+
+        仅对该角色放开系统角色的权限编辑限制，避免影响其他系统内置角色。
+        """
+        role_code = (role.code or "").strip().upper()
+        role_name = (role.name or "").strip()
+        return role_code in {"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"} or role_name == "系统管理员"
+
     @staticmethod
     async def create_role(
         tenant_id: int,
@@ -330,8 +342,8 @@ class RoleService:
         if not role:
             raise NotFoundError("角色", role_uuid)
         
-        # 检查系统角色
-        if role.is_system:
+        # 检查系统角色：仅“系统管理员”允许调整权限
+        if role.is_system and not RoleService._is_admin_system_role(role):
             raise AuthorizationError("系统角色不可修改权限")
         
         # 验证权限属于当前组织并转换为ID
@@ -406,6 +418,8 @@ class RoleService:
                         permission_code=permission_code
                     )
                 )
+        # 权限变更后 bump 租户级版本，驱动缓存失效
+        await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
         
         return {
             "success": True,
@@ -446,7 +460,7 @@ class RoleService:
         from core.models.role_permission import RolePermission
         role_permissions = await RolePermission.filter(role_id=role.id).all()
         permission_ids = [rp.permission_id for rp in role_permissions]
-        
+
         # 查询权限（仅未删除的）
         if permission_ids:
             permissions = await Permission.filter(
@@ -455,7 +469,13 @@ class RoleService:
                 deleted_at__isnull=True
             ).all()
         else:
-            permissions = []
+            # “系统管理员”默认拥有全量权限：当未显式绑定时回显全量权限用于前端默认全选。
+            if RoleService._is_admin_system_role(role):
+                permissions = await Permission.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True
+                ).all()
+            else:
+                permissions = []
         
         return list(permissions)
-

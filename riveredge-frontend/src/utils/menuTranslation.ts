@@ -24,6 +24,25 @@ export function extractAppCodeFromPath(path: string | undefined): string | null 
 }
 
 /**
+ * 应用显示名唯一来源：仅从 locale 的 app.${appCode}.name 取值，避免与 API 返回的 name 竞争
+ *
+ * @param appCode 应用 code（如 master-data）
+ * @param t 翻译函数
+ * @param fallback 当翻译不存在或等于 key 时的兜底
+ * @returns 显示名
+ */
+export function getAppDisplayName(
+  appCode: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+  fallback?: string
+): string {
+  const key = `app.${appCode}.name`;
+  const translated = t(key, { defaultValue: fallback ?? '' });
+  if (translated && translated !== key && translated.trim() !== '') return translated;
+  return fallback ?? '';
+}
+
+/**
  * 统一处理菜单名称翻译
  *
  * @param name 菜单名称（可能是翻译 key 或普通文本）

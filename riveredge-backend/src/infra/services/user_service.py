@@ -15,6 +15,8 @@ from infra.models.user import User
 from infra.schemas.user import UserCreate, UserUpdate
 from infra.domain.tenant_context import get_current_tenant_id, require_tenant_context
 from infra.domain.security.security import hash_password
+from core.services.authorization.user_permission_service import UserPermissionService
+from core.services.authorization.permission_version_service import PermissionVersionService
 
 
 class UserService:
@@ -351,6 +353,32 @@ class UserService:
             tenant = await Tenant.get_or_none(id=user.tenant_id)
             if tenant:
                 tenant_name = tenant.name
+        await user.fetch_related("department", "position", "roles")
+        permissions: List[str] = []
+        permission_version = 1
+        if user.tenant_id:
+            permission_set = await UserPermissionService.get_user_permissions(
+                user_id=user.id,
+                tenant_id=user.tenant_id,
+            )
+            permissions = sorted(permission_set)
+            permission_version = await PermissionVersionService.get_version(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+            )
+        department = None
+        if user.department:
+            department = {
+                "uuid": str(user.department.uuid),
+                "name": user.department.name,
+            }
+        position = None
+        if user.position:
+            position = {
+                "uuid": str(user.position.uuid),
+                "name": user.position.name,
+            }
+        roles = [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await user.roles.all()]
         
         return {
             "id": user.id,
@@ -364,5 +392,9 @@ class UserService:
             "is_active": user.is_active,
             "is_infra_admin": user.is_infra_admin,
             "is_tenant_admin": user.is_tenant_admin,
+            "permissions": permissions,
+            "permission_version": permission_version,
+            "department": department,
+            "position": position,
+            "roles": roles,
         }
-

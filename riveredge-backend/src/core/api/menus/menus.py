@@ -19,6 +19,7 @@ from core.schemas.menu import (
 )
 from core.services.system.menu_service import MenuService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_access
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/menus", tags=["Menus"])
 @router.post("", response_model=MenuResponse, status_code=status.HTTP_201_CREATED)
 async def create_menu(
     data: MenuCreate,
+    _auth: object = Depends(require_access("system.menu", "create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -54,6 +56,7 @@ async def get_menus(
     parent_uuid: Optional[str] = Query(None, description="父菜单UUID过滤"),
     application_uuid: Optional[str] = Query(None, description="应用UUID过滤"),
     is_active: Optional[bool] = Query(None, description="是否启用过滤"),
+    _auth: object = Depends(require_access("system.menu", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -87,6 +90,7 @@ async def get_menu_tree(
     parent_uuid: Optional[str] = Query(None, description="父菜单UUID（可选，如果提供则从该菜单开始构建树）"),
     application_uuid: Optional[str] = Query(None, description="应用UUID过滤"),
     is_active: Optional[bool] = Query(None, description="是否启用过滤"),
+    _auth: object = Depends(require_access("system.menu", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -119,6 +123,7 @@ async def get_menu_tree(
 @router.get("/{uuid}", response_model=MenuResponse)
 async def get_menu(
     uuid: str,
+    _auth: object = Depends(require_access("system.menu", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -150,6 +155,7 @@ async def get_menu(
 async def update_menu(
     uuid: str,
     data: MenuUpdate,
+    _auth: object = Depends(require_access("system.menu", "update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -180,6 +186,7 @@ async def update_menu(
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_menu(
     uuid: str,
+    _auth: object = Depends(require_access("system.menu", "delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -211,6 +218,7 @@ async def delete_menu(
 @router.post("/update-order", status_code=status.HTTP_200_OK)
 async def update_menu_order(
     menu_orders: List[Dict[str, Any]] = Body(..., description="菜单排序列表"),
+    _auth: object = Depends(require_access("system.menu", "update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -227,4 +235,3 @@ async def update_menu_order(
     """
     await MenuService.update_menu_order(tenant_id=tenant_id, menu_orders=menu_orders)
     return {"success": True, "message": "菜单排序更新成功"}
-

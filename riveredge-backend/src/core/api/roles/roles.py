@@ -19,6 +19,7 @@ from core.schemas.role import (
 )
 from core.services.authorization.role_service import RoleService
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_access
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
@@ -59,6 +60,7 @@ router = APIRouter(prefix="/roles", tags=["Core Roles"])
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     data: RoleCreate,
+    _auth: object = Depends(require_access("system.role", "create")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -108,6 +110,7 @@ async def get_role_list(
     code: Optional[str] = Query(None, description="角色代码筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     is_system: Optional[bool] = Query(None, description="是否系统角色筛选"),
+    _auth: object = Depends(require_access("system.role", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -153,6 +156,7 @@ async def get_role_list(
 @router.get("/{role_uuid}", response_model=RoleResponse)
 async def get_role(
     role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -213,6 +217,7 @@ async def get_role(
 async def update_role(
     role_uuid: str,
     data: RoleUpdate,
+    _auth: object = Depends(require_access("system.role", "update")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -262,6 +267,7 @@ async def update_role(
 @router.delete("/{role_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "delete")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -305,6 +311,7 @@ async def delete_role(
 async def assign_permissions(
     role_uuid: str,
     data: RolePermissionAssign,
+    _auth: object = Depends(require_access("system.role", "assign")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -362,6 +369,7 @@ async def assign_permissions(
 @router.get("/{role_uuid}/permissions", response_model=list[PermissionInfo])
 async def get_role_permissions(
     role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -404,4 +412,3 @@ async def get_role_permissions(
 
 # 包含角色场景路由
 router.include_router(role_scenarios_router)
-

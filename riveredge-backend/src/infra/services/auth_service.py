@@ -33,6 +33,8 @@ from infra.domain.security.security import (
 )
 from infra.domain.tenant_context import set_current_tenant_id
 from infra.services.tenant_service import TenantService
+from core.services.authorization.user_permission_service import UserPermissionService
+from core.services.authorization.permission_version_service import PermissionVersionService
 
 
 async def _ensure_db_connection():
@@ -687,6 +689,26 @@ class AuthService:
         
         # 如果没有组织列表，使用当前组织作为默认组织
         default_tenant_id = final_tenant_id
+        permissions: list[str] = []
+        permission_version = 1
+        await user.fetch_related("department", "position", "roles")
+        if final_tenant_id is not None:
+            permission_set = await UserPermissionService.get_user_permissions(
+                user_id=user.id,
+                tenant_id=final_tenant_id,
+            )
+            permissions = sorted(permission_set)
+            permission_version = await PermissionVersionService.get_version(
+                tenant_id=final_tenant_id,
+                user_id=user.id,
+            )
+        department = None
+        if user.department:
+            department = {"uuid": str(user.department.uuid), "name": user.department.name}
+        position = None
+        if user.position:
+            position = {"uuid": str(user.position.uuid), "name": user.position.name}
+        roles = [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await user.roles.all()]
         
         result = {
             "access_token": access_token,
@@ -701,6 +723,11 @@ class AuthService:
                 "tenant_id": final_tenant_id,
                 "is_infra_admin": user.is_infra_admin,
                 "is_tenant_admin": user.is_tenant_admin,
+                "permissions": permissions,
+                "permission_version": permission_version,
+                "department": department,
+                "position": position,
+                "roles": roles,
             },
             "tenants": user_tenants_list if user_tenants_list else None,
             "default_tenant_id": default_tenant_id,
@@ -917,6 +944,15 @@ class AuthService:
             
             # 4. 返回登录响应
             # ⚠️ 关键修复：在 user 对象中包含 tenant_name，确保前端可以正确显示租户名称
+            permission_set = await UserPermissionService.get_user_permissions(
+                user_id=guest_user.id,
+                tenant_id=default_tenant.id,
+            )
+            permission_version = await PermissionVersionService.get_version(
+                tenant_id=default_tenant.id,
+                user_id=guest_user.id,
+            )
+            await guest_user.fetch_related("department", "position", "roles")
             user_info_dict = {
                 "id": guest_user.id,
                 "uuid": str(guest_user.uuid),
@@ -927,6 +963,11 @@ class AuthService:
                 "tenant_name": default_tenant.name,  # ⚠️ 关键修复：包含租户名称
                 "is_infra_admin": guest_user.is_infra_admin,
                 "is_tenant_admin": guest_user.is_tenant_admin,
+                "permissions": sorted(permission_set),
+                "permission_version": permission_version,
+                "department": {"uuid": str(guest_user.department.uuid), "name": guest_user.department.name} if guest_user.department else None,
+                "position": {"uuid": str(guest_user.position.uuid), "name": guest_user.position.name} if guest_user.position else None,
+                "roles": [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await guest_user.roles.all()],
             }
             
             # 确保 default_tenant 不为 None（双重验证）
@@ -1113,4 +1154,3 @@ class AuthService:
         except Exception as e:
             # 登录日志记录失败不影响登录流程，静默处理
             logger.warning(f"记录登录日志失败: {e}")
-

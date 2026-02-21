@@ -1,0 +1,57 @@
+[32m2026-02-21 15:49:54.919[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:49:54.921[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100001[0m
+[32m2026-02-21 15:49:58.817[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:49:58.829[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:49:58.831[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100002[0m
+[32m2026-02-21 15:50:02.618[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:02.621[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:02.624[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100003[0m
+[32m2026-02-21 15:50:06.371[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:06.374[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:06.383[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100004[0m
+[32m2026-02-21 15:50:10.078[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:10.083[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:10.092[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100005[0m
+[32m2026-02-21 15:50:13.860[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:13.862[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:13.872[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100006[0m
+[32m2026-02-21 15:50:17.623[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:17.624[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:17.626[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100007[0m
+[32m2026-02-21 15:50:21.335[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:21.337[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:21.347[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100008[0m
+[32m2026-02-21 15:50:25.124[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:25.127[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:25.136[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100009[0m
+[32m2026-02-21 15:50:28.923[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+[32m2026-02-21 15:50:28.926[0m | [1mINFO    [0m | [36mcore.services.business.code_generation_service[0m:[36m_recalibrate_sequence_from_db[0m:[36m540[0m - [1mcode_sequence_recalibrate_skip rule_code=MATERIAL_CODE rule.code=MATERIAL_CODE reason=no_entity_config[0m
+[32m2026-02-21 15:50:28.927[0m | [1mINFO    [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m417[0m - [1m使用编码规则生成物料主编码: M100010[0m
+[32m2026-02-21 15:50:32.677[0m | [33m[1mWARNING [0m | [36mapps.master_data.services.material_service[0m:[36mcreate_material[0m:[36m749[0m - [33m[1m发送物料创建事件到 Inngest 失败: Expecting value: line 1 column 1 (char 0)[0m
+
+-----
+
+WeasyPrint could not import some external libraries. Please carefully follow the installation steps before reporting an issue:
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation
+https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting 
+
+-----
+
+清理历史单据...
+软删除现有主数据 (保持环境纯净)...
+创建测试物料分组...
+创建极简测试物料 (使用系统编码规则)...
+创建物料成功: M10测试总成 -> 编码: M100001
+创建物料成功: M10车架组件 -> 编码: M100002
+创建物料成功: M10电机套件 -> 编码: M100003
+创建物料成功: M10高配电池夹 -> 编码: M100004
+创建物料成功: 环保瓦楞包装箱 -> 编码: M100005
+创建物料成功: 前后刹车套装 -> 编码: M100006
+创建物料成功: 铝合金主梁 -> 编码: M100007
+创建物料成功: 工业焊条 -> 编码: M100008
+创建物料成功: 电机转金属芯 -> 编码: M100009
+创建物料成功: 油压刹车片 -> 编码: M100010
+创建标准工序和工艺路线...
+绑定工艺路线到自制件...
+创建极简BOM结构...
+沙盒数据重建完成！

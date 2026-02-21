@@ -751,10 +751,13 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           </Paragraph>
           <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
             <div>
-              <Text strong>Cursor</Text> —— <Text code>Composer 1.0</Text> / <Text code>Composer 1.5</Text>
+              <Text strong>Cursor</Text> —— <Text code>Composer 1.5</Text>
             </div>
             <div>
               <Text strong>Antigravity</Text> —— <Text code>Gemini 3 Pro</Text>
+            </div>
+            <div>
+              <Text strong>Trae</Text> —— <Text code>GPT-5.3-Codex</Text>
             </div>
           </Space>
           <Paragraph type="secondary" style={{ marginTop: 24 }}>

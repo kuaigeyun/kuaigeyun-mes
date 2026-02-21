@@ -11,6 +11,7 @@ from datetime import datetime
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 from passlib.context import CryptContext
+from loguru import logger
 
 from infra.models.user import User
 from core.models.department import Department
@@ -18,6 +19,7 @@ from core.models.position import Position
 from core.models.role import Role
 from core.models.user_role import UserRole
 from core.schemas.user import UserCreate, UserUpdate
+from core.services.authorization.permission_version_service import PermissionVersionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -117,8 +119,8 @@ class UserService:
         # 加密密码
         password_hash = User.hash_password(data.password)
 
-        # 创建用户与角色分配放在同一事务中，避免 core_user_roles 外键校验时看不到新用户
-        async with in_transaction():
+        # 创建用户与角色分配放在同一事务中，并显式使用同一连接
+        async with in_transaction() as conn:
             user = await User.create(
                 tenant_id=tenant_id,
                 username=data.username,
@@ -131,12 +133,15 @@ class UserService:
                 is_active=data.is_active if data.is_active is not None else True,
                 is_tenant_admin=data.is_tenant_admin if data.is_tenant_admin is not None else False,
                 remark=getattr(data, 'remark', None),
+                using_db=conn,
             )
             if role_ids:
                 roles = await Role.filter(id__in=role_ids).all()
-                await UserRole.bulk_create([
-                    UserRole(user_id=user.id, role_id=r.id) for r in roles
-                ])
+                await UserRole.bulk_create(
+                    [UserRole(user_id=user.id, role_id=r.id) for r in roles],
+                    using_db=conn,
+                )
+        await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user.id)
 
         return user
     
@@ -396,11 +401,25 @@ class UserService:
             if hasattr(user, key):
                 setattr(user, key, value)
         
-        # 用户保存与角色更新放在同一事务中，避免 core_user_roles 外键校验时看不到已保存的用户
-        async with in_transaction():
-            await user.save()
+        # 用户保存与角色更新放在同一事务中，并显式使用同一连接
+        async with in_transaction() as conn:
+            await user.save(using_db=conn)
+            db_user = await User.filter(
+                uuid=user_uuid,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).using_db(conn).first()
+            if not db_user:
+                logger.error(
+                    "用户角色更新前用户不存在: tenant_id={}, user_uuid={}, request_user_id={}",
+                    tenant_id,
+                    user_uuid,
+                    current_user_id,
+                )
+                raise ValidationError("用户不存在或已被删除，无法更新角色")
             if data.role_uuids is not None:
-                await UserRole.filter(user_id=user.id).delete()
+                # 先清空当前角色关系
+                await UserRole.filter(user_id=db_user.id).using_db(conn).delete()
                 if data.role_uuids:
                     roles = await Role.filter(
                         uuid__in=data.role_uuids,
@@ -408,10 +427,18 @@ class UserService:
                         deleted_at__isnull=True
                     ).all()
                     if len(roles) != len(data.role_uuids):
+                        logger.warning(
+                            "用户角色更新校验失败: tenant_id={}, user_uuid={}, role_uuids={}",
+                            tenant_id,
+                            user_uuid,
+                            data.role_uuids,
+                        )
                         raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
-                    await UserRole.bulk_create([
-                        UserRole(user_id=user.id, role_id=r.id) for r in roles
-                    ])
+                    await UserRole.bulk_create(
+                        [UserRole(user_id=db_user.id, role_id=r.id) for r in roles],
+                        using_db=conn,
+                    )
+        await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user.id)
         
         # 重新加载关联数据
         await user.fetch_related('roles', 'department', 'position')
@@ -868,4 +895,3 @@ class UserService:
                 writer.writerow(row)
         
         return file_path
-

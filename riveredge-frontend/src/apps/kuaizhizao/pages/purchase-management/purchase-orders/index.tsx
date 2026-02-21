@@ -8,10 +8,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -381,6 +383,7 @@ const PurchaseOrdersPage: React.FC = () => {
           tax_rate: detail.tax_rate,
           currency: detail.currency || 'CNY',
           notes: detail.notes,
+          attachments: (detail as any).attachments || [],
         });
       }, 100);
     } catch (error) {
@@ -399,8 +402,24 @@ const PurchaseOrdersPage: React.FC = () => {
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
+      const data = { ...values };
+      
+      // 处理附件
+      const formAttachments = data.attachments || [];
+      data.attachments = formAttachments.map((f: any) => {
+        if (f.response) {
+          if (Array.isArray(f.response) && f.response.length > 0) {
+            return { uid: f.response[0].uuid, name: f.response[0].original_name, status: 'done', url: getFileDownloadUrl(f.response[0].uuid) };
+          }
+          if (f.response.uuid) {
+            return { uid: f.response.uuid, name: f.response.original_name, status: 'done', url: getFileDownloadUrl(f.response.uuid) };
+          }
+        }
+        return { uid: f.uid, name: f.name, status: 'done', url: f.url };
+      });
+
       if (isEdit && currentOrder?.id) {
-        await updatePurchaseOrder(currentOrder.id, values);
+        await updatePurchaseOrder(currentOrder.id, data);
         messageApi.success('采购订单更新成功');
       } else {
         // 创建时需要提供明细项，这里先创建一个空的明细数组
@@ -696,6 +715,27 @@ const PurchaseOrdersPage: React.FC = () => {
           placeholder="请输入备注信息"
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
+        />
+        <ProFormUploadButton
+          name="attachments"
+          label="附件"
+          max={10}
+          colProps={{ span: 24 }}
+          fieldProps={{
+            multiple: true,
+            customRequest: async (options) => {
+              try {
+                const res = await uploadMultipleFiles([options.file as File], { category: 'purchase_order_attachments' });
+                if (options.onSuccess) {
+                  options.onSuccess(res[0], options.file as any);
+                }
+              } catch (err) {
+                if (options.onError) {
+                  options.onError(err as any);
+                }
+              }
+            }
+          }}
         />
         <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
           <p style={{ margin: 0, color: '#999' }}>

@@ -20,6 +20,8 @@ from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageE
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.quality_exception import QualityException
 from apps.kuaizhizao.models.inventory_alert import InventoryAlert
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.rework_order import ReworkOrder
 from loguru import logger
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -768,6 +770,52 @@ async def get_production_broadcast(
         import traceback
         traceback.print_exc()
         return ProductionBroadcastResponse(items=[])
+
+
+@router.get("/menu-badge-counts", summary="获取左侧菜单业务单据未完成数量（用于徽标）")
+async def get_menu_badge_counts(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    返回各业务单据的「未完成」数量，key 与前端菜单 path 映射一致。
+    用于左侧菜单业务类单据显示数量小徽标。
+    """
+    counts = {}
+    try:
+        # 工单：已下达 + 进行中
+        counts["work_order"] = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=["released", "in_progress"],
+            deleted_at__isnull=True,
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts work_order: {e}")
+        counts["work_order"] = 0
+    try:
+        # 返工单：已下达 + 进行中
+        counts["rework_order"] = await ReworkOrder.filter(
+            tenant_id=tenant_id,
+            status__in=["released", "in_progress"],
+            deleted_at__isnull=True,
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts rework_order: {e}")
+        counts["rework_order"] = 0
+    try:
+        # 异常（待处理）：缺料 + 延期 + 质量
+        c1 = await MaterialShortageException.filter(tenant_id=tenant_id, status="open").count()
+        c2 = await DeliveryDelayException.filter(tenant_id=tenant_id, status="open").count()
+        c3 = await QualityException.filter(tenant_id=tenant_id, status="open").count()
+        counts["exception"] = c1 + c2 + c3
+    except Exception as e:
+        logger.warning(f"menu-badge-counts exception: {e}")
+        counts["exception"] = 0
+    # 其他业务单据暂无统计，前端用 0 不显示或后续扩展
+    for key in ("purchase_order", "sales_order", "inbound", "quality_inspection", "production_plan", "equipment", "mold"):
+        if key not in counts:
+            counts[key] = 0
+    return counts
 
 
 @router.get("", response_model=DashboardResponse, summary="获取工作台数据")

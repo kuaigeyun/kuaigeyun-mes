@@ -109,6 +109,7 @@ class MaterialBase(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
+    images: Optional[List[str]] = Field(None, description="产品图片列表")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
     # 部门编码列表（用于创建时输入）
@@ -178,6 +179,7 @@ class MaterialUpdate(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
+    images: Optional[List[str]] = Field(None, description="产品图片列表")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
     # 部门编码列表（用于更新时输入）

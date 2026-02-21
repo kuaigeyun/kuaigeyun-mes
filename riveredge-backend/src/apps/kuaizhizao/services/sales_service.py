@@ -46,10 +46,13 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         """创建销售预测"""
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
+            code = getattr(forecast_data, "forecast_code", None) or ""
+            code = (code.strip() if isinstance(code, str) else "") or None
+            if not code or code == "AUTO":
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
 
-            # 准备创建数据，排除forecast_code（因为我们要使用生成的编码）
+            # 准备创建数据，排除 forecast_code 后统一写入
             create_data = forecast_data.model_dump(exclude_unset=True, exclude={'created_by', 'forecast_code'})
             create_data['forecast_code'] = code
             create_data['created_by'] = created_by

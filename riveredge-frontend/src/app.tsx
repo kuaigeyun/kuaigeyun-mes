@@ -76,6 +76,11 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
           tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
+          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
+          permission_version: savedUserInfo.permission_version || 1,
+          department: savedUserInfo.department,
+          position: savedUserInfo.position,
+          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
         };
         setCurrentUser(restoredUser);
         setUserInfo(restoredUser);
@@ -147,6 +152,11 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
           tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
+          permissions: Array.isArray(savedUserInfo.permissions) ? savedUserInfo.permissions : [],
+          permission_version: savedUserInfo.permission_version || 1,
+          department: savedUserInfo.department,
+          position: savedUserInfo.position,
+          roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
         };
         setCurrentUser(restoredUser);
         // ⚠️ 关键修复：确保恢复的用户信息也保存到 localStorage

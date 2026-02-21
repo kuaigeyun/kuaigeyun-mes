@@ -56,6 +56,7 @@ class SalesOrder(BaseModel):
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     is_active = fields.BooleanField(default=True, description="是否有效")
     created_by = fields.IntField(null=True, description="创建人ID")
     updated_by = fields.IntField(null=True, description="更新人ID")

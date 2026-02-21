@@ -10,10 +10,11 @@
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniImport } from '../../../../../components/uni-import';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -44,6 +45,7 @@ import type { Customer } from '../../../../master-data/types/supply-chain';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 
 
 
@@ -155,10 +157,10 @@ const SalesOrdersPage: React.FC = () => {
     loadConfig();
   }, []);
 
-  // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [importModalVisible, setImportModalVisible] = useState(false);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -302,6 +304,7 @@ const SalesOrdersPage: React.FC = () => {
           customer_id: customerId,
           order_date: data.order_date ? dayjs(data.order_date) : undefined,
           delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
+          attachments: (data as any).attachments || [],
         };
 
         formRef.current?.setFieldsValue(formData);
@@ -452,6 +455,20 @@ const SalesOrdersPage: React.FC = () => {
           remaining_quantity: (it as any).remaining_quantity != null ? Number((it as any).remaining_quantity) : q(it),
           total_amount: amt,
         };
+      });
+
+      // 处理附件
+      const formAttachments = values.attachments || [];
+      values.attachments = formAttachments.map((f: any) => {
+        if (f.response) {
+          if (Array.isArray(f.response) && f.response.length > 0) {
+            return { uid: f.response[0].uuid, name: f.response[0].original_name, status: 'done', url: getFileDownloadUrl(f.response[0].uuid) };
+          }
+          if (f.response.uuid) {
+            return { uid: f.response.uuid, name: f.response.original_name, status: 'done', url: getFileDownloadUrl(f.response.uuid) };
+          }
+        }
+        return { uid: f.uid, name: f.name, status: 'done', url: f.url };
       });
 
       // 如果是直接提交，先生成正式编码（如果配置了规则）
@@ -788,6 +805,48 @@ const SalesOrdersPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '批量导入失败');
     }
+  };
+
+  const handleItemImport = (data: any[][]) => {
+    // 假设数据从第3行开始（0:表头, 1:示例）
+    const rows = data.slice(2);
+    const newItems = rows
+      .map((row) => {
+        const materialCode = String(row[0] || '').trim();
+        const spec = String(row[1] || '').trim();
+        const unit = String(row[2] || '').trim();
+        const quantity = parseFloat(row[3]) || 0;
+        const price = parseFloat(row[4]) || 0;
+        const deliveryDate = row[5];
+
+        if (!materialCode) return null;
+
+        const material = materials.find(m => m.mainCode === materialCode || m.code === materialCode);
+        
+        return {
+          material_id: material?.id,
+          material_code: material?.mainCode || material?.code || materialCode,
+          material_name: material?.name || '',
+          material_spec: material?.specification || spec,
+          material_unit: material?.baseUnit || unit,
+          required_quantity: quantity,
+          unit_price: price,
+          delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
+          item_amount: quantity * price,
+        };
+      })
+      .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id !== undefined || it.material_code !== ''));
+
+    if (newItems.length === 0) {
+      messageApi.warning('未检测到有效数据（请确保物料编码不为空）');
+      return;
+    }
+
+    const currentItems = formRef.current?.getFieldValue('items') || [];
+    formRef.current?.setFieldsValue({
+      items: [...currentItems, ...newItems],
+    });
+    messageApi.success(`成功导入 ${newItems.length} 条明细`);
   };
 
   // 表格列（仅订单行，明细在展开行中显示）
@@ -1134,12 +1193,21 @@ const SalesOrdersPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* 订单明细：Form.List + Table footer，与 BOM 子物料列表结构一致；超出宽度时横向滚动 */}
-          <ProForm.Item
-            label="订单明细"
-            required
-            style={{ width: '100%', minWidth: 0 }}
-          >
+          {/* 订单明细：自定义头部带导入按钮，确保按钮位于最右侧 */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+                <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+                订单明细
+              </span>
+              <Button 
+                size="small" 
+                icon={<ImportOutlined />} 
+                onClick={() => setImportModalVisible(true)}
+              >
+                导入明细
+              </Button>
+            </div>
             <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条订单明细' }]}>
               <AntForm.List name="items">
                 {(fields, { add, remove }) => {
@@ -1265,8 +1333,8 @@ const SalesOrdersPage: React.FC = () => {
                           rowKey="key"
                           pagination={false}
                           columns={orderDetailColumns}
-                          scroll={{ x: totalWidth }}
-                          style={{ width: totalWidth, margin: 0 }}
+                          scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                          style={{ width: '100%', margin: 0 }}
                           footer={() => (
                             <Button
                               type="dashed"
@@ -1298,7 +1366,28 @@ const SalesOrdersPage: React.FC = () => {
                 }}
               </AntForm.List>
             </ProForm.Item>
-          </ProForm.Item>
+          </div>
+
+          <ProFormUploadButton
+            name="attachments"
+            label="附件"
+            max={10}
+            fieldProps={{
+              multiple: true,
+              customRequest: async (options) => {
+                try {
+                  const res = await uploadMultipleFiles([options.file as File], { category: 'sales_order_attachments' });
+                  if (options.onSuccess) {
+                    options.onSuccess(res[0], options.file as any);
+                  }
+                } catch (err) {
+                  if (options.onError) {
+                    options.onError(err as any);
+                  }
+                }
+              }
+            }}
+          />
 
           <ProFormTextArea
             name="notes"
@@ -1306,6 +1395,15 @@ const SalesOrdersPage: React.FC = () => {
             placeholder="请输入备注"
           />
         </ProForm>
+
+        <UniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={handleItemImport}
+          title="导入订单明细"
+          headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
+          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+        />
       </Modal>
 
       {/* 详情 Drawer */}

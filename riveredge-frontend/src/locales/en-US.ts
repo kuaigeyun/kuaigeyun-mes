@@ -132,6 +132,22 @@ export default {
   'permission.resource.site_setting': 'Site Setting',
   'permission.resource.language': 'Language',
   'permission.resource.integration_config': 'Integration Config',
+  'permission.action.create': 'Create',
+  'permission.action.read': 'View',
+  'permission.action.view': 'View',
+  'permission.action.update': 'Edit',
+  'permission.action.delete': 'Delete',
+  'permission.action.assign': 'Assign',
+  'permission.action.manage': 'Manage',
+  'permission.action.approve': 'Approve',
+  'permission.action.submit': 'Submit',
+  'permission.action.export': 'Export',
+  'permission.action.import': 'Import',
+  'permission.action.execute': 'Execute',
+  'permission.action.sync': 'Sync',
+  'permission.scope.all': 'All',
+  'permission.scope.department': 'Department',
+  'permission.scope.self': 'Self',
 
   // Path translations (fallback for breadcrumb and tabs)
   'path.workshops': 'Workshops',
@@ -402,8 +418,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.line-side-warehouse': 'Line-Side Warehouse',
   'app.kuaizhizao.menu.warehouse-management.backflush-records': 'Backflush Records',
 
-  // Master Data application menu translations
-  'app.master-data.name': 'Master Data Management',
+  // Master Data application menu translations (app name unified above as app.master-data.name)
   'app.master-data.menu.factory': 'Factory Data',
   'app.master-data.menu.factory.plants': 'Plants',
   'app.master-data.menu.factory.workshops': 'Workshops',

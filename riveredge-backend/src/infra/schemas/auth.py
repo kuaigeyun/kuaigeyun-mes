@@ -303,6 +303,28 @@ class CurrentUserResponse(BaseModel):
     is_active: bool = Field(..., description="是否激活")
     is_infra_admin: bool = Field(..., description="是否为平台管理（系统级超级管理员）")
     is_tenant_admin: bool = Field(..., description="是否为组织管理员")
+    permissions: List[str] = Field(default_factory=list, description="当前用户权限代码列表")
+    permission_version: int = Field(default=1, description="权限版本号")
+    department: Optional[dict] = Field(None, description="部门信息（轻量）")
+    position: Optional[dict] = Field(None, description="职位信息（轻量）")
+    roles: List[dict] = Field(default_factory=list, description="角色信息（轻量）")
+
+
+class AccessCheckRequest(BaseModel):
+    resource: str = Field(..., description="资源，如 system.user")
+    action: str = Field(..., description="动作，如 read")
+
+
+class BatchAccessCheckRequest(BaseModel):
+    checks: List[AccessCheckRequest] = Field(..., description="批量检查项")
+    check_abac: bool = Field(default=True, description="是否检查ABAC策略")
+
+
+class AccessCheckResult(BaseModel):
+    resource: str
+    action: str
+    allowed: bool
+    reason: str
 
 
 # 全局邮箱验证器
