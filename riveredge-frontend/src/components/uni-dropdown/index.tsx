@@ -2,15 +2,18 @@
  * UniDropdown - 管理型下拉增强组件
  *
  * 在 Select 下拉列表下方增加「快速新建」「高级搜索」入口，可复用、可配置。
+ * 支持按文案模糊搜索与拼音/拼音首字母搜索（依赖 pinyin-pro）。
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Select, theme } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
 import type { QuickCreateConfig, AdvancedSearchConfig } from './types';
 import { AdvancedSearchModal } from './AdvancedSearchModal';
+import { preloadPinyinLib } from '../../utils/pinyin';
+import { match as pinyinMatch } from 'pinyin-pro';
 
 export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender'> {
   /** 快速新建配置，不传则不显示 */
@@ -23,10 +26,37 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
   quickCreate,
   advancedSearch,
   onChange,
+  filterOption,
+  optionFilterProp,
   ...selectProps
 }) => {
   const { token } = theme.useToken();
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+
+  // 预加载拼音库，便于下拉内拼音搜索生效
+  useEffect(() => {
+    preloadPinyinLib().catch(() => {});
+  }, []);
+
+  // 模糊搜索：按 label 文案匹配 + 拼音/拼音首字母匹配（pinyin-pro）
+  const effectiveFilterOption =
+    filterOption !== undefined
+      ? filterOption
+      : (input: string, option: any) => {
+          const rawLabel = option?.label;
+          const labelStr = typeof rawLabel === 'string' ? rawLabel : String(rawLabel ?? '');
+          const inputTrim = (input || '').trim();
+          if (!inputTrim) return true;
+          const inputLower = inputTrim.toLowerCase();
+          if (labelStr.toLowerCase().includes(inputLower)) return true;
+          try {
+            const result = pinyinMatch(labelStr, inputTrim);
+            return result != null && result.length > 0;
+          } catch {
+            return false;
+          }
+        };
+  const effectiveOptionFilterProp = optionFilterProp ?? 'label';
 
   const handleAdvancedSearchSelect = useCallback(
     (value: any, label: string) => {
@@ -111,6 +141,8 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
     <>
       <Select
         {...selectProps}
+        filterOption={effectiveFilterOption}
+        optionFilterProp={effectiveOptionFilterProp}
         onChange={onChange}
         popupRender={popupRender}
       />
