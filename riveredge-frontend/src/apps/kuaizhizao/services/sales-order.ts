@@ -58,6 +58,10 @@ export interface SalesOrder {
     duration_to_review?: number | null;
     duration_submit_to_review?: number | null;
   };
+  /** 交货进度 0-100（列表接口返回） */
+  delivery_progress?: number | null;
+  /** 开票进度 0-100（列表接口返回） */
+  invoice_progress?: number | null;
 }
 
 /**

@@ -95,19 +95,23 @@ export function formatDate(
 
 /**
  * 格式化数字
- * 
- * @param num - 数字
+ *
+ * @param num - 数字（可为字符串等，会先转为 number）
  * @param decimals - 小数位数（默认 2）
  * @returns 格式化后的数字字符串
  */
 export function formatNumber(
-  num: number | null | undefined,
+  num: number | string | null | undefined,
   decimals: number = 2
 ): string {
-  if (num === null || num === undefined) {
+  if (num === null || num === undefined || num === '') {
     return '-';
   }
-  return num.toFixed(decimals);
+  const n = Number(num);
+  if (!Number.isFinite(n)) {
+    return '-';
+  }
+  return n.toFixed(decimals);
 }
 
 /**
