@@ -19,8 +19,9 @@ from .demand_computations.demand_computations import router as demand_computatio
 from .sales_orders.sales_orders import router as sales_order_router
 from .quotations.quotations import router as quotation_router
 from .delivery_notices.delivery_notices import router as delivery_notice_router
+from .shipment_notices.shipment_notices import router as shipment_notice_router
+from .receipt_notices.receipt_notices import router as receipt_notice_router
 from .sample_trials.sample_trials import router as sample_trial_router
-from .approval_flows.approval_flows import router as approval_flow_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
 from .document_relations.document_relations import router as document_relation_router
@@ -68,6 +69,8 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 router.include_router(sales_order_router)  # 销售订单管理（独立API）- 优先匹配
 router.include_router(quotation_router)  # 报价单管理
 router.include_router(delivery_notice_router)  # 送货单管理
+router.include_router(shipment_notice_router)  # 发货通知单管理
+router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(sample_trial_router)  # 样品试用单管理
 router.include_router(production_router)
 router.include_router(purchase_router)
@@ -75,7 +78,6 @@ router.include_router(purchase_requisition_router)
 
 router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(demand_computation_router)  # 统一需求计算（新设计）
-router.include_router(approval_flow_router)  # 审核流程管理
 router.include_router(state_transition_router)  # 状态流转管理
 router.include_router(document_push_pull_router)  # 单据下推和上拉
 router.include_router(document_relation_router)  # 单据关联关系

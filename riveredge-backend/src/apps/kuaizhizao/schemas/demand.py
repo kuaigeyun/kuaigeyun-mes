@@ -181,7 +181,9 @@ class DemandResponse(DemandBase):
     
     # 耗时统计（可选）
     duration_info: Optional[dict] = Field(None, description="耗时统计信息")
-    
+    # 生命周期（后端计算，供前端 UniLifecycleStepper 展示）
+    lifecycle: Optional[dict] = Field(None, description="生命周期节点与当前阶段")
+
     class Config:
         from_attributes = True
 
@@ -210,7 +212,8 @@ class DemandListResponse(BaseSchema):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
-    
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算）")
+
     class Config:
         from_attributes = True
 

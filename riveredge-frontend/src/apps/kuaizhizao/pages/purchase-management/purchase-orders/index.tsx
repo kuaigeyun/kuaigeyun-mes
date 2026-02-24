@@ -18,7 +18,9 @@ import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, PurchaseOrder } from '../../../services/purchase';
+import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import {
@@ -49,8 +51,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
   // 审批流程相关状态
-  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
-  const [approvalRecords, setApprovalRecords] = useState<ApprovalRecord[]>([]);
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
 
@@ -130,44 +131,30 @@ const PurchaseOrdersPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          {isDraftStatus(record.status) && (
-            <Button
-              type="link"
-              size="small"
-              icon={<SendOutlined />}
-              onClick={() => handleSubmitOrder(record)}
-              style={{ color: '#1890ff' }}
-            >
-              提交
-            </Button>
-          )}
-          {isDraftStatus(record.status) && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleApprove(record)}
-              style={{ color: '#52c41a' }}
-            >
-              审核
-            </Button>
-          )}
+          <UniWorkflowActions
+            record={record}
+            entityName="采购订单"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={['草稿', 'draft']}
+            pendingStatuses={['待审核', 'pending_review']}
+            approvedStatuses={['已审核', 'audited', '审核通过']}
+            rejectedStatuses={['已驳回', 'rejected']}
+            theme="link"
+            size="small"
+            actions={{
+              submit: (id) => submitPurchaseOrder(id),
+              approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
+              reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
+            }}
+            onSuccess={() => actionRef.current?.reload()}
+          />
           {isAuditedStatus(record.status) && (
             <Button
               type="link"
@@ -180,13 +167,7 @@ const PurchaseOrdersPage: React.FC = () => {
             </Button>
           )}
           {isDraftStatus(record.status) && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record)}
-            >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
               删除
             </Button>
           )}
@@ -223,41 +204,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const loadApprovalData = async (orderId: number) => {
     setApprovalLoading(true);
     try {
-      // 获取审批流程状态
-      const status = await getPurchaseOrderApprovalStatus(orderId);
+      const status = await getApprovalStatus('purchase_order', orderId);
       setApprovalStatus(status);
-
-      // 如果启动了审批流程，获取审批记录
-      if (status.has_flow) {
-        const recordsResult = await getPurchaseOrderApprovalRecords(orderId);
-        setApprovalRecords(recordsResult.data || []);
-      } else {
-        setApprovalRecords([]);
-      }
     } catch (error) {
       console.error('获取审批流程数据失败:', error);
       setApprovalStatus(null);
-      setApprovalRecords([]);
     } finally {
       setApprovalLoading(false);
     }
-  };
-
-  // 处理提交订单审核
-  const handleSubmitOrder = async (record: PurchaseOrder) => {
-    Modal.confirm({
-      title: '提交采购订单',
-      content: `确定要提交采购订单 "${record.order_code}" 吗？提交后将变为待审核状态。`,
-      onOk: async () => {
-        try {
-          await submitPurchaseOrder(record.id!);
-          messageApi.success('采购订单提交成功');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '采购订单提交失败');
-        }
-      },
-    });
   };
 
   // 处理下推到采购入库
@@ -272,30 +226,6 @@ const PurchaseOrdersPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '下推采购入库失败');
-        }
-      },
-    });
-  };
-
-  // 处理审核
-  const handleApprove = async (record: PurchaseOrder, approved: boolean = true) => {
-    Modal.confirm({
-      title: approved ? '审核通过采购订单' : '审核驳回采购订单',
-      content: `确定要${approved ? '审核通过' : '审核驳回'}采购订单 "${record.order_code}" 吗？`,
-      onOk: async () => {
-        try {
-          await approvePurchaseOrder(record.id!, {
-            approved,
-            review_remarks: '',
-          });
-          messageApi.success(`采购订单${approved ? '审核通过' : '审核驳回'}成功`);
-          actionRef.current?.reload();
-          // 如果详情页已打开，刷新审批数据
-          if (detailDrawerVisible && orderDetail?.id === record.id) {
-            await loadApprovalData(record.id!);
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || '采购订单审核失败');
         }
       },
     });
@@ -753,7 +683,6 @@ const PurchaseOrdersPage: React.FC = () => {
           setOrderDetail(null);
           setDocumentRelations(null);
           setApprovalStatus(null);
-          setApprovalRecords([]);
         }}
         dataSource={orderDetail || undefined}
         columns={detailColumns}
@@ -837,43 +766,35 @@ const PurchaseOrdersPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* 审批流程（采购审批流程增强） */}
+              {/* 审批流程 */}
               {approvalStatus && approvalStatus.has_flow && (
                 <Card
                   title="审批流程"
                   style={{ marginBottom: 16 }}
                   loading={approvalLoading}
                   extra={
-                    <Tag color={approvalStatus.is_completed ? 'success' : approvalStatus.is_rejected ? 'error' : 'processing'}>
-                      {approvalStatus.flow_status || '进行中'}
+                    <Tag color={approvalStatus.status === 'approved' ? 'success' : approvalStatus.status === 'rejected' ? 'error' : 'processing'}>
+                      {approvalStatus.status === 'approved' ? '已通过' : approvalStatus.status === 'rejected' ? '已驳回' : '进行中'}
                     </Tag>
                   }
                 >
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ marginBottom: 8 }}>
-                      <strong>流程名称：</strong>{approvalStatus.flow_name || '-'}
-                    </div>
-                    <div style={{ marginBottom: 8 }}>
-                      <strong>流程编码：</strong>{approvalStatus.flow_code || '-'}
-                    </div>
-                    {approvalStatus.current_step && (
+                    {approvalStatus.current_node && (
                       <div>
-                        <strong>当前步骤：</strong>
-                        <Tag color="blue">
-                          第{approvalStatus.current_step}步 - {approvalStatus.current_step_name || '-'}
-                        </Tag>
+                        <strong>当前节点：</strong>
+                        <Tag color="blue">{approvalStatus.current_node}</Tag>
                       </div>
                     )}
                   </div>
 
                   {/* 审批记录时间线 */}
-                  {approvalRecords.length > 0 && (
+                  {approvalStatus?.history && approvalStatus.history.length > 0 && (
                     <div>
                       <Divider titlePlacement="left">审批记录</Divider>
                       <Timeline
-                        items={approvalRecords.map((record) => {
-                          const isPassed = record.approval_result === '通过';
-                          const isRejected = record.approval_result === '驳回';
+                        items={approvalStatus.history.map((h) => {
+                          const isPassed = h.action === 'approve';
+                          const isRejected = h.action === 'reject';
 
                           return {
                             dot: isPassed ? (
@@ -887,21 +808,18 @@ const PurchaseOrdersPage: React.FC = () => {
                             children: (
                               <div>
                                 <div style={{ marginBottom: 4 }}>
-                                  <strong>{record.step_name || `第${record.step_order}步`}</strong>
                                   <Tag
                                     color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}
-                                    style={{ marginLeft: 8 }}
                                   >
-                                    {record.approval_result}
+                                    {isPassed ? '通过' : isRejected ? '驳回' : h.action || '-'}
                                   </Tag>
                                 </div>
                                 <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
-                                  审核人：{record.approver_name}
-                                  {record.approval_time && ` | 审核时间：${record.approval_time}`}
+                                  {h.action_at && `审核时间：${h.action_at}`}
                                 </div>
-                                {record.approval_comment && (
+                                {h.comment && (
                                   <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
-                                    审核意见：{record.approval_comment}
+                                    审核意见：{h.comment}
                                   </div>
                                 )}
                               </div>
@@ -912,7 +830,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     </div>
                   )}
 
-                  {approvalRecords.length === 0 && (
+                  {(!approvalStatus?.history || approvalStatus.history.length === 0) && approvalStatus?.has_flow && (
                     <Empty
                       description="暂无审批记录"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}

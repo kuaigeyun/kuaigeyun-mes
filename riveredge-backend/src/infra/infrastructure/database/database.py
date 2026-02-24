@@ -207,6 +207,10 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.demand_item",  # 统一需求明细模型
                 "apps.kuaizhizao.models.demand_computation",  # 需求计算模型
                 "apps.kuaizhizao.models.demand_computation_item",  # 需求计算明细模型
+                "apps.kuaizhizao.models.demand_snapshot",  # 需求快照
+                "apps.kuaizhizao.models.demand_recalc_history",  # 需求重算历史
+                "apps.kuaizhizao.models.demand_computation_snapshot",  # 需求计算快照
+                "apps.kuaizhizao.models.demand_computation_recalc_history",  # 需求计算重算历史
                 # BOM管理已移至master_data APP，不再需要bill_of_materials模型
                 # "apps.kuaizhizao.models.bill_of_materials",  # BOM模型
                 # "apps.kuaizhizao.models.bill_of_materials_item",  # BOM明细模型

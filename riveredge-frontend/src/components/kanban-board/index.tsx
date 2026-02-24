@@ -24,6 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Card, Badge, Empty, Typography, Space, theme } from 'antd';
 import { HolderOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 const { useToken } = theme;
@@ -178,6 +179,7 @@ const KanbanColumn: React.FC<{
   showCount?: boolean;
   renderHeader?: (column: KanbanColumn) => React.ReactNode;
 }> = ({ column, cardProps, showCount, renderHeader }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
   const idField = cardProps.idField || 'id';
 
@@ -258,7 +260,7 @@ const KanbanColumn: React.FC<{
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="暂无任务"
+                description={t('components.kanban.noTasks')}
                 style={{ marginTop: 40 }}
               />
             )}

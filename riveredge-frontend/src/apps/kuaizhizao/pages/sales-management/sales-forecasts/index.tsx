@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Select, Form as AntForm, DatePicker, Row, Col } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
   listSalesForecasts,
@@ -291,8 +292,9 @@ const SalesForecastsPage: React.FC = () => {
         notes: values.notes,
       };
       if (isEdit && currentId) {
-        await updateSalesForecast(currentId, { ...basePayload, items });
-        messageApi.success('更新成功');
+        const res = await updateSalesForecast(currentId, { ...basePayload, items });
+        const syncTip = '已同步至关联需求，若已下推计算请前往需求计算重新执行。';
+        messageApi.success(res?.demand_synced ? `更新成功。${syncTip}` : '更新成功');
       } else {
         await createSalesForecast({ ...basePayload, forecast_code: forecastCode, items } as SalesForecast);
         messageApi.success('创建成功');
@@ -305,69 +307,10 @@ const SalesForecastsPage: React.FC = () => {
     }
   };
 
-  const handleSubmitForecast = (id: number) => {
-    modalApi.confirm({
-      title: '提交销售预测',
-      content: '确定要提交此销售预测吗？提交后将进入审核流程。',
-      onOk: async () => {
-        try {
-          await submitSalesForecast(id);
-          messageApi.success('提交成功');
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '提交失败');
-        }
-      },
-    });
-  };
-
-  const handleApprove = (id: number) => {
-    modalApi.confirm({
-      title: '审核通过',
-      content: '确定要审核通过此销售预测吗？',
-      onOk: async () => {
-        try {
-          await approveSalesForecast(id);
-          messageApi.success('审核通过');
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '审核失败');
-        }
-      },
-    });
-  };
-
-  const handleReject = (id: number) => {
-    let reason = '';
-    modalApi.confirm({
-      title: '驳回销售预测',
-      content: (
-        <Input.TextArea
-          placeholder="请输入驳回原因"
-          rows={4}
-          onChange={(e) => { reason = e.target.value; }}
-        />
-      ),
-      onOk: async () => {
-        if (!reason?.trim()) {
-          messageApi.warning('请输入驳回原因');
-          return;
-        }
-        try {
-          await approveSalesForecast(id, reason.trim());
-          messageApi.success('已驳回');
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '驳回失败');
-        }
-      },
-    });
-  };
-
   const handlePushToMrp = (id: number) => {
     modalApi.confirm({
-      title: '下推到MRP运算',
-      content: '确定要将此销售预测下推到MRP运算吗？',
+      title: '下推到需求计算',
+      content: '确定要将此销售预测下推到需求计算吗？',
       onOk: async () => {
         try {
           await pushSalesForecastToMrp(id);
@@ -457,27 +400,32 @@ const SalesForecastsPage: React.FC = () => {
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
                 编辑
               </Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitForecast(record.id!)}>
-                提交
-              </Button>
               <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete([record.id!])}>
                 删除
               </Button>
             </>
           )}
-          {record.status === SalesForecastStatus.PENDING_REVIEW && (
-            <>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.id!)}>
-                审核
-              </Button>
-              <Button type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleReject(record.id!)}>
-                驳回
-              </Button>
-            </>
-          )}
+          <UniWorkflowActions
+            record={record}
+            entityName="销售预测"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[SalesForecastStatus.DRAFT]}
+            pendingStatuses={[SalesForecastStatus.PENDING_REVIEW]}
+            approvedStatuses={[SalesForecastStatus.AUDITED]}
+            rejectedStatuses={[SalesForecastStatus.REJECTED]}
+            theme="link"
+            size="small"
+            actions={{
+              submit: (id) => submitSalesForecast(id),
+              approve: (id) => approveSalesForecast(id),
+              reject: (id, reason) => approveSalesForecast(id, reason || ''),
+            }}
+            onSuccess={() => actionRef.current?.reload()}
+          />
           {record.status === SalesForecastStatus.AUDITED && (
             <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handlePushToMrp(record.id!)}>
-              下推MRP
+              下推需求计算
             </Button>
           )}
         </Space>
@@ -775,19 +723,32 @@ const SalesForecastsPage: React.FC = () => {
             <div style={{ marginTop: 24 }}>
               <Space>
                 {currentForecast.status === SalesForecastStatus.DRAFT && (
-                  <>
-                    <Button onClick={() => { setDrawerVisible(false); handleEdit([currentForecast.id!]); }}>编辑</Button>
-                    <Button type="primary" onClick={() => handleSubmitForecast(currentForecast.id!)}>提交</Button>
-                  </>
+                  <Button onClick={() => { setDrawerVisible(false); handleEdit([currentForecast.id!]); }}>编辑</Button>
                 )}
-                {currentForecast.status === SalesForecastStatus.PENDING_REVIEW && (
-                  <>
-                    <Button type="primary" onClick={() => handleApprove(currentForecast.id!)}>审核通过</Button>
-                    <Button danger onClick={() => handleReject(currentForecast.id!)}>驳回</Button>
-                  </>
-                )}
+                <UniWorkflowActions
+                  record={currentForecast}
+                  entityName="销售预测"
+                  statusField="status"
+                  reviewStatusField="review_status"
+                  draftStatuses={[SalesForecastStatus.DRAFT]}
+                  pendingStatuses={[SalesForecastStatus.PENDING_REVIEW]}
+                  approvedStatuses={[SalesForecastStatus.AUDITED]}
+                  rejectedStatuses={[SalesForecastStatus.REJECTED]}
+                  actions={{
+                    submit: (id) => submitSalesForecast(id),
+                    approve: (id) => approveSalesForecast(id),
+                    reject: (id, reason) => {
+                      if (!reason?.trim()) throw new Error('请输入驳回原因');
+                      return approveSalesForecast(id, reason.trim());
+                    },
+                  }}
+                  onSuccess={() => {
+                    actionRef.current?.reload();
+                    setDrawerVisible(false);
+                  }}
+                />
                 {currentForecast.status === SalesForecastStatus.AUDITED && (
-                  <Button type="primary" onClick={() => handlePushToMrp(currentForecast.id!)}>下推MRP</Button>
+                  <Button type="primary" onClick={() => handlePushToMrp(currentForecast.id!)}>下推需求计算</Button>
                 )}
               </Space>
             </div>

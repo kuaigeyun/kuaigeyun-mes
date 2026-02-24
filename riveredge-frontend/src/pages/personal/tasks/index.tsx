@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, message, Typography } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
@@ -26,6 +27,7 @@ import {
  * 我的任务页面组件
  */
 const UserTasksPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -52,7 +54,7 @@ const UserTasksPage: React.FC = () => {
       const data = await getUserTaskStats();
       setStats(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载任务统计失败');
+      messageApi.error(error.message || t('pages.personal.tasks.loadStatsFailed'));
     }
   };
 
@@ -79,7 +81,7 @@ const UserTasksPage: React.FC = () => {
       };
       
       await processUserTask(currentTask.uuid, data);
-      messageApi.success(actionType === 'approve' ? '审批通过' : '审批拒绝');
+      messageApi.success(actionType === 'approve' ? t('pages.personal.tasks.approveSuccess') : t('pages.personal.tasks.rejectSuccess'));
       setProcessModalVisible(false);
       setCurrentTask(null);
       setComment('');
@@ -87,7 +89,7 @@ const UserTasksPage: React.FC = () => {
       loadStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '处理失败');
+      messageApi.error(error.message || t('pages.personal.tasks.processFailed'));
       throw error;
     }
   };
@@ -101,7 +103,7 @@ const UserTasksPage: React.FC = () => {
       setDrawerVisible(true);
       setDetailData(record);
     } catch (error: any) {
-      messageApi.error(error.message || '获取任务详情失败');
+      messageApi.error(error.message || t('pages.personal.tasks.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -164,10 +166,10 @@ const UserTasksPage: React.FC = () => {
    */
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
-      pending: { color: 'processing', text: '待处理' },
-      approved: { color: 'success', text: '已通过' },
-      rejected: { color: 'error', text: '已拒绝' },
-      cancelled: { color: 'default', text: '已取消' },
+      pending: { color: 'processing', text: t('pages.personal.tasks.statusPending') },
+      approved: { color: 'success', text: t('pages.personal.tasks.statusApproved') },
+      rejected: { color: 'error', text: t('pages.personal.tasks.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.personal.tasks.statusCancelled') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
@@ -178,7 +180,7 @@ const UserTasksPage: React.FC = () => {
    */
   const columns: ProColumns<UserTask>[] = [
     {
-      title: '任务标题',
+      title: t('pages.personal.tasks.title'),
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
@@ -195,26 +197,26 @@ const UserTasksPage: React.FC = () => {
       },
     },
     {
-      title: '内容',
+      title: t('pages.personal.tasks.content'),
       dataIndex: 'content',
       key: 'content',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '状态',
+      title: t('pages.personal.tasks.status'),
       dataIndex: 'status',
       key: 'status',
       valueEnum: {
-        pending: { text: '待处理' },
-        approved: { text: '已通过' },
-        rejected: { text: '已拒绝' },
-        cancelled: { text: '已取消' },
+        pending: { text: t('pages.personal.tasks.statusPending') },
+        approved: { text: t('pages.personal.tasks.statusApproved') },
+        rejected: { text: t('pages.personal.tasks.statusRejected') },
+        cancelled: { text: t('pages.personal.tasks.statusCancelled') },
       },
       render: (_: any, record: UserTask) => getStatusTag(record.status),
     },
     {
-      title: '提交时间',
+      title: t('pages.personal.tasks.submittedAt'),
       dataIndex: 'submitted_at',
       key: 'submitted_at',
       valueType: 'dateTime',
@@ -222,7 +224,7 @@ const UserTasksPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.personal.tasks.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTime',
@@ -230,7 +232,7 @@ const UserTasksPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.personal.tasks.actions'),
       valueType: 'option',
       width: 250,
       fixed: 'right',
@@ -244,7 +246,7 @@ const UserTasksPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              查看
+              {t('pages.personal.tasks.view')}
             </Button>
             {isPending && (
               <>
@@ -254,7 +256,7 @@ const UserTasksPage: React.FC = () => {
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleProcessTask(record, 'approve')}
                 >
-                  审批
+                  {t('pages.personal.tasks.approve')}
                 </Button>
                 <Button
                   type="link"
@@ -263,7 +265,7 @@ const UserTasksPage: React.FC = () => {
                   icon={<CloseCircleOutlined />}
                   onClick={() => handleProcessTask(record, 'reject')}
                 >
-                  拒绝
+                  {t('pages.personal.tasks.reject')}
                 </Button>
               </>
             )}
@@ -277,17 +279,17 @@ const UserTasksPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '任务标题', dataIndex: 'title' },
-    { title: '任务内容', dataIndex: 'content', span: 2 },
+    { title: t('pages.personal.tasks.title'), dataIndex: 'title' },
+    { title: t('pages.personal.tasks.content'), dataIndex: 'content', span: 2 },
     {
-      title: '状态',
+      title: t('pages.personal.tasks.status'),
       dataIndex: 'status',
       render: (value: string) => getStatusTag(value),
     },
-    { title: '提交时间', dataIndex: 'submitted_at', valueType: 'dateTime' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.personal.tasks.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
+    { title: t('pages.personal.tasks.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     {
-      title: '表单数据',
+      title: t('pages.personal.tasks.formData'),
       dataIndex: 'form_data',
       span: 2,
       render: (value: any) => value ? (
@@ -304,7 +306,7 @@ const UserTasksPage: React.FC = () => {
       ) : '-',
     },
     {
-      title: '审批历史',
+      title: t('pages.personal.tasks.approvalHistory'),
       dataIndex: 'approval_history',
       span: 2,
       render: (value: any[]) => value && Array.isArray(value) && value.length > 0 ? (
@@ -318,7 +320,7 @@ const UserTasksPage: React.FC = () => {
           {value.map((history: any, index: number) => (
             <div key={index} style={{ marginBottom: '8px' }}>
               <Tag color={history.action === 'approve' ? 'success' : 'error'}>
-                {history.action === 'approve' ? '通过' : '拒绝'}
+                {history.action === 'approve' ? t('pages.personal.tasks.through') : t('pages.personal.tasks.rejectLabel')}
               </Tag>
               {history.comment && <span>{history.comment}</span>}
               <Typography.Text type="secondary" style={{ marginLeft: '8px' }}>
@@ -338,22 +340,22 @@ const UserTasksPage: React.FC = () => {
           stats
             ? [
                 {
-                  title: '总任务数',
+                  title: t('pages.personal.tasks.totalTasks'),
                   value: stats.total,
                   valueStyle: { color: '#1890ff' },
                 },
                 {
-                  title: '待处理任务',
+                  title: t('pages.personal.tasks.pendingTasks'),
                   value: stats.pending,
                   valueStyle: { color: '#ff4d4f' },
                 },
                 {
-                  title: '已通过任务',
+                  title: t('pages.personal.tasks.approvedTasks'),
                   value: stats.approved,
                   valueStyle: { color: '#52c41a' },
                 },
                 {
-                  title: '我提交的任务',
+                  title: t('pages.personal.tasks.mySubmitted'),
                   value: stats.submitted,
                   valueStyle: { color: '#faad14' },
                 },
@@ -362,7 +364,7 @@ const UserTasksPage: React.FC = () => {
         }
       >
         <UniTable<UserTask>
-          headerTitle="我的任务"
+          headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -381,7 +383,7 @@ const UserTasksPage: React.FC = () => {
                 total: response.total,
               };
             } catch (error: any) {
-              messageApi.error(error?.message || '获取任务列表失败');
+              messageApi.error(error?.message || t('pages.personal.tasks.getListFailed'));
               return {
                 data: [],
                 success: false,
@@ -403,7 +405,7 @@ const UserTasksPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -413,9 +415,9 @@ const UserTasksPage: React.FC = () => {
               a.download = `my-tasks-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.updateFailed'));
             }
           }}
           pagination={{
@@ -431,7 +433,7 @@ const UserTasksPage: React.FC = () => {
                 actionRef.current?.reload();
               }}
             >
-              待处理
+              {t('pages.personal.tasks.pendingTab')}
             </Button>,
             <Button
               key="submitted"
@@ -441,41 +443,39 @@ const UserTasksPage: React.FC = () => {
                 actionRef.current?.reload();
               }}
             >
-              我提交的
+              {t('pages.personal.tasks.mySubmittedTab')}
             </Button>,
           ]}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           kanbanViewConfig={useMemo(() => {
             if (taskType === 'pending') {
-              // 待处理任务：只显示待处理状态
               return {
                 statusField: 'status',
                 statusGroups: {
-                  pending: { title: '待处理', color: '#1890ff' },
+                  pending: { title: t('pages.personal.tasks.statusPending'), color: '#1890ff' },
                 },
                 renderCard: renderKanbanCard,
               };
             } else {
-              // 我提交的任务：显示所有状态
               return {
                 statusField: 'status',
                 statusGroups: {
-                  pending: { title: '待审批', color: '#1890ff' },
-                  approved: { title: '已通过', color: '#52c41a' },
-                  rejected: { title: '已拒绝', color: '#ff4d4f' },
-                  cancelled: { title: '已取消', color: '#999' },
+                  pending: { title: t('pages.personal.tasks.pendingApproval'), color: '#1890ff' },
+                  approved: { title: t('pages.personal.tasks.statusApproved'), color: '#52c41a' },
+                  rejected: { title: t('pages.personal.tasks.statusRejected'), color: '#ff4d4f' },
+                  cancelled: { title: t('pages.personal.tasks.statusCancelled'), color: '#999' },
                 },
                 renderCard: renderKanbanCard,
               };
             }
-          }, [taskType])}
+          }, [taskType, t])}
         />
       </ListPageTemplate>
 
       {/* 处理任务 Modal */}
       <FormModalTemplate
-        title={actionType === 'approve' ? '审批通过' : '审批拒绝'}
+        title={actionType === 'approve' ? t('pages.personal.tasks.modalApproveTitle') : t('pages.personal.tasks.modalRejectTitle')}
         open={processModalVisible}
         onClose={() => {
           setProcessModalVisible(false);
@@ -489,17 +489,17 @@ const UserTasksPage: React.FC = () => {
         {currentTask && (
           <>
             <Typography.Paragraph>
-              <strong>任务标题：</strong>{currentTask.title}
+              <strong>{t('pages.personal.tasks.taskTitleLabel')}</strong>{currentTask.title}
             </Typography.Paragraph>
             <Typography.Paragraph>
-              <strong>任务内容：</strong>{currentTask.content || '(无内容)'}
+              <strong>{t('pages.personal.tasks.taskContentLabel')}</strong>{currentTask.content || t('pages.personal.tasks.noContent')}
             </Typography.Paragraph>
             <ProFormTextArea
               name="comment"
-              label="审批意见"
+              label={t('pages.personal.tasks.commentLabel')}
               fieldProps={{
                 rows: 4,
-                placeholder: actionType === 'approve' ? '请输入审批意见（可选）' : '请输入拒绝原因（可选）',
+                placeholder: actionType === 'approve' ? t('pages.personal.tasks.commentPlaceholderApprove') : t('pages.personal.tasks.commentPlaceholderReject'),
               }}
             />
           </>
@@ -508,7 +508,7 @@ const UserTasksPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<UserTask>
-        title="任务详情"
+        title={t('pages.personal.tasks.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

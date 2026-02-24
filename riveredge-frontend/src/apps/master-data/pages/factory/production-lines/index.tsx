@@ -5,18 +5,16 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { productionLineApi, workshopApi } from '../../../services/factory';
-import type { ProductionLine, ProductionLineCreate, ProductionLineUpdate, Workshop } from '../../../types/factory';
+import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
+import type { ProductionLine, ProductionLineCreate, Workshop } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 产线管理列表页面组件
@@ -24,7 +22,6 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 const ProductionLinesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -35,97 +32,37 @@ const ProductionLinesPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑产线）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  // 保存预览编码，用于在提交时判断是否需要正式生成
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
   
-  // 车间列表（用于下拉选择）
+  // 车间列表（用于导入等）
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
-  const [workshopsLoading, setWorkshopsLoading] = useState(false);
 
-  /**
-   * 加载车间列表
-   */
   useEffect(() => {
     const loadWorkshops = async () => {
       try {
-        setWorkshopsLoading(true);
         const result = await workshopApi.list({ limit: 1000, isActive: true });
         setWorkshops(result);
       } catch (error: any) {
         console.error('加载车间列表失败:', error);
-      } finally {
-        setWorkshopsLoading(false);
       }
     };
     loadWorkshops();
   }, []);
 
-  /**
-   * 处理新建产线
-   */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentProductionLineUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    
-    // 检查是否启用自动编码
-    if (isAutoGenerateEnabled('master-data-factory-production-line')) {
-      const ruleCode = getPageRuleCode('master-data-factory-production-line');
-      if (ruleCode) {
-        try {
-          // 使用测试生成（不更新序号），仅用于预览
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-            isActive: true,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-          formRef.current?.setFieldsValue({
-            isActive: true,
-          });
-        }
-      } else {
-        setPreviewCode(null);
-        formRef.current?.setFieldsValue({
-          isActive: true,
-        });
-      }
-    } else {
-      setPreviewCode(null);
-      formRef.current?.setFieldsValue({
-        isActive: true,
-      });
-    }
   };
 
-  /**
-   * 处理编辑产线
-   */
-  const handleEdit = async (record: ProductionLine) => {
-    try {
-      setIsEdit(true);
-      setCurrentProductionLineUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取产线详情
-      const detail = await productionLineApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        workshopId: detail.workshopId,
-        description: detail.description,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取产线详情失败');
-    }
+  const handleEdit = (record: ProductionLine) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -526,7 +463,7 @@ const ProductionLinesPage: React.FC = () => {
           item.name || '',
           workshop ? `${workshop.code}(${workshop.name})` : '',
           item.description || '',
-          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
+          item.isActive ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -573,60 +510,6 @@ const ProductionLinesPage: React.FC = () => {
   };
 
   /**
-   * 处理提交表单（创建/更新产线）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      if (isEdit && currentProductionLineUuid) {
-        // 更新产线
-        await productionLineApi.update(currentProductionLineUuid, values as ProductionLineUpdate);
-        messageApi.success('更新成功');
-      } else {
-        // 创建产线
-        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
-        if (!isEdit && isAutoGenerateEnabled('master-data-factory-production-line')) {
-          const ruleCode = getPageRuleCode('master-data-factory-production-line');
-          const currentCode = values.code;
-          
-          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成编码失败，使用预览编码:', error);
-              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
-            }
-          }
-        }
-        
-        await productionLineApi.create(values as ProductionLineCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
-  };
-
-  /**
    * 表格列定义
    */
   const columns: ProColumns<ProductionLine>[] = [
@@ -666,7 +549,7 @@ const ProductionLinesPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
+        const isActive = record?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
             {isActive ? '启用' : '禁用'}
@@ -735,7 +618,7 @@ const ProductionLinesPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<ProductionLine>[] = [
+  const detailColumns: ProDescriptionsItemProps<ProductionLine>[] = [
     {
       title: '产线编码',
       dataIndex: 'code',
@@ -758,7 +641,7 @@ const ProductionLinesPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
+        const isActive = record?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
             {isActive ? '启用' : '禁用'}
@@ -913,74 +796,12 @@ const ProductionLinesPage: React.FC = () => {
       />
 
       {/* 创建/编辑产线 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑产线' : '新建产线'}
+      <ProductionLineFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-      >
-        <ProFormText
-          name="code"
-          label="产线编码"
-          placeholder="请输入产线编码"
-          rules={[
-            { required: true, message: '请输入产线编码' },
-            { max: 50, message: '产线编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            disabled: isEdit, // 编辑时不允许修改编码
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="产线名称"
-          placeholder="请输入产线名称"
-          rules={[
-            { required: true, message: '请输入产线名称' },
-            { max: 200, message: '产线名称不能超过200个字符' },
-          ]}
-        />
-        <SafeProFormSelect
-          name="workshopId"
-          label="所属车间"
-          placeholder="请选择车间"
-          options={workshops.map(w => ({
-            label: `${w.code} - ${w.name}`,
-            value: w.id,
-          }))}
-          rules={[
-            { required: true, message: '请选择车间' },
-          ]}
-          fieldProps={{
-            loading: workshopsLoading,
-            showSearch: true,
-            filterOption: (input, option) => {
-              const label = option?.label as string || '';
-              return label.toLowerCase().includes(input.toLowerCase());
-            },
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述信息"
-          fieldProps={{
-            rows: 4,
-            maxLength: 1000,
-          }}
-        />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

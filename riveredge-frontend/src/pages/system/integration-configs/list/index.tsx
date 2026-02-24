@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card, theme } from 'antd';
@@ -66,26 +67,24 @@ const getTypeInfo = (type: string): { color: string; text: string; icon: React.R
 /**
  * 获取连接状态显示
  */
-const getConnectionStatus = (integration: IntegrationConfig): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
+const getConnectionStatus = (t: (key: string) => string, integration: IntegrationConfig): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
   if (!integration.is_active) {
-    return { status: 'default', text: '已禁用' };
+    return { status: 'default', text: t('pages.system.integrationConfigs.statusDisabled') };
   }
-  
   if (integration.is_connected) {
-    return { status: 'success', text: '已连接' };
+    return { status: 'success', text: t('pages.system.integrationConfigs.statusConnected') };
   }
-  
   if (integration.last_error) {
-    return { status: 'error', text: '连接失败' };
+    return { status: 'error', text: t('pages.system.integrationConfigs.statusFailed') };
   }
-  
-  return { status: 'warning', text: '未连接' };
+  return { status: 'warning', text: t('pages.system.integrationConfigs.statusDisconnected') };
 };
 
 /**
  * 集成设置列表页面组件
  */
 const IntegrationConfigListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
@@ -146,7 +145,7 @@ const IntegrationConfigListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取集成配置详情失败');
+      messageApi.error(error.message || t('pages.system.integrationConfigs.getDetailFailed'));
     }
   };
 
@@ -160,7 +159,7 @@ const IntegrationConfigListPage: React.FC = () => {
       const detail = await getIntegrationConfigByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取集成配置详情失败');
+      messageApi.error(error.message || t('pages.system.integrationConfigs.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -175,10 +174,10 @@ const IntegrationConfigListPage: React.FC = () => {
   const handleDelete = async (record: IntegrationConfig) => {
     try {
       await deleteIntegrationConfig(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.integrationConfigs.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.integrationConfigs.deleteFailed'));
     }
   };
 
@@ -187,15 +186,15 @@ const IntegrationConfigListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.integrationConfigs.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.integrationConfigs.confirmBatchDelete'),
+      content: t('pages.system.integrationConfigs.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -209,21 +208,21 @@ const IntegrationConfigListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.integrationConfigs.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.integrationConfigs.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('pages.system.integrationConfigs.batchDeleteFailed', { count: failCount }) + (errors.length > 0 ? ': ' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.integrationConfigs.batchDeleteError'));
         }
       },
     });
@@ -237,13 +236,13 @@ const IntegrationConfigListPage: React.FC = () => {
       setTestingUuid(record.uuid);
       const result = await testConnection(record.uuid);
       if (result.success) {
-        messageApi.success(result.message || '连接测试成功');
+        messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
       } else {
-        messageApi.error(result.message || '连接测试失败');
+        messageApi.error(result.message || t('pages.system.integrationConfigs.testFailed'));
       }
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '连接测试失败');
+      messageApi.error(error.message || t('pages.system.integrationConfigs.testFailed'));
     } finally {
       setTestingUuid(null);
     }
@@ -261,8 +260,8 @@ const IntegrationConfigListPage: React.FC = () => {
       try {
         config = JSON.parse(configJson);
       } catch (e) {
-        messageApi.error('配置 JSON 格式不正确');
-        throw new Error('配置 JSON 格式不正确');
+        messageApi.error(t('pages.system.integrationConfigs.configJsonInvalid'));
+        throw new Error(t('pages.system.integrationConfigs.configJsonInvalid'));
       }
       
       if (isEdit && currentIntegrationUuid) {
@@ -272,7 +271,7 @@ const IntegrationConfigListPage: React.FC = () => {
           config: config,
           is_active: values.is_active,
         } as IntegrationConfigUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.integrationConfigs.updateSuccess'));
       } else {
         await createIntegrationConfig({
           name: values.name,
@@ -282,14 +281,14 @@ const IntegrationConfigListPage: React.FC = () => {
           config: config,
           is_active: values.is_active,
         } as IntegrationConfigCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.integrationConfigs.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.integrationConfigs.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -311,34 +310,34 @@ const IntegrationConfigListPage: React.FC = () => {
 
     return [
       {
-        title: '总集成数',
+        title: t('pages.system.integrationConfigs.totalCount'),
         value: stats.total,
         valueStyle: { color: '#1890ff' },
       },
       {
-        title: '已连接',
+        title: t('pages.system.integrationConfigs.connectedCount'),
         value: stats.connected,
         valueStyle: { color: '#52c41a' },
       },
       {
-        title: '未连接',
+        title: t('pages.system.integrationConfigs.disconnectedCount'),
         value: stats.disconnected,
         valueStyle: { color: '#ff4d4f' },
       },
       {
-        title: '已禁用',
+        title: t('pages.system.integrationConfigs.disabledCount'),
         value: stats.inactive,
         valueStyle: { color: '#faad14' },
       },
     ];
-  }, [allIntegrations]);
+  }, [allIntegrations, t]);
 
   /**
    * 卡片渲染函数
    */
   const renderCard = (integration: IntegrationConfig, index: number) => {
     const typeInfo = getTypeInfo(integration.type);
-    const connectionStatus = getConnectionStatus(integration);
+    const connectionStatus = getConnectionStatus(t, integration);
     
     return (
       <Card
@@ -346,13 +345,13 @@ const IntegrationConfigListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title="查看详情">
+          <Tooltip key="view" title={t('pages.system.integrationConfigs.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(integration)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="test" title="测试连接">
+          <Tooltip key="test" title={t('pages.system.integrationConfigs.testConnection')}>
             <ApiOutlined
               onClick={() => handleTestConnection(integration)}
               style={{ fontSize: 16, color: '#1890ff' }}
@@ -360,12 +359,12 @@ const IntegrationConfigListPage: React.FC = () => {
           </Tooltip>,
           <Popconfirm
             key="delete"
-            title="确定要删除这个集成配置吗？"
+            title={t('pages.system.integrationConfigs.confirmDelete')}
             onConfirm={() => handleDelete(integration)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            <Tooltip title="删除">
+            <Tooltip title={t('pages.system.integrationConfigs.delete')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -386,7 +385,7 @@ const IntegrationConfigListPage: React.FC = () => {
             
             {integration.code && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                代码: {integration.code}
+                {t('pages.system.integrationConfigs.code')}: {integration.code}
               </Text>
             )}
             
@@ -404,7 +403,7 @@ const IntegrationConfigListPage: React.FC = () => {
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.connectionStatus')}：</Text>
               <Badge
                 status={connectionStatus.status}
                 text={connectionStatus.text}
@@ -412,15 +411,15 @@ const IntegrationConfigListPage: React.FC = () => {
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.enableStatus')}：</Text>
               <Tag color={integration.is_active ? 'success' : 'default'}>
-                {integration.is_active ? '启用' : '禁用'}
+                {integration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
               </Tag>
             </div>
             
             {integration.last_connected_at && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.lastConnection')}：</Text>
                 <Text style={{ fontSize: 12 }}>
                   {dayjs(integration.last_connected_at).fromNow()}
                 </Text>
@@ -430,7 +429,7 @@ const IntegrationConfigListPage: React.FC = () => {
             {integration.last_error && (
               <div style={{ marginTop: 8 }}>
                 <Text type="danger" style={{ fontSize: 11 }}>
-                  错误: {integration.last_error}
+                  {t('pages.system.integrationConfigs.error')}: {integration.last_error}
                 </Text>
               </div>
             )}
@@ -445,18 +444,18 @@ const IntegrationConfigListPage: React.FC = () => {
    */
   const columns: ProColumns<IntegrationConfig>[] = [
     {
-      title: '集成名称',
+      title: t('pages.system.integrationConfigs.name'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '集成代码',
+      title: t('pages.system.integrationConfigs.codeLabel'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '集成类型',
+      title: t('pages.system.integrationConfigs.type'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
@@ -478,52 +477,52 @@ const IntegrationConfigListPage: React.FC = () => {
       },
     },
     {
-      title: '描述',
+      title: t('pages.system.integrationConfigs.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '连接状态',
+      title: t('pages.system.integrationConfigs.connectionStatusLabel'),
       dataIndex: 'is_connected',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        true: { text: '已连接', status: 'Success' },
-        false: { text: '未连接', status: 'Default' },
+        true: { text: t('pages.system.integrationConfigs.statusConnected'), status: 'Success' },
+        false: { text: t('pages.system.integrationConfigs.statusDisconnected'), status: 'Default' },
       },
       render: (_, record) => (
         <Space>
           {record.is_connected ? (
-            <Badge status="success" text="已连接" />
+            <Badge status="success" text={t('pages.system.integrationConfigs.statusConnected')} />
           ) : (
-            <Badge status="default" text="未连接" />
+            <Badge status="default" text={t('pages.system.integrationConfigs.statusDisconnected')} />
           )}
           {record.last_error && (
             <Tag color="error" style={{ fontSize: 11 }}>
-              错误
+              {t('pages.system.integrationConfigs.error')}
             </Tag>
           )}
         </Space>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.integrationConfigs.enableStatusLabel'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.integrationConfigs.enabled'), status: 'Success' },
+        false: { text: t('pages.system.integrationConfigs.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后连接时间',
+      title: t('pages.system.integrationConfigs.lastConnectionTime'),
       dataIndex: 'last_connected_at',
       width: 180,
       valueType: 'dateTime',
@@ -531,7 +530,7 @@ const IntegrationConfigListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.integrationConfigs.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -545,15 +544,15 @@ const IntegrationConfigListPage: React.FC = () => {
    */
   const detailColumns = [
     {
-      title: '集成名称',
+      title: t('pages.system.integrationConfigs.name'),
       dataIndex: 'name',
     },
     {
-      title: '集成代码',
+      title: t('pages.system.integrationConfigs.codeLabel'),
       dataIndex: 'code',
     },
     {
-      title: '集成类型',
+      title: t('pages.system.integrationConfigs.type'),
       dataIndex: 'type',
       render: (value: string) => {
         const typeMap: Record<string, string> = {
@@ -566,11 +565,11 @@ const IntegrationConfigListPage: React.FC = () => {
       },
     },
     {
-      title: '集成描述',
+      title: t('pages.system.integrationConfigs.description'),
       dataIndex: 'description',
     },
     {
-      title: '配置信息',
+      title: t('pages.system.integrationConfigs.configInfo'),
       dataIndex: 'config',
       render: (value: Record<string, any>) => (
         <pre style={{
@@ -587,46 +586,46 @@ const IntegrationConfigListPage: React.FC = () => {
       ),
     },
     {
-      title: '连接状态',
+      title: t('pages.system.integrationConfigs.connectionStatusLabel'),
       dataIndex: 'is_connected',
       render: (value: boolean) => (
         <Space>
           {value ? (
-            <Badge status="success" text="已连接" />
+            <Badge status="success" text={t('pages.system.integrationConfigs.statusConnected')} />
           ) : (
-            <Badge status="default" text="未连接" />
+            <Badge status="default" text={t('pages.system.integrationConfigs.statusDisconnected')} />
           )}
         </Space>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.integrationConfigs.enableStatusLabel'),
       dataIndex: 'is_active',
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '启用' : '禁用'}
+          {value ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后连接时间',
+      title: t('pages.system.integrationConfigs.lastConnectionTime'),
       dataIndex: 'last_connected_at',
       valueType: 'dateTime',
     },
     {
-      title: '最后错误',
+      title: t('pages.system.integrationConfigs.lastError'),
       dataIndex: 'last_error',
       render: (value: string) => value ? (
         <Tag color="error">{value}</Tag>
       ) : '-',
     },
     {
-      title: '创建时间',
+      title: t('pages.system.integrationConfigs.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('pages.system.integrationConfigs.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
@@ -637,7 +636,7 @@ const IntegrationConfigListPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <>
           <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            配置外部 API 或数据库连接，用于与 MES、计划、仓储等模块数据对齐。支持 API、数据库、OAuth、Webhook 等类型。
+            {t('pages.system.integrationConfigs.subtitle')}
           </Paragraph>
           <UniTable<IntegrationConfig>
           actionRef={actionRef}
@@ -677,7 +676,7 @@ const IntegrationConfigListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取集成配置列表失败:', error);
-              messageApi.error(error?.message || '获取集成配置列表失败');
+              messageApi.error(error?.message || t('pages.system.integrationConfigs.getListFailed'));
               return {
                 data: [],
                 success: false,
@@ -688,14 +687,14 @@ const IntegrationConfigListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建集成配置"
+          createButtonText={t('pages.system.integrationConfigs.createButton')}
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.integrationConfigs.batchDelete')}
           toolBarRender={() => [
             <Button key="wizard" icon={<ThunderboltOutlined />} onClick={() => setWizardVisible(true)}>
-              通过向导创建
+              {t('pages.system.integrationConfigs.createByWizard')}
             </Button>,
           ]}
           showImportButton
@@ -710,7 +709,7 @@ const IntegrationConfigListPage: React.FC = () => {
               items = await getIntegrationConfigList({ skip: 0, limit: 10000 });
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.integrationConfigs.exportNoData'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -720,7 +719,7 @@ const IntegrationConfigListPage: React.FC = () => {
             a.download = `integration-configs-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('pages.system.integrationConfigs.exportSuccess'));
           }}
           rowSelection={{
             selectedRowKeys,
@@ -737,7 +736,7 @@ const IntegrationConfigListPage: React.FC = () => {
 
       {/* 创建/编辑集成配置 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑集成配置' : '新建集成配置'}
+        title={isEdit ? t('pages.system.integrationConfigs.editModalTitle') : t('pages.system.integrationConfigs.createModalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -751,24 +750,24 @@ const IntegrationConfigListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="集成名称"
-          rules={[{ required: true, message: '请输入集成名称' }]}
-          placeholder="请输入集成名称"
+          label={t('pages.system.integrationConfigs.name')}
+          rules={[{ required: true, message: t('pages.system.integrationConfigs.nameRequired') }]}
+          placeholder={t('pages.system.integrationConfigs.namePlaceholder')}
         />
         <ProFormText
           name="code"
-          label="集成代码"
+          label={t('pages.system.integrationConfigs.codeLabel')}
           rules={[
-            { required: true, message: '请输入集成代码' },
-            { pattern: /^[a-z0-9_]+$/, message: '集成代码只能包含小写字母、数字和下划线' },
+            { required: true, message: t('pages.system.integrationConfigs.codeRequired') },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.integrationConfigs.codePattern') },
           ]}
-          placeholder="请输入集成代码（唯一标识，如：wechat_oauth）"
+          placeholder={t('pages.system.integrationConfigs.codePlaceholder')}
           disabled={isEdit}
         />
         <SafeProFormSelect
           name="type"
-          label="集成类型"
-          rules={[{ required: true, message: '请选择集成类型' }]}
+          label={t('pages.system.integrationConfigs.type')}
+          rules={[{ required: true, message: t('pages.system.integrationConfigs.typeRequired') }]}
           options={[
             { label: 'OAuth', value: 'OAuth' },
             { label: 'API', value: 'API' },
@@ -811,24 +810,24 @@ const IntegrationConfigListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="description"
-          label="集成描述"
-          placeholder="请输入集成描述"
+          label={t('pages.system.integrationConfigs.description')}
+          placeholder={t('pages.system.integrationConfigs.descPlaceholder')}
         />
         <div>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-            配置信息（JSON）
+            {t('pages.system.integrationConfigs.configJsonLabel')}
           </label>
           <Input.TextArea
             value={configJson}
             onChange={(e) => setConfigJson(e.target.value)}
             rows={10}
-            placeholder='请输入配置信息（JSON 格式），例如：{"url": "https://api.example.com", "method": "GET", "headers": {}}'
+            placeholder={t('pages.system.integrationConfigs.configJsonPlaceholder')}
             style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </div>
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('pages.system.integrationConfigs.isActive')}
         />
       </FormModalTemplate>
 
@@ -843,7 +842,7 @@ const IntegrationConfigListPage: React.FC = () => {
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<IntegrationConfig>
-        title="集成配置详情"
+        title={t('pages.system.integrationConfigs.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

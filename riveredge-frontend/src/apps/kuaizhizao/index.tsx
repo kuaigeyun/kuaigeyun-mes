@@ -30,18 +30,16 @@ import OutsourceManagementPage from './pages/production-execution/outsource-mana
 // 采购管理页面
 import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
 import PurchaseRequisitionsPage from './pages/purchase-management/purchase-requisitions';
-import PurchaseReceiptsPage from './pages/purchase-management/purchase-receipts';
-import PurchaseReturnsPage from './pages/purchase-management/purchase-returns';
+import ReceiptNoticesPage from './pages/purchase-management/receipt-notices';
 
 // 销售管理页面
 // TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理
 import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import QuotationsPage from './pages/sales-management/quotations';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
-import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
 import DeliveryNoticesPage from './pages/sales-management/delivery-notices';
+import ShipmentNoticesPage from './pages/sales-management/shipment-notices';
 import SampleTrialsPage from './pages/sales-management/sample-trials';
-import SalesReturnsPage from './pages/sales-management/sales-returns';
 
 // 质量管理页面
 import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
@@ -96,6 +94,9 @@ import ReplenishmentSuggestionsPage from './pages/warehouse-management/replenish
 import BatchInventoryQueryPage from './pages/warehouse-management/batch-inventory-query';
 import LineSideWarehousePage from './pages/warehouse-management/line-side-warehouse';
 import BackflushRecordsPage from './pages/warehouse-management/backflush-records';
+import StocktakingPage from './pages/warehouse-management/stocktaking';
+import InventoryTransferPage from './pages/warehouse-management/inventory-transfer';
+import PlaceholderPage from './components/PlaceholderPage';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -109,8 +110,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 采购管理路由 */}
       <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
       <Route path="purchase-management/purchase-requisitions" element={<PurchaseRequisitionsPage />} />
-      <Route path="purchase-management/purchase-receipts" element={<PurchaseReceiptsPage />} />
-      <Route path="purchase-management/purchase-returns" element={<PurchaseReturnsPage />} />
+      <Route path="purchase-management/receipt-notices" element={<ReceiptNoticesPage />} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
@@ -135,10 +135,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
       <Route path="sales-management/quotations" element={<QuotationsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
-      <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
-      <Route path="sales-management/delivery-notices" element={<DeliveryNoticesPage />} />
+      <Route path="sales-management/shipment-notices" element={<ShipmentNoticesPage />} />
       <Route path="sales-management/sample-trials" element={<SampleTrialsPage />} />
-      <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
       
       <Route path="production-execution/work-orders/:id/kiosk" element={<WorkOrderDetailKioskPage />} />
 
@@ -162,10 +160,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/maintenance-plans" element={<MaintenancePlansPage />} />
       <Route path="equipment-management/molds" element={<MoldsPage />} />
       <Route path="equipment-management/tool-ledger" element={<ToolLedgerPage />} />
-      <Route path="equipment-management/tool-usage" element={<ToolLedgerPage />} />
-      <Route path="equipment-management/tool-calibration" element={<ToolLedgerPage />} />
-      <Route path="equipment-management/equipment-calibration" element={<EquipmentPage />} />
-      <Route path="equipment-management/mold-calibration" element={<MoldsPage />} />
       <Route path="equipment-management/equipment-status" element={<EquipmentStatusPage />} />
       <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
 
@@ -183,9 +177,13 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="finance-management/receivables/:id" element={<ReceivableDetailPage />} />
       <Route path="finance-management/receipts" element={<ReceivableListPage />} />
 
+      {/* 分析中心路由 */}
+      <Route path="analysis-center/document-timing" element={<DocumentTimingPage />} />
+      <Route path="analysis-center/document-efficiency" element={<DocumentEfficiencyPage />} />
+
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />
-      <Route path="warehouse-management/inventory-query" element={<InventoryPage />} />
+      <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
       <Route path="warehouse-management/inbound" element={<InboundPage />} />
       <Route path="warehouse-management/other-inbound" element={<OtherInboundPage />} />
       <Route path="warehouse-management/other-outbound" element={<OtherOutboundPage />} />
@@ -194,16 +192,75 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/outbound" element={<OutboundPage />} />
       <Route path="warehouse-management/customer-material-registration" element={<CustomerMaterialRegistrationPage />} />
       <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />
-      <Route path="warehouse-management/document-timing" element={<DocumentTimingPage />} />
-      <Route path="warehouse-management/document-node-timing" element={<DocumentTimingPage />} />
-      <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
-      <Route path="warehouse-management/document-efficiency-analysis" element={<DocumentEfficiencyPage />} />
       <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
-      <Route path="warehouse-management/opening-inventory-import" element={<InitialDataImportPage />} />
-      <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
+      <Route path="warehouse-management/stocktaking" element={<StocktakingPage />} />
+      <Route path="warehouse-management/inventory-transfer" element={<InventoryTransferPage />} />
+      <Route path="warehouse-management/delivery-notes" element={<DeliveryNoticesPage />} />
+      <Route path="warehouse-management/assembly-orders" element={<PlaceholderPage title="组装单" />} />
+      <Route path="warehouse-management/disassembly-orders" element={<PlaceholderPage title="拆卸单" />} />
       <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
       <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />
       <Route path="warehouse-management/backflush-records" element={<BackflushRecordsPage />} />
+
+      {/* 报表路由（占位） */}
+      <Route path="sales-management/reports/sales-order-query" element={<PlaceholderPage title="销售订单综合查询" />} />
+      <Route path="sales-management/reports/order-execution-tracking" element={<PlaceholderPage title="销售订单执行跟踪" />} />
+      <Route path="sales-management/reports/customer-sales-summary" element={<PlaceholderPage title="客户销售业绩汇总" />} />
+      <Route path="sales-management/reports/customer-sales-reconciliation" element={<PlaceholderPage title="客户销售明细对账" />} />
+      <Route path="sales-management/reports/product-sales-ranking" element={<PlaceholderPage title="产品销售排行榜" />} />
+      <Route path="sales-management/reports/forecast-vs-actual" element={<PlaceholderPage title="销售预测与实际对比" />} />
+      <Route path="sales-management/reports/quotation-query" element={<PlaceholderPage title="报价单综合查询" />} />
+      <Route path="sales-management/reports/sample-trial-query" element={<PlaceholderPage title="样品试用单综合查询" />} />
+      <Route path="plan-management/reports/demand-plan-detail" element={<PlaceholderPage title="需求计划明细表" />} />
+      <Route path="plan-management/reports/production-plan-comparison" element={<PlaceholderPage title="生产计划下达与完成对比" />} />
+      <Route path="plan-management/reports/purchase-plan-comparison" element={<PlaceholderPage title="采购计划下达与完成对比" />} />
+      <Route path="plan-management/reports/capacity-load-analysis" element={<PlaceholderPage title="产能负荷分析" />} />
+      <Route path="plan-management/reports/material-shortage-alert" element={<PlaceholderPage title="物料缺口/短缺预警" />} />
+      <Route path="purchase-management/reports/purchase-requisition-tracking" element={<PlaceholderPage title="采购申请状态跟踪" />} />
+      <Route path="purchase-management/reports/purchase-order-query" element={<PlaceholderPage title="采购订单综合查询" />} />
+      <Route path="purchase-management/reports/purchase-order-progress" element={<PlaceholderPage title="采购订单执行进度" />} />
+      <Route path="purchase-management/reports/supplier-delivery-summary" element={<PlaceholderPage title="供应商交货明细与统计" />} />
+      <Route path="purchase-management/reports/supplier-price-comparison" element={<PlaceholderPage title="供应商价格对比分析" />} />
+      <Route path="purchase-management/reports/purchase-reconciliation" element={<PlaceholderPage title="采购对账" />} />
+      <Route path="purchase-management/reports/supplier-quality-rate" element={<PlaceholderPage title="供应商到货质量合格率" />} />
+      <Route path="production-execution/reports/work-order-query" element={<PlaceholderPage title="工单综合查询" />} />
+      <Route path="production-execution/reports/work-order-tracking" element={<PlaceholderPage title="工单状态跟踪" />} />
+      <Route path="production-execution/reports/work-order-material-usage" element={<PlaceholderPage title="工单物料耗用明细" />} />
+      <Route path="production-execution/reports/work-order-labor-detail" element={<PlaceholderPage title="工单工时/报工明细" />} />
+      <Route path="production-execution/reports/production-efficiency" element={<PlaceholderPage title="生产效率分析" />} />
+      <Route path="production-execution/reports/process-progress-detail" element={<PlaceholderPage title="工序生产进度明细" />} />
+      <Route path="production-execution/reports/rework-order-analysis" element={<PlaceholderPage title="返工工单综合查询" />} />
+      <Route path="production-execution/reports/outsource-order-query" element={<PlaceholderPage title="委外工单综合查询" />} />
+      <Route path="production-execution/reports/outsource-material-reconciliation" element={<PlaceholderPage title="委外工单发料与收货对账" />} />
+      <Route path="production-execution/reports/wip-inventory" element={<PlaceholderPage title="车间在制品盘点" />} />
+      <Route path="quality-management/reports/incoming-inspection-report" element={<PlaceholderPage title="来料检验报告查询与统计" />} />
+      <Route path="quality-management/reports/process-inspection-report" element={<PlaceholderPage title="过程检验报告查询与统计" />} />
+      <Route path="quality-management/reports/finished-inspection-report" element={<PlaceholderPage title="成品检验报告查询与统计" />} />
+      <Route path="quality-management/reports/quality-exception-tracking" element={<PlaceholderPage title="质量异常处理跟踪" />} />
+      <Route path="quality-management/reports/nonconforming-summary" element={<PlaceholderPage title="不合格品处理汇总" />} />
+      <Route path="quality-management/reports/quality-rate-trend" element={<PlaceholderPage title="质量合格率趋势" />} />
+      <Route path="equipment-management/reports/equipment-maintenance-detail" element={<PlaceholderPage title="设备维修记录明细" />} />
+      <Route path="equipment-management/reports/equipment-maintenance-plan" element={<PlaceholderPage title="设备保养计划与执行" />} />
+      <Route path="equipment-management/reports/equipment-fault-analysis" element={<PlaceholderPage title="设备故障统计" />} />
+      <Route path="equipment-management/reports/equipment-status-log" element={<PlaceholderPage title="设备运行状态日志" />} />
+      <Route path="warehouse-management/reports/inventory-summary" element={<PlaceholderPage title="库存收发存汇总" />} />
+      <Route path="warehouse-management/reports/inventory-ledger" element={<PlaceholderPage title="库存收发存明细" />} />
+      <Route path="warehouse-management/reports/inventory-age-analysis" element={<PlaceholderPage title="库龄分析" />} />
+      <Route path="warehouse-management/reports/slow-moving-inventory" element={<PlaceholderPage title="呆滞物料统计" />} />
+      <Route path="warehouse-management/reports/inbound-summary" element={<PlaceholderPage title="入库明细汇总" />} />
+      <Route path="warehouse-management/reports/outbound-summary" element={<PlaceholderPage title="出库明细汇总" />} />
+      <Route path="warehouse-management/reports/stocktaking-history" element={<PlaceholderPage title="盘点单历史与差异" />} />
+      <Route path="warehouse-management/reports/transfer-tracking" element={<PlaceholderPage title="调拨单跟踪" />} />
+      <Route path="finance-management/reports/receivable-age-analysis" element={<PlaceholderPage title="应收账款账龄分析" />} />
+      <Route path="finance-management/reports/receivable-reconciliation" element={<PlaceholderPage title="应收账款对账" />} />
+      <Route path="finance-management/reports/sales-receipt-detail" element={<PlaceholderPage title="销售回款明细" />} />
+      <Route path="finance-management/reports/payable-age-analysis" element={<PlaceholderPage title="应付账款账龄分析" />} />
+      <Route path="finance-management/reports/payable-reconciliation" element={<PlaceholderPage title="应付账款对账" />} />
+      <Route path="finance-management/reports/three-way-match" element={<PlaceholderPage title="三单匹配" />} />
+      <Route path="analysis-center/reports/sales-order-full-trace" element={<PlaceholderPage title="销售订单全链路跟踪" />} />
+      <Route path="analysis-center/reports/purchase-order-full-trace" element={<PlaceholderPage title="采购订单全链路跟踪" />} />
+      <Route path="analysis-center/reports/material-lifecycle-trace" element={<PlaceholderPage title="物料全生命周期跟踪" />} />
+      <Route path="analysis-center/reports/business-status-dashboard" element={<PlaceholderPage title="业务单据状态看板" />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={

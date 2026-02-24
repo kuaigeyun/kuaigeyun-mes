@@ -248,11 +248,19 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_forecast_item",
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
+                f"apps.{module_code}.models.shipment_notice",
+                f"apps.{module_code}.models.shipment_notice_item",
+                f"apps.{module_code}.models.receipt_notice",
+                f"apps.{module_code}.models.receipt_notice_item",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",
                 f"apps.{module_code}.models.demand_computation",
                 f"apps.{module_code}.models.demand_computation_item",
+                f"apps.{module_code}.models.demand_snapshot",
+                f"apps.{module_code}.models.demand_recalc_history",
+                f"apps.{module_code}.models.demand_computation_snapshot",
+                f"apps.{module_code}.models.demand_computation_recalc_history",
                 f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
@@ -265,8 +273,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.production_plan_item",
                 f"apps.{module_code}.models.mrp_result",
                 f"apps.{module_code}.models.lrp_result",
-                # 审核流程和状态流转模块
-                f"apps.{module_code}.models.approval_flow",  # 审核流程
+                # 状态流转模块（审核流程已统一至 core ApprovalInstance）
                 f"apps.{module_code}.models.state_transition",  # 状态流转
                 # 设备管理模块
                 f"apps.{module_code}.models.equipment",  # 设备模型
@@ -428,11 +435,19 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_forecast_item",
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
+                f"apps.{module_code}.models.shipment_notice",
+                f"apps.{module_code}.models.shipment_notice_item",
+                f"apps.{module_code}.models.receipt_notice",
+                f"apps.{module_code}.models.receipt_notice_item",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",
                 f"apps.{module_code}.models.demand_computation",
                 f"apps.{module_code}.models.demand_computation_item",
+                f"apps.{module_code}.models.demand_snapshot",
+                f"apps.{module_code}.models.demand_recalc_history",
+                f"apps.{module_code}.models.demand_computation_snapshot",
+                f"apps.{module_code}.models.demand_computation_recalc_history",
                 f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
@@ -445,8 +460,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.production_plan_item",
                 f"apps.{module_code}.models.mrp_result",
                 f"apps.{module_code}.models.lrp_result",
-                # 审核流程和状态流转模块
-                f"apps.{module_code}.models.approval_flow",  # 审核流程
+                # 状态流转模块（审核流程已统一至 core ApprovalInstance）
                 f"apps.{module_code}.models.state_transition",  # 状态流转
                 # 设备管理模块
                 f"apps.{module_code}.models.equipment",  # 设备模型

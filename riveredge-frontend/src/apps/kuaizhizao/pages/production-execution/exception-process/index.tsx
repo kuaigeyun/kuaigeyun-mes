@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-des
 import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, PlayCircleOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
@@ -61,7 +62,7 @@ const ExceptionProcessPage: React.FC = () => {
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [stepTransitionModalVisible, setStepTransitionModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
-  const [userList, setUserList] = useState<any[]>([]);
+  // 用户列表交由 UniUserSelect 内置管理
   const [exceptionList, setExceptionList] = useState<any[]>([]);
 
   /**
@@ -77,18 +78,7 @@ const ExceptionProcessPage: React.FC = () => {
     }
   };
 
-  // 加载用户列表
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const users = await apiRequest('/core/users', { method: 'GET', params: { is_active: true } });
-        setUserList(Array.isArray(users) ? users : (users?.data || users?.items || []));
-      } catch (error) {
-        console.error('获取用户列表失败:', error);
-      }
-    };
-    loadUsers();
-  }, []);
+  // 获取用户列表逻辑已由 UniUserSelect 接管
 
   // 加载异常列表
   useEffect(() => {
@@ -471,13 +461,7 @@ const ExceptionProcessPage: React.FC = () => {
             {
               name: 'assigned_to',
               label: '分配给',
-              valueType: 'select',
-              request: async () => {
-                return userList.map((user) => ({
-                  label: user.name || user.username,
-                  value: user.id,
-                }));
-              },
+              renderFormItem: () => <UniUserSelect name="assigned_to" />
             },
           ]}
           pagination={{
@@ -591,12 +575,12 @@ const ExceptionProcessPage: React.FC = () => {
       {/* 启动流程Modal */}
       <FormModalTemplate
         title="启动异常处理流程"
-        visible={startModalVisible}
-        onCancel={() => {
+        open={startModalVisible}
+        onClose={() => {
           setStartModalVisible(false);
           setCurrentRecord(null);
         }}
-        onSubmit={handleStart}
+        onFinish={handleStart}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
@@ -610,7 +594,7 @@ const ExceptionProcessPage: React.FC = () => {
               quality: '质量异常',
             },
             fieldProps: {
-              onChange: (value: string) => {
+              onChange: (_: string) => {
                 // 清空exception_id选择
                 const form = (document.querySelector('.ant-pro-form') as any)?.__form;
                 if (form) {
@@ -640,13 +624,7 @@ const ExceptionProcessPage: React.FC = () => {
           {
             name: 'assigned_to',
             label: '分配给',
-            valueType: 'select',
-            request: async () => {
-              return userList.map((user) => ({
-                label: user.name || user.username,
-                value: user.id,
-              }));
-            },
+            renderFormItem: () => <UniUserSelect name="assigned_to" />
           },
           {
             name: 'remarks',
@@ -662,24 +640,18 @@ const ExceptionProcessPage: React.FC = () => {
       {/* 分配Modal */}
       <FormModalTemplate
         title="分配异常处理流程"
-        visible={assignModalVisible}
-        onCancel={() => {
+        open={assignModalVisible}
+        onClose={() => {
           setAssignModalVisible(false);
         }}
-        onSubmit={handleAssign}
+        onFinish={handleAssign}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
             name: 'assigned_to',
             label: '分配给',
-            valueType: 'select',
             rules: [{ required: true, message: '请选择分配给谁' }],
-            request: async () => {
-              return userList.map((user) => ({
-                label: user.name || user.username,
-                value: user.id,
-              }));
-            },
+            renderFormItem: () => <UniUserSelect name="assigned_to" />
           },
           {
             name: 'comment',
@@ -695,11 +667,11 @@ const ExceptionProcessPage: React.FC = () => {
       {/* 步骤流转Modal */}
       <FormModalTemplate
         title="步骤流转"
-        visible={stepTransitionModalVisible}
-        onCancel={() => {
+        open={stepTransitionModalVisible}
+        onClose={() => {
           setStepTransitionModalVisible(false);
         }}
-        onSubmit={handleStepTransition}
+        onFinish={handleStepTransition}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
@@ -730,11 +702,11 @@ const ExceptionProcessPage: React.FC = () => {
       {/* 解决Modal */}
       <FormModalTemplate
         title="解决异常处理流程"
-        visible={resolveModalVisible}
-        onCancel={() => {
+        open={resolveModalVisible}
+        onClose={() => {
           setResolveModalVisible(false);
         }}
-        onSubmit={handleResolve}
+        onFinish={handleResolve}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {

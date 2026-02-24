@@ -11,6 +11,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPackageList, deletePackage, type Package, TenantPlan } from '../../../services/tenant';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { useTranslation } from 'react-i18next';
 import PackageForm from './form';
 import type { ActionType } from '@ant-design/pro-components';
 
@@ -18,6 +19,7 @@ import type { ActionType } from '@ant-design/pro-components';
  * 套餐管理页面组件
  */
 export default function PackageManagementPage() {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>();
@@ -86,7 +88,7 @@ export default function PackageManagementPage() {
       };
     } catch (error: any) {
       console.error('❌ 套餐列表查询失败:', error);
-      messageApi.error(error?.message || '获取数据失败');
+      messageApi.error(error?.message || t('pages.infra.package.fetchFailed'));
       return {
         data: [],
         success: false,
@@ -102,14 +104,14 @@ export default function PackageManagementPage() {
       return Promise.all(packageIds.map(id => deletePackage(id)));
     },
     onSuccess: (_, packageIds) => {
-      messageApi.success(`删除成功，共删除 ${packageIds.length} 个套餐`);
+      messageApi.success(t('pages.infra.package.deleteSuccessCount', { count: packageIds.length }));
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       setSelectedRowKeys([]); // 清空选中状态
       // 手动刷新表格
       actionRef.current?.reload();
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || '删除失败');
+      messageApi.error(error?.message || t('pages.infra.package.deleteFailed'));
     },
   });
 
@@ -165,29 +167,29 @@ export default function PackageManagementPage() {
 
   // 套餐类型映射
   const planMap: Record<string, { text: string; color: string }> = {
-    [TenantPlan.TRIAL]: { text: '体验套餐', color: 'blue' },
-    [TenantPlan.BASIC]: { text: '基础版', color: 'green' },
-    [TenantPlan.PROFESSIONAL]: { text: '专业版', color: 'orange' },
-    [TenantPlan.ENTERPRISE]: { text: '企业版', color: 'red' },
+    [TenantPlan.TRIAL]: { text: t('pages.infra.package.planTrial'), color: 'blue' },
+    [TenantPlan.BASIC]: { text: t('pages.infra.package.planBasic'), color: 'green' },
+    [TenantPlan.PROFESSIONAL]: { text: t('pages.infra.package.planProfessional'), color: 'orange' },
+    [TenantPlan.ENTERPRISE]: { text: t('pages.infra.package.planEnterprise'), color: 'red' },
   };
 
   const columns = [
     {
-      title: 'ID',
+      title: t('pages.infra.admin.id'),
       dataIndex: 'id',
       key: 'id',
       width: 80,
       sorter: true,
     },
     {
-      title: '套餐名称',
+      title: t('pages.infra.package.name'),
       dataIndex: 'name',
       key: 'name',
       sorter: true,
       filterable: true,
     },
     {
-      title: '套餐类型',
+      title: t('pages.infra.package.plan'),
       dataIndex: 'plan',
       key: 'plan',
       sorter: true,
@@ -197,48 +199,48 @@ export default function PackageManagementPage() {
       },
     },
     {
-      title: '用户数限制',
+      title: t('pages.infra.package.maxUsers'),
       dataIndex: 'max_users',
       key: 'max_users',
       sorter: true,
       render: (value: number) => value?.toLocaleString() || '-',
     },
     {
-      title: '存储空间(MB)',
+      title: t('pages.infra.package.maxStorage'),
       dataIndex: 'max_storage_mb',
       key: 'max_storage_mb',
       sorter: true,
       render: (value: number) => value?.toLocaleString() || '-',
     },
     {
-      title: '允许PRO应用',
+      title: t('pages.infra.package.allowProApps'),
       dataIndex: 'allow_pro_apps',
       key: 'allow_pro_apps',
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '是' : '否'}
+          {value ? t('pages.infra.package.yes') : t('pages.infra.package.no')}
         </Tag>
       ),
     },
     {
-      title: '状态',
+      title: t('pages.infra.package.status'),
       dataIndex: 'is_active',
       key: 'is_active',
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '激活' : '未激活'}
+          {value ? t('pages.infra.package.statusActive') : t('pages.infra.package.statusInactive')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('pages.infra.admin.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTime',
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.infra.package.actions'),
       key: 'action',
       width: 120,
       render: (_: any, record: Package) => (
@@ -249,14 +251,14 @@ export default function PackageManagementPage() {
             onClick={() => handleEdit(record)}
             size="small"
           >
-            编辑
+            {t('pages.infra.package.edit')}
           </Button>
           <Popconfirm
-            title="确认删除"
-            description={`确定要删除套餐"${record.name}"吗？`}
+            title={t('pages.infra.package.deleteConfirmTitle')}
+            description={t('pages.infra.package.deleteConfirmContent', { name: record.name })}
             onConfirm={() => handleSingleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('pages.infra.package.ok')}
+            cancelText={t('pages.infra.package.cancel')}
           >
             <Button
               type="link"
@@ -265,7 +267,7 @@ export default function PackageManagementPage() {
               size="small"
               loading={deleteMutation.isPending}
             >
-              删除
+              {t('pages.infra.package.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -295,7 +297,7 @@ export default function PackageManagementPage() {
 
       {/* 编辑弹窗 */}
       <FormModalTemplate
-        title="编辑套餐"
+        title={t('pages.infra.package.editTitle')}
         open={editModalVisible}
         onClose={() => {
           setEditModalVisible(false);
@@ -318,7 +320,7 @@ export default function PackageManagementPage() {
 
       {/* 创建弹窗 */}
       <FormModalTemplate
-        title="新建套餐"
+        title={t('pages.infra.package.createTitle')}
         open={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onFinish={handleSave}

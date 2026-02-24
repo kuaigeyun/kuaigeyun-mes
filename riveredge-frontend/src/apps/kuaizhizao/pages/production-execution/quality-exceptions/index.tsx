@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePick
 import { App, Tag, Button, Space, Divider } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 
@@ -53,7 +54,7 @@ const QualityExceptionsPage: React.FC = () => {
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
-  const [userList, setUserList] = useState<any[]>([]);
+  // 用户列表交由 UniUserSelect 内置管理
   const handleFormRef = useRef<any>(null);
 
   /**
@@ -64,18 +65,7 @@ const QualityExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
-  // 加载用户列表（用于选择责任人）
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const users = await apiRequest('/core/users', { method: 'GET', params: { is_active: true } });
-        setUserList(Array.isArray(users) ? users : (users?.data || users?.items || []));
-      } catch (error) {
-        console.error('获取用户列表失败:', error);
-      }
-    };
-    loadUsers();
-  }, []);
+  // 获取用户列表逻辑已由 UniUserSelect 接管
 
   /**
    * 打开处理异常Modal
@@ -114,10 +104,8 @@ const QualityExceptionsPage: React.FC = () => {
         }
         if (values.responsiblePersonId) {
           params.responsible_person_id = values.responsiblePersonId;
-          const selectedUser = userList.find(u => u.id === values.responsiblePersonId);
-          if (selectedUser) {
-            params.responsible_person_name = selectedUser.name || selectedUser.username;
-          }
+          // _responsible_person_name 将由 onChange 处理注入，或者如果没有注入也不强制抛错
+          params.responsible_person_name = values._responsible_person_name || '';
         }
         if (values.plannedCompletionDate) {
           params.planned_completion_date = values.plannedCompletionDate.format('YYYY-MM-DD HH:mm:ss');
@@ -460,18 +448,15 @@ const QualityExceptionsPage: React.FC = () => {
                     rows: 4,
                   }}
                 />
-                <ProFormSelect
+                <UniUserSelect
                   name="responsiblePersonId"
                   label="责任人"
                   placeholder="请选择责任人（可选）"
-                  options={userList.map(user => ({
-                    label: `${user.name || user.username} (${user.email || ''})`,
-                    value: user.id,
-                  }))}
-                  fieldProps={{
-                    showSearch: true,
-                    filterOption: (input: string, option: any) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  onChange={(_, user) => {
+                    const u = Array.isArray(user) ? user[0] : user;
+                    handleFormRef.current?.setFieldsValue({
+                      _responsible_person_name: u?.full_name || u?.username
+                    });
                   }}
                 />
                 <ProFormDatePicker

@@ -9,6 +9,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { Layout, Card, Button, Space, message, Tabs, Divider, theme } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { SaveOutlined, EyeOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
 import { DndContext, DragOverlay, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
@@ -75,6 +76,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
   onPreview,
   dataSchema,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
   const [config, setConfig] = useState<ReportConfig>(
     initialConfig || {
@@ -146,7 +148,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
         y: 100,
         width: defaultWidth,
         height: defaultHeight,
-        ...(componentType === 'text' && { content: '文本内容', textType: 'paragraph' }),
+        ...(componentType === 'text' && { content: t('components.reportDesigner.defaultTextContent'), textType: 'paragraph' }),
         ...(componentType === 'image' && { src: '', alt: '' }),
         ...(componentType === 'chart' && { chartType: 'column' }),
       };
@@ -206,7 +208,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
   const handleSave = useCallback(() => {
     if (onSave) {
       onSave(config);
-      message.success('保存成功');
+      message.success(t('components.reportDesigner.saveSuccess'));
     }
   }, [config, onSave]);
 
@@ -229,21 +231,21 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
       <Layout style={{ height: '100%' }}>
         {/* 左侧组件库 */}
         <Sider width={200} style={{ background: '#fff', borderRight: `1px solid ${token.colorBorder}` }}>
-          <Card title="组件库" size="small" style={{ height: '100%' }}>
+          <Card title={t('components.reportDesigner.componentLibrary')} size="small" style={{ height: '100%' }}>
             <Space orientation="vertical" style={{ width: '100%' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>基础组件</div>
-              <DraggableItem id="component-table" label="表格" />
-              <DraggableItem id="component-chart" label="图表" />
-              <DraggableItem id="component-text" label="文本" />
-              <DraggableItem id="component-image" label="图片" />
-              <DraggableItem id="component-group" label="分组" />
+              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('components.reportDesigner.basicComponents')}</div>
+              <DraggableItem id="component-table" label={t('components.reportDesigner.table')} />
+              <DraggableItem id="component-chart" label={t('components.reportDesigner.chart')} />
+              <DraggableItem id="component-text" label={t('components.reportDesigner.text')} />
+              <DraggableItem id="component-image" label={t('components.reportDesigner.image')} />
+              <DraggableItem id="component-group" label={t('components.reportDesigner.group')} />
 
               <Divider style={{ margin: '12px 0' }} />
               
-              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>系统配置</div>
-              <DraggableItem id="component-system-config" label="系统参数配置" />
-              <DraggableItem id="component-core-config" label="核心配置(站点)" />
-              <DraggableItem id="component-business-config" label="业务规则配置" />
+              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('components.reportDesigner.systemConfig')}</div>
+              <DraggableItem id="component-system-config" label={t('components.reportDesigner.systemParams')} />
+              <DraggableItem id="component-core-config" label={t('components.reportDesigner.coreConfig')} />
+              <DraggableItem id="component-business-config" label={t('components.reportDesigner.businessConfig')} />
             </Space>
           </Card>
         </Sider>
@@ -266,7 +268,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
               items={[
                 {
                   key: 'design',
-                  label: '设计',
+                  label: t('components.reportDesigner.tabDesign'),
                   children: (
                     <Canvas id="canvas" components={config.components}>
               {config.components.map((component) => (
@@ -302,7 +304,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
                 },
                 {
                   key: 'preview',
-                  label: '预览',
+                  label: t('components.reportDesigner.tabPreview'),
                   children: <Preview config={config} />,
                 },
               ]}

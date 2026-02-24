@@ -12,10 +12,13 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniImport } from '../../../../../components/uni-import';
+import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -48,6 +51,8 @@ import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
+/** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
+import { getUserList, type User } from '../../../../../services/user';
 
 
 
@@ -175,9 +180,15 @@ const SalesOrdersPage: React.FC = () => {
   // 客户列表（对接技术数据管理-供应链-客户）
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  // 用户列表（系统管理-用户管理-帐户管理，用于销售员选择）
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   // 新建时预览的订单编码（用于提交时判断是否需正式占号）
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
+  /** 编辑时若销售员姓名不在用户列表中，用于下拉展示 */
+  const [legacySalesmanName, setLegacySalesmanName] = useState<string | null>(null);
 
   /**
    * 加载物料列表
@@ -218,6 +229,25 @@ const SalesOrdersPage: React.FC = () => {
   }, [messageApi]);
 
   /**
+   * 加载用户列表（系统管理-用户管理-帐户管理 /core/users）
+   */
+  React.useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setUsersLoading(true);
+        const result = await getUserList({ page: 1, page_size: 100, is_active: true });
+        setUsers(result.items || []);
+      } catch (error: any) {
+        console.error('加载用户列表失败:', error);
+        messageApi.error('加载用户列表失败');
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+    loadUsers();
+  }, [messageApi]);
+
+  /**
    * 新建弹窗打开后，等表单挂载完成再设置订单日期默认当天；交货日期由用户自行输入
    */
   useEffect(() => {
@@ -236,6 +266,7 @@ const SalesOrdersPage: React.FC = () => {
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
+    setLegacySalesmanName(null);
     setModalVisible(true);
     formRef.current?.resetFields();
     if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
@@ -298,12 +329,17 @@ const SalesOrdersPage: React.FC = () => {
           };
         });
         const customerId = data.customer_id ?? customers.find(c => c.name === data.customer_name)?.id;
+        const salesmanName = data.salesman_name;
+        const matchedUser = users.find(u => (u.full_name || u.username) === salesmanName);
+        const salesmanUuid = matchedUser ? matchedUser.uuid : (salesmanName ? `__name__${salesmanName}` : undefined);
+        setLegacySalesmanName(salesmanName && !matchedUser ? salesmanName : null);
 
         // 转换主表单的日期字段为 dayjs 对象
         const formData = {
           ...data,
           items,
           customer_id: customerId,
+          salesman_uuid: salesmanUuid,
           order_date: data.order_date ? dayjs(data.order_date) : undefined,
           delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
           attachments: (data as any).attachments || [],
@@ -434,6 +470,17 @@ const SalesOrdersPage: React.FC = () => {
         if (c) values.customer_name = c.name;
       }
 
+      // 销售员：从 salesman_uuid 解析 salesman_name，后端只需 salesman_name
+      if (values.salesman_uuid != null) {
+        if (typeof values.salesman_uuid === 'string' && values.salesman_uuid.startsWith('__name__')) {
+          values.salesman_name = values.salesman_uuid.replace(/^__name__/, '');
+        } else {
+          const u = users.find(x => x.uuid === values.salesman_uuid);
+          if (u) values.salesman_name = u.full_name || u.username;
+        }
+      }
+      delete values.salesman_uuid;
+
       const q = (it: SalesOrderItem) => Number((it as any).required_quantity) || 0;
       const p = (it: SalesOrderItem) => Number((it as any).unit_price) || 0;
 
@@ -492,35 +539,30 @@ const SalesOrdersPage: React.FC = () => {
       // 1. 创建或更新订单
       if (isEdit && currentId) {
         await updateSalesOrder(currentId, values);
-        if (isDraft) messageApi.success('销售订单已更新');
       } else {
         const res = await createSalesOrder(values);
-        // 假设 createSalesOrder 返回创建的对象或ID，如果返回void则需修改Service适配
-        // 这里假设 res 包含 id，或者我们需要重新查询。为保险起见，如果 res 中没有 id，可能需要调整。
-        // 通常 list 或 get 接口返回 id。假设 res 是 SalesOrder 对象。
         orderId = (res as any)?.id;
       }
 
-      // 2. 如果不是草稿（即点击了“提交订单”），则执行后续流程
-      if (!isDraft && orderId) {
-        await submitSalesOrder(orderId);
-
-        // 检查审核配置
-        let currentAuditEnabled = auditEnabled;
+      // 2. 草稿保存直接提示
+      if (isDraft) {
+         messageApi.success(isEdit ? '销售订单已更新。' : '订单已保存为草稿');
+      } else if (orderId) {
+        // 非草稿（即点击了“提交订单”或“更新”），则执行执行提交
         try {
-          // 再次确认配置
-          const config = await getBusinessConfig();
-          currentAuditEnabled = config.parameters?.sales?.audit_enabled === true;
-        } catch (e) {/* ignore */ }
-
-        if (!currentAuditEnabled) {
-          await approveSalesOrder(orderId);
-          messageApi.success('订单已创建并自动通过审核');
-        } else {
-          messageApi.success('订单已创建并提交，请等待审核');
+          const submitRes = await submitSalesOrder(orderId);
+          // 判断后端返回的状态是否已经是“已审核”
+          const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
+          const syncTip = submitRes?.demand_synced ? '已同步至关联需求，若已下推计算请前往需求计算重新执行。' : '';
+          
+          if (isApproved) {
+             messageApi.success(isEdit ? `订单已更新并自动通过审核。${syncTip}` : `订单已创建并自动通过审核。${syncTip}`);
+          } else {
+             messageApi.success(isEdit ? '订单已重新提交，请等待审核' : '订单已创建并提交，请等待审核');
+          }
+        } catch (submitError: any) {
+          messageApi.error(`订单保存成功，但提交失败: ${submitError.message || '未知错误'}`);
         }
-      } else {
-        if (!isEdit) messageApi.success('订单已保存为草稿');
       }
 
       setModalVisible(false);
@@ -560,92 +602,10 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理提交销售订单
-   */
-  /**
-   * 处理提交销售订单
-   */
-  /**
-   * 处理提交销售订单
-   */
-  const handleSubmitDemand = async (id: number) => {
-    // 提交前重新获取最新的业务配置（以防用户修改了配置但未刷新页面）
-    let currentAuditEnabled = auditEnabled;
-    try {
-      const config = await getBusinessConfig();
-      // 默认为关闭，与配置页面 Switch 组件行为一致
-      currentAuditEnabled = config.parameters?.sales?.audit_enabled === true;
-      setAuditEnabled(currentAuditEnabled);
-    } catch (e) {
-      console.warn('获取最新提交配置失败，将使用当前页面缓存的配置状态', e);
-    }
-
-    modalApi.confirm({
-      title: '提交销售订单',
-      content: currentAuditEnabled
-        ? '确定要提交此销售订单吗？提交后将进入审核流程。'
-        : '确定要提交此销售订单吗？提交后将自动通过审核。',
-      onOk: async () => {
-        try {
-          await submitSalesOrder(id);
-
-          if (!currentAuditEnabled) {
-            // 如果审核功能关闭，提交后直接调用审核通过接口
-            try {
-              await approveSalesOrder(id);
-              messageApi.success('销售订单提交成功并已自动通过审核');
-            } catch (approveError: any) {
-              messageApi.warning('订单已提交，但自动审核失败: ' + (approveError.message || '未知错误'));
-            }
-          } else {
-            messageApi.success('销售订单提交成功');
-          }
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '提交失败');
-        }
-      },
-    });
-  };
-
-  /**
-   * 处理审核通过
-   */
-  const handleApprove = async (id: number) => {
-    modalApi.confirm({
-      title: '审核通过',
-      content: '确定要审核通过此销售订单吗？',
-      onOk: async () => {
-        try {
-          await approveSalesOrder(id);
-          messageApi.success('销售订单审核通过');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '审核失败');
-        }
-      },
-    });
-  };
-
-  /**
    * 处理撤销审核
+   * 改由 UniWorkflowActions 组件内部管理，保留空壳防止报错或直接删除
+   * （在组件级别已经由 UniWorkflowActions 全面接管了审核和提交操作按钮）
    */
-  const handleRevokeAudit = async (id: number) => {
-    modalApi.confirm({
-      title: '撤销审核',
-      content: '确定要撤销此销售订单的审核吗？撤销后状态将回退到待审核。',
-      onOk: async () => {
-        try {
-          await unapproveSalesOrder(id);
-          messageApi.success('撤销审核成功');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '撤销审核失败');
-        }
-      },
-    });
-  };
 
   /**
    * 处理下推到需求计算
@@ -860,7 +820,8 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 200,
+      width: 320,
+      fixed: 'right' as const,
       render: (_: unknown, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record);
         const mainStages = lifecycle.mainStages ?? [];
@@ -877,16 +838,6 @@ const SalesOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      valueEnum: {
-        [ReviewStatus.PENDING]: { text: '待审核', status: 'Processing' },
-        [ReviewStatus.APPROVED]: { text: '审核通过', status: 'Success' },
-        [ReviewStatus.REJECTED]: { text: '审核驳回', status: 'Error' },
-      },
-    },
-    {
       title: '操作',
       width: 200,
       fixed: 'right' as const,
@@ -896,32 +847,39 @@ const SalesOrdersPage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>
-          {record.status === SalesOrderStatus.DRAFT && (
+          {(record.status === SalesOrderStatus.DRAFT || record.status === SalesOrderStatus.PENDING_REVIEW || record.status === '待审核') && (
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
               编辑
             </Button>
           )}
-          {record.status === SalesOrderStatus.DRAFT && (
-            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitDemand(record.id!)}>
-              提交
-            </Button>
-          )}
-          {record.status === SalesOrderStatus.DRAFT && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete([record.id!])}
-            >
-              删除
-            </Button>
-          )}
-          {record.review_status === ReviewStatus.PENDING && (
-            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.id!)}>
-              审核
-            </Button>
-          )}
+          <UniWorkflowActions
+            record={record}
+            entityName="销售订单"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[SalesOrderStatus.DRAFT]}
+            pendingStatuses={[ReviewStatus.PENDING, '待审核']}
+            approvedStatuses={['已审核', SalesOrderStatus.AUDITED]}
+            rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
+            autoApproveWhenSubmit={!auditEnabled}
+            theme="link"
+            size="small"
+            actions={{
+               submit: async (id) => {
+                  const res = await submitSalesOrder(id);
+                  if (!auditEnabled) {
+                     return approveSalesOrder(id);
+                  }
+                  return res;
+               },
+               approve: approveSalesOrder,
+               revoke: unapproveSalesOrder,
+            }}
+            onSuccess={() => actionRef.current?.reload()}
+            confirmMessages={{
+               submit: auditEnabled ? '确定要提交此销售订单吗？提交后将进入审核流程。' : '确定要提交此销售订单吗？提交后将自动通过审核。',
+            }}
+          />
           {(record.review_status === ReviewStatus.APPROVED) && !record.pushed_to_computation && (
             <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handlePushToComputation(record.id!)}>
               下推
@@ -930,16 +888,6 @@ const SalesOrdersPage: React.FC = () => {
           {(record.status === '已审核' || record.status === SalesOrderStatus.AUDITED) && record.pushed_to_computation && (
             <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(record.id!)}>
               撤回计算
-            </Button>
-          )}
-          {(record.status === '已审核' || record.status === '已驳回') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<RollbackOutlined />}
-              onClick={() => handleRevokeAudit(record.id!)}
-            >
-              撤销审核
             </Button>
           )}
         </Space>
@@ -1130,32 +1078,59 @@ const SalesOrdersPage: React.FC = () => {
               />
             </Col>
             <Col span={6}>
-              <ProFormSelect
-                name="customer_id"
-                label="客户名称"
-                rules={[{ required: true, message: '请选择客户' }]}
-                placeholder="请选择客户"
-                fieldProps={{
-                  showSearch: true,
-                  allowClear: true,
-                  loading: customersLoading,
-                  style: { width: '100%' },
-                  options: customers.map((c) => ({
+              <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
+                <UniDropdown
+                  placeholder="请选择客户"
+                  showSearch
+                  allowClear
+                  loading={customersLoading}
+                  style={{ width: '100%' }}
+                  options={customers.map((c) => ({
                     label: (c.code ? `${c.code} - ` : '') + c.name,
                     value: c.id,
-                  })),
-                  filterOption: (input: string, option?: { label?: string }) =>
-                    (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
-                  onChange: (id: number | undefined) => {
+                  }))}
+                  onChange={(id: number | undefined) => {
                     const c = id ? customers.find((x) => x.id === id) : null;
                     formRef.current?.setFieldsValue({
                       customer_name: c?.name ?? undefined,
-                      customer_contact: c?.contactPerson ?? undefined,
+                      customer_contact: c?.contactPerson ?? (c as any)?.contact ?? undefined,
                       customer_phone: c?.phone ?? undefined,
                     });
-                  },
-                }}
-              />
+                  }}
+                  quickCreate={{
+                    label: '快速新建',
+                    onClick: () => setCustomerCreateVisible(true),
+                  }}
+                  advancedSearch={{
+                    label: '高级搜索',
+                    fields: [
+                      { name: 'code', label: '客户编码' },
+                      { name: 'name', label: '客户名称' },
+                      { name: 'contactPerson', label: '联系人' },
+                    ],
+                    onSearch: async (values) => {
+                      const list = await customerApi.list({ limit: 200, skip: 0 });
+                      let filtered = list;
+                      if (values.code?.trim()) {
+                        const k = values.code.trim().toLowerCase();
+                        filtered = filtered.filter((c) => (c.code ?? '').toLowerCase().includes(k));
+                      }
+                      if (values.name?.trim()) {
+                        const k = values.name.trim().toLowerCase();
+                        filtered = filtered.filter((c) => (c.name ?? '').toLowerCase().includes(k));
+                      }
+                      if (values.contactPerson?.trim()) {
+                        const k = values.contactPerson.trim().toLowerCase();
+                        filtered = filtered.filter((c) => (c.contactPerson ?? '').toLowerCase().includes(k));
+                      }
+                      return filtered.map((c) => ({
+                        value: c.id,
+                        label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id),
+                      }));
+                    },
+                  }}
+                />
+              </ProForm.Item>
             </Col>
             <Col span={6}>
               <ProFormText
@@ -1172,11 +1147,47 @@ const SalesOrdersPage: React.FC = () => {
               />
             </Col>
             <Col span={6}>
-              <ProFormText
-                name="salesman_name"
-                label="销售员姓名"
-                placeholder="请输入销售员姓名"
-              />
+              <ProForm.Item name="salesman_uuid" label="销售员姓名">
+                <UniDropdown
+                  placeholder="请选择销售员"
+                  showSearch
+                  allowClear
+                  loading={usersLoading}
+                  style={{ width: '100%' }}
+                  options={[
+                    ...users.map((u) => ({
+                      label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
+                      value: u.uuid,
+                    })),
+                    ...(legacySalesmanName
+                      ? [{ label: legacySalesmanName, value: `__name__${legacySalesmanName}` }]
+                      : []),
+                  ]}
+                  advancedSearch={{
+                    label: '高级搜索',
+                    fields: [
+                      { name: 'username', label: '账号' },
+                      { name: 'full_name', label: '姓名' },
+                      { name: 'phone', label: '手机号' },
+                    ],
+                    onSearch: async (searchValues) => {
+                      const result = await getUserList({
+                        page: 1,
+                        page_size: 100,
+                        is_active: true,
+                        ...(searchValues.username?.trim() && { username: searchValues.username.trim() }),
+                        ...(searchValues.full_name?.trim() && { full_name: searchValues.full_name.trim() }),
+                        ...(searchValues.phone?.trim() && { phone: searchValues.phone.trim() }),
+                      });
+                      const list = result.items || [];
+                      return list.map((u) => ({
+                        value: u.uuid,
+                        label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
+                      }));
+                    },
+                  }}
+                />
+              </ProForm.Item>
             </Col>
             <Col span={12}>
               <ProFormText
@@ -1413,6 +1424,22 @@ const SalesOrdersPage: React.FC = () => {
           exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
         />
       </Modal>
+
+      <CustomerFormModal
+        open={customerCreateVisible}
+        onClose={() => setCustomerCreateVisible(false)}
+        editUuid={null}
+        onSuccess={(customer) => {
+          setCustomers((prev) => [...prev, customer]);
+          formRef.current?.setFieldsValue({
+            customer_id: customer.id,
+            customer_name: customer.name,
+            customer_contact: customer.contactPerson,
+            customer_phone: customer.phone,
+          });
+          setCustomerCreateVisible(false);
+        }}
+      />
 
       {/* 详情 Drawer */}
       <Drawer

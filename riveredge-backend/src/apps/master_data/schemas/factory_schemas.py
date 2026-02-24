@@ -11,12 +11,14 @@ from datetime import datetime
 
 class PlantBase(BaseModel):
     """厂区基础 Schema"""
-    
+
     code: str = Field(..., max_length=50, description="厂区编码")
     name: str = Field(..., max_length=200, description="厂区名称")
     description: Optional[str] = Field(None, description="描述")
     address: Optional[str] = Field(None, max_length=500, description="地址")
-    is_active: bool = Field(True, description="是否启用")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -40,12 +42,14 @@ class PlantCreate(PlantBase):
 
 class PlantUpdate(BaseModel):
     """更新厂区 Schema"""
-    
+
     code: Optional[str] = Field(None, max_length=50, description="厂区编码")
     name: Optional[str] = Field(None, max_length=200, description="厂区名称")
     description: Optional[str] = Field(None, description="描述")
     address: Optional[str] = Field(None, max_length=500, description="地址")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -82,12 +86,12 @@ class PlantResponse(PlantBase):
 
 class WorkshopBase(BaseModel):
     """车间基础 Schema"""
-    
+
     code: str = Field(..., max_length=50, description="车间编码")
     name: str = Field(..., max_length=200, description="车间名称")
     plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
     description: Optional[str] = Field(None, description="描述")
-    is_active: bool = Field(True, description="是否启用")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     
@@ -113,12 +117,12 @@ class WorkshopCreate(WorkshopBase):
 
 class WorkshopUpdate(BaseModel):
     """更新车间 Schema"""
-    
+
     code: Optional[str] = Field(None, max_length=50, description="车间编码")
     name: Optional[str] = Field(None, max_length=200, description="车间名称")
     plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
     description: Optional[str] = Field(None, description="描述")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     
@@ -157,12 +161,12 @@ class WorkshopResponse(WorkshopBase):
 
 class ProductionLineBase(BaseModel):
     """产线基础 Schema"""
-    
+
     code: str = Field(..., max_length=50, description="产线编码")
     name: str = Field(..., max_length=200, description="产线名称")
     workshop_id: int = Field(..., description="所属车间ID", alias="workshopId")
     description: Optional[str] = Field(None, description="描述")
-    is_active: bool = Field(True, description="是否启用")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     
@@ -188,12 +192,12 @@ class ProductionLineCreate(ProductionLineBase):
 
 class ProductionLineUpdate(BaseModel):
     """更新产线 Schema"""
-    
+
     code: Optional[str] = Field(None, max_length=50, description="产线编码")
     name: Optional[str] = Field(None, max_length=200, description="产线名称")
     workshop_id: Optional[int] = Field(None, description="所属车间ID", alias="workshopId")
     description: Optional[str] = Field(None, description="描述")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     
@@ -233,14 +237,14 @@ class ProductionLineResponse(ProductionLineBase):
 
 class WorkstationBase(BaseModel):
     """工位基础 Schema"""
-    
+
     code: str = Field(..., max_length=50, description="工位编码")
     name: str = Field(..., max_length=200, description="工位名称")
     production_line_id: int = Field(..., description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
     work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
-    is_active: bool = Field(True, description="是否启用")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     
@@ -266,14 +270,14 @@ class WorkstationCreate(WorkstationBase):
 
 class WorkstationUpdate(BaseModel):
     """更新工位 Schema"""
-    
+
     code: Optional[str] = Field(None, max_length=50, description="工位编码")
     name: Optional[str] = Field(None, max_length=200, description="工位名称")
     production_line_id: Optional[int] = Field(None, description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
     work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     
     model_config = ConfigDict(populate_by_name=True)
     

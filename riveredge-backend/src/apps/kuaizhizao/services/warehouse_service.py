@@ -2255,6 +2255,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
     def __init__(self):
         super().__init__(OtherInbound)
+        self.business_config_service = BusinessConfigService()
 
     async def create_other_inbound(
         self,
@@ -2263,6 +2264,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         created_by: int
     ) -> OtherInboundResponse:
         """创建其他入库单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inbound")
+        if not is_enabled:
+            raise BusinessLogicError("入库管理节点未启用，无法创建其他入库单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -2406,6 +2410,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
     def __init__(self):
         super().__init__(OtherOutbound)
+        self.business_config_service = BusinessConfigService()
 
     async def create_other_outbound(
         self,
@@ -2414,6 +2419,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         created_by: int
     ) -> OtherOutboundResponse:
         """创建其他出库单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "outbound")
+        if not is_enabled:
+            raise BusinessLogicError("出库管理节点未启用，无法创建其他出库单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")

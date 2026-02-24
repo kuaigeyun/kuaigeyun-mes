@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ActionType,
   ProColumns,
@@ -106,6 +107,7 @@ const keyValueListToObject = (
  * 接口管理列表页面组件
  */
 const APIListPage: React.FC = () => {
+  const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const actionRef = useRef<ActionType>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
@@ -176,7 +178,7 @@ const APIListPage: React.FC = () => {
       })
       setModalVisible(true)
     } catch (error: any) {
-      messageApi.error(error.message || '获取接口详情失败')
+      messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
     }
   }
 
@@ -190,7 +192,7 @@ const APIListPage: React.FC = () => {
       const detail = await getAPIByUuid(record.uuid)
       setDetailData(detail)
     } catch (error: any) {
-      messageApi.error(error.message || '获取接口详情失败')
+      messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
     } finally {
       setDetailLoading(false)
     }
@@ -202,10 +204,10 @@ const APIListPage: React.FC = () => {
   const handleDelete = async (record: API) => {
     try {
       await deleteAPI(record.uuid)
-      messageApi.success('删除成功')
+      messageApi.success(t('pages.system.apis.deleteSuccess'))
       actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败')
+      messageApi.error(error.message || t('pages.system.apis.deleteFailed'))
     }
   }
 
@@ -214,13 +216,13 @@ const APIListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的接口')
+      messageApi.warning(t('pages.system.apis.selectToDelete'))
       return
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${selectedRowKeys.length} 个接口吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.apis.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -235,14 +237,14 @@ const APIListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个（系统接口不可删除）`)
+            messageApi.warning(t('pages.system.apis.batchDeleteDone', { done, fail }))
           } else {
-            messageApi.success(`已删除 ${done} 个接口`)
+            messageApi.success(t('pages.system.apis.batchDeleteSuccessCount', { count: done }))
           }
           setSelectedRowKeys([])
           actionRef.current?.reload()
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败')
+          messageApi.error(error.message || t('pages.system.apis.batchDeleteFailed'))
         }
       },
     })
@@ -258,7 +260,7 @@ const APIListPage: React.FC = () => {
       setTestRequestJson('{}')
       setTestResult(null)
     } catch (error: any) {
-      messageApi.error(error.message || '打开测试面板失败')
+      messageApi.error(error.message || t('pages.system.apis.openTestFailed'))
     }
   }
 
@@ -276,7 +278,7 @@ const APIListPage: React.FC = () => {
       try {
         testRequest = JSON.parse(testRequestJson)
       } catch (e) {
-        messageApi.error('测试请求 JSON 格式不正确')
+        messageApi.error(t('pages.system.apis.testRequestJsonInvalid'))
         return
       }
 
@@ -284,12 +286,12 @@ const APIListPage: React.FC = () => {
       setTestResult(result)
 
       if (result.status_code >= 200 && result.status_code < 300) {
-        messageApi.success('接口测试成功')
+        messageApi.success(t('pages.system.apis.testSuccess'))
       } else {
-        messageApi.warning(`接口测试完成，状态码: ${result.status_code}`)
+        messageApi.warning(t('pages.system.apis.testCompleteStatus', { code: result.status_code }))
       }
     } catch (error: any) {
-      messageApi.error(error.message || '接口测试失败')
+      messageApi.error(error.message || t('pages.system.apis.testFailed'))
     } finally {
       setTestLoading(false)
     }
@@ -323,7 +325,7 @@ const APIListPage: React.FC = () => {
           response_example: responseExample,
           is_active: values.is_active,
         } as UpdateAPIData)
-        messageApi.success('更新成功')
+        messageApi.success(t('pages.system.apis.updateSuccess'))
       } else {
         await createAPI({
           name: values.name,
@@ -339,14 +341,14 @@ const APIListPage: React.FC = () => {
           is_active: values.is_active,
           is_system: values.is_system || false,
         } as CreateAPIData)
-        messageApi.success('创建成功')
+        messageApi.success(t('pages.system.apis.createSuccess'))
       }
 
       setModalVisible(false)
       setFormInitialValues(undefined)
       actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败')
+      messageApi.error(error.message || t('pages.system.apis.operationFailed'))
       throw error
     } finally {
       setFormLoading(false)
@@ -358,18 +360,18 @@ const APIListPage: React.FC = () => {
    */
   const columns: ProColumns<API>[] = [
     {
-      title: '接口名称',
+      title: t('pages.system.apis.columnName'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '接口代码',
+      title: t('pages.system.apis.columnCode'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '请求方法',
+      title: t('pages.system.apis.columnMethod'),
       dataIndex: 'method',
       width: 100,
       valueType: 'select',
@@ -392,42 +394,46 @@ const APIListPage: React.FC = () => {
       },
     },
     {
-      title: '接口路径',
+      title: t('pages.system.apis.columnPath'),
       dataIndex: 'path',
       ellipsis: true,
       width: 300,
     },
     {
-      title: '描述',
+      title: t('pages.system.apis.columnDescription'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('pages.system.apis.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.apis.enabled'), status: 'Success' },
+        false: { text: t('pages.system.apis.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
         </Tag>
       ),
     },
     {
-      title: '系统接口',
+      title: t('pages.system.apis.columnSystem'),
       dataIndex: 'is_system',
       width: 100,
       hideInSearch: true,
       render: (_, record) =>
-        record.is_system ? <Tag color="purple">系统</Tag> : <Tag>自定义</Tag>,
+        record.is_system ? (
+          <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
+        ) : (
+          <Tag>{t('pages.system.apis.customTag')}</Tag>
+        ),
     },
     {
-      title: '创建时间',
+      title: t('pages.system.apis.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -435,7 +441,7 @@ const APIListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.apis.columnActions'),
       valueType: 'option',
       width: 250,
       fixed: 'right',
@@ -447,7 +453,7 @@ const APIListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.apis.view')}
           </Button>
           <Button
             type="link"
@@ -455,7 +461,7 @@ const APIListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.apis.edit')}
           </Button>
           <Button
             type="link"
@@ -463,12 +469,15 @@ const APIListPage: React.FC = () => {
             icon={<ThunderboltOutlined />}
             onClick={() => handleTest(record)}
           >
-            测试
+            {t('pages.system.apis.test')}
           </Button>
           {!record.is_system && (
-            <Popconfirm title="确定要删除这个接口吗？" onConfirm={() => handleDelete(record)}>
+            <Popconfirm
+              title={t('pages.system.apis.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+            >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                删除
+                {t('pages.system.apis.delete')}
               </Button>
             </Popconfirm>
           )}
@@ -518,7 +527,7 @@ const APIListPage: React.FC = () => {
               }
             } catch (error: any) {
               console.error('获取接口列表失败:', error)
-              messageApi.error(error?.message || '获取接口列表失败')
+              messageApi.error(error?.message || t('pages.system.apis.loadListFailed'))
               return {
                 data: [],
                 success: false,
@@ -533,14 +542,14 @@ const APIListPage: React.FC = () => {
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.apis.batchDelete')}
           showCreateButton
           onCreate={handleCreate}
-          createButtonText="新建接口"
+          createButtonText={t('pages.system.apis.createButton')}
           showImportButton
           onImport={async data => {
             if (!data || data.length < 2) {
-              messageApi.warning('请填写导入数据')
+              messageApi.warning(t('pages.system.apis.fillImportData'))
               return
             }
             const headers = (data[0] || []).map((h: any) =>
@@ -588,7 +597,7 @@ const APIListPage: React.FC = () => {
                 done++
               }
             }
-            messageApi.success(`成功导入 ${done} 条`)
+            messageApi.success(t('pages.system.apis.importSuccessCount', { count: done }))
             actionRef.current?.reload()
           }}
           showExportButton
@@ -603,7 +612,7 @@ const APIListPage: React.FC = () => {
               items = res.items
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出')
+              messageApi.warning(t('pages.system.apis.noDataToExport'))
               return
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
@@ -613,7 +622,7 @@ const APIListPage: React.FC = () => {
             a.download = `apis-${new Date().toISOString().slice(0, 10)}.json`
             a.click()
             URL.revokeObjectURL(url)
-            messageApi.success('导出成功')
+            messageApi.success(t('pages.system.apis.exportSuccess'))
           }}
           pagination={{
             defaultPageSize: 20,
@@ -624,7 +633,7 @@ const APIListPage: React.FC = () => {
 
       {/* 创建/编辑接口 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑接口' : '新建接口'}
+        title={isEdit ? t('pages.system.apis.modalEdit') : t('pages.system.apis.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false)
@@ -638,33 +647,33 @@ const APIListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="接口名称"
-          rules={[{ required: true, message: '请输入接口名称' }]}
-          placeholder="请输入接口名称"
+          label={t('pages.system.apis.labelName')}
+          rules={[{ required: true, message: t('pages.system.apis.nameRequired') }]}
+          placeholder={t('pages.system.apis.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
-          label="接口代码"
+          label={t('pages.system.apis.labelCode')}
           rules={[
-            { required: true, message: '请输入接口代码' },
-            { pattern: /^[a-z0-9_]+$/, message: '接口代码只能包含小写字母、数字和下划线' },
+            { required: true, message: t('pages.system.apis.codeRequired') },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.apis.codePattern') },
           ]}
-          placeholder="请输入接口代码（唯一标识，如：get_user_info）"
+          placeholder={t('pages.system.apis.codePlaceholder')}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="path"
-          label="接口路径"
-          rules={[{ required: true, message: '请输入接口路径' }]}
-          placeholder="请输入接口路径（如：/api/v1/users 或 https://api.example.com/users）"
+          label={t('pages.system.apis.labelPath')}
+          rules={[{ required: true, message: t('pages.system.apis.pathRequired') }]}
+          placeholder={t('pages.system.apis.pathPlaceholder')}
           colProps={{ span: 12 }}
         />
         <SafeProFormSelect
           name="method"
-          label="请求方法"
-          rules={[{ required: true, message: '请选择请求方法' }]}
+          label={t('pages.system.apis.labelMethod')}
+          rules={[{ required: true, message: t('pages.system.apis.methodRequired') }]}
           options={[
             { label: 'GET', value: 'GET' },
             { label: 'POST', value: 'POST' },
@@ -677,28 +686,28 @@ const APIListPage: React.FC = () => {
         <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
           <ProFormList
             name="request_headers"
-            label="请求头"
-            creatorButtonProps={{ creatorButtonText: '添加请求头' }}
+            label={t('pages.system.apis.labelRequestHeaders')}
+            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addRequestHeader') }}
             min={0}
           >
             <ProFormGroup>
-              <ProFormText name="key" placeholder="键（如 Authorization）" colProps={{ span: 8 }} />
-              <ProFormText name="value" placeholder="值" colProps={{ span: 14 }} />
+              <ProFormText name="key" placeholder={t('pages.system.apis.headerKeyPlaceholder')} colProps={{ span: 8 }} />
+              <ProFormText name="value" placeholder={t('pages.system.apis.headerValuePlaceholder')} colProps={{ span: 14 }} />
             </ProFormGroup>
           </ProFormList>
         </ProFormGroup>
         <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
           <ProFormList
             name="request_params"
-            label="请求参数"
-            creatorButtonProps={{ creatorButtonText: '添加参数' }}
+            label={t('pages.system.apis.labelRequestParams')}
+            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addParam') }}
             min={0}
           >
             <ProFormGroup>
-              <ProFormText name="key" placeholder="键（如 page）" colProps={{ span: 8 }} />
+              <ProFormText name="key" placeholder={t('pages.system.apis.paramKeyPlaceholder')} colProps={{ span: 8 }} />
               <ProFormText
                 name="value"
-                placeholder="值（支持数字、JSON）"
+                placeholder={t('pages.system.apis.paramValuePlaceholder')}
                 colProps={{ span: 14 }}
               />
             </ProFormGroup>
@@ -707,15 +716,15 @@ const APIListPage: React.FC = () => {
         <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
           <ProFormList
             name="request_body"
-            label="请求体"
-            creatorButtonProps={{ creatorButtonText: '添加字段' }}
+            label={t('pages.system.apis.labelRequestBody')}
+            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addBodyField') }}
             min={0}
           >
             <ProFormGroup>
-              <ProFormText name="key" placeholder="键" colProps={{ span: 8 }} />
+              <ProFormText name="key" placeholder={t('pages.system.apis.bodyKeyPlaceholder')} colProps={{ span: 8 }} />
               <ProFormText
                 name="value"
-                placeholder="值（支持字符串、数字、JSON）"
+                placeholder={t('pages.system.apis.bodyValuePlaceholder')}
                 colProps={{ span: 14 }}
               />
             </ProFormGroup>
@@ -724,28 +733,28 @@ const APIListPage: React.FC = () => {
         <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
           <ProFormList
             name="response_format"
-            label="响应格式"
-            creatorButtonProps={{ creatorButtonText: '添加字段' }}
+            label={t('pages.system.apis.labelResponseFormat')}
+            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addFormatField') }}
             min={0}
           >
             <ProFormGroup>
-              <ProFormText name="key" placeholder="键（如 code、message）" colProps={{ span: 8 }} />
-              <ProFormText name="value" placeholder="值" colProps={{ span: 14 }} />
+              <ProFormText name="key" placeholder={t('pages.system.apis.formatKeyPlaceholder')} colProps={{ span: 8 }} />
+              <ProFormText name="value" placeholder={t('pages.system.apis.formatValuePlaceholder')} colProps={{ span: 14 }} />
             </ProFormGroup>
           </ProFormList>
         </ProFormGroup>
         <ProFormGroup colProps={{ span: 24 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
           <ProFormList
             name="response_example"
-            label="响应示例"
-            creatorButtonProps={{ creatorButtonText: '添加字段' }}
+            label={t('pages.system.apis.labelResponseExample')}
+            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addExampleField') }}
             min={0}
           >
             <ProFormGroup>
-              <ProFormText name="key" placeholder="键" colProps={{ span: 8 }} />
+              <ProFormText name="key" placeholder={t('pages.system.apis.exampleKeyPlaceholder')} colProps={{ span: 8 }} />
               <ProFormText
                 name="value"
-                placeholder="值（支持字符串、数字、JSON）"
+                placeholder={t('pages.system.apis.exampleValuePlaceholder')}
                 colProps={{ span: 14 }}
               />
             </ProFormGroup>
@@ -753,49 +762,37 @@ const APIListPage: React.FC = () => {
         </ProFormGroup>
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="选填"
+          label={t('pages.system.apis.labelDescription')}
+          placeholder={t('pages.system.apis.descriptionPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label="是否启用" colProps={{ span: 12 }} />
-        {!isEdit && <ProFormSwitch name="is_system" label="是否系统接口" colProps={{ span: 12 }} />}
+        <ProFormSwitch name="is_active" label={t('pages.system.apis.labelActive')} colProps={{ span: 12 }} />
+        {!isEdit && <ProFormSwitch name="is_system" label={t('pages.system.apis.labelSystem')} colProps={{ span: 12 }} />}
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate
-        title="接口详情"
+        title={t('pages.system.apis.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         dataSource={detailData}
         columns={[
+          { title: t('pages.system.apis.detailColumnName'), dataIndex: 'name' },
+          { title: t('pages.system.apis.detailColumnCode'), dataIndex: 'code' },
+          { title: t('pages.system.apis.detailColumnDescription'), dataIndex: 'description' },
           {
-            title: '接口名称',
-            dataIndex: 'name',
-          },
-          {
-            title: '接口代码',
-            dataIndex: 'code',
-          },
-          {
-            title: '接口描述',
-            dataIndex: 'description',
-          },
-          {
-            title: '请求方法',
+            title: t('pages.system.apis.detailColumnMethod'),
             dataIndex: 'method',
-            render: value => <Tag color="blue">{value}</Tag>,
+            render: (value: string) => <Tag color="blue">{value}</Tag>,
           },
+          { title: t('pages.system.apis.detailColumnPath'), dataIndex: 'path' },
           {
-            title: '接口路径',
-            dataIndex: 'path',
-          },
-          {
-            title: '请求头',
+            title: t('pages.system.apis.detailColumnRequestHeaders'),
             dataIndex: 'request_headers',
-            render: value => (
+            render: (value: any) => (
               <pre
                 style={{
                   margin: 0,
@@ -812,9 +809,9 @@ const APIListPage: React.FC = () => {
             ),
           },
           {
-            title: '请求参数',
+            title: t('pages.system.apis.detailColumnRequestParams'),
             dataIndex: 'request_params',
-            render: value => (
+            render: (value: any) => (
               <pre
                 style={{
                   margin: 0,
@@ -831,9 +828,9 @@ const APIListPage: React.FC = () => {
             ),
           },
           {
-            title: '请求体',
+            title: t('pages.system.apis.detailColumnRequestBody'),
             dataIndex: 'request_body',
-            render: value => (
+            render: (value: any) => (
               <pre
                 style={{
                   margin: 0,
@@ -850,9 +847,9 @@ const APIListPage: React.FC = () => {
             ),
           },
           {
-            title: '响应格式',
+            title: t('pages.system.apis.detailColumnResponseFormat'),
             dataIndex: 'response_format',
-            render: value => (
+            render: (value: any) => (
               <pre
                 style={{
                   margin: 0,
@@ -869,9 +866,9 @@ const APIListPage: React.FC = () => {
             ),
           },
           {
-            title: '响应示例',
+            title: t('pages.system.apis.detailColumnResponseExample'),
             dataIndex: 'response_example',
-            render: value => (
+            render: (value: any) => (
               <pre
                 style={{
                   margin: 0,
@@ -888,33 +885,32 @@ const APIListPage: React.FC = () => {
             ),
           },
           {
-            title: '启用状态',
+            title: t('pages.system.apis.detailColumnActive'),
             dataIndex: 'is_active',
-            render: value => (
-              <Tag color={value ? 'success' : 'default'}>{value ? '启用' : '禁用'}</Tag>
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? t('pages.system.apis.enabled') : t('pages.system.apis.disabled')}
+              </Tag>
             ),
           },
           {
-            title: '系统接口',
+            title: t('pages.system.apis.detailColumnSystem'),
             dataIndex: 'is_system',
-            render: value => (value ? <Tag color="purple">系统</Tag> : <Tag>自定义</Tag>),
+            render: (value: boolean) =>
+              value ? (
+                <Tag color="purple">{t('pages.system.apis.systemTag')}</Tag>
+              ) : (
+                <Tag>{t('pages.system.apis.customTag')}</Tag>
+              ),
           },
-          {
-            title: '创建时间',
-            dataIndex: 'created_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '更新时间',
-            dataIndex: 'updated_at',
-            valueType: 'dateTime',
-          },
+          { title: t('pages.system.apis.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('pages.system.apis.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ]}
       />
 
       {/* 接口测试 Drawer */}
       <Drawer
-        title="接口测试"
+        title={t('pages.system.apis.testDrawerTitle')}
         open={testDrawerVisible}
         onClose={() => {
           setTestDrawerVisible(false)
@@ -930,7 +926,7 @@ const APIListPage: React.FC = () => {
             loading={testLoading}
             onClick={handleExecuteTest}
           >
-            执行测试
+            {t('pages.system.apis.executeTest')}
           </Button>
         }
       >
@@ -938,13 +934,13 @@ const APIListPage: React.FC = () => {
           <>
             <div style={{ marginBottom: 16 }}>
               <Paragraph>
-                <Text strong>测试请求（JSON）</Text>
+                <Text strong>{t('pages.system.apis.testRequestLabel')}</Text>
               </Paragraph>
               <TextArea
                 value={testRequestJson}
                 onChange={e => setTestRequestJson(e.target.value)}
                 rows={8}
-                placeholder='请输入测试请求（JSON 格式），例如：{"headers": {"Authorization": "Bearer token"}, "params": {"page": 1}, "body": {"name": "test"}}'
+                placeholder={t('pages.system.apis.testRequestPlaceholder')}
                 style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
               />
             </div>
@@ -952,11 +948,11 @@ const APIListPage: React.FC = () => {
             {testResult && (
               <div>
                 <Paragraph>
-                  <Text strong>测试结果</Text>
+                  <Text strong>{t('pages.system.apis.testResultLabel')}</Text>
                 </Paragraph>
                 <div style={{ marginBottom: 16 }}>
                   <Space>
-                    <Text>状态码：</Text>
+                    <Text>{t('pages.system.apis.statusCodeLabel')}</Text>
                     <Tag
                       color={
                         testResult.status_code >= 200 && testResult.status_code < 300
@@ -966,12 +962,12 @@ const APIListPage: React.FC = () => {
                     >
                       {testResult.status_code}
                     </Tag>
-                    <Text>耗时：</Text>
+                    <Text>{t('pages.system.apis.elapsedLabel')}</Text>
                     <Tag>{testResult.elapsed_time}s</Tag>
                   </Space>
                 </div>
                 <div style={{ marginBottom: 16 }}>
-                  <Text strong>响应头：</Text>
+                  <Text strong>{t('pages.system.apis.responseHeadersLabel')}</Text>
                   <pre
                     style={{
                       margin: '8px 0',
@@ -987,7 +983,7 @@ const APIListPage: React.FC = () => {
                   </pre>
                 </div>
                 <div>
-                  <Text strong>响应体：</Text>
+                  <Text strong>{t('pages.system.apis.responseBodyLabel')}</Text>
                   <pre
                     style={{
                       margin: '8px 0',

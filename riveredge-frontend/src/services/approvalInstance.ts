@@ -56,6 +56,39 @@ export interface ApprovalInstanceActionData {
 }
 
 /**
+ * 按 entity 获取审批状态（统一入口，供 UniApprovalPanel 等使用）
+ */
+export interface ApprovalStatusResponse {
+  has_flow: boolean;
+  status?: string;
+  current_node?: string;
+  current_approver_id?: number;
+  tasks?: Array<{
+    uuid: string;
+    node_id?: string;
+    approver_id?: number;
+    status?: string;
+    action_at?: string;
+    comment?: string;
+  }>;
+  history?: Array<{
+    action?: string;
+    action_by?: number;
+    action_at?: string;
+    comment?: string;
+  }>;
+}
+
+export async function getApprovalStatus(
+  entityType: string,
+  entityId: number,
+): Promise<ApprovalStatusResponse> {
+  return apiRequest<ApprovalStatusResponse>('/core/approval-instances/status', {
+    params: { entity_type: entityType, entity_id: entityId },
+  });
+}
+
+/**
  * 获取审批实例列表
  */
 export async function getApprovalInstanceList(params?: ApprovalInstanceListParams): Promise<ApprovalInstance[]> {

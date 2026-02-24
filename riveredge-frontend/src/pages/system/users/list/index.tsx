@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Card, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
@@ -36,6 +37,7 @@ import { getRoleList } from '../../../../services/role';
  * 账户管理列表页面组件
  */
 const UserListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -80,7 +82,7 @@ const UserListPage: React.FC = () => {
    */
   const handleBatchGenerateQRCode = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要生成二维码的用户');
+      messageApi.warning(t('field.user.selectUsersForQrcode'));
       return;
     }
 
@@ -100,7 +102,7 @@ const UserListPage: React.FC = () => {
       const validUsers = users.filter((user) => user !== null) as User[];
 
       if (validUsers.length === 0) {
-        messageApi.error('无法获取选中的用户数据');
+        messageApi.error(t('field.user.cannotGetSelectedUsers'));
         return;
       }
 
@@ -114,11 +116,9 @@ const UserListPage: React.FC = () => {
       );
 
       const qrcodes = await Promise.all(qrcodePromises);
-      messageApi.success(`成功生成 ${qrcodes.length} 个人员二维码`);
-      
-      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+      messageApi.success(t('field.user.qrcodeGenerateSuccess', { count: qrcodes.length }));
     } catch (error: any) {
-      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('field.user.qrcodeGenerateFailed') + (error.message ? `: ${error.message}` : ''));
     }
   };
 
@@ -204,7 +204,7 @@ const UserListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取用户详情失败');
+      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
     }
   };
 
@@ -218,7 +218,7 @@ const UserListPage: React.FC = () => {
       const detail = await getUserByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取用户详情失败');
+      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -230,10 +230,10 @@ const UserListPage: React.FC = () => {
   const handleDelete = async (record: User) => {
     try {
       await deleteUser(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -242,23 +242,23 @@ const UserListPage: React.FC = () => {
    */
   const handleBatchDelete = async (uuids: React.Key[]) => {
     Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${uuids.length} 个用户吗？`,
-      okText: '确定',
+      title: t('field.user.batchDeleteTitle'),
+      content: t('field.user.batchDeleteConfirm', { count: uuids.length }),
+      okText: t('common.confirm'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           const result = await batchDeleteUsers(uuids as string[]);
           if (result.failure_count > 0) {
-            messageApi.warning(`删除完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
+            messageApi.warning(t('field.user.batchDeletePartial', { success: result.success_count, fail: result.failure_count }));
           } else {
-            messageApi.success(`成功删除 ${result.success_count} 条记录`);
+            messageApi.success(t('field.user.batchDeleteSuccess', { count: result.success_count }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
@@ -269,14 +269,14 @@ const UserListPage: React.FC = () => {
    */
   const handleResetPassword = async (record: User) => {
     Modal.confirm({
-      title: '重置密码',
-      content: `确定要重置用户 "${record.username}" 的密码吗？`,
+      title: t('field.user.resetPasswordTitle'),
+      content: t('field.user.resetPasswordConfirm', { username: record.username }),
       onOk: async () => {
         try {
           await resetUserPassword(record.uuid);
-          messageApi.success('密码重置成功');
+          messageApi.success(t('field.user.resetPasswordSuccess'));
         } catch (error: any) {
-          messageApi.error(error.message || '密码重置失败');
+          messageApi.error(error.message || t('field.user.resetPasswordFailed'));
         }
       },
     });
@@ -313,15 +313,15 @@ const UserListPage: React.FC = () => {
       }
 
       if (isEdit && currentUserUuid) {
-        const updated = await updateUser(currentUserUuid, submitData as UpdateUserData);
-        messageApi.success('更新成功');
+        await updateUser(currentUserUuid, submitData as UpdateUserData);
+        messageApi.success(t('pages.system.updateSuccess'));
       } else {
         if (!submitData.password) {
-          messageApi.error('新建用户必须设置密码');
+          messageApi.error(t('field.user.passwordRequired'));
           return;
         }
         await createUser(submitData as CreateUserData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.createSuccess'));
       }
 
       setModalVisible(false);
@@ -340,44 +340,29 @@ const UserListPage: React.FC = () => {
    * 解析错误信息，提供具体的字段级提示
    */
   const parseErrorMessage = (error: any): string => {
-    const message = error.message || error.detail || '操作失败';
+    const message = error.message || error.detail || t('pages.system.deleteFailed');
 
-    // 解析用户名相关错误
     if (message.includes('用户名') && message.includes('已存在')) {
-      return '用户名已被使用，请更换其他用户名';
+      return t('field.user.errorUsernameExists');
     }
-
-    // 解析部门相关错误
     if (message.includes('部门不存在') || message.includes('部门')) {
-      return '选择的部门不存在或不属于当前组织，请重新选择';
+      return t('field.user.errorDepartmentInvalid');
     }
-
-    // 解析职位相关错误
     if (message.includes('职位不存在') || message.includes('职位')) {
-      return '选择的职位不存在或不属于当前组织，请重新选择';
+      return t('field.user.errorPositionInvalid');
     }
-
-    // 解析角色相关错误
     if (message.includes('角色') && (message.includes('不存在') || message.includes('无效'))) {
-      return '选择的角色不存在或无效，请重新选择';
+      return t('field.user.errorRoleInvalid');
     }
-
-    // 解析手机号相关错误
     if (message.includes('手机号') || message.includes('phone')) {
-      return '手机号格式不正确或已被使用，请检查后重新输入';
+      return t('field.user.errorPhoneInvalid');
     }
-
-    // 解析邮箱相关错误
     if (message.includes('邮箱') || message.includes('email')) {
-      return '邮箱格式不正确或已被使用，请检查后重新输入';
+      return t('field.user.errorEmailInvalid');
     }
-
-    // 解析权限相关错误
     if (message.includes('权限') || message.includes('permission')) {
-      return '您没有权限执行此操作，请联系管理员';
+      return t('field.user.errorNoPermission');
     }
-
-    // 其他情况返回原始错误信息
     return message;
   };
 
@@ -386,18 +371,17 @@ const UserListPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('field.user.importEmpty'));
       return;
     }
 
-    // 跳过表头和示例数据行，从第3行开始
     const rows = data.slice(2);
-    const nonEmptyRows = rows.filter(row => 
+    const nonEmptyRows = rows.filter(row =>
       row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
     );
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行');
+      messageApi.warning(t('field.user.importNoRows'));
       return;
     }
 
@@ -405,12 +389,12 @@ const UserListPage: React.FC = () => {
       const result = await importUsers(data);
       
       Modal.info({
-        title: '导入完成',
+        title: t('field.user.importComplete'),
         width: 600,
         content: (
           <div>
-            <p>成功：{result.success_count} 条</p>
-            <p>失败：{result.failure_count} 条</p>
+            <p>{t('field.user.importSuccessCount', { count: result.success_count })}</p>
+            <p>{t('field.user.importFailCount', { count: result.failure_count })}</p>
             {result.errors.length > 0 && (
               <List
                 size="small"
@@ -418,7 +402,7 @@ const UserListPage: React.FC = () => {
                 renderItem={(item) => (
                   <List.Item>
                     <Typography.Text type="danger">
-                      第 {item.row} 行：{item.message}
+                      {t('field.user.importErrorRow', { row: item.row, message: item.message })}
                     </Typography.Text>
                   </List.Item>
                 )}
@@ -432,7 +416,7 @@ const UserListPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
+      messageApi.error(error.message || t('field.user.importFailed'));
     }
   };
 
@@ -450,9 +434,9 @@ const UserListPage: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      messageApi.success('导出成功');
+      messageApi.success(t('field.user.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
+      messageApi.error(error.message || t('field.user.exportFailed'));
     }
   };
 
@@ -461,20 +445,20 @@ const UserListPage: React.FC = () => {
    */
   const columns: ProColumns<User>[] = [
     {
-      title: '用户名',
+      title: t('field.user.username'),
       dataIndex: 'username',
       width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '姓名',
+      title: t('field.user.fullName'),
       dataIndex: 'full_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '部门',
+      title: t('field.user.department'),
       dataIndex: 'department_uuid',
       width: 150,
       ellipsis: true,
@@ -486,7 +470,7 @@ const UserListPage: React.FC = () => {
       render: (_, record) => record.department?.name || '-',
     },
     {
-      title: '职位',
+      title: t('field.user.position'),
       dataIndex: 'position_uuid',
       width: 120,
       ellipsis: true,
@@ -497,7 +481,7 @@ const UserListPage: React.FC = () => {
       render: (_, record) => record.position?.name || '-',
     },
     {
-      title: '角色',
+      title: t('field.user.roles'),
       dataIndex: 'roles',
       width: 150,
       ellipsis: true,
@@ -511,51 +495,51 @@ const UserListPage: React.FC = () => {
       ),
     },
     {
-      title: '手机号',
+      title: t('field.user.phone'),
       dataIndex: 'phone',
       width: 130,
       ellipsis: true,
     },
     {
-      title: '邮箱',
+      title: t('field.user.email'),
       dataIndex: 'email',
       width: 180,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '组织管理员',
+      title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Warning' },
-        false: { text: '否', status: 'Default' },
+        true: { text: t('field.customField.yes'), status: 'Warning' },
+        false: { text: t('field.customField.no'), status: 'Default' },
       },
       hideInTable: true,
       render: (_, record) => (
         <Tag color={record.is_tenant_admin ? 'gold' : 'default'}>
-          {record.is_tenant_admin ? '是' : '否'}
+          {record.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')}
         </Tag>
       ),
     },
     {
-      title: '状态',
+      title: t('field.user.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
+        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('field.user.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -563,7 +547,7 @@ const UserListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '更新时间',
+      title: t('field.user.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
       valueType: 'dateTime',
@@ -571,14 +555,14 @@ const UserListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '最后登录',
+      title: t('field.user.lastLogin'),
       dataIndex: 'last_login',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 250,
       fixed: 'right',
@@ -590,7 +574,7 @@ const UserListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.user.view')}
           </Button>
           <Button
             type="link"
@@ -598,7 +582,7 @@ const UserListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.user.edit')}
           </Button>
           <Button
             type="link"
@@ -606,10 +590,10 @@ const UserListPage: React.FC = () => {
             icon={<ReloadOutlined />}
             onClick={() => handleResetPassword(record)}
           >
-            重置
+            {t('field.user.reset')}
           </Button>
           <Popconfirm
-            title="确定要删除这个用户吗？"
+            title={t('field.user.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -618,7 +602,7 @@ const UserListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.user.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -630,22 +614,22 @@ const UserListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns: ProDescriptionsItemProps<User>[] = [
-    { title: '用户名', dataIndex: 'username' },
-    { title: '邮箱', dataIndex: 'email' },
-    { title: '姓名', dataIndex: 'full_name' },
-    { title: '手机号', dataIndex: 'phone' },
-    { 
-      title: '部门', 
-      dataIndex: ['department', 'name'], 
-      render: (_: any, record: User) => record?.department?.name || '-' 
-    },
-    { 
-      title: '职位', 
-      dataIndex: ['position', 'name'], 
-      render: (_: any, record: User) => record?.position?.name || '-' 
+    { title: t('field.user.username'), dataIndex: 'username' },
+    { title: t('field.user.email'), dataIndex: 'email' },
+    { title: t('field.user.fullName'), dataIndex: 'full_name' },
+    { title: t('field.user.phone'), dataIndex: 'phone' },
+    {
+      title: t('field.user.department'),
+      dataIndex: ['department', 'name'],
+      render: (_: any, record: User) => record?.department?.name || '-'
     },
     {
-      title: '角色',
+      title: t('field.user.position'),
+      dataIndex: ['position', 'name'],
+      render: (_: any, record: User) => record?.position?.name || '-'
+    },
+    {
+      title: t('field.user.roles'),
       dataIndex: 'roles',
       span: 2,
       render: (_: any, record: User) => (
@@ -657,18 +641,18 @@ const UserListPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
+      title: t('field.user.status'),
       dataIndex: 'is_active',
-      render: (_: any, record: User) => (record?.is_active ? '启用' : '禁用'),
+      render: (_: any, record: User) => (record?.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')),
     },
     {
-      title: '组织管理员',
+      title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
-      render: (_: any, record: User) => (record?.is_tenant_admin ? '是' : '否'),
+      render: (_: any, record: User) => (record?.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no')),
     },
-    { title: '最后登录', dataIndex: 'last_login', valueType: 'dateTime' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('field.user.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
+    { title: t('field.user.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('field.user.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -717,7 +701,7 @@ const UserListPage: React.FC = () => {
             disabled={selectedRowKeys.length === 0}
             onClick={handleBatchGenerateQRCode}
           >
-            批量生成二维码
+            {t('field.user.batchQrcode')}
           </Button>,
         ]}
         showImportButton={true}
@@ -725,17 +709,17 @@ const UserListPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showCreateButton
-        createButtonText="新建用户"
+        createButtonText={t('field.user.createButton')}
         onCreate={handleCreate}
         showDeleteButton={true}
-        deleteButtonText="批量删除"
+        deleteButtonText={t('field.user.batchDeleteButton')}
         onDelete={handleBatchDelete}
         />
       </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑用户' : '新建用户'}
+        title={isEdit ? t('field.user.editTitle') : t('field.user.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -751,14 +735,14 @@ const UserListPage: React.FC = () => {
       >
         <ProFormText
           name="username"
-          label="用户名"
+          label={t('field.user.username')}
           rules={[
-            { required: true, message: '请输入用户名' },
-            { min: 3, message: '用户名长度不能少于3个字符' },
-            { max: 50, message: '用户名长度不能超过50个字符' },
-            { pattern: /^[a-zA-Z0-9_-]+$/, message: '用户名只能包含字母、数字、下划线和连字符' }
+            { required: true, message: t('field.user.usernameRequired') },
+            { min: 3, message: t('field.user.usernameMin') },
+            { max: 50, message: t('field.user.usernameMax') },
+            { pattern: /^[a-zA-Z0-9_-]+$/, message: t('field.user.usernamePattern') }
           ]}
-          placeholder="请输入用户名（3-50个字符）"
+          placeholder={t('field.user.usernamePlaceholder')}
           disabled={isEdit}
           fieldProps={{
             autoComplete: 'off'
@@ -767,42 +751,42 @@ const UserListPage: React.FC = () => {
         />
         <ProFormText
           name="full_name"
-          label="姓名"
+          label={t('field.user.fullName')}
           rules={[
-            { max: 100, message: '姓名长度不能超过100个字符' }
+            { max: 100, message: t('field.user.fullNameMax') }
           ]}
-          placeholder="请输入姓名"
+          placeholder={t('field.user.fullNamePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="phone"
-          label="手机号"
+          label={t('field.user.phone')}
           rules={[
-            { required: true, message: '请输入手机号' },
-            { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位中国大陆手机号（以1开头）' }
+            { required: true, message: t('field.user.phoneRequired') },
+            { pattern: /^1[3-9]\d{9}$/, message: t('field.user.phonePattern') }
           ]}
-          placeholder="请输入手机号"
+          placeholder={t('field.user.phonePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="email"
-          label="邮箱"
+          label={t('field.user.email')}
           rules={[
-            { type: 'email', message: '请输入正确的邮箱地址' }
+            { type: 'email', message: t('field.user.emailInvalid') }
           ]}
-          placeholder="请输入邮箱（可选）"
+          placeholder={t('field.user.emailPlaceholder')}
           fieldProps={{ autoComplete: 'email' }}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="password"
-          label="密码"
+          label={t('field.user.password')}
           rules={isEdit ? [] : [
-            { required: true, message: '请输入密码' },
-            { min: 8, message: '密码长度不能少于8个字符' },
-            { max: 128, message: '密码长度不能超过128个字符' }
+            { required: true, message: t('field.user.passwordRequiredPlaceholder') },
+            { min: 8, message: t('field.user.passwordMin') },
+            { max: 128, message: t('field.user.passwordMax') }
           ]}
-          placeholder={isEdit ? '留空则不修改密码' : '请输入密码（8-128个字符）'}
+          placeholder={isEdit ? t('field.user.passwordPlaceholderEdit') : t('field.user.passwordPlaceholder')}
           fieldProps={{
             type: 'password',
             autoComplete: 'new-password'
@@ -811,21 +795,21 @@ const UserListPage: React.FC = () => {
         />
         <ProFormText
           name="confirmPassword"
-          label="确认密码"
+          label={t('field.user.confirmPassword')}
           rules={isEdit ? [] : [
-            { required: true, message: '请再次输入密码' },
-            { min: 8, message: '密码长度不能少于8个字符' },
-            { max: 128, message: '密码长度不能超过128个字符' },
+            { required: true, message: t('field.user.confirmPasswordRequired') },
+            { min: 8, message: t('field.user.passwordMin') },
+            { max: 128, message: t('field.user.passwordMax') },
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!value || getFieldValue('password') === value) {
                   return Promise.resolve();
                 }
-                return Promise.reject(new Error('两次输入的密码不一致'));
+                return Promise.reject(new Error(t('field.user.passwordMismatch')));
               },
             }),
           ]}
-          placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（8-128个字符）'}
+          placeholder={isEdit ? t('field.user.passwordPlaceholderEdit') : t('field.user.confirmPasswordPlaceholder')}
           fieldProps={{
             type: 'password',
             autoComplete: 'new-password'
@@ -834,8 +818,8 @@ const UserListPage: React.FC = () => {
         />
         <ProFormSelect
           name="department_uuid"
-          label="部门"
-          placeholder="请选择部门"
+          label={t('field.user.department')}
+          placeholder={t('field.user.departmentPlaceholder')}
           allowClear
           options={departmentOptions}
           fieldProps={{ showSearch: true }}
@@ -843,8 +827,8 @@ const UserListPage: React.FC = () => {
         />
         <ProFormSelect
           name="position_uuid"
-          label="职位"
-          placeholder="请选择职位"
+          label={t('field.user.position')}
+          placeholder={t('field.user.positionPlaceholder')}
           options={positionOptions}
           fieldProps={{
             showSearch: true,
@@ -853,8 +837,8 @@ const UserListPage: React.FC = () => {
         />
         <ProFormSelect
           name="role_uuids"
-          label="角色"
-          placeholder="请选择角色"
+          label={t('field.user.roles')}
+          placeholder={t('field.user.rolesPlaceholder')}
           options={roleOptions}
           fieldProps={{
             mode: 'multiple',
@@ -870,19 +854,19 @@ const UserListPage: React.FC = () => {
         />
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('field.user.isActiveLabel')}
           colProps={{ span: 12 }}
         />
         <ProFormSwitch
           name="is_tenant_admin"
-          label="是否组织管理员"
+          label={t('field.user.isTenantAdminLabel')}
           colProps={{ span: 12 }}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<User>
-        title="用户详情"
+        title={t('field.user.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -892,7 +876,7 @@ const UserListPage: React.FC = () => {
       >
         {detailData && (
           <div style={{ marginTop: 24 }}>
-            <Card title="人员二维码">
+            <Card title={t('field.user.qrcodeCardTitle')}>
               <QRCodeGenerator
                 qrcodeType="EMP"
                 data={{

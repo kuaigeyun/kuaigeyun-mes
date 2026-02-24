@@ -62,6 +62,8 @@ export interface SalesOrder {
   delivery_progress?: number | null;
   /** 开票进度 0-100（列表接口返回） */
   invoice_progress?: number | null;
+  /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
+  demand_synced?: boolean;
 }
 
 /**

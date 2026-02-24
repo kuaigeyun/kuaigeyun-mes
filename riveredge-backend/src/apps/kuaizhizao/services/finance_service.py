@@ -32,6 +32,7 @@ from apps.kuaizhizao.schemas.finance import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class PayableService(AppBaseService[Payable]):
@@ -39,9 +40,13 @@ class PayableService(AppBaseService[Payable]):
 
     def __init__(self):
         super().__init__(Payable)
+        self.business_config_service = BusinessConfigService()
 
     async def create_payable(self, tenant_id: int, payable_data: PayableCreate, created_by: int) -> PayableResponse:
         """创建应付单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "payable")
+        if not is_enabled:
+            raise BusinessLogicError("应付账款节点未启用，无法创建应付单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
@@ -231,9 +236,13 @@ class ReceivableService(AppBaseService[Receivable]):
 
     def __init__(self):
         super().__init__(Receivable)
+        self.business_config_service = BusinessConfigService()
 
     async def create_receivable(self, tenant_id: int, receivable_data: ReceivableCreate, created_by: int) -> ReceivableResponse:
         """创建应收单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "receivable")
+        if not is_enabled:
+            raise BusinessLogicError("应收账款节点未启用，无法创建应收单")
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")

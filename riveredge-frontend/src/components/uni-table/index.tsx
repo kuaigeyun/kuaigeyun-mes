@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, ReactNode, useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ProTable,
   ActionType,
@@ -13,7 +14,7 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty } from 'antd'
+import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty, ConfigProvider } from 'antd'
 import {
   DownloadOutlined,
   UploadOutlined,
@@ -29,7 +30,7 @@ import {
   QuestionCircleOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
-import { QuerySearchButton } from '../riveredge-query'
+import { QuerySearchButton } from '../uni-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
 // 内联的 useProTableSearch hook（简化实现）
 const useProTableSearch = () => {
@@ -59,13 +60,14 @@ import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../util
 function generateImportConfigFromColumns<T extends Record<string, any>>(
   columns: ProColumns<T>[],
   options?: {
-    excludeFields?: string[] // 排除的字段（如 id、created_at 等）
-    includeFields?: string[] // 只包含的字段（如果提供，只包含这些字段）
-    fieldMap?: Record<string, string> // 自定义字段映射
+    excludeFields?: string[]
+    includeFields?: string[]
+    fieldMap?: Record<string, string>
     fieldRules?: Record<
       string,
       { required?: boolean; validator?: (value: any) => boolean | string }
-    > // 自定义验证规则
+    >
+    t?: (key: string, opts?: { [key: string]: any }) => string
   }
 ) {
   const {
@@ -73,6 +75,7 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
     includeFields,
     fieldMap: customFieldMap = {},
     fieldRules: customFieldRules = {},
+    t = (k: string, o?: any) => (typeof o?.defaultValue === 'string' ? o.defaultValue : k),
   } = options || {}
 
   const headers: string[] = []
@@ -126,16 +129,16 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
         const firstOption = Object.keys(valueEnum)[0]
         exampleValue = valueEnum[firstOption]?.text || firstOption || ''
       } else {
-        exampleValue = '示例值'
+        exampleValue = t('components.uniTable.exampleValue')
       }
     } else if (col.valueType === 'date' || col.valueType === 'dateTime') {
       exampleValue = '2024-01-01'
     } else if (col.valueType === 'digit') {
       exampleValue = '0'
     } else if (col.valueType === 'switch' || col.valueType === 'checkbox') {
-      exampleValue = '是'
+      exampleValue = t('components.uniTable.exampleYes')
     } else {
-      exampleValue = `示例${title}`
+      exampleValue = t('components.uniTable.exampleField', { title })
     }
     exampleRow.push(exampleValue)
 
@@ -167,14 +170,14 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
     if (col.valueType === 'digit') {
       fieldRules[fieldName].validator = (value: any) => {
         if (value && isNaN(Number(value))) {
-          return `${title}必须是数字`
+          return t('components.uniTable.validatorNumber', { title })
         }
         return true
       }
     } else if (col.valueType === 'date' || col.valueType === 'dateTime') {
       fieldRules[fieldName].validator = (value: any) => {
         if (value && isNaN(new Date(value).getTime())) {
-          return `${title}必须是有效的日期`
+          return t('components.uniTable.validatorDate', { title })
         }
         return true
       }
@@ -525,15 +528,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onExport,
   showSyncButton = false,
   onSync,
-  syncButtonText = '同步',
+  syncButtonText,
   showCreateButton = false,
   onCreate,
-  createButtonText = '新建',
+  createButtonText,
   showEditButton = false,
   onEdit,
   showDeleteButton = false,
   onDelete,
-  deleteButtonText = '删除',
+  deleteButtonText,
   defaultPageSize: defaultPageSizeProp,
   showQuickJumper = true,
   viewTypes = ['table', 'help'],
@@ -550,6 +553,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   formRef: externalFormRef,
   ...restProps
 }: UniTableProps<T>) {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const { token } = theme.useToken()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -619,6 +623,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return generateImportConfigFromColumns(columns, {
       fieldMap: importFieldMap,
       fieldRules: importFieldRules,
+      t,
     })
   }, [
     columns,
@@ -627,6 +632,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     importExampleRow,
     importFieldMap,
     importFieldRules,
+    t,
   ])
 
   // 使用自动生成的配置或手动提供的配置
@@ -880,12 +886,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     const viewTypeOptions = [
-      { value: 'table', label: '表格', icon: TableOutlined },
-      { value: 'card', label: '卡片', icon: AppstoreOutlined },
-      { value: 'kanban', label: '看板', icon: BarsOutlined },
-      { value: 'stats', label: '统计', icon: BarChartOutlined },
-      { value: 'touch', label: '触屏', icon: TabletOutlined },
-      { value: 'help', label: '帮助', icon: QuestionCircleOutlined },
+      { value: 'table', label: t('components.uniTable.viewTable'), icon: TableOutlined },
+      { value: 'card', label: t('components.uniTable.viewCard'), icon: AppstoreOutlined },
+      { value: 'kanban', label: t('components.uniTable.viewKanban'), icon: BarsOutlined },
+      { value: 'stats', label: t('components.uniTable.viewStats'), icon: BarChartOutlined },
+      { value: 'touch', label: t('components.uniTable.viewTouch'), icon: TabletOutlined },
+      { value: 'help', label: t('components.uniTable.viewHelp'), icon: QuestionCircleOutlined },
     ].filter(option => viewTypes.includes(option.value as any))
 
     return (
@@ -925,7 +931,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       // 但我们可以将字段映射和验证规则作为额外参数传递（如果需要）
       onImport(data)
     } else {
-      message.warning('请配置 onImport 回调函数来处理导入数据')
+      message.warning(t('components.uniTable.configOnImport'))
     }
   }
 
@@ -946,7 +952,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (showCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate}>
-          {createButtonText}
+          {createButtonText ?? t('components.uniTable.create')}
         </Button>
       )
     }
@@ -965,7 +971,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
           disabled={selectedRowKeys.length === 0}
         >
-          {deleteButtonText}
+          {deleteButtonText ?? t('components.uniTable.delete')}
         </Button>
       )
     }
@@ -983,7 +989,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
           disabled={selectedRowKeys.length !== 1}
         >
-          修改
+          {t('components.uniTable.edit')}
         </Button>
       )
     }
@@ -1041,7 +1047,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             e.currentTarget.style.color = token.colorSuccess
           }}
         >
-          导入
+          {t('components.uniTable.import')}
         </Button>
       )
     }
@@ -1052,7 +1058,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           key="sync"
           icon={<SyncOutlined />}
-          onClick={() => (onSync ? onSync() : message.warning('请配置 onSync 回调函数'))}
+          onClick={() => (onSync ? onSync() : message.warning(t('components.uniTable.configOnSync')))}
           style={{
             backgroundColor: token.colorWarningBg || token.colorFillTertiary,
             border: 'none',
@@ -1069,7 +1075,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             e.currentTarget.style.color = token.colorWarning
           }}
         >
-          {syncButtonText}
+          {syncButtonText ?? t('components.uniTable.sync')}
         </Button>
       )
     }
@@ -1080,18 +1086,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       const exportMenuItems: MenuProps['items'] = [
         {
           key: 'selected',
-          label: '导出选中',
+          label: t('components.uniTable.exportSelected'),
           icon: <DownloadOutlined />,
           disabled: !selectedRowKeys || selectedRowKeys.length === 0,
         },
         {
           key: 'currentPage',
-          label: '导出本页',
+          label: t('components.uniTable.exportCurrentPage'),
           icon: <DownloadOutlined />,
         },
         {
           key: 'all',
-          label: '导出全部',
+          label: t('components.uniTable.exportAll'),
           icon: <DownloadOutlined />,
         },
       ]
@@ -1099,7 +1105,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       // 处理导出菜单点击
       const handleExportMenuClick: MenuProps['onClick'] = ({ key }) => {
         if (!onExport) {
-          message.warning('请配置 onExport 回调函数来处理导出数据')
+          message.warning(t('components.uniTable.configOnExport'))
           return
         }
 
@@ -1141,7 +1147,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               e.currentTarget.style.color = token.colorPrimary
             }}
           >
-            导出
+            {t('components.uniTable.export')}
             <DownOutlined style={{ marginLeft: 4, fontSize: '12px' }} />
           </Button>
         </Dropdown>
@@ -1186,7 +1192,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           border: 1px solid ${token.colorBorderSecondary} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
-          overflow: hidden !important;
+          overflow: visible !important;
         }
         .uni-table-pro-table .ant-pro-card .ant-pro-card-body {
           padding-left: 16px !important;
@@ -1379,7 +1385,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
                 <Input
                   className="uni-table-fuzzy-search"
-                  placeholder="模糊搜索"
+                  placeholder={t('components.uniTable.fuzzySearch')}
                   allowClear
                   value={fuzzySearchKeyword}
                   onChange={e => handleFuzzySearch(e.target.value)}
@@ -1390,7 +1396,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   }}
                 />
                 {showAdvancedSearch && (
-                  <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>搜索组件错误</span>}>
+                  <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>{t('components.uniTable.searchError')}</span>}>
                     <QuerySearchButton
                       columns={processedColumns}
                       formRef={formRef as React.MutableRefObject<ProFormInstance>}
@@ -1406,14 +1412,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             </div>
 
           {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
-          {/* overflow: visible 避免双滚动条，由外层 UniTabs content 统一滚动 */}
-          <div
-            style={{
-              display: currentViewType === 'table' ? 'block' : 'none',
-              width: '100%',
-            }}
-          >
-            <ProTable<T>
+          {/* ConfigProvider getPopupContainer 让列设置等弹出层挂到 body，避免被容器高度/overflow 截断 */}
+          <ConfigProvider getPopupContainer={() => document.body}>
+            <div
+              style={{
+                display: currentViewType === 'table' ? 'block' : 'none',
+                width: '100%',
+              }}
+            >
+              <ProTable<T>
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}
               formRef={formRef}
@@ -1447,10 +1454,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               options={{
                 density: true,
                 setting: {
-                  listsHeight: 400,
+                  listsHeight: 360,
                 },
                 reload: () => actionRef.current?.reload(),
-                fullScreen: true,
+                // 设为 false 避免 ProTable 内部 ConfigProvider 覆盖 getPopupContainer，使列设置等弹出层挂到 body 不被截断
+                fullScreen: false,
                 ...((restProps.options || (restProps.toolbar as any)?.options || {}) as any),
               }}
               toolbar={{
@@ -1510,7 +1518,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 showSizeChanger: true,
                 showQuickJumper: true,
                 pageSizeOptions: ['10', '20', '50', '100'],
-                showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
+                showTotal: (total, range) => t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
               }}
               scroll={hasActionColumn ? { x: 'max-content' } : undefined}
               {...(() => {
@@ -1520,8 +1528,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 const { toolBarRender, search, ...otherProps } = restProps
                 return otherProps
               })()}
-            />
-          </div>
+              />
+            </div>
+          </ConfigProvider>
 
           {/* 卡片视图 */}
           {currentViewType === 'card' && viewTypes.includes('card') && (
@@ -1539,7 +1548,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   </div>
                 ) : (
                   <Empty
-                    description="暂无应用数据"
+                    description={t('components.uniTable.emptyCard')}
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     style={{ marginTop: '60px' }}
                   />
@@ -1558,9 +1567,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   <AppstoreOutlined
                     style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
                   />
-                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>卡片视图</div>
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.cardViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
-                    请配置 <code>cardViewConfig.renderCard</code> 来自定义卡片渲染
+                    {t('components.uniTable.cardViewHint')}
                   </div>
                 </div>
               )}
@@ -1632,9 +1641,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   <BarsOutlined
                     style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
                   />
-                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>看板视图</div>
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.kanbanViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
-                    请配置 <code>kanbanViewConfig</code> 来启用看板视图
+                    {t('components.uniTable.kanbanViewHint')}
                   </div>
                 </div>
               )}
@@ -1688,7 +1697,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                           borderRadius: '4px',
                         }}
                       >
-                        图表功能开发中...
+                        {t('components.uniTable.chartDeveloping')}
                       </div>
                     </div>
                   )}
@@ -1707,9 +1716,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   <BarChartOutlined
                     style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
                   />
-                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>统计视图</div>
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.statsViewTitle')}</div>
                   <div style={{ fontSize: '14px', color: '#999' }}>
-                    请配置 <code>statsViewConfig.metrics</code> 来启用统计视图
+                    {t('components.uniTable.statsViewHint')}
                   </div>
                 </div>
               )}
@@ -1733,10 +1742,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     style={{ fontSize: '48px', marginBottom: '16px', color: '#1890ff' }}
                   />
                   <div style={{ fontSize: '18px', marginBottom: '8px', fontWeight: 500 }}>
-                    {helpViewConfig?.title ?? '使用帮助'}
+                    {helpViewConfig?.title ?? t('components.uniTable.helpTitle')}
                   </div>
                   <div style={{ fontSize: '14px', color: '#666', maxWidth: 400, margin: '0 auto' }}>
-                    可通过顶部搜索栏筛选数据，支持导入导出。如需页面专属帮助，可配置 helpViewConfig.content。
+                    {t('components.uniTable.helpHint')}
                   </div>
                 </div>
               )}
@@ -1767,7 +1776,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   </div>
                 ) : (
                   <Empty
-                    description="暂无数据"
+                    description={t('components.uniTable.emptyData')}
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     style={{ marginTop: '60px' }}
                   />
@@ -1786,9 +1795,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   <TabletOutlined
                     style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }}
                   />
-                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>触屏视图</div>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>{t('components.uniTable.touchViewTitle')}</div>
                   <div style={{ fontSize: '20px', color: '#999' }}>
-                    请配置 <code>touchViewConfig.renderCard</code> 来启用触屏视图
+                    {t('components.uniTable.touchViewHint')}
                   </div>
                 </div>
               )}

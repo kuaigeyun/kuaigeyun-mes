@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Timeline, Empty, Spin, Card } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { SwapOutlined, CheckCircleOutlined, ArrowRightOutlined, LinkOutlined } from '@ant-design/icons';
 import type {
   DocumentTrackingResponse,
@@ -19,22 +20,23 @@ interface DocumentTrackingPanelProps {
   onDocumentClick?: (type: string, id: number) => void;
 }
 
-const typeLabel: Record<string, string> = {
-  state_transition: '状态变更',
-  approve: '审核',
-  push: '下推',
-  pull: '上拉',
-  from: '关联',
-};
-
 export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
   documentType,
   documentId,
   onDocumentClick,
 }) => {
+  const { t } = useTranslation();
   const [data, setData] = useState<DocumentTrackingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const typeLabel: Record<string, string> = {
+    state_transition: t('components.documentTrackingPanel.typeStateTransition'),
+    approve: t('components.documentTrackingPanel.typeApprove'),
+    push: t('components.documentTrackingPanel.typePush'),
+    pull: t('components.documentTrackingPanel.typePull'),
+    from: t('components.documentTrackingPanel.typeFrom'),
+  };
 
   useEffect(() => {
     if (!documentType || !documentId) return;
@@ -42,14 +44,14 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     setError(null);
     getDocumentTracking(documentType, documentId)
       .then(setData)
-      .catch((e) => setError(e?.message || '加载失败'))
+      .catch((e) => setError(e?.message || t('components.documentTrackingPanel.loadFailed')))
       .finally(() => setLoading(false));
-  }, [documentType, documentId]);
+  }, [documentType, documentId, t]);
 
   if (loading) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin tip="加载操作记录..." />
+        <Spin tip={t('components.documentTrackingPanel.loadingTip')} />
       </div>
     );
   }
@@ -63,7 +65,7 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
   if (!data) {
     return (
       <Card size="small">
-        <Empty description="暂无数据" />
+        <Empty description={t('components.documentTrackingPanel.noData')} />
       </Card>
     );
   }
@@ -121,25 +123,25 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
   return (
     <div style={{ padding: '0 16px 16px' }}>
       {(data.relations.upstream.length > 0 || data.relations.downstream.length > 0) && (
-        <Card size="small" title="上下游关联" style={{ marginBottom: 16 }}>
+        <Card size="small" title={t('components.documentTrackingPanel.relationsTitle')} style={{ marginBottom: 16 }}>
           {data.relations.upstream.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>上游</div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{t('components.documentTrackingPanel.upstream')}</div>
               {data.relations.upstream.map((r) => renderRelation(r, 'up'))}
             </div>
           )}
           {data.relations.downstream.length > 0 && (
             <div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>下游</div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{t('components.documentTrackingPanel.downstream')}</div>
               {data.relations.downstream.map((r) => renderRelation(r, 'down'))}
             </div>
           )}
         </Card>
       )}
 
-      <Card size="small" title="操作记录">
+      <Card size="small" title={t('components.documentTrackingPanel.operationsTitle')}>
         {data.timeline.length === 0 ? (
-          <Empty description="暂无操作记录" />
+          <Empty description={t('components.documentTrackingPanel.noOperations')} />
         ) : (
           <Timeline items={data.timeline.map(renderTimelineItem)} />
         )}

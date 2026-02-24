@@ -18,6 +18,7 @@ from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.outsource_work_order import (
@@ -58,6 +59,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
 
     def __init__(self):
         super().__init__(OutsourceWorkOrder)
+        self.business_config_service = BusinessConfigService()
 
     async def create_outsource_work_order(
         self,
@@ -79,6 +81,9 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         Raises:
             ValidationError: 数据验证失败
         """
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "outsource_order")
+        if not is_enabled:
+            raise BusinessLogicError("委外工单节点未启用，无法创建委外工单")
         async with in_transaction():
             # 处理委外工单编码
             code = work_order_data.code

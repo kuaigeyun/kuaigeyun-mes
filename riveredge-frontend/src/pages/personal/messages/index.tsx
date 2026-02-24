@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, message, Card, Typography } from 'antd';
 import { CheckOutlined, EyeOutlined } from '@ant-design/icons';
@@ -25,6 +26,7 @@ import {
  * 我的消息页面组件
  */
 const UserMessagesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -46,7 +48,7 @@ const UserMessagesPage: React.FC = () => {
       const data = await getUserMessageStats();
       setStats(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载消息统计失败');
+      messageApi.error(error.message || t('pages.personal.messages.loadStatsFailed'));
     }
   };
 
@@ -55,7 +57,7 @@ const UserMessagesPage: React.FC = () => {
    */
   const handleMarkRead = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请选择要标记的消息');
+      messageApi.warning(t('pages.personal.messages.selectToMark'));
       return;
     }
 
@@ -63,13 +65,13 @@ const UserMessagesPage: React.FC = () => {
       await markMessagesRead({
         message_uuids: selectedRowKeys as string[],
       });
-      messageApi.success('标记成功');
+      messageApi.success(t('pages.personal.messages.markSuccess'));
       setSelectedRowKeys([]);
       // 重新加载数据
       loadStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '标记失败');
+      messageApi.error(error.message || t('pages.personal.messages.markFailed'));
     }
   };
 
@@ -96,7 +98,7 @@ const UserMessagesPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '获取消息详情失败');
+      messageApi.error(error.message || t('pages.personal.messages.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -126,7 +128,7 @@ const UserMessagesPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(message)}
           >
-            查看
+            {t('pages.personal.messages.view')}
           </Button>,
           isUnread && (
             <Button
@@ -138,15 +140,15 @@ const UserMessagesPage: React.FC = () => {
                   await markMessagesRead({
                     message_uuids: [message.uuid],
                   });
-                  messageApi.success('已标记为已读');
+                  messageApi.success(t('pages.personal.messages.markedRead'));
                   loadStats();
                   actionRef.current?.reload();
                 } catch (error: any) {
-                  messageApi.error(error.message || '标记失败');
+                  messageApi.error(error.message || t('pages.personal.messages.markFailed'));
                 }
               }}
             >
-              标记已读
+              {t('pages.personal.messages.markRead')}
             </Button>
           ),
         ].filter(Boolean)}
@@ -156,7 +158,7 @@ const UserMessagesPage: React.FC = () => {
             <Space>
               {isUnread && <Badge dot />}
               <Typography.Text strong={isUnread}>
-                {message.subject || '(无主题)'}
+                {message.subject || t('common.noSubject')}
               </Typography.Text>
             </Space>
           }
@@ -184,11 +186,11 @@ const UserMessagesPage: React.FC = () => {
    */
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
-      pending: { color: 'default', text: '待发送' },
-      sending: { color: 'processing', text: '发送中' },
-      success: { color: 'processing', text: '已发送' },
-      read: { color: 'success', text: '已读' },
-      failed: { color: 'error', text: '失败' },
+      pending: { color: 'default', text: t('pages.personal.messages.statusPending') },
+      sending: { color: 'processing', text: t('pages.personal.messages.statusSending') },
+      success: { color: 'processing', text: t('pages.personal.messages.statusSuccess') },
+      read: { color: 'success', text: t('pages.personal.messages.statusRead') },
+      failed: { color: 'error', text: t('pages.personal.messages.statusFailed') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
@@ -199,10 +201,10 @@ const UserMessagesPage: React.FC = () => {
    */
   const getChannelTag = (channel: string) => {
     const channelMap: Record<string, { color: string; text: string }> = {
-      email: { color: 'blue', text: '邮件' },
-      sms: { color: 'green', text: '短信' },
-      internal: { color: 'purple', text: '站内信' },
-      push: { color: 'orange', text: '推送' },
+      email: { color: 'blue', text: t('pages.personal.messages.channelEmail') },
+      sms: { color: 'green', text: t('pages.personal.messages.channelSms') },
+      internal: { color: 'purple', text: t('pages.personal.messages.channelInternal') },
+      push: { color: 'orange', text: t('pages.personal.messages.channelPush') },
     };
     const channelInfo = channelMap[channel] || { color: 'default', text: channel };
     return <Tag color={channelInfo.color}>{channelInfo.text}</Tag>;
@@ -213,7 +215,7 @@ const UserMessagesPage: React.FC = () => {
    */
   const columns: ProColumns<UserMessage>[] = [
     {
-      title: '主题',
+      title: t('pages.personal.messages.subject'),
       dataIndex: 'subject',
       key: 'subject',
       ellipsis: true,
@@ -223,46 +225,46 @@ const UserMessagesPage: React.FC = () => {
           <Space>
             {isUnread && <Badge dot />}
             <span style={{ fontWeight: isUnread ? 'bold' : 'normal' }}>
-              {text || '(无主题)'}
+              {text || t('common.noSubject')}
             </span>
           </Space>
         );
       },
     },
     {
-      title: '内容',
+      title: t('pages.personal.messages.content'),
       dataIndex: 'content',
       key: 'content',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '渠道',
+      title: t('pages.personal.messages.channel'),
       dataIndex: 'type',
       key: 'type',
       valueEnum: {
-        email: { text: '邮件' },
-        sms: { text: '短信' },
-        internal: { text: '站内信' },
-        push: { text: '推送' },
+        email: { text: t('pages.personal.messages.channelEmail') },
+        sms: { text: t('pages.personal.messages.channelSms') },
+        internal: { text: t('pages.personal.messages.channelInternal') },
+        push: { text: t('pages.personal.messages.channelPush') },
       },
       render: (_: any, record: UserMessage) => getChannelTag(record.type),
     },
     {
-      title: '状态',
+      title: t('pages.personal.messages.status'),
       dataIndex: 'status',
       key: 'status',
       valueEnum: {
-        pending: { text: '待发送' },
-        sending: { text: '发送中' },
-        success: { text: '已发送' },
-        read: { text: '已读' },
-        failed: { text: '失败' },
+        pending: { text: t('pages.personal.messages.statusPending') },
+        sending: { text: t('pages.personal.messages.statusSending') },
+        success: { text: t('pages.personal.messages.statusSuccess') },
+        read: { text: t('pages.personal.messages.statusRead') },
+        failed: { text: t('pages.personal.messages.statusFailed') },
       },
       render: (_: any, record: UserMessage) => getStatusTag(record.status),
     },
     {
-      title: '发送时间',
+      title: t('pages.personal.messages.sentAt'),
       dataIndex: 'sent_at',
       key: 'sent_at',
       valueType: 'dateTime',
@@ -270,7 +272,7 @@ const UserMessagesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.personal.messages.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTime',
@@ -278,7 +280,7 @@ const UserMessagesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.personal.messages.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -292,7 +294,7 @@ const UserMessagesPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
             >
-              查看
+              {t('pages.personal.messages.view')}
             </Button>
             {isUnread && (
               <Button
@@ -304,15 +306,15 @@ const UserMessagesPage: React.FC = () => {
                     await markMessagesRead({
                       message_uuids: [record.uuid],
                     });
-                    messageApi.success('已标记为已读');
+                    messageApi.success(t('pages.personal.messages.markedRead'));
                     loadStats();
                     actionRef.current?.reload();
                   } catch (error: any) {
-                    messageApi.error(error.message || '标记失败');
+                    messageApi.error(error.message || t('pages.personal.messages.markFailed'));
                   }
                 }}
               >
-                标记已读
+                {t('pages.personal.messages.markRead')}
               </Button>
             )}
           </Space>
@@ -325,22 +327,22 @@ const UserMessagesPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '主题', dataIndex: 'subject' },
-    { title: '内容', dataIndex: 'content', span: 2 },
+    { title: t('pages.personal.messages.subject'), dataIndex: 'subject' },
+    { title: t('pages.personal.messages.content'), dataIndex: 'content', span: 2 },
     {
-      title: '渠道',
+      title: t('pages.personal.messages.channel'),
       dataIndex: 'type',
       render: (value: string) => getChannelTag(value),
     },
     {
-      title: '状态',
+      title: t('pages.personal.messages.status'),
       dataIndex: 'status',
       render: (value: string) => getStatusTag(value),
     },
-    { title: '发送时间', dataIndex: 'sent_at', valueType: 'dateTime' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.personal.messages.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
+    { title: t('pages.personal.messages.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     {
-      title: '错误信息',
+      title: t('pages.personal.messages.errorInfo'),
       dataIndex: 'error_message',
       span: 2,
       render: (value: string) => value ? (
@@ -356,22 +358,22 @@ const UserMessagesPage: React.FC = () => {
           stats
             ? [
                 {
-                  title: '总消息数',
+                  title: t('pages.personal.messages.totalMessages'),
                   value: stats.total,
                   valueStyle: { color: '#1890ff' },
                 },
                 {
-                  title: '未读消息',
+                  title: t('pages.personal.messages.unreadMessages'),
                   value: stats.unread,
                   valueStyle: { color: '#ff4d4f' },
                 },
                 {
-                  title: '已读消息',
+                  title: t('pages.personal.messages.readMessages'),
                   value: stats.read,
                   valueStyle: { color: '#52c41a' },
                 },
                 {
-                  title: '失败消息',
+                  title: t('pages.personal.messages.failedMessages'),
                   value: stats.failed,
                   valueStyle: { color: '#faad14' },
                 },
@@ -380,7 +382,7 @@ const UserMessagesPage: React.FC = () => {
         }
       >
         <UniTable<UserMessage>
-          headerTitle="我的消息"
+          headerTitle={t('pages.personal.messages.headerTitle')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -397,7 +399,7 @@ const UserMessagesPage: React.FC = () => {
                 total: response.total,
               };
             } catch (error: any) {
-              messageApi.error(error?.message || '获取消息列表失败');
+              messageApi.error(error?.message || t('pages.personal.messages.getListFailed'));
               return {
                 data: [],
                 success: false,
@@ -421,7 +423,7 @@ const UserMessagesPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -431,9 +433,9 @@ const UserMessagesPage: React.FC = () => {
               a.download = `my-messages-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.updateFailed'));
             }
           }}
           pagination={{
@@ -448,7 +450,7 @@ const UserMessagesPage: React.FC = () => {
               onClick={handleMarkRead}
               disabled={selectedRowKeys.length === 0}
             >
-              标记已读
+              {t('pages.personal.messages.markRead')}
             </Button>,
           ]}
           viewTypes={['table', 'help']}
@@ -462,7 +464,7 @@ const UserMessagesPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<UserMessage>
-        title="消息详情"
+        title={t('pages.personal.messages.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

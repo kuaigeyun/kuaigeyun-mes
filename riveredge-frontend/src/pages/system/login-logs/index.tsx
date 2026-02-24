@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Tag, Space, message, Button } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
@@ -28,6 +29,7 @@ import dayjs from 'dayjs';
  * 登录日志页面组件
  */
 const LoginLogsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
@@ -50,7 +52,7 @@ const LoginLogsPage: React.FC = () => {
     } catch (error: any) {
       // 如果是 401 错误，不显示错误消息（可能是用户未登录）
       if (error?.response?.status !== 401) {
-        messageApi.error(error.message || '加载统计信息失败');
+        messageApi.error(error.message || t('pages.system.loginLogs.loadStatsFailed'));
       }
     }
   }, [currentUser, messageApi]);
@@ -75,9 +77,9 @@ const LoginLogsPage: React.FC = () => {
    */
   const getLoginStatusTag = (status: string) => {
     if (status === 'success') {
-      return <Tag color="success">成功</Tag>;
+      return <Tag color="success">{t('pages.system.loginLogs.statusSuccess')}</Tag>;
     } else if (status === 'failed') {
-      return <Tag color="error">失败</Tag>;
+      return <Tag color="error">{t('pages.system.loginLogs.statusFailed')}</Tag>;
     } else {
       return <Tag>{status}</Tag>;
     }
@@ -93,52 +95,52 @@ const LoginLogsPage: React.FC = () => {
       render: (value: string) => value,
     },
     {
-      title: '用户名',
+      title: t('pages.system.loginLogs.username'),
       dataIndex: 'username',
       render: (value: string) => value || '-',
     },
     {
-      title: '用户ID',
+      title: t('pages.system.loginLogs.userId'),
       dataIndex: 'user_id',
       render: (value: number) => value || '-',
     },
     {
-      title: '组织ID',
+      title: t('pages.system.loginLogs.tenantId'),
       dataIndex: 'tenant_id',
       render: (value: number) => value || '-',
     },
     {
-      title: '登录IP',
+      title: t('pages.system.loginLogs.loginIp'),
       dataIndex: 'login_ip',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录地点',
+      title: t('pages.system.loginLogs.loginLocation'),
       dataIndex: 'login_location',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录设备',
+      title: t('pages.system.loginLogs.loginDevice'),
       dataIndex: 'login_device',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录浏览器',
+      title: t('pages.system.loginLogs.loginBrowser'),
       dataIndex: 'login_browser',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录状态',
+      title: t('pages.system.loginLogs.loginStatus'),
       dataIndex: 'login_status',
       render: (value: string) => getLoginStatusTag(value),
     },
     {
-      title: '失败原因',
+      title: t('pages.system.loginLogs.failureReason'),
       dataIndex: 'failure_reason',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录时间',
+      title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
       render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -147,17 +149,17 @@ const LoginLogsPage: React.FC = () => {
   // 构建统计卡片数据
   const statCards = stats ? [
     {
-      title: '总登录数',
+      title: t('pages.system.loginLogs.statTotal'),
       value: stats.total,
       valueStyle: { color: '#1890ff' },
     },
     {
-      title: '成功登录',
+      title: t('pages.system.loginLogs.statSuccess'),
       value: stats.success_count,
       valueStyle: { color: '#52c41a' },
     },
     {
-      title: '失败登录',
+      title: t('pages.system.loginLogs.statFailed'),
       value: stats.failed_count,
       valueStyle: { color: '#ff4d4f' },
     },
@@ -168,21 +170,21 @@ const LoginLogsPage: React.FC = () => {
    */
   const columns: ProColumns<LoginLog>[] = [
     {
-      title: '用户名',
+      title: t('pages.system.loginLogs.username'),
       dataIndex: 'username',
       key: 'username',
       ellipsis: true,
       width: 150,
     },
     {
-      title: '登录IP',
+      title: t('pages.system.loginLogs.loginIp'),
       dataIndex: 'login_ip',
       key: 'login_ip',
       ellipsis: true,
       width: 120,
     },
     {
-      title: '登录地点',
+      title: t('pages.system.loginLogs.loginLocation'),
       dataIndex: 'login_location',
       key: 'login_location',
       ellipsis: true,
@@ -190,7 +192,7 @@ const LoginLogsPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '登录设备',
+      title: t('pages.system.loginLogs.loginDevice'),
       dataIndex: 'login_device',
       key: 'login_device',
       ellipsis: true,
@@ -198,7 +200,7 @@ const LoginLogsPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '登录浏览器',
+      title: t('pages.system.loginLogs.loginBrowser'),
       dataIndex: 'login_browser',
       key: 'login_browser',
       ellipsis: true,
@@ -206,19 +208,19 @@ const LoginLogsPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '登录状态',
+      title: t('pages.system.loginLogs.loginStatus'),
       dataIndex: 'login_status',
       key: 'login_status',
       valueType: 'select',
       valueEnum: {
-        success: { text: '成功' },
-        failed: { text: '失败' },
+        success: { text: t('pages.system.loginLogs.statusSuccess') },
+        failed: { text: t('pages.system.loginLogs.statusFailed') },
       },
       width: 100,
       render: (_: any, record: LoginLog) => getLoginStatusTag(record.login_status),
     },
     {
-      title: '失败原因',
+      title: t('pages.system.loginLogs.failureReason'),
       dataIndex: 'failure_reason',
       key: 'failure_reason',
       ellipsis: true,
@@ -227,7 +229,7 @@ const LoginLogsPage: React.FC = () => {
       render: (value: string) => value || '-',
     },
     {
-      title: '登录时间',
+      title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
       key: 'created_at',
       valueType: 'dateTimeRange',
@@ -290,7 +292,7 @@ const LoginLogsPage: React.FC = () => {
                   total: 0,
                 };
               }
-              messageApi.error(error.message || '加载登录日志列表失败');
+              messageApi.error(error.message || t('pages.system.loginLogs.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -312,7 +314,7 @@ const LoginLogsPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.loginLogs.noDataExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -322,9 +324,9 @@ const LoginLogsPage: React.FC = () => {
               a.download = `login-logs-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.loginLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.loginLogs.exportFailed'));
             }
           }}
           toolBarRender={() => [
@@ -332,16 +334,16 @@ const LoginLogsPage: React.FC = () => {
               loadStats();
               actionRef.current?.reload();
             }}>
-              <BarChartOutlined /> 刷新统计
+              <BarChartOutlined /> {t('pages.system.loginLogs.refreshStats')}
             </Button>,
           ]}
-          headerTitle="登录日志"
+          headerTitle={t('pages.system.loginLogs.headerTitle')}
         />
       </ListPageTemplate>
 
       {/* 日志详情 Drawer */}
       <DetailDrawerTemplate<LoginLog>
-        title="登录日志详情"
+        title={t('pages.system.loginLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);

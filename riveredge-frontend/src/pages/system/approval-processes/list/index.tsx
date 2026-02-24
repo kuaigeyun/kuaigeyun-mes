@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
@@ -28,6 +29,7 @@ import {
  * 审批流程管理列表页面组件
  */
 const ApprovalProcessListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -73,7 +75,7 @@ const ApprovalProcessListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取审批流程详情失败');
+      messageApi.error(error.message || t('pages.system.approvalProcesses.getDetailFailed'));
     }
   };
 
@@ -87,7 +89,7 @@ const ApprovalProcessListPage: React.FC = () => {
       const detail = await getApprovalProcessByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取审批流程详情失败');
+      messageApi.error(error.message || t('pages.system.approvalProcesses.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -106,10 +108,10 @@ const ApprovalProcessListPage: React.FC = () => {
   const handleDelete = async (record: ApprovalProcess) => {
     try {
       await deleteApprovalProcess(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.approvalProcesses.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.approvalProcesses.deleteFailed'));
     }
   };
 
@@ -118,17 +120,17 @@ const ApprovalProcessListPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请选择要删除的审批流程');
+      messageApi.warning(t('pages.system.approvalProcesses.selectToDelete'));
       return;
     }
     
     try {
       await Promise.all(selectedRowKeys.map((key) => deleteApprovalProcess(key as string)));
-      messageApi.success('批量删除成功');
+      messageApi.success(t('pages.system.approvalProcesses.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error('批量删除失败');
+      messageApi.error(t('pages.system.approvalProcesses.batchDeleteFailed'));
     }
   };
 
@@ -151,17 +153,17 @@ const ApprovalProcessListPage: React.FC = () => {
       
       if (isEdit && currentApprovalProcessUuid) {
         await updateApprovalProcess(currentApprovalProcessUuid, data as UpdateApprovalProcessData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.approvalProcesses.updateSuccess'));
       } else {
         await createApprovalProcess(data as CreateApprovalProcessData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.approvalProcesses.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.approvalProcesses.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -173,48 +175,48 @@ const ApprovalProcessListPage: React.FC = () => {
    */
   const columns: ProColumns<ApprovalProcess>[] = [
     {
-      title: '流程名称',
+      title: t('pages.system.approvalProcesses.name'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '流程代码',
+      title: t('pages.system.approvalProcesses.code'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '描述',
+      title: t('pages.system.approvalProcesses.description'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('pages.system.approvalProcesses.enableStatus'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.approvalProcesses.enabled'), status: 'Success' },
+        false: { text: t('pages.system.approvalProcesses.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('pages.system.approvalProcesses.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.approvalProcesses.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -226,7 +228,7 @@ const ApprovalProcessListPage: React.FC = () => {
           icon={<EyeOutlined />}
           onClick={() => handleView(record)}
         >
-          查看
+          {t('pages.system.approvalProcesses.view')}
         </Button>,
         <Button
           key="design"
@@ -235,7 +237,7 @@ const ApprovalProcessListPage: React.FC = () => {
           icon={<SettingOutlined />}
           onClick={() => handleDesign(record)}
         >
-          设计
+          {t('pages.system.approvalProcesses.design')}
         </Button>,
         <Button
           key="edit"
@@ -244,11 +246,11 @@ const ApprovalProcessListPage: React.FC = () => {
           icon={<EditOutlined />}
           onClick={() => handleEdit(record)}
         >
-          编辑
+          {t('pages.system.approvalProcesses.edit')}
         </Button>,
         <Popconfirm
           key="delete"
-          title="确定要删除这个审批流程吗？"
+          title={t('pages.system.approvalProcesses.confirmDelete')}
           onConfirm={() => handleDelete(record)}
         >
           <Button
@@ -257,7 +259,7 @@ const ApprovalProcessListPage: React.FC = () => {
             danger
             icon={<DeleteOutlined />}
           >
-            删除
+            {t('pages.system.approvalProcesses.delete')}
           </Button>
         </Popconfirm>,
       ],
@@ -268,7 +270,7 @@ const ApprovalProcessListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<ApprovalProcess>
-        headerTitle="审批流程管理"
+        headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {
@@ -296,11 +298,11 @@ const ApprovalProcessListPage: React.FC = () => {
         }}
         showAdvancedSearch={true}
         showCreateButton
-        createButtonText="新建审批流程"
+        createButtonText={t('pages.system.approvalProcesses.createButton')}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText="批量删除"
+        deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
         showImportButton
         showExportButton
         onExport={async (type, keys, pageData) => {
@@ -310,7 +312,7 @@ const ApprovalProcessListPage: React.FC = () => {
             items = allData.filter((d) => keys.includes(d.uuid));
           }
           if (items.length === 0) {
-            messageApi.warning('暂无数据可导出');
+            messageApi.warning(t('pages.system.approvalProcesses.exportNoData'));
             return;
           }
           const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -320,7 +322,7 @@ const ApprovalProcessListPage: React.FC = () => {
           a.download = `approval-processes-${new Date().toISOString().slice(0, 10)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          messageApi.success('导出成功');
+          messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
         }}
         search={{
           labelWidth: 'auto',
@@ -329,7 +331,7 @@ const ApprovalProcessListPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑审批流程' : '新建审批流程'}
+        title={isEdit ? t('pages.system.approvalProcesses.editModalTitle') : t('pages.system.approvalProcesses.createModalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -343,28 +345,28 @@ const ApprovalProcessListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="流程名称"
-          placeholder="请输入流程名称"
-          rules={[{ required: true, message: '请输入流程名称' }]}
+          label={t('pages.system.approvalProcesses.nameLabel')}
+          placeholder={t('pages.system.approvalProcesses.namePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.approvalProcesses.nameRequired') }]}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
-          label="流程代码"
-          placeholder="请输入唯一代码"
+          label={t('pages.system.approvalProcesses.codeLabel')}
+          placeholder={t('pages.system.approvalProcesses.codePlaceholder')}
           rules={[
-            { required: true, message: '请输入流程代码' },
-            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '以字母开头，仅限字母数字下划线' },
+            { required: true, message: t('pages.system.approvalProcesses.codeRequired') },
+            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: t('pages.system.approvalProcesses.codePattern') },
           ]}
           disabled={isEdit}
-          tooltip="创建后不可修改"
+          tooltip={t('pages.system.approvalProcesses.codeTooltip')}
           colProps={{ span: 12 }}
         />
       
         <ProFormTextArea
           name="description"
-          label="流程描述"
-          placeholder="请输入流程描述..."
+          label={t('pages.system.approvalProcesses.descLabel')}
+          placeholder={t('pages.system.approvalProcesses.descPlaceholder')}
           fieldProps={{
             rows: 3,
           }}
@@ -373,16 +375,16 @@ const ApprovalProcessListPage: React.FC = () => {
       
         <ProFormSwitch
           name="is_active"
-          label="是否立即启用"
-          checkedChildren="启用"
-          unCheckedChildren="禁用"
+          label={t('pages.system.approvalProcesses.isActiveLabel')}
+          checkedChildren={t('pages.system.approvalProcesses.enabled')}
+          unCheckedChildren={t('pages.system.approvalProcesses.disabled')}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="审批流程详情"
+        title={t('pages.system.approvalProcesses.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -390,28 +392,28 @@ const ApprovalProcessListPage: React.FC = () => {
         dataSource={detailData}
         columns={[
               {
-                title: '流程名称',
+                title: t('pages.system.approvalProcesses.name'),
                 dataIndex: 'name',
               },
               {
-                title: '流程代码',
+                title: t('pages.system.approvalProcesses.code'),
                 dataIndex: 'code',
               },
               {
-                title: '描述',
+                title: t('pages.system.approvalProcesses.description'),
                 dataIndex: 'description',
               },
               {
-                title: '启用状态',
+                title: t('pages.system.approvalProcesses.enableStatus'),
                 dataIndex: 'is_active',
                 render: (value: any) => (
                   <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
+                    {value ? t('pages.system.approvalProcesses.enabled') : t('pages.system.approvalProcesses.disabled')}
                   </Tag>
                 ),
               },
               {
-                title: '节点配置',
+                title: t('pages.system.approvalProcesses.nodesConfig'),
                 dataIndex: 'nodes',
                 render: (value: any) => (
                   <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
@@ -420,7 +422,7 @@ const ApprovalProcessListPage: React.FC = () => {
                 ),
               },
               {
-                title: '流程配置',
+                title: t('pages.system.approvalProcesses.flowConfig'),
                 dataIndex: 'config',
                 render: (value: any) => (
                   <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
@@ -429,16 +431,16 @@ const ApprovalProcessListPage: React.FC = () => {
                 ),
               },
               {
-                title: 'Inngest 工作流ID',
+                title: t('pages.system.approvalProcesses.inngestWorkflowId'),
                 dataIndex: 'inngest_workflow_id',
               },
               {
-                title: '创建时间',
+                title: t('pages.system.approvalProcesses.createdAt'),
                 dataIndex: 'created_at',
                 valueType: 'dateTime',
               },
               {
-                title: '更新时间',
+                title: t('pages.system.approvalProcesses.updatedAt'),
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },

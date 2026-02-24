@@ -21,36 +21,32 @@ import {
 
 // @ts-ignore
 import { apiRequest } from '../../../../services/api';
-
-/**
- * 组织状态标签映射
- */
-const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
-  [TenantStatus.ACTIVE]: { color: 'success', text: '激活' },
-  [TenantStatus.INACTIVE]: { color: 'default', text: '未激活' },
-  [TenantStatus.EXPIRED]: { color: 'warning', text: '已过期' },
-  [TenantStatus.SUSPENDED]: { color: 'error', text: '已暂停' },
-};
-
-/**
- * 组织套餐标签映射
- */
-const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
-  [TenantPlan.TRIAL]: { color: 'default', text: '体验套餐' },
-  [TenantPlan.BASIC]: { color: 'blue', text: '基础版' },
-  [TenantPlan.PROFESSIONAL]: { color: 'purple', text: '专业版' },
-  [TenantPlan.ENTERPRISE]: { color: 'gold', text: '企业版' },
-};
+import { useTranslation } from 'react-i18next';
 
 /**
  * 超级管理员组织详情页面组件
  */
 const SuperAdminTenantDetail: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tenantId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+
+  const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
+    [TenantStatus.ACTIVE]: { color: 'success', text: t('pages.infra.tenant.statusActive') },
+    [TenantStatus.INACTIVE]: { color: 'default', text: t('pages.infra.tenant.statusInactive') },
+    [TenantStatus.EXPIRED]: { color: 'warning', text: t('pages.infra.tenant.statusExpired') },
+    [TenantStatus.SUSPENDED]: { color: 'error', text: t('pages.infra.tenant.statusSuspended') },
+  };
+
+  const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
+    [TenantPlan.TRIAL]: { color: 'default', text: t('pages.infra.tenant.planTrial') },
+    [TenantPlan.BASIC]: { color: 'blue', text: t('pages.infra.tenant.planBasic') },
+    [TenantPlan.PROFESSIONAL]: { color: 'purple', text: t('pages.infra.tenant.planProfessional') },
+    [TenantPlan.ENTERPRISE]: { color: 'gold', text: t('pages.infra.tenant.planEnterprise') },
+  };
 
   /**
    * 加载组织数据
@@ -69,7 +65,7 @@ const SuperAdminTenantDetail: React.FC = () => {
       const data = await getTenantById(Number(tenantId), true);
       setTenant(data);
     } catch (error: any) {
-      message.error(error.message || '加载组织信息失败');
+      message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
     } finally {
       setLoading(false);
     }
@@ -84,10 +80,10 @@ const SuperAdminTenantDetail: React.FC = () => {
       await apiRequest(`/infra/tenants/${tenantId}/approve`, {
         method: 'POST',
       });
-      message.success('审核通过成功');
+      message.success(t('pages.infra.tenant.approveSuccess'));
       loadTenant();
     } catch (error: any) {
-      message.error(error.message || '审核通过失败');
+      message.error(error.message || t('pages.infra.tenant.approveFailed'));
     }
   };
 
@@ -100,10 +96,10 @@ const SuperAdminTenantDetail: React.FC = () => {
       await apiRequest(`/infra/tenants/${tenantId}/reject`, {
         method: 'POST',
       });
-      message.success('审核拒绝成功');
+      message.success(t('pages.infra.tenant.rejectSuccess'));
       loadTenant();
     } catch (error: any) {
-      message.error(error.message || '审核拒绝失败');
+      message.error(error.message || t('pages.infra.tenant.rejectFailed'));
     }
   };
 
@@ -114,10 +110,10 @@ const SuperAdminTenantDetail: React.FC = () => {
     if (!tenantId) return;
     try {
       await activateTenant(Number(tenantId));
-      message.success('激活成功');
+      message.success(t('pages.infra.tenant.activateSuccess'));
       loadTenant();
     } catch (error: any) {
-      message.error(error.message || '激活失败');
+      message.error(error.message || t('pages.infra.tenant.activateFailed'));
     }
   };
 
@@ -128,15 +124,15 @@ const SuperAdminTenantDetail: React.FC = () => {
     if (!tenantId) return;
     try {
       await deactivateTenant(Number(tenantId));
-      message.success('停用成功');
+      message.success(t('pages.infra.tenant.deactivateSuccess'));
       loadTenant();
     } catch (error: any) {
-      message.error(error.message || '停用失败');
+      message.error(error.message || t('pages.infra.tenant.deactivateFailed'));
     }
   };
 
   if (!tenant) {
-    return <PageContainer loading={loading} breadcrumb={false}>组织不存在</PageContainer>;
+    return <PageContainer loading={loading} breadcrumb={false}>{t('pages.infra.tenant.notFound')}</PageContainer>;
   }
 
   const isInactive = tenant.status === TenantStatus.INACTIVE;
@@ -145,29 +141,29 @@ const SuperAdminTenantDetail: React.FC = () => {
 
   return (
     <PageContainer
-      title="组织详情（超级管理员）"
+      title={t('pages.infra.tenant.detailTitleSuperAdmin')}
       breadcrumb={false}
       extra={
         <Space>
-          <Button onClick={() => navigate(-1)}>返回</Button>
+          <Button onClick={() => navigate(-1)}>{t('pages.infra.tenant.back')}</Button>
           {isInactive && (
             <>
               <Button type="primary" onClick={handleApprove}>
-                审核通过
+                {t('pages.infra.tenant.approve')}
               </Button>
               <Button danger onClick={handleReject}>
-                审核拒绝
+                {t('pages.infra.tenant.reject')}
               </Button>
             </>
           )}
           {isSuspended && (
             <Button type="primary" onClick={handleActivate}>
-              激活
+              {t('pages.infra.tenant.activateButton')}
             </Button>
           )}
           {isActive && (
             <Button danger onClick={handleDeactivate}>
-              停用
+              {t('pages.infra.tenant.deactivate')}
             </Button>
           )}
         </Space>
@@ -179,15 +175,15 @@ const SuperAdminTenantDetail: React.FC = () => {
         column={2}
         columns={[
           {
-            title: '组织名称',
+            title: t('pages.infra.tenant.name'),
             dataIndex: 'name',
           },
           {
-            title: '域名',
+            title: t('pages.infra.tenant.domain'),
             dataIndex: 'domain',
           },
           {
-            title: '状态',
+            title: t('pages.infra.tenant.status'),
             dataIndex: 'status',
             render: (_, record) => {
               const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
@@ -195,7 +191,7 @@ const SuperAdminTenantDetail: React.FC = () => {
             },
           },
           {
-            title: '套餐',
+            title: t('pages.infra.tenant.plan'),
             dataIndex: 'plan',
             render: (_, record) => {
               const planInfo = planTagMap[record.plan] ?? { color: 'default', text: record.plan ?? '-' };
@@ -203,30 +199,30 @@ const SuperAdminTenantDetail: React.FC = () => {
             },
           },
           {
-            title: '最大用户数',
+            title: t('pages.infra.tenant.maxUsers'),
             dataIndex: 'max_users',
           },
           {
-            title: '存储空间 (MB)',
+            title: t('pages.infra.tenant.maxStorage'),
             dataIndex: 'max_storage',
           },
           {
-            title: '过期时间',
+            title: t('pages.infra.tenant.expiresAt'),
             dataIndex: 'expires_at',
             valueType: 'dateTime',
           },
           {
-            title: '创建时间',
+            title: t('pages.infra.tenant.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: '更新时间',
+            title: t('pages.infra.tenant.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },
           {
-            title: '配置',
+            title: t('pages.infra.tenant.settings'),
             dataIndex: 'settings',
             valueType: 'jsonCode',
             span: 2,

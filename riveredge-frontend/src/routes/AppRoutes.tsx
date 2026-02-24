@@ -14,6 +14,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
@@ -41,6 +42,7 @@ function createLazyApp(app: Application) {
 
 // 应用组件错误边界
 const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }> = ({ children, appName }) => {
+  const { t } = useTranslation();
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -58,11 +60,11 @@ const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }>
   if (hasError) {
     return (
       <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
-        <h3 style={{ color: '#cf1322' }}>❌ 应用加载错误</h3>
-        <p><strong>应用:</strong> {appName}</p>
-        <p><strong>错误:</strong> {error?.message || '未知错误'}</p>
+        <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.loadError')}</h3>
+        <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
+        <p><strong>{t('appRoutes.error')}:</strong> {error?.message || t('common.unknownError')}</p>
         <details>
-          <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 查看错误详情</summary>
+          <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 {t('appRoutes.viewDetails')}</summary>
           <pre style={{ marginTop: '10px', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
             {error?.stack || 'No stack trace'}
           </pre>
@@ -75,7 +77,7 @@ const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }>
             window.location.reload();
           }}
         >
-          重新加载
+          {t('appRoutes.reload')}
         </Button>
       </div>
     );
@@ -87,9 +89,9 @@ const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }>
     console.error(`❌ AppErrorBoundary: 渲染错误 in ${appName}:`, renderError);
     return (
       <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
-        <h3 style={{ color: '#cf1322' }}>❌ 应用渲染错误</h3>
-        <p><strong>应用:</strong> {appName}</p>
-        <p><strong>错误:</strong> {renderError instanceof Error ? renderError.message : String(renderError)}</p>
+        <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.renderError')}</h3>
+        <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
+        <p><strong>{t('appRoutes.error')}:</strong> {renderError instanceof Error ? renderError.message : String(renderError)}</p>
       </div>
     );
   }
@@ -99,34 +101,37 @@ const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }>
 const LoadingFallback: React.FC = () => <DelayedFallback />;
 
 // 应用加载错误组件
-const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => (
-  <div style={{
-    padding: '24px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '200px'
-  }}>
-    <Alert
-      message="应用加载失败"
-      description={
-        <div>
-          <p>业务应用加载过程中出现错误，但这不影响系统核心功能的正常使用。</p>
-          <p style={{ marginTop: 8, color: '#666' }}>
-            错误详情: {error.message}
-          </p>
-        </div>
-      }
-      type="warning"
-      showIcon
-      action={
-        <Button size="small" onClick={onRetry}>
-          重试加载
-        </Button>
-      }
-    />
-  </div>
-);
+const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => {
+  const { t } = useTranslation();
+  return (
+    <div style={{
+      padding: '24px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '200px'
+    }}>
+      <Alert
+        message={t('appRoutes.loadFailed')}
+        description={
+          <div>
+            <p>{t('appRoutes.loadFailedDesc')}</p>
+            <p style={{ marginTop: 8, color: '#666' }}>
+              {t('appRoutes.errorDetail')}: {error.message}
+            </p>
+          </div>
+        }
+        type="warning"
+        showIcon
+        action={
+          <Button size="small" onClick={onRetry}>
+            {t('appRoutes.retryLoad')}
+          </Button>
+        }
+      />
+    </div>
+  );
+};
 
 /**
  * 应用路由组件
@@ -134,7 +139,7 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
  * 异步加载业务应用，确保应用层问题不影响系统层
  */
 const AppRoutes: React.FC = () => {
-
+  const { t } = useTranslation();
   const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -246,21 +251,21 @@ const AppRoutes: React.FC = () => {
     console.warn('⚠️ [AppRoutes] 没有应用路由，可能应用未加载');
     return (
       <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7' }}>
-        <h3>⚠️ 没有可用的应用路由</h3>
-        <p>当前路径: {window.location.pathname}</p>
-        <p>已加载的应用路由数: {appRoutes.length}</p>
-        <p>如果这是应用路径，请检查应用是否正确安装和启用</p>
+        <h3>⚠️ {t('appRoutes.noAppRoutes')}</h3>
+        <p>{t('appRoutes.currentPath')}: {window.location.pathname}</p>
+        <p>{t('appRoutes.loadedRoutesCount')}: {appRoutes.length}</p>
+        <p>{t('appRoutes.noAppRoutesHint')}</p>
         <div style={{ marginTop: '16px', padding: '12px', background: '#f0f0f0', borderRadius: '4px' }}>
-          <p><strong>排查步骤：</strong></p>
+          <p><strong>{t('appRoutes.troubleshootTitle')}：</strong></p>
           <ol style={{ marginLeft: '20px' }}>
-            <li>打开浏览器控制台（F12），查看是否有错误信息</li>
-            <li>访问"系统管理 → 应用管理"页面，点击"扫描应用"按钮，扫描并注册应用</li>
-            <li>确保应用已安装（is_installed = true）且已启用（is_active = true）</li>
-            <li>确认应用的 <code>entry_point</code> 和 <code>route_path</code> 配置正确</li>
-            <li>查看控制台中的 <code>📦 [AppRoutes]</code> 和 <code>🔍 [pluginLoader]</code> 日志</li>
+            <li>{t('appRoutes.troubleshoot1')}</li>
+            <li>{t('appRoutes.troubleshoot2')}</li>
+            <li>{t('appRoutes.troubleshoot3')}</li>
+            <li>{t('appRoutes.troubleshoot4')}</li>
+            <li>{t('appRoutes.troubleshoot5')}</li>
           </ol>
           <p style={{ marginTop: '12px', color: '#666', fontSize: '12px' }}>
-            💡 提示：系统已自动尝试扫描应用。如果仍然没有应用，请手动在"应用管理"页面扫描应用。
+            💡 {t('appRoutes.troubleshootTip')}
           </p>
         </div>
       </div>

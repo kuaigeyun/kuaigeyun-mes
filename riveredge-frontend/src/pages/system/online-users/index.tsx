@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Card, Avatar, Tag, Space, message, Popconfirm, Button, Badge, Typography, Tooltip, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
@@ -29,64 +30,10 @@ const { Text } = Typography;
 const { useToken } = theme;
 
 /**
- * 获取用户状态
- */
-const getUserStatus = (user: OnlineUser): { status: 'success' | 'warning' | 'default'; text: string } => {
-  if (!user.last_activity_time) {
-    return { status: 'default', text: '未知' };
-  }
-  
-  const lastActivity = dayjs(user.last_activity_time);
-  const now = dayjs();
-  const minutesAgo = now.diff(lastActivity, 'minute');
-  
-  if (minutesAgo <= 5) {
-    return { status: 'success', text: '活跃' };
-  } else if (minutesAgo <= 15) {
-    return { status: 'warning', text: '空闲' };
-  } else {
-    return { status: 'default', text: '离线' };
-  }
-};
-
-/**
- * 获取在线时长
- */
-const getOnlineDuration = (user: OnlineUser): string => {
-  if (!user.login_time) {
-    return '-';
-  }
-  
-  const loginTime = dayjs(user.login_time);
-  const now = dayjs();
-  return dayjs.duration(now.diff(loginTime)).humanize();
-};
-
-/**
- * 获取最后活动时间显示
- */
-const getLastActivityDisplay = (user: OnlineUser): string => {
-  if (!user.last_activity_time) {
-    return '-';
-  }
-  
-  const lastActivity = dayjs(user.last_activity_time);
-  const now = dayjs();
-  const minutesAgo = now.diff(lastActivity, 'minute');
-  
-  if (minutesAgo < 1) {
-    return '刚刚';
-  } else if (minutesAgo < 60) {
-    return `${minutesAgo} 分钟前`;
-  } else {
-    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
-  }
-};
-
-/**
  * 在线用户页面组件
  */
 const OnlineUsersPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -111,10 +58,39 @@ const OnlineUsersPage: React.FC = () => {
     } catch (error: any) {
       // 如果是 401 错误，不显示错误消息（可能是用户未登录）
       if (error?.response?.status !== 401) {
-        messageApi.error(error.message || '加载统计信息失败');
+        messageApi.error(error.message || t('pages.system.onlineUsers.loadStatsFailed'));
       }
     }
   }, [currentUser, messageApi]);
+
+  const getUserStatus = (user: OnlineUser): { status: 'success' | 'warning' | 'default'; text: string } => {
+    if (!user.last_activity_time) {
+      return { status: 'default', text: t('pages.system.onlineUsers.statusUnknown') };
+    }
+    const lastActivity = dayjs(user.last_activity_time);
+    const now = dayjs();
+    const minutesAgo = now.diff(lastActivity, 'minute');
+    if (minutesAgo <= 5) return { status: 'success', text: t('pages.system.onlineUsers.statusActive') };
+    if (minutesAgo <= 15) return { status: 'warning', text: t('pages.system.onlineUsers.statusIdle') };
+    return { status: 'default', text: t('pages.system.onlineUsers.statusOffline') };
+  };
+
+  const getLastActivityDisplay = (user: OnlineUser): string => {
+    if (!user.last_activity_time) return '-';
+    const lastActivity = dayjs(user.last_activity_time);
+    const now = dayjs();
+    const minutesAgo = now.diff(lastActivity, 'minute');
+    if (minutesAgo < 1) return t('pages.system.onlineUsers.justNow');
+    if (minutesAgo < 60) return t('pages.system.onlineUsers.minutesAgo', { count: minutesAgo });
+    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
+  };
+
+  const getOnlineDuration = (user: OnlineUser): string => {
+    if (!user.login_time) return '-';
+    const loginTime = dayjs(user.login_time);
+    const now = dayjs();
+    return dayjs.duration(now.diff(loginTime)).humanize();
+  };
 
   useEffect(() => {
     // 只有在用户已登录（currentUser 存在）时才加载统计数据
@@ -155,12 +131,12 @@ const OnlineUsersPage: React.FC = () => {
   const handleForceLogout = async (record: OnlineUser) => {
     try {
       await forceLogout(record.user_id);
-      messageApi.success('强制下线成功');
+      messageApi.success(t('pages.system.onlineUsers.forceLogoutSuccess'));
       // 刷新列表和统计
       loadStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '强制下线失败');
+      messageApi.error(error.message || t('pages.system.onlineUsers.forceLogoutFailed'));
     }
   };
 
@@ -172,29 +148,29 @@ const OnlineUsersPage: React.FC = () => {
     
     return [
       {
-        title: '总在线用户数',
+        title: t('pages.system.onlineUsers.statTotal'),
         value: stats.total,
         valueStyle: { color: '#1890ff' },
       },
       {
-        title: '活跃用户数（最近5分钟）',
+        title: t('pages.system.onlineUsers.statActive'),
         value: stats.active,
         valueStyle: { color: '#52c41a' },
       },
       ...(Object.keys(stats.by_tenant).length > 0 ? [{
-        title: '按组织统计',
+        title: t('pages.system.onlineUsers.statByTenant'),
         value: (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
             {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
               <Tag key={tenantId} color="blue">
-                组织 {tenantId}: {count}
+                {t('pages.system.onlineUsers.tenantLabel', { id: tenantId })}: {count}
               </Tag>
             ))}
           </div>
         ),
       }] : []),
     ];
-  }, [stats]);
+  }, [stats, t]);
 
   /**
    * 卡片渲染函数
@@ -208,7 +184,7 @@ const OnlineUsersPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title="查看详情">
+          <Tooltip key="view" title={t('pages.system.onlineUsers.viewDetail')}>
             <EyeOutlined
               onClick={() => handleViewDetail(user)}
               style={{ fontSize: 16 }}
@@ -216,12 +192,12 @@ const OnlineUsersPage: React.FC = () => {
           </Tooltip>,
           <Popconfirm
             key="logout"
-            title="确定要强制该用户下线吗？"
+            title={t('pages.system.onlineUsers.forceLogoutConfirm')}
             onConfirm={() => handleForceLogout(user)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            <Tooltip title="强制下线">
+            <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
               <LogoutOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -257,7 +233,7 @@ const OnlineUsersPage: React.FC = () => {
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             {user.email && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>邮箱：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.email')}：</Text>
                 <Text style={{ fontSize: 12 }} ellipsis={{ tooltip: user.email }}>
                   {user.email}
                 </Text>
@@ -266,7 +242,7 @@ const OnlineUsersPage: React.FC = () => {
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                <GlobalOutlined /> IP：
+                <GlobalOutlined /> {t('pages.system.onlineUsers.ip')}：
               </Text>
               <Text style={{ fontSize: 12 }}>{user.login_ip || '-'}</Text>
             </div>
@@ -274,7 +250,7 @@ const OnlineUsersPage: React.FC = () => {
             {user.login_time && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  <ClockCircleOutlined /> 登录时间：
+                  <ClockCircleOutlined /> {t('pages.system.onlineUsers.loginTime')}：
                 </Text>
                 <Text style={{ fontSize: 12 }}>
                   {dayjs(user.login_time).format('MM-DD HH:mm')}
@@ -284,7 +260,7 @@ const OnlineUsersPage: React.FC = () => {
             
             {user.last_activity_time && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>最后活动：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.lastActivity')}：</Text>
                 <Text style={{ fontSize: 12 }}>
                   {getLastActivityDisplay(user)}
                 </Text>
@@ -293,7 +269,7 @@ const OnlineUsersPage: React.FC = () => {
             
             {user.login_time && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>在线时长：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.onlineDuration')}：</Text>
                 <Text style={{ fontSize: 12 }}>
                   {getOnlineDuration(user)}
                 </Text>
@@ -310,14 +286,14 @@ const OnlineUsersPage: React.FC = () => {
    */
   const columns: ProColumns<OnlineUser>[] = [
     {
-      title: '用户名',
+      title: t('pages.system.onlineUsers.username'),
       dataIndex: 'username',
       key: 'username',
       ellipsis: true,
       width: 150,
     },
     {
-      title: '用户全名',
+      title: t('pages.system.onlineUsers.fullName'),
       dataIndex: 'full_name',
       key: 'full_name',
       ellipsis: true,
@@ -325,7 +301,7 @@ const OnlineUsersPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '邮箱',
+      title: t('pages.system.onlineUsers.email'),
       dataIndex: 'email',
       key: 'email',
       ellipsis: true,
@@ -333,14 +309,14 @@ const OnlineUsersPage: React.FC = () => {
       width: 200,
     },
     {
-      title: '登录IP',
+      title: t('pages.system.onlineUsers.loginIp'),
       dataIndex: 'login_ip',
       key: 'login_ip',
       ellipsis: true,
       width: 120,
     },
     {
-      title: '登录时间',
+      title: t('pages.system.onlineUsers.loginTime'),
       dataIndex: 'login_time',
       key: 'login_time',
       valueType: 'dateTime',
@@ -351,7 +327,7 @@ const OnlineUsersPage: React.FC = () => {
       width: 180,
     },
     {
-      title: '最后活动时间',
+      title: t('pages.system.onlineUsers.lastActivityTime'),
       dataIndex: 'last_activity_time',
       key: 'last_activity_time',
       valueType: 'dateTime',
@@ -368,42 +344,42 @@ const OnlineUsersPage: React.FC = () => {
    */
   const detailColumns = [
     {
-      title: '用户ID',
+      title: t('pages.system.onlineUsers.userId'),
       dataIndex: 'user_id',
       render: (value: number) => value,
     },
     {
-      title: '用户名',
+      title: t('pages.system.onlineUsers.username'),
       dataIndex: 'username',
       render: (value: string) => value,
     },
     {
-      title: '用户全名',
+      title: t('pages.system.onlineUsers.fullName'),
       dataIndex: 'full_name',
       render: (value: string) => value || '-',
     },
     {
-      title: '邮箱',
+      title: t('pages.system.onlineUsers.email'),
       dataIndex: 'email',
       render: (value: string) => value || '-',
     },
     {
-      title: '组织ID',
+      title: t('pages.system.onlineUsers.tenantId'),
       dataIndex: 'tenant_id',
       render: (value: number) => value,
     },
     {
-      title: '登录IP',
+      title: t('pages.system.onlineUsers.loginIp'),
       dataIndex: 'login_ip',
       render: (value: string) => value || '-',
     },
     {
-      title: '登录时间',
+      title: t('pages.system.onlineUsers.loginTime'),
       dataIndex: 'login_time',
       valueType: 'dateTime',
     },
     {
-      title: '最后活动时间',
+      title: t('pages.system.onlineUsers.lastActivityTime'),
       dataIndex: 'last_activity_time',
       valueType: 'dateTime',
     },
@@ -441,7 +417,7 @@ const OnlineUsersPage: React.FC = () => {
                   total: 0,
                 };
               }
-              messageApi.error(error.message || '加载在线用户列表失败');
+              messageApi.error(error.message || t('pages.system.onlineUsers.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -463,7 +439,7 @@ const OnlineUsersPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.user_id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.onlineUsers.noDataExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -473,17 +449,17 @@ const OnlineUsersPage: React.FC = () => {
               a.download = `online-users-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.onlineUsers.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.onlineUsers.exportFailed'));
             }
           }}
           toolBarRender={() => [
             <Button key="refresh" onClick={loadStats}>
-              <BarChartOutlined /> 刷新统计
+              <BarChartOutlined /> {t('pages.system.onlineUsers.refreshStats')}
             </Button>,
           ]}
-          headerTitle="在线用户"
+          headerTitle={t('pages.system.onlineUsers.headerTitle')}
           viewTypes={['table', 'help']}
           defaultViewType="table"
           cardViewConfig={{
@@ -494,7 +470,7 @@ const OnlineUsersPage: React.FC = () => {
 
       {/* 用户详情 Drawer */}
       <DetailDrawerTemplate<OnlineUser>
-        title="在线用户详情"
+        title={t('pages.system.onlineUsers.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);

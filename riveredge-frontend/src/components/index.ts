@@ -7,7 +7,7 @@
 export { default as TenantSelector } from './tenant-selector';
 export { default as TenantSelectionModal } from './tenant-selection-modal';
 export { default as TermsModal } from './terms-modal';
-export { QuerySearchButton, QuerySearchModal } from './riveredge-query';
+export { QuerySearchButton, QuerySearchModal } from './uni-query';
 export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';
 export type { UniTableProps } from './uni-table';
 export { default as UniImport } from './uni-import';
@@ -39,3 +39,5 @@ export { default as DocumentRelationGraph } from './document-relation-graph';
 export type { DocumentRelationGraphProps } from './document-relation-graph';
 export { default as DocumentRelationDisplay } from './document-relation-display';
 export type { DocumentRelationDisplayProps, DocumentRelationData, RelatedDocument } from './document-relation-display';
+export { SchemaFormRenderer } from './schema-form';
+export type { SchemaFormRendererProps, FieldConfig, FieldType, RuleConfig } from './schema-form';

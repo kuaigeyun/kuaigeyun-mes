@@ -1,111 +1,75 @@
 /**
  * 角色管理列表页面
- * 
+ *
  * 用于系统管理员查看和管理组织内的角色。
  * 支持角色的 CRUD 操作和权限分配。
+ * Schema 驱动 + 国际化
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Tree, message } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { RoleFormModal } from '../components/RoleFormModal';
 import {
   getRoleList,
   getRoleByUuid,
-  createRole,
-  updateRole,
   deleteRole,
   getRolePermissions,
   assignPermissions,
   getAllPermissions,
   Role,
-  CreateRoleData,
-  UpdateRoleData,
   Permission,
 } from '../../../../services/role';
 
-/**
- * 角色管理列表页面组件
- */
 const RoleListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
+
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
   const [currentRoleUuid, setCurrentRoleUuid] = useState<string | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
-  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Role | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  
+
   // 权限分配 Modal 状态
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
   const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
-  /**
-   * 处理新建角色
-   */
   const handleCreate = () => {
-    setIsEdit(false);
     setCurrentRoleUuid(null);
-    setFormInitialValues({
-      is_active: true,
-    });
     setModalVisible(true);
   };
 
-  // 导入处理函数
+  const handleEdit = (record: Role) => {
+    setCurrentRoleUuid(record.uuid);
+    setModalVisible(true);
+  };
+
   const handleImport = async (data: any[][]) => {
-    message.info('导入功能开发中...');
+    message.info(t('pages.system.importDeveloping'));
     console.log('导入数据:', data);
   };
 
-  // 导出处理函数
   const handleExport = (
     type: 'selected' | 'currentPage' | 'all',
     selectedRowKeys?: React.Key[],
     currentPageData?: Role[]
   ) => {
-    message.info('导出功能开发中...');
+    message.info(t('pages.system.exportDeveloping'));
     console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
   };
 
-  /**
-   * 处理编辑角色
-   */
-  const handleEdit = async (record: Role) => {
-    try {
-      setIsEdit(true);
-      setCurrentRoleUuid(record.uuid);
-      
-      // 获取角色详情
-      const detail = await getRoleByUuid(record.uuid);
-      setFormInitialValues({
-        name: detail.name,
-        code: detail.code,
-        description: detail.description,
-        is_system: detail.is_system,
-        is_active: detail.is_active,
-      });
-      setModalVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || '获取角色详情失败');
-    }
-  };
-
-  /**
-   * 处理查看详情
-   */
   const handleView = async (record: Role) => {
     try {
       setDetailLoading(true);
@@ -113,231 +77,181 @@ const RoleListPage: React.FC = () => {
       const detail = await getRoleByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取角色详情失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  /**
-   * 处理删除角色
-   */
   const handleDelete = async (record: Role) => {
     try {
       await deleteRole(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
-  /**
-   * 处理批量删除角色
-   */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？系统角色无法删除。此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirm'),
+      content: t('field.role.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
-
           for (const key of selectedRowKeys) {
             try {
               await deleteRole(key.toString());
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.deleteFailed'));
             }
           }
-
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(
+              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+            );
           }
-
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
   };
 
-  /**
-   * 处理提交表单（创建/更新）
-   */
-  const handleSubmit = async (values: any): Promise<void> => {
-    try {
-      setFormLoading(true);
-      
-      if (isEdit && currentRoleUuid) {
-        await updateRole(currentRoleUuid, values as UpdateRoleData);
-        messageApi.success('更新成功');
-      } else {
-        await createRole(values as CreateRoleData);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      setFormInitialValues(undefined);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
-      throw error;
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理权限分配
-   */
   const handleAssignPermissions = async (record: Role) => {
     try {
       setPermissionLoading(true);
       setPermissionModalVisible(true);
       setCurrentRoleUuid(record.uuid);
-      
-      // 获取所有权限
       const allPermissions = await getAllPermissions({ page_size: 100 });
-      
-      // 获取角色已有权限
       const rolePermissions = await getRolePermissions(record.uuid);
-      const rolePermissionUuids = rolePermissions.map(p => p.uuid);
+      const rolePermissionUuids = rolePermissions.map((p) => p.uuid);
       setCheckedKeys(rolePermissionUuids);
-      
-      // 构建树形数据（按资源分组）
       const resourceMap: Record<string, Permission[]> = {};
-      allPermissions.items.forEach(permission => {
+      allPermissions.items.forEach((permission) => {
         if (!resourceMap[permission.resource]) {
           resourceMap[permission.resource] = [];
         }
         resourceMap[permission.resource].push(permission);
       });
-      
-      const treeData = Object.keys(resourceMap).map(resource => ({
+      const treeData = Object.keys(resourceMap).map((resource) => ({
         title: resource,
         key: `resource-${resource}`,
-        children: resourceMap[resource].map(permission => ({
+        children: resourceMap[resource].map((permission) => ({
           title: `${permission.name} (${permission.code})`,
           key: permission.uuid,
         })),
       }));
-      
       setPermissionTreeData(treeData);
     } catch (error: any) {
-      messageApi.error(error.message || '获取权限列表失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setPermissionLoading(false);
     }
   };
 
-  /**
-   * 提交权限分配
-   */
   const handleSubmitPermissions = async () => {
     try {
       if (!currentRoleUuid) return;
-      
       setPermissionLoading(true);
-      const permissionUuids = checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-')) as string[];
+      const permissionUuids = checkedKeys.filter(
+        (key) => typeof key === 'string' && !key.startsWith('resource-')
+      ) as string[];
       await assignPermissions(currentRoleUuid, permissionUuids);
-      messageApi.success('权限分配成功');
+      messageApi.success(t('common.assignSuccess'));
       setPermissionModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '权限分配失败');
+      messageApi.error(error.message || t('common.operationFailed'));
     } finally {
       setPermissionLoading(false);
     }
   };
 
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<Role>[] = [
     {
-      title: '角色名称',
+      title: t('field.role.name'),
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '角色代码',
+      title: t('field.role.code'),
       dataIndex: 'code',
       width: 150,
       copyable: true,
     },
     {
-      title: '描述',
+      title: t('field.role.description'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '系统角色',
+      title: t('field.role.systemRole'),
       dataIndex: 'is_system',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Default' },
-        false: { text: '否', status: 'Processing' },
+        true: { text: t('field.role.yes'), status: 'Default' },
+        false: { text: t('field.role.no'), status: 'Processing' },
       },
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? '是' : '否'}
+          {record.is_system ? t('field.role.yes') : t('field.role.no')}
         </Tag>
       ),
     },
     {
-      title: '权限数',
+      title: t('field.role.permissionCount'),
       dataIndex: 'permission_count',
       width: 100,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '用户数',
+      title: t('field.role.userCount'),
       dataIndex: 'user_count',
       width: 100,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '状态',
+      title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.role.enabled'), status: 'Success' },
+        false: { text: t('field.role.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -345,7 +259,7 @@ const RoleListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
       valueType: 'dateTime',
@@ -353,7 +267,7 @@ const RoleListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 220,
       fixed: 'right',
@@ -365,7 +279,7 @@ const RoleListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.role.view')}
           </Button>
           <Button
             type="link"
@@ -374,7 +288,7 @@ const RoleListPage: React.FC = () => {
             onClick={() => handleEdit(record)}
             disabled={record.is_system}
           >
-            编辑
+            {t('field.role.edit')}
           </Button>
           <Button
             type="link"
@@ -382,10 +296,10 @@ const RoleListPage: React.FC = () => {
             icon={<SettingOutlined />}
             onClick={() => handleAssignPermissions(record)}
           >
-            权限
+            {t('field.role.permissions')}
           </Button>
           <Popconfirm
-            title="确定要删除这个角色吗？"
+            title={t('field.role.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
             disabled={record.is_system}
           >
@@ -396,7 +310,7 @@ const RoleListPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={record.is_system}
             >
-              删除
+              {t('field.role.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -412,63 +326,37 @@ const RoleListPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, _, __, searchFormValues) => {
-            // ⚠️ 修复：正确处理高级搜索参数
-            // 1. name 字段转换为 keyword（后端使用 keyword 搜索名称）
-            // 2. is_system 字段直接传递（后端支持 is_system 筛选）
-            // 3. is_active 字段直接传递（后端支持 is_active 筛选）
             const apiParams: any = {
               page: params.current || 1,
               page_size: params.pageSize || 20,
             };
-            
-            // 处理 keyword（Fuzzy 搜索）
-            if (searchFormValues?.keyword) {
-              apiParams.keyword = searchFormValues.keyword;
-            }
-            
-            // 处理各别字段（Advanced 搜索）
-            if (searchFormValues?.name) {
-              apiParams.name = searchFormValues.name;
-            }
-            if (searchFormValues?.code) {
-              apiParams.code = searchFormValues.code;
-            }
-            
-            // 处理 is_system（需要转换为 boolean）
+            if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
+            if (searchFormValues?.name) apiParams.name = searchFormValues.name;
+            if (searchFormValues?.code) apiParams.code = searchFormValues.code;
             if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '') {
               apiParams.is_system = searchFormValues.is_system === 'true' || searchFormValues.is_system === true;
             }
-            
-            // 处理 is_active（需要转换为 boolean）
             if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '') {
               apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
             }
-            
             const response = await getRoleList(apiParams);
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
-            };
+            return { data: response.items, success: true, total: response.total };
           }}
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建角色"
+          createButtonText={t('field.role.createTitle')}
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.batchDelete')}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
             showQuickJumper: true,
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showImportButton={true}
           onImport={handleImport}
           showExportButton={true}
@@ -476,79 +364,46 @@ const RoleListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑角色' : '新建角色'}
+      <RoleFormModal
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
-          setFormInitialValues(undefined);
+          setCurrentRoleUuid(null);
         }}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        initialValues={formInitialValues}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-      >
-        <ProFormText
-          name="name"
-          label="角色名称"
-          rules={[{ required: true, message: '请输入角色名称' }]}
-          placeholder="请输入角色名称"
-        />
-        <ProFormText
-          name="code"
-          label="角色代码"
-          rules={[
-            { required: true, message: '请输入角色代码' },
-            { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
-          ]}
-          placeholder="请输入角色代码（如：admin、user）"
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入角色描述"
-        />
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-          initialValue={true}
-        />
-      </FormModalTemplate>
+        editUuid={currentRoleUuid}
+        onSuccess={() => actionRef.current?.reload()}
+      />
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="角色详情"
+        title={t('field.role.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData || undefined}
         columns={[
-          { title: '角色名称', dataIndex: 'name' },
-          { title: '角色代码', dataIndex: 'code' },
-          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: t('field.role.name'), dataIndex: 'name' },
+          { title: t('field.role.code'), dataIndex: 'code' },
+          { title: t('field.role.description'), dataIndex: 'description', span: 2 },
           {
-            title: '系统角色',
+            title: t('field.role.systemRole'),
             dataIndex: 'is_system',
-            render: (value: boolean) => (value ? '是' : '否'),
+            render: (value: boolean) => (value ? t('field.role.yes') : t('field.role.no')),
           },
           {
-            title: '状态',
+            title: t('field.role.status'),
             dataIndex: 'is_active',
-            render: (value: boolean) => (value ? '启用' : '禁用'),
+            render: (value: boolean) => (value ? t('field.role.enabled') : t('field.role.disabled')),
           },
-          { title: '权限数', dataIndex: 'permission_count' },
-          { title: '用户数', dataIndex: 'user_count' },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: t('field.role.permissionCount'), dataIndex: 'permission_count' },
+          { title: t('field.role.userCount'), dataIndex: 'user_count' },
+          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ]}
       />
 
-      {/* 权限分配 Modal */}
       <Modal
-        title="分配权限"
+        title={t('field.role.assignPermissions')}
         open={permissionModalVisible}
         onCancel={() => setPermissionModalVisible(false)}
         onOk={handleSubmitPermissions}
@@ -568,4 +423,3 @@ const RoleListPage: React.FC = () => {
 };
 
 export default RoleListPage;
-

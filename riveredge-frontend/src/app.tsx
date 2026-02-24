@@ -7,10 +7,13 @@
  * - Ant Design 6.1.0 + Pro Components 2.8.2 (UI组件)
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
 import { App as AntdApp, Spin, ConfigProvider, message } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
+import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, isTokenExpired } from './utils/auth';
@@ -38,6 +41,7 @@ if (typeof window !== 'undefined') {
 
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
+  const { t } = useTranslation();
   const location = useLocation();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const loading = useGlobalStore((s) => s.loading);
@@ -262,7 +266,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         const inactiveTime = Date.now() - lastActivityTime;
         if (inactiveTime > inactivityTimeout) {
           console.warn(`⚠️ 用户已不活动 ${inactiveTime / 1000} 秒，超过阈值 ${inactivityTimeout / 1000} 秒，自动退出`);
-          message.warning('由于长时间未操作，您已自动退出登录');
+          message.warning(t('common.autoLogoutInactivity'));
           handleLogout();
           return false;
         }
@@ -310,7 +314,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         clearInterval(checkTimerRef.current);
       }
     };
-  }, [isPublicPath, location.pathname, setCurrentUser, getConfig]);
+  }, [isPublicPath, location.pathname, setCurrentUser, getConfig, t]);
 
   // 检查是否有 token（这是判断是否登录的唯一标准）
   const token = getToken();
@@ -430,9 +434,17 @@ const AppContent: React.FC = () => {
   );
 };
 
+// Ant Design 语言包映射（按 i18n 语言代码）
+const ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
+  'zh-CN': zhCN,
+  'zh': zhCN,
+  'en-US': enUS,
+  'en': enUS,
+};
+
 // 主应用组件
 export default function App() {
-
+  const { i18n } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const initFromApi = useThemeStore((s) => s.initFromApi);
   const themeInitialized = useThemeStore((s) => s.initialized);
@@ -486,8 +498,13 @@ export default function App() {
     [resolved.algorithm, resolved.token]
   );
 
+  const antLocale = useMemo(
+    () => ANT_LOCALE_MAP[i18n.language] || ANT_LOCALE_MAP[i18n.language?.split('-')[0]] || zhCN,
+    [i18n.language]
+  );
+
   return (
-    <ConfigProvider theme={finalThemeConfig}>
+    <ConfigProvider theme={finalThemeConfig} locale={antLocale}>
       <AntdApp>
         <AppContent />
       </AntdApp>

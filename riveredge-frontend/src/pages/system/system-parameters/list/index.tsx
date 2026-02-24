@@ -6,9 +6,10 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Card, Typography } from 'antd';
+import { App, Modal, Popconfirm, Button, Tag, Space, Card, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -28,6 +29,7 @@ import {
  * 系统参数管理列表页面组件
  */
 const SystemParameterListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -86,7 +88,7 @@ const SystemParameterListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取参数详情失败');
+      messageApi.error(error.message || t('field.systemParameter.fetchDetailFailed'));
     }
   };
 
@@ -100,7 +102,7 @@ const SystemParameterListPage: React.FC = () => {
       const detail = await getSystemParameterByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取参数详情失败');
+      messageApi.error(error.message || t('field.systemParameter.fetchDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -112,10 +114,10 @@ const SystemParameterListPage: React.FC = () => {
   const handleDelete = async (record: SystemParameter) => {
     try {
       await deleteSystemParameter(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -124,15 +126,15 @@ const SystemParameterListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？系统参数无法删除。此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('field.systemParameter.batchDeleteTitle'),
+      content: t('field.systemParameter.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -146,21 +148,21 @@ const SystemParameterListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
@@ -181,8 +183,8 @@ const SystemParameterListPage: React.FC = () => {
             processedValue = JSON.parse(values.value);
           }
         } catch (e) {
-          messageApi.error('JSON 格式不正确');
-          throw new Error('JSON 格式不正确');
+          messageApi.error(t('field.systemParameter.jsonInvalid'));
+          throw new Error(t('field.systemParameter.jsonInvalid'));
         }
       } else if (values.type === 'number') {
         processedValue = Number(values.value);
@@ -196,7 +198,7 @@ const SystemParameterListPage: React.FC = () => {
           description: values.description,
           is_active: values.is_active,
         } as UpdateSystemParameterData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.updateSuccess'));
       } else {
         await createSystemParameter({
           key: values.key,
@@ -206,14 +208,14 @@ const SystemParameterListPage: React.FC = () => {
           is_system: values.is_system || false,
           is_active: values.is_active,
         } as CreateSystemParameterData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -235,13 +237,13 @@ const SystemParameterListPage: React.FC = () => {
    */
   const renderParameterCard = (item: SystemParameter, index: number) => {
     const displayValue = formatValue(item.value, item.type);
-    const typeMap: Record<string, { color: string; text: string }> = {
-      string: { color: 'default', text: '字符串' },
-      number: { color: 'blue', text: '数字' },
-      boolean: { color: 'green', text: '布尔' },
-      json: { color: 'orange', text: 'JSON' },
+    const typeMap: Record<string, { color: string; textKey: string }> = {
+      string: { color: 'default', textKey: 'field.systemParameter.typeString' },
+      number: { color: 'blue', textKey: 'field.systemParameter.typeNumber' },
+      boolean: { color: 'green', textKey: 'field.systemParameter.typeBoolean' },
+      json: { color: 'orange', textKey: 'field.systemParameter.typeJson' },
     };
-    const typeInfo = typeMap[item.type] || { color: 'default', text: item.type };
+    const typeInfo = typeMap[item.type] || { color: 'default', textKey: item.type };
 
     return (
       <Card
@@ -258,7 +260,7 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(item)}
           >
-            查看
+            {t('field.systemParameter.view')}
           </Button>,
           <Button
             key="edit"
@@ -266,11 +268,11 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(item)}
           >
-            编辑
+            {t('field.systemParameter.edit')}
           </Button>,
           <Popconfirm
             key="delete"
-            title="确定要删除这个参数吗？"
+            title={t('field.systemParameter.deleteConfirm')}
             onConfirm={() => handleDelete(item)}
             disabled={item.is_system}
           >
@@ -280,7 +282,7 @@ const SystemParameterListPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={item.is_system}
             >
-              删除
+              {t('field.systemParameter.delete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -289,10 +291,10 @@ const SystemParameterListPage: React.FC = () => {
           title={
             <Space>
               <Typography.Text strong>{item.key}</Typography.Text>
-              <Tag color={typeInfo.color}>{typeInfo.text}</Tag>
-              {item.is_system && <Tag color="default">系统参数</Tag>}
+              <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>
+              {item.is_system && <Tag color="default">{t('field.systemParameter.isSystem')}</Tag>}
               <Tag color={item.is_active ? 'success' : 'default'}>
-                {item.is_active ? '启用' : '禁用'}
+                {item.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
               </Tag>
             </Space>
           }
@@ -330,13 +332,13 @@ const SystemParameterListPage: React.FC = () => {
    */
   const columns: ProColumns<SystemParameter>[] = [
     {
-      title: '参数键',
+      title: t('field.systemParameter.key'),
       dataIndex: 'key',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '参数值',
+      title: t('field.systemParameter.value'),
       dataIndex: 'value',
       width: 250,
       ellipsis: true,
@@ -350,66 +352,66 @@ const SystemParameterListPage: React.FC = () => {
       },
     },
     {
-      title: '参数类型',
+      title: t('field.systemParameter.type'),
       dataIndex: 'type',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        string: { text: '字符串', status: 'Default' },
-        number: { text: '数字', status: 'Processing' },
-        boolean: { text: '布尔', status: 'Success' },
-        json: { text: 'JSON', status: 'Warning' },
+        string: { text: t('field.systemParameter.typeString'), status: 'Default' },
+        number: { text: t('field.systemParameter.typeNumber'), status: 'Processing' },
+        boolean: { text: t('field.systemParameter.typeBoolean'), status: 'Success' },
+        json: { text: t('field.systemParameter.typeJson'), status: 'Warning' },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { color: string; text: string }> = {
-          string: { color: 'default', text: '字符串' },
-          number: { color: 'blue', text: '数字' },
-          boolean: { color: 'green', text: '布尔' },
-          json: { color: 'orange', text: 'JSON' },
+        const typeMap: Record<string, { color: string; textKey: string }> = {
+          string: { color: 'default', textKey: 'field.systemParameter.typeString' },
+          number: { color: 'blue', textKey: 'field.systemParameter.typeNumber' },
+          boolean: { color: 'green', textKey: 'field.systemParameter.typeBoolean' },
+          json: { color: 'orange', textKey: 'field.systemParameter.typeJson' },
         };
-        const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        const typeInfo = typeMap[record.type] || { color: 'default', textKey: record.type };
+        return <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>;
       },
     },
     {
-      title: '描述',
+      title: t('field.systemParameter.description'),
       dataIndex: 'description',
       width: 200,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '系统参数',
+      title: t('field.systemParameter.isSystem'),
       dataIndex: 'is_system',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Default' },
-        false: { text: '否', status: 'Processing' },
+        true: { text: t('field.systemParameter.yes'), status: 'Default' },
+        false: { text: t('field.systemParameter.no'), status: 'Processing' },
       },
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? '是' : '否'}
+          {record.is_system ? t('field.systemParameter.yes') : t('field.systemParameter.no')}
         </Tag>
       ),
     },
     {
-      title: '状态',
+      title: t('field.systemParameter.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
+        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('field.systemParameter.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -417,7 +419,7 @@ const SystemParameterListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -429,7 +431,7 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.systemParameter.view')}
           </Button>
           <Button
             type="link"
@@ -437,10 +439,10 @@ const SystemParameterListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.systemParameter.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个参数吗？"
+            title={t('field.systemParameter.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
             disabled={record.is_system}
           >
@@ -451,7 +453,7 @@ const SystemParameterListPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={record.is_system}
             >
-              删除
+              {t('field.systemParameter.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -468,26 +470,26 @@ const SystemParameterListPage: React.FC = () => {
         return (
           <ProFormDigit
             name="value"
-            label="参数值"
-            rules={[{ required: true, message: '请输入参数值' }]}
-            placeholder="请输入数字"
+            label={t('field.systemParameter.value')}
+            rules={[{ required: true, message: t('field.systemParameter.valueRequired') }]}
+            placeholder={t('field.systemParameter.valueNumberPlaceholder')}
           />
         );
       case 'boolean':
         return (
           <ProFormSwitch
             name="value"
-            label="参数值"
-            rules={[{ required: true, message: '请选择参数值' }]}
+            label={t('field.systemParameter.value')}
+            rules={[{ required: true, message: t('field.systemParameter.valueRequired') }]}
           />
         );
       case 'json':
         return (
           <ProFormTextArea
             name="value"
-            label="参数值（JSON）"
+            label={t('field.systemParameter.valueJson')}
             rules={[
-              { required: true, message: '请输入参数值' },
+              { required: true, message: t('field.systemParameter.valueRequired') },
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve();
@@ -495,12 +497,12 @@ const SystemParameterListPage: React.FC = () => {
                     JSON.parse(value);
                     return Promise.resolve();
                   } catch (e) {
-                    return Promise.reject(new Error('JSON 格式不正确'));
+                    return Promise.reject(new Error(t('field.systemParameter.jsonInvalid')));
                   }
                 },
               },
             ]}
-            placeholder='请输入 JSON 格式的值，例如：{"key": "value"} 或 ["item1", "item2"]'
+            placeholder={t('field.systemParameter.valueJsonPlaceholder')}
             fieldProps={{
               rows: 6,
             }}
@@ -510,9 +512,9 @@ const SystemParameterListPage: React.FC = () => {
         return (
           <ProFormText
             name="value"
-            label="参数值"
-            rules={[{ required: true, message: '请输入参数值' }]}
-            placeholder="请输入字符串值"
+            label={t('field.systemParameter.value')}
+            rules={[{ required: true, message: t('field.systemParameter.valueRequired') }]}
+            placeholder={t('field.systemParameter.valueStringPlaceholder')}
           />
         );
     }
@@ -555,7 +557,7 @@ const SystemParameterListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取系统参数列表失败:', error);
-              messageApi.error(error?.message || '获取系统参数列表失败');
+              messageApi.error(error?.message || t('field.systemParameter.listFetchFailed'));
               return {
                 data: [],
                 success: false,
@@ -570,11 +572,11 @@ const SystemParameterListPage: React.FC = () => {
             showSizeChanger: true,
           }}
           showCreateButton
-          createButtonText="新建参数"
+          createButtonText={t('field.systemParameter.createButton')}
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('field.systemParameter.batchDeleteButton')}
           showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -584,7 +586,7 @@ const SystemParameterListPage: React.FC = () => {
               items = res.items.filter((d) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('field.systemParameter.exportNoData'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -594,7 +596,7 @@ const SystemParameterListPage: React.FC = () => {
             a.download = `system-parameters-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('field.systemParameter.exportSuccess'));
           }}
           rowSelection={{
             selectedRowKeys,
@@ -611,7 +613,7 @@ const SystemParameterListPage: React.FC = () => {
 
       {/* 创建/编辑参数 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑参数' : '新建参数'}
+        title={isEdit ? t('field.systemParameter.editTitle') : t('field.systemParameter.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -625,20 +627,20 @@ const SystemParameterListPage: React.FC = () => {
       >
           <ProFormText
             name="key"
-            label="参数键"
-            rules={[{ required: true, message: '请输入参数键' }]}
-            placeholder="请输入参数键（唯一标识）"
+            label={t('field.systemParameter.key')}
+            rules={[{ required: true, message: t('field.systemParameter.keyRequired') }]}
+            placeholder={t('field.systemParameter.keyPlaceholder')}
             disabled={isEdit}
           />
           <SafeProFormSelect
             name="type"
-            label="参数类型"
-            rules={[{ required: true, message: '请选择参数类型' }]}
+            label={t('field.systemParameter.type')}
+            rules={[{ required: true, message: t('field.systemParameter.typeRequired') }]}
             options={[
-              { label: '字符串', value: 'string' },
-              { label: '数字', value: 'number' },
-              { label: '布尔', value: 'boolean' },
-              { label: 'JSON', value: 'json' },
+              { label: t('field.systemParameter.typeString'), value: 'string' },
+              { label: t('field.systemParameter.typeNumber'), value: 'number' },
+              { label: t('field.systemParameter.typeBoolean'), value: 'boolean' },
+              { label: t('field.systemParameter.typeJson'), value: 'json' },
             ]}
             fieldProps={{
               onChange: (value) => {
@@ -651,24 +653,24 @@ const SystemParameterListPage: React.FC = () => {
           {renderValueInput()}
           <ProFormTextArea
             name="description"
-            label="描述"
-            placeholder="请输入参数描述"
+            label={t('field.systemParameter.description')}
+            placeholder={t('field.systemParameter.descriptionPlaceholder')}
           />
           {!isEdit && (
             <ProFormSwitch
               name="is_system"
-              label="是否系统参数"
+              label={t('field.systemParameter.isSystemLabel')}
             />
           )}
           <ProFormSwitch
             name="is_active"
-            label="是否启用"
+            label={t('field.systemParameter.isActiveLabel')}
           />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate
-        title="参数详情"
+        title={t('field.systemParameter.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -676,11 +678,11 @@ const SystemParameterListPage: React.FC = () => {
         dataSource={detailData}
         columns={[
               {
-                title: '参数键',
+                title: t('field.systemParameter.key'),
                 dataIndex: 'key',
               },
               {
-                title: '参数值',
+                title: t('field.systemParameter.value'),
                 dataIndex: 'value',
                 render: (value, record) => {
                   const displayValue = formatValue(value, record.type);
@@ -702,30 +704,30 @@ const SystemParameterListPage: React.FC = () => {
                 },
               },
               {
-                title: '参数类型',
+                title: t('field.systemParameter.type'),
                 dataIndex: 'type',
               },
               {
-                title: '描述',
+                title: t('field.systemParameter.description'),
                 dataIndex: 'description',
               },
               {
-                title: '系统参数',
+                title: t('field.systemParameter.isSystem'),
                 dataIndex: 'is_system',
-                render: (value) => (value ? '是' : '否'),
+                render: (value) => (value ? t('field.systemParameter.yes') : t('field.systemParameter.no')),
               },
               {
-                title: '状态',
+                title: t('field.systemParameter.status'),
                 dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
+                render: (value) => (value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')),
               },
               {
-                title: '创建时间',
+                title: t('field.systemParameter.createdAt'),
                 dataIndex: 'created_at',
                 valueType: 'dateTime',
               },
               {
-                title: '更新时间',
+                title: t('field.systemParameter.updatedAt'),
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },

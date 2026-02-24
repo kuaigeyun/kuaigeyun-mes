@@ -5,15 +5,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { supplierApi } from '../../../services/supply-chain';
-import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import type { Supplier, SupplierCreate, SupplierUpdate } from '../../../types/supply-chain';
+import { SupplierFormModal } from '../../../components/SupplierFormModal';
+import type { Supplier } from '../../../types/supply-chain';
 
 /**
  * 供应商管理列表页面组件
@@ -21,7 +20,6 @@ import type { Supplier, SupplierCreate, SupplierUpdate } from '../../../types/su
 const SuppliersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -32,64 +30,22 @@ const SuppliersPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑供应商）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
-
-  const PAGE_CODE = 'master-data-supply-chain-supplier';
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
   /**
    * 处理新建供应商
    */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentSupplierUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
-
-    if (isAutoGenerateEnabled(PAGE_CODE)) {
-      const ruleCode = getPageRuleCode(PAGE_CODE);
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          setPreviewCode(codeResponse.code);
-          formRef.current?.setFieldsValue({ code: codeResponse.code });
-        } catch (e) {
-          setPreviewCode(null);
-        }
-      } else {
-        setPreviewCode(null);
-      }
-    } else {
-      setPreviewCode(null);
-    }
   };
 
   /**
    * 处理编辑供应商
    */
-  const handleEdit = async (record: Supplier) => {
-    try {
-      setIsEdit(true);
-      setCurrentSupplierUuid(record.uuid);
-      setPreviewCode(null);
-      setModalVisible(true);
-      const detail = await supplierApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        shortName: detail.shortName,
-        contactPerson: detail.contactPerson,
-        phone: detail.phone,
-        email: detail.email,
-        address: detail.address,
-        category: detail.category,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取供应商详情失败');
-    }
+  const handleEdit = (record: Supplier) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
   };
 
   /**
@@ -179,48 +135,10 @@ const SuppliersPage: React.FC = () => {
     setSupplierDetail(null);
   };
 
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-
-      if (isEdit && currentSupplierUuid) {
-        await supplierApi.update(currentSupplierUuid, values as SupplierUpdate);
-        messageApi.success('更新成功');
-      } else {
-        if (isAutoGenerateEnabled(PAGE_CODE)) {
-          const ruleCode = getPageRuleCode(PAGE_CODE);
-          const currentCode = values.code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (e) {
-              // 继续使用表单中的编码
-            }
-          }
-        }
-        if (values.isActive === undefined) {
-          values.isActive = true;
-        }
-        await supplierApi.create(values as SupplierCreate);
-        messageApi.success('创建成功');
-      }
-
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  const handleCloseModal = () => {
+  const handleModalSuccess = () => {
     setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -278,8 +196,8 @@ const SuppliersPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -370,8 +288,8 @@ const SuppliersPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -485,106 +403,12 @@ const SuppliersPage: React.FC = () => {
       />
 
       {/* 创建/编辑供应商 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑供应商' : '新建供应商'}
+      <SupplierFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-        layout="vertical"
-        grid={true}
-      >
-          <ProFormText
-            name="code"
-            label="供应商编码"
-            placeholder={isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入供应商编码'}
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入供应商编码' },
-              { max: 50, message: '供应商编码不能超过50个字符' },
-            ]}
-            fieldProps={{ style: { textTransform: 'uppercase' } }}
-            extra={!isEdit && isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑。' : undefined}
-          />
-          <ProFormText
-            name="name"
-            label="供应商名称"
-            placeholder="请输入供应商名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入供应商名称' },
-              { max: 200, message: '供应商名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="shortName"
-            label="简称"
-            placeholder="请输入简称"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '简称不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="contactPerson"
-            label="联系人"
-            placeholder="请输入联系人"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '联系人不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="phone"
-            label="电话"
-            placeholder="请输入电话"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 20, message: '电话不能超过20个字符' },
-            ]}
-          />
-          <ProFormText
-            name="email"
-            label="邮箱"
-            placeholder="请输入邮箱"
-            colProps={{ span: 12 }}
-            rules={[
-              { type: 'email', message: '请输入有效的邮箱地址' },
-              { max: 100, message: '邮箱不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="category"
-            label="分类"
-            placeholder="请输入分类"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 50, message: '分类不能超过50个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="address"
-            label="地址"
-            placeholder="请输入地址"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 3,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-            initialValue={true}
-          />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

@@ -155,10 +155,11 @@ export const CONNECTOR_DEFINITIONS: ConnectorDefinition[] = [
   },
 ];
 
+/** 分类的 i18n 键，在 DataSourceConnectorMarket 中用 t(labelKey) 渲染 */
 export const CONNECTOR_CATEGORIES = [
-  { key: 'all', label: '全部' },
-  { key: 'database', label: '数据库' },
-  { key: 'api', label: 'API' },
-  { key: 'oauth', label: 'OAuth' },
-  { key: 'other', label: '其他' },
+  { key: 'all', labelKey: 'pages.system.dataSources.connectorMarket.categoryAll' },
+  { key: 'database', labelKey: 'pages.system.dataSources.connectorMarket.categoryDatabase' },
+  { key: 'api', labelKey: 'pages.system.dataSources.connectorMarket.categoryApi' },
+  { key: 'oauth', labelKey: 'pages.system.dataSources.connectorMarket.categoryOauth' },
+  { key: 'other', labelKey: 'pages.system.dataSources.connectorMarket.categoryOther' },
 ] as const;

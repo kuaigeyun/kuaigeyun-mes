@@ -29,10 +29,14 @@ from apps.kuaizhizao.schemas.quotation import (
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class QuotationService:
     """报价单管理服务"""
+
+    def __init__(self):
+        self.business_config_service = BusinessConfigService()
 
     def _quotation_to_response(
         self,
@@ -171,6 +175,9 @@ class QuotationService:
         created_by: int,
     ) -> QuotationResponse:
         """创建报价单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "quotation")
+        if not is_enabled:
+            raise BusinessLogicError("报价单节点未启用，无法创建报价单")
         from pathlib import Path
         import json
         received_code = getattr(quotation_data, "quotation_code", None) or (quotation_data.quotation_code if hasattr(quotation_data, "quotation_code") else None)

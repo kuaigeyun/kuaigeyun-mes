@@ -5,15 +5,16 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
 import { defectTypeApi } from '../../../services/process';
-import type { DefectType, DefectTypeCreate, DefectTypeUpdate } from '../../../types/process';
-import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import type { DefectType, DefectTypeCreate } from '../../../types/process';
+import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { generateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/import';
 
@@ -23,78 +24,31 @@ import { batchImport } from '../../../../../utils/import';
 const DefectTypesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentDefectTypeUuid, setCurrentDefectTypeUuid] = useState<string | null>(null);
   const [defectTypeDetail, setDefectTypeDetail] = useState<DefectType | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
   // Modal 相关状态（创建/编辑不良品）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  /** 预览编码（自动编码时使用，提交时若未修改则正式生成） */
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
-  /**
-   * 处理新建不良品
-   */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentDefectTypeUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-
-    if (isAutoGenerateEnabled('master-data-defect-type')) {
-      const ruleCode = getPageRuleCode('master-data-defect-type');
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-            isActive: true,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-          formRef.current?.setFieldsValue({ isActive: true });
-        }
-      } else {
-        setPreviewCode(null);
-        formRef.current?.setFieldsValue({ isActive: true });
-      }
-    } else {
-      setPreviewCode(null);
-      formRef.current?.setFieldsValue({ isActive: true });
-    }
   };
 
-  /**
-   * 处理编辑不良品
-   */
-  const handleEdit = async (record: DefectType) => {
-    try {
-      setIsEdit(true);
-      setCurrentDefectTypeUuid(record.uuid);
-      setPreviewCode(null);
-      setModalVisible(true);
+  const handleEdit = (record: DefectType) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
 
-      const detail = await defectTypeApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        category: detail.category,
-        description: detail.description,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取不良品详情失败');
-    }
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -162,16 +116,11 @@ const DefectTypesPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: DefectType) => {
     try {
-      setCurrentDefectTypeUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
       const detail = await defectTypeApi.get(record.uuid);
-      setDefectTypeDetail({
-        ...detail,
-        createdAt: detail.createdAt ?? (detail as any).created_at,
-        updatedAt: detail.updatedAt ?? (detail as any).updated_at,
-      });
+      setDefectTypeDetail(detail);
     } catch (error: any) {
       messageApi.error(error.message || '获取不良品详情失败');
     } finally {
@@ -179,60 +128,9 @@ const DefectTypesPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理关闭详情
-   */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentDefectTypeUuid(null);
     setDefectTypeDetail(null);
-  };
-
-  /**
-   * 处理提交表单（创建/更新不良品）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-
-      if (isEdit && currentDefectTypeUuid) {
-        await defectTypeApi.update(currentDefectTypeUuid, values as DefectTypeUpdate);
-        messageApi.success('更新成功');
-      } else {
-        if (isAutoGenerateEnabled('master-data-defect-type')) {
-          const ruleCode = getPageRuleCode('master-data-defect-type');
-          const currentCode = values.code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成编码失败，使用预览编码:', error);
-            }
-          }
-        }
-        await defectTypeApi.create(values as DefectTypeCreate);
-        messageApi.success('创建成功');
-      }
-
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
   };
 
   /**
@@ -432,7 +330,7 @@ const DefectTypesPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
+        const isActive = record?.isActive ?? false;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
             {isActive ? '启用' : '禁用'}
@@ -448,8 +346,8 @@ const DefectTypesPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       render: (_, record) => {
-        const val = record.createdAt ?? (record as any).created_at;
-        return val ? (typeof val === 'string' ? new Date(val).toLocaleString('zh-CN') : val) : '-';
+        const val = record.createdAt;
+        return val ? (typeof val === 'string' ? new Date(val).toLocaleString() : val) : '-';
       },
     },
     {
@@ -497,7 +395,7 @@ const DefectTypesPage: React.FC = () => {
       <UniTable<DefectType>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -517,11 +415,7 @@ const DefectTypesPage: React.FC = () => {
           try {
             const result = await defectTypeApi.list(apiParams);
             const list = result?.data ?? result;
-            const data = (Array.isArray(list) ? list : []).map((r: any) => ({
-              ...r,
-              createdAt: r.createdAt ?? r.created_at,
-              updatedAt: r.updatedAt ?? r.updated_at,
-            }));
+            const data = Array.isArray(list) ? list : [];
             const total = typeof result?.total === 'number' ? result.total : data.length;
             return {
               data,
@@ -595,7 +489,7 @@ const DefectTypesPage: React.FC = () => {
             title: '启用状态',
             dataIndex: 'isActive',
             render: (_, record) => {
-              const isActive = record?.isActive ?? (record as any)?.is_active;
+              const isActive = record?.isActive ?? false;
               return (
                 <Tag color={isActive ? 'success' : 'default'}>
                   {isActive ? '启用' : '禁用'}
@@ -608,65 +502,12 @@ const DefectTypesPage: React.FC = () => {
         ]}
       />
 
-      <FormModalTemplate
-        title={isEdit ? '编辑不良品' : '新建不良品'}
+      <DefectTypeFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{ isActive: true }}
-      >
-        <ProFormText
-          name="code"
-          label="不良品编码"
-          placeholder={isAutoGenerateEnabled('master-data-defect-type') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入不良品编码'}
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: '请输入不良品编码' },
-            { max: 50, message: '不良品编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            style: { textTransform: 'uppercase' },
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="不良品名称"
-          placeholder="请输入不良品名称"
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: '请输入不良品名称' },
-            { max: 200, message: '不良品名称不能超过200个字符' },
-          ]}
-        />
-        <ProFormText
-          name="category"
-          label="分类"
-          placeholder="请输入分类"
-          colProps={{ span: 12 }}
-          rules={[
-            { max: 50, message: '分类不能超过50个字符' },
-          ]}
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述"
-          colProps={{ span: 24 }}
-          fieldProps={{
-            rows: 4,
-            maxLength: 500,
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-          colProps={{ span: 12 }}
-        />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </ListPageTemplate>
   );
 };

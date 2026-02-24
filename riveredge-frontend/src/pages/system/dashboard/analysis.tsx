@@ -29,6 +29,7 @@ import {
   BarChartOutlined,
   PieChartOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { DashboardTemplate } from '../../../components/layout-templates';
 import { Area, Pie } from '@ant-design/charts';
@@ -81,6 +82,7 @@ const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
  * 分析页页面组件
  */
 export default function AnalysisPage() {
+  const { t } = useTranslation();
   const { token } = useToken();
 
   // 获取销售数据
@@ -107,16 +109,16 @@ export default function AnalysisPage() {
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
         <Col>
           <Typography.Title level={4} style={{ margin: 0 }}>
-            分析页
+            {t('pages.dashboard.analysis.title')}
           </Typography.Title>
         </Col>
         <Col>
           <Space>
             <Button type="primary" icon={<BarChartOutlined />}>
-              导出报表
+              {t('pages.dashboard.analysis.exportReport')}
             </Button>
             <Button icon={<SettingOutlined />}>
-              配置
+              {t('pages.dashboard.analysis.config')}
             </Button>
           </Space>
         </Col>
@@ -127,16 +129,16 @@ export default function AnalysisPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总销售额"
+              title={t('pages.dashboard.analysis.statTotalSales')}
               value={1128930}
               prefix={<DollarOutlined />}
-              suffix="元"
+              suffix={t('pages.dashboard.analysis.unitYuan')}
               styles={{ content: { color: '#3f8600' } }}
             />
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 <RiseOutlined style={{ color: '#3f8600', marginRight: 4 }} />
-                相比上月 +12.5%
+                {t('pages.dashboard.analysis.comparedLastMonth')} +12.5%
               </Text>
             </div>
           </Card>
@@ -144,7 +146,7 @@ export default function AnalysisPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="订单数量"
+              title={t('pages.dashboard.analysis.statOrderCount')}
               value={2847}
               prefix={<ShoppingCartOutlined />}
               styles={{ content: { color: '#1890ff' } }}
@@ -152,7 +154,7 @@ export default function AnalysisPage() {
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 <RiseOutlined style={{ color: '#1890ff', marginRight: 4 }} />
-                相比上月 +8.2%
+                {t('pages.dashboard.analysis.comparedLastMonth')} +8.2%
               </Text>
             </div>
           </Card>
@@ -160,7 +162,7 @@ export default function AnalysisPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="访客数量"
+              title={t('pages.dashboard.analysis.statVisitors')}
               value={12345}
               prefix={<UserOutlined />}
               styles={{ content: { color: '#722ed1' } }}
@@ -168,7 +170,7 @@ export default function AnalysisPage() {
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 <FallOutlined style={{ color: '#f5222d', marginRight: 4 }} />
-                相比上月 -2.1%
+                {t('pages.dashboard.analysis.comparedLastMonth')} -2.1%
               </Text>
             </div>
           </Card>
@@ -176,7 +178,7 @@ export default function AnalysisPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="转化率"
+              title={t('pages.dashboard.analysis.statConversionRate')}
               value={32.5}
               suffix="%"
               styles={{ content: { color: '#faad14' } }}
@@ -184,7 +186,7 @@ export default function AnalysisPage() {
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 <RiseOutlined style={{ color: '#3f8600', marginRight: 4 }} />
-                相比上月 +5.3%
+                {t('pages.dashboard.analysis.comparedLastMonth')} +5.3%
               </Text>
             </div>
           </Card>
@@ -199,7 +201,7 @@ export default function AnalysisPage() {
             title={
               <Space>
                 <BarChartOutlined />
-                <span>销售额趋势</span>
+                <span>{t('pages.dashboard.analysis.chartSalesTrend')}</span>
               </Space>
             }
             loading={salesLoading}
@@ -213,9 +215,9 @@ export default function AnalysisPage() {
                   smooth: true,
                   areaStyle: { fill: '#1890ff', fillOpacity: 0.6 },
                   color: '#1890ff',
-                  xAxis: { title: { text: '月份' } },
-                  yAxis: { title: { text: '销售额' }, label: { formatter: (v: string) => `¥${v}` } },
-                  tooltip: { formatter: (datum: any) => ({ name: '销售额', value: `¥${datum.sales}` }) },
+                  xAxis: { title: { text: t('pages.dashboard.analysis.axisMonth') } },
+                  yAxis: { title: { text: t('pages.dashboard.analysis.axisSales') }, label: { formatter: (v: string) => `¥${v}` } },
+                  tooltip: { formatter: (datum: any) => ({ name: t('pages.dashboard.analysis.tooltipSales'), value: `¥${datum.sales}` }) },
                 } as any)}
               />
             </div>
@@ -228,7 +230,7 @@ export default function AnalysisPage() {
             title={
               <Space>
                 <PieChartOutlined />
-                <span>产品销售分布</span>
+                <span>{t('pages.dashboard.analysis.chartProductDistribution')}</span>
               </Space>
             }
             loading={productLoading}
@@ -256,7 +258,7 @@ export default function AnalysisPage() {
             title={
               <Space>
                 <ShoppingCartOutlined />
-                <span>热销产品排行</span>
+                <span>{t('pages.dashboard.analysis.topProductsRanking')}</span>
               </Space>
             }
             loading={topProductsLoading}
@@ -285,7 +287,7 @@ export default function AnalysisPage() {
                       </Space>
                     </div>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      销售额: ¥{item.sales.toLocaleString()}
+                      {t('pages.dashboard.analysis.salesLabel')}: ¥{item.sales.toLocaleString()}
                     </Text>
                   </div>
                 </div>
@@ -300,14 +302,14 @@ export default function AnalysisPage() {
             title={
               <Space>
                 <CheckCircleOutlined />
-                <span>目标完成进度</span>
+                <span>{t('pages.dashboard.analysis.targetProgress')}</span>
               </Space>
             }
           >
             <Space orientation="vertical" style={{ width: '100%' }} size="large">
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text>月度销售额目标</Text>
+                  <Text>{t('pages.dashboard.analysis.targetMonthlySales')}</Text>
                   <Text strong>¥1,200,000 / ¥1,500,000</Text>
                 </div>
                 <Progress percent={80} strokeColor="#1890ff" />
@@ -315,7 +317,7 @@ export default function AnalysisPage() {
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text>季度订单目标</Text>
+                  <Text>{t('pages.dashboard.analysis.targetQuarterlyOrders')}</Text>
                   <Text strong>2,847 / 3,500</Text>
                 </div>
                 <Progress percent={81} strokeColor="#52c41a" />
@@ -323,7 +325,7 @@ export default function AnalysisPage() {
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text>年度增长目标</Text>
+                  <Text>{t('pages.dashboard.analysis.targetYearlyGrowth')}</Text>
                   <Text strong>15.3% / 20%</Text>
                 </div>
                 <Progress percent={77} strokeColor="#faad14" />
@@ -331,7 +333,7 @@ export default function AnalysisPage() {
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text>客户满意度目标</Text>
+                  <Text>{t('pages.dashboard.analysis.targetSatisfaction')}</Text>
                   <Text strong>4.6 / 5.0</Text>
                 </div>
                 <Progress percent={92} strokeColor="#f5222d" />

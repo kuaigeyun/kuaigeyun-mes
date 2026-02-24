@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Space, Tag, Empty, Spin, Radio, Drawer } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { EyeOutlined, ReloadOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
@@ -109,6 +110,7 @@ const DocumentNode: React.FC<NodeProps> = ({ data }) => {
  * 根节点组件（当前单据）
  */
 const RootNode: React.FC<NodeProps> = ({ data }) => {
+  const { t } = useTranslation();
   const color = getDocumentTypeColor(data?.document_type || '');
   
   return (
@@ -126,7 +128,7 @@ const RootNode: React.FC<NodeProps> = ({ data }) => {
       <Handle type="target" position={Position.Top} />
       <div style={{ marginBottom: 8 }}>
         <Tag color={color} style={{ marginBottom: 4, fontSize: 12 }}>
-          当前单据
+          {t('components.documentRelationGraph.currentDocument')}
         </Tag>
         <Tag color={color}>
           {getDocumentTypeName(data?.document_type || '')}
@@ -175,8 +177,10 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
   maxDepth = 10,
   onDocumentClick,
   style,
-  title = '单据关联关系可视化',
+  title,
 }) => {
+  const { t } = useTranslation();
+  const displayTitle = title ?? t('components.documentRelationGraph.title');
   const [loading, setLoading] = useState(false);
   const [traceData, setTraceData] = useState<DocumentTraceData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +200,7 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
       const data = await traceDocumentChain(documentType, documentId, direction, maxDepth);
       setTraceData(data);
     } catch (err: any) {
-      setError(err.message || '加载追溯数据失败');
+      setError(err.message || t('components.documentRelationGraph.loadFailed'));
       setTraceData(null);
     } finally {
       setLoading(false);
@@ -360,17 +364,17 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
     <Card
       title={
         <Space>
-          <span>{title}</span>
+          <span>{displayTitle}</span>
           <Radio.Group
             value={layout}
             onChange={(e) => setLayout(e.target.value)}
             size="small"
           >
             <Radio.Button value="horizontal">
-              <ExpandOutlined /> 水平布局
+              <ExpandOutlined /> {t('components.documentRelationGraph.layoutHorizontal')}
             </Radio.Button>
             <Radio.Button value="vertical">
-              <CompressOutlined /> 垂直布局
+              <CompressOutlined /> {t('components.documentRelationGraph.layoutVertical')}
             </Radio.Button>
           </Radio.Group>
           <Button
@@ -380,7 +384,7 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
             onClick={loadTraceData}
             loading={loading}
           >
-            刷新
+            {t('components.documentRelationGraph.refresh')}
           </Button>
         </Space>
       }
@@ -416,14 +420,14 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
               </FlowStoreProvider>
             </ReactFlowProvider>
           ) : (
-            <Empty description="暂无关联单据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description={t('components.documentRelationGraph.noDocuments')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
           )}
         </div>
       )}
 
       {/* 节点详情Drawer */}
       <Drawer
-        title="单据详情"
+        title={t('components.documentRelationGraph.detailTitle')}
         open={!!selectedNode}
         onClose={() => setSelectedNode(null)}
         width={400}
@@ -431,23 +435,23 @@ const DocumentRelationGraph: React.FC<DocumentRelationGraphProps> = ({
         {selectedNode && (
           <div>
             <p>
-              <strong>单据类型：</strong>
+              <strong>{t('components.documentRelationGraph.documentType')}：</strong>
               <Tag color={getDocumentTypeColor(selectedNode.data?.document_type || '')}>
                 {getDocumentTypeName(selectedNode.data?.document_type || '')}
               </Tag>
             </p>
             <p>
-              <strong>单据编码：</strong>
+              <strong>{t('components.documentRelationGraph.documentCode')}：</strong>
               {selectedNode.data?.document_code || `ID: ${selectedNode.data?.document_id}`}
             </p>
             {selectedNode.data?.document_name && (
               <p>
-                <strong>单据名称：</strong>
+                <strong>{t('components.documentRelationGraph.documentName')}：</strong>
                 {selectedNode.data.document_name}
               </p>
             )}
             <p>
-              <strong>层级：</strong>
+              <strong>{t('components.documentRelationGraph.level')}：</strong>
               {selectedNode.data?.level || 0}
             </p>
           </div>

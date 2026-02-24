@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, theme } from 'antd';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { 
@@ -114,8 +115,9 @@ type ViewType = 'icons' | 'list' | 'details';
  * 文件管理列表页面组件
  */
 const FileListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken(); // 获取主题 token
+  const { token } = theme.useToken();
   
   // 视图状态
   const [viewType, setViewType] = useState<ViewType>('icons');
@@ -174,7 +176,7 @@ const FileListPage: React.FC = () => {
       const response = await getFileList(params);
       setFileList(response.items);
     } catch (error: any) {
-      messageApi.error(error.message || '加载文件列表失败');
+      messageApi.error(error.message || t('pages.system.files.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -199,7 +201,7 @@ const FileListPage: React.FC = () => {
     }));
 
     const allFilesNode: DataNode = {
-      title: '全部文件',
+      title: t('pages.system.files.allFiles'),
       key: 'all',
       icon: <FolderOpenOutlined />,
       isLeaf: categoryNodes.length === 0,
@@ -334,7 +336,7 @@ const FileListPage: React.FC = () => {
    */
   const handleUpload = async () => {
     if (uploadFileList.length === 0) {
-      messageApi.warning('请选择要上传的文件');
+      messageApi.warning(t('pages.system.files.selectFilesToUpload'));
       return;
     }
     
@@ -347,12 +349,12 @@ const FileListPage: React.FC = () => {
       });
       
       await Promise.all(uploadPromises);
-      messageApi.success('上传成功');
+      messageApi.success(t('pages.system.files.uploadSuccess'));
       setUploadVisible(false);
       setUploadFileList([]);
       loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
     } catch (error: any) {
-      messageApi.error(error.message || '上传失败');
+      messageApi.error(error.message || t('pages.system.files.uploadFailed'));
     }
   };
 
@@ -361,7 +363,7 @@ const FileListPage: React.FC = () => {
    */
   const handleCreateFolder = async () => {
     if (!folderName.trim()) {
-      messageApi.warning('请输入文件夹名称');
+      messageApi.warning(t('pages.system.files.enterFolderName'));
       return;
     }
 
@@ -374,7 +376,7 @@ const FileListPage: React.FC = () => {
     });
     
     if (categories.has(folderName.trim())) {
-      messageApi.warning('文件夹名称已存在');
+      messageApi.warning(t('pages.system.files.folderNameExists'));
       return;
     }
 
@@ -390,7 +392,7 @@ const FileListPage: React.FC = () => {
         description: '文件夹占位文件',
       });
       
-      messageApi.success('文件夹创建成功');
+      messageApi.success(t('pages.system.files.folderCreateSuccess'));
       setCreateFolderVisible(false);
       setFolderName('');
       // 刷新文件列表
@@ -399,7 +401,7 @@ const FileListPage: React.FC = () => {
       setSelectedTreeKeys([folderName.trim()]);
       setCurrentPath(['全部文件', folderName.trim()]);
     } catch (error: any) {
-      messageApi.error(error.message || '创建文件夹失败');
+      messageApi.error(error.message || t('pages.system.files.folderCreateFailed'));
     } finally {
       setCreatingFolder(false);
     }
@@ -414,7 +416,7 @@ const FileListPage: React.FC = () => {
       setPreviewInfo(preview);
       setPreviewVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取预览信息失败');
+      messageApi.error(error.message || t('pages.system.files.previewFailed'));
     }
   };
 
@@ -438,17 +440,17 @@ const FileListPage: React.FC = () => {
     const filesToDelete = file ? [file] : selectedRowKeys.map(key => fileList.find(f => f.uuid === key)).filter(Boolean) as File[];
     
     if (filesToDelete.length === 0) {
-      messageApi.warning('请选择要删除的文件');
+      messageApi.warning(t('pages.system.files.selectToDelete'));
       return;
     }
     
     try {
       await batchDeleteFiles(filesToDelete.map(f => f.uuid));
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.files.deleteSuccess'));
       setSelectedRowKeys([]);
       loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.files.deleteFailed'));
     }
   };
 
@@ -457,7 +459,7 @@ const FileListPage: React.FC = () => {
    */
   const handleRename = async () => {
     if (!renameFile || !renameValue.trim()) {
-      messageApi.warning('请输入新名称');
+      messageApi.warning(t('pages.system.files.enterNewName'));
       return;
     }
     
@@ -465,13 +467,13 @@ const FileListPage: React.FC = () => {
       await updateFile(renameFile.uuid, {
         name: renameValue.trim(),
       } as FileUpdate);
-      messageApi.success('重命名成功');
+      messageApi.success(t('pages.system.files.renameSuccess'));
       setRenameVisible(false);
       setRenameFile(null);
       setRenameValue('');
       loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
     } catch (error: any) {
-      messageApi.error(error.message || '重命名失败');
+      messageApi.error(error.message || t('pages.system.files.renameFailed'));
     }
   };
 
@@ -493,7 +495,7 @@ const FileListPage: React.FC = () => {
   const contextMenuItems: MenuProps['items'] = [
     {
       key: 'open',
-      label: '打开',
+      label: t('pages.system.files.contextOpen'),
       icon: <EyeOutlined />,
       onClick: () => {
         if (contextMenuFile) {
@@ -504,7 +506,7 @@ const FileListPage: React.FC = () => {
     },
     {
       key: 'download',
-      label: '下载',
+      label: t('pages.system.files.contextDownload'),
       icon: <DownloadOutlined />,
       onClick: () => {
         if (contextMenuFile) {
@@ -516,7 +518,7 @@ const FileListPage: React.FC = () => {
     { type: 'divider' },
     {
       key: 'cut',
-      label: '剪切',
+      label: t('pages.system.files.contextCut'),
       icon: <ScissorOutlined />,
       onClick: () => {
         const files = contextMenuFile ? [contextMenuFile] : selectedRowKeys.map(key => fileList.find(f => f.uuid === key)).filter(Boolean) as File[];
@@ -526,7 +528,7 @@ const FileListPage: React.FC = () => {
     },
     {
       key: 'copy',
-      label: '复制',
+      label: t('pages.system.files.contextCopy'),
       icon: <CopyOutlined />,
       onClick: () => {
         const files = contextMenuFile ? [contextMenuFile] : selectedRowKeys.map(key => fileList.find(f => f.uuid === key)).filter(Boolean) as File[];
@@ -536,19 +538,19 @@ const FileListPage: React.FC = () => {
     },
     {
       key: 'paste',
-      label: '粘贴',
+      label: t('pages.system.files.contextPaste'),
       icon: <SnippetsOutlined />,
       disabled: clipboard.type === null || clipboard.files.length === 0,
       onClick: () => {
         // TODO: 实现粘贴功能
-        messageApi.info('粘贴功能开发中');
+        messageApi.info(t('pages.system.files.pasteDeveloping'));
         setContextMenuVisible(false);
       },
     },
     { type: 'divider' },
     {
       key: 'rename',
-      label: '重命名',
+      label: t('pages.system.files.contextRename'),
       icon: <EditOutlined />,
       onClick: () => {
         if (contextMenuFile) {
@@ -561,7 +563,7 @@ const FileListPage: React.FC = () => {
     },
     {
       key: 'delete',
-      label: '删除',
+      label: t('pages.system.files.contextDelete'),
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () => {
@@ -576,7 +578,7 @@ const FileListPage: React.FC = () => {
    */
   const columns: ColumnsType<File> = [
     {
-      title: '名称',
+      title: t('pages.system.files.columnName'),
       dataIndex: 'original_name',
       key: 'name',
       width: '40%',
@@ -590,16 +592,16 @@ const FileListPage: React.FC = () => {
       ),
     },
     {
-      title: '类型',
+      title: t('pages.system.files.columnType'),
       dataIndex: 'file_type',
       key: 'type',
       width: '15%',
       sorter: true,
       sortOrder: sortField === 'file_type' ? sortOrder : null,
-      render: (_, record) => record.file_type || '未知',
+      render: (_, record) => record.file_type || t('pages.system.files.typeUnknown'),
     },
     {
-      title: '大小',
+      title: t('pages.system.files.columnSize'),
       dataIndex: 'file_size',
       key: 'size',
       width: '15%',
@@ -608,7 +610,7 @@ const FileListPage: React.FC = () => {
       render: (_, record) => formatFileSize(record.file_size),
     },
     {
-      title: '修改时间',
+      title: t('pages.system.files.columnModified'),
       dataIndex: 'updated_at',
       key: 'updated_at',
       width: '20%',
@@ -768,7 +770,7 @@ const FileListPage: React.FC = () => {
       <TwoColumnLayout
         leftPanel={{
           search: {
-            placeholder: '搜索文件夹',
+            placeholder: t('pages.system.files.searchFolder'),
             value: treeSearchValue,
             onChange: setTreeSearchValue,
             allowClear: true,
@@ -796,34 +798,35 @@ const FileListPage: React.FC = () => {
             ),
             center: (
               <Breadcrumb
-                items={currentPath.map((path, index) => ({
-                  title: index === currentPath.length - 1 ? (
-                    <span style={{ fontWeight: 500 }}>{path}</span>
-                  ) : (
-                    <a onClick={() => {
-                      // TODO: 实现路径导航
-                    }}>{path}</a>
-                  ),
-                }))}
+                items={currentPath.map((path, index) => {
+                  const displayPath = path === '全部文件' ? t('pages.system.files.allFiles') : path;
+                  return {
+                    title: index === currentPath.length - 1 ? (
+                      <span style={{ fontWeight: 500 }}>{displayPath}</span>
+                    ) : (
+                      <a onClick={() => {}}>{displayPath}</a>
+                    ),
+                  };
+                })}
               />
             ),
             right: (
               <Space>
-                <Tooltip title="图标视图">
+                <Tooltip title={t('pages.system.files.viewIcons')}>
                   <Button
                     type={viewType === 'icons' ? 'primary' : 'default'}
                     icon={<AppstoreOutlined />}
                     onClick={() => setViewType('icons')}
                   />
                 </Tooltip>
-                <Tooltip title="列表视图">
+                <Tooltip title={t('pages.system.files.viewList')}>
                   <Button
                     type={viewType === 'list' ? 'primary' : 'default'}
                     icon={<UnorderedListOutlined />}
                     onClick={() => setViewType('list')}
                   />
                 </Tooltip>
-                <Tooltip title="详细信息">
+                <Tooltip title={t('pages.system.files.viewDetails')}>
                   <Button
                     type={viewType === 'details' ? 'primary' : 'default'}
                     icon={<UnorderedListOutlined />}
@@ -851,13 +854,13 @@ const FileListPage: React.FC = () => {
                   icon={<UploadOutlined />}
                   onClick={() => setUploadVisible(true)}
                 >
-                  上传
+                  {t('pages.system.files.uploadButton')}
                 </Button>
                 <Button
                   icon={<PlusOutlined />}
                   onClick={() => setCreateFolderVisible(true)}
                 >
-                  新建文件夹
+                  {t('pages.system.files.newFolderButton')}
                 </Button>
                 <Button
                   danger
@@ -865,11 +868,11 @@ const FileListPage: React.FC = () => {
                   icon={<DeleteOutlined />}
                   onClick={() => handleDelete()}
                 >
-                  删除
+                  {t('pages.system.files.deleteButton')}
                 </Button>
                 <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
                 <Space>
-                  <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>排序：</span>
+                  <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.sortLabel')}</span>
                   <Select
                     value={`${sortField}-${sortOrder ?? 'ascend'}`}
                     onChange={(v) => {
@@ -878,14 +881,14 @@ const FileListPage: React.FC = () => {
                       setSortOrder(o);
                     }}
                     options={[
-                      { value: 'original_name-ascend', label: '名称 升序' },
-                      { value: 'original_name-descend', label: '名称 降序' },
-                      { value: 'file_size-ascend', label: '大小 升序' },
-                      { value: 'file_size-descend', label: '大小 降序' },
-                      { value: 'file_type-ascend', label: '类型 升序' },
-                      { value: 'file_type-descend', label: '类型 降序' },
-                      { value: 'updated_at-descend', label: '修改时间 降序（新→旧）' },
-                      { value: 'updated_at-ascend', label: '修改时间 升序（旧→新）' },
+                      { value: 'original_name-ascend', label: t('pages.system.files.sortNameAsc') },
+                      { value: 'original_name-descend', label: t('pages.system.files.sortNameDesc') },
+                      { value: 'file_size-ascend', label: t('pages.system.files.sortSizeAsc') },
+                      { value: 'file_size-descend', label: t('pages.system.files.sortSizeDesc') },
+                      { value: 'file_type-ascend', label: t('pages.system.files.sortTypeAsc') },
+                      { value: 'file_type-descend', label: t('pages.system.files.sortTypeDesc') },
+                      { value: 'updated_at-descend', label: t('pages.system.files.sortModifiedDesc') },
+                      { value: 'updated_at-ascend', label: t('pages.system.files.sortModifiedAsc') },
                     ]}
                     style={{ width: 160 }}
                     size="middle"
@@ -929,8 +932,8 @@ const FileListPage: React.FC = () => {
             <>
               <span>
                 {selectedRowKeys.length > 0
-                  ? `已选择 ${selectedRowKeys.length} 项，共 ${formatFileSize(selectedFilesSize)}`
-                  : `共 ${fileList.length} 项`}
+                  ? t('pages.system.files.selectedCount', { n: selectedRowKeys.length, size: formatFileSize(selectedFilesSize) })
+                  : t('pages.system.files.totalCount', { n: fileList.length })}
               </span>
               <span>{formatFileSize(fileList.reduce((total, file) => total + file.file_size, 0))}</span>
             </>
@@ -940,7 +943,7 @@ const FileListPage: React.FC = () => {
 
       {/* 上传文件 Modal */}
       <Modal
-        title="上传文件"
+        title={t('pages.system.files.uploadModalTitle')}
         open={uploadVisible}
         onCancel={() => {
           setUploadVisible(false);
@@ -955,13 +958,13 @@ const FileListPage: React.FC = () => {
           beforeUpload={() => false}
           multiple
         >
-          <Button icon={<UploadOutlined />}>选择文件</Button>
+          <Button icon={<UploadOutlined />}>{t('pages.system.files.selectFiles')}</Button>
         </Upload>
       </Modal>
 
       {/* 文件预览 Modal */}
       <Modal
-        title="文件预览"
+        title={t('pages.system.files.previewModalTitle')}
         open={previewVisible}
         onCancel={() => {
           setPreviewVisible(false);
@@ -979,14 +982,14 @@ const FileListPage: React.FC = () => {
               height: 'calc(100vh - 200px)',
               border: 'none',
             }}
-            title="文件预览"
+            title={t('pages.system.files.previewModalTitle')}
           />
         )}
       </Modal>
 
       {/* 重命名 Modal */}
       <Modal
-        title="重命名"
+        title={t('pages.system.files.renameModalTitle')}
         open={renameVisible}
         onCancel={() => {
           setRenameVisible(false);
@@ -998,14 +1001,14 @@ const FileListPage: React.FC = () => {
         <Input
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
-          placeholder="请输入新名称"
+          placeholder={t('pages.system.files.renamePlaceholder')}
           onPressEnter={handleRename}
         />
       </Modal>
 
       {/* 新建文件夹 Modal */}
       <Modal
-        title="新建文件夹"
+        title={t('pages.system.files.newFolderModalTitle')}
         open={createFolderVisible}
         onCancel={() => {
           setCreateFolderVisible(false);
@@ -1017,7 +1020,7 @@ const FileListPage: React.FC = () => {
         <Input
           value={folderName}
           onChange={(e) => setFolderName(e.target.value)}
-          placeholder="请输入文件夹名称"
+          placeholder={t('pages.system.files.folderNamePlaceholder')}
           onPressEnter={handleCreateFolder}
           autoFocus
         />

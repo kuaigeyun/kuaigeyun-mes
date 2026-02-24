@@ -78,7 +78,7 @@ export interface CreateRoleData {
   name: string;
   code: string;
   description?: string;
-  is_system?: boolean;
+  is_active?: boolean;
 }
 
 /**
@@ -88,7 +88,7 @@ export interface UpdateRoleData {
   name?: string;
   code?: string;
   description?: string;
-  is_system?: boolean;
+  is_active?: boolean;
 }
 
 /**

@@ -176,10 +176,18 @@ function buildMainStages(stageName: string, isException: boolean): SubStage[] {
   });
 }
 
+import type { BackendLifecycle } from './backendLifecycle';
+import { parseBackendLifecycle } from './backendLifecycle';
+
 /**
  * 根据销售订单计算生命周期结果，供 UniLifecycle 使用。
+ * 优先使用后端下发的 lifecycle（节点由后端控制），无则前端兜底计算。
  */
 export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
+  const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
+  if (backend?.main_stages?.length) {
+    return parseBackendLifecycle(backend);
+  }
   const status = norm(record?.status);
   const reviewStatus = norm(record?.review_status);
   const delivery = deliveryProgress(record);

@@ -15,6 +15,34 @@ from loguru import logger
 from infra.models.tenant import Tenant, TenantPlan
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
+# 节点配置常量（供预设构建使用）
+_NODE_OFF = {"enabled": False, "auditRequired": False}
+_NODE_ON = {"enabled": True, "auditRequired": False}
+_NODE_AUDIT = {"enabled": True, "auditRequired": True}
+
+
+def _build_preset_nodes(all_nodes: list, *pairs) -> dict:
+    """(node_id, mode) 其中 mode 为 'off'|'on'|'audit'"""
+    d = {n: _NODE_OFF for n in all_nodes}
+    for nid, mode in pairs:
+        if mode == "audit":
+            d[nid] = _NODE_AUDIT
+        elif mode == "on":
+            d[nid] = _NODE_ON
+    return d
+
+
+# 全部 30 业务节点（与 kuaizhizao-business-documents 对齐，含发货通知单、送货单）
+ALL_NODES = [
+    "quotation", "sample_trial", "sales_forecast", "sales_order", "sales_delivery", "shipment_notice", "delivery_notice",
+    "purchase_request", "purchase_order", "receipt_notice", "inbound_delivery",
+    "production_plan", "work_order", "rework_order", "outsource_order",
+    "quality_inspection", "inventory_check",
+    "equipment_fault", "maintenance_plan", "maintenance_reminder", "equipment_status",
+    "inbound", "outbound", "stocktaking", "inventory_transfer", "assembly_order", "disassembly_order",
+    "receivable", "payable", "invoice",
+]
+
 
 class BusinessConfigService:
     """
@@ -32,25 +60,46 @@ class BusinessConfigService:
         "industry": "general",
         "scale": "small",
         "nodes": {
-            "sales_order": {"enabled": True, "auditRequired": False},
+            "quotation": {"enabled": False, "auditRequired": False},
+            "sample_trial": {"enabled": False, "auditRequired": False},
             "sales_forecast": {"enabled": True, "auditRequired": False},
+            "sales_order": {"enabled": True, "auditRequired": False},
             "sales_delivery": {"enabled": True, "auditRequired": False},
-            "inventory_check": {"enabled": False, "auditRequired": False},
-            "production_plan": {"enabled": False, "auditRequired": False},
+            "shipment_notice": {"enabled": True, "auditRequired": False},
+            "delivery_notice": {"enabled": False, "auditRequired": False},
             "purchase_request": {"enabled": True, "auditRequired": False},
             "purchase_order": {"enabled": True, "auditRequired": False},
+            "receipt_notice": {"enabled": True, "auditRequired": False},
             "inbound_delivery": {"enabled": True, "auditRequired": False},
+            "production_plan": {"enabled": False, "auditRequired": False},
             "work_order": {"enabled": True, "auditRequired": False},
+            "rework_order": {"enabled": False, "auditRequired": False},
+            "outsource_order": {"enabled": False, "auditRequired": False},
             "quality_inspection": {"enabled": False, "auditRequired": False},
+            "inventory_check": {"enabled": False, "auditRequired": False},
+            "equipment_fault": {"enabled": False, "auditRequired": False},
+            "maintenance_plan": {"enabled": False, "auditRequired": False},
+            "maintenance_reminder": {"enabled": False, "auditRequired": False},
+            "equipment_status": {"enabled": False, "auditRequired": False},
+            "inbound": {"enabled": True, "auditRequired": False},
+            "outbound": {"enabled": True, "auditRequired": False},
+            "stocktaking": {"enabled": False, "auditRequired": False},
+            "inventory_transfer": {"enabled": False, "auditRequired": False},
+            "assembly_order": {"enabled": False, "auditRequired": False},
+            "disassembly_order": {"enabled": False, "auditRequired": False},
+            "receivable": {"enabled": False, "auditRequired": False},
+            "payable": {"enabled": False, "auditRequired": False},
+            "invoice": {"enabled": False, "auditRequired": False},
         },
         "modules": {
-            "production": True,      # 生产管理（核心模块，不可关闭）
-            "warehouse": True,       # 仓储管理（核心模块，不可关闭）
-            "demand": True,          # 需求管理（支持直接创建生产计划）
-            "purchase": True,        # 采购管理
-            "sales": True,           # 销售管理
-            "quality": False,        # 质量管理（默认关闭）
-            "finance": False,        # 财务管理（默认关闭）
+            "production": True,
+            "warehouse": True,
+            "demand": True,
+            "purchase": True,
+            "sales": True,
+            "quality": False,
+            "finance": False,
+            "equipment": False,
         },
         "parameters": {
             "work_order": {
@@ -130,6 +179,14 @@ class BusinessConfigService:
         config = await self.get_business_config(tenant_id)
         nodes = config.get("nodes", {})
         node_config = nodes.get(node_key)
+        # 销售订单：任一为「无需审核」则无需审核。1) parameters.sales.audit_enabled=False 表示关闭审核；2) 蓝图 nodes.sales_order.auditRequired=False 表示自动审核
+        if node_key == "sales_order":
+            sales_params = config.get("parameters", {}).get("sales", {})
+            if sales_params.get("audit_enabled", True) is False:
+                return False
+            if node_config is not None:
+                return bool(node_config.get("auditRequired", False))
+            return False
         
         # 如果节点配置不存在，默认需要审核（向后兼容，或者根据模式决定，这里简便起见默认True或根据simple模式? 
         # 为了安全起见，如果不配置，默认False可能更符合"极简"体验，但默认True符合"严谨"体验。
@@ -176,25 +233,46 @@ class BusinessConfigService:
         "industry": "general",
         "scale": "medium",
         "nodes": {
-            "sales_order": {"enabled": True, "auditRequired": True},
+            "quotation": {"enabled": True, "auditRequired": False},
+            "sample_trial": {"enabled": True, "auditRequired": False},
             "sales_forecast": {"enabled": True, "auditRequired": True},
+            "sales_order": {"enabled": True, "auditRequired": True},
             "sales_delivery": {"enabled": True, "auditRequired": True},
-            "inventory_check": {"enabled": True, "auditRequired": True},
-            "production_plan": {"enabled": True, "auditRequired": True},
+            "shipment_notice": {"enabled": True, "auditRequired": False},
+            "delivery_notice": {"enabled": True, "auditRequired": False},
             "purchase_request": {"enabled": True, "auditRequired": True},
             "purchase_order": {"enabled": True, "auditRequired": True},
+            "receipt_notice": {"enabled": True, "auditRequired": False},
             "inbound_delivery": {"enabled": True, "auditRequired": False},
+            "production_plan": {"enabled": True, "auditRequired": True},
             "work_order": {"enabled": True, "auditRequired": False},
+            "rework_order": {"enabled": True, "auditRequired": False},
+            "outsource_order": {"enabled": True, "auditRequired": False},
             "quality_inspection": {"enabled": True, "auditRequired": True},
+            "inventory_check": {"enabled": True, "auditRequired": True},
+            "equipment_fault": {"enabled": True, "auditRequired": False},
+            "maintenance_plan": {"enabled": True, "auditRequired": False},
+            "maintenance_reminder": {"enabled": True, "auditRequired": False},
+            "equipment_status": {"enabled": True, "auditRequired": False},
+            "inbound": {"enabled": True, "auditRequired": False},
+            "outbound": {"enabled": True, "auditRequired": False},
+            "stocktaking": {"enabled": True, "auditRequired": False},
+            "inventory_transfer": {"enabled": True, "auditRequired": False},
+            "assembly_order": {"enabled": True, "auditRequired": False},
+            "disassembly_order": {"enabled": True, "auditRequired": False},
+            "receivable": {"enabled": True, "auditRequired": False},
+            "payable": {"enabled": True, "auditRequired": False},
+            "invoice": {"enabled": True, "auditRequired": False},
         },
         "modules": {
-            "production": True,      # 生产管理（核心模块，不可关闭）
-            "warehouse": True,       # 仓储管理（核心模块，不可关闭）
-            "demand": True,          # 需求管理
-            "purchase": True,        # 采购管理
-            "sales": True,           # 销售管理
-            "quality": True,         # 质量管理
-            "finance": True,         # 财务管理
+            "production": True,
+            "warehouse": True,
+            "demand": True,
+            "purchase": True,
+            "sales": True,
+            "quality": True,
+            "finance": True,
+            "equipment": True,
         },
         "parameters": {
             "work_order": {
@@ -239,162 +317,129 @@ class BusinessConfigService:
         },
     }
     
-    # 五级业务复杂度预设（L1-L5）
+    # 八级业务复杂度预设（L0-L7，统一新逻辑）
     COMPLEXITY_PRESETS = {
+        "L0": {
+            "code": "L0",
+            "name": "试运行模式",
+            "description": "仅工单+报工，快速验证",
+            "nodes": _build_preset_nodes(ALL_NODES, ("work_order", "on")),
+            "modules": {
+                "production": True, "warehouse": True, "demand": False,
+                "purchase": False, "sales": False, "quality": False, "finance": False, "equipment": False,
+            },
+            "parameters": {"planning": {"require_production_plan": False}, "work_order": {"allow_production_without_material": True}},
+        },
         "L1": {
             "code": "L1",
             "name": "来料加工模式",
             "description": "代工/OEM，只接生产任务，材料由委托方提供",
-            "nodes": {
-                "sales_order": {"enabled": False, "auditRequired": False},
-                "sales_forecast": {"enabled": False, "auditRequired": False},
-                "sales_delivery": {"enabled": False, "auditRequired": False},
-                "inventory_check": {"enabled": False, "auditRequired": False},
-                "production_plan": {"enabled": False, "auditRequired": False},
-                "purchase_request": {"enabled": False, "auditRequired": False},
-                "purchase_order": {"enabled": False, "auditRequired": False},
-                "inbound_delivery": {"enabled": False, "auditRequired": False},
-                "work_order": {"enabled": True, "auditRequired": False},
-                "quality_inspection": {"enabled": False, "auditRequired": False},
-            },
+            "nodes": _build_preset_nodes(ALL_NODES, ("work_order", "on")),
             "modules": {
-                "production": True,
-                "warehouse": True,
-                "demand": True,
-                "purchase": False,
-                "sales": False,
-                "quality": False,
-                "finance": False,
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": False, "sales": False, "quality": False, "finance": False, "equipment": False,
             },
-            "parameters": {
-                "planning": {"require_production_plan": False},
-                "procurement": {"require_purchase_requisition": False},
-                "work_order": {"allow_production_without_material": True},
-            },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": True}},
         },
         "L2": {
             "code": "L2",
             "name": "订单生产模式",
             "description": "有销售但原料外采或委外，不做采购闭环",
-            "nodes": {
-                "sales_order": {"enabled": True, "auditRequired": False},
-                "sales_forecast": {"enabled": True, "auditRequired": False},
-                "sales_delivery": {"enabled": True, "auditRequired": False},
-                "inventory_check": {"enabled": False, "auditRequired": False},
-                "production_plan": {"enabled": False, "auditRequired": False},
-                "purchase_request": {"enabled": False, "auditRequired": False},
-                "purchase_order": {"enabled": False, "auditRequired": False},
-                "inbound_delivery": {"enabled": False, "auditRequired": False},
-                "work_order": {"enabled": True, "auditRequired": False},
-                "quality_inspection": {"enabled": False, "auditRequired": False},
-            },
+            "nodes": _build_preset_nodes(ALL_NODES, ("sales_forecast", "on"), ("sales_order", "on"), ("sales_delivery", "on"), ("work_order", "on")),
             "modules": {
-                "production": True,
-                "warehouse": True,
-                "demand": True,
-                "purchase": False,
-                "sales": True,
-                "quality": False,
-                "finance": False,
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": False, "sales": True, "quality": False, "finance": False, "equipment": False,
             },
-            "parameters": {
-                "planning": {"require_production_plan": False},
-                "procurement": {"require_purchase_requisition": False},
-                "work_order": {"allow_production_without_material": True},
-            },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": True}},
         },
         "L3": {
             "code": "L3",
             "name": "生产物料模式",
             "description": "自采原料、自管库存的生产车间",
-            "nodes": {
-                "sales_order": {"enabled": False, "auditRequired": False},
-                "sales_forecast": {"enabled": False, "auditRequired": False},
-                "sales_delivery": {"enabled": False, "auditRequired": False},
-                "inventory_check": {"enabled": True, "auditRequired": False},
-                "production_plan": {"enabled": True, "auditRequired": False},
-                "purchase_request": {"enabled": True, "auditRequired": False},
-                "purchase_order": {"enabled": True, "auditRequired": False},
-                "inbound_delivery": {"enabled": True, "auditRequired": False},
-                "work_order": {"enabled": True, "auditRequired": False},
-                "quality_inspection": {"enabled": True, "auditRequired": False},
-            },
+            "nodes": _build_preset_nodes(ALL_NODES,
+                ("inventory_check", "on"), ("production_plan", "on"), ("purchase_request", "on"),
+                ("purchase_order", "on"), ("inbound_delivery", "on"), ("receipt_notice", "on"),
+                ("work_order", "on"), ("quality_inspection", "on"),
+                ("inbound", "on"), ("outbound", "on"),
+            ),
             "modules": {
-                "production": True,
-                "warehouse": True,
-                "demand": True,
-                "purchase": True,
-                "sales": False,
-                "quality": True,
-                "finance": False,
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": True, "sales": False, "quality": True, "finance": False, "equipment": False,
             },
-            "parameters": {
-                "planning": {"require_production_plan": False},
-                "procurement": {"require_purchase_requisition": False},
-                "work_order": {"allow_production_without_material": False},
-            },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
         },
         "L4": {
             "code": "L4",
             "name": "进销存生产模式",
             "description": "中小厂完整业务，追求效率，不强调内控",
-            "nodes": {
-                "sales_order": {"enabled": True, "auditRequired": False},
-                "sales_forecast": {"enabled": True, "auditRequired": False},
-                "sales_delivery": {"enabled": True, "auditRequired": False},
-                "inventory_check": {"enabled": True, "auditRequired": False},
-                "production_plan": {"enabled": True, "auditRequired": False},
-                "purchase_request": {"enabled": True, "auditRequired": False},
-                "purchase_order": {"enabled": True, "auditRequired": False},
-                "inbound_delivery": {"enabled": True, "auditRequired": False},
-                "work_order": {"enabled": True, "auditRequired": False},
-                "quality_inspection": {"enabled": True, "auditRequired": False},
-            },
+            "nodes": _build_preset_nodes(ALL_NODES,
+                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "on"), ("sales_order", "on"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
+                ("purchase_request", "on"), ("purchase_order", "on"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
+                ("production_plan", "on"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
+                ("quality_inspection", "on"), ("inventory_check", "on"),
+                ("inbound", "on"), ("outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"),
+            ),
             "modules": {
-                "production": True,
-                "warehouse": True,
-                "demand": True,
-                "purchase": True,
-                "sales": True,
-                "quality": True,
-                "finance": False,
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": True, "sales": True, "quality": True, "finance": False, "equipment": False,
             },
-            "parameters": {
-                "planning": {"require_production_plan": False},
-                "procurement": {"require_purchase_requisition": False},
-                "work_order": {"allow_production_without_material": False},
-            },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
         },
         "L5": {
             "code": "L5",
             "name": "全流程内控模式",
             "description": "规范企业，需内控与追溯",
-            "nodes": {
-                "sales_order": {"enabled": True, "auditRequired": True},
-                "sales_forecast": {"enabled": True, "auditRequired": True},
-                "sales_delivery": {"enabled": True, "auditRequired": False},
-                "inventory_check": {"enabled": True, "auditRequired": True},
-                "production_plan": {"enabled": True, "auditRequired": True},
-                "purchase_request": {"enabled": True, "auditRequired": True},
-                "purchase_order": {"enabled": True, "auditRequired": True},
-                "inbound_delivery": {"enabled": True, "auditRequired": False},
-                "work_order": {"enabled": True, "auditRequired": False},
-                "quality_inspection": {"enabled": True, "auditRequired": True},
-            },
+            "nodes": _build_preset_nodes(ALL_NODES,
+                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
+                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
+                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
+                ("quality_inspection", "audit"), ("inventory_check", "audit"),
+                ("inbound", "on"), ("outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"),
+                ("receivable", "on"), ("payable", "on"), ("invoice", "on"),
+            ),
             "modules": {
-                "production": True,
-                "warehouse": True,
-                "demand": True,
-                "purchase": True,
-                "sales": True,
-                "quality": True,
-                "finance": True,
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": False,
             },
-            "parameters": {
-                "planning": {"require_production_plan": False},
-                "procurement": {"require_purchase_requisition": False},
-                "work_order": {"allow_production_without_material": False},
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
+        },
+        "L6": {
+            "code": "L6",
+            "name": "全模块+设备",
+            "description": "L5 基础上启用设备管理",
+            "nodes": _build_preset_nodes(ALL_NODES,
+                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
+                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
+                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
+                ("quality_inspection", "audit"), ("inventory_check", "audit"),
+                ("equipment_fault", "on"), ("maintenance_plan", "on"), ("maintenance_reminder", "on"), ("equipment_status", "on"),
+                ("inbound", "on"), ("outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"),
+                ("receivable", "on"), ("payable", "on"), ("invoice", "on"),
+            ),
+            "modules": {
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": True,
             },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
+        },
+        "L7": {
+            "code": "L7",
+            "name": "全模块+设备+仓储细粒度",
+            "description": "L6 基础上启用全部仓储与财务节点",
+            "nodes": _build_preset_nodes(ALL_NODES,
+                ("quotation", "on"), ("sample_trial", "on"), ("sales_forecast", "audit"), ("sales_order", "audit"), ("sales_delivery", "on"), ("shipment_notice", "on"), ("delivery_notice", "on"),
+                ("purchase_request", "audit"), ("purchase_order", "audit"), ("receipt_notice", "on"), ("inbound_delivery", "on"),
+                ("production_plan", "audit"), ("work_order", "on"), ("rework_order", "on"), ("outsource_order", "on"),
+                ("quality_inspection", "audit"), ("inventory_check", "audit"),
+                ("equipment_fault", "on"), ("maintenance_plan", "on"), ("maintenance_reminder", "on"), ("equipment_status", "on"),
+                ("inbound", "on"), ("outbound", "on"), ("stocktaking", "on"), ("inventory_transfer", "on"), ("assembly_order", "on"), ("disassembly_order", "on"),
+                ("receivable", "on"), ("payable", "on"), ("invoice", "on"),
+            ),
+            "modules": {
+                "production": True, "warehouse": True, "demand": True,
+                "purchase": True, "sales": True, "quality": True, "finance": True, "equipment": True,
+            },
+            "parameters": {"planning": {"require_production_plan": False}, "procurement": {"require_purchase_requisition": False}, "work_order": {"allow_production_without_material": False}},
         },
     }
 
@@ -575,7 +620,7 @@ class BusinessConfigService:
             Dict[str, Any]: 应用结果
         """
         if level not in self.COMPLEXITY_PRESETS:
-            raise ValidationError(f"无效的复杂度等级: {level}，支持 L1/L2/L3/L4/L5")
+            raise ValidationError(f"无效的复杂度等级: {level}，支持 L0-L7")
 
         preset = self.COMPLEXITY_PRESETS[level]
         tenant = await Tenant.get_or_none(id=tenant_id)
@@ -617,16 +662,13 @@ class BusinessConfigService:
 
     async def get_complexity_presets(self) -> Dict[str, Any]:
         """
-        获取五级业务复杂度预设列表（供前端选择器使用）
+        获取八级业务复杂度预设列表 L0-L7（供前端选择器使用）
         """
+        order = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
         return {
             "presets": [
-                {
-                    "code": p["code"],
-                    "name": p["name"],
-                    "description": p["description"],
-                }
-                for p in self.COMPLEXITY_PRESETS.values()
+                {"code": self.COMPLEXITY_PRESETS[k]["code"], "name": self.COMPLEXITY_PRESETS[k]["name"], "description": self.COMPLEXITY_PRESETS[k]["description"]}
+                for k in order if k in self.COMPLEXITY_PRESETS
             ],
             "default_level": self.DEFAULT_COMPLEXITY_LEVEL,
         }

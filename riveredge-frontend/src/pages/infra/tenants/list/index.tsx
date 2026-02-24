@@ -5,7 +5,8 @@
  * 支持组织注册审核、启用/禁用等功能。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
@@ -32,24 +33,18 @@ import {
 import { apiRequest } from '../../../../services/api';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
-/**
- * 组织状态标签映射
- */
-const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
-  [TenantStatus.ACTIVE]: { color: 'success', text: '激活' },
-  [TenantStatus.INACTIVE]: { color: 'default', text: '未激活' },
-  [TenantStatus.EXPIRED]: { color: 'warning', text: '已过期' },
-  [TenantStatus.SUSPENDED]: { color: 'error', text: '已暂停' },
+const statusTagMap: Record<TenantStatus, { color: string; textKey: string }> = {
+  [TenantStatus.ACTIVE]: { color: 'success', textKey: 'pages.infra.tenant.statusActive' },
+  [TenantStatus.INACTIVE]: { color: 'default', textKey: 'pages.infra.tenant.statusInactive' },
+  [TenantStatus.EXPIRED]: { color: 'warning', textKey: 'pages.infra.tenant.statusExpired' },
+  [TenantStatus.SUSPENDED]: { color: 'error', textKey: 'pages.infra.tenant.statusSuspended' },
 };
 
-/**
- * 组织套餐标签映射
- */
-const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
-  [TenantPlan.TRIAL]: { color: 'default', text: '体验套餐' },
-  [TenantPlan.BASIC]: { color: 'blue', text: '基础版' },
-  [TenantPlan.PROFESSIONAL]: { color: 'purple', text: '专业版' },
-  [TenantPlan.ENTERPRISE]: { color: 'gold', text: '企业版' },
+const planTagMap: Record<TenantPlan, { color: string; textKey: string }> = {
+  [TenantPlan.TRIAL]: { color: 'default', textKey: 'pages.infra.tenant.planTrial' },
+  [TenantPlan.BASIC]: { color: 'blue', textKey: 'pages.infra.tenant.planBasic' },
+  [TenantPlan.PROFESSIONAL]: { color: 'purple', textKey: 'pages.infra.tenant.planProfessional' },
+  [TenantPlan.ENTERPRISE]: { color: 'gold', textKey: 'pages.infra.tenant.planEnterprise' },
 };
 
 
@@ -57,6 +52,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  * 超级管理员组织列表页面组件
  */
 const SuperAdminTenantList: React.FC = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
@@ -83,10 +79,10 @@ const SuperAdminTenantList: React.FC = () => {
       await apiRequest(`/infra/tenants/${tenantId}/approve`, {
         method: 'POST',
       });
-      message.success('审核通过成功');
+      message.success(t('pages.infra.tenant.approveSuccess'));
       return true;
     } catch (error: any) {
-      message.error(error.message || '审核通过失败');
+      message.error(error.message || t('pages.infra.tenant.approveFailed'));
       return false;
     }
   };
@@ -103,13 +99,44 @@ const SuperAdminTenantList: React.FC = () => {
         method: 'POST',
         data: { reason },
       });
-      message.success('审核拒绝成功');
+      message.success(t('pages.infra.tenant.rejectSuccess'));
       return true;
     } catch (error: any) {
-      message.error(error.message || '审核拒绝失败');
+      message.error(error.message || t('pages.infra.tenant.rejectFailed'));
       return false;
     }
   };
+
+  // 表头字段映射（随语言变化，用于导入解析）
+  const headerToFieldMap = useMemo(() => {
+    const m: Record<string, string> = {
+      'name': 'name', '*name': 'name',
+      'domain': 'domain', '*domain': 'domain',
+      'plan': 'plan', 'status': 'status',
+      'max_users': 'max_users', 'max_storage': 'max_storage', 'expires_at': 'expires_at',
+    };
+    m[t('pages.infra.tenant.importHeaderName')] = 'name';
+    m[t('pages.infra.tenant.name')] = 'name';
+    m[t('pages.infra.tenant.nameShort')] = 'name';
+    m[t('pages.infra.tenant.importHeaderDomain')] = 'domain';
+    m[t('pages.infra.tenant.domain')] = 'domain';
+    m[t('pages.infra.tenant.importHeaderPlan')] = 'plan';
+    m[t('pages.infra.tenant.plan')] = 'plan';
+    m[t('pages.infra.tenant.planType')] = 'plan';
+    m[t('pages.infra.tenant.importHeaderStatus')] = 'status';
+    m[t('pages.infra.tenant.status')] = 'status';
+    m[t('pages.infra.tenant.importHeaderMaxUsers')] = 'max_users';
+    m[t('pages.infra.tenant.maxUsers')] = 'max_users';
+    m[t('pages.infra.tenant.maxUsersShort')] = 'max_users';
+    m[t('pages.infra.tenant.importHeaderMaxStorage')] = 'max_storage';
+    m[t('pages.infra.tenant.maxStorage')] = 'max_storage';
+    m[t('pages.infra.tenant.maxStorageShort')] = 'max_storage';
+    m[t('pages.infra.tenant.storageShort')] = 'max_storage';
+    m[t('pages.infra.tenant.importHeaderExpiresAt')] = 'expires_at';
+    m[t('pages.infra.tenant.expiresAt')] = 'expires_at';
+    m[t('pages.infra.tenant.expiresAtShort')] = 'expires_at';
+    return m;
+  }, [t]);
 
   /**
    * 处理导入数据
@@ -120,50 +147,19 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      message.warning('导入数据为空');
+      message.warning(t('pages.infra.tenant.importEmpty'));
       return;
     }
 
-    // 解析表头和数据
-    // 第1行（索引0）：表头
-    // 第2行（索引1）：示例数据（跳过）
-    // 从第3行开始（索引2）：实际数据行
     const headers = data[0] || [];
-    const rows = data.slice(2); // 跳过表头和示例数据行，从第3行开始
+    const rows = data.slice(2);
 
     if (rows.length === 0) {
-      message.warning('没有可导入的数据行（请从第3行开始填写数据）');
+      message.warning(t('pages.infra.tenant.importNoRows'));
       return;
     }
 
-    // 表头字段映射（支持中英文，支持带*号的必填项标识）
-    const headerMap: Record<string, string> = {
-      '组织名称': 'name',
-      '*组织名称': 'name',
-      '名称': 'name',
-      '*名称': 'name',
-      'name': 'name',
-      '*name': 'name',
-      '域名': 'domain',
-      '*域名': 'domain',
-      'domain': 'domain',
-      '*domain': 'domain',
-      '套餐类型': 'plan',
-      '套餐': 'plan',
-      'plan': 'plan',
-      '状态': 'status',
-      'status': 'status',
-      '最大用户数': 'max_users',
-      '用户数': 'max_users',
-      'max_users': 'max_users',
-      '存储空间(MB)': 'max_storage',
-      '存储空间': 'max_storage',
-      '存储': 'max_storage',
-      'max_storage': 'max_storage',
-      '过期时间': 'expires_at',
-      '过期': 'expires_at',
-      'expires_at': 'expires_at',
-    };
+    const headerMap = headerToFieldMap;
 
     // 找到表头索引
     const headerIndexMap: Record<string, number> = {};
@@ -178,7 +174,9 @@ const SuperAdminTenantList: React.FC = () => {
     const requiredFields = ['name', 'domain'];
     const missingFields = requiredFields.filter(field => headerIndexMap[field] === undefined);
     if (missingFields.length > 0) {
-      message.error(`缺少必需字段：${missingFields.join('、')}。请确保表头包含"组织名称"和"域名"列。`);
+      const fieldLabels: Record<string, string> = { name: t('pages.infra.tenant.name'), domain: t('pages.infra.tenant.domain') };
+      const missingLabels = missingFields.map(f => fieldLabels[f] || f).join('、');
+      message.error(t('pages.infra.tenant.importMissingFields', { fields: missingLabels }));
       return;
     }
 
@@ -194,7 +192,7 @@ const SuperAdminTenantList: React.FC = () => {
       });
 
     if (nonEmptyRows.length === 0) {
-      message.warning('没有可导入的数据行（所有行都为空）');
+      message.warning(t('pages.infra.tenant.importNoRowsAllEmpty'));
       return;
     }
 
@@ -216,64 +214,64 @@ const SuperAdminTenantList: React.FC = () => {
         }
       });
 
-      // 验证必需字段
       if (!rowData.name || !rowData.domain) {
         errors.push({
           rowIndex,
-          message: `第 ${rowIndex} 行：缺少必需字段（组织名称或域名）`,
+          message: t('pages.infra.tenant.importRowMissing', { row: rowIndex }),
         });
         return;
       }
 
-      // 验证域名格式（只能包含字母、数字、下划线、连字符）
       const domainRegex = /^[a-zA-Z0-9_-]+$/;
       if (!domainRegex.test(rowData.domain)) {
         errors.push({
           rowIndex,
-          message: `第 ${rowIndex} 行：域名格式不正确（只能包含字母、数字、下划线、连字符）`,
+          message: t('pages.infra.tenant.importRowDomainInvalid', { row: rowIndex }),
         });
         return;
       }
 
-      // 解析套餐类型
+      // 解析套餐类型（支持当前语言与英文）
       let plan: TenantPlan = TenantPlan.TRIAL;
       if (rowData.plan) {
         const planMap: Record<string, TenantPlan> = {
           'trial': TenantPlan.TRIAL,
-          '体验套餐': TenantPlan.TRIAL,
-          '体验': TenantPlan.TRIAL,
+          [t('pages.infra.tenant.planTrial')]: TenantPlan.TRIAL,
           'basic': TenantPlan.BASIC,
-          '基础版': TenantPlan.BASIC,
-          '基础': TenantPlan.BASIC,
+          [t('pages.infra.tenant.planBasic')]: TenantPlan.BASIC,
           'professional': TenantPlan.PROFESSIONAL,
-          '专业版': TenantPlan.PROFESSIONAL,
-          '专业': TenantPlan.PROFESSIONAL,
+          [t('pages.infra.tenant.planProfessional')]: TenantPlan.PROFESSIONAL,
           'enterprise': TenantPlan.ENTERPRISE,
-          '企业版': TenantPlan.ENTERPRISE,
-          '企业': TenantPlan.ENTERPRISE,
+          [t('pages.infra.tenant.planEnterprise')]: TenantPlan.ENTERPRISE,
         };
-        const normalizedPlan = String(rowData.plan).toLowerCase().trim();
+        const normalizedPlan = String(rowData.plan).trim();
+        const normalizedPlanLower = normalizedPlan.toLowerCase();
         if (planMap[normalizedPlan]) {
           plan = planMap[normalizedPlan];
+        } else if (planMap[normalizedPlanLower]) {
+          plan = planMap[normalizedPlanLower];
         }
       }
 
-      // 解析状态
+      // 解析状态（支持当前语言与英文）
       let status: TenantStatus = TenantStatus.INACTIVE;
       if (rowData.status) {
         const statusMap: Record<string, TenantStatus> = {
           'active': TenantStatus.ACTIVE,
-          '激活': TenantStatus.ACTIVE,
+          [t('pages.infra.tenant.statusActive')]: TenantStatus.ACTIVE,
           'inactive': TenantStatus.INACTIVE,
-          '未激活': TenantStatus.INACTIVE,
+          [t('pages.infra.tenant.statusInactive')]: TenantStatus.INACTIVE,
           'expired': TenantStatus.EXPIRED,
-          '已过期': TenantStatus.EXPIRED,
+          [t('pages.infra.tenant.statusExpired')]: TenantStatus.EXPIRED,
           'suspended': TenantStatus.SUSPENDED,
-          '已暂停': TenantStatus.SUSPENDED,
+          [t('pages.infra.tenant.statusSuspended')]: TenantStatus.SUSPENDED,
         };
-        const normalizedStatus = String(rowData.status).toLowerCase().trim();
+        const normalizedStatus = String(rowData.status).trim();
+        const normalizedStatusLower = normalizedStatus.toLowerCase();
         if (statusMap[normalizedStatus]) {
           status = statusMap[normalizedStatus];
+        } else if (statusMap[normalizedStatusLower]) {
+          status = statusMap[normalizedStatusLower];
         }
       }
 
@@ -313,14 +311,13 @@ const SuperAdminTenantList: React.FC = () => {
       });
     });
 
-    // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
       Modal.error({
-        title: '数据验证失败',
+        title: t('pages.infra.tenant.importValidationFailed'),
         width: 600,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('pages.infra.tenant.importValidationHint')}</p>
             <List
               size="small"
               dataSource={errors}
@@ -336,14 +333,13 @@ const SuperAdminTenantList: React.FC = () => {
       return;
     }
 
-    // 显示导入进度 Modal
     const progressModal = Modal.info({
-      title: '正在导入组织数据',
+      title: t('pages.infra.tenant.importing'),
       width: 600,
       content: (
         <div>
           <Progress percent={0} status="active" />
-          <p style={{ marginTop: 16 }}>准备导入 {importData.length} 条组织数据...</p>
+          <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.importPreparing', { count: importData.length })}</p>
         </div>
       ),
       okButtonProps: { style: { display: 'none' } },
@@ -369,43 +365,41 @@ const SuperAdminTenantList: React.FC = () => {
         results.push({
           success: true,
           rowIndex: item.rowIndex,
-          message: `成功创建组织：${item.data.name} (域名: ${item.data.domain})`,
+          message: t('pages.infra.tenant.importRowSuccess', { name: item.data.name, domain: item.data.domain }),
           data: tenant,
         });
 
-        // 更新进度
         progressModal.update({
           content: (
             <div>
               <Progress percent={percent} status="active" />
               <p style={{ marginTop: 16 }}>
-                正在导入第 {i + 1} / {importData.length} 条数据...
+                {t('pages.infra.tenant.importProgress', { current: i + 1, total: importData.length })}
               </p>
               <p style={{ marginTop: 8, color: '#52c41a' }}>
-                成功：{successCount} 条 | 失败：{failCount} 条
+                {t('pages.infra.tenant.importProgressCount', { success: successCount, fail: failCount })}
               </p>
             </div>
           ),
         });
       } catch (error: any) {
         failCount++;
-        const errorMessage = error?.message || error?.detail || '未知错误';
+        const errorMessage = error?.message || error?.detail || t('pages.infra.tenant.operationFailed');
         results.push({
           success: false,
           rowIndex: item.rowIndex,
-          message: `第 ${item.rowIndex} 行创建失败：${errorMessage}`,
+          message: t('pages.infra.tenant.importRowFail', { row: item.rowIndex, message: errorMessage }),
         });
 
-        // 更新进度
         progressModal.update({
           content: (
             <div>
               <Progress percent={percent} status="active" />
               <p style={{ marginTop: 16 }}>
-                正在导入第 {i + 1} / {importData.length} 条数据...
+                {t('pages.infra.tenant.importProgress', { current: i + 1, total: importData.length })}
               </p>
               <p style={{ marginTop: 8, color: '#52c41a' }}>
-                成功：{successCount} 条 | 失败：{failCount} 条
+                {t('pages.infra.tenant.importProgressCount', { success: successCount, fail: failCount })}
               </p>
             </div>
           ),
@@ -416,18 +410,17 @@ const SuperAdminTenantList: React.FC = () => {
     // 关闭进度 Modal，显示结果
     progressModal.destroy();
 
-    // 显示导入结果
     const failedResults = results.filter(r => !r.success);
     if (failedResults.length > 0) {
       Modal.warning({
-        title: '导入完成（部分失败）',
+        title: t('pages.infra.tenant.importPartialTitle'),
         width: 700,
         content: (
           <div>
             <p>
-              <strong>导入结果：</strong>成功 {successCount} 条，失败 {failCount} 条
+              <strong>{t('pages.infra.tenant.importResult', { success: successCount, fail: failCount })}</strong>
             </p>
-            <p style={{ marginTop: 16 }}>失败的记录：</p>
+            <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.importFailedRecords')}</p>
             <List
               size="small"
               dataSource={failedResults}
@@ -439,19 +432,13 @@ const SuperAdminTenantList: React.FC = () => {
             />
           </div>
         ),
-        onOk: () => {
-          // 刷新表格
-          actionRef.current?.reload();
-        },
+        onOk: () => actionRef.current?.reload(),
       });
     } else {
       Modal.success({
-        title: '导入成功',
-        content: `成功导入 ${successCount} 条组织数据`,
-        onOk: () => {
-          // 刷新表格
-          actionRef.current?.reload();
-        },
+        title: t('pages.infra.tenant.importSuccessTitle'),
+        content: t('pages.infra.tenant.importSuccessContent', { count: successCount }),
+        onOk: () => actionRef.current?.reload(),
       });
     }
   };
@@ -468,15 +455,12 @@ const SuperAdminTenantList: React.FC = () => {
       });
       setTenantDetail(data);
     } catch (error: any) {
-      message.error(error.message || '加载组织信息失败');
+      message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  /**
-   * 打开详情 Drawer
-   */
   const handleOpenDetail = (tenantId: number) => {
     setCurrentTenantId(tenantId);
     setDrawerVisible(true);
@@ -503,16 +487,16 @@ const SuperAdminTenantList: React.FC = () => {
     let exportInfo = '';
     switch (type) {
       case 'selected':
-        exportInfo = `选中的 ${selectedRowKeys?.length || 0} 条数据`;
+        exportInfo = t('pages.infra.tenant.exportSelected', { count: selectedRowKeys?.length || 0 });
         break;
       case 'currentPage':
-        exportInfo = `当前页的 ${currentPageData?.length || 0} 条数据`;
+        exportInfo = t('pages.infra.tenant.exportCurrentPage', { count: currentPageData?.length || 0 });
         break;
       case 'all':
-        exportInfo = '全部数据';
+        exportInfo = t('pages.infra.tenant.exportAll');
         break;
     }
-    message.info(`导出功能开发中，将导出：${exportInfo}`);
+    message.info(t('pages.infra.tenant.exportDeveloping', { info: exportInfo }));
     // TODO: 实现导出功能
     // 根据 type 调用不同的导出逻辑
     // - selected: 导出 selectedRowKeys 对应的数据
@@ -548,36 +532,36 @@ const SuperAdminTenantList: React.FC = () => {
         // 设置默认套餐配置，确保页面可以正常使用
         setPackageConfigs({
           trial: {
-            name: '体验套餐',
+            name: t('pages.infra.tenant.planTrial'),
             max_users: 10,
             max_storage_mb: 1024,
             allow_pro_apps: false,
-            description: '适合快速体验系统功能，限制用户数和存储空间',
+            description: t('pages.infra.tenant.planDescriptionTrial'),
           },
           basic: {
-            name: '基础版',
+            name: t('pages.infra.tenant.planBasic'),
             max_users: 50,
             max_storage_mb: 5120,
             allow_pro_apps: false,
-            description: '适合小型团队使用，提供基础功能',
+            description: t('pages.infra.tenant.planDescriptionBasic'),
           },
           professional: {
-            name: '专业版',
+            name: t('pages.infra.tenant.planProfessional'),
             max_users: 200,
             max_storage_mb: 20480,
             allow_pro_apps: true,
-            description: '适合中型企业使用，提供完整功能和 PRO 应用支持',
+            description: t('pages.infra.tenant.planDescriptionProfessional'),
           },
           enterprise: {
-            name: '企业版',
+            name: t('pages.infra.tenant.planEnterprise'),
             max_users: 1000,
             max_storage_mb: 102400,
             allow_pro_apps: true,
-            description: '适合大型企业使用，提供最高配置和完整功能',
+            description: t('pages.infra.tenant.planDescriptionEnterprise'),
           },
         });
       });
-  }, []);
+  }, [t]);
 
   /**
    * 处理套餐选择变化
@@ -669,7 +653,7 @@ const SuperAdminTenantList: React.FC = () => {
           });
         }, 0);
       } catch (error: any) {
-        message.error(error.message || '加载组织信息失败');
+        message.error(error.message || t('pages.infra.tenant.loadDetailFailed'));
         setModalVisible(false);
       } finally {
         setFormLoading(false);
@@ -712,9 +696,8 @@ const SuperAdminTenantList: React.FC = () => {
           method: 'PUT',
           data: updateData,
         });
-        message.success('更新成功');
+        message.success(t('pages.infra.tenant.updateSuccess'));
       } else {
-        // 创建组织
         const createData: CreateTenantData = {
           name: values.name,
           domain: values.domain,
@@ -723,19 +706,17 @@ const SuperAdminTenantList: React.FC = () => {
           settings: values.settings || {},
           expires_at: values.expires_at,
         };
-        // 使用平台超级管理员接口创建组织
         await apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
           data: createData,
         });
-        message.success('创建成功');
+        message.success(t('pages.infra.tenant.createSuccess'));
       }
-      
-      // 关闭 Modal 并刷新列表
+
       handleCloseModal();
       actionRef.current?.reload();
     } catch (error: any) {
-      message.error(error.message || '操作失败');
+      message.error(error.message || t('pages.infra.tenant.operationFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -750,27 +731,25 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      message.warning('请先选择要删除的组织');
+      message.warning(t('pages.infra.tenant.selectToDelete'));
       return;
     }
 
-    // 确认删除
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除选中的 ${keys.length} 个组织吗？删除后组织将被暂停（软删除），数据不会真正删除。`,
-      okText: '确认删除',
+      title: t('pages.infra.tenant.deleteConfirmTitle'),
+      content: t('pages.infra.tenant.deleteConfirmContent', { count: keys.length }),
+      okText: t('pages.infra.tenant.deleteConfirmOk'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
-          // 显示删除进度 Modal
           const progressModal = Modal.info({
-            title: '正在删除组织',
+            title: t('pages.infra.tenant.deleting'),
             width: 600,
             content: (
               <div>
                 <Progress percent={0} status="active" />
-                <p style={{ marginTop: 16 }}>准备删除 {keys.length} 个组织...</p>
+                <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deletePreparing', { count: keys.length })}</p>
               </div>
             ),
             okButtonProps: { style: { display: 'none' } },
@@ -781,7 +760,6 @@ const SuperAdminTenantList: React.FC = () => {
           let successCount = 0;
           let failCount = 0;
 
-          // 批量删除
           for (let i = 0; i < tenantIds.length; i++) {
             const tenantId = tenantIds[i];
             const percent = Math.round(((i + 1) / tenantIds.length) * 100);
@@ -792,64 +770,50 @@ const SuperAdminTenantList: React.FC = () => {
               results.push({
                 success: true,
                 tenantId,
-                message: `成功删除组织 ID: ${tenantId}`,
+                message: t('pages.infra.tenant.deleteRowSuccess', { id: tenantId }),
               });
 
-              // 更新进度
               progressModal.update({
                 content: (
                   <div>
                     <Progress percent={percent} status="active" />
-                    <p style={{ marginTop: 16 }}>
-                      正在删除第 {i + 1} / {tenantIds.length} 个组织...
-                    </p>
-                    <p style={{ marginTop: 8, color: '#52c41a' }}>
-                      成功：{successCount} 个 | 失败：{failCount} 个
-                    </p>
+                    <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteProgress', { current: i + 1, total: tenantIds.length })}</p>
+                    <p style={{ marginTop: 8, color: '#52c41a' }}>{t('pages.infra.tenant.deleteProgressCount', { success: successCount, fail: failCount })}</p>
                   </div>
                 ),
               });
             } catch (error: any) {
               failCount++;
-              const errorMessage = error?.message || error?.detail || '未知错误';
+              const errorMessage = error?.message || error?.detail || t('pages.infra.tenant.operationFailed');
               results.push({
                 success: false,
                 tenantId,
-                message: `删除组织 ID ${tenantId} 失败：${errorMessage}`,
+                message: t('pages.infra.tenant.deleteRowFail', { id: tenantId, message: errorMessage }),
               });
 
-              // 更新进度
               progressModal.update({
                 content: (
                   <div>
                     <Progress percent={percent} status="active" />
-                    <p style={{ marginTop: 16 }}>
-                      正在删除第 {i + 1} / {tenantIds.length} 个组织...
-                    </p>
-                    <p style={{ marginTop: 8, color: '#52c41a' }}>
-                      成功：{successCount} 个 | 失败：{failCount} 个
-                    </p>
+                    <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteProgress', { current: i + 1, total: tenantIds.length })}</p>
+                    <p style={{ marginTop: 8, color: '#52c41a' }}>{t('pages.infra.tenant.deleteProgressCount', { success: successCount, fail: failCount })}</p>
                   </div>
                 ),
               });
             }
           }
 
-          // 关闭进度 Modal
           progressModal.destroy();
 
-          // 显示删除结果
           const failedResults = results.filter(r => !r.success);
           if (failedResults.length > 0) {
             Modal.warning({
-              title: '删除完成（部分失败）',
+              title: t('pages.infra.tenant.deletePartialTitle'),
               width: 700,
               content: (
                 <div>
-                  <p>
-                    <strong>删除结果：</strong>成功 {successCount} 个，失败 {failCount} 个
-                  </p>
-                  <p style={{ marginTop: 16 }}>失败的记录：</p>
+                  <p><strong>{t('pages.infra.tenant.deleteResult', { success: successCount, fail: failCount })}</strong></p>
+                  <p style={{ marginTop: 16 }}>{t('pages.infra.tenant.deleteFailedRecords')}</p>
                   <List
                     size="small"
                     dataSource={failedResults}
@@ -862,26 +826,22 @@ const SuperAdminTenantList: React.FC = () => {
                 </div>
               ),
               onOk: () => {
-                // 刷新表格
                 actionRef.current?.reload();
-                // 清空选中项
                 setSelectedRowKeys([]);
               },
             });
           } else {
             Modal.success({
-              title: '删除成功',
-              content: `成功删除 ${successCount} 个组织`,
+              title: t('pages.infra.tenant.deleteSuccessTitle'),
+              content: t('pages.infra.tenant.deleteSuccessContent', { count: successCount }),
               onOk: () => {
-                // 刷新表格
                 actionRef.current?.reload();
-                // 清空选中项
                 setSelectedRowKeys([]);
               },
             });
           }
         } catch (error: any) {
-          message.error('删除操作失败：' + (error.message || '未知错误'));
+          message.error(t('pages.infra.tenant.deleteOpFailed', { message: error?.message || '' }));
         }
       },
     });
@@ -892,7 +852,7 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const columns: ProColumns<Tenant>[] = [
     {
-      title: '组织名称',
+      title: t('pages.infra.tenant.name'),
       dataIndex: 'name',
       ellipsis: true,
       sorter: true,
@@ -923,7 +883,7 @@ const SuperAdminTenantList: React.FC = () => {
       },
     },
     {
-      title: '域名',
+      title: t('pages.infra.tenant.domain'),
       dataIndex: 'domain',
       ellipsis: true,
       sorter: true,
@@ -954,39 +914,39 @@ const SuperAdminTenantList: React.FC = () => {
       },
     },
     {
-      title: '状态',
+      title: t('pages.infra.tenant.status'),
       dataIndex: 'status',
       valueType: 'select',
       sorter: true,
       valueEnum: {
-        [TenantStatus.ACTIVE]: { text: '激活' },
-        [TenantStatus.INACTIVE]: { text: '未激活' },
-        [TenantStatus.EXPIRED]: { text: '已过期' },
-        [TenantStatus.SUSPENDED]: { text: '已暂停' },
+        [TenantStatus.ACTIVE]: { text: t('pages.infra.tenant.statusActive') },
+        [TenantStatus.INACTIVE]: { text: t('pages.infra.tenant.statusInactive') },
+        [TenantStatus.EXPIRED]: { text: t('pages.infra.tenant.statusExpired') },
+        [TenantStatus.SUSPENDED]: { text: t('pages.infra.tenant.statusSuspended') },
       },
       render: (_, record) => {
-        const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
+        return <Tag color={statusInfo.color}>{statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}</Tag>;
       },
     },
     {
-      title: '套餐',
+      title: t('pages.infra.tenant.plan'),
       dataIndex: 'plan',
       valueType: 'select',
       sorter: true,
       valueEnum: {
-        [TenantPlan.TRIAL]: { text: '体验套餐' },
-        [TenantPlan.BASIC]: { text: '基础版' },
-        [TenantPlan.PROFESSIONAL]: { text: '专业版' },
-        [TenantPlan.ENTERPRISE]: { text: '企业版' },
+        [TenantPlan.TRIAL]: { text: t('pages.infra.tenant.planTrial') },
+        [TenantPlan.BASIC]: { text: t('pages.infra.tenant.planBasic') },
+        [TenantPlan.PROFESSIONAL]: { text: t('pages.infra.tenant.planProfessional') },
+        [TenantPlan.ENTERPRISE]: { text: t('pages.infra.tenant.planEnterprise') },
       },
       render: (_, record) => {
-        const planInfo = planTagMap[record.plan] ?? { color: 'default', text: record.plan ?? '-' };
-        return <Tag color={planInfo.color}>{planInfo.text}</Tag>;
+        const planInfo = planTagMap[record.plan] ?? { color: 'default', textKey: '' };
+        return <Tag color={planInfo.color}>{planInfo.textKey ? t(planInfo.textKey) : (record.plan ?? '-')}</Tag>;
       },
     },
     {
-      title: '最大用户数',
+      title: t('pages.infra.tenant.maxUsers'),
       dataIndex: 'max_users',
       width: 120,
       hideInSearch: true,
@@ -994,7 +954,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['lg'],
     },
     {
-      title: '存储空间 (MB)',
+      title: t('pages.infra.tenant.maxStorage'),
       dataIndex: 'max_storage',
       width: 150,
       hideInSearch: true,
@@ -1002,7 +962,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['lg'],
     },
     {
-      title: '创建时间',
+      title: t('pages.infra.tenant.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       hideInSearch: true,
@@ -1011,7 +971,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['xl'],
     },
     {
-      title: '操作',
+      title: t('pages.infra.tenant.actions'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
@@ -1027,11 +987,11 @@ const SuperAdminTenantList: React.FC = () => {
               size="small"
               onClick={() => handleOpenDetail(record.id)}
             >
-              详情
+              {t('pages.infra.tenant.detail')}
             </Button>
             {isInactive && (
               <Popconfirm
-                title="确定要审核通过此组织吗？"
+                title={t('pages.infra.tenant.approveConfirm')}
                 onConfirm={async () => {
                   const success = await approveTenant(record.id);
                   if (success) {
@@ -1040,13 +1000,13 @@ const SuperAdminTenantList: React.FC = () => {
                 }}
               >
                 <Button type="link" size="small" icon={<CheckOutlined />}>
-                  审核通过
+                  {t('pages.infra.tenant.approve')}
                 </Button>
               </Popconfirm>
             )}
             {isInactive && (
               <Popconfirm
-                title="确定要拒绝此组织注册吗？"
+                title={t('pages.infra.tenant.rejectConfirm')}
                 onConfirm={async () => {
                   const success = await rejectTenant(record.id);
                   if (success) {
@@ -1055,13 +1015,13 @@ const SuperAdminTenantList: React.FC = () => {
                 }}
               >
                 <Button type="link" size="small" danger icon={<CloseOutlined />}>
-                  审核拒绝
+                  {t('pages.infra.tenant.reject')}
                 </Button>
               </Popconfirm>
             )}
             {isSuspended && (
               <Popconfirm
-                title="确定要激活此组织吗？"
+                title={t('pages.infra.tenant.activateConfirm')}
                 onConfirm={async () => {
                   const success = await activateTenant(record.id);
                   if (success) {
@@ -1070,13 +1030,13 @@ const SuperAdminTenantList: React.FC = () => {
                 }}
               >
                 <Button type="link" size="small" icon={<PlayCircleOutlined />}>
-                  激活
+                  {t('pages.infra.tenant.activate')}
                 </Button>
               </Popconfirm>
             )}
             {isActive && (
               <Popconfirm
-                title="确定要停用此组织吗？"
+                title={t('pages.infra.tenant.deactivateConfirm')}
                 onConfirm={async () => {
                   const success = await deactivateTenant(record.id);
                   if (success) {
@@ -1085,7 +1045,7 @@ const SuperAdminTenantList: React.FC = () => {
                 }}
               >
                 <Button type="link" size="small" danger icon={<PauseCircleOutlined />}>
-                  停用
+                  {t('pages.infra.tenant.deactivate')}
                 </Button>
               </Popconfirm>
             )}
@@ -1108,15 +1068,17 @@ const SuperAdminTenantList: React.FC = () => {
         setSelectedRowKeys(keys);
       }}
       showCreateButton={true}
+      createButtonText={t('pages.infra.tenant.createButton')}
       onCreate={handleCreate}
       showEditButton={true}
       onEdit={handleEdit}
       showDeleteButton={true}
+      deleteButtonText={t('pages.infra.tenant.batchDeleteButton')}
       onDelete={handleDelete}
       showImportButton={true}
       onImport={handleImport}
-      importHeaders={['*组织名称', '*域名', '套餐类型', '状态', '最大用户数', '存储空间(MB)', '过期时间']}
-      importExampleRow={['示例组织', 'example', '体验套餐', '未激活', '10', '1024', '']}
+      importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('pages.infra.tenant.importHeaderStatus'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
+      importExampleRow={[t('pages.infra.tenant.importExampleName'), 'example', t('pages.infra.tenant.planTrial'), t('pages.infra.tenant.statusInactive'), '10', '1024', '']}
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'help']}
@@ -1174,7 +1136,7 @@ const SuperAdminTenantList: React.FC = () => {
           // 如果获取数据失败，返回空列表而不是抛出错误
           // 避免错误导致页面跳转
           console.error('获取组织列表失败:', error);
-          message.error(error?.message || '获取组织列表失败');
+          message.error(error?.message || t('pages.infra.tenant.listLoadFailed'));
           return {
             data: [],
             success: false,
@@ -1188,7 +1150,7 @@ const SuperAdminTenantList: React.FC = () => {
     
     {/* 组织详情 Drawer */}
     <DetailDrawerTemplate<Tenant>
-      title="组织详情"
+      title={t('pages.infra.tenant.detailTitle')}
       width={DRAWER_CONFIG.STANDARD_WIDTH}
       open={drawerVisible}
       onClose={handleCloseDetail}
@@ -1196,68 +1158,67 @@ const SuperAdminTenantList: React.FC = () => {
       dataSource={tenantDetail || {}}
       columns={[
             {
-              title: '组织名称',
+              title: t('pages.infra.tenant.name'),
               dataIndex: 'name',
             },
             {
-              title: '域名',
+              title: t('pages.infra.tenant.domain'),
               dataIndex: 'domain',
             },
             {
-              title: '状态',
+              title: t('pages.infra.tenant.status'),
               dataIndex: 'status',
               render: (_, record) => {
-                const statusInfo = statusTagMap[record.status] ?? { color: 'default', text: record.status ?? '-' };
-                return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+                const statusInfo = statusTagMap[record.status] ?? { color: 'default', textKey: '' };
+                return <Tag color={statusInfo.color}>{statusInfo.textKey ? t(statusInfo.textKey) : (record.status ?? '-')}</Tag>;
               },
             },
             {
-              title: '套餐',
+              title: t('pages.infra.tenant.plan'),
               dataIndex: 'plan',
               render: (_, record) => {
-                const planInfo = planTagMap[record.plan] ?? { color: 'default', text: record.plan ?? '-' };
-                return <Tag color={planInfo.color}>{planInfo.text}</Tag>;
+                const planInfo = planTagMap[record.plan] ?? { color: 'default', textKey: '' };
+                return <Tag color={planInfo.color}>{planInfo.textKey ? t(planInfo.textKey) : (record.plan ?? '-')}</Tag>;
               },
             },
             {
-              title: '最大用户数',
+              title: t('pages.infra.tenant.maxUsers'),
               dataIndex: 'max_users',
             },
             {
-              title: '存储空间 (MB)',
+              title: t('pages.infra.tenant.maxStorage'),
               dataIndex: 'max_storage',
             },
             {
-              title: '过期时间',
+              title: t('pages.infra.tenant.expiresAt'),
               dataIndex: 'expires_at',
               valueType: 'dateTime',
             },
             {
-              title: '创建时间',
+              title: t('pages.infra.tenant.createdAt'),
               dataIndex: 'created_at',
               valueType: 'dateTime',
             },
             {
-              title: '更新时间',
+              title: t('pages.infra.tenant.updatedAt'),
               dataIndex: 'updated_at',
               valueType: 'dateTime',
             },
             {
-              title: '配置',
+              title: t('pages.infra.tenant.settings'),
               dataIndex: 'settings',
               span: 2,
               render: (value) => {
-                // ⭐ 修复：确保 settings 对象被正确序列化为 JSON 字符串显示
                 if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) {
                   return '-';
                 }
                 try {
-                  const jsonStr = typeof value === 'string' 
-                    ? value 
+                  const jsonStr = typeof value === 'string'
+                    ? value
                     : JSON.stringify(value, null, 2);
                   return (
-                    <pre style={{ 
-                      margin: 0, 
+                    <pre style={{
+                      margin: 0,
                       whiteSpace: 'pre-wrap',
                       fontSize: '12px',
                       fontFamily: CODE_FONT_FAMILY,
@@ -1271,7 +1232,7 @@ const SuperAdminTenantList: React.FC = () => {
                     </pre>
                   );
                 } catch (error) {
-                  return <span style={{ color: '#ff4d4f' }}>配置格式错误</span>;
+                  return <span style={{ color: '#ff4d4f' }}>{t('pages.infra.tenant.configError')}</span>;
                 }
               },
             },
@@ -1280,7 +1241,7 @@ const SuperAdminTenantList: React.FC = () => {
     
     {/* 新建/编辑组织 Modal */}
     <FormModalTemplate
-      title={isEdit ? '编辑组织' : '新建组织'}
+      title={isEdit ? t('pages.infra.tenant.editTitle') : t('pages.infra.tenant.createTitle')}
       open={modalVisible}
       onClose={handleCloseModal}
       onFinish={handleSubmit}
@@ -1295,47 +1256,47 @@ const SuperAdminTenantList: React.FC = () => {
     >
         <ProFormText
           name="name"
-          label="组织名称"
-          placeholder="请输入组织名称"
+          label={t('pages.infra.tenant.name')}
+          placeholder={t('pages.infra.tenant.namePlaceholder')}
           colProps={{ span: 12 }}
           rules={[
-            { required: true, message: '请输入组织名称' },
-            { min: 1, max: 100, message: '组织名称长度为 1-100 字符' },
+            { required: true, message: t('pages.infra.tenant.nameRequired') },
+            { min: 1, max: 100, message: t('pages.infra.tenant.nameLength') },
           ]}
         />
         <ProFormText
           name="domain"
-          label="组织域名"
-          placeholder="请输入组织域名（用于子域名访问）"
+          label={t('pages.infra.tenant.formDomainLabel')}
+          placeholder={t('pages.infra.tenant.formDomainPlaceholder')}
           colProps={{ span: 12 }}
           rules={[
-            { required: true, message: '请输入组织域名' },
-            { min: 1, max: 100, message: '组织域名长度为 1-100 字符' },
-            { pattern: /^[a-z0-9-]+$/, message: '域名只能包含小写字母、数字和连字符' },
+            { required: true, message: t('pages.infra.tenant.formDomainRequired') },
+            { min: 1, max: 100, message: t('pages.infra.tenant.domainLength') },
+            { pattern: /^[a-z0-9-]+$/, message: t('pages.infra.tenant.formDomainPattern') },
           ]}
         />
         <SafeProFormSelect
           name="status"
-          label="组织状态"
-          placeholder="请选择组织状态"
+          label={t('pages.infra.tenant.formStatusLabel')}
+          placeholder={t('pages.infra.tenant.formStatusPlaceholder')}
           colProps={{ span: 12 }}
           options={[
-            { label: '激活', value: TenantStatus.ACTIVE },
-            { label: '未激活', value: TenantStatus.INACTIVE },
-            { label: '已过期', value: TenantStatus.EXPIRED },
-            { label: '已暂停', value: TenantStatus.SUSPENDED },
+            { label: t('pages.infra.tenant.statusActive'), value: TenantStatus.ACTIVE },
+            { label: t('pages.infra.tenant.statusInactive'), value: TenantStatus.INACTIVE },
+            { label: t('pages.infra.tenant.statusExpired'), value: TenantStatus.EXPIRED },
+            { label: t('pages.infra.tenant.statusSuspended'), value: TenantStatus.SUSPENDED },
           ]}
         />
         <SafeProFormSelect
           name="plan"
-          label="组织套餐"
-          placeholder="请选择组织套餐"
+          label={t('pages.infra.tenant.formPlanLabel')}
+          placeholder={t('pages.infra.tenant.formPlanPlaceholder')}
           colProps={{ span: 12 }}
           options={[
-            { label: '体验套餐', value: TenantPlan.TRIAL },
-            { label: '基础版', value: TenantPlan.BASIC },
-            { label: '专业版', value: TenantPlan.PROFESSIONAL },
-            { label: '企业版', value: TenantPlan.ENTERPRISE },
+            { label: t('pages.infra.tenant.planTrial'), value: TenantPlan.TRIAL },
+            { label: t('pages.infra.tenant.planBasic'), value: TenantPlan.BASIC },
+            { label: t('pages.infra.tenant.planProfessional'), value: TenantPlan.PROFESSIONAL },
+            { label: t('pages.infra.tenant.planEnterprise'), value: TenantPlan.ENTERPRISE },
           ]}
           fieldProps={{
             onChange: (value: TenantPlan) => {
@@ -1344,32 +1305,36 @@ const SuperAdminTenantList: React.FC = () => {
           }}
           extra={
             selectedPlan && packageConfigs[selectedPlan]
-              ? `套餐说明：${packageConfigs[selectedPlan].description}（最大用户数：${packageConfigs[selectedPlan].max_users}，最大存储：${packageConfigs[selectedPlan].max_storage_mb} MB）`
+              ? t('pages.infra.tenant.planDescriptionExtra', {
+                  description: packageConfigs[selectedPlan].description,
+                  maxUsers: packageConfigs[selectedPlan].max_users,
+                  maxStorage: packageConfigs[selectedPlan].max_storage_mb,
+                })
               : undefined
           }
         />
         <ProFormDigit
           name="max_users"
-          label="最大用户数"
-          placeholder="将根据套餐自动设置"
+          label={t('pages.infra.tenant.maxUsers')}
+          placeholder={t('pages.infra.tenant.formMaxUsersPlaceholder')}
           colProps={{ span: 12 }}
           min={1}
-          rules={[{ required: true, message: '请输入最大用户数' }]}
-          extra="选择套餐后将自动设置，也可手动调整"
+          rules={[{ required: true, message: t('pages.infra.tenant.formMaxUsersRequired') }]}
+          extra={t('pages.infra.tenant.formPlanExtra')}
         />
         <ProFormDigit
           name="max_storage"
-          label="最大存储空间（MB）"
-          placeholder="将根据套餐自动设置"
+          label={t('pages.infra.tenant.formMaxStorageLabel')}
+          placeholder={t('pages.infra.tenant.formMaxStoragePlaceholder')}
           colProps={{ span: 12 }}
           min={0}
-          rules={[{ required: true, message: '请输入最大存储空间' }]}
-          extra="选择套餐后将自动设置，也可手动调整"
+          rules={[{ required: true, message: t('pages.infra.tenant.formMaxStorageRequired') }]}
+          extra={t('pages.infra.tenant.formPlanExtra')}
         />
         <ProFormDateTimePicker
           name="expires_at"
-          label="过期时间（可选）"
-          placeholder="请选择过期时间（留空则永不过期）"
+          label={t('pages.infra.tenant.formExpiresAtLabel')}
+          placeholder={t('pages.infra.tenant.formExpiresAtPlaceholder')}
           colProps={{ span: 12 }}
         />
     </FormModalTemplate>

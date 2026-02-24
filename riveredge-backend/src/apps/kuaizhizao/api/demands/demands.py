@@ -154,6 +154,28 @@ async def list_demands(
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求列表失败")
 
 
+@router.get("/orphan-report", response_model=Dict[str, Any], summary="巡检孤儿需求（仅查询）")
+async def inspect_orphan_demands(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    巡检孤儿需求（仅查询，不修改）。
+
+    返回当前租户的：销售订单数、销售预测数、需求总数，以及来源单据已不存在的需求 ID 列表（孤儿）。
+    用于确认数据后再决定是否调用 POST /clean-orphans 清理。
+    """
+    try:
+        result = await demand_service.inspect_orphan_demands(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        logger.error(f"巡检孤儿需求失败: {e}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"巡检孤儿需求失败: {str(e)}",
+        )
+
+
 @router.get("/{demand_id}", response_model=DemandResponse, summary="获取需求详情")
 async def get_demand(
     demand_id: int = Path(..., description="需求ID"),
@@ -181,6 +203,38 @@ async def get_demand(
     except Exception as e:
         logger.error(f"获取需求详情失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求详情失败")
+
+
+@router.get("/{demand_id}/recalc-history", summary="获取需求重算历史")
+async def get_demand_recalc_history(
+    demand_id: int = Path(..., description="需求ID"),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求重算历史列表，用于「重算过程」展示。"""
+    try:
+        return await demand_service.list_demand_recalc_history(
+            tenant_id=tenant_id, demand_id=demand_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/{demand_id}/snapshots", summary="获取需求快照列表")
+async def get_demand_snapshots(
+    demand_id: int = Path(..., description="需求ID"),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求快照列表。"""
+    try:
+        return await demand_service.list_demand_snapshots(
+            tenant_id=tenant_id, demand_id=demand_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/{demand_id}", response_model=DemandResponse, summary="更新需求")
@@ -438,3 +492,25 @@ async def withdraw_demand_from_computation(
     except Exception as e:
         logger.error(f"撤回需求计算失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"撤回需求计算失败: {str(e)}")
+
+
+@router.post("/clean-orphans", response_model=Dict[str, Any], summary="清理孤儿需求")
+async def clean_orphan_demands(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    清理孤儿需求
+
+    将来源单据（销售订单或销售预测）已被删除、但需求记录仍存在的需求进行软删除，
+    使其不再在需求列表中展示。用于在改动删除逻辑前已产生的历史孤儿数据。
+    """
+    try:
+        result = await demand_service.clean_orphan_demands(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        logger.error(f"清理孤儿需求失败: {e}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"清理孤儿需求失败: {str(e)}",
+        )

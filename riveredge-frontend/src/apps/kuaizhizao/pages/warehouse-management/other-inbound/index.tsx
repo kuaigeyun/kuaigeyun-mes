@@ -12,10 +12,10 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialApi } from '../../../../master-data/services/material';
 
 const REASON_TYPES = [
   { value: '盘盈', label: '盘盈' },
@@ -71,18 +71,15 @@ const OtherInboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; inbound_quantity: number; unit_price: number }>>([]);
 
   React.useEffect(() => {
     const load = async () => {
       try {
-        const [wh, mat] = await Promise.all([
+        const [wh] = await Promise.all([
           masterDataWarehouseApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
         ]);
-        setWarehouseList(Array.isArray(wh) ? wh : wh?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
       } catch (e) {
         console.error('加载仓库/物料失败', e);
       }
@@ -219,16 +216,15 @@ const OtherInboundPage: React.FC = () => {
     setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', inbound_quantity: 1, unit_price: 0 }]);
   };
 
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
+  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
+    if (!material) return;
     const updated = [...formItems];
     updated[idx] = {
       ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
+      material_id: material.id,
+      material_code: material.mainCode || material.code || '',
+      material_name: material.name || '',
+      material_unit: material.baseUnit || '',
     };
     setFormItems(updated);
   };
@@ -343,12 +339,14 @@ const OtherInboundPage: React.FC = () => {
             <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
             {formItems.map((it, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Select
-                  placeholder="物料"
-                  style={{ width: 200 }}
-                  options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                  onChange={(v) => onMaterialSelect(idx, v)}
-                />
+                <div style={{ flex: '1 1 250px' }}>
+                  <UniMaterialSelect
+                    name={['items', idx, 'material_id']}
+                    label=""
+                    placeholder="请输入或选择物料"
+                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
+                  />
+                </div>
                 <InputNumber placeholder="数量" min={0.01} value={it.inbound_quantity} onChange={(v) => {
                   const u = [...formItems]; u[idx] = { ...u[idx], inbound_quantity: v ?? 0 }; setFormItems(u);
                 }} />

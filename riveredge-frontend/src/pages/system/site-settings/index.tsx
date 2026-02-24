@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -29,6 +30,7 @@ import ImageCropper from '../../../components/image-cropper';
  * 站点设置页面组件
  */
 const SiteSettingsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const [form] = Form.useForm();
@@ -67,7 +69,7 @@ const SiteSettingsPage: React.FC = () => {
         setLogoUrl(previewInfo.preview_url);
         setLogoFileList([{
           uid: logoValue.trim(),
-          name: '站点Logo',
+          name: t('pages.system.siteSettings.siteLogo'),
           status: 'done',
           url: previewInfo.preview_url,
         }]);
@@ -81,7 +83,7 @@ const SiteSettingsPage: React.FC = () => {
       setLogoUrl(logoValue.trim());
       setLogoFileList([{
         uid: logoValue.trim(),
-        name: '站点Logo',
+        name: t('pages.system.siteSettings.siteLogo'),
         status: 'done',
         url: logoValue.trim(),
       }]);
@@ -231,7 +233,7 @@ const SiteSettingsPage: React.FC = () => {
       // 加载LOGO预览
       await loadLogoPreview(siteLogoValue);
     } catch (error: any) {
-      messageApi.error(error?.message || '加载站点设置失败');
+      messageApi.error(error?.message || t('pages.system.siteSettings.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -243,7 +245,7 @@ const SiteSettingsPage: React.FC = () => {
   const handleLogoFileSelect: UploadProps['beforeUpload'] = (file) => {
     // 检查文件类型
     if (!file.type.startsWith('image/')) {
-      messageApi.error('请选择图片文件');
+      messageApi.error(t('pages.system.siteSettings.selectImage'));
       return false;
     }
     
@@ -277,7 +279,7 @@ const SiteSettingsPage: React.FC = () => {
       // 上传剪裁后的文件（使用category标记为站点logo，便于管理，自动租户隔离）
       const response: FileUploadResponse = await uploadFile(croppedFile, {
         category: 'site-logo',
-        description: '站点Logo',
+        description: t('pages.system.siteSettings.siteLogo'),
       });
       
       if (response.uuid) {
@@ -308,15 +310,15 @@ const SiteSettingsPage: React.FC = () => {
           url: previewUrl || localPreviewUrl,
         }]);
         
-        messageApi.success('LOGO上传成功');
+        messageApi.success(t('pages.system.siteSettings.logoUploadSuccess'));
       } else {
         // 上传失败，释放本地预览URL
         URL.revokeObjectURL(localPreviewUrl);
         setLogoUrl(undefined);
-        throw new Error('上传失败');
+        throw new Error(t('pages.system.siteSettings.uploadFailed'));
       }
     } catch (error: any) {
-      messageApi.error(error.message || 'LOGO上传失败');
+      messageApi.error(error.message || t('pages.system.siteSettings.logoUploadFailed'));
     }
   };
 
@@ -340,10 +342,10 @@ const SiteSettingsPage: React.FC = () => {
         site_logo: '',
       });
       await updateSiteSetting({ settings: { site_logo: '' } });
-      messageApi.success('站点Logo已清除');
+      messageApi.success(t('pages.system.siteSettings.logoClearSuccess'));
       useThemeStore.getState().initFromApi();
     } catch (error: any) {
-      messageApi.error(error.message || '清除Logo失败');
+      messageApi.error(error.message || t('pages.system.siteSettings.logoClearFailed'));
     } finally {
       setSaving(false);
     }
@@ -374,14 +376,14 @@ const SiteSettingsPage: React.FC = () => {
       };
 
       await updateSiteSetting({ settings });
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.siteSettings.saveSuccess'));
 
       // 刷新 configStore 使日期格式、站点名称、LOGO 等配置立即生效（BasicLayout 等从 configStore 读取）
       await fetchConfigs();
       // 重新加载设置
       await loadSiteSetting();
     } catch (error: any) {
-      messageApi.error(error?.message || '保存失败');
+      messageApi.error(error?.message || t('pages.system.siteSettings.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -395,7 +397,7 @@ const SiteSettingsPage: React.FC = () => {
           onClick={loadSiteSetting}
           loading={loading}
         >
-          刷新
+          {t('pages.system.siteSettings.refresh')}
         </Button>
         <Button
           type="primary"
@@ -403,7 +405,7 @@ const SiteSettingsPage: React.FC = () => {
           onClick={handleSave}
           loading={saving}
         >
-          保存
+          {t('pages.system.siteSettings.save')}
         </Button>
       </Space>
     </div>
@@ -414,15 +416,15 @@ const SiteSettingsPage: React.FC = () => {
       <Col xs={24} sm={24} md={24} lg={24}>
         <Form.Item
           name="site_logo"
-          label="站点 Logo"
-          tooltip="上传图片作为站点Logo，未配置时将使用默认Logo（支持租户隔离）"
+          label={t('pages.system.siteSettings.siteLogo')}
+          tooltip={t('pages.system.siteSettings.siteLogoTooltip')}
         >
           <Space orientation="vertical" style={{ width: '100%' }}>
             {logoUrl && (
               <div style={{ marginBottom: 8 }}>
                 <img
                   src={logoUrl}
-                  alt="站点Logo"
+                  alt={t('pages.system.siteSettings.siteLogo')}
                   style={{
                     maxWidth: '200px',
                     maxHeight: '100px',
@@ -442,11 +444,11 @@ const SiteSettingsPage: React.FC = () => {
                 accept="image/*"
                 showUploadList={false}
               >
-                <Button icon={<UploadOutlined />}>上传Logo</Button>
+                <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadLogo')}</Button>
               </Upload>
               {logoUrl && (
                 <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo}>
-                  清除Logo
+                  {t('pages.system.siteSettings.clearLogo')}
                 </Button>
               )}
             </Space>
@@ -456,30 +458,30 @@ const SiteSettingsPage: React.FC = () => {
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item
           name="site_name"
-          label="站点名称"
-          tooltip="未配置时将使用框架名称（RiverEdge SaaS）"
+          label={t('pages.system.siteSettings.siteName')}
+          tooltip={t('pages.system.siteSettings.siteNameTooltip')}
         >
-          <Input placeholder="请输入站点名称（可选，未配置时使用框架名称）" />
+          <Input placeholder={t('pages.system.siteSettings.siteNamePlaceholder')} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="organization_name" label="组织名称">
-          <Input placeholder="请输入组织名称" />
+        <Form.Item name="organization_name" label={t('pages.system.siteSettings.organizationName')}>
+          <Input placeholder={t('pages.system.siteSettings.organizationNamePlaceholder')} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="organization_address" label="组织地址">
-          <Input placeholder="请输入组织地址" />
+        <Form.Item name="organization_address" label={t('pages.system.siteSettings.organizationAddress')}>
+          <Input placeholder={t('pages.system.siteSettings.organizationAddressPlaceholder')} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="contact_info" label="联系方式">
-          <Input placeholder="请输入联系方式" />
+        <Form.Item name="contact_info" label={t('pages.system.siteSettings.contactInfo')}>
+          <Input placeholder={t('pages.system.siteSettings.contactInfoPlaceholder')} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="default_currency" label="默认货币">
-          <Select placeholder="请选择默认货币" loading={loading} allowClear>
+        <Form.Item name="default_currency" label={t('pages.system.siteSettings.defaultCurrency')}>
+          <Select placeholder={t('pages.system.siteSettings.defaultCurrencyPlaceholder')} loading={loading} allowClear>
             {currencyOptions.map((item) => (
               <Select.Option key={item.uuid} value={item.value}>
                 {item.label}
@@ -498,8 +500,8 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="date_format" label="日期格式">
-          <Select placeholder="请选择日期格式">
+        <Form.Item name="date_format" label={t('pages.system.siteSettings.dateFormat')}>
+          <Select placeholder={t('pages.system.siteSettings.dateFormatPlaceholder')}>
             <Select.Option value="YYYY-MM-DD">YYYY-MM-DD</Select.Option>
             <Select.Option value="DD/MM/YYYY">DD/MM/YYYY</Select.Option>
             <Select.Option value="MM/DD/YYYY">MM/DD/YYYY</Select.Option>
@@ -508,8 +510,8 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="default_language" label="默认语言">
-          <Select placeholder="请选择默认语言" loading={loading} allowClear>
+        <Form.Item name="default_language" label={t('pages.system.siteSettings.defaultLanguage')}>
+          <Select placeholder={t('pages.system.siteSettings.defaultLanguagePlaceholder')} loading={loading} allowClear>
             {languageOptions.map((item) => (
               <Select.Option key={item.key} value={item.value}>
                 {item.label}
@@ -525,8 +527,8 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="timezone" label="时区设置">
-          <Select placeholder="请选择时区" loading={loading} allowClear>
+        <Form.Item name="timezone" label={t('pages.system.siteSettings.timezone')}>
+          <Select placeholder={t('pages.system.siteSettings.timezonePlaceholder')} loading={loading} allowClear>
             {timezoneOptions.map((item) => (
               <Select.Option key={item.uuid} value={item.value}>
                 {item.label}
@@ -546,13 +548,13 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={24} lg={24}>
-        <Form.Item name="copyright" label="版权信息">
-          <Input placeholder="请输入版权信息" />
+        <Form.Item name="copyright" label={t('pages.system.siteSettings.copyright')}>
+          <Input placeholder={t('pages.system.siteSettings.copyrightPlaceholder')} />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={24} lg={24}>
-        <Form.Item name="description" label="站点描述">
-          <Input.TextArea rows={3} placeholder="请输入站点描述" />
+        <Form.Item name="description" label={t('pages.system.siteSettings.description')}>
+          <Input.TextArea rows={3} placeholder={t('pages.system.siteSettings.descriptionPlaceholder')} />
         </Form.Item>
       </Col>
     </Row>
@@ -568,12 +570,12 @@ const SiteSettingsPage: React.FC = () => {
   const functionSettingsContent = (
     <Row gutter={[24, 16]}>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="enable_invitation" label="启用邀请注册" valuePropName="checked">
+        <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
           <Switch />
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="enable_register" label="启用公开注册" valuePropName="checked">
+        <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
           <Switch />
         </Form.Item>
       </Col>
@@ -604,15 +606,15 @@ const SiteSettingsPage: React.FC = () => {
         activeTabKey={activeTabKey}
         onTabChange={setActiveTabKey}
         tabs={[
-          { key: 'basic', label: '基本信息', children: basicInfoWithActions },
-          { key: 'function', label: '功能设置', children: functionSettingsWithActions },
+          { key: 'basic', label: t('pages.system.siteSettings.tabBasic'), children: basicInfoWithActions },
+          { key: 'function', label: t('pages.system.siteSettings.tabFunction'), children: functionSettingsWithActions },
         ]}
       />
 
       {/* 图片剪裁弹窗 */}
       <ImageCropper
         open={cropModalVisible}
-        title="剪裁站点Logo"
+        title={t('pages.system.siteSettings.cropTitle')}
         image={selectedImageFile}
         defaultShape="rect"
         onCancel={handleCropCancel}

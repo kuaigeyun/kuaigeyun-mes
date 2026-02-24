@@ -54,7 +54,7 @@ const OperationLogsPage: React.FC = () => {
     } catch (error: any) {
       // 如果是 401 错误，不显示错误消息（可能是用户未登录）
       if (error?.response?.status !== 401) {
-        messageApi.error(error.message || '加载统计信息失败');
+        messageApi.error(error.message || t('pages.system.operationLogs.loadStatsFailed'));
       }
     }
   }, [currentUser, messageApi]);
@@ -76,7 +76,7 @@ const OperationLogsPage: React.FC = () => {
       setCurrentLog(logDetail);
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '加载日志详情失败');
+      messageApi.error(error.message || t('pages.system.operationLogs.loadDetailFailed'));
     }
   };
 
@@ -85,12 +85,12 @@ const OperationLogsPage: React.FC = () => {
    */
   const getOperationTypeTag = (type: string) => {
     const typeMap: Record<string, { color: string; text: string }> = {
-      create: { color: 'success', text: '创建' },
-      update: { color: 'processing', text: '更新' },
-      delete: { color: 'error', text: '删除' },
-      view: { color: 'default', text: '查看' },
-      error: { color: 'error', text: '错误' },
-      unknown: { color: 'default', text: '未知' },
+      create: { color: 'success', text: t('pages.system.operationLogs.typeCreate') },
+      update: { color: 'processing', text: t('pages.system.operationLogs.typeUpdate') },
+      delete: { color: 'error', text: t('pages.system.operationLogs.typeDelete') },
+      view: { color: 'default', text: t('pages.system.operationLogs.typeView') },
+      error: { color: 'error', text: t('pages.system.operationLogs.typeError') },
+      unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
     };
     const typeInfo = typeMap[type] || { color: 'default', text: type };
     return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
@@ -101,20 +101,18 @@ const OperationLogsPage: React.FC = () => {
    */
   const formatModuleName = (module: string | undefined): string => {
     if (!module) return '-';
-    // 应用根模块使用 locale 统一来源
     if (module === 'apps/master-data') return t('app.master-data.name');
-    // 其余技术路径的友好名称
     const moduleMap: Record<string, string> = {
-      'apps/master-data/factory': '工厂管理',
-      'apps/master-data/warehouse': '仓库管理',
-      'apps/master-data/material': '物料管理',
-      'apps/master-data/product': '产品管理',
-      'apps/master-data/customer': '客户管理',
-      'apps/master-data/supplier': '供应商管理',
-      'apps/master-data/process': '工艺管理',
-      'apps/master-data/performance': '绩效管理',
-      'core': '系统管理',
-      'infra': '平台管理',
+      'apps/master-data/factory': t('pages.system.operationLogs.moduleFactory'),
+      'apps/master-data/warehouse': t('pages.system.operationLogs.moduleWarehouse'),
+      'apps/master-data/material': t('pages.system.operationLogs.moduleMaterial'),
+      'apps/master-data/product': t('pages.system.operationLogs.moduleProduct'),
+      'apps/master-data/customer': t('pages.system.operationLogs.moduleCustomer'),
+      'apps/master-data/supplier': t('pages.system.operationLogs.moduleSupplier'),
+      'apps/master-data/process': t('pages.system.operationLogs.moduleProcess'),
+      'apps/master-data/performance': t('pages.system.operationLogs.modulePerformance'),
+      'core': t('pages.system.operationLogs.moduleCore'),
+      'infra': t('pages.system.operationLogs.moduleInfra'),
     };
     return moduleMap[module] || module;
   };
@@ -125,8 +123,7 @@ const OperationLogsPage: React.FC = () => {
   const formatOperationContent = (content: string | undefined, objectType: string | undefined): string => {
     if (content) return content;
     if (!objectType) return '-';
-    // 如果没有操作内容，根据对象类型生成友好描述
-    return `${objectType}相关操作`;
+    return t('pages.system.operationLogs.operationContentDefault', { objectType });
   };
 
   /**
@@ -135,125 +132,54 @@ const OperationLogsPage: React.FC = () => {
   const getUserDisplayName = (record: OperationLog): string => {
     if (record.user_full_name) return record.user_full_name;
     if (record.username) return record.username;
-    return `用户${record.user_id}`;
+    return t('pages.system.operationLogs.userDisplay', { id: record.user_id });
   };
 
   /**
    * 详情列定义（优化：突出有用信息，技术性字段放在后面）
    */
   const detailColumns = [
-    {
-      title: '操作时间',
-      dataIndex: 'created_at',
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: '操作类型',
-      dataIndex: 'operation_type',
-      render: (value: string) => getOperationTypeTag(value),
-    },
-    {
-      title: '操作模块',
-      dataIndex: 'operation_module',
-      render: (value: string) => formatModuleName(value),
-    },
-    {
-      title: '操作对象类型',
-      dataIndex: 'operation_object_type',
-      render: (value: string) => value || '-',
-    },
-    {
-      title: '操作内容',
-      dataIndex: 'operation_content',
-      span: 2,
-      render: (value: string, record: OperationLog) => (
-        <div style={{ wordBreak: 'break-word' }}>
-          {formatOperationContent(value, record.operation_object_type)}
-        </div>
-      ),
-    },
-    {
-      title: '操作人',
-      dataIndex: 'user_id',
-      render: (_: any, record: OperationLog) => getUserDisplayName(record),
-    },
-    {
-      title: 'IP地址',
-      dataIndex: 'ip_address',
-      render: (value: string) => value || '-',
-    },
-    {
-      title: '请求方法',
-      dataIndex: 'request_method',
-      render: (value: string) => value || '-',
-    },
-    {
-      title: '请求路径',
-      dataIndex: 'request_path',
-      span: 2,
-      render: (value: string) => (
-        <div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>
-          {value || '-'}
-        </div>
-      ),
-    },
-    {
-      title: '用户代理',
-      dataIndex: 'user_agent',
-      span: 2,
-      render: (value: string) => (
-        <div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>
-          {value || '-'}
-        </div>
-      ),
-    },
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (value: string) => getOperationTypeTag(value) },
+    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (value: string) => formatModuleName(value) },
+    { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (value: string) => value || '-' },
+    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', span: 2, render: (value: string, record: OperationLog) => (<div style={{ wordBreak: 'break-word' }}>{formatOperationContent(value, record.operation_object_type)}</div>) },
+    { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', render: (_: any, record: OperationLog) => getUserDisplayName(record) },
+    { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', render: (value: string) => value || '-' },
+    { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', render: (value: string) => value || '-' },
+    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', span: 2, render: (value: string) => (<div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>{value || '-'}</div>) },
+    { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', span: 2, render: (value: string) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{value || '-'}</div>) },
   ];
 
-  // 构建统计卡片数据
   const statCards = stats ? [
+    { title: t('pages.system.operationLogs.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
     {
-      title: '总操作数',
-      value: stats.total,
-      valueStyle: { color: '#1890ff' },
-    },
-    {
-      title: '按类型统计',
+      title: t('pages.system.operationLogs.statByType'),
       value: (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
           {Object.entries(stats.by_type).map(([type, count]) => {
             const typeMap: Record<string, { color: string; text: string }> = {
-              create: { color: 'success', text: '创建' },
-              update: { color: 'processing', text: '更新' },
-              delete: { color: 'error', text: '删除' },
-              view: { color: 'default', text: '查看' },
-              error: { color: 'error', text: '错误' },
-              unknown: { color: 'default', text: '未知' },
+              create: { color: 'success', text: t('pages.system.operationLogs.typeCreate') },
+              update: { color: 'processing', text: t('pages.system.operationLogs.typeUpdate') },
+              delete: { color: 'error', text: t('pages.system.operationLogs.typeDelete') },
+              view: { color: 'default', text: t('pages.system.operationLogs.typeView') },
+              error: { color: 'error', text: t('pages.system.operationLogs.typeError') },
+              unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
             };
             const typeInfo = typeMap[type] || { color: 'default', text: type };
-            return (
-              <Tag key={type} color={typeInfo.color}>
-                {typeInfo.text}: {count}
-              </Tag>
-            );
+            return <Tag key={type} color={typeInfo.color}>{typeInfo.text}: {count}</Tag>;
           })}
         </div>
       ),
     },
     {
-      title: '按模块统计',
+      title: t('pages.system.operationLogs.statByModule'),
       value: (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-          {Object.entries(stats.by_module)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5)
-            .map(([module, count]) => (
-              <Tag key={module}>
-                {formatModuleName(module)}: {count}
-              </Tag>
-            ))}
-          {Object.keys(stats.by_module).length > 5 && (
-            <Tag>...</Tag>
-          )}
+          {Object.entries(stats.by_module).sort(([, a], [, b]) => b - a).slice(0, 5).map(([module, count]) => (
+            <Tag key={module}>{formatModuleName(module)}: {count}</Tag>
+          ))}
+          {Object.keys(stats.by_module).length > 5 && <Tag>...</Tag>}
         </div>
       ),
     },
@@ -263,99 +189,15 @@ const OperationLogsPage: React.FC = () => {
    * 表格列定义（优化：突出对用户有用的信息）
    */
   const columns: ProColumns<OperationLog>[] = [
-    {
-      title: '操作时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      valueType: 'dateTimeRange',
-      sorter: true,
-      render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
-      width: 180,
-      fixed: 'left',
-    },
-    {
-      title: '操作类型',
-      dataIndex: 'operation_type',
-      key: 'operation_type',
-      valueType: 'select',
-      valueEnum: {
-        create: { text: '创建' },
-        update: { text: '更新' },
-        delete: { text: '删除' },
-        view: { text: '查看' },
-        error: { text: '错误' },
-        unknown: { text: '未知' },
-      },
-      render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type),
-      width: 100,
-    },
-    {
-      title: '操作模块',
-      dataIndex: 'operation_module',
-      key: 'operation_module',
-      ellipsis: true,
-      width: 120,
-      render: (value: string) => formatModuleName(value),
-    },
-    {
-      title: '操作对象',
-      dataIndex: 'operation_object_type',
-      key: 'operation_object_type',
-      ellipsis: true,
-      width: 120,
-      render: (value: string) => value || '-',
-    },
-    {
-      title: '操作内容',
-      dataIndex: 'operation_content',
-      key: 'operation_content',
-      ellipsis: true,
-      search: false,
-      width: 250,
-      render: (value: string, record: OperationLog) => 
-        formatOperationContent(value, record.operation_object_type),
-    },
-    {
-      title: '操作人',
-      dataIndex: 'user_id',
-      key: 'user_id',
-      valueType: 'digit',
-      width: 120,
-      render: (_: any, record: OperationLog) => getUserDisplayName(record),
-    },
-    {
-      title: 'IP地址',
-      dataIndex: 'ip_address',
-      key: 'ip_address',
-      ellipsis: true,
-      search: false,
-      width: 120,
-      hideInTable: true, // 默认隐藏，详情中可见
-    },
-    {
-      title: '请求方法',
-      dataIndex: 'request_method',
-      key: 'request_method',
-      valueType: 'select',
-      valueEnum: {
-        GET: { text: 'GET' },
-        POST: { text: 'POST' },
-        PUT: { text: 'PUT' },
-        PATCH: { text: 'PATCH' },
-        DELETE: { text: 'DELETE' },
-      },
-      width: 100,
-      hideInTable: true, // 默认隐藏，详情中可见
-    },
-    {
-      title: '请求路径',
-      dataIndex: 'request_path',
-      key: 'request_path',
-      ellipsis: true,
-      search: false,
-      width: 200,
-      hideInTable: true, // 默认隐藏，详情中可见
-    },
+    { title: t('pages.system.operationLogs.createdAt'), dataIndex: 'created_at', key: 'created_at', valueType: 'dateTimeRange', sorter: true, render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'), width: 180, fixed: 'left' },
+    { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', key: 'operation_type', valueType: 'select', valueEnum: { create: { text: t('pages.system.operationLogs.typeCreate') }, update: { text: t('pages.system.operationLogs.typeUpdate') }, delete: { text: t('pages.system.operationLogs.typeDelete') }, view: { text: t('pages.system.operationLogs.typeView') }, error: { text: t('pages.system.operationLogs.typeError') }, unknown: { text: t('pages.system.operationLogs.typeUnknown') } }, render: (_: any, record: OperationLog) => getOperationTypeTag(record.operation_type), width: 100 },
+    { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', key: 'operation_module', ellipsis: true, width: 120, render: (value: string) => formatModuleName(value) },
+    { title: t('pages.system.operationLogs.operationObject'), dataIndex: 'operation_object_type', key: 'operation_object_type', ellipsis: true, width: 120, render: (value: string) => value || '-' },
+    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', key: 'operation_content', ellipsis: true, search: false, width: 250, render: (value: string, record: OperationLog) => formatOperationContent(value, record.operation_object_type) },
+    { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', key: 'user_id', valueType: 'digit', width: 120, render: (_: any, record: OperationLog) => getUserDisplayName(record) },
+    { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', key: 'ip_address', ellipsis: true, search: false, width: 120, hideInTable: true },
+    { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', key: 'request_method', valueType: 'select', valueEnum: { GET: { text: 'GET' }, POST: { text: 'POST' }, PUT: { text: 'PUT' }, PATCH: { text: 'PATCH' }, DELETE: { text: 'DELETE' } }, width: 100, hideInTable: true },
+    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', key: 'request_path', ellipsis: true, search: false, width: 200, hideInTable: true },
   ];
 
   return (
@@ -411,7 +253,7 @@ const OperationLogsPage: React.FC = () => {
                   total: 0,
                 };
               }
-              messageApi.error(error.message || '加载操作日志列表失败');
+              messageApi.error(error.message || t('pages.system.operationLogs.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -433,7 +275,7 @@ const OperationLogsPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.operationLogs.noDataExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -443,20 +285,17 @@ const OperationLogsPage: React.FC = () => {
               a.download = `operation-logs-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.operationLogs.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.operationLogs.exportFailed'));
             }
           }}
           toolBarRender={() => [
-            <Button key="refresh" onClick={() => {
-              loadStats();
-              actionRef.current?.reload();
-            }}>
-              <BarChartOutlined /> 刷新统计
+            <Button key="refresh" onClick={() => { loadStats(); actionRef.current?.reload(); }}>
+              <BarChartOutlined /> {t('pages.system.operationLogs.refreshStats')}
             </Button>,
           ]}
-          headerTitle="操作日志"
+          headerTitle={t('pages.system.operationLogs.headerTitle')}
           onDetail={async (keys: React.Key[]) => {
             if (keys.length === 1) {
               const uuid = String(keys[0]);
@@ -465,16 +304,15 @@ const OperationLogsPage: React.FC = () => {
                 setCurrentLog(logDetail);
                 setDetailDrawerVisible(true);
               } catch (error: any) {
-                messageApi.error(error.message || '加载日志详情失败');
+                messageApi.error(error.message || t('pages.system.operationLogs.loadDetailFailed'));
               }
             }
           }}
         />
       </ListPageTemplate>
 
-      {/* 日志详情 Drawer */}
       <DetailDrawerTemplate<OperationLog>
-        title="操作日志详情"
+        title={t('pages.system.operationLogs.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);

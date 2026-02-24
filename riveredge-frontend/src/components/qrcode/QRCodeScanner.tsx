@@ -9,6 +9,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, Button, Space, message, Input, Upload, Modal } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { ScanOutlined, UploadOutlined, FileImageOutlined } from '@ant-design/icons';
 import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -30,6 +31,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
   onScanSuccess,
   showResult = true,
 }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [qrcodeText, setQrcodeText] = useState('');
   const [parseResult, setParseResult] = useState<QRCodeParseResponse | null>(null);
@@ -41,7 +43,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
    */
   const parseQRCodeText = async () => {
     if (!qrcodeText.trim()) {
-      message.warning('请输入二维码文本');
+      message.warning(t('components.qrcode.inputRequired'));
       return;
     }
 
@@ -50,9 +52,9 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
       const response = await qrcodeApi.parse({ qrcode_text: qrcodeText });
       setParseResult(response);
       onScanSuccess?.(response);
-      message.success('二维码解析成功');
+      message.success(t('components.qrcode.parseSuccess'));
     } catch (error: any) {
-      message.error(`解析二维码失败: ${error.message || '未知错误'}`);
+      message.error(t('components.qrcode.parseFailed', { message: error.message || t('components.qrcode.unknownError') }));
       setParseResult(null);
     } finally {
       setLoading(false);
@@ -76,9 +78,9 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
           const response = await qrcodeApi.parse({ qrcode_image: base64Image });
           setParseResult(response);
           onScanSuccess?.(response);
-          message.success('二维码解析成功');
+          message.success(t('components.qrcode.parseSuccess'));
         } catch (error: any) {
-          message.error(`解析二维码失败: ${error.message || '未知错误'}`);
+          message.error(t('components.qrcode.parseFailed', { message: error.message || t('components.qrcode.unknownError') }));
           setParseResult(null);
         } finally {
           setLoading(false);
@@ -86,7 +88,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
       };
       reader.readAsDataURL(file);
     } catch (error: any) {
-      message.error(`上传图片失败: ${error.message || '未知错误'}`);
+      message.error(t('components.qrcode.uploadFailed', { message: error.message || t('components.qrcode.unknownError') }));
       setLoading(false);
     }
     
@@ -100,7 +102,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        message.error('请选择图片文件');
+        message.error(t('components.qrcode.selectImageFile'));
         return;
       }
       handleImageUpload(file);
@@ -116,7 +118,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
 
   return (
     <Card
-      title="二维码扫描"
+      title={t('components.qrcode.title')}
       extra={
         <Space>
           <Button
@@ -124,7 +126,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
             onClick={openFileDialog}
             loading={loading}
           >
-            选择图片
+            {t('components.qrcode.selectImage')}
           </Button>
           <input
             ref={fileInputRef}
@@ -140,7 +142,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
         {/* 文本输入方式 */}
         <div>
           <Input.TextArea
-            placeholder="请输入二维码文本内容（JSON格式）"
+            placeholder={t('components.qrcode.placeholder')}
             value={qrcodeText}
             onChange={(e) => setQrcodeText(e.target.value)}
             rows={4}
@@ -153,7 +155,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
             loading={loading}
             block
           >
-            解析二维码
+            {t('components.qrcode.parse')}
           </Button>
         </div>
 
@@ -164,7 +166,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
           showUploadList={false}
         >
           <Button icon={<UploadOutlined />} block>
-            上传二维码图片
+            {t('components.qrcode.uploadImage')}
           </Button>
         </Upload>
 
@@ -173,7 +175,7 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
           <div style={{ textAlign: 'center' }}>
             <img
               src={uploadedImage}
-              alt="上传的二维码"
+              alt={t('components.qrcode.uploadedImageAlt')}
               style={{ maxWidth: '100%', maxHeight: 300, border: '1px solid #d9d9d9', borderRadius: 4 }}
             />
           </div>
@@ -181,19 +183,19 @@ export const QRCodeScanner: React.FC<QRCodeScannerProps> = ({
 
         {/* 显示解析结果 */}
         {showResult && parseResult && (
-          <Card size="small" title="解析结果">
+          <Card size="small" title={t('components.qrcode.resultTitle')}>
             <div>
-              <div><strong>类型:</strong> {parseResult.qrcode_type}</div>
+              <div><strong>{t('components.qrcode.type')}:</strong> {parseResult.qrcode_type}</div>
               <div style={{ marginTop: 8 }}>
-                <strong>数据:</strong>
+                <strong>{t('components.qrcode.data')}:</strong>
                 <pre style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, overflow: 'auto' }}>
                   {JSON.stringify(parseResult.data, null, 2)}
                 </pre>
               </div>
               <div style={{ marginTop: 8 }}>
-                <strong>状态:</strong>{' '}
+                <strong>{t('components.qrcode.status')}:</strong>{' '}
                 <span style={{ color: parseResult.valid ? '#52c41a' : '#ff4d4f' }}>
-                  {parseResult.valid ? '有效' : '无效'}
+                  {parseResult.valid ? t('components.qrcode.valid') : t('components.qrcode.invalid')}
                 </span>
               </div>
             </div>

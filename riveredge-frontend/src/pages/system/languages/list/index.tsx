@@ -1,11 +1,13 @@
 /**
  * 语言管理列表页面
- * 
+ *
  * 用于系统管理员查看和管理组织内的语言。
  * 支持语言的 CRUD 操作和翻译管理。
+ * 国际化
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, Input } from 'antd';
@@ -33,6 +35,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
  * 语言管理列表页面组件
  */
 const LanguageListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -67,11 +70,14 @@ const LanguageListPage: React.FC = () => {
       setInitializing(true);
       const result = await initializeSystemLanguages();
       messageApi.success(
-        `系统语言加载完成！创建 ${result.languages_created_count} 个语言，跳过 ${result.languages_skipped_count} 个已存在`
+        t('field.language.loadSystemLanguagesSuccess', {
+          created: result.languages_created_count,
+          skipped: result.languages_skipped_count,
+        })
       );
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '加载系统语言失败');
+      messageApi.error(error?.message || t('common.loadFailed'));
     } finally {
       setInitializing(false);
     }
@@ -111,7 +117,7 @@ const LanguageListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取语言详情失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     }
   };
 
@@ -125,7 +131,7 @@ const LanguageListPage: React.FC = () => {
       const detail = await getLanguageByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取语言详情失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -142,7 +148,7 @@ const LanguageListPage: React.FC = () => {
       const detail = await getLanguageByUuid(record.uuid);
       setTranslations(detail.translations || {});
     } catch (error: any) {
-      messageApi.error(error.message || '获取翻译内容失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setTranslationLoading(false);
     }
@@ -153,11 +159,11 @@ const LanguageListPage: React.FC = () => {
    */
   const handleAddTranslation = () => {
     if (!newTranslationKey.trim()) {
-      messageApi.warning('请输入翻译键');
+      messageApi.warning(t('field.language.translationKeyPlaceholder'));
       return;
     }
     if (translations[newTranslationKey]) {
-      messageApi.warning('翻译键已存在');
+      messageApi.warning(t('field.language.keyExists'));
       return;
     }
     setTranslations({
@@ -189,7 +195,7 @@ const LanguageListPage: React.FC = () => {
     };
     const localeContent = localeMap[currentLanguageForTranslation.code];
     if (!localeContent) {
-      messageApi.warning(`本地暂无 ${currentLanguageForTranslation.code} 的语言包，仅支持 zh-CN、en-US`);
+      messageApi.warning(t('field.language.noLocaleForCode', { code: currentLanguageForTranslation.code }));
       return;
     }
     try {
@@ -198,10 +204,10 @@ const LanguageListPage: React.FC = () => {
         translations: localeContent,
       } as TranslationUpdateRequest);
       setTranslations(localeContent);
-      messageApi.success(`已从本地同步 ${Object.keys(localeContent).length} 条翻译`);
+      messageApi.success(t('field.language.syncFromLocaleSuccess', { count: Object.keys(localeContent).length }));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '同步失败');
+      messageApi.error(error?.message || t('common.operationFailed'));
     } finally {
       setTranslationSaving(false);
     }
@@ -218,11 +224,11 @@ const LanguageListPage: React.FC = () => {
       await updateTranslations(currentLanguageForTranslation.uuid, {
         translations,
       } as TranslationUpdateRequest);
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.updateSuccess'));
       setTranslationDrawerVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('common.saveFailed'));
     } finally {
       setTranslationSaving(false);
     }
@@ -234,10 +240,10 @@ const LanguageListPage: React.FC = () => {
   const handleDelete = async (record: Language) => {
     try {
       await deleteLanguage(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -246,15 +252,15 @@ const LanguageListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？默认语言无法删除。此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirm'),
+      content: t('field.language.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -268,21 +274,23 @@ const LanguageListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(
+              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+            );
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
@@ -297,17 +305,17 @@ const LanguageListPage: React.FC = () => {
       
       if (isEdit && currentLanguageUuid) {
         await updateLanguage(currentLanguageUuid, values as UpdateLanguageData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.updateSuccess'));
       } else {
         await createLanguage(values as CreateLanguageData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -319,7 +327,7 @@ const LanguageListPage: React.FC = () => {
    */
   const columns: ProColumns<Language>[] = [
     {
-      title: '语言代码',
+      title: t('field.language.code'),
       dataIndex: 'code',
       width: 120,
       fixed: 'left',
@@ -328,62 +336,62 @@ const LanguageListPage: React.FC = () => {
       ),
     },
     {
-      title: '语言名称',
+      title: t('field.language.name'),
       dataIndex: 'name',
       width: 150,
     },
     {
-      title: '本地名称',
+      title: t('field.language.nativeName'),
       dataIndex: 'native_name',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '翻译数量',
+      title: t('field.language.translationCount'),
       dataIndex: 'translations',
       width: 120,
       hideInSearch: true,
       render: (_, record) => Object.keys(record.translations || {}).length,
     },
     {
-      title: '默认语言',
+      title: t('field.language.isDefault'),
       dataIndex: 'is_default',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Success' },
-        false: { text: '否', status: 'Default' },
+        true: { text: t('field.role.yes'), status: 'Success' },
+        false: { text: t('field.role.no'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_default ? 'success' : 'default'}>
-          {record.is_default ? '是' : '否'}
+          {record.is_default ? t('field.role.yes') : t('field.role.no')}
         </Tag>
       ),
     },
     {
-      title: '排序',
+      title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '状态',
+      title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.role.enabled'), status: 'Success' },
+        false: { text: t('field.role.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -391,7 +399,7 @@ const LanguageListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 250,
       fixed: 'right',
@@ -403,7 +411,7 @@ const LanguageListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.language.view')}
           </Button>
           <Button
             type="link"
@@ -411,7 +419,7 @@ const LanguageListPage: React.FC = () => {
             icon={<TranslationOutlined />}
             onClick={() => handleManageTranslations(record)}
           >
-            翻译
+            {t('field.language.translations')}
           </Button>
           <Button
             type="link"
@@ -419,10 +427,10 @@ const LanguageListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.language.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个语言吗？"
+            title={t('field.language.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
             disabled={record.is_default}
           >
@@ -433,7 +441,7 @@ const LanguageListPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={record.is_default}
             >
-              删除
+              {t('field.language.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -446,7 +454,7 @@ const LanguageListPage: React.FC = () => {
    */
   const translationColumns = [
     {
-      title: '翻译键',
+      title: t('field.language.translationKey'),
       dataIndex: 'key',
       width: '40%',
       render: (text: string) => (
@@ -454,12 +462,12 @@ const LanguageListPage: React.FC = () => {
       ),
     },
     {
-      title: '翻译值',
+      title: t('field.language.translationValue'),
       dataIndex: 'value',
       width: '50%',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: '10%',
       render: (_: any, record: { key: string }) => (
         <Button
@@ -468,7 +476,7 @@ const LanguageListPage: React.FC = () => {
           size="small"
           onClick={() => handleDeleteTranslation(record.key)}
         >
-          删除
+          {t('field.language.delete')}
         </Button>
       ),
     },
@@ -517,7 +525,7 @@ const LanguageListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取语言列表失败:', error);
-              messageApi.error(error?.message || '获取语言列表失败');
+              messageApi.error(error?.message || t('common.loadFailed'));
               return {
                 data: [],
                 success: false,
@@ -528,13 +536,13 @@ const LanguageListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建语言"
+          createButtonText={t('field.language.createTitle')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -547,7 +555,7 @@ const LanguageListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -557,9 +565,9 @@ const LanguageListPage: React.FC = () => {
               a.download = `languages-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.operationFailed'));
             }
           }}
           pagination={{
@@ -573,7 +581,7 @@ const LanguageListPage: React.FC = () => {
               onClick={handleInitializeSystemLanguages}
               loading={initializing}
             >
-              加载系统语言
+              {t('field.language.loadSystemLanguages')}
             </Button>,
           ]}
         />
@@ -581,7 +589,7 @@ const LanguageListPage: React.FC = () => {
 
       {/* 创建/编辑语言 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑语言' : '新建语言'}
+        title={isEdit ? t('field.language.editTitle') : t('field.language.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -595,44 +603,44 @@ const LanguageListPage: React.FC = () => {
       >
         <SafeProFormSelect
           name="code"
-          label="语言代码"
-          rules={[{ required: true, message: '请选择语言代码' }]}
+          label={t('field.language.code')}
+          rules={[{ required: true, message: t('field.language.codeRequired') }]}
           disabled={isEdit}
-          extra="语言代码用于程序识别，创建后不可修改"
+          extra={t('field.language.codeExtra')}
           options={[
-            { label: '简体中文 (zh-CN)', value: 'zh-CN' },
-            { label: 'English (en-US)', value: 'en-US' },
+            { label: t('field.language.codeZhCN'), value: 'zh-CN' },
+            { label: t('field.language.codeEnUS'), value: 'en-US' },
           ]}
         />
         <ProFormText
           name="name"
-          label="语言名称"
-          rules={[{ required: true, message: '请输入语言名称' }]}
-          placeholder="例如：中文、English、日本語"
+          label={t('field.language.name')}
+          rules={[{ required: true, message: t('field.language.nameRequired') }]}
+          placeholder={t('field.language.namePlaceholder')}
         />
         <ProFormText
           name="native_name"
-          label="本地名称"
-          placeholder="例如：中文、English、日本語"
+          label={t('field.language.nativeName')}
+          placeholder={t('field.language.namePlaceholder')}
         />
         <ProFormSwitch
           name="is_default"
-          label="是否默认语言"
+          label={t('field.language.isDefault')}
         />
         <ProFormDigit
           name="sort_order"
-          label="排序顺序"
+          label={t('field.language.sortOrder')}
           fieldProps={{ min: 0 }}
         />
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('field.language.isActive')}
         />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate
-        title="语言详情"
+        title={t('field.language.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -640,47 +648,47 @@ const LanguageListPage: React.FC = () => {
         dataSource={detailData || undefined}
         columns={[
           {
-            title: '语言代码',
+            title: t('field.language.code'),
             dataIndex: 'code',
             render: (_: any, entity: Language) => (
               <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{entity?.code}</span>
             ),
           },
           {
-            title: '语言名称',
+            title: t('field.language.name'),
             dataIndex: 'name',
           },
           {
-            title: '本地名称',
+            title: t('field.language.nativeName'),
             dataIndex: 'native_name',
             render: (_: any, entity: Language) => entity?.native_name || '-',
           },
           {
-            title: '翻译数量',
+            title: t('field.language.translationCount'),
             dataIndex: 'translations',
             render: (_: any, entity: Language) => Object.keys(entity?.translations || {}).length,
           },
           {
-            title: '默认语言',
+            title: t('field.language.isDefault'),
             dataIndex: 'is_default',
-            render: (_: any, entity: Language) => (entity?.is_default ? '是' : '否'),
+            render: (_: any, entity: Language) => (entity?.is_default ? t('field.role.yes') : t('field.role.no')),
           },
           {
-            title: '排序顺序',
+            title: t('field.language.sortOrder'),
             dataIndex: 'sort_order',
           },
           {
-            title: '状态',
+            title: t('field.role.status'),
             dataIndex: 'is_active',
-            render: (_: any, entity: Language) => (entity?.is_active ? '启用' : '禁用'),
+            render: (_: any, entity: Language) => (entity?.is_active ? t('field.role.enabled') : t('field.role.disabled')),
           },
           {
-            title: '创建时间',
+            title: t('common.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: '更新时间',
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },
@@ -689,7 +697,7 @@ const LanguageListPage: React.FC = () => {
 
       {/* 翻译管理 Drawer */}
       <Drawer
-        title={`翻译管理 - ${currentLanguageForTranslation?.name || ''}`}
+        title={`${t('field.language.translations')} - ${currentLanguageForTranslation?.name || ''}`}
         open={translationDrawerVisible}
         onClose={() => {
           setTranslationDrawerVisible(false);
@@ -714,14 +722,14 @@ const LanguageListPage: React.FC = () => {
               onClick={handleSyncFromLocale}
               loading={translationSaving}
             >
-              从本地同步
+              {t('field.language.syncFromLocale')}
             </Button>
             <Button
               type="primary"
               onClick={handleSaveTranslations}
               loading={translationSaving}
             >
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
@@ -729,19 +737,19 @@ const LanguageListPage: React.FC = () => {
         <div style={{ marginBottom: 16, flexShrink: 0 }}>
           <Space.Compact style={{ width: '100%' }}>
             <Input
-              placeholder="翻译键"
+              placeholder={t('field.language.translationKeyPlaceholder')}
               value={newTranslationKey}
               onChange={(e) => setNewTranslationKey(e.target.value)}
               onPressEnter={handleAddTranslation}
             />
             <Input
-              placeholder="翻译值"
+              placeholder={t('field.language.translationValuePlaceholder')}
               value={newTranslationValue}
               onChange={(e) => setNewTranslationValue(e.target.value)}
               onPressEnter={handleAddTranslation}
             />
             <Button type="primary" onClick={handleAddTranslation}>
-              添加
+              {t('field.language.addTranslation')}
             </Button>
           </Space.Compact>
         </div>

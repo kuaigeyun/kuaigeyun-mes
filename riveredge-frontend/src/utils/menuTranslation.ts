@@ -61,15 +61,20 @@ export function translateMenuName(
   if (name.includes('.') && !name.startsWith('/')) {
     const translated = t(name, { defaultValue: name });
     if (translated !== name) return translated;
+    // 翻译失败时，禁止回退到应用名，否则报表等子菜单会错误显示为「快格轻制造」
+    // 直接尝试路径翻译或返回原 key
   }
 
-  // 2. 优先从路径提取应用 code（最可靠的方法）
-  const appCode = extractAppCodeFromPath(path);
-  if (appCode) {
-    const appNameKey = `app.${appCode}.name`;
-    const translated = t(appNameKey, { defaultValue: '' });
-    if (translated && translated !== appNameKey && translated.trim() !== '') {
-      return translated;
+  // 2. 仅当 name 非 i18n key 时，才用应用名兜底（如根菜单、空名称等）
+  const isI18nKey = name.includes('.') && !name.startsWith('/');
+  if (!isI18nKey) {
+    const appCode = extractAppCodeFromPath(path);
+    if (appCode) {
+      const appNameKey = `app.${appCode}.name`;
+      const translated = t(appNameKey, { defaultValue: '' });
+      if (translated && translated !== appNameKey && translated.trim() !== '') {
+        return translated;
+      }
     }
   }
 
@@ -144,9 +149,19 @@ export function translateAppMenuItemName(
     // 约定：path 末段 = i18n key 末段，path 推导直接命中 locale
     const pathKey = relativePath.replace(/\//g, '.');
     const menuKey = `app.${appCode}.menu.${pathKey}`;
-    const translated = t(menuKey, { defaultValue: '' });
+    let translated = t(menuKey, { defaultValue: '' });
     if (translated && translated !== menuKey && translated.trim() !== '') {
       return translated;
+    }
+
+    // 报表类菜单使用扁平命名空间 app.xxx.menu.reports.yyy，path 为 module/reports/yyy
+    // 路径推导会得到 app.xxx.menu.module.reports.yyy（不存在），需额外尝试 app.xxx.menu.reports.yyy
+    if (relativePath.includes('reports/')) {
+      const reportKey = `app.${appCode}.menu.reports.${relativePath.split('reports/').pop()?.replace(/\//g, '.') || ''}`;
+      translated = t(reportKey, { defaultValue: '' });
+      if (translated && translated !== reportKey && translated.trim() !== '') {
+        return translated;
+      }
     }
 
     const lastSegment = relativePath.split('/').pop() || '';
@@ -187,8 +202,14 @@ export function translatePathTitle(path: string, t: any): string {
   if (appCode) {
     const relativePath = path.replace(`/apps/${appCode}/`, '');
     const menuKey = `app.${appCode}.menu.${relativePath.replace(/\//g, '.')}`;
-    const translated = t(menuKey, { defaultValue: '' });
+    let translated = t(menuKey, { defaultValue: '' });
     if (translated && translated !== menuKey) return translated;
+    // 报表路径 module/reports/xxx 使用扁平 key app.xxx.menu.reports.xxx
+    if (relativePath.includes('reports/')) {
+      const reportKey = `app.${appCode}.menu.reports.${relativePath.split('reports/').pop()?.replace(/\//g, '.') || ''}`;
+      translated = t(reportKey, { defaultValue: '' });
+      if (translated && translated !== reportKey) return translated;
+    }
   }
 
   // 2. 尝试多种前缀的翻译 (path.*, menu.*)

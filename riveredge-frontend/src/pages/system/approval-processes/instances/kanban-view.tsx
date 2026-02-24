@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Badge, Tag, Button, Space, message, Drawer, Typography, Descriptions, Divider, Timeline, Empty, Statistic, Row, Col } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ClockCircleOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
 import { DragEndEvent } from '@dnd-kit/core';
@@ -46,6 +47,7 @@ interface ApprovalStats {
  * 看板视图组件
  */
 const KanbanView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [instances, setInstances] = useState<ApprovalInstance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +78,7 @@ const KanbanView: React.FC = () => {
       };
       setStats(statsData);
     } catch (error: any) {
-      handleError(error, '加载审批实例失败');
+      handleError(error, t('pages.system.approvalInstances.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -91,10 +93,10 @@ const KanbanView: React.FC = () => {
    */
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
-      pending: { color: 'processing', text: '待审批' },
-      approved: { color: 'success', text: '已通过' },
-      rejected: { color: 'error', text: '已拒绝' },
-      cancelled: { color: 'default', text: '已取消' },
+      pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+      approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+      rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
@@ -107,30 +109,30 @@ const KanbanView: React.FC = () => {
     return [
       {
         id: 'pending',
-        title: '待审批',
+        title: t('pages.system.approvalInstances.statusPending'),
         color: '#1890ff',
         items: instances.filter((i) => i.status === 'pending'),
       },
       {
         id: 'approved',
-        title: '已通过',
+        title: t('pages.system.approvalInstances.statusApproved'),
         color: '#52c41a',
         items: instances.filter((i) => i.status === 'approved'),
       },
       {
         id: 'rejected',
-        title: '已拒绝',
+        title: t('pages.system.approvalInstances.statusRejected'),
         color: '#ff4d4f',
         items: instances.filter((i) => i.status === 'rejected'),
       },
       {
         id: 'cancelled',
-        title: '已取消',
+        title: t('pages.system.approvalInstances.statusCancelled'),
         color: '#999',
         items: instances.filter((i) => i.status === 'cancelled'),
       },
     ];
-  }, [instances]);
+  }, [instances, t]);
 
   /**
    * 处理拖拽结束
@@ -166,10 +168,10 @@ const KanbanView: React.FC = () => {
             action: targetColumnId === 'approved' ? 'approve' : 'reject',
           };
           await performApprovalAction(instance.uuid, action);
-          messageApi.success(targetColumnId === 'approved' ? '审批通过' : '审批拒绝');
+          messageApi.success(targetColumnId === 'approved' ? t('pages.system.approvalInstances.approveSuccess') : t('pages.system.approvalInstances.rejectSuccess'));
           loadInstances();
         } catch (error: any) {
-          handleError(error, '处理失败');
+          handleError(error, t('pages.system.approvalInstances.handleFailed'));
         }
       }
     }
@@ -217,7 +219,7 @@ const KanbanView: React.FC = () => {
               handleViewDetail(instance);
             }}
           >
-            查看
+            {t('pages.system.approvalInstances.view')}
           </Button>
         </div>
       </div>
@@ -270,7 +272,7 @@ const KanbanView: React.FC = () => {
       }
       setApprovalHistory(history);
     } catch (error: any) {
-      handleError(error, '获取详情失败');
+      handleError(error, t('pages.system.approvalInstances.getDetailFailed'));
     }
   };
 
@@ -284,16 +286,16 @@ const KanbanView: React.FC = () => {
       };
       await performApprovalAction(instance.uuid, actionData);
       messageApi.success(
-        action === 'approve' ? '审批通过' :
-        action === 'reject' ? '审批拒绝' :
-        action === 'cancel' ? '审批取消' :
-        '审批转交'
+        action === 'approve' ? t('pages.system.approvalInstances.approveSuccess') :
+        action === 'reject' ? t('pages.system.approvalInstances.rejectSuccess') :
+        action === 'cancel' ? t('pages.system.approvalInstances.cancelSuccess') :
+        t('pages.system.approvalInstances.transferSuccess')
       );
       setDetailDrawerVisible(false);
       setSelectedInstance(null);
       loadInstances();
     } catch (error: any) {
-      handleError(error, '处理失败');
+      handleError(error, t('pages.system.approvalInstances.handleFailed'));
     }
   };
 
@@ -302,7 +304,7 @@ const KanbanView: React.FC = () => {
    */
   const renderApprovalHistory = () => {
     if (approvalHistory.length === 0) {
-      return <Empty description="暂无审批历史" />;
+      return <Empty description={t('pages.system.approvalInstances.noHistory')} />;
     }
 
     return (
@@ -330,10 +332,10 @@ const KanbanView: React.FC = () => {
               <div>
                 <div style={{ marginBottom: 4 }}>
                   <Text strong>
-                    {item.action === 'approve' ? '通过' :
-                     item.action === 'reject' ? '拒绝' :
-                     item.action === 'cancel' ? '取消' :
-                     '转交'}
+                    {item.action === 'approve' ? t('pages.system.approvalInstances.timelineApprove') :
+                     item.action === 'reject' ? t('pages.system.approvalInstances.timelineReject') :
+                     item.action === 'cancel' ? t('pages.system.approvalInstances.timelineCancel') :
+                     t('pages.system.approvalInstances.timelineTransfer')}
                   </Text>
                   <Text type="secondary" style={{ marginLeft: 8 }}>
                     {item.approver}
@@ -370,28 +372,28 @@ const KanbanView: React.FC = () => {
           <Row gutter={16}>
             <Col span={6}>
               <Statistic
-                title="总审批数"
+                title={t('pages.system.approvalInstances.statTotal')}
                 value={stats.total}
                 styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
-                title="待审批"
+                title={t('pages.system.approvalInstances.statusPending')}
                 value={stats.pending}
                 styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
-                title="已通过"
+                title={t('pages.system.approvalInstances.statusApproved')}
                 value={stats.approved}
                 styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
-                title="已拒绝"
+                title={t('pages.system.approvalInstances.statusRejected')}
                 value={stats.rejected}
                 styles={{ content: { color: '#ff4d4f' } }}
               />
@@ -416,7 +418,7 @@ const KanbanView: React.FC = () => {
 
       {/* 详情抽屉 */}
       <Drawer
-        title="审批实例详情"
+        title={t('pages.system.approvalInstances.detailTitle')}
         placement="right"
         size={700}
         open={detailDrawerVisible}
@@ -433,26 +435,26 @@ const KanbanView: React.FC = () => {
                 icon={<CheckCircleOutlined />}
                 onClick={() => handleAction(selectedInstance, 'approve')}
               >
-                同意
+                {t('pages.system.approvalInstances.approve')}
               </Button>
               <Button
                 danger
                 icon={<CloseCircleOutlined />}
                 onClick={() => handleAction(selectedInstance, 'reject')}
               >
-                拒绝
+                {t('pages.system.approvalInstances.reject')}
               </Button>
               <Button
                 icon={<SwapOutlined />}
                 onClick={() => handleAction(selectedInstance, 'transfer')}
               >
-                转交
+                {t('pages.system.approvalInstances.transfer')}
               </Button>
               <Button
                 icon={<StopOutlined />}
                 onClick={() => handleAction(selectedInstance, 'cancel')}
               >
-                取消
+                {t('pages.system.approvalInstances.cancel')}
               </Button>
             </Space>
           ) : null
@@ -461,30 +463,30 @@ const KanbanView: React.FC = () => {
         {selectedInstance && (
           <div>
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="审批标题">
+              <Descriptions.Item label={t('pages.system.approvalInstances.title')}>
                 <Text strong>{selectedInstance.title}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="审批内容">
-                {selectedInstance.content || '(无内容)'}
+              <Descriptions.Item label={t('pages.system.approvalInstances.content')}>
+                {selectedInstance.content || t('pages.system.approvalInstances.noContent')}
               </Descriptions.Item>
-              <Descriptions.Item label="状态">
+              <Descriptions.Item label={t('pages.system.approvalInstances.statusLabel')}>
                 {getStatusTag(selectedInstance.status)}
               </Descriptions.Item>
               {selectedInstance.current_node && (
-                <Descriptions.Item label="当前节点">
+                <Descriptions.Item label={t('pages.system.approvalInstances.currentNode')}>
                   {selectedInstance.current_node}
                 </Descriptions.Item>
               )}
               {selectedInstance.current_approver_id && (
-                <Descriptions.Item label="当前审批人ID">
+                <Descriptions.Item label={t('pages.system.approvalInstances.currentApproverId')}>
                   {selectedInstance.current_approver_id}
                 </Descriptions.Item>
               )}
-              <Descriptions.Item label="提交时间">
+              <Descriptions.Item label={t('pages.system.approvalInstances.submittedAt')}>
                 {new Date(selectedInstance.submitted_at).toLocaleString()}
               </Descriptions.Item>
               {selectedInstance.completed_at && (
-                <Descriptions.Item label="完成时间">
+                <Descriptions.Item label={t('pages.system.approvalInstances.completedAt')}>
                   {new Date(selectedInstance.completed_at).toLocaleString()}
                 </Descriptions.Item>
               )}
@@ -492,7 +494,7 @@ const KanbanView: React.FC = () => {
 
             {selectedInstance.data && Object.keys(selectedInstance.data).length > 0 && (
               <>
-                <Divider>审批数据</Divider>
+                <Divider>{t('pages.system.approvalInstances.approvalData')}</Divider>
                 <pre
                   style={{
                     padding: '12px',
@@ -507,7 +509,7 @@ const KanbanView: React.FC = () => {
               </>
             )}
 
-            <Divider>审批历史</Divider>
+            <Divider>{t('pages.system.approvalInstances.historyLabel')}</Divider>
             {renderApprovalHistory()}
           </div>
         )}

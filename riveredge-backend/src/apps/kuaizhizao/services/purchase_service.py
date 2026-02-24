@@ -333,36 +333,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             }).save()
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 
-        # 尝试启动审批流程（采购审批流程增强）
+        # 启动审批流程（统一使用 ApprovalInstanceService）
         try:
-            from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
-            
-            approval_service = ApprovalFlowService()
-            
-            # 尝试获取适用的审批流程
-            flow = await approval_service.get_approval_flow_for_entity(
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            instance = await ApprovalInstanceService.start_approval(
                 tenant_id=tenant_id,
+                user_id=submitted_by,
+                process_code="purchase_order_approval",
                 entity_type="purchase_order",
-                business_mode=None,
-                demand_type=None
+                entity_id=order_id,
+                entity_uuid=str(order.uuid),
+                title=f"采购订单审批: {order.order_code}",
+                content=f"供应商: {order.supplier_name}, 金额: {order.total_amount}",
             )
-            
-            if flow:
-                # 启动审批流程
-                await approval_service.start_approval_flow(
-                    tenant_id=tenant_id,
-                    entity_type="purchase_order",
-                    entity_id=order_id,
-                    business_mode=None,
-                    demand_type=None
-                )
-                # 状态设置为待审核（审批流程中）
-                status = DocumentStatus.PENDING_REVIEW.value
-            else:
-                # 没有配置审批流程，使用原有逻辑
-                status = DocumentStatus.PENDING_REVIEW.value
+            status = DocumentStatus.PENDING_REVIEW.value
         except Exception as e:
-            # 如果启动审批流程失败，记录日志但不影响提交
             logger.warning(f"启动采购订单审批流程失败: {str(e)}，订单ID: {order_id}")
             status = DocumentStatus.PENDING_REVIEW.value
 
@@ -394,40 +379,31 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             PurchaseOrderResponse: 审核后的订单信息
         """
-        from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
         from infra.models.user import User
-        
+
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        # 获取审核人姓名
         approver = await User.get_or_none(id=approved_by)
         approver_name = approver.name if approver else f"用户{approved_by}"
 
-        # 检查是否启动了审批流程（采购审批流程增强）
-        approval_service = ApprovalFlowService()
-        approval_status = await approval_service.get_approval_status(
+        approval_status = await ApprovalInstanceService.get_approval_status(
             tenant_id=tenant_id,
             entity_type="purchase_order",
-            entity_id=order_id
+            entity_id=order_id,
         )
 
         if approval_status.get("has_flow"):
-            # 使用审批流程系统审核
-            approval_result = "通过" if approve_data.approved else "驳回"
-            
-            result = await approval_service.execute_approval(
+            result = await ApprovalInstanceService.execute_approval(
                 tenant_id=tenant_id,
                 entity_type="purchase_order",
                 entity_id=order_id,
                 approver_id=approved_by,
-                approver_name=approver_name,
-                approval_result=approval_result,
-                approval_comment=approve_data.review_remarks
+                approved=approve_data.approved,
+                comment=approve_data.review_remarks,
             )
-
-            # 根据审批流程结果更新订单状态
             if result.get("flow_rejected"):
                 update_dict = {
                     'reviewer_id': approved_by,
@@ -447,7 +423,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'updated_by': approved_by
                 }
             else:
-                # 审批流程进行中
                 update_dict = {
                     'reviewer_id': approved_by,
                     'review_time': datetime.now(),

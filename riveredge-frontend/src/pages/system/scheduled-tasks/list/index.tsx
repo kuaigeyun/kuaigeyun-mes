@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge } from 'antd';
@@ -32,6 +33,7 @@ const { TextArea } = Input;
  * 定时任务管理列表页面组件
  */
 const ScheduledTaskListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -91,7 +93,7 @@ const ScheduledTaskListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取定时任务详情失败');
+      messageApi.error(error.message || t('field.scheduledTask.fetchDetailFailed'));
     }
   };
 
@@ -105,7 +107,7 @@ const ScheduledTaskListPage: React.FC = () => {
       const detail = await getScheduledTaskByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取定时任务详情失败');
+      messageApi.error(error.message || t('field.scheduledTask.fetchDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -117,10 +119,10 @@ const ScheduledTaskListPage: React.FC = () => {
   const handleDelete = async (record: ScheduledTask) => {
     try {
       await deleteScheduledTask(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -129,15 +131,15 @@ const ScheduledTaskListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('field.scheduledTask.batchDeleteTitle'),
+      content: t('field.scheduledTask.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -151,21 +153,21 @@ const ScheduledTaskListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
@@ -177,10 +179,10 @@ const ScheduledTaskListPage: React.FC = () => {
   const handleStart = async (record: ScheduledTask) => {
     try {
       await startScheduledTask(record.uuid);
-      messageApi.success('启动成功');
+      messageApi.success(t('field.scheduledTask.startSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '启动失败');
+      messageApi.error(error.message || t('field.scheduledTask.startFailed'));
     }
   };
 
@@ -190,10 +192,10 @@ const ScheduledTaskListPage: React.FC = () => {
   const handleStop = async (record: ScheduledTask) => {
     try {
       await stopScheduledTask(record.uuid);
-      messageApi.success('停止成功');
+      messageApi.success(t('field.scheduledTask.stopSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '停止失败');
+      messageApi.error(error.message || t('field.scheduledTask.stopFailed'));
     }
   };
 
@@ -209,8 +211,8 @@ const ScheduledTaskListPage: React.FC = () => {
       try {
         triggerConfig = JSON.parse(triggerConfigJson);
       } catch (e) {
-        messageApi.error('触发器配置 JSON 格式不正确');
-        throw new Error('触发器配置 JSON 格式不正确');
+        messageApi.error(t('field.scheduledTask.triggerConfigJsonInvalid'));
+        throw new Error(t('field.scheduledTask.triggerConfigJsonInvalid'));
       }
       
       // 解析任务配置 JSON
@@ -218,8 +220,8 @@ const ScheduledTaskListPage: React.FC = () => {
       try {
         taskConfig = JSON.parse(taskConfigJson);
       } catch (e) {
-        messageApi.error('任务配置 JSON 格式不正确');
-        throw new Error('任务配置 JSON 格式不正确');
+        messageApi.error(t('field.scheduledTask.taskConfigJsonInvalid'));
+        throw new Error(t('field.scheduledTask.taskConfigJsonInvalid'));
       }
       
       if (isEdit && currentScheduledTaskUuid) {
@@ -231,7 +233,7 @@ const ScheduledTaskListPage: React.FC = () => {
           task_config: taskConfig,
           is_active: values.is_active,
         } as UpdateScheduledTaskData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.updateSuccess'));
       } else {
         await createScheduledTask({
           name: values.name,
@@ -243,14 +245,14 @@ const ScheduledTaskListPage: React.FC = () => {
           task_config: taskConfig,
           is_active: values.is_active,
         } as CreateScheduledTaskData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -262,91 +264,91 @@ const ScheduledTaskListPage: React.FC = () => {
    */
   const columns: ProColumns<ScheduledTask>[] = [
     {
-      title: '任务名称',
+      title: t('field.scheduledTask.name'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '任务代码',
+      title: t('field.scheduledTask.code'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '任务类型',
+      title: t('field.scheduledTask.type'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        python_script: { text: 'Python脚本', status: 'Processing' },
-        api_call: { text: 'API调用', status: 'Success' },
+        python_script: { text: t('field.scheduledTask.typePython'), status: 'Processing' },
+        api_call: { text: t('field.scheduledTask.typeApi'), status: 'Success' },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { color: string; text: string }> = {
-          python_script: { color: 'blue', text: 'Python脚本' },
-          api_call: { color: 'green', text: 'API调用' },
+        const typeMap: Record<string, { color: string; textKey: string }> = {
+          python_script: { color: 'blue', textKey: 'field.scheduledTask.typePython' },
+          api_call: { color: 'green', textKey: 'field.scheduledTask.typeApi' },
         };
-        const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        const typeInfo = typeMap[record.type] || { color: 'default', textKey: record.type };
+        return <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>;
       },
     },
     {
-      title: '触发器类型',
+      title: t('field.scheduledTask.triggerType'),
       dataIndex: 'trigger_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        cron: { text: 'Cron', status: 'Success' },
-        interval: { text: 'Interval', status: 'Processing' },
-        date: { text: 'Date', status: 'Warning' },
+        cron: { text: t('field.scheduledTask.triggerCron'), status: 'Success' },
+        interval: { text: t('field.scheduledTask.triggerInterval'), status: 'Processing' },
+        date: { text: t('field.scheduledTask.triggerDate'), status: 'Warning' },
       },
       render: (_, record) => {
-        const triggerMap: Record<string, { color: string; text: string }> = {
-          cron: { color: 'blue', text: 'Cron' },
-          interval: { color: 'orange', text: 'Interval' },
-          date: { color: 'green', text: 'Date' },
+        const triggerMap: Record<string, { color: string; textKey: string }> = {
+          cron: { color: 'blue', textKey: 'field.scheduledTask.triggerCron' },
+          interval: { color: 'orange', textKey: 'field.scheduledTask.triggerInterval' },
+          date: { color: 'green', textKey: 'field.scheduledTask.triggerDate' },
         };
-        const triggerInfo = triggerMap[record.trigger_type] || { color: 'default', text: record.trigger_type };
-        return <Tag color={triggerInfo.color}>{triggerInfo.text}</Tag>;
+        const triggerInfo = triggerMap[record.trigger_type] || { color: 'default', textKey: record.trigger_type };
+        return <Tag color={triggerInfo.color}>{t(triggerInfo.textKey)}</Tag>;
       },
     },
     {
-      title: '描述',
+      title: t('field.scheduledTask.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '运行状态',
+      title: t('field.scheduledTask.runStatus'),
       dataIndex: 'is_running',
       width: 100,
       render: (_, record) => (
         <Space>
           {record.is_running ? (
-            <Badge status="processing" text="运行中" />
+            <Badge status="processing" text={t('field.scheduledTask.running')} />
           ) : (
-            <Badge status="default" text="未运行" />
+            <Badge status="default" text={t('field.scheduledTask.notRunning')} />
           )}
         </Space>
       ),
     },
     {
-      title: '启用状态',
+      title: t('field.scheduledTask.activeStatus'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.systemParameter.enabled'), status: 'Success' },
+        false: { text: t('field.systemParameter.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后运行时间',
+      title: t('field.scheduledTask.lastRunAt'),
       dataIndex: 'last_run_at',
       width: 180,
       valueType: 'dateTime',
@@ -354,7 +356,7 @@ const ScheduledTaskListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '最后运行状态',
+      title: t('field.scheduledTask.lastRunStatus'),
       dataIndex: 'last_run_status',
       width: 120,
       hideInSearch: true,
@@ -362,16 +364,16 @@ const ScheduledTaskListPage: React.FC = () => {
         if (!record.last_run_status) {
           return '-';
         }
-        const statusMap: Record<string, { color: string; text: string }> = {
-          success: { color: 'success', text: '成功' },
-          failed: { color: 'error', text: '失败' },
+        const statusMap: Record<string, { color: string; textKey: string }> = {
+          success: { color: 'success', textKey: 'field.scheduledTask.success' },
+          failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
         };
-        const statusInfo = statusMap[record.last_run_status] || { color: 'default', text: record.last_run_status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        const statusInfo = statusMap[record.last_run_status] || { color: 'default', textKey: record.last_run_status };
+        return <Tag color={statusInfo.color}>{t(statusInfo.textKey)}</Tag>;
       },
     },
     {
-      title: '创建时间',
+      title: t('field.scheduledTask.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -379,7 +381,7 @@ const ScheduledTaskListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
@@ -391,7 +393,7 @@ const ScheduledTaskListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.scheduledTask.view')}
           </Button>
           <Button
             type="link"
@@ -399,7 +401,7 @@ const ScheduledTaskListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.scheduledTask.edit')}
           </Button>
           {record.is_active ? (
             <Button
@@ -408,7 +410,7 @@ const ScheduledTaskListPage: React.FC = () => {
               icon={<PauseCircleOutlined />}
               onClick={() => handleStop(record)}
             >
-              停止
+              {t('field.scheduledTask.stop')}
             </Button>
           ) : (
             <Button
@@ -417,11 +419,11 @@ const ScheduledTaskListPage: React.FC = () => {
               icon={<PlayCircleOutlined />}
               onClick={() => handleStart(record)}
             >
-              启动
+              {t('field.scheduledTask.start')}
             </Button>
           )}
           <Popconfirm
-            title="确定要删除这个定时任务吗？"
+            title={t('field.scheduledTask.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -430,7 +432,7 @@ const ScheduledTaskListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.scheduledTask.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -475,7 +477,7 @@ const ScheduledTaskListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取定时任务列表失败:', error);
-              messageApi.error(error?.message || '获取定时任务列表失败');
+              messageApi.error(error?.message || t('field.scheduledTask.listFetchFailed'));
               return {
                 data: [],
                 success: false,
@@ -486,13 +488,13 @@ const ScheduledTaskListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建定时任务"
+          createButtonText={t('field.scheduledTask.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('field.scheduledTask.batchDeleteButton')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -505,7 +507,7 @@ const ScheduledTaskListPage: React.FC = () => {
                 items = items.filter((d: any) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('field.scheduledTask.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -515,9 +517,9 @@ const ScheduledTaskListPage: React.FC = () => {
               a.download = `scheduled-tasks-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('field.scheduledTask.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.deleteFailed'));
             }
           }}
           pagination={{
@@ -529,7 +531,7 @@ const ScheduledTaskListPage: React.FC = () => {
 
       {/* 创建/编辑定时任务 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑定时任务' : '新建定时任务'}
+        title={isEdit ? t('field.scheduledTask.editTitle') : t('field.scheduledTask.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -543,53 +545,46 @@ const ScheduledTaskListPage: React.FC = () => {
       >
           <ProFormText
             name="name"
-            label="任务名称"
-            rules={[{ required: true, message: '请输入任务名称' }]}
-            placeholder="请输入任务名称"
+            label={t('field.scheduledTask.name')}
+            rules={[{ required: true, message: t('field.scheduledTask.nameRequired') }]}
+            placeholder={t('field.scheduledTask.namePlaceholder')}
           />
           <ProFormText
             name="code"
-            label="任务代码"
+            label={t('field.scheduledTask.code')}
             rules={[
-              { required: true, message: '请输入任务代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '任务代码只能包含小写字母、数字和下划线' },
+              { required: true, message: t('field.scheduledTask.codeRequired') },
+              { pattern: /^[a-z0-9_]+$/, message: t('field.scheduledTask.codePattern') },
             ]}
-            placeholder="请输入任务代码（唯一标识，如：daily_report）"
+            placeholder={t('field.scheduledTask.codePlaceholder')}
             disabled={isEdit}
           />
           <SafeProFormSelect
             name="type"
-            label="任务类型"
-            rules={[{ required: true, message: '请选择任务类型' }]}
+            label={t('field.scheduledTask.type')}
+            rules={[{ required: true, message: t('field.scheduledTask.typeRequired') }]}
             options={[
-              { label: 'Python脚本', value: 'python_script' },
-              { label: 'API调用', value: 'api_call' },
+              { label: t('field.scheduledTask.typePython'), value: 'python_script' },
+              { label: t('field.scheduledTask.typeApi'), value: 'api_call' },
             ]}
             disabled={isEdit}
           />
           <SafeProFormSelect
             name="trigger_type"
-            label="触发器类型"
-            rules={[{ required: true, message: '请选择触发器类型' }]}
+            label={t('field.scheduledTask.triggerType')}
+            rules={[{ required: true, message: t('field.scheduledTask.triggerTypeRequired') }]}
             options={[
-              { label: 'Cron', value: 'cron' },
-              { label: 'Interval', value: 'interval' },
-              { label: 'Date', value: 'date' },
+              { label: t('field.scheduledTask.triggerCron'), value: 'cron' },
+              { label: t('field.scheduledTask.triggerInterval'), value: 'interval' },
+              { label: t('field.scheduledTask.triggerDate'), value: 'date' },
             ]}
             fieldProps={{
               onChange: (value) => {
                 setTriggerType(value);
-                // 根据类型设置默认配置
                 const defaultConfigs: Record<string, Record<string, any>> = {
-                  cron: {
-                    cron: '0 0 * * *',
-                  },
-                  interval: {
-                    seconds: 300,
-                  },
-                  date: {
-                    at: new Date().toISOString(),
-                  },
+                  cron: { cron: '0 0 * * *' },
+                  interval: { seconds: 300 },
+                  date: { at: new Date().toISOString() },
                 };
                 setTriggerConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
               },
@@ -598,47 +593,47 @@ const ScheduledTaskListPage: React.FC = () => {
           />
           <ProFormTextArea
             name="description"
-            label="任务描述"
-            placeholder="请输入任务描述"
+            label={t('field.scheduledTask.description')}
+            placeholder={t('field.scheduledTask.descriptionPlaceholder')}
           />
           <div>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              触发器配置（JSON）
+              {t('field.scheduledTask.triggerConfigJson')}
             </label>
             <TextArea
               value={triggerConfigJson}
               onChange={(e) => setTriggerConfigJson(e.target.value)}
               rows={4}
-              placeholder={triggerType === 'cron' 
-                ? '请输入 Cron 表达式，例如：{"cron": "0 0 * * *"}'
+              placeholder={triggerType === 'cron'
+                ? t('field.scheduledTask.triggerConfigPlaceholderCron')
                 : triggerType === 'interval'
-                ? '请输入间隔时间（秒），例如：{"seconds": 300}'
-                : '请输入执行时间，例如：{"at": "2025-01-01T00:00:00Z"}'
+                ? t('field.scheduledTask.triggerConfigPlaceholderInterval')
+                : t('field.scheduledTask.triggerConfigPlaceholderDate')
               }
               style={{ fontFamily: CODE_FONT_FAMILY }}
             />
           </div>
           <div>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              任务配置（JSON）
+              {t('field.scheduledTask.taskConfigJson')}
             </label>
             <TextArea
               value={taskConfigJson}
               onChange={(e) => setTaskConfigJson(e.target.value)}
               rows={6}
-              placeholder='请输入任务配置（JSON 格式），例如：{"url": "https://api.example.com/endpoint", "method": "POST", "headers": {}, "data": {}}'
+              placeholder={t('field.scheduledTask.taskConfigPlaceholder')}
               style={{ fontFamily: CODE_FONT_FAMILY }}
             />
           </div>
           <ProFormSwitch
             name="is_active"
-            label="是否启用"
+            label={t('field.scheduledTask.isActiveLabel')}
           />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate
-        title="定时任务详情"
+        title={t('field.scheduledTask.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -646,42 +641,42 @@ const ScheduledTaskListPage: React.FC = () => {
         dataSource={detailData}
         columns={[
           {
-            title: '任务名称',
+            title: t('field.scheduledTask.name'),
             dataIndex: 'name',
           },
           {
-            title: '任务代码',
+            title: t('field.scheduledTask.code'),
             dataIndex: 'code',
           },
           {
-            title: '任务类型',
+            title: t('field.scheduledTask.type'),
             dataIndex: 'type',
             render: (value: string) => {
               const typeMap: Record<string, string> = {
-                python_script: 'Python脚本',
-                api_call: 'API调用',
+                python_script: t('field.scheduledTask.typePython'),
+                api_call: t('field.scheduledTask.typeApi'),
               };
               return typeMap[value] || value;
             },
           },
           {
-            title: '触发器类型',
+            title: t('field.scheduledTask.triggerType'),
             dataIndex: 'trigger_type',
             render: (value: string) => {
               const triggerMap: Record<string, string> = {
-                cron: 'Cron',
-                interval: 'Interval',
-                date: 'Date',
+                cron: t('field.scheduledTask.triggerCron'),
+                interval: t('field.scheduledTask.triggerInterval'),
+                date: t('field.scheduledTask.triggerDate'),
               };
               return triggerMap[value] || value;
             },
           },
           {
-            title: '任务描述',
+            title: t('field.scheduledTask.description'),
             dataIndex: 'description',
           },
           {
-            title: '触发器配置',
+            title: t('field.scheduledTask.triggerConfig'),
             dataIndex: 'trigger_config',
             render: (value: Record<string, any>) => (
               <pre style={{
@@ -698,7 +693,7 @@ const ScheduledTaskListPage: React.FC = () => {
             ),
           },
           {
-            title: '任务配置',
+            title: t('field.scheduledTask.taskConfig'),
             dataIndex: 'task_config',
             render: (value: Record<string, any>) => (
               <pre style={{
@@ -715,58 +710,58 @@ const ScheduledTaskListPage: React.FC = () => {
             ),
           },
           {
-            title: 'Inngest 函数ID',
+            title: t('field.scheduledTask.inngestFunctionId'),
             dataIndex: 'inngest_function_id',
             render: (value: string) => value || '-',
           },
           {
-            title: '运行状态',
+            title: t('field.scheduledTask.runStatus'),
             dataIndex: 'is_running',
             render: (value: boolean) => (
-              <Badge status={value ? 'processing' : 'default'} text={value ? '运行中' : '未运行'} />
+              <Badge status={value ? 'processing' : 'default'} text={value ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')} />
             ),
           },
           {
-            title: '启用状态',
+            title: t('field.scheduledTask.activeStatus'),
             dataIndex: 'is_active',
             render: (value: boolean) => (
               <Tag color={value ? 'success' : 'default'}>
-                {value ? '启用' : '禁用'}
+                {value ? t('field.systemParameter.enabled') : t('field.systemParameter.disabled')}
               </Tag>
             ),
           },
           {
-            title: '最后运行时间',
+            title: t('field.scheduledTask.lastRunAt'),
             dataIndex: 'last_run_at',
             valueType: 'dateTime',
           },
           {
-            title: '最后运行状态',
+            title: t('field.scheduledTask.lastRunStatus'),
             dataIndex: 'last_run_status',
             render: (value: string) => {
               if (!value) return '-';
-              const statusMap: Record<string, { color: string; text: string }> = {
-                success: { color: 'success', text: '成功' },
-                failed: { color: 'error', text: '失败' },
+              const statusMap: Record<string, { color: string; textKey: string }> = {
+                success: { color: 'success', textKey: 'field.scheduledTask.success' },
+                failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
               };
-              const statusInfo = statusMap[value] || { color: 'default', text: value };
-              return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+              const statusInfo = statusMap[value] || { color: 'default', textKey: value };
+              return <Tag color={statusInfo.color}>{t(statusInfo.textKey)}</Tag>;
             },
           },
           {
-            title: '最后错误',
+            title: t('field.scheduledTask.lastError'),
             dataIndex: 'last_error',
             render: (value: string) => value ? (
               <Tag color="error">{value}</Tag>
             ) : '-',
           },
           {
-            title: '创建时间',
+            title: t('field.scheduledTask.createdAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: '更新时间',
+            title: t('field.scheduledTask.updatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },

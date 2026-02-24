@@ -9,6 +9,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea, P
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio } from 'antd';
 import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi, materialBindingApi } from '../../../services/production';
 import { materialApi } from '../../../../master-data/services/material';
@@ -702,58 +703,6 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
-   * 处理审核报工
-   */
-  const handleApproveReporting = (record: ReportingRecord) => {
-    Modal.confirm({
-      title: '确认审核',
-      content: `确定要审核通过报工记录 "${record.work_order_code}" 吗？`,
-      onOk: async () => {
-        try {
-          await reportingApi.approve(record.id.toString(), {});
-          messageApi.success('审核通过');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '审核失败');
-          throw error;
-        }
-      },
-    });
-  };
-
-  /**
-   * 处理驳回报工
-   */
-  const handleRejectReporting = (record: ReportingRecord) => {
-    let rejectionReason = '';
-    Modal.confirm({
-      title: '驳回报工',
-      content: (
-        <div>
-          <p style={{ marginBottom: 12 }}>确定要驳回报工记录 "{record.work_order_code}" 吗？</p>
-          <Input.TextArea
-            placeholder="请输入驳回原因（选填）"
-            rows={3}
-            onChange={(e) => { rejectionReason = e.target.value; }}
-          />
-        </div>
-      ),
-      okText: '确认驳回',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await reportingApi.approve(record.id.toString(), {}, { rejection_reason: rejectionReason || undefined });
-          messageApi.success('已驳回');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '驳回失败');
-          throw error;
-        }
-      },
-    });
-  };
-
-  /**
    * 处理创建报废记录
    */
   const handleCreateScrap = (record: ReportingRecord) => {
@@ -962,24 +911,22 @@ const ReportingPage: React.FC = () => {
         <Space>
           {record.status === 'pending' && (
             <>
-              <Button
-                type="link"
+              <UniWorkflowActions
+                record={record}
+                entityName="报工记录"
+                statusField="status"
+                draftStatuses={[]}
+                pendingStatuses={['pending']}
+                approvedStatuses={['approved']}
+                rejectedStatuses={['rejected']}
+                actions={{
+                  approve: (id) => reportingApi.approve(id.toString(), {}),
+                  reject: (id, reason) => reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
+                }}
+                onSuccess={() => actionRef.current?.reload()}
+                theme="link"
                 size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApproveReporting(record)}
-                style={{ color: '#52c41a' }}
-              >
-                审核
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleRejectReporting(record)}
-              >
-                驳回
-              </Button>
+              />
               <Button
                 type="link"
                 size="small"

@@ -122,7 +122,7 @@ export const MobileQRCode: React.FC = () => {
                 arrow={false}
                 classNames={{ root: 'header-actions-dropdown' }}
             >
-                <Tooltip title={t('common.mobileExperience', '移动端体验')}>
+                <Tooltip title={t('common.mobileExperience')}>
                     <Button
                         type="text"
                         size="small"

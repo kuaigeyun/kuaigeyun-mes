@@ -20,6 +20,7 @@ import {
 import { clearAuth } from '../../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores';
+import { useTranslation } from 'react-i18next';
 import PlatformSettingsPage from './settings';
 // import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
@@ -27,6 +28,7 @@ import PlatformSettingsPage from './settings';
  * 平台超级管理员管理页面组件
  */
 export default function InfraSuperAdminPage() {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -45,13 +47,13 @@ export default function InfraSuperAdminPage() {
   const updateMutation = useMutation({
     mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
-      messageApi.success('更新成功');
+      messageApi.success(t('pages.infra.admin.updateSuccess'));
       // setEditModalVisible(false);
       // setEditFormData(null);
       queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || '更新失败');
+      messageApi.error(error?.message || t('pages.infra.admin.updateFailed'));
     },
   });
 
@@ -81,8 +83,8 @@ export default function InfraSuperAdminPage() {
    */
   const handleLogout = () => {
     Modal.confirm({
-      title: '确认退出',
-      content: '确定要退出登录吗？',
+      title: t('pages.infra.admin.logoutConfirmTitle'),
+      content: t('pages.infra.admin.logoutConfirmContent'),
       onOk: () => {
         // 清除认证信息
         clearAuth();
@@ -90,7 +92,7 @@ export default function InfraSuperAdminPage() {
         setCurrentUser(undefined);
         // 清除查询缓存
         queryClient.clear();
-        messageApi.success('已退出登录');
+        messageApi.success(t('pages.infra.admin.logoutSuccess'));
         // ⚠️ 关键修复：使用 navigate 跳转，避免页面刷新
         navigate('/infra/login', { replace: true });
       },
@@ -103,18 +105,18 @@ export default function InfraSuperAdminPage() {
       label: (
         <span>
           <UserOutlined />
-          管理员信息
+          {t('pages.infra.admin.tabAdmin')}
         </span>
       ),
       children: (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <h2 style={{ margin: 0 }}>平台管理员信息</h2>
+            <h2 style={{ margin: 0 }}>{t('pages.infra.admin.pageTitle')}</h2>
             <Button
               icon={<LogoutOutlined />}
               onClick={handleLogout}
             >
-              退出登录
+              {t('pages.infra.admin.logout')}
             </Button>
           </div>
           {admin && (
@@ -124,42 +126,42 @@ export default function InfraSuperAdminPage() {
               loading={isLoading}
               columns={[
                 {
-                  title: 'ID',
+                  title: t('pages.infra.admin.id'),
                   dataIndex: 'id',
                 },
                 {
-                  title: '用户名',
+                  title: t('pages.infra.admin.username'),
                   dataIndex: 'username',
                 },
                 {
-                  title: '邮箱',
+                  title: t('pages.infra.admin.email'),
                   dataIndex: 'email',
                 },
                 {
-                  title: '全名',
+                  title: t('pages.infra.admin.fullName'),
                   dataIndex: 'full_name',
                 },
                 {
-                  title: '状态',
+                  title: t('pages.infra.admin.status'),
                   dataIndex: 'is_active',
                   valueType: 'switch',
                   valueEnum: {
-                    true: { text: '激活', status: 'Success' },
-                    false: { text: '未激活', status: 'Error' },
+                    true: { text: t('pages.infra.admin.statusActive'), status: 'Success' },
+                    false: { text: t('pages.infra.admin.statusInactive'), status: 'Error' },
                   },
                 },
                 {
-                  title: '最后登录时间',
+                  title: t('pages.infra.admin.lastLogin'),
                   dataIndex: 'last_login',
                   valueType: 'dateTime',
                 },
                 {
-                  title: '创建时间',
+                  title: t('pages.infra.admin.createdAt'),
                   dataIndex: 'created_at',
                   valueType: 'dateTime',
                 },
                 {
-                  title: '更新时间',
+                  title: t('pages.infra.admin.updatedAt'),
                   dataIndex: 'updated_at',
                   valueType: 'dateTime',
                 },
@@ -174,7 +176,7 @@ export default function InfraSuperAdminPage() {
       label: (
         <span>
           <SettingOutlined />
-          平台设置
+          {t('pages.infra.admin.tabSettings')}
         </span>
       ),
       children: <PlatformSettingsPage />,

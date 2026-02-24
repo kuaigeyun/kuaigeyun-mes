@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -40,36 +41,14 @@ dayjs.extend(relativeTime);
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
 
-/**
- * 获取模板类型图标和颜色
- */
-const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
+/** 获取模板类型图标和颜色，text 需在组件内用 t 传入 other 的翻译 */
+const getTypeInfo = (type: string, otherText: string = '其他'): { color: string; text: string; icon: React.ReactNode } => {
   const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-    pdf: { 
-      color: 'red', 
-      text: 'PDF',
-      icon: <FileTextOutlined />,
-    },
-    html: { 
-      color: 'blue', 
-      text: 'HTML',
-      icon: <FileTextOutlined />,
-    },
-    word: { 
-      color: 'green', 
-      text: 'Word',
-      icon: <FileTextOutlined />,
-    },
-    excel: { 
-      color: 'purple', 
-      text: 'Excel',
-      icon: <FileTextOutlined />,
-    },
-    other: { 
-      color: 'default', 
-      text: '其他',
-      icon: <FileTextOutlined />,
-    },
+    pdf: { color: 'red', text: 'PDF', icon: <FileTextOutlined /> },
+    html: { color: 'blue', text: 'HTML', icon: <FileTextOutlined /> },
+    word: { color: 'green', text: 'Word', icon: <FileTextOutlined /> },
+    excel: { color: 'purple', text: 'Excel', icon: <FileTextOutlined /> },
+    other: { color: 'default', text: otherText, icon: <FileTextOutlined /> },
   };
   return typeMap[type] || { color: 'default', text: type, icon: <FileTextOutlined /> };
 };
@@ -108,6 +87,7 @@ const extractVariables = (content: string): string[] => {
  * 打印模板管理列表页面组件
  */
 const PrintTemplateListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -174,7 +154,7 @@ const PrintTemplateListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取打印模板详情失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
     }
   };
 
@@ -188,7 +168,7 @@ const PrintTemplateListPage: React.FC = () => {
       const detail = await getPrintTemplateByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取打印模板详情失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -228,14 +208,14 @@ const PrintTemplateListPage: React.FC = () => {
       setRenderResult(result);
       
       if (result.success) {
-        messageApi.success('模板渲染成功');
+        messageApi.success(t('pages.system.printTemplates.renderSuccess'));
       } else {
-        messageApi.error(result.error || '模板渲染失败');
+        messageApi.error(result.error || t('pages.system.printTemplates.renderFailed'));
       }
       
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '模板渲染失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.renderFailed'));
     } finally {
       setRenderFormLoading(false);
     }
@@ -247,10 +227,10 @@ const PrintTemplateListPage: React.FC = () => {
   const handleDelete = async (record: PrintTemplate) => {
     try {
       await deletePrintTemplate(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.printTemplates.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.deleteFailed'));
     }
   };
 
@@ -259,17 +239,17 @@ const PrintTemplateListPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请选择要删除的打印模板');
+      messageApi.warning(t('pages.system.printTemplates.selectToDelete'));
       return;
     }
     
     try {
       await Promise.all(selectedRowKeys.map((key) => deletePrintTemplate(key as string)));
-      messageApi.success('批量删除成功');
+      messageApi.success(t('pages.system.printTemplates.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error('批量删除失败');
+      messageApi.error(t('pages.system.printTemplates.batchDeleteFailed'));
     }
   };
 
@@ -287,20 +267,20 @@ const PrintTemplateListPage: React.FC = () => {
   const createSampleWorkOrderTemplate = async () => {
     try {
       await createPrintTemplate({
-        name: '工单打印模板（含二维码）',
+        name: t('pages.system.printTemplates.workOrderTemplateName'),
         code: DOCUMENT_TYPE_TO_CODE.work_order,
         type: 'pdf',
-        description: '基于 pdfme 的工单打印模板，包含工单二维码、基本信息及工序列表。',
+        description: t('pages.system.printTemplates.workOrderTemplateDescription'),
         content: JSON.stringify(DEFAULT_WORK_ORDER_PDFME_TEMPLATE),
         config: { document_type: 'work_order' },
         is_active: true,
         is_default: true,
       });
 
-      messageApi.success('工单模板创建成功，可在设计器中进一步调整');
+      messageApi.success(t('pages.system.printTemplates.workOrderTemplateCreated'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建工单模板失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
     }
   };
 
@@ -325,7 +305,7 @@ const PrintTemplateListPage: React.FC = () => {
           config: { ...(currentEditDetail?.config || {}), document_type: values.document_type },
         };
         await updatePrintTemplate(currentPrintTemplateUuid, updateData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.printTemplates.updateSuccess'));
       } else {
         const data: CreatePrintTemplateData = {
           name: values.name,
@@ -336,14 +316,14 @@ const PrintTemplateListPage: React.FC = () => {
           config: { document_type: values.document_type },
         };
         await createPrintTemplate(data);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.printTemplates.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.printTemplates.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -365,34 +345,18 @@ const PrintTemplateListPage: React.FC = () => {
     };
 
     return [
-      {
-        title: '总模板数',
-        value: stats.total,
-        valueStyle: { color: '#1890ff' },
-      },
-      {
-        title: '已启用',
-        value: stats.active,
-        valueStyle: { color: '#52c41a' },
-      },
-      {
-        title: '默认模板',
-        value: stats.default,
-        valueStyle: { color: '#faad14' },
-      },
-      {
-        title: '总使用次数',
-        value: stats.totalUsage,
-        valueStyle: { color: '#722ed1' },
-      },
+      { title: t('pages.system.printTemplates.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+      { title: t('pages.system.printTemplates.statActive'), value: stats.active, valueStyle: { color: '#52c41a' } },
+      { title: t('pages.system.printTemplates.statDefault'), value: stats.default, valueStyle: { color: '#faad14' } },
+      { title: t('pages.system.printTemplates.statUsage'), value: stats.totalUsage, valueStyle: { color: '#722ed1' } },
     ];
-  }, [allTemplates]);
+  }, [allTemplates, t]);
 
   /**
    * 卡片渲染函数
    */
   const renderCard = (template: PrintTemplate, index: number) => {
-    const typeInfo = getTypeInfo(template.type);
+    const typeInfo = getTypeInfo(template.type, t('pages.system.printTemplates.typeOther'));
     const variables = extractVariables(template.content);
     
     return (
@@ -401,13 +365,13 @@ const PrintTemplateListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title="查看详情">
+          <Tooltip key="view" title={t('pages.system.printTemplates.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(template)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="render" title="渲染模板">
+          <Tooltip key="render" title={t('pages.system.printTemplates.renderTemplate')}>
             <PrinterOutlined
               onClick={() => handleRender(template)}
               disabled={!template.is_active}
@@ -416,12 +380,12 @@ const PrintTemplateListPage: React.FC = () => {
           </Tooltip>,
           <Popconfirm
             key="delete"
-            title="确定要删除这个打印模板吗？"
+            title={t('pages.system.printTemplates.deleteConfirmTitle')}
             onConfirm={() => handleDelete(template)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            <Tooltip title="删除">
+            <Tooltip title={t('pages.system.printTemplates.deleteTooltip')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -442,7 +406,7 @@ const PrintTemplateListPage: React.FC = () => {
             
             {template.code && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                代码: {template.code}
+                {t('pages.system.printTemplates.codePrefix')}{template.code}
               </Text>
             )}
             
@@ -460,27 +424,27 @@ const PrintTemplateListPage: React.FC = () => {
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.statusLabel')}</Text>
               <Tag color={template.is_active ? 'success' : 'default'}>
-                {template.is_active ? '启用' : '禁用'}
+                {template.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
               </Tag>
             </div>
             
             {template.is_default && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>默认模板：</Text>
-                <Tag color="processing">是</Tag>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.defaultLabel')}</Text>
+                <Tag color="processing">{t('pages.system.printTemplates.isDefault')}</Tag>
               </div>
             )}
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.usageLabel')}</Text>
               <Text style={{ fontSize: 12 }}>{template.usage_count || 0}</Text>
             </div>
             
             {variables.length > 0 && (
               <div style={{ marginTop: 8 }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>变量：</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.system.printTemplates.variablesLabel')}</Text>
                 <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
                   {variables.slice(0, 3).map((v) => (
                     <Tag key={v} style={{ fontSize: 10, margin: 0 }}>{v}</Tag>
@@ -494,7 +458,7 @@ const PrintTemplateListPage: React.FC = () => {
             
             {template.last_used_at && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>最后使用：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.lastUsedLabel')}</Text>
                 <Text style={{ fontSize: 12 }}>
                   {dayjs(template.last_used_at).fromNow()}
                 </Text>
@@ -510,20 +474,10 @@ const PrintTemplateListPage: React.FC = () => {
    * 表格列定义
    */
   const columns: ProColumns<PrintTemplate>[] = [
+    { title: t('pages.system.printTemplates.columnName'), dataIndex: 'name', width: 200, ellipsis: true },
+    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code', width: 150, ellipsis: true },
     {
-      title: '模板名称',
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: '模板代码',
-      dataIndex: 'code',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '模板类型',
+      title: t('pages.system.printTemplates.columnType'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
@@ -532,83 +486,59 @@ const PrintTemplateListPage: React.FC = () => {
         html: { text: 'HTML' },
         word: { text: 'Word' },
         excel: { text: 'Excel' },
-        other: { text: '其他' },
+        other: { text: t('pages.system.printTemplates.typeOther') },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { color: string; text: string }> = {
-          pdf: { color: 'red', text: 'PDF' },
-          html: { color: 'blue', text: 'HTML' },
-          word: { color: 'green', text: 'Word' },
-          excel: { color: 'purple', text: 'Excel' },
-          other: { color: 'default', text: '其他' },
-        };
-        const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
+        const typeInfo = getTypeInfo(record.type, t('pages.system.printTemplates.typeOther'));
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
     {
-      title: '是否启用',
+      title: t('pages.system.printTemplates.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.printTemplates.enabled'), status: 'Success' },
+        false: { text: t('pages.system.printTemplates.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
         </Tag>
       ),
     },
     {
-      title: '是否默认',
+      title: t('pages.system.printTemplates.columnDefault'),
       dataIndex: 'is_default',
       width: 100,
       hideInSearch: true,
       render: (_, record) => (
         <Tag color={record.is_default ? 'processing' : 'default'}>
-          {record.is_default ? '默认' : '-'}
+          {record.is_default ? t('pages.system.printTemplates.defaultTag') : '-'}
         </Tag>
       ),
     },
+    { title: t('pages.system.printTemplates.columnUsage'), dataIndex: 'usage_count', width: 100, hideInSearch: true },
+    { title: t('pages.system.printTemplates.columnLastUsed'), dataIndex: 'last_used_at', width: 180, valueType: 'dateTime', hideInSearch: true },
+    { title: t('pages.system.printTemplates.columnCreatedAt'), dataIndex: 'created_at', width: 180, valueType: 'dateTime', hideInSearch: true },
     {
-      title: '使用次数',
-      dataIndex: 'usage_count',
-      width: 100,
-      hideInSearch: true,
-    },
-    {
-      title: '最后使用时间',
-      dataIndex: 'last_used_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-    },
-    {
-      title: '操作',
+      title: t('pages.system.printTemplates.columnActions'),
       dataIndex: 'option',
       valueType: 'option',
       width: 200,
       render: (_, record) => (
         <Space>
-          <a onClick={() => handleEdit(record)}>编辑</a>
-          <a onClick={() => handleOpenDesigner(record)}>设计</a>
-          <a onClick={() => handleView(record)}>详情</a>
+          <a onClick={() => handleEdit(record)}>{t('pages.system.printTemplates.edit')}</a>
+          <a onClick={() => handleOpenDesigner(record)}>{t('pages.system.printTemplates.design')}</a>
+          <a onClick={() => handleView(record)}>{t('pages.system.printTemplates.detail')}</a>
           <Popconfirm
-            title="确定要删除这个打印模板吗？"
+            title={t('pages.system.printTemplates.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            <a style={{ color: '#ff4d4f' }}>删除</a>
+            <a style={{ color: '#ff4d4f' }}>{t('pages.system.printTemplates.deleteTooltip')}</a>
           </Popconfirm>
         </Space>
       ),
@@ -619,42 +549,30 @@ const PrintTemplateListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
+    { title: t('pages.system.printTemplates.columnName'), dataIndex: 'name' },
+    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code' },
+    { title: t('pages.system.printTemplates.columnType'), dataIndex: 'type' },
+    { title: t('pages.system.printTemplates.labelDescription'), dataIndex: 'description' },
     {
-      title: '模板名称',
-      dataIndex: 'name',
-    },
-    {
-      title: '模板代码',
-      dataIndex: 'code',
-    },
-    {
-      title: '模板类型',
-      dataIndex: 'type',
-    },
-    {
-      title: '模板描述',
-      dataIndex: 'description',
-    },
-    {
-      title: '是否启用',
+      title: t('pages.system.printTemplates.columnActive'),
       dataIndex: 'is_active',
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '启用' : '禁用'}
+          {value ? t('pages.system.printTemplates.enabled') : t('pages.system.printTemplates.disabled')}
         </Tag>
       ),
     },
     {
-      title: '是否默认',
+      title: t('pages.system.printTemplates.columnDefault'),
       dataIndex: 'is_default',
       render: (value: boolean) => (
         <Tag color={value ? 'processing' : 'default'}>
-          {value ? '默认' : '-'}
+          {value ? t('pages.system.printTemplates.defaultTag') : '-'}
         </Tag>
       ),
     },
     {
-      title: '模板内容',
+      title: t('pages.system.printTemplates.columnContent'),
       dataIndex: 'content',
       render: (value: string) => (
         <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
@@ -663,7 +581,7 @@ const PrintTemplateListPage: React.FC = () => {
       ),
     },
     {
-      title: '模板配置',
+      title: t('pages.system.printTemplates.columnConfig'),
       dataIndex: 'config',
       render: (value: Record<string, any>) => (
         value ? (
@@ -673,25 +591,10 @@ const PrintTemplateListPage: React.FC = () => {
         ) : '-'
       ),
     },
-    {
-      title: '使用次数',
-      dataIndex: 'usage_count',
-    },
-    {
-      title: '最后使用时间',
-      dataIndex: 'last_used_at',
-      valueType: 'dateTime',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-    },
+    { title: t('pages.system.printTemplates.columnUsage'), dataIndex: 'usage_count' },
+    { title: t('pages.system.printTemplates.columnLastUsed'), dataIndex: 'last_used_at', valueType: 'dateTime' },
+    { title: t('pages.system.printTemplates.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.printTemplates.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -731,7 +634,7 @@ const PrintTemplateListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取打印模板列表失败:', error);
-              messageApi.error(error?.message || '获取打印模板列表失败');
+              messageApi.error(error?.message || t('pages.system.printTemplates.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -742,14 +645,14 @@ const PrintTemplateListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建打印模板"
+          createButtonText={t('pages.system.printTemplates.createButton')}
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.printTemplates.batchDelete')}
           toolBarRender={() => [
             <Button key="createSample" onClick={createSampleWorkOrderTemplate}>
-              一键生成工单模板
+              {t('pages.system.printTemplates.createWorkOrderButton')}
             </Button>,
           ]}
           showImportButton
@@ -764,7 +667,7 @@ const PrintTemplateListPage: React.FC = () => {
               items = await getPrintTemplateList({ skip: 0, limit: 10000 });
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.printTemplates.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -774,7 +677,7 @@ const PrintTemplateListPage: React.FC = () => {
             a.download = `print-templates-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('pages.system.printTemplates.exportSuccess'));
           }}
           rowSelection={{
             selectedRowKeys,
@@ -790,7 +693,7 @@ const PrintTemplateListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑打印模板' : '新建打印模板'}
+        title={isEdit ? t('pages.system.printTemplates.modalEdit') : t('pages.system.printTemplates.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -812,61 +715,53 @@ const PrintTemplateListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="模板名称"
-          rules={[{ required: true, message: '请输入模板名称' }]}
+          label={t('pages.system.printTemplates.labelName')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.nameRequired') }]}
         />
         <SafeProFormSelect
           name="document_type"
-          label="关联业务单据"
-          rules={[{ required: true, message: '请选择关联的业务单据类型，设计时可绑定对应变量' }]}
+          label={t('pages.system.printTemplates.labelDocumentType')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
           options={DOCUMENT_TYPE_OPTIONS}
-          tooltip="选择后，模板代码将自动生成，设计器将显示该单据的可用变量"
+          tooltip={t('pages.system.printTemplates.documentTypeTooltip')}
         />
         <ProFormText
           name="code"
-          label="模板代码"
-          rules={[{ required: true, message: '请先选择关联业务单据' }]}
+          label={t('pages.system.printTemplates.labelCode')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.codeRequired') }]}
           disabled
-          tooltip="根据关联业务单据自动生成，创建后不可修改"
+          tooltip={t('pages.system.printTemplates.codeTooltip')}
         />
         <SafeProFormSelect
           name="type"
-          label="输出格式"
-          rules={[{ required: true, message: '请选择输出格式' }]}
+          label={t('pages.system.printTemplates.labelOutputFormat')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.outputFormatRequired') }]}
           options={[
             { label: 'PDF', value: 'pdf' },
             { label: 'HTML', value: 'html' },
             { label: 'Word', value: 'word' },
             { label: 'Excel', value: 'excel' },
-            { label: '其他', value: 'other' },
+            { label: t('pages.system.printTemplates.typeOther'), value: 'other' },
           ]}
           disabled={isEdit}
         />
         <ProFormTextArea
           name="description"
-          label="模板描述"
-          fieldProps={{
-            rows: 3,
-          }}
+          label={t('pages.system.printTemplates.labelDescription')}
+          fieldProps={{ rows: 3 }}
         />
 
         {isEdit && (
           <>
-            <ProFormSwitch
-              name="is_active"
-              label="是否启用"
-            />
-            <ProFormSwitch
-              name="is_default"
-              label="是否默认模板"
-            />
+            <ProFormSwitch name="is_active" label={t('pages.system.printTemplates.labelActive')} />
+            <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />
           </>
         )}
       </FormModalTemplate>
 
       {/* 渲染模板 Modal */}
       <Modal
-        title="渲染打印模板"
+        title={t('pages.system.printTemplates.renderModalTitle')}
         open={renderModalVisible}
         onCancel={() => setRenderModalVisible(false)}
         footer={null}
@@ -878,24 +773,24 @@ const PrintTemplateListPage: React.FC = () => {
           onFinish={handleRenderSubmit}
           submitter={{
             searchConfig: {
-              submitText: '渲染',
+              submitText: t('pages.system.printTemplates.submitRender'),
             },
           }}
         >
           <ProFormTextArea
             name="data"
-            label="模板数据（JSON）"
-            rules={[{ required: true, message: '请输入模板数据' }]}
+            label={t('pages.system.printTemplates.labelTemplateData')}
+            rules={[{ required: true, message: t('pages.system.printTemplates.templateDataRequired') }]}
             fieldProps={{
               rows: 6,
               style: { fontFamily: CODE_FONT_FAMILY },
-              placeholder: '{"title": "标题", "content": "内容"}',
+              placeholder: t('pages.system.printTemplates.templateDataPlaceholder'),
             }}
-            tooltip="模板数据，JSON 格式，用于替换模板中的变量"
+            tooltip={t('pages.system.printTemplates.templateDataTooltip')}
           />
           <SafeProFormSelect
             name="output_format"
-            label="输出格式"
+            label={t('pages.system.printTemplates.labelOutputFormat')}
             options={[
               { label: 'PDF', value: 'pdf' },
               { label: 'HTML', value: 'html' },
@@ -903,22 +798,22 @@ const PrintTemplateListPage: React.FC = () => {
           />
           <ProFormSwitch
             name="async_execution"
-            label="异步执行（通过 Inngest）"
-            tooltip="如果启用，模板渲染将通过 Inngest 异步执行"
+            label={t('pages.system.printTemplates.labelAsync')}
+            tooltip={t('pages.system.printTemplates.asyncTooltip')}
           />
         </ProForm>
         
         {renderResult && (
           <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
-            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>渲染结果：</div>
+            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>{t('pages.system.printTemplates.resultTitle')}</div>
             {renderResult.success ? (
-              <div style={{ color: '#52c41a' }}>✓ 渲染成功</div>
+              <div style={{ color: '#52c41a' }}>{t('pages.system.printTemplates.resultSuccess')}</div>
             ) : (
-              <div style={{ color: '#ff4d4f' }}>✗ 渲染失败</div>
+              <div style={{ color: '#ff4d4f' }}>{t('pages.system.printTemplates.resultFailed')}</div>
             )}
             {renderResult.error && (
               <div style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>错误：</div>
+                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('pages.system.printTemplates.errorLabel')}</div>
                 <pre style={{ background: '#fff', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto', color: '#ff4d4f' }}>
                   {renderResult.error}
                 </pre>
@@ -930,7 +825,7 @@ const PrintTemplateListPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<PrintTemplate>
-        title="打印模板详情"
+        title={t('pages.system.printTemplates.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

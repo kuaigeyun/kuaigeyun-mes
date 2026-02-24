@@ -51,6 +51,7 @@ class SalesForecastResponse(SalesForecastBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
 
     class Config:
         from_attributes = True

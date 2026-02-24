@@ -186,7 +186,7 @@ const MenuListPage: React.FC = () => {
         total: finalData.length,
       };
     } catch (error: any) {
-      messageApi.error(error.message || '加载菜单数据失败');
+      messageApi.error(error.message || t('pages.system.menus.loadMenuFailed'));
       return { data: [], success: false, total: 0 };
     }
   };
@@ -198,7 +198,7 @@ const MenuListPage: React.FC = () => {
      // UniTable 的 record 是来自 loadData 返回的 tree items
      const item = record as any as MenuTree; 
      if (item.children && item.children.length > 0) {
-         return { can: false, reason: '包含子菜单，请先删除子菜单' };
+         return { can: false, reason: t('pages.system.menus.deleteChildFirst') };
      }
      return { can: true };
   };
@@ -209,11 +209,11 @@ const MenuListPage: React.FC = () => {
   const handleDelete = async (record: Menu) => {
     try {
       await deleteMenu(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       refreshLayoutMenus();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -231,7 +231,7 @@ const MenuListPage: React.FC = () => {
         const menu = allMenus.find(m => m.uuid === key);
         if (menu) {
             if (menu.application_uuid) {
-                cannotDeleteNames.push(menu.name + '(应用菜单)');
+                cannotDeleteNames.push(menu.name + '(' + t('pages.system.menus.appMenuSuffix') + ')');
             } else if (allMenus.some(m => m.parent_uuid === menu.uuid)) {
                 cannotDeleteNames.push(menu.name);
             } else {
@@ -241,22 +241,22 @@ const MenuListPage: React.FC = () => {
     });
 
     if (cannotDeleteNames.length > 0) {
-        messageApi.warning(`以下菜单无法删除: ${cannotDeleteNames.join(', ')}`);
+        messageApi.warning(t('pages.system.menus.cannotDeleteMenus', { names: cannotDeleteNames.join(', ') }));
         return;
     }
 
     modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${canDeleteKeys.length} 个菜单吗？`,
+      title: t('pages.system.menus.batchDeleteConfirm'),
+      content: t('pages.system.menus.batchDeleteCountConfirm', { count: canDeleteKeys.length }),
       onOk: async () => {
          try {
              await Promise.all(canDeleteKeys.map(key => deleteMenu(key)));
-             messageApi.success('批量删除成功');
+             messageApi.success(t('pages.system.menus.batchDeleteSuccess'));
              setSelectedRowKeys([]);
              refreshLayoutMenus();
              actionRef.current?.reload();
          } catch (e: any) {
-             messageApi.error(e.message || '批量删除失败');
+             messageApi.error(e.message || t('pages.system.menus.batchDeleteFailed'));
          }
       }
     });
@@ -286,7 +286,7 @@ const MenuListPage: React.FC = () => {
         });
         setModalVisible(true);
     } catch (error: any) {
-        messageApi.error(error.message || '获取详情失败');
+        messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
     }
   };
   
@@ -297,7 +297,7 @@ const MenuListPage: React.FC = () => {
       const detail = await getMenuDetail(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取菜单详情失败');
+      messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -317,16 +317,16 @@ const MenuListPage: React.FC = () => {
         
         if (isEdit && currentMenuUuid) {
             await updateMenu(currentMenuUuid, values);
-            messageApi.success('更新成功');
+            messageApi.success(t('pages.system.updateSuccess'));
         } else {
             await createMenu(values);
-            messageApi.success('创建成功');
+            messageApi.success(t('pages.system.createSuccess'));
         }
         setModalVisible(false);
         refreshLayoutMenus();
         actionRef.current?.reload();
     } catch (error: any) {
-        messageApi.error(error.message || '操作失败');
+        messageApi.error(error.message || t('pages.system.operationFailed'));
     } finally {
         setFormLoading(false);
     }
@@ -334,7 +334,7 @@ const MenuListPage: React.FC = () => {
 
   const columns: ProColumns<Menu>[] = [
     {
-        title: '菜单名称',
+        title: t('pages.system.menus.menuName'),
         dataIndex: 'name',
         width: 250,
         fixed: 'left',
@@ -355,26 +355,26 @@ const MenuListPage: React.FC = () => {
         }
     },
     {
-        title: '路径',
+        title: t('pages.system.menus.path'),
         dataIndex: 'path',
         copyable: true,
         ellipsis: true,
     },
     {
-        title: '图标',
+        title: t('pages.system.menus.icon'),
         dataIndex: 'icon',
         width: 100,
         hideInSearch: true,
         render: (_, record) => record.icon ? <Tag>{record.icon}</Tag> : '-'
     },
     {
-        title: '组件',
+        title: t('pages.system.menus.component'),
         dataIndex: 'component',
         ellipsis: true,
         hideInSearch: true,
     },
     {
-        title: '排序',
+        title: t('pages.system.menus.sort'),
         dataIndex: 'sort_order',
         width: 80,
         valueType: 'digit',
@@ -382,31 +382,31 @@ const MenuListPage: React.FC = () => {
         sorter: (a, b) => a.sort_order - b.sort_order,
     },
     {
-        title: '状态',
+        title: t('pages.system.menus.status'),
         dataIndex: 'is_active',
         width: 100,
         valueType: 'select',
         valueEnum: {
-            true: { text: '启用', status: 'Success' },
-            false: { text: '禁用', status: 'Default' },
+            true: { text: t('pages.system.applications.enabled'), status: 'Success' },
+            false: { text: t('pages.system.applications.disabled'), status: 'Default' },
         },
         render: (_, record) => (
             <Tag color={record.is_active ? 'success' : 'default'}>
-                {record.is_active ? '启用' : '禁用'}
+                {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
             </Tag>
         )
     },
     {
-        title: '外部链接',
+        title: t('pages.system.menus.externalLink'),
       dataIndex: 'is_external',
       width: 100,
       hideInSearch: true,
       render: (_, record) => (
-        record.is_external ? <Tag color="orange">是</Tag> : <span style={{color: '#ccc'}}>-</span>
+        record.is_external ? <Tag color="orange">{t('pages.system.menus.externalYes')}</Tag> : <span style={{color: '#ccc'}}>-</span>
       ),
     },
     {
-        title: '来源',
+        title: t('pages.system.menus.source'),
         dataIndex: 'application_uuid',
         width: 100,
         hideInSearch: true,
@@ -422,7 +422,7 @@ const MenuListPage: React.FC = () => {
           ),
     },
     {
-        title: '操作',
+        title: t('common.actions'),
         valueType: 'option',
         width: 220,
         fixed: 'right',
@@ -432,17 +432,17 @@ const MenuListPage: React.FC = () => {
             const canDelete = !isAppMenu && deleteCheck.can;
             return (
             <Space size="small">
-                <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>查看</Button>
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-                <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>添加子项</Button>
+                <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>{t('pages.system.menus.view')}</Button>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>{t('pages.system.menus.edit')}</Button>
+                <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleCreate(record.uuid)}>{t('pages.system.menus.addChild')}</Button>
                 <Popconfirm
-                    title="确定删除?"
+                    title={t('pages.system.menus.deleteConfirm')}
                     onConfirm={() => handleDelete(record)}
                     disabled={!canDelete}
                 >
                     <Tooltip title={isAppMenu ? t('menu.system.appMenuDeleteDisabled', { defaultValue: '应用菜单不可删除，请在应用中心同步更新' }) : deleteCheck.reason}>
                         <span>
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>删除</Button>
+                            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>{t('pages.system.menus.delete')}</Button>
                         </span>
                     </Tooltip>
                 </Popconfirm>
@@ -458,19 +458,19 @@ const MenuListPage: React.FC = () => {
     <ListPageTemplate
         statCards={[
             {
-                title: '菜单总数',
+                title: t('pages.system.menus.totalCount'),
                 value: stats.totalCount,
                 prefix: <AppstoreOutlined />,
                 valueStyle: { color: '#1890ff' },
             },
             {
-                title: '启用菜单',
+                title: t('pages.system.menus.activeCount'),
                 value: stats.activeCount,
                 prefix: <CheckCircleOutlined />,
                 valueStyle: { color: '#52c41a' },
             },
             {
-                title: '外部链接',
+                title: t('pages.system.menus.externalCount'),
                 value: stats.externalCount,
                 prefix: <LinkOutlined />,
                 valueStyle: { color: '#faad14' },
@@ -479,16 +479,16 @@ const MenuListPage: React.FC = () => {
     >
         <UniTable<Menu>
             actionRef={actionRef}
-            headerTitle="菜单列表"
+            headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"
             columns={columns}
             request={loadData}
             showCreateButton
-            createButtonText="新建菜单"
+            createButtonText={t('pages.system.menus.createMenu')}
             onCreate={() => handleCreate()}
             showDeleteButton
             onDelete={handleBatchDelete}
-            deleteButtonText="批量删除"
+            deleteButtonText={t('pages.system.menus.batchDelete')}
             enableRowSelection
             onRowSelectionChange={setSelectedRowKeys}
             showImportButton={false}
@@ -508,7 +508,7 @@ const MenuListPage: React.FC = () => {
                 items = allMenus;
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.menus.noDataToExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -518,7 +518,7 @@ const MenuListPage: React.FC = () => {
               a.download = `menus-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.menus.exportedCount', { count: items.length }));
             }}
             toolBarRender={() => [
                  <Button
@@ -531,7 +531,7 @@ const MenuListPage: React.FC = () => {
                     }
                     }}
                 >
-                    {expandedRowKeys.length > 0 ? '一键收起' : '一键展开'}
+                    {expandedRowKeys.length > 0 ? t('pages.system.menus.collapseAll') : t('pages.system.menus.expandAll')}
                 </Button>,
             ]}
             pagination={{ defaultPageSize: 50, showSizeChanger: true }}
@@ -544,7 +544,7 @@ const MenuListPage: React.FC = () => {
         />
 
         <FormModalTemplate
-            title={isEdit ? '编辑菜单' : '新建菜单'}
+            title={isEdit ? t('pages.system.menus.editMenu') : t('pages.system.menus.createMenu')}
             open={modalVisible}
             onClose={() => setModalVisible(false)}
             onFinish={handleSubmit}
@@ -553,14 +553,14 @@ const MenuListPage: React.FC = () => {
             loading={formLoading}
             width={MODAL_CONFIG.STANDARD_WIDTH}
         >
-             <ProFormText name="name" label="菜单名称" rules={[{ required: true }]} placeholder="请输入菜单名称" colProps={{ span: 12 }} />
-             <ProFormText name="path" label="菜单路径" placeholder="/system/example" colProps={{ span: 12 }} />
-             <ProFormText name="icon" label="图标" placeholder="Antd Icon Name" colProps={{ span: 12 }} />
-             <ProFormText name="component" label="组件路径" placeholder="src/pages/..." colProps={{ span: 12 }} />
+             <ProFormText name="name" label={t('pages.system.menus.menuName')} rules={[{ required: true }]} placeholder={t('pages.system.menus.menuNamePlaceholder')} colProps={{ span: 12 }} />
+             <ProFormText name="path" label={t('pages.system.menus.path')} placeholder={t('pages.system.menus.pathPlaceholder')} colProps={{ span: 12 }} />
+             <ProFormText name="icon" label={t('pages.system.menus.icon')} placeholder={t('pages.system.menus.iconPlaceholder')} colProps={{ span: 12 }} />
+             <ProFormText name="component" label={t('pages.system.menus.componentPath')} placeholder={t('pages.system.menus.componentPathPlaceholder')} colProps={{ span: 12 }} />
              <ProFormTreeSelect
                 name="parent_uuid"
-                label="父菜单"
-                placeholder="请选择父菜单"
+                label={t('pages.system.menus.parentMenu')}
+                placeholder={t('pages.system.menus.parentMenuPlaceholder')}
                 fieldProps={{
                     treeData: menuTreeData,
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
@@ -573,22 +573,22 @@ const MenuListPage: React.FC = () => {
              />
              <ProFormSelect
                 name="application_uuid"
-                label="关联应用"
+                label={t('pages.system.menus.relatedApp')}
                 options={applications}
-                placeholder="请选择应用"
+                placeholder={t('pages.system.menus.relatedAppPlaceholder')}
                 fieldProps={{ variant: 'outlined' }}
                 colProps={{ span: 12 }}
              />
-             <ProFormText name="permission_code" label="权限代码" colProps={{ span: 12 }} />
-             <ProFormText name="sort_order" label="排序" fieldProps={{ type: 'number' }} colProps={{ span: 12 }} />
-             <ProFormSwitch name="is_active" label="启用" colProps={{ span: 6 }} />
-             <ProFormSwitch name="is_external" label="外部链接" colProps={{ span: 6 }} />
-             <ProFormText name="external_url" label="外部链接URL" colProps={{ span: 24 }} />
-             <ProFormTextArea name="meta" label="元数据(JSON)" fieldProps={{ rows: 3 }} colProps={{ span: 24 }} />
+             <ProFormText name="permission_code" label={t('pages.system.menus.permissionCode')} colProps={{ span: 12 }} />
+             <ProFormText name="sort_order" label={t('pages.system.menus.sort')} fieldProps={{ type: 'number' }} colProps={{ span: 12 }} />
+             <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 6 }} />
+             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 6 }} />
+             <ProFormText name="external_url" label={t('pages.system.menus.externalUrl')} colProps={{ span: 24 }} />
+             <ProFormTextArea name="meta" label={t('pages.system.menus.metadataJson')} fieldProps={{ rows: 3 }} colProps={{ span: 24 }} />
         </FormModalTemplate>
 
         <DetailDrawerTemplate
-            title="菜单详情"
+            title={t('pages.system.menus.detailTitle')}
             open={drawerVisible}
             onClose={() => setDrawerVisible(false)}
             dataSource={detailData || {}}
@@ -596,22 +596,22 @@ const MenuListPage: React.FC = () => {
             width={DRAWER_CONFIG.STANDARD_WIDTH}
             columns={[
                 {
-                  title: '名称',
+                  title: t('pages.system.menus.name'),
                   dataIndex: 'name',
                   render: (_: any, row: any) =>
                     translateAppMenuItemName(row?.name, row?.path, t, row?.children),
                 },
-                { title: '路径', dataIndex: 'path' },
-                { title: '图标', dataIndex: 'icon' },
-                { title: '组件', dataIndex: 'component' },
-                { title: '权限代码', dataIndex: 'permission_code' },
-                { title: '排序', dataIndex: 'sort_order' },
-                { title: '状态', dataIndex: 'is_active', render: (_: any, entity: any) => (entity?.is_active ? '启用' : '禁用') },
-                { title: '外部链接', dataIndex: 'is_external', render: (_: any, entity: any) => (entity?.is_external ? '是' : '否') },
-                { title: '外部URL', dataIndex: 'external_url' },
-                { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-                { title: '元数据', dataIndex: 'meta', render: (_: any, entity: any) => <pre>{JSON.stringify(entity?.meta, null, 2)}</pre> }
+                { title: t('pages.system.menus.path'), dataIndex: 'path' },
+                { title: t('pages.system.menus.icon'), dataIndex: 'icon' },
+                { title: t('pages.system.menus.component'), dataIndex: 'component' },
+                { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
+                { title: t('pages.system.menus.sort'), dataIndex: 'sort_order' },
+                { title: t('pages.system.menus.status'), dataIndex: 'is_active', render: (_: any, entity: any) => (entity?.is_active ? t('pages.system.menus.enabled') : t('pages.system.menus.disabled')) },
+                { title: t('pages.system.menus.externalLink'), dataIndex: 'is_external', render: (_: any, entity: any) => (entity?.is_external ? t('pages.system.menus.externalYes') : t('pages.system.menus.externalNo')) },
+                { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
+                { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+                { title: t('pages.system.menus.metadata'), dataIndex: 'meta', render: (_: any, entity: any) => <pre>{JSON.stringify(entity?.meta, null, 2)}</pre> }
             ]}
         />
     </ListPageTemplate>

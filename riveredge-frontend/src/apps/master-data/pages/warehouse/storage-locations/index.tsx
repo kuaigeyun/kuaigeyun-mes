@@ -5,18 +5,16 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
-import type { StorageLocation, StorageLocationCreate, StorageLocationUpdate, StorageArea } from '../../../types/warehouse';
+import { StorageLocationFormModal } from '../../../components/StorageLocationFormModal';
+import type { StorageLocation, StorageLocationCreate, StorageArea } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 库位管理列表页面组件
@@ -24,7 +22,6 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 const StorageLocationsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -35,97 +32,37 @@ const StorageLocationsPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑库位）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  // 保存预览编码，用于在提交时判断是否需要正式生成
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
   
-  // 库区列表（用于下拉选择）
+  // 库区列表（用于导入等）
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
-  const [storageAreasLoading, setStorageAreasLoading] = useState(false);
 
-  /**
-   * 加载库区列表
-   */
   useEffect(() => {
     const loadStorageAreas = async () => {
       try {
-        setStorageAreasLoading(true);
         const result = await storageAreaApi.list({ limit: 1000, isActive: true });
         setStorageAreas(result);
       } catch (error: any) {
         console.error('加载库区列表失败:', error);
-      } finally {
-        setStorageAreasLoading(false);
       }
     };
     loadStorageAreas();
   }, []);
 
-  /**
-   * 处理新建库位
-   */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentStorageLocationUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    
-    // 检查是否启用自动编码
-    if (isAutoGenerateEnabled('master-data-warehouse-storage-location')) {
-      const ruleCode = getPageRuleCode('master-data-warehouse-storage-location');
-      if (ruleCode) {
-        try {
-          // 使用测试生成（不更新序号），仅用于预览
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-            isActive: true,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-          formRef.current?.setFieldsValue({
-            isActive: true,
-          });
-        }
-      } else {
-        setPreviewCode(null);
-        formRef.current?.setFieldsValue({
-          isActive: true,
-        });
-      }
-    } else {
-      setPreviewCode(null);
-      formRef.current?.setFieldsValue({
-        isActive: true,
-      });
-    }
   };
 
-  /**
-   * 处理编辑库位
-   */
-  const handleEdit = async (record: StorageLocation) => {
-    try {
-      setIsEdit(true);
-      setCurrentStorageLocationUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取库位详情
-      const detail = await storageLocationApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        storageAreaId: detail.storageAreaId,
-        description: detail.description,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取库位详情失败');
-    }
+  const handleEdit = (record: StorageLocation) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -575,60 +512,6 @@ const StorageLocationsPage: React.FC = () => {
   };
 
   /**
-   * 处理提交表单（创建/更新库位）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      if (isEdit && currentStorageLocationUuid) {
-        // 更新库位
-        await storageLocationApi.update(currentStorageLocationUuid, values as StorageLocationUpdate);
-        messageApi.success('更新成功');
-      } else {
-        // 创建库位
-        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
-        if (!isEdit && isAutoGenerateEnabled('master-data-warehouse-storage-location')) {
-          const ruleCode = getPageRuleCode('master-data-warehouse-storage-location');
-          const currentCode = values.code;
-          
-          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成编码失败，使用预览编码:', error);
-              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
-            }
-          }
-        }
-        
-        await storageLocationApi.create(values as StorageLocationCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
-  };
-
-  /**
    * 获取库区名称
    */
   const getStorageAreaName = (storageAreaId: number): string => {
@@ -658,7 +541,7 @@ const StorageLocationsPage: React.FC = () => {
       dataIndex: 'storageAreaId',
       width: 200,
       hideInSearch: true,
-      render: (_, record) => getStorageAreaName(record?.storageAreaId ?? (record as any)?.storage_area_id),
+      render: (_, record) => getStorageAreaName(record?.storageAreaId),
     },
     {
       title: '描述',
@@ -676,10 +559,9 @@ const StorageLocationsPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+          <Tag color={record?.isActive ? 'success' : 'default'}>
+            {record?.isActive ? '启用' : '禁用'}
           </Tag>
         );
       },
@@ -735,7 +617,7 @@ const StorageLocationsPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<StorageLocation>[] = [
+  const detailColumns: ProDescriptionsItemProps<StorageLocation>[] = [
     {
       title: '库位编码',
       dataIndex: 'code',
@@ -747,7 +629,7 @@ const StorageLocationsPage: React.FC = () => {
     {
       title: '所属库区',
       dataIndex: 'storageAreaId',
-      render: (_, record) => getStorageAreaName(record?.storageAreaId ?? (record as any)?.storage_area_id),
+      render: (_, record) => getStorageAreaName(record?.storageAreaId),
     },
     {
       title: '描述',
@@ -758,10 +640,9 @@ const StorageLocationsPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+          <Tag color={record?.isActive ? 'success' : 'default'}>
+            {record?.isActive ? '启用' : '禁用'}
           </Tag>
         );
       },
@@ -899,74 +780,12 @@ const StorageLocationsPage: React.FC = () => {
       />
 
       {/* 创建/编辑库位 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑库位' : '新建库位'}
+      <StorageLocationFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-      >
-        <ProFormText
-          name="code"
-          label="库位编码"
-          placeholder="请输入库位编码"
-          rules={[
-            { required: true, message: '请输入库位编码' },
-            { max: 50, message: '库位编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            disabled: isEdit, // 编辑时不允许修改编码
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="库位名称"
-          placeholder="请输入库位名称"
-          rules={[
-            { required: true, message: '请输入库位名称' },
-            { max: 200, message: '库位名称不能超过200个字符' },
-          ]}
-        />
-        <SafeProFormSelect
-          name="storageAreaId"
-          label="所属库区"
-          placeholder="请选择库区"
-          options={storageAreas.map(s => ({
-            label: `${s.code} - ${s.name}`,
-            value: s.id,
-          }))}
-          rules={[
-            { required: true, message: '请选择库区' },
-          ]}
-          fieldProps={{
-            loading: storageAreasLoading,
-            showSearch: true,
-            filterOption: (input, option) => {
-              const label = option?.label as string || '';
-              return label.toLowerCase().includes(input.toLowerCase());
-            },
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述信息"
-          fieldProps={{
-            rows: 4,
-            maxLength: 1000,
-          }}
-        />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

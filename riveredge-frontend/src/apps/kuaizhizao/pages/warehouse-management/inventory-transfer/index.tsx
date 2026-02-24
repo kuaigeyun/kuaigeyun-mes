@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, message, Card, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { materialApi } from '../../../../master-data/services/material';
@@ -76,33 +77,13 @@ const InventoryTransferPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentTransfer, setCurrentTransfer] = useState<InventoryTransfer | null>(null);
 
-  // 仓库列表状态
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  // 仓库列表状态 (交由 UniWarehouseSelect 管理)
   // 物料列表状态
   const [materialList, setMaterialList] = useState<any[]>([]);
   // 当前调拨单ID（用于添加明细）
   const [currentTransferId, setCurrentTransferId] = useState<number | null>(null);
 
-  /**
-   * 加载仓库列表
-   */
-  React.useEffect(() => {
-    const loadWarehouses = async () => {
-      try {
-        // TODO: 调用仓库API获取仓库列表
-        // const warehouses = await warehouseApi.list();
-        // setWarehouseList(warehouses || []);
-        setWarehouseList([
-          { id: 1, name: '原材料仓库' },
-          { id: 2, name: '成品仓库' },
-          { id: 3, name: '半成品仓库' },
-        ]);
-      } catch (error) {
-        console.error('加载仓库列表失败:', error);
-      }
-    };
-    loadWarehouses();
-  }, []);
+  // 加载仓库逻辑移除
 
   /**
    * 加载物料列表
@@ -142,9 +123,9 @@ const InventoryTransferPage: React.FC = () => {
 
       await inventoryTransferApi.create({
         from_warehouse_id: values.from_warehouse_id,
-        from_warehouse_name: warehouseList.find((w: any) => w.id === values.from_warehouse_id)?.name || '',
+        from_warehouse_name: values._from_warehouse_name || '',
         to_warehouse_id: values.to_warehouse_id,
-        to_warehouse_name: warehouseList.find((w: any) => w.id === values.to_warehouse_id)?.name || '',
+        to_warehouse_name: values._to_warehouse_name || '',
         transfer_date: values.transfer_date?.toISOString() || new Date().toISOString(),
         transfer_reason: values.transfer_reason,
         remarks: values.remarks,
@@ -402,7 +383,7 @@ const InventoryTransferPage: React.FC = () => {
       <FormModalTemplate
         title="创建调拨单"
         open={createModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setCreateModalVisible(false);
           formRef.current?.resetFields();
         }}
@@ -410,25 +391,19 @@ const InventoryTransferPage: React.FC = () => {
         formRef={formRef}
         {...MODAL_CONFIG}
       >
-        <ProFormSelect
+        <UniWarehouseSelect
           name="from_warehouse_id"
           label="调出仓库"
           placeholder="请选择调出仓库"
-          rules={[{ required: true, message: '请选择调出仓库' }]}
-          options={warehouseList.map((w: any) => ({
-            label: w.name,
-            value: w.id,
-          }))}
+          required
+          onChange={(_, option) => formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name })}
         />
-        <ProFormSelect
+        <UniWarehouseSelect
           name="to_warehouse_id"
           label="调入仓库"
           placeholder="请选择调入仓库"
-          rules={[{ required: true, message: '请选择调入仓库' }]}
-          options={warehouseList.map((w: any) => ({
-            label: w.name,
-            value: w.id,
-          }))}
+          required
+          onChange={(_, option) => formRef.current?.setFieldsValue({ _to_warehouse_name: option?.name })}
         />
         <ProFormDatePicker
           name="transfer_date"
@@ -456,7 +431,7 @@ const InventoryTransferPage: React.FC = () => {
       <FormModalTemplate
         title="添加调拨明细"
         open={itemModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setItemModalVisible(false);
           setCurrentTransferId(null);
           itemFormRef.current?.resetFields();
@@ -566,7 +541,7 @@ const InventoryTransferPage: React.FC = () => {
           {
             title: '调拨总金额',
             dataIndex: 'total_amount',
-            render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
+            render: (dom: React.ReactNode, entity: InventoryTransfer) => `¥${entity.total_amount?.toFixed(2) || '0.00'}`,
           },
           {
             title: '调拨原因',

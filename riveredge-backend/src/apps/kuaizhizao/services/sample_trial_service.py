@@ -36,6 +36,7 @@ from apps.kuaizhizao.schemas.warehouse import (
 )
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class SampleTrialService(AppBaseService[SampleTrial]):
@@ -43,6 +44,7 @@ class SampleTrialService(AppBaseService[SampleTrial]):
 
     def __init__(self):
         super().__init__(SampleTrial)
+        self.business_config_service = BusinessConfigService()
 
     async def create_sample_trial(
         self,
@@ -51,6 +53,9 @@ class SampleTrialService(AppBaseService[SampleTrial]):
         created_by: int
     ) -> SampleTrialResponse:
         """创建样品试用单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sample_trial")
+        if not is_enabled:
+            raise BusinessLogicError("样品试用单节点未启用，无法创建样品试用单")
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "SAMPLE_TRIAL_CODE", prefix=f"ST{today}")

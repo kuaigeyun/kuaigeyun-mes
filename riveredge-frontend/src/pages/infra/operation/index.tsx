@@ -69,7 +69,7 @@ export default function OperationsDashboard() {
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   // 检查是否有 Token 和平台超级管理员权限
   const hasToken = !!getToken();
@@ -194,8 +194,8 @@ export default function OperationsDashboard() {
    */
   const handleRefresh = useCallback(() => {
     refetch();
-    messageApi.success('数据已刷新');
-  }, [refetch, messageApi]);
+    messageApi.success(t('pages.infra.operation.refreshSuccess'));
+  }, [refetch, messageApi, t]);
   
   /**
    * 准备图表数据
@@ -204,12 +204,12 @@ export default function OperationsDashboard() {
     if (!displayStatistics) return [];
     
     return [
-      { name: '激活', value: displayStatistics.by_status?.active || 0, color: '#52c41a' },
-      { name: '未激活', value: displayStatistics.by_status?.inactive || 0, color: '#faad14' },
-      { name: '已过期', value: displayStatistics.by_status?.expired || 0, color: '#ff4d4f' },
-      { name: '已暂停', value: displayStatistics.by_status?.suspended || 0, color: '#8c8c8c' },
+      { name: t('pages.infra.admin.statusActive'), value: displayStatistics.by_status?.active || 0, color: '#52c41a' },
+      { name: t('pages.infra.admin.statusInactive'), value: displayStatistics.by_status?.inactive || 0, color: '#faad14' },
+      { name: t('pages.infra.tenant.statusExpired'), value: displayStatistics.by_status?.expired || 0, color: '#ff4d4f' },
+      { name: t('pages.infra.tenant.statusSuspended'), value: displayStatistics.by_status?.suspended || 0, color: '#8c8c8c' },
     ].filter(item => item.value > 0);
-  }, [displayStatistics]);
+  }, [displayStatistics, t]);
   
   const planChartData = useMemo(() => {
     if (!displayStatistics) return [];
@@ -220,19 +220,19 @@ export default function OperationsDashboard() {
                   (displayStatistics.by_plan?.enterprise || 0);
     
     return [
-      { name: '基础版', value: displayStatistics.by_plan?.basic || 0, color: '#1890ff' },
-      { name: '专业版', value: displayStatistics.by_plan?.professional || 0, color: '#722ed1' },
-      { name: '企业版', value: displayStatistics.by_plan?.enterprise || 0, color: '#52c41a' },
-      { name: '体验套餐', value: trial, color: '#faad14' },
+      { name: t('pages.infra.operation.planBasic'), value: displayStatistics.by_plan?.basic || 0, color: '#1890ff' },
+      { name: t('pages.infra.operation.planProfessional'), value: displayStatistics.by_plan?.professional || 0, color: '#722ed1' },
+      { name: t('pages.infra.operation.planEnterprise'), value: displayStatistics.by_plan?.enterprise || 0, color: '#52c41a' },
+      { name: t('pages.infra.operation.planTrial'), value: trial, color: '#faad14' },
     ].filter(item => item.value > 0);
-  }, [displayStatistics]);
+  }, [displayStatistics, t]);
   
   /**
    * 处理数据导出（CSV 格式）
    */
   const handleExport = useCallback(() => {
     if (!displayStatistics) {
-      messageApi.warning('暂无数据可导出');
+      messageApi.warning(t('pages.infra.operation.noDataExport'));
       return;
     }
     
@@ -241,58 +241,58 @@ export default function OperationsDashboard() {
       const exportData: string[][] = [];
       
       // 添加标题行
-      exportData.push(['运营看板统计数据', '']);
+      exportData.push([t('pages.infra.operation.exportStatsTitle'), '']);
       // 使用国际化日期格式
-      exportData.push(['导出时间', dayjs().format('llll')]);
-      exportData.push(['时间范围', timeRangeType === 'custom' && customDateRange 
-        ? `${customDateRange[0]?.format('ll')} 至 ${customDateRange[1]?.format('ll')}`
-        : timeRangeType === 'today' ? '今日'
-        : timeRangeType === 'week' ? '本周'
-        : timeRangeType === 'month' ? '本月'
-        : '全部']);
+      exportData.push([t('pages.infra.operation.exportTime'), dayjs().format('llll')]);
+      exportData.push([t('pages.infra.operation.timeRangeLabel'), timeRangeType === 'custom' && customDateRange 
+        ? `${customDateRange[0]?.format('ll')}${t('pages.infra.operation.dateRangeConnector')}${customDateRange[1]?.format('ll')}`
+        : timeRangeType === 'today' ? t('pages.infra.operation.timeRangeToday')
+        : timeRangeType === 'week' ? t('pages.infra.operation.timeRangeWeek')
+        : timeRangeType === 'month' ? t('pages.infra.operation.timeRangeMonth')
+        : t('pages.infra.operation.timeRangeAll')]);
       if (hasCachedData) {
-        exportData.push(['数据状态', '缓存数据（API 加载失败）']);
+        exportData.push([t('pages.infra.operation.exportDataStatus'), t('pages.infra.operation.cachedData')]);
       }
       exportData.push([]); // 空行
       
       // 核心指标
-      exportData.push(['核心指标', '']);
-      exportData.push(['总组织数', String(displayStatistics.total || 0)]);
-      exportData.push(['激活组织', String(displayStatistics.by_status?.active || 0)]);
-      exportData.push(['未激活组织', String(displayStatistics.by_status?.inactive || 0)]);
-      exportData.push(['已过期组织', String(displayStatistics.by_status?.expired || 0)]);
-      exportData.push(['已暂停组织', String(displayStatistics.by_status?.suspended || 0)]);
+      exportData.push([t('pages.infra.operation.coreMetrics'), '']);
+      exportData.push([t('pages.infra.operation.totalTenants'), String(displayStatistics.total || 0)]);
+      exportData.push([t('pages.infra.operation.activeTenants'), String(displayStatistics.by_status?.active || 0)]);
+      exportData.push([t('pages.infra.operation.inactiveTenants'), String(displayStatistics.by_status?.inactive || 0)]);
+      exportData.push([t('pages.infra.operation.expiredTenants'), String(displayStatistics.by_status?.expired || 0)]);
+      exportData.push([t('pages.infra.operation.suspendedTenants'), String(displayStatistics.by_status?.suspended || 0)]);
       exportData.push([]); // 空行
       
       // 组织状态分布
-      exportData.push(['组织状态分布', '']);
-      exportData.push(['状态', '数量']);
+      exportData.push([t('pages.infra.operation.statusDistribution'), '']);
+      exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
       if (statusChartData.length > 0) {
         statusChartData.forEach(item => {
           exportData.push([item.name, String(item.value)]);
         });
       } else {
-        exportData.push(['暂无数据', '0']);
+        exportData.push([t('pages.infra.operation.noData'), '0']);
       }
       exportData.push([]); // 空行
       
       // 组织套餐分布
-      exportData.push(['组织套餐分布', '']);
-      exportData.push(['套餐类型', '数量']);
+      exportData.push([t('pages.infra.operation.planDistribution'), '']);
+      exportData.push([t('pages.infra.tenant.plan'), t('pages.infra.operation.countLabel')]);
       if (planChartData.length > 0) {
         planChartData.forEach(item => {
           exportData.push([item.name, String(item.value)]);
         });
       } else {
-        exportData.push(['暂无数据', '0']);
+        exportData.push([t('pages.infra.operation.noData'), '0']);
       }
       exportData.push([]); // 空行
       
       // 数据更新时间（使用国际化格式）
       if (displayStatistics.updated_at) {
-        exportData.push(['数据更新时间', dayjs(displayStatistics.updated_at).format('llll')]);
+        exportData.push([t('pages.infra.operation.dataUpdatedAt'), dayjs(displayStatistics.updated_at).format('llll')]);
       } else if (dataUpdatedAt) {
-        exportData.push(['数据更新时间', dayjs(dataUpdatedAt).format('llll') + '（缓存）']);
+        exportData.push([t('pages.infra.operation.dataUpdatedAt'), dayjs(dataUpdatedAt).format('llll') + t('pages.infra.operation.cachedLabel')]);
       }
       
       // 转换为 CSV 格式
@@ -315,31 +315,31 @@ export default function OperationsDashboard() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `运营看板统计数据_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
+      a.download = `${t('pages.infra.operation.exportStatsTitle')}_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       
-      messageApi.success('数据导出成功');
+      messageApi.success(t('pages.infra.operation.exportSuccess'));
     } catch (error: any) {
       console.error('导出失败:', error);
-      messageApi.error('导出失败：' + (error.message || '未知错误'));
+      messageApi.error(t('pages.infra.operation.exportFailed', { message: error.message || t('pages.infra.operation.unknownError') }));
     }
-  }, [displayStatistics, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi]);
+  }, [displayStatistics, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi, t]);
 
   return (
     <ListPageTemplate>
       {/* 页面头部工具栏 */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, marginBottom: 4 }}>运营看板</h2>
-          <Text type="secondary">平台级运营数据概览</Text>
+          <h2 style={{ margin: 0, marginBottom: 4 }}>{t('pages.infra.operation.title')}</h2>
+          <Text type="secondary">{t('pages.infra.operation.subtitle')}</Text>
         </div>
         <Space size="middle">
           {/* 时间范围筛选 */}
           <Space>
-            <Text type="secondary">时间范围：</Text>
+            <Text type="secondary">{t('pages.infra.operation.timeRange')}</Text>
             <Radio.Group
               value={timeRangeType}
               onChange={(e) => {
@@ -349,10 +349,10 @@ export default function OperationsDashboard() {
                 }
               }}
             >
-              <Radio.Button value="today">今日</Radio.Button>
-              <Radio.Button value="week">本周</Radio.Button>
-              <Radio.Button value="month">本月</Radio.Button>
-              <Radio.Button value="custom">自定义</Radio.Button>
+              <Radio.Button value="today">{t('pages.infra.operation.today')}</Radio.Button>
+              <Radio.Button value="week">{t('pages.infra.operation.week')}</Radio.Button>
+              <Radio.Button value="month">{t('pages.infra.operation.month')}</Radio.Button>
+              <Radio.Button value="custom">{t('pages.infra.operation.custom')}</Radio.Button>
             </Radio.Group>
             {timeRangeType === 'custom' && (
               <RangePicker
@@ -365,13 +365,13 @@ export default function OperationsDashboard() {
           
           {/* 操作按钮 */}
           <Space>
-            <Tooltip title={autoRefresh ? '关闭自动刷新' : '开启自动刷新'}>
+            <Tooltip title={autoRefresh ? t('pages.infra.operation.autoRefreshTooltipOn') : t('pages.infra.operation.autoRefreshTooltipOff')}>
               <Button
                 type={autoRefresh ? 'primary' : 'default'}
                 icon={<ReloadOutlined spin={autoRefresh} />}
                 onClick={() => setAutoRefresh(!autoRefresh)}
               >
-                {autoRefresh ? '自动刷新中' : '自动刷新'}
+                {autoRefresh ? t('pages.infra.operation.autoRefreshOn') : t('pages.infra.operation.autoRefresh')}
               </Button>
             </Tooltip>
             <Button
@@ -379,13 +379,13 @@ export default function OperationsDashboard() {
               onClick={handleRefresh}
               loading={loading}
             >
-              刷新
+              {t('pages.infra.operation.refresh')}
             </Button>
             <Button
               icon={<DownloadOutlined />}
               onClick={handleExport}
             >
-              导出
+              {t('pages.infra.operation.export')}
             </Button>
           </Space>
         </Space>
@@ -398,7 +398,7 @@ export default function OperationsDashboard() {
             <Col span={6}>
               <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
                 <Statistic
-                  title="总组织数"
+                  title={t('pages.infra.operation.totalTenants')}
                   value={displayStatistics.total || 0}
                   prefix={<ApartmentOutlined />}
                   valueStyle={{ color: '#1890ff' }}
@@ -408,7 +408,7 @@ export default function OperationsDashboard() {
             <Col span={6}>
               <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
                 <Statistic
-                  title="激活组织"
+                  title={t('pages.infra.operation.activeTenants')}
                   value={displayStatistics.by_status?.active || 0}
                   prefix={<RiseOutlined />}
                   valueStyle={{ color: '#52c41a' }}
@@ -418,7 +418,7 @@ export default function OperationsDashboard() {
             <Col span={6}>
               <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
                 <Statistic
-                  title="未激活组织"
+                  title={t('pages.infra.operation.inactiveTenants')}
                   value={displayStatistics.by_status?.inactive || 0}
                   prefix={<FallOutlined />}
                   valueStyle={{ color: '#faad14' }}
@@ -428,7 +428,7 @@ export default function OperationsDashboard() {
             <Col span={6}>
               <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
                 <Statistic
-                  title="已暂停组织"
+                  title={t('pages.infra.operation.suspendedTenants')}
                   value={displayStatistics.by_status?.suspended || 0}
                   prefix={<ApartmentOutlined />}
                   valueStyle={{ color: '#ff4d4f' }}
@@ -445,16 +445,16 @@ export default function OperationsDashboard() {
             description={
               <Space direction="vertical" size="small" align="center">
                 <Text type="warning" strong>
-                  {!hasToken ? '请先登录' : '权限不足'}
+                  {!hasToken ? t('pages.infra.operation.loginFirst') : t('pages.infra.operation.noPermission')}
                 </Text>
                 <Text type="secondary">
                   {!hasToken 
-                    ? '运营看板需要平台超级管理员权限，请先登录' 
-                    : '您没有访问运营看板的权限，需要平台超级管理员权限'}
+                    ? t('pages.infra.operation.loginHint') 
+                    : t('pages.infra.operation.noPermissionHint')}
                 </Text>
                 {!hasToken && (
                   <Button type="primary" href="/platform">
-                    前往登录
+                    {t('pages.infra.operation.goLogin')}
                   </Button>
                 )}
               </Space>
@@ -469,25 +469,25 @@ export default function OperationsDashboard() {
           {hasCachedData ? (
             <Space direction="vertical" size="small" align="center" style={{ width: '100%' }}>
               <Text type="warning" strong>
-                ⚠️ 数据加载失败，正在显示缓存数据
+                ⚠️ {t('pages.infra.operation.loadFailedCached')}
               </Text>
               <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                数据更新时间：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : '未知'}
+                {t('pages.infra.operation.dataUpdatedAt')}：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : t('pages.infra.monitoring.unknown')}
               </Text>
               <Button size="small" onClick={() => refetch()}>
-                重新加载
+                {t('pages.infra.operation.reload')}
               </Button>
             </Space>
           ) : (
             <Empty
               description={
                 <Space direction="vertical" size="small" align="center">
-                  <Text type="danger" strong>加载数据失败</Text>
+                  <Text type="danger" strong>{t('pages.infra.operation.loadFailed')}</Text>
                   <Text type="secondary">
-                    {error instanceof Error ? error.message : '网络错误，请稍后重试'}
+                    {error instanceof Error ? error.message : t('pages.infra.operation.networkError')}
                   </Text>
                   <Button size="small" onClick={() => refetch()}>
-                    重试
+                    {t('pages.infra.operation.retry')}
                   </Button>
                 </Space>
               }
@@ -516,7 +516,7 @@ export default function OperationsDashboard() {
               title={
                 <Space>
                   <PieChartOutlined />
-                  <span>组织状态分布</span>
+                  <span>{t('pages.infra.operation.statusDistribution')}</span>
                 </Space>
               }
               loading={loading}
@@ -534,7 +534,7 @@ export default function OperationsDashboard() {
                   />
                 </div>
               ) : (
-                <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               )}
             </Card>
           </Col>
@@ -543,7 +543,7 @@ export default function OperationsDashboard() {
               title={
                 <Space>
                   <BarChartOutlined />
-                  <span>组织套餐分布</span>
+                  <span>{t('pages.infra.operation.planDistribution')}</span>
                 </Space>
               }
               loading={loading}
@@ -561,7 +561,7 @@ export default function OperationsDashboard() {
                   />
                 </div>
               ) : (
-                <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               )}
             </Card>
           </Col>
@@ -572,20 +572,20 @@ export default function OperationsDashboard() {
               <Card style={{ marginTop: 24 }}>
                 <Space>
                   <Text type="secondary">
-                    数据更新时间：{displayStatistics?.updated_at 
+                    {t('pages.infra.operation.dataUpdatedAt')}：{displayStatistics?.updated_at 
                       ? dayjs(displayStatistics.updated_at).format('llll')
                       : dataUpdatedAt 
                         ? dayjs(dataUpdatedAt).format('llll')
-                        : '未知'}
+                        : t('pages.infra.monitoring.unknown')}
                     {hasCachedData && (
                       <Text type="warning" style={{ marginLeft: 8 }}>
-                        （缓存数据）
+                        {t('pages.infra.operation.cachedLabel')}
                       </Text>
                     )}
                   </Text>
                   {autoRefresh && !error && (
                     <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                      （自动刷新中...）
+                      {t('pages.infra.operation.autoRefreshing')}
                     </Text>
                   )}
                 </Space>
@@ -597,7 +597,7 @@ export default function OperationsDashboard() {
       {/* 有权限但无数据 */}
       {!loading && !error && !displayStatistics && hasToken && isInfraSuperAdmin && (
         <Card>
-          <Empty description="暂无数据" />
+          <Empty description={t('pages.infra.operation.noData')} />
         </Card>
       )}
     </ListPageTemplate>

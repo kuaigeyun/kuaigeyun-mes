@@ -6,6 +6,7 @@
 
 import { Modal, List, Typography, Tag } from 'antd';
 import { ApartmentOutlined, CheckOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { LoginResponse } from '../../services/auth';
 
 const { Text } = Typography;
@@ -64,6 +65,8 @@ export default function TenantSelectionModal({
   onSelect,
   onCancel,
 }: TenantSelectionModalProps) {
+  const { t } = useTranslation();
+
   /**
    * 获取组织状态标签
    *
@@ -71,20 +74,20 @@ export default function TenantSelectionModal({
    * @returns 状态标签
    */
   const getStatusTag = (status: string) => {
-    const statusMap: Record<string, { color: string; text: string }> = {
-      active: { color: 'success', text: '激活' },
-      inactive: { color: 'default', text: '未激活' },
-      expired: { color: 'error', text: '已过期' },
-      suspended: { color: 'warning', text: '已暂停' },
+    const statusMap: Record<string, { color: string; textKey: string }> = {
+      active: { color: 'success', textKey: 'components.tenantSelection.statusActive' },
+      inactive: { color: 'default', textKey: 'components.tenantSelection.statusInactive' },
+      expired: { color: 'error', textKey: 'components.tenantSelection.statusExpired' },
+      suspended: { color: 'warning', textKey: 'components.tenantSelection.statusSuspended' },
     };
 
-    const statusInfo = statusMap[status] || { color: 'default', text: status };
-    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+    const statusInfo = statusMap[status] || { color: 'default', textKey: '' };
+    return <Tag color={statusInfo.color}>{statusInfo.textKey ? t(statusInfo.textKey) : status}</Tag>;
   };
 
   return (
     <Modal
-      title="选择组织"
+      title={t('components.tenantSelection.title')}
       open={open}
       onCancel={onCancel}
       footer={null}
@@ -94,7 +97,7 @@ export default function TenantSelectionModal({
     >
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">
-          您属于多个组织，请选择要进入的组织：
+          {t('components.tenantSelection.hint')}
         </Text>
       </div>
 
@@ -124,14 +127,14 @@ export default function TenantSelectionModal({
                   {getStatusTag(tenant.status)}
                   {defaultTenantId === tenant.id && (
                     <Tag color="blue" icon={<CheckOutlined />}>
-                      默认
+                      {t('components.tenantSelection.default')}
                     </Tag>
                   )}
                 </div>
               }
               description={
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  域名: {tenant.domain}
+                  {t('components.tenantSelection.domainLabel')}: {tenant.domain}
                 </Text>
               }
             />

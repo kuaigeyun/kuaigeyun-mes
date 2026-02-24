@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-design/pro-components';
 import { App, Card, message, Upload, Avatar, Space, Button, Row, Col, Divider, Typography, Segmented, theme, Form, Tabs, Descriptions } from 'antd';
 import { UserOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -27,6 +28,7 @@ import { apiRequest } from '../../../services/api';
  * 个人资料页面组件
  */
 const UserProfilePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const formRef = React.useRef<ProFormInstance>();
@@ -58,7 +60,7 @@ const UserProfilePage: React.FC = () => {
         await loadProfile();
       } else {
         console.error('❌ 个人资料页面：tenant_id 为空，无法加载个人资料');
-        messageApi.error('组织信息未设置，请重新登录');
+        messageApi.error(t('pages.personal.profile.tenantRequired'));
       }
     };
 
@@ -107,7 +109,7 @@ const UserProfilePage: React.FC = () => {
               // 仍然设置文件列表，但使用基本信息
               setAvatarFileList([{
                 uid: data.avatar,
-                name: '头像',
+                name: t('pages.personal.profile.avatarName'),
                 status: 'done',
                 url: previewUrl,
               }]);
@@ -128,7 +130,7 @@ const UserProfilePage: React.FC = () => {
         setAvatarFileList([]);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '加载个人资料失败');
+      messageApi.error(error.message || t('pages.personal.profile.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -186,11 +188,11 @@ const UserProfilePage: React.FC = () => {
           await updateUserProfile({ avatar: response.uuid });
         } catch (error: any) {
           console.error('保存头像到后端失败:', error);
-          messageApi.warning('头像上传成功，但保存到后端失败，请稍后重试');
+          messageApi.warning(t('pages.personal.profile.avatarSaveFailed'));
         }
         
         onSuccess?.(response);
-        messageApi.success('头像上传并保存成功');
+        messageApi.success(t('pages.personal.profile.avatarUploadSuccess'));
       } else {
         // 上传失败，释放本地预览 URL
         URL.revokeObjectURL(localPreviewUrl);
@@ -199,7 +201,7 @@ const UserProfilePage: React.FC = () => {
       }
     } catch (error: any) {
       onError?.(error);
-      messageApi.error(error.message || '头像上传失败');
+      messageApi.error(error.message || t('pages.personal.profile.uploadFailed'));
     }
   };
 
@@ -225,10 +227,10 @@ const UserProfilePage: React.FC = () => {
       // 重新加载个人资料
       await loadProfile();
       
-      messageApi.success('头像已清除');
+      messageApi.success(t('pages.personal.profile.avatarCleared'));
     } catch (error: any) {
       console.error('❌ 清除头像失败:', error);
-      messageApi.error(error.message || '清除头像失败');
+      messageApi.error(error.message || t('pages.personal.profile.avatarClearFailed'));
     } finally {
       setLoading(false);
     }
@@ -245,7 +247,7 @@ const UserProfilePage: React.FC = () => {
       
       // 验证新密码和确认密码是否一致
       if (new_password !== confirm_password) {
-        messageApi.error('新密码和确认密码不一致');
+        messageApi.error(t('pages.personal.profile.passwordMismatch'));
         return;
       }
       
@@ -258,13 +260,13 @@ const UserProfilePage: React.FC = () => {
         },
       });
       
-      messageApi.success('密码修改成功');
+      messageApi.success(t('pages.personal.profile.passwordChangeSuccess'));
       
       // 清空表单
       passwordFormRef.current?.resetFields();
     } catch (error: any) {
       console.error('❌ 修改密码失败:', error);
-      messageApi.error(error.message || '修改密码失败');
+      messageApi.error(error.message || t('pages.personal.profile.passwordChangeFailed'));
     } finally {
       setPasswordLoading(false);
     }
@@ -314,7 +316,7 @@ const UserProfilePage: React.FC = () => {
       });
       
       await updateUserProfile(data);
-      messageApi.success('个人资料更新成功');
+      messageApi.success(t('pages.personal.profile.updateSuccess'));
       
       // 头像已经在上传时自动保存，这里不需要再处理头像
       
@@ -369,7 +371,7 @@ const UserProfilePage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '更新失败');
+      messageApi.error(error.message || t('pages.personal.profile.updateFailed'));
     } finally {
       setLoading(false);
     }
@@ -386,7 +388,7 @@ const UserProfilePage: React.FC = () => {
       <Row gutter={16}>
         {/* 左侧：显示用户信息 */}
         <Col xs={24} md={8}>
-          <Card title="用户信息" loading={loading} style={{ marginBottom: 16 }}>
+          <Card title={t('pages.personal.profile.userInfo')} loading={loading} style={{ marginBottom: 16 }}>
             <Space orientation="vertical" align="center" style={{ width: '100%' }}>
               {avatarUrl ? (
                 <Avatar
@@ -408,7 +410,7 @@ const UserProfilePage: React.FC = () => {
               )}
               <div style={{ textAlign: 'center', width: '100%' }}>
                 <Title level={4} style={{ margin: '16px 0 8px 0' }}>
-                  {profileData?.full_name || profileData?.username || '未设置姓名'}
+                  {profileData?.full_name || profileData?.username || t('pages.personal.profile.noName')}
                 </Title>
                 <Text type="secondary">{profileData?.username}</Text>
               </div>
@@ -417,39 +419,39 @@ const UserProfilePage: React.FC = () => {
             <Divider />
             
             <Descriptions column={1}>
-              <Descriptions.Item label="用户名">{profileData?.username || '-'}</Descriptions.Item>
-              <Descriptions.Item label="邮箱">
-                {profileData?.email && profileData.email.trim() ? profileData.email : <Text type="secondary">未设置</Text>}
+              <Descriptions.Item label={t('pages.personal.profile.username')}>{profileData?.username || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('pages.personal.profile.email')}>
+                {profileData?.email && profileData.email.trim() ? profileData.email : <Text type="secondary">{t('pages.personal.profile.notSet')}</Text>}
               </Descriptions.Item>
-              <Descriptions.Item label="姓名">
-                {profileData?.full_name && profileData.full_name.trim() ? profileData.full_name : <Text type="secondary">未设置</Text>}
+              <Descriptions.Item label={t('pages.personal.profile.fullName')}>
+                {profileData?.full_name && profileData.full_name.trim() ? profileData.full_name : <Text type="secondary">{t('pages.personal.profile.notSet')}</Text>}
               </Descriptions.Item>
-              <Descriptions.Item label="手机号">
-                {profileData?.phone && profileData.phone.trim() ? profileData.phone : <Text type="secondary">未设置</Text>}
+              <Descriptions.Item label={t('pages.personal.profile.phone')}>
+                {profileData?.phone && profileData.phone.trim() ? profileData.phone : <Text type="secondary">{t('pages.personal.profile.notSet')}</Text>}
               </Descriptions.Item>
-              <Descriptions.Item label="性别">
+              <Descriptions.Item label={t('pages.personal.profile.gender')}>
                 {profileData?.gender === 'male' ? (
-                  <Text>男</Text>
+                  <Text>{t('pages.personal.profile.male')}</Text>
                 ) : profileData?.gender === 'female' ? (
-                  <Text>女</Text>
+                  <Text>{t('pages.personal.profile.female')}</Text>
                 ) : (
-                  <Text type="secondary">未设置</Text>
+                  <Text type="secondary">{t('pages.personal.profile.notSet')}</Text>
                 )}
               </Descriptions.Item>
               {profileData?.bio && (
-                <Descriptions.Item label="个人简介">{profileData.bio}</Descriptions.Item>
+                <Descriptions.Item label={t('pages.personal.profile.bio')}>{profileData.bio}</Descriptions.Item>
               )}
               {profileData?.contact_info && Object.keys(profileData.contact_info).length > 0 && (
-                <Descriptions.Item label="联系方式">
+                <Descriptions.Item label={t('pages.personal.profile.contactInfo')}>
                   <div>
                     {profileData.contact_info.wechat && (
-                      <div>微信：{profileData.contact_info.wechat}</div>
+                      <div>{t('pages.personal.profile.wechat')}：{profileData.contact_info.wechat}</div>
                     )}
                     {profileData.contact_info.qq && (
-                      <div>QQ：{profileData.contact_info.qq}</div>
+                      <div>{t('pages.personal.profile.qq')}：{profileData.contact_info.qq}</div>
                     )}
                     {profileData.contact_info.address && (
-                      <div>地址：{profileData.contact_info.address}</div>
+                      <div>{t('pages.personal.profile.address')}：{profileData.contact_info.address}</div>
                     )}
                   </div>
                 </Descriptions.Item>
@@ -460,14 +462,14 @@ const UserProfilePage: React.FC = () => {
 
         {/* 右侧：编辑用户信息 */}
         <Col xs={24} md={16}>
-          <Card title="编辑资料" loading={loading}>
+          <Card title={t('pages.personal.profile.editProfile')} loading={loading}>
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
               items={[
                 {
                   key: 'basic',
-                  label: '基本信息',
+                  label: t('pages.personal.profile.basicInfo'),
                   children: (
                     <ProForm
                       formRef={formRef}
@@ -485,7 +487,7 @@ const UserProfilePage: React.FC = () => {
                       }}
                       submitter={{
                         searchConfig: {
-                          submitText: '保存',
+                          submitText: t('common.save'),
                         },
                         resetButtonProps: {
                           style: { display: 'none' },
@@ -493,7 +495,7 @@ const UserProfilePage: React.FC = () => {
                       }}
                       layout="vertical"
                     >
-              <ProForm.Item name="avatar" label="头像">
+              <ProForm.Item name="avatar" label={t('pages.personal.profile.avatar')}>
                 <Space orientation="vertical" align="center">
                   {avatarUrl ? (
                     <Avatar
@@ -522,7 +524,7 @@ const UserProfilePage: React.FC = () => {
                       accept="image/*"
                       showUploadList={false}
                     >
-                      <Button icon={<UploadOutlined />}>上传头像</Button>
+                      <Button icon={<UploadOutlined />}>{t('pages.personal.profile.uploadAvatar')}</Button>
                     </Upload>
                     {avatarUrl && (
                       <Button
@@ -531,7 +533,7 @@ const UserProfilePage: React.FC = () => {
                         onClick={handleClearAvatar}
                         loading={loading}
                       >
-                        清除头像
+                        {t('pages.personal.profile.clearAvatar')}
                       </Button>
                     )}
                   </Space>
@@ -540,24 +542,24 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormText
                 name="username"
-                label="用户名"
+                label={t('pages.personal.profile.username')}
                 fieldProps={{
-                  placeholder: '请输入用户名',
+                  placeholder: t('pages.login.usernamePlaceholder'),
                   maxLength: 50,
                   style: { width: 280 },
                 }}
                 rules={[
-                  { required: true, message: '请输入用户名' },
-                  { min: 1, message: '用户名不能为空' },
-                  { max: 50, message: '用户名不能超过50个字符' },
+                  { required: true, message: t('pages.login.usernameRequired') },
+                  { min: 1, message: t('pages.login.usernameRequired') },
+                  { max: 50, message: t('pages.login.usernameLen') },
                 ]}
               />
               
               <ProFormText
                 name="full_name"
-                label="姓名"
+                label={t('pages.personal.profile.fullName')}
                 fieldProps={{
-                  placeholder: '请输入姓名',
+                  placeholder: t('pages.personal.profile.fullName'),
                   maxLength: 100,
                   style: { width: 280 },
                 }}
@@ -565,7 +567,7 @@ const UserProfilePage: React.FC = () => {
               
               <ProForm.Item
                 name="gender"
-                label="性别"
+                label={t('pages.personal.profile.gender')}
               >
                 <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.gender !== currentValues.gender}>
                   {({ getFieldValue, setFieldValue }) => {
@@ -576,8 +578,8 @@ const UserProfilePage: React.FC = () => {
                           value={genderValue}
                           onChange={(newValue) => setFieldValue('gender', newValue)}
                           options={[
-                            { label: '男', value: 'male' },
-                            { label: '女', value: 'female' },
+                            { label: t('pages.personal.profile.male'), value: 'male' },
+                            { label: t('pages.personal.profile.female'), value: 'female' },
                           ]}
                           size="large"
                         />
@@ -608,9 +610,9 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormText
                 name="phone"
-                label="手机号"
+                label={t('pages.personal.profile.phone')}
                 fieldProps={{
-                  placeholder: '请输入手机号',
+                  placeholder: t('pages.login.phonePlaceholder'),
                   maxLength: 20,
                   style: { width: 280 },
                 }}
@@ -624,7 +626,7 @@ const UserProfilePage: React.FC = () => {
                       if (phoneRegex.test(value.trim())) {
                         return Promise.resolve();
                       }
-                      return Promise.reject(new Error('请输入有效的手机号（11位数字，以1开头）'));
+                      return Promise.reject(new Error(t('pages.login.phoneInvalid')));
                     },
                   },
                 ]}
@@ -632,9 +634,9 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormText
                 name="email"
-                label="邮箱"
+                label={t('pages.personal.profile.email')}
                 fieldProps={{
-                  placeholder: '请输入邮箱',
+                  placeholder: t('pages.login.emailPlaceholder'),
                   type: 'email',
                   maxLength: 255,
                   style: { width: 360 },
@@ -649,7 +651,7 @@ const UserProfilePage: React.FC = () => {
                       if (emailRegex.test(value.trim())) {
                         return Promise.resolve();
                       }
-                      return Promise.reject(new Error('请输入有效的邮箱地址'));
+                      return Promise.reject(new Error(t('pages.login.emailInvalid')));
                     },
                   },
                 ]}
@@ -657,20 +659,20 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormTextArea
                 name="bio"
-                label="个人简介"
+                label={t('pages.personal.profile.bio')}
                 fieldProps={{
                   rows: 4,
-                  placeholder: '请输入个人简介',
+                  placeholder: t('pages.personal.profile.bio'),
                   style: { width: '100%' },
                 }}
               />
               
-              <Divider titlePlacement="left">联系方式</Divider>
+              <Divider titlePlacement="left">{t('pages.personal.profile.contactInfo')}</Divider>
               
               <ProFormText
                 name="contact_wechat"
-                label="微信"
-                placeholder="请输入微信号"
+                label={t('pages.personal.profile.wechat')}
+                placeholder={t('pages.personal.profile.wechat')}
                 fieldProps={{
                   maxLength: 50,
                   style: { width: 280 },
@@ -679,8 +681,8 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormText
                 name="contact_qq"
-                label="QQ"
-                placeholder="请输入QQ号"
+                label={t('pages.personal.profile.qq')}
+                placeholder={t('pages.personal.profile.qq')}
                 fieldProps={{
                   maxLength: 20,
                   style: { width: 280 },
@@ -689,8 +691,8 @@ const UserProfilePage: React.FC = () => {
               
               <ProFormText
                 name="contact_address"
-                label="地址"
-                placeholder="请输入地址"
+                label={t('pages.personal.profile.address')}
+                placeholder={t('pages.personal.profile.address')}
                 fieldProps={{
                   maxLength: 200,
                   style: { width: '100%' },
@@ -701,14 +703,14 @@ const UserProfilePage: React.FC = () => {
                 },
                 {
                   key: 'security',
-                  label: '安全设置',
+                  label: t('pages.personal.profile.securitySettings'),
                   children: (
                     <ProForm
                       formRef={passwordFormRef}
                       onFinish={handlePasswordChange}
                       submitter={{
                         searchConfig: {
-                          submitText: '修改密码',
+                          submitText: t('pages.personal.profile.changePassword'),
                         },
                         resetButtonProps: {
                           style: { display: 'none' },
@@ -721,47 +723,47 @@ const UserProfilePage: React.FC = () => {
                     >
                       <ProFormText.Password
                         name="old_password"
-                        label="当前密码"
+                        label={t('pages.personal.profile.currentPassword')}
                         fieldProps={{
-                          placeholder: '请输入当前密码',
+                          placeholder: t('pages.personal.profile.currentPasswordPlaceholder'),
                           style: { width: 360 },
                         }}
                         rules={[
-                          { required: true, message: '请输入当前密码' },
-                          { min: 8, message: '密码长度至少 8 个字符' },
-                          { max: 128, message: '密码长度不能超过 128 个字符' },
+                          { required: true, message: t('pages.personal.profile.currentPasswordPlaceholder') },
+                          { min: 8, message: t('pages.login.passwordLen') },
+                          { max: 128, message: t('pages.login.passwordLenMax') },
                         ]}
                       />
                       
                       <ProFormText.Password
                         name="new_password"
-                        label="新密码"
+                        label={t('pages.personal.profile.newPassword')}
                         fieldProps={{
-                          placeholder: '请输入新密码（8-128个字符）',
+                          placeholder: t('pages.personal.profile.newPasswordPlaceholder'),
                           style: { width: 360 },
                         }}
                         rules={[
-                          { required: true, message: '请输入新密码' },
-                          { min: 8, message: '密码长度至少 8 个字符' },
-                          { max: 128, message: '密码长度不能超过 128 个字符' },
+                          { required: true, message: t('pages.personal.profile.newPassword') },
+                          { min: 8, message: t('pages.login.passwordLen') },
+                          { max: 128, message: t('pages.login.passwordLenMax') },
                         ]}
                       />
                       
                       <ProFormText.Password
                         name="confirm_password"
-                        label="确认新密码"
+                        label={t('pages.personal.profile.confirmNewPassword')}
                         fieldProps={{
-                          placeholder: '请再次输入新密码',
+                          placeholder: t('pages.personal.profile.confirmNewPasswordPlaceholder'),
                           style: { width: 360 },
                         }}
                         rules={[
-                          { required: true, message: '请再次输入新密码' },
+                          { required: true, message: t('pages.personal.profile.confirmNewPasswordPlaceholder') },
                           ({ getFieldValue }) => ({
                             validator(_, value) {
                               if (!value || getFieldValue('new_password') === value) {
                                 return Promise.resolve();
                               }
-                              return Promise.reject(new Error('两次输入的密码不一致'));
+                              return Promise.reject(new Error(t('pages.login.confirmPasswordMismatch')));
                             },
                           }),
                         ]}

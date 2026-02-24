@@ -49,10 +49,11 @@ class PerformanceService:
         if existing:
             raise ValidationError(f"日期 {data.holiday_date} 已存在假期")
         
-        # 创建假期
+        # 创建假期（by_alias=False 得到 snake_case 供 ORM 使用）
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         holiday = await Holiday.create(
             tenant_id=tenant_id,
-            **data.dict()
+            **create_data
         )
         
         return HolidayResponse.model_validate(holiday)
@@ -173,8 +174,8 @@ class PerformanceService:
             if existing:
                 raise ValidationError(f"日期 {data.holiday_date} 已存在假期")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(holiday, key, value)
         
@@ -241,11 +242,12 @@ class PerformanceService:
         if existing:
             raise ValidationError(f"技能编码 {data.code} 已存在")
         
-        # 创建技能
+        # 创建技能（by_alias=False 得到 snake_case 供 ORM 使用）
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         try:
             skill = await Skill.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
@@ -361,8 +363,8 @@ class PerformanceService:
             if existing:
                 raise ValidationError(f"技能编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(skill, key, value)
         

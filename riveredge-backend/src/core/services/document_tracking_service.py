@@ -77,26 +77,30 @@ class DocumentTrackingService:
         except Exception:
             pass
 
-        # 2. ApprovalRecord
+        # 2. ApprovalHistory（统一审批系统）
         try:
-            from apps.kuaizhizao.models.approval_flow import ApprovalRecord
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.models.approval_history import ApprovalHistory
 
-            records = await ApprovalRecord.filter(
+            instance = await ApprovalInstanceService.get_instance_by_entity(
                 tenant_id=tenant_id,
                 entity_type=document_type,
                 entity_id=document_id,
-            ).order_by("approval_time").all()
-
-            for r in records:
-                timeline.append({
-                    "type": "approve",
-                    "at": r.approval_time.isoformat() if r.approval_time else None,
-                    "by": r.approver_name or str(r.approver_id),
-                    "by_id": r.approver_id,
-                    "detail": f"审核{r.approval_result}",
-                    "result": r.approval_result,
-                    "comment": r.approval_comment,
-                })
+            )
+            if instance:
+                records = await ApprovalHistory.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                ).order_by("action_at").all()
+                for r in records:
+                    timeline.append({
+                        "type": "approve",
+                        "at": r.action_at.isoformat() if r.action_at else None,
+                        "by_id": r.action_by,
+                        "detail": f"审核{r.action}",
+                        "result": r.action,
+                        "comment": r.comment,
+                    })
         except Exception:
             pass
 

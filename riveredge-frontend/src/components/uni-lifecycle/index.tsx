@@ -87,7 +87,9 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       percent={Math.min(100, Math.max(0, Math.round(percent)))}
       size={sizeNum}
       status={progressStatus}
+      strokeWidth={12}
       strokeColor={progressStatus === 'exception' ? 'var(--ant-color-error)' : undefined}
+      railColor="var(--ant-color-border)"
     />
   );
 

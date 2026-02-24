@@ -79,7 +79,7 @@ class FactoryService:
         try:
             plant = await Plant.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -247,7 +247,7 @@ class FactoryService:
                 raise ValidationError(f"厂区编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(plant, key, value)
         
@@ -462,7 +462,7 @@ class FactoryService:
         try:
             workshop = await Workshop.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -654,7 +654,7 @@ class FactoryService:
                 raise ValidationError(f"车间编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(workshop, key, value)
         
@@ -881,7 +881,7 @@ class FactoryService:
         try:
             production_line = await ProductionLine.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -1074,7 +1074,7 @@ class FactoryService:
                 raise ValidationError(f"产线编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(production_line, key, value)
         
@@ -1301,7 +1301,7 @@ class FactoryService:
         try:
             workstation = await Workstation.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -1494,7 +1494,7 @@ class FactoryService:
                 raise ValidationError(f"工位编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(workstation, key, value)
         

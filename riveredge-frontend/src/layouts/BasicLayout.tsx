@@ -76,6 +76,7 @@ import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
+import { verifyCopyright } from '../utils/copyrightIntegrity';
 
 /** 左侧菜单 path 与业务单据未完成数量 key 的映射（用于数量徽标） */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
@@ -557,6 +558,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const lockScreen = useGlobalStore((s) => s.lockScreen);
   // 头像 URL：优先从缓存读取以消除首屏闪烁，再异步拉取最新
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+
+  // 版权声明关键字段校验（Layout 挂载时执行一次）
+  useEffect(() => {
+    verifyCopyright();
+  }, []);
 
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
@@ -1214,7 +1220,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
       document.title = `${pageTitle} - ${currentSiteName}`;
     } else {
-      document.title = `${currentSiteName} - 多组织管理框架`;
+      document.title = `${currentSiteName} - ${t('common.docTitleSuffix')}`;
     }
   }, [location.pathname, breadcrumbMenuData, t, siteName, currentUser]);
 
@@ -1327,6 +1333,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         navigate('/personal/profile');
         break;
       case 'copyright':
+        verifyCopyright();
         setTechStackModalOpen(true);
         break;
       case 'clear-menu-cache':
@@ -1651,7 +1658,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         console.warn('更新用户偏好设置失败:', error);
       }
 
-      message.success(`已切换到${LANGUAGE_MAP[languageCode] || languageCode}`);
+      message.success(t('common.switchLanguageSuccess', { language: LANGUAGE_MAP[languageCode] || languageCode }));
     } catch (error: any) {
       console.error('切换语言失败:', error);
       message.error(error?.message || t('common.switchLanguageFailed'));
@@ -3532,7 +3539,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               menuData={filteredMenuData}
               isLightModeLightBg={isLightModeLightBg}
               token={token}
-              placeholder={t('common.searchPlaceholder', '搜索菜单、功能...')}
+              placeholder={t('common.searchPlaceholder')}
             />
           );
 
@@ -3580,7 +3587,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     >
                       <Space size={8} align="center">
                         <Typography.Text strong style={{ fontSize: 16 }}>
-                          消息通知
+                          {t('ui.message.notification')}
                         </Typography.Text>
                         {unreadCount > 0 && (
                           <Badge
@@ -3597,7 +3604,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                           navigate('/personal/messages');
                         }}
                       >
-                        查看全部 <RightOutlined />
+                        {t('pages.dashboard.viewAll')} <RightOutlined />
                       </Button>
                     </div>
 

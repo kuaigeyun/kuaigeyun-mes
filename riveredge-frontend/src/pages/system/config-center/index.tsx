@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, theme } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, CodeSandboxOutlined, ControlOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
@@ -68,6 +69,7 @@ function toSiteSettings(flat: Record<string, any>, siteParamKeys: string[]): Rec
 }
 
 const ConfigCenterPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [searchParams] = useSearchParams();
@@ -101,14 +103,14 @@ const ConfigCenterPage: React.FC = () => {
         template_name: values.template_name,
         template_description: values.template_description,
       });
-      messageApi.success('配置模板已保存');
+      messageApi.success(t('pages.system.configCenter.templateSaveSuccess'));
       setTemplateModalVisible(false);
       templateForm.resetFields();
       const list = await getConfigTemplates();
       setTemplates(list);
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('pages.system.configCenter.saveFailed'));
     }
   };
 
@@ -174,7 +176,7 @@ const ConfigCenterPage: React.FC = () => {
 
       form.setFieldsValue(initialValues);
     } catch (error: any) {
-      messageApi.error(error.message || '加载配置失败');
+      messageApi.error(error.message || t('pages.system.configCenter.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -209,13 +211,13 @@ const ConfigCenterPage: React.FC = () => {
         await batchUpdateProcessParameters({ parameters: bizParams });
       }
 
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.configCenter.saveSuccess'));
       useThemeStore.getState().initFromApi();
-      messageApi.info('部分设置（如主题色）可能需要刷新页面后生效');
+      messageApi.info(t('pages.system.configCenter.refreshToApply'));
       await loadData();
     } catch (error: any) {
       if (error?.errorFields) return;
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -234,7 +236,7 @@ const ConfigCenterPage: React.FC = () => {
         <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: 8 }}>
           <Space>
             <SettingOutlined style={{ fontSize: 18 }} />
-            <Text strong>参数分类</Text>
+            <Text strong>{t('pages.system.configCenter.categoryTitle')}</Text>
           </Space>
         </div>
         <Menu
@@ -243,17 +245,17 @@ const ConfigCenterPage: React.FC = () => {
           style={{ border: 'none', background: 'transparent' }}
           items={CONFIG_CATEGORIES.map((c) => ({
             key: c.id,
-            label: c.name,
+            label: t(c.nameKey),
           }))}
           onClick={({ key }) => setSelectedCategory(key)}
         />
       </Sider>
       <Content style={{ padding: '0 0 0 24px', overflow: 'visible' }}>
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 16 }}>{category?.name}</Text>
-          {category?.description && (
+          <Text strong style={{ fontSize: 16 }}>{category ? t(category.nameKey) : ''}</Text>
+          {category?.descriptionKey && (
             <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-              {category.description}
+              {t(category.descriptionKey)}
             </Paragraph>
           )}
         </div>
@@ -272,9 +274,9 @@ const ConfigCenterPage: React.FC = () => {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <Text strong>{param.name}</Text>
+                      <Text strong>{t(param.nameKey)}</Text>
                       <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                        {param.description}
+                        {t(param.descriptionKey)}
                       </Paragraph>
                     </div>
                     <div style={{ flexShrink: 0 }}>
@@ -307,10 +309,10 @@ const ConfigCenterPage: React.FC = () => {
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
           <Space>
             <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
-              刷新
+              {t('pages.system.configCenter.refresh')}
             </Button>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
-              保存
+              {t('pages.system.configCenter.save')}
             </Button>
           </Space>
         </div>
@@ -343,7 +345,7 @@ const ConfigCenterPage: React.FC = () => {
             label: (
               <Space>
                 <ControlOutlined />
-                <span>参数配置</span>
+                <span>{t('pages.system.configCenter.tabParameters')}</span>
               </Space>
             ),
             children: parametersTabContent,
@@ -353,7 +355,7 @@ const ConfigCenterPage: React.FC = () => {
             label: (
               <Space>
                 <CodeSandboxOutlined />
-                <span>业务蓝图</span>
+                <span>{t('pages.system.configCenter.tabGraph')}</span>
               </Space>
             ),
             children: graphTabContent,
@@ -363,26 +365,26 @@ const ConfigCenterPage: React.FC = () => {
       />
 
       <Modal
-        title="保存配置模板"
+        title={t('pages.system.configCenter.templateModalTitle')}
         open={templateModalVisible}
         onOk={handleSaveTemplate}
         onCancel={() => {
           setTemplateModalVisible(false);
           templateForm.resetFields();
         }}
-        okText="保存"
-        cancelText="取消"
+        okText={t('pages.system.configCenter.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={templateForm} layout="vertical">
           <Form.Item
             name="template_name"
-            label="模板名称"
-            rules={[{ required: true, message: '请输入模板名称' }]}
+            label={t('pages.system.configCenter.templateName')}
+            rules={[{ required: true, message: t('pages.system.configCenter.templateNameRequired') }]}
           >
-            <Input placeholder="请输入模板名称" />
+            <Input placeholder={t('pages.system.configCenter.templateNamePlaceholder')} />
           </Form.Item>
-          <Form.Item name="template_description" label="模板描述">
-            <Input.TextArea placeholder="请输入模板描述（可选）" rows={3} />
+          <Form.Item name="template_description" label={t('pages.system.configCenter.templateDescription')}>
+            <Input.TextArea placeholder={t('pages.system.configCenter.templateDescriptionPlaceholder')} rows={3} />
           </Form.Item>
         </Form>
       </Modal>

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Slider, Form, Row, Col, Divider, Typography } from 'antd';
@@ -52,6 +53,7 @@ const defaultPreferenceValues: Record<string, any> = {
 };
 
 const UserPreferencesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = React.useRef<ProFormInstance>();
   const preferences = useUserPreferenceStore((s) => s.preferences);
@@ -171,7 +173,7 @@ const UserPreferencesPage: React.FC = () => {
 
       await updatePreferences(values);
 
-      messageApi.success('偏好设置更新成功');
+      messageApi.success(t('pages.personal.preferences.updateSuccess'));
 
       // 如果语言变更，重新加载用户语言和翻译内容
       if (values.language && values.language !== i18n.language) {
@@ -179,7 +181,7 @@ const UserPreferencesPage: React.FC = () => {
         await refreshTranslations();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '更新失败');
+      messageApi.error(error.message || t('pages.personal.preferences.updateFailed'));
     }
   };
 
@@ -188,39 +190,39 @@ const UserPreferencesPage: React.FC = () => {
 
   return (
     <div style={{ padding: 0 }}>
-      <Card title="偏好设置" loading={storeLoading} styles={{ body: { padding: '24px 24px 16px' } }}>
+      <Card title={t('pages.personal.preferences.title')} loading={storeLoading} styles={{ body: { padding: '24px 24px 16px' } }}>
         <ProForm
           formRef={formRef}
           initialValues={defaultPreferenceValues}
           onFinish={handleSubmit}
           submitter={{
-            searchConfig: { submitText: '保存' },
+            searchConfig: { submitText: t('pages.personal.preferences.save') },
             render: (_, dom) => <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid var(--ant-color-border)' }}>{dom}</div>,
           }}
           layout="vertical"
         >
           {/* 主题与外观 */}
-          <Typography.Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>主题与外观</Typography.Title>
+          <Typography.Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>{t('pages.personal.preferences.themeAndAppearance')}</Typography.Title>
           <div style={sectionMargin}>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={24} md={8}>
                 <SafeProFormSelect
                   name="theme"
-                  label="颜色模式"
-                  valueEnum={{ light: '亮色', dark: '暗色', auto: '自动' }}
-                  placeholder="请选择"
+                  label={t('pages.personal.preferences.colorMode')}
+                  valueEnum={{ light: t('pages.personal.preferences.light'), dark: t('pages.personal.preferences.dark'), auto: t('pages.personal.preferences.auto') }}
+                  placeholder={t('pages.personal.preferences.pleaseSelect')}
                 />
               </Col>
             </Row>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={12}>
-                <Form.Item name={['theme_config', 'fontSize']} label="字体大小">
-                  <Slider min={12} max={20} marks={{ 12: '小', 14: '标准', 16: '大', 18: '很大', 20: '特大' }} />
+                <Form.Item name={['theme_config', 'fontSize']} label={t('pages.personal.preferences.fontSize')}>
+                  <Slider min={12} max={20} marks={{ 12: t('pages.personal.preferences.fontSmall'), 14: t('pages.personal.preferences.fontStandard'), 16: t('pages.personal.preferences.fontLarge'), 18: t('pages.personal.preferences.fontXl'), 20: t('pages.personal.preferences.fontXxl') }} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12}>
-                <Form.Item name={['theme_config', 'borderRadius']} label="圆角大小">
-                  <Slider min={0} max={16} marks={{ 0: '直角', 6: '适中', 12: '圆润', 16: '很圆' }} />
+                <Form.Item name={['theme_config', 'borderRadius']} label={t('pages.personal.preferences.borderRadius')}>
+                  <Slider min={0} max={16} marks={{ 0: t('pages.personal.preferences.square'), 6: t('pages.personal.preferences.medium'), 12: t('pages.personal.preferences.round'), 16: t('pages.personal.preferences.rounder') }} />
                 </Form.Item>
               </Col>
             </Row>
@@ -228,7 +230,7 @@ const UserPreferencesPage: React.FC = () => {
               <Col xs={24} sm={12} md={6}>
                 <Form.Item
                   name={['theme_config', 'colorPrimary']}
-                  label="主题色"
+                  label={t('pages.personal.preferences.themeColor')}
                   getValueFromEvent={(c: any) => normalizeColor(c, '#1890ff')}
                   normalize={(v: any) => normalizeColor(v, '#1890ff')}
                 >
@@ -238,8 +240,8 @@ const UserPreferencesPage: React.FC = () => {
               <Col xs={24} sm={12} md={6}>
                 <Form.Item
                   name={['theme_config', 'siderBgColor']}
-                  label="菜单栏背景色"
-                  extra="仅浅色模式"
+                  label={t('pages.personal.preferences.siderBgColor')}
+                  extra={t('pages.personal.preferences.siderBgExtra')}
                   getValueFromEvent={(c: any) => normalizeColor(c, '')}
                   normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
                 >
@@ -249,7 +251,7 @@ const UserPreferencesPage: React.FC = () => {
               <Col xs={24} sm={12} md={6}>
                 <Form.Item
                   name={['theme_config', 'headerBgColor']}
-                  label="顶栏背景色"
+                  label={t('pages.personal.preferences.headerBgColor')}
                   getValueFromEvent={(c: any) => normalizeColor(c, '')}
                   normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
                 >
@@ -259,7 +261,7 @@ const UserPreferencesPage: React.FC = () => {
               <Col xs={24} sm={12} md={6}>
                 <Form.Item
                   name={['theme_config', 'tabsBgColor']}
-                  label="标签栏背景色"
+                  label={t('pages.personal.preferences.tabsBgColor')}
                   getValueFromEvent={(c: any) => normalizeColor(c, '')}
                   normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
                 >
@@ -269,23 +271,23 @@ const UserPreferencesPage: React.FC = () => {
             </Row>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name={['theme_config', 'compact']} label="紧凑模式" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name={['theme_config', 'compact']} label={t('pages.personal.preferences.compactMode')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name="tabs_persistence" label="标签栏持久化" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name="tabs_persistence" label={t('pages.personal.preferences.tabsPersistence')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
             </Row>
           </div>
 
           {/* 语言 */}
           <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>语言</Typography.Title>
+          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.language')}</Typography.Title>
           <div style={sectionMargin}>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={24} md={8}>
                 <SafeProFormSelect
                   name="language"
-                  label="界面语言"
+                  label={t('pages.personal.preferences.interfaceLanguage')}
                   valueEnum={
                     languages.length > 0
                       ? languages.reduce((acc, lang) => {
@@ -294,7 +296,7 @@ const UserPreferencesPage: React.FC = () => {
                         }, {} as Record<string, string>)
                       : { 'zh-CN': '简体中文', 'en-US': 'English' }
                   }
-                  placeholder="请选择语言"
+                  placeholder={t('pages.personal.preferences.pleaseSelectLanguage')}
                 />
               </Col>
             </Row>
@@ -302,55 +304,55 @@ const UserPreferencesPage: React.FC = () => {
 
           {/* 通知 */}
           <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>通知</Typography.Title>
+          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.notifications')}</Typography.Title>
           <div style={sectionMargin}>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'email']} label="邮件通知" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name={['notifications', 'email']} label={t('pages.personal.preferences.emailNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'sms']} label="短信通知" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name={['notifications', 'sms']} label={t('pages.personal.preferences.smsNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'internal']} label="站内信通知" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name={['notifications', 'internal']} label={t('pages.personal.preferences.internalNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
               <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'push']} label="推送通知" fieldProps={{ checkedChildren: '开启', unCheckedChildren: '关闭' }} />
+                <ProFormSwitch name={['notifications', 'push']} label={t('pages.personal.preferences.pushNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
               </Col>
             </Row>
           </div>
 
           {/* 界面 */}
           <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>界面</Typography.Title>
+          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.interface')}</Typography.Title>
           <div style={{ marginBottom: 8 }}>
             <Row gutter={rowGutter}>
               <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'layout']} label="布局" valueEnum={{ default: '默认', compact: '紧凑', wide: '宽屏' }} placeholder="请选择" />
+                <SafeProFormSelect name={['ui', 'layout']} label={t('pages.personal.preferences.layout')} valueEnum={{ default: t('pages.personal.preferences.layoutDefault'), compact: t('pages.personal.preferences.layoutCompact'), wide: t('pages.personal.preferences.layoutWide') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
               </Col>
               <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'font_size']} label="字体大小" valueEnum={{ small: '小', medium: '中', large: '大' }} placeholder="请选择" />
+                <SafeProFormSelect name={['ui', 'font_size']} label={t('pages.personal.preferences.fontSize')} valueEnum={{ small: t('pages.personal.preferences.fontSmall'), medium: t('pages.personal.preferences.fontStandard'), large: t('pages.personal.preferences.fontLarge') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
               </Col>
               <Col xs={24} sm={12} md={8}>
-                <ProFormSwitch name={['ui', 'sidebar_collapsed']} label="侧边栏默认收起" fieldProps={{ checkedChildren: '是', unCheckedChildren: '否' }} />
+                <ProFormSwitch name={['ui', 'sidebar_collapsed']} label={t('pages.personal.preferences.sidebarCollapsed')} fieldProps={{ checkedChildren: t('pages.personal.preferences.yes'), unCheckedChildren: t('pages.personal.preferences.no') }} />
               </Col>
               <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'default_page_size']} label="表格每页条数" valueEnum={{ 10: '10 条/页', 20: '20 条/页', 50: '50 条/页', 100: '100 条/页' }} placeholder="请选择" />
+                <SafeProFormSelect name={['ui', 'default_page_size']} label={t('pages.personal.preferences.tablePageSize')} valueEnum={{ 10: t('pages.personal.preferences.perPage10'), 20: t('pages.personal.preferences.perPage20'), 50: t('pages.personal.preferences.perPage50'), 100: t('pages.personal.preferences.perPage100') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
               </Col>
               <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'default_table_density']} label="表格密度" valueEnum={{ default: '默认', middle: '中等', small: '紧凑' }} placeholder="请选择" />
+                <SafeProFormSelect name={['ui', 'default_table_density']} label={t('pages.personal.preferences.tableDensity')} valueEnum={{ default: t('pages.personal.preferences.densityDefault'), middle: t('pages.personal.preferences.densityMiddle'), small: t('pages.personal.preferences.densitySmall') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <ProFormSelect
                   name={['ui', 'max_tabs']}
-                  label="最大标签页数"
+                  label={t('pages.personal.preferences.maxTabs')}
                   options={[
                     { label: '10', value: 10 },
                     { label: '20', value: 20 },
                     { label: '30', value: 30 },
                     { label: '50', value: 50 },
                   ]}
-                  placeholder="请选择"
+                  placeholder={t('pages.personal.preferences.pleaseSelect')}
                 />
               </Col>
             </Row>

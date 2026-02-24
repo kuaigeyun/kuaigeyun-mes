@@ -64,10 +64,10 @@ class StocktakingService(AppBaseService[Stocktaking]):
         Raises:
             ValidationError: 数据验证失败
         """
-        # 0. 检查模块是否启用
-        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inventory_check")
+        # 0. 检查节点是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "stocktaking")
         if not is_enabled:
-            raise BusinessLogicError("库存盘点模块未启用，无法创建盘点单")
+            raise BusinessLogicError("盘点单节点未启用，无法创建盘点单")
 
         async with in_transaction():
             # 生成盘点单号
@@ -225,10 +225,10 @@ class StocktakingService(AppBaseService[Stocktaking]):
             NotFoundError: 盘点单不存在
             ValidationError: 数据验证失败
         """
-        # 0. 检查模块是否启用
-        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inventory_check")
+        # 0. 检查节点是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "stocktaking")
         if not is_enabled:
-            raise BusinessLogicError("库存盘点模块未启用，无法开始盘点")
+            raise BusinessLogicError("盘点单节点未启用，无法开始盘点")
 
         async with in_transaction():
             # 获取盘点单

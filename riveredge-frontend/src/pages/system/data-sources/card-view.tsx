@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Progress, Alert, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined, ReloadOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -31,6 +32,7 @@ const { useToken } = theme;
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [loading, setLoading] = useState(false);
@@ -54,7 +56,7 @@ const CardView: React.FC = () => {
       });
       setDataSources(response.items);
     } catch (error: any) {
-      handleError(error, '加载数据源列表失败');
+      handleError(error, t('pages.system.dataSources.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ const CardView: React.FC = () => {
       setCurrentDataSource(detail);
       setDetailModalVisible(true);
     } catch (error: any) {
-      handleError(error, '获取数据源详情失败');
+      handleError(error, t('pages.system.dataSources.getDetailFailed'));
     }
   };
 
@@ -108,17 +110,16 @@ const CardView: React.FC = () => {
       setTestResult(result);
       
       if (result.success) {
-        handleSuccess(result.message || '连接测试成功');
-        // 刷新列表以更新连接状态
+        handleSuccess(result.message || t('pages.system.dataSources.testSuccess'));
         loadDataSources();
       } else {
-        handleError(new Error(result.message || '连接测试失败'), '连接测试失败');
+        handleError(new Error(result.message || t('pages.system.dataSources.testFailed')), t('pages.system.dataSources.testFailed'));
       }
     } catch (error: any) {
-      handleError(error, '连接测试失败');
+      handleError(error, t('pages.system.dataSources.testFailed'));
       setTestResult({
         success: false,
-        message: error.message || '连接测试失败',
+        message: error.message || t('pages.system.dataSources.testFailed'),
         elapsed_time: 0,
       });
     } finally {
@@ -132,10 +133,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (dataSource: DataSource) => {
     try {
       await deleteDataSource(dataSource.uuid);
-      handleSuccess('删除成功');
+      handleSuccess(t('pages.system.dataSources.deleteSuccess'));
       loadDataSources();
     } catch (error: any) {
-      handleError(error, '删除失败');
+      handleError(error, t('pages.system.dataSources.deleteFailed'));
     }
   };
 
@@ -169,22 +170,13 @@ const CardView: React.FC = () => {
   };
 
   /**
-   * 获取连接状态显示
+   * 获取连接状态显示（i18n）
    */
   const getConnectionStatus = (dataSource: DataSource): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
-    if (!dataSource.is_active) {
-      return { status: 'default', text: '已禁用' };
-    }
-    
-    if (dataSource.is_connected) {
-      return { status: 'success', text: '已连接' };
-    }
-    
-    if (dataSource.last_error) {
-      return { status: 'error', text: '连接失败' };
-    }
-    
-    return { status: 'warning', text: '未连接' };
+    if (!dataSource.is_active) return { status: 'default', text: t('pages.system.dataSources.statusDisabled') };
+    if (dataSource.is_connected) return { status: 'success', text: t('pages.system.dataSources.statusConnected') };
+    if (dataSource.last_error) return { status: 'error', text: t('pages.system.dataSources.statusFailed') };
+    return { status: 'warning', text: t('pages.system.dataSources.statusNotConnected') };
   };
 
   /**
@@ -204,7 +196,7 @@ const CardView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="数据源管理"
+        title={t('pages.system.dataSources.cardView.pageTitle')}
         extra={[
           <Button
             key="refresh"
@@ -212,7 +204,7 @@ const CardView: React.FC = () => {
             onClick={loadDataSources}
             loading={loading}
           >
-            刷新
+            {t('pages.system.dataSources.cardView.refresh')}
           </Button>,
         ]}
       >
@@ -221,7 +213,7 @@ const CardView: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总数据源数"
+                title={t('pages.system.dataSources.statTotal')}
                 value={stats.total}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -229,7 +221,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已连接"
+                title={t('pages.system.dataSources.statConnected')}
                 value={stats.connected}
                 prefix={<CheckCircleOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -237,7 +229,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="未连接"
+                title={t('pages.system.dataSources.statDisconnected')}
                 value={stats.disconnected}
                 prefix={<CloseCircleOutlined />}
                 styles={{ content: { color: '#ff4d4f' } }}
@@ -245,7 +237,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已禁用"
+                title={t('pages.system.dataSources.statInactive')}
                 value={stats.inactive}
                 prefix={<ExclamationCircleOutlined />}
                 styles={{ content: { color: '#faad14' } }}
@@ -254,7 +246,7 @@ const CardView: React.FC = () => {
           </Row>
           {Object.keys(stats.byType).length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
-              <Text type="secondary" style={{ marginRight: 8 }}>按类型统计：</Text>
+              <Text type="secondary" style={{ marginRight: 8 }}>{t('pages.system.dataSources.cardView.statsByType')}</Text>
               <Space wrap>
                 {Object.entries(stats.byType).map(([type, count]) => {
                   const typeInfo = getTypeInfo(type);
@@ -283,28 +275,26 @@ const CardView: React.FC = () => {
                       hoverable
                       style={{ height: '100%' }}
                       actions={[
-                        <Tooltip title="查看详情">
+                        <Tooltip key="view" title={t('pages.system.dataSources.viewDetail')}>
                           <EyeOutlined
-                            key="view"
                             onClick={() => handleViewDetail(dataSource)}
                             style={{ fontSize: 16 }}
                           />
                         </Tooltip>,
-                        <Tooltip title="测试连接">
+                        <Tooltip key="test" title={t('pages.system.dataSources.testConnection')}>
                           <ThunderboltOutlined
-                            key="test"
                             onClick={() => handleTestConnection(dataSource)}
                             style={{ fontSize: 16, color: '#1890ff' }}
                           />
                         </Tooltip>,
                         <Popconfirm
                           key="delete"
-                          title="确定要删除这个数据源吗？"
+                          title={t('pages.system.dataSources.deleteConfirmTitle')}
                           onConfirm={() => handleDelete(dataSource)}
-                          okText="确定"
-                          cancelText="取消"
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
                         >
-                          <Tooltip title="删除">
+                          <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -325,7 +315,7 @@ const CardView: React.FC = () => {
                           
                           {dataSource.code && (
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              代码: {dataSource.code}
+                              {t('pages.system.dataSources.codePrefix')}{dataSource.code}
                             </Text>
                           )}
                           
@@ -343,7 +333,7 @@ const CardView: React.FC = () => {
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.connectionStatusLabel')}</Text>
                             <Badge
                               status={connectionStatus.status}
                               text={connectionStatus.text}
@@ -351,15 +341,15 @@ const CardView: React.FC = () => {
                           </div>
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.statusLabel')}</Text>
                             <Tag color={dataSource.is_active ? 'success' : 'default'}>
-                              {dataSource.is_active ? '启用' : '禁用'}
+                              {dataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
                             </Tag>
                           </div>
                           
                           {dataSource.last_connected_at && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.lastConnectedLabel')}</Text>
                               <Text style={{ fontSize: 12 }}>
                                 {dayjs(dataSource.last_connected_at).fromNow()}
                               </Text>
@@ -383,14 +373,14 @@ const CardView: React.FC = () => {
               })}
             </Row>
           ) : (
-            <Empty description="暂无数据源" />
+            <Empty description={t('pages.system.dataSources.cardView.empty')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 数据源详情 Modal */}
       <Modal
-        title="数据源详情"
+        title={t('pages.system.dataSources.detailTitle')}
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
@@ -401,21 +391,21 @@ const CardView: React.FC = () => {
       >
         {currentDataSource && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="数据源名称">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnName')}>
               {currentDataSource.name}
             </Descriptions.Item>
-            <Descriptions.Item label="数据源代码">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnCode')}>
               {currentDataSource.code}
             </Descriptions.Item>
-            <Descriptions.Item label="数据源类型">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnType')}>
               <Tag color={getTypeInfo(currentDataSource.type).color}>
                 {getTypeInfo(currentDataSource.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="数据源描述">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnDescription')}>
               {currentDataSource.description || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="连接配置">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnConfig')}>
               <pre style={{
                 margin: 0,
                 padding: '8px',
@@ -428,24 +418,24 @@ const CardView: React.FC = () => {
                 {JSON.stringify(currentDataSource.config, null, 2)}
               </pre>
             </Descriptions.Item>
-            <Descriptions.Item label="连接状态">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnConnectionStatus')}>
               <Badge
                 status={getConnectionStatus(currentDataSource).status}
                 text={getConnectionStatus(currentDataSource).text}
               />
             </Descriptions.Item>
-            <Descriptions.Item label="启用状态">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnActive')}>
               <Tag color={currentDataSource.is_active ? 'success' : 'default'}>
-                {currentDataSource.is_active ? '启用' : '禁用'}
+                {currentDataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="最后连接时间">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnLastConnected')}>
               {currentDataSource.last_connected_at
                 ? dayjs(currentDataSource.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             {currentDataSource.last_error && (
-              <Descriptions.Item label="最后错误">
+              <Descriptions.Item label={t('pages.system.dataSources.detailColumnLastError')}>
                 <Alert
                   message={currentDataSource.last_error}
                   type="error"
@@ -454,10 +444,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="创建时间">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnCreatedAt')}>
               {dayjs(currentDataSource.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
+            <Descriptions.Item label={t('pages.system.dataSources.detailColumnUpdatedAt')}>
               {dayjs(currentDataSource.updated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
@@ -466,7 +456,7 @@ const CardView: React.FC = () => {
 
       {/* 连接测试 Modal */}
       <Modal
-        title="连接测试"
+        title={t('pages.system.dataSources.cardView.testModalTitle')}
         open={testModalVisible}
         onCancel={() => {
           setTestModalVisible(false);
@@ -479,7 +469,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            关闭
+            {t('pages.system.dataSources.cardView.close')}
           </Button>,
         ]}
         size={600}
@@ -488,7 +478,7 @@ const CardView: React.FC = () => {
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Progress type="circle" percent={100} status="active" />
             <div style={{ marginTop: 16 }}>
-              <Text>正在测试连接...</Text>
+              <Text>{t('pages.system.dataSources.cardView.testing')}</Text>
             </div>
           </div>
         )}
@@ -496,22 +486,22 @@ const CardView: React.FC = () => {
         {testResult && (
           <div>
             <Alert
-              message={testResult.success ? '连接测试成功' : '连接测试失败'}
+              message={testResult.success ? t('pages.system.dataSources.testSuccess') : t('pages.system.dataSources.testFailed')}
               description={testResult.message}
               type={testResult.success ? 'success' : 'error'}
               showIcon
               style={{ marginBottom: 16 }}
             />
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="测试结果">
+              <Descriptions.Item label={t('pages.system.dataSources.cardView.testResultLabel')}>
                 <Tag color={testResult.success ? 'success' : 'error'}>
-                  {testResult.success ? '成功' : '失败'}
+                  {testResult.success ? t('pages.system.dataSources.cardView.resultSuccess') : t('pages.system.dataSources.cardView.resultFailure')}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="响应时间">
+              <Descriptions.Item label={t('pages.system.dataSources.cardView.responseTimeLabel')}>
                 {testResult.elapsed_time}ms
               </Descriptions.Item>
-              <Descriptions.Item label="消息">
+              <Descriptions.Item label={t('pages.system.dataSources.cardView.messageLabel')}>
                 {testResult.message}
               </Descriptions.Item>
             </Descriptions>
