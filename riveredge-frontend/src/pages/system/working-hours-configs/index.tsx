@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Popconfirm } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
@@ -37,7 +38,16 @@ interface WorkingHoursConfig {
 /**
  * 工作时间段配置管理页面组件
  */
+const DAY_KEYS = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'] as const;
+const SCOPE_TYPE_KEYS: Record<string, string> = {
+  all: 'scopeAll',
+  warehouse: 'scopeWarehouse',
+  work_center: 'scopeWorkCenter',
+  department: 'scopeDepartment',
+};
+
 const WorkingHoursConfigsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -98,10 +108,10 @@ const WorkingHoursConfigsPage: React.FC = () => {
     if (record.id) {
       try {
         await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'DELETE' });
-        messageApi.success('删除成功');
+        messageApi.success(t('pages.system.workingHoursConfigs.deleteSuccess'));
         actionRef.current?.reload();
       } catch (error) {
-        messageApi.error('删除失败');
+        messageApi.error(t('pages.system.workingHoursConfigs.deleteFailed'));
       }
     }
   };
@@ -116,7 +126,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
         setCurrentRecord(detailData);
         setDetailDrawerVisible(true);
       } catch (error) {
-        messageApi.error('获取配置详情失败');
+        messageApi.error(t('pages.system.workingHoursConfigs.getDetailFailed'));
       }
     }
   };
@@ -126,43 +136,42 @@ const WorkingHoursConfigsPage: React.FC = () => {
    */
   const columns: ProColumns<WorkingHoursConfig>[] = [
     {
-      title: '配置名称',
+      title: t('pages.system.workingHoursConfigs.columnName'),
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '适用范围类型',
+      title: t('pages.system.workingHoursConfigs.columnScopeType'),
       dataIndex: 'scope_type',
       width: 120,
       valueEnum: {
-        all: { text: '全部', status: 'default' },
-        warehouse: { text: '仓库', status: 'processing' },
-        work_center: { text: '工作中心', status: 'success' },
-        department: { text: '部门', status: 'warning' },
+        all: { text: t('pages.system.workingHoursConfigs.scopeAll'), status: 'default' },
+        warehouse: { text: t('pages.system.workingHoursConfigs.scopeWarehouse'), status: 'processing' },
+        work_center: { text: t('pages.system.workingHoursConfigs.scopeWorkCenter'), status: 'success' },
+        department: { text: t('pages.system.workingHoursConfigs.scopeDepartment'), status: 'warning' },
       },
     },
     {
-      title: '适用范围',
+      title: t('pages.system.workingHoursConfigs.columnScopeName'),
       dataIndex: 'scope_name',
       width: 150,
       ellipsis: true,
-      render: (_, record) => record.scope_name || '全部',
+      render: (_, record) => record.scope_name || t('pages.system.workingHoursConfigs.scopeAll'),
     },
     {
-      title: '星期几',
+      title: t('pages.system.workingHoursConfigs.columnDayOfWeek'),
       dataIndex: 'day_of_week',
       width: 100,
       render: (_, record) => {
         if (record.day_of_week === null || record.day_of_week === undefined) {
-          return '全部工作日';
+          return t('pages.system.workingHoursConfigs.dayAll');
         }
-        const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-        return days[record.day_of_week] || '-';
+        return t(`pages.system.workingHoursConfigs.${DAY_KEYS[record.day_of_week]}`) || '-';
       },
     },
     {
-      title: '工作时间段',
+      title: t('pages.system.workingHoursConfigs.columnWorkingHours'),
       dataIndex: 'working_hours',
       width: 200,
       ellipsis: true,
@@ -174,29 +183,29 @@ const WorkingHoursConfigsPage: React.FC = () => {
       },
     },
     {
-      title: '启用状态',
+      title: t('pages.system.workingHoursConfigs.columnEnabled'),
       dataIndex: 'is_enabled',
       width: 100,
       render: (_, record) => (
         <Tag color={record.is_enabled ? 'success' : 'default'}>
-          {record.is_enabled ? '启用' : '禁用'}
+          {record.is_enabled ? t('pages.system.workingHoursConfigs.enabled') : t('pages.system.workingHoursConfigs.disabled')}
         </Tag>
       ),
     },
     {
-      title: '优先级',
+      title: t('pages.system.workingHoursConfigs.columnPriority'),
       dataIndex: 'priority',
       width: 80,
       align: 'right',
     },
     {
-      title: '创建时间',
+      title: t('pages.system.workingHoursConfigs.columnCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('pages.system.workingHoursConfigs.columnActions'),
       width: 180,
       fixed: 'right',
       render: (_, record) => (
@@ -207,7 +216,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            详情
+            {t('pages.system.workingHoursConfigs.view')}
           </Button>
           <Button
             type="link"
@@ -215,13 +224,13 @@ const WorkingHoursConfigsPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.workingHoursConfigs.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这条配置吗？"
+            title={t('pages.system.workingHoursConfigs.confirmDelete')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('pages.system.workingHoursConfigs.commonOk')}
+            cancelText={t('pages.system.workingHoursConfigs.commonCancel')}
           >
             <Button
               type="link"
@@ -229,7 +238,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.workingHoursConfigs.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -248,19 +257,19 @@ const WorkingHoursConfigsPage: React.FC = () => {
           method: 'PUT',
           data: values,
         });
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.workingHoursConfigs.updateSuccess'));
       } else {
         await apiRequest('/core/working-hours-configs', {
           method: 'POST',
           data: values,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.workingHoursConfigs.createSuccess'));
       }
       setModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.workingHoursConfigs.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -270,7 +279,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="工作时间段配置"
+        headerTitle={t('pages.system.workingHoursConfigs.headerTitle')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -289,7 +298,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
               total: result?.length || 0,
             };
           } catch (error) {
-            messageApi.error('获取配置列表失败');
+            messageApi.error(t('pages.system.workingHoursConfigs.loadListFailed'));
             return {
               data: [],
               success: false,
@@ -298,7 +307,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
           }
         }}
         showCreateButton
-        createButtonText="新建工作时间段配置"
+        createButtonText={t('pages.system.workingHoursConfigs.createButton')}
         onCreate={handleCreate}
         showAdvancedSearch={true}
         showImportButton={false}
@@ -312,7 +321,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
             const items = Array.isArray(result) ? result : [];
             const toExport = type === 'currentPage' && pageData?.length ? pageData : items;
             if (toExport.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.workingHoursConfigs.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
@@ -322,16 +331,16 @@ const WorkingHoursConfigsPage: React.FC = () => {
             a.download = `working-hours-configs-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success(`已导出 ${toExport.length} 条记录`);
+            messageApi.success(t('pages.system.workingHoursConfigs.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
-            messageApi.error('导出失败');
+            messageApi.error(t('pages.system.workingHoursConfigs.exportFailed'));
           }
         }}
       />
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑工作时间段配置' : '新建工作时间段配置'}
+        title={isEdit ? t('pages.system.workingHoursConfigs.modalEdit') : t('pages.system.workingHoursConfigs.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -353,78 +362,77 @@ const WorkingHoursConfigsPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="配置名称"
-          placeholder="请输入配置名称"
-          rules={[{ required: true, message: '请输入配置名称' }]}
+          label={t('pages.system.workingHoursConfigs.labelName')}
+          placeholder={t('pages.system.workingHoursConfigs.namePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.workingHoursConfigs.nameRequired') }]}
           colProps={{ span: 24 }}
         />
         <ProFormSelect
           name="scope_type"
-          label="适用范围类型"
-          placeholder="请选择适用范围类型"
-          rules={[{ required: true, message: '请选择适用范围类型' }]}
+          label={t('pages.system.workingHoursConfigs.labelScopeType')}
+          placeholder={t('pages.system.workingHoursConfigs.scopeTypePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.workingHoursConfigs.scopeTypeRequired') }]}
           options={[
-            { label: '全部', value: 'all' },
-            { label: '仓库', value: 'warehouse' },
-            { label: '工作中心', value: 'work_center' },
-            { label: '部门', value: 'department' },
+            { label: t('pages.system.workingHoursConfigs.scopeAll'), value: 'all' },
+            { label: t('pages.system.workingHoursConfigs.scopeWarehouse'), value: 'warehouse' },
+            { label: t('pages.system.workingHoursConfigs.scopeWorkCenter'), value: 'work_center' },
+            { label: t('pages.system.workingHoursConfigs.scopeDepartment'), value: 'department' },
           ]}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="day_of_week"
-          label="星期几"
-          placeholder="请选择星期几（留空表示所有工作日）"
+          label={t('pages.system.workingHoursConfigs.labelDayOfWeek')}
+          placeholder={t('pages.system.workingHoursConfigs.dayOfWeekPlaceholder')}
           options={[
-            { label: '全部工作日', value: null },
-            { label: '周一', value: 0 },
-            { label: '周二', value: 1 },
-            { label: '周三', value: 2 },
-            { label: '周四', value: 3 },
-            { label: '周五', value: 4 },
-            { label: '周六', value: 5 },
-            { label: '周日', value: 6 },
+            { label: t('pages.system.workingHoursConfigs.dayAll'), value: null },
+            { label: t('pages.system.workingHoursConfigs.dayMon'), value: 0 },
+            { label: t('pages.system.workingHoursConfigs.dayTue'), value: 1 },
+            { label: t('pages.system.workingHoursConfigs.dayWed'), value: 2 },
+            { label: t('pages.system.workingHoursConfigs.dayThu'), value: 3 },
+            { label: t('pages.system.workingHoursConfigs.dayFri'), value: 4 },
+            { label: t('pages.system.workingHoursConfigs.daySat'), value: 5 },
+            { label: t('pages.system.workingHoursConfigs.daySun'), value: 6 },
           ]}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="start_date"
-          label="生效开始日期"
-          placeholder="请选择生效开始日期（可选）"
+          label={t('pages.system.workingHoursConfigs.labelStartDate')}
+          placeholder={t('pages.system.workingHoursConfigs.startDatePlaceholder')}
           fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="end_date"
-          label="生效结束日期"
-          placeholder="请选择生效结束日期（可选）"
+          label={t('pages.system.workingHoursConfigs.labelEndDate')}
+          placeholder={t('pages.system.workingHoursConfigs.endDatePlaceholder')}
           fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
-        {/* TODO: 添加工作时间段配置组件（支持多个时间段） */}
         <ProFormSwitch
           name="is_enabled"
-          label="启用状态"
+          label={t('pages.system.workingHoursConfigs.labelEnabled')}
           colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="priority"
-          label="优先级"
-          placeholder="请输入优先级（数字越大优先级越高）"
+          label={t('pages.system.workingHoursConfigs.labelPriority')}
+          placeholder={t('pages.system.workingHoursConfigs.priorityPlaceholder')}
           fieldProps={{ min: 0 }}
           colProps={{ span: 12 }}
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('pages.system.workingHoursConfigs.labelRemarks')}
+          placeholder={t('pages.system.workingHoursConfigs.remarksPlaceholder')}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title={`配置详情 - ${currentRecord?.name || ''}`}
+        title={`${t('pages.system.workingHoursConfigs.detailTitle')} - ${currentRecord?.name || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH}
@@ -432,25 +440,25 @@ const WorkingHoursConfigsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>配置名称：</strong>{currentRecord.name}</p>
-              <p><strong>适用范围类型：</strong>{currentRecord.scope_type}</p>
-              <p><strong>适用范围：</strong>{currentRecord.scope_name || '全部'}</p>
-              <p><strong>星期几：</strong>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnName')}：</strong>{currentRecord.name}</p>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnScopeType')}：</strong>{currentRecord.scope_type && SCOPE_TYPE_KEYS[currentRecord.scope_type] ? t(`pages.system.workingHoursConfigs.${SCOPE_TYPE_KEYS[currentRecord.scope_type]}`) : currentRecord.scope_type || '-'}</p>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnScopeName')}：</strong>{currentRecord.scope_name || t('pages.system.workingHoursConfigs.scopeAll')}</p>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnDayOfWeek')}：</strong>
                 {currentRecord.day_of_week === null || currentRecord.day_of_week === undefined
-                  ? '全部工作日'
-                  : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][currentRecord.day_of_week]}
+                  ? t('pages.system.workingHoursConfigs.dayAll')
+                  : t(`pages.system.workingHoursConfigs.${DAY_KEYS[currentRecord.day_of_week]}`)}
               </p>
-              <p><strong>工作时间段：</strong>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnWorkingHours')}：</strong>
                 {currentRecord.working_hours && currentRecord.working_hours.length > 0
                   ? currentRecord.working_hours.map((h: any) => `${h.start}-${h.end}`).join(', ')
                   : '-'}
               </p>
-              <p><strong>启用状态：</strong>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnEnabled')}：</strong>
                 <Tag color={currentRecord.is_enabled ? 'success' : 'default'}>
-                  {currentRecord.is_enabled ? '启用' : '禁用'}
+                  {currentRecord.is_enabled ? t('pages.system.workingHoursConfigs.enabled') : t('pages.system.workingHoursConfigs.disabled')}
                 </Tag>
               </p>
-              <p><strong>优先级：</strong>{currentRecord.priority}</p>
+              <p><strong>{t('pages.system.workingHoursConfigs.columnPriority')}：</strong>{currentRecord.priority}</p>
             </div>
           ) : null
         }

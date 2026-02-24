@@ -159,7 +159,7 @@ const BusinessConfigPage: React.FC = () => {
         messageApi.success(t('pages.system.businessConfig.templateImportedApplied'));
         await loadConfig();
       } catch (error: any) {
-        messageApi.error(t('pages.system.businessConfig.templateImportFailed', { reason: error.message || '文件格式错误' }));
+        messageApi.error(t('pages.system.businessConfig.templateImportFailed', { reason: error.message || t('pages.system.businessConfig.invalidFileFormat') }));
       }
     };
     input.click();

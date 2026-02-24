@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Modal, Tabs, Table, Tag, Typography, Space, Divider, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import { ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
@@ -552,6 +553,7 @@ interface TechStackModalProps {
 }
 
 const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
 
   useEffect(() => {
@@ -576,10 +578,9 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
   const databaseTech = techStackData.filter(item => item.category === 'database');
   const infrastructureTech = techStackData.filter(item => item.category === 'infrastructure');
 
-  // 表格列定义
   const columns = [
     {
-      title: '技术名称',
+      title: t('components.techStackModal.columnName'),
       dataIndex: 'name',
       key: 'name',
       width: 200,
@@ -588,82 +589,80 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           {text}
           {record.isCore && (
             <Tag color="gold" icon={<FileTextOutlined />}>
-              核心组件
+              {t('components.techStackModal.tagCore')}
             </Tag>
           )}
         </Space>
       ),
     },
     {
-      title: '版本',
+      title: t('components.techStackModal.columnVersion'),
       dataIndex: 'version',
       key: 'version',
       width: 150,
       render: (text: string) => <Text code>{text}</Text>,
     },
     {
-      title: '作用描述',
+      title: t('components.techStackModal.columnDescription'),
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
     },
     {
-      title: '许可协议',
+      title: t('components.techStackModal.columnLicense'),
       dataIndex: 'license',
       key: 'license',
       width: 200,
       render: (text: string) => <Text type="secondary">{text}</Text>,
     },
     {
-      title: '商业使用',
+      title: t('components.techStackModal.columnCommercialUse'),
       dataIndex: 'commercialUse',
       key: 'commercialUse',
       width: 100,
       align: 'center' as const,
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'error'}>
-          {value ? '✅ 免费' : '❌ 需许可'}
+          {value ? t('components.techStackModal.tagFree') : t('components.techStackModal.tagRequired')}
         </Tag>
       ),
     },
   ];
 
-  // Tab 配置
   const tabItems: TabsProps['items'] = [
     {
       key: 'overview',
-      label: '概览',
+      label: t('components.techStackModal.tabOverview'),
       children: (
         <div style={tabContentStyle}>
-          <Title level={4}>核心技术栈</Title>
+          <Title level={4}>{t('components.techStackModal.overview.coreTitle')}</Title>
           <Paragraph>
-            RiverEdge SaaS 多组织框架采用现代化的技术栈：
+            {t('components.techStackModal.overview.intro')}
           </Paragraph>
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <div>
-              <Text strong>FastAPI</Text>：高性能异步 Web 框架
+              <Text strong>FastAPI</Text>：{t('components.techStackModal.overview.fastapi')}
             </div>
             <div>
-              <Text strong>Inngest</Text>：现代化任务调度系统
+              <Text strong>Inngest</Text>：{t('components.techStackModal.overview.inngest')}
             </div>
             <div>
-              <Text strong>React</Text>：现代化前端框架
+              <Text strong>React</Text>：{t('components.techStackModal.overview.react')}
             </div>
             <div>
-              <Text strong>Tortoise ORM</Text>：异步 ORM 框架
+              <Text strong>Tortoise ORM</Text>：{t('components.techStackModal.overview.tortoise')}
             </div>
             <div>
-              <Text strong>Ant Design</Text>：企业级 UI 组件库
+              <Text strong>Ant Design</Text>：{t('components.techStackModal.overview.antd')}
             </div>
           </Space>
           <Divider />
-          <Title level={5}>许可协议说明</Title>
+          <Title level={5}>{t('components.techStackModal.overview.licenseTitle')}</Title>
           <Paragraph>
-            所有核心技术均采用宽松的开源许可证（MIT、Apache 2.0、BSD 等），可放心用于商业项目。
+            {t('components.techStackModal.overview.licenseIntro')}
           </Paragraph>
           <Paragraph>
-            <Text strong>⚠️ 重要提示：</Text> Redis 服务器必须使用 <Text code>6.2.6+</Text> 版本（BSD 3-Clause 许可证），
-            避免使用 Redis 7.0+（RSAL 许可证限制商业使用）。
+            {t('components.techStackModal.overview.redisWarning')}
           </Paragraph>
         </div>
       ),
@@ -672,76 +671,76 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       key: 'copyright',
       label: (
         <Badge dot color="red" offset={[8, 0]}>
-          <span>本项目版权声明</span>
+          <span>{t('components.techStackModal.tabCopyright')}</span>
         </Badge>
       ),
       children: (
         <div style={tabContentStyle}>
           <Alert
-            message="重要说明"
-            description="使用、修改或分发本项目前，请务必阅读并遵守以下版权与许可声明。"
+            message={t('components.techStackModal.copyright.important')}
+            description={t('components.techStackModal.copyright.importantDesc')}
             type="info"
             showIcon
             icon={<ExclamationCircleOutlined />}
             style={{ marginBottom: 24 }}
           />
-          <Title level={4}>本项目版权声明</Title>
+          <Title level={4}>{t('components.techStackModal.copyright.projectTitle')}</Title>
           <Paragraph>
-            本声明适用于 RiverEdge SaaS 多组织框架及其相关源代码、文档、插件式应用与衍生产物。
+            {t('components.techStackModal.copyright.projectScope')}
           </Paragraph>
           
-          <Title level={5}>版权归属</Title>
+          <Title level={5}>{t('components.techStackModal.copyright.ownershipTitle')}</Title>
           <Paragraph>
             <Text strong>Copyright © {COPYRIGHT_COMPANY_NAME}</Text>
           </Paragraph>
           <Paragraph type="secondary">
-            {COPYRIGHT_COMPANY_NAME}拥有本项目的著作权。使用、修改、分发等权利由下方 Apache License 2.0 许可协议规定。
+            {t('components.techStackModal.copyright.ownershipDesc', { company: COPYRIGHT_COMPANY_NAME })}
           </Paragraph>
           
           <Divider />
           
-          <Title level={5}>商标</Title>
+          <Title level={5}>{t('components.techStackModal.copyright.trademarkTitle')}</Title>
           <Paragraph>
-            <Text strong>{COPYRIGHT_TRADEMARK}</Text> 为{COPYRIGHT_COMPANY_NAME}注册商标，受《中华人民共和国商标法》保护。
+            {t('components.techStackModal.copyright.trademarkDesc', { trademark: COPYRIGHT_TRADEMARK, company: COPYRIGHT_COMPANY_NAME })}
           </Paragraph>
           <Paragraph>
-            Apache License 2.0 不授予商标使用权。未经书面许可，不得：
+            {t('components.techStackModal.copyright.trademarkNoGrant')}
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            • 使用 "{COPYRIGHT_TRADEMARK}" 进行商业推广或声称与本公司存在合作关系
+            • {t('components.techStackModal.copyright.trademarkItem1', { trademark: COPYRIGHT_TRADEMARK })}
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            • 将 "{COPYRIGHT_TRADEMARK}" 作为自研产品或服务名称使用
+            • {t('components.techStackModal.copyright.trademarkItem2', { trademark: COPYRIGHT_TRADEMARK })}
           </Paragraph>
           
           <Divider />
           
-          <Title level={5}>软件许可</Title>
+          <Title level={5}>{t('components.techStackModal.copyright.softwareTitle')}</Title>
           <Paragraph>
-            本项目采用 <Text code>Apache License 2.0</Text>。您可：
+            {t('components.techStackModal.copyright.softwareIntro')}
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            ✅ 商业使用、修改、私有使用、分发源代码或二进制
+            ✅ {t('components.techStackModal.copyright.softwareItem1')}
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            ✅ 获得明确的专利使用权
+            ✅ {t('components.techStackModal.copyright.softwareItem2')}
           </Paragraph>
           <Paragraph type="secondary" style={{ marginTop: 8 }}>
-            完整协议详见项目根目录 <Text code>LICENSE</Text> 文件。
+            {t('components.techStackModal.copyright.softwareNote')}
           </Paragraph>
           
           <Divider />
           
-          <Title level={5}>合规要求</Title>
+          <Title level={5}>{t('components.techStackModal.copyright.complianceTitle')}</Title>
           <Paragraph>
-            商业使用时须保留：版权声明、商标说明及 Apache 2.0 许可文本。
+            {t('components.techStackModal.copyright.complianceDesc')}
           </Paragraph>
           <Paragraph>
-            <Text strong>经本公司书面授权</Text>，被授权方可去除或替换版权声明、商标等公司标识，用于白标部署、私有化或定制化产品。
+            <Text strong>{t('components.techStackModal.copyright.complianceAuth')}</Text>
           </Paragraph>
           <Paragraph style={warningBoxStyle}>
             <Text type="warning" strong>
-              删除或篡改版权/商标声明将违反许可协议并可能承担法律责任。
+              {t('components.techStackModal.copyright.warning')}
             </Text>
           </Paragraph>
         </div>
@@ -749,33 +748,33 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
     {
       key: 'ai-assist',
-      label: 'AI 辅助',
+      label: t('components.techStackModal.tabAiAssist'),
       children: (
         <div style={tabContentStyle}>
-          <Title level={4}>AI 辅助编制声明</Title>
+          <Title level={4}>{t('components.techStackModal.aiAssist.title')}</Title>
           <Paragraph>
-            本项目在以下 IDE 及其编程模型的辅助下编制：
+            {t('components.techStackModal.aiAssist.intro')}
           </Paragraph>
           <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
             <div>
-              <Text strong>Cursor</Text> —— <Text code>Composer 1.5</Text>
+              {t('components.techStackModal.aiAssist.cursor')}
             </div>
             <div>
-              <Text strong>Antigravity</Text> —— <Text code>Gemini 3 Pro</Text>
+              {t('components.techStackModal.aiAssist.antigravity')}
             </div>
             <div>
-              <Text strong>Trae</Text> —— <Text code>GPT-5.3-Codex</Text>
+              {t('components.techStackModal.aiAssist.trae')}
             </div>
           </Space>
           <Paragraph type="secondary" style={{ marginTop: 24 }}>
-            部分代码与文档在 AI 辅助下完成编写，开发过程中由人工主导设计与决策，AI 用于提高效率与辅助实现。
+            {t('components.techStackModal.aiAssist.note')}
           </Paragraph>
         </div>
       ),
     },
     {
       key: 'backend',
-      label: `后端技术 (${backendTech.length})`,
+      label: t('components.techStackModal.tabBackend', { count: backendTech.length }),
       children: (
         <div style={tabContentStyle}>
           <Table
@@ -790,7 +789,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
     {
       key: 'frontend',
-      label: `前端技术 (${frontendTech.length})`,
+      label: t('components.techStackModal.tabFrontend', { count: frontendTech.length }),
       children: (
         <div style={tabContentStyle}>
           <Table
@@ -805,7 +804,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
     {
       key: 'database',
-      label: `数据库 (${databaseTech.length})`,
+      label: t('components.techStackModal.tabDatabase', { count: databaseTech.length }),
       children: (
         <div style={tabContentStyle}>
           <Table
@@ -820,7 +819,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
     {
       key: 'infrastructure',
-      label: `基础设施 (${infrastructureTech.length})`,
+      label: t('components.techStackModal.tabInfrastructure', { count: infrastructureTech.length }),
       children: (
         <div style={tabContentStyle}>
           <Table
@@ -837,7 +836,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
 
   return (
     <Modal
-      title="版权声明"
+      title={t('components.techStackModal.title')}
       open={open}
       onCancel={onCancel}
       footer={null}

@@ -78,13 +78,13 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                   isActive: true,
                 });
                 if (!previewCodeValue) {
-                  messageApi.info('未获取到工艺路线编码预览，请检查「编码规则」中是否已为当前组织配置并启用「工艺路线」规则；也可直接手动输入编码。');
+                  messageApi.info(t('app.master-data.codeRulePreviewHint'));
                 }
               })
               .catch(() => {
                 setPreviewCode(null);
                 formRef.current?.setFieldsValue({ isActive: true });
-                messageApi.info('自动编码获取失败，请手动输入工艺路线编码，或在「编码规则」中配置「工艺路线」后重试。');
+                messageApi.info(t('app.master-data.codeRuleAutoFailed'));
               });
           } else {
             setPreviewCode(null);
@@ -104,13 +104,13 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                   isActive: true,
                 });
                 if (!previewCodeValue) {
-                  messageApi.info('未获取到工艺路线编码预览，请检查「编码规则」中是否已为当前组织配置并启用「工艺路线」规则；也可直接手动输入编码。');
+                  messageApi.info(t('app.master-data.codeRulePreviewHint'));
                 }
               })
               .catch(() => {
                 setPreviewCode(null);
                 formRef.current?.setFieldsValue({ isActive: true });
-                messageApi.info('自动编码获取失败，请手动输入工艺路线编码，或在「编码规则」中配置「工艺路线」后重试。');
+                messageApi.info(t('app.master-data.codeRuleAutoFailed'));
               });
           } else {
             setPreviewCode(null);
@@ -163,7 +163,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         }
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取工艺路线详情失败');
+        messageApi.error(err?.message || t('app.master-data.routes.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -171,15 +171,15 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
     try {
       setFormLoading(true);
       if (!values.code?.trim()) {
-        messageApi.error('请输入工艺路线编码');
+        messageApi.error(t('app.master-data.routes.codeRequired'));
         return;
       }
       if (!values.name?.trim()) {
-        messageApi.error('请输入工艺路线名称');
+        messageApi.error(t('app.master-data.routes.nameRequired'));
         return;
       }
       if (operationSequence.length === 0) {
-        messageApi.error('请至少添加一个工序');
+        messageApi.error(t('app.master-data.routes.operationRequired'));
         return;
       }
 
@@ -222,12 +222,12 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
 
       if (isEdit && editUuid) {
         await processRouteApi.update(editUuid, submitData as ProcessRouteUpdate);
-        messageApi.success('工艺路线更新成功');
+        messageApi.success(t('app.master-data.routes.updateSuccess'));
         const updated = await processRouteApi.get(editUuid);
         onSuccess(updated);
       } else {
         const created = await processRouteApi.create(submitData as ProcessRouteCreate);
-        messageApi.success('工艺路线创建成功');
+        messageApi.success(t('app.master-data.routes.createSuccess'));
         onSuccess(created);
       }
 
@@ -236,7 +236,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       setPreviewCode(null);
       setOperationSequence([]);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }
@@ -282,7 +282,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Tag color={operationSequence.length > 0 ? 'processing' : 'default'}>
-            已配置 {operationSequence.length} 个工序
+            {t('app.master-data.operationsConfigured', { count: operationSequence.length })}
           </Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('field.route.operationSequenceHint')}

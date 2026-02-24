@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Progress, Divider, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -32,6 +33,7 @@ const { useToken } = theme;
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [loading, setLoading] = useState(false);
@@ -53,7 +55,7 @@ const CardView: React.FC = () => {
       const data = await getPrintDeviceList();
       setDevices(data);
     } catch (error: any) {
-      handleError(error, '加载打印设备列表失败');
+      handleError(error, t('pages.system.printDevices.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -90,7 +92,7 @@ const CardView: React.FC = () => {
       setCurrentDevice(detail);
       setDetailModalVisible(true);
     } catch (error: any) {
-      handleError(error, '获取设备详情失败');
+      handleError(error, t('pages.system.printDevices.getDetailFailed'));
     }
   };
 
@@ -108,17 +110,17 @@ const CardView: React.FC = () => {
       setTestResult(result);
       
       if (result.success) {
-        handleSuccess(result.message || '连接测试成功');
+        handleSuccess(result.message || t('pages.system.printDevices.testSuccess'));
         // 刷新列表以更新设备状态
         loadDevices();
       } else {
-        handleError(new Error(result.error || '连接测试失败'), '连接测试失败');
+        handleError(new Error(result.error || t('pages.system.printDevices.testFailed')), t('pages.system.printDevices.testFailed'));
       }
     } catch (error: any) {
-      handleError(error, '连接测试失败');
+      handleError(error, t('pages.system.printDevices.testFailed'));
       setTestResult({
         success: false,
-        error: error.message || '连接测试失败',
+        error: error.message || t('pages.system.printDevices.testFailed'),
       });
     } finally {
       setTestLoading(false);
@@ -132,10 +134,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (device: PrintDevice) => {
     try {
       await deletePrintDevice(device.uuid);
-      handleSuccess('删除成功');
+      handleSuccess(t('pages.system.printDevices.deleteSuccess'));
       loadDevices();
     } catch (error: any) {
-      handleError(error, '删除失败');
+      handleError(error, t('pages.system.printDevices.deleteFailed'));
     }
   };
 
@@ -143,29 +145,14 @@ const CardView: React.FC = () => {
    * 获取设备类型图标和颜色
    */
   const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
-    const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      local: { 
-        color: 'blue', 
-        text: '本地',
-        icon: <PrinterFilled />,
-      },
-      network: { 
-        color: 'green', 
-        text: '网络',
-        icon: <PrinterFilled />,
-      },
-      cloud: { 
-        color: 'purple', 
-        text: '云打印',
-        icon: <PrinterFilled />,
-      },
-      other: { 
-        color: 'default', 
-        text: '其他',
-        icon: <PrinterFilled />,
-      },
+    const typeMap: Record<string, { color: string; textKey: string; icon: React.ReactNode }> = {
+      local: { color: 'blue', textKey: 'pages.system.printDevices.typeLocal', icon: <PrinterFilled /> },
+      network: { color: 'green', textKey: 'pages.system.printDevices.typeNetwork', icon: <PrinterFilled /> },
+      cloud: { color: 'purple', textKey: 'pages.system.printDevices.typeCloud', icon: <PrinterFilled /> },
+      other: { color: 'default', textKey: 'pages.system.printDevices.typeOther', icon: <PrinterFilled /> },
     };
-    return typeMap[type] || { color: 'default', text: type, icon: <PrinterFilled /> };
+    const info = typeMap[type] || { color: 'default', textKey: '', icon: <PrinterFilled /> };
+    return { ...info, text: info.textKey ? t(info.textKey) : type };
   };
 
   /**
@@ -180,26 +167,24 @@ const CardView: React.FC = () => {
     if (!device.is_active) {
       return { 
         status: 'default', 
-        text: '已禁用',
+        text: t('pages.system.printDevices.statusDisabled'),
         onlineStatus: 'default',
-        onlineText: '已禁用',
+        onlineText: t('pages.system.printDevices.statusDisabled'),
       };
     }
-    
     if (device.is_online) {
       return { 
         status: 'success', 
-        text: '在线',
+        text: t('pages.system.printDevices.statusOnline'),
         onlineStatus: 'success',
-        onlineText: '在线',
+        onlineText: t('pages.system.printDevices.statusOnline'),
       };
     }
-    
     return { 
       status: 'error', 
-      text: '离线',
+      text: t('pages.system.printDevices.statusOffline'),
       onlineStatus: 'error',
-      onlineText: '离线',
+      onlineText: t('pages.system.printDevices.statusOffline'),
     };
   };
 
@@ -223,7 +208,7 @@ const CardView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="打印设备管理"
+        title={t('pages.system.printDevices.cardViewTitle')}
         extra={[
           <Button
             key="refresh"
@@ -231,7 +216,7 @@ const CardView: React.FC = () => {
             onClick={loadDevices}
             loading={loading}
           >
-            刷新
+            {t('pages.system.printDevices.refresh')}
           </Button>,
         ]}
       >
@@ -240,7 +225,7 @@ const CardView: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总设备数"
+                title={t('pages.system.printDevices.statTotal')}
                 value={stats.total}
                 prefix={<PrinterFilled />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -248,7 +233,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="在线设备"
+                title={t('pages.system.printDevices.statOnline')}
                 value={stats.online}
                 prefix={<CheckCircleOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -256,7 +241,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="离线设备"
+                title={t('pages.system.printDevices.statOffline')}
                 value={stats.offline}
                 prefix={<CloseCircleOutlined />}
                 styles={{ content: { color: '#ff4d4f' } }}
@@ -264,7 +249,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总使用次数"
+                title={t('pages.system.printDevices.statTotalUsage')}
                 value={stats.totalUsage}
                 prefix={<PrinterOutlined />}
                 styles={{ content: { color: '#722ed1' } }}
@@ -274,7 +259,7 @@ const CardView: React.FC = () => {
           <Row gutter={16} style={{ marginTop: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已启用"
+                title={t('pages.system.printDevices.statActive')}
                 value={stats.active}
                 prefix={<CheckCircleOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -282,7 +267,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已禁用"
+                title={t('pages.system.printDevices.statInactive')}
                 value={stats.inactive}
                 prefix={<ExclamationCircleOutlined />}
                 styles={{ content: { color: '#faad14' } }}
@@ -290,7 +275,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="默认设备"
+                title={t('pages.system.printDevices.statDefault')}
                 value={stats.default}
                 prefix={<PrinterFilled />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -299,7 +284,7 @@ const CardView: React.FC = () => {
           </Row>
           {Object.keys(stats.byType).length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
-              <Text type="secondary" style={{ marginRight: 8 }}>按类型统计：</Text>
+              <Text type="secondary" style={{ marginRight: 8 }}>{t('pages.system.printDevices.byTypeStats')}</Text>
               <Space wrap>
                 {Object.entries(stats.byType).map(([type, count]) => {
                   const typeInfo = getTypeInfo(type);
@@ -328,14 +313,14 @@ const CardView: React.FC = () => {
                       hoverable
                       style={{ height: '100%' }}
                       actions={[
-                        <Tooltip title="查看详情">
+                        <Tooltip title={t('pages.system.printDevices.viewDetail')}>
                           <EyeOutlined
                             key="view"
                             onClick={() => handleViewDetail(device)}
                             style={{ fontSize: 16 }}
                           />
                         </Tooltip>,
-                        <Tooltip title="测试连接">
+                        <Tooltip title={t('pages.system.printDevices.testConnection')}>
                           <CheckCircleOutlined
                             key="test"
                             onClick={() => handleTestDevice(device)}
@@ -348,12 +333,12 @@ const CardView: React.FC = () => {
                         </Tooltip>,
                         <Popconfirm
                           key="delete"
-                          title="确定要删除这个打印设备吗？"
+                          title={t('pages.system.printDevices.deleteConfirmTitle')}
                           onConfirm={() => handleDelete(device)}
-                          okText="确定"
-                          cancelText="取消"
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
                         >
-                          <Tooltip title="删除">
+                          <Tooltip title={t('pages.system.printDevices.deleteTooltip')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -374,7 +359,7 @@ const CardView: React.FC = () => {
                           
                           {device.code && (
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              代码: {device.code}
+                              {t('pages.system.printDevices.codePrefix')}{device.code}
                             </Text>
                           )}
                           
@@ -392,7 +377,7 @@ const CardView: React.FC = () => {
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>在线状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.onlineStatusLabel')}</Text>
                             <Badge
                               status={deviceStatus.onlineStatus}
                               text={deviceStatus.onlineText}
@@ -400,27 +385,27 @@ const CardView: React.FC = () => {
                           </div>
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.statusLabel')}</Text>
                             <Tag color={device.is_active ? 'success' : 'default'}>
-                              {device.is_active ? '启用' : '禁用'}
+                              {device.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
                             </Tag>
                           </div>
                           
                           {device.is_default && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>默认设备：</Text>
-                              <Tag color="processing">是</Tag>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.defaultLabel')}</Text>
+                              <Tag color="processing">{t('pages.system.printDevices.isDefault')}</Tag>
                             </div>
                           )}
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.usageLabel')}</Text>
                             <Text style={{ fontSize: 12 }}>{device.usage_count || 0}</Text>
                           </div>
                           
                           {device.last_connected_at && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.lastConnectedLabel')}</Text>
                               <Text style={{ fontSize: 12 }}>
                                 {dayjs(device.last_connected_at).fromNow()}
                               </Text>
@@ -429,7 +414,7 @@ const CardView: React.FC = () => {
                           
                           {device.last_used_at && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>最后使用：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.lastUsedLabel')}</Text>
                               <Text style={{ fontSize: 12 }}>
                                 {dayjs(device.last_used_at).fromNow()}
                               </Text>
@@ -443,14 +428,14 @@ const CardView: React.FC = () => {
               })}
             </Row>
           ) : (
-            <Empty description="暂无打印设备" />
+            <Empty description={t('pages.system.printDevices.noDevices')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 设备详情 Modal */}
       <Modal
-        title="设备详情"
+        title={t('pages.system.printDevices.deviceDetail')}
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
@@ -461,21 +446,21 @@ const CardView: React.FC = () => {
       >
         {currentDevice && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="设备名称">
+            <Descriptions.Item label={t('pages.system.printDevices.columnName')}>
               {currentDevice.name}
             </Descriptions.Item>
-            <Descriptions.Item label="设备代码">
+            <Descriptions.Item label={t('pages.system.printDevices.columnCode')}>
               {currentDevice.code}
             </Descriptions.Item>
-            <Descriptions.Item label="设备类型">
+            <Descriptions.Item label={t('pages.system.printDevices.columnType')}>
               <Tag color={getTypeInfo(currentDevice.type).color}>
                 {getTypeInfo(currentDevice.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="设备描述">
+            <Descriptions.Item label={t('pages.system.printDevices.labelDescription')}>
               {currentDevice.description || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="设备配置">
+            <Descriptions.Item label={t('pages.system.printDevices.columnConfig')}>
               <pre style={{
                 margin: 0,
                 padding: '8px',
@@ -488,39 +473,39 @@ const CardView: React.FC = () => {
                 {JSON.stringify(currentDevice.config, null, 2)}
               </pre>
             </Descriptions.Item>
-            <Descriptions.Item label="在线状态">
+            <Descriptions.Item label={t('pages.system.printDevices.columnOnline')}>
               <Badge
                 status={getDeviceStatus(currentDevice).onlineStatus}
                 text={getDeviceStatus(currentDevice).onlineText}
               />
             </Descriptions.Item>
-            <Descriptions.Item label="启用状态">
+            <Descriptions.Item label={t('pages.system.printDevices.columnActive')}>
               <Tag color={currentDevice.is_active ? 'success' : 'default'}>
-                {currentDevice.is_active ? '启用' : '禁用'}
+                {currentDevice.is_active ? t('pages.system.printDevices.enabled') : t('pages.system.printDevices.disabled')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="默认设备">
+            <Descriptions.Item label={t('pages.system.printDevices.statDefault')}>
               <Tag color={currentDevice.is_default ? 'processing' : 'default'}>
-                {currentDevice.is_default ? '是' : '否'}
+                {currentDevice.is_default ? t('pages.system.printDevices.isDefault') : t('pages.system.printDevices.no')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="使用次数">
+            <Descriptions.Item label={t('pages.system.printDevices.columnUsage')}>
               {currentDevice.usage_count || 0}
             </Descriptions.Item>
-            <Descriptions.Item label="最后连接时间">
+            <Descriptions.Item label={t('pages.system.printDevices.columnLastConnected')}>
               {currentDevice.last_connected_at
                 ? dayjs(currentDevice.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="最后使用时间">
+            <Descriptions.Item label={t('pages.system.printDevices.columnLastUsed')}>
               {currentDevice.last_used_at
                 ? dayjs(currentDevice.last_used_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="创建时间">
+            <Descriptions.Item label={t('pages.system.printDevices.columnCreatedAt')}>
               {dayjs(currentDevice.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
+            <Descriptions.Item label={t('pages.system.printDevices.columnUpdatedAt')}>
               {dayjs(currentDevice.updated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
@@ -529,7 +514,7 @@ const CardView: React.FC = () => {
 
       {/* 设备测试 Modal */}
       <Modal
-        title="设备连接测试"
+        title={t('pages.system.printDevices.testConnectionModal')}
         open={testModalVisible}
         onCancel={() => {
           setTestModalVisible(false);
@@ -542,7 +527,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            关闭
+            {t('pages.system.printDevices.close')}
           </Button>,
         ]}
         size={600}
@@ -551,7 +536,7 @@ const CardView: React.FC = () => {
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Progress type="circle" percent={100} status="active" />
             <div style={{ marginTop: 16 }}>
-              <Text>正在测试设备连接...</Text>
+              <Text>{t('pages.system.printDevices.testingConnection')}</Text>
             </div>
           </div>
         )}
@@ -559,25 +544,25 @@ const CardView: React.FC = () => {
         {testResult && (
           <div>
             <Alert
-              message={testResult.success ? '连接测试成功' : '连接测试失败'}
+              message={testResult.success ? t('pages.system.printDevices.testSuccess') : t('pages.system.printDevices.testFailed')}
               description={testResult.message || testResult.error}
               type={testResult.success ? 'success' : 'error'}
               showIcon
               style={{ marginBottom: 16 }}
             />
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="测试结果">
+              <Descriptions.Item label={t('pages.system.printDevices.testResult')}>
                 <Tag color={testResult.success ? 'success' : 'error'}>
-                  {testResult.success ? '成功' : '失败'}
+                  {testResult.success ? t('pages.system.printDevices.success') : t('pages.system.printDevices.fail')}
                 </Tag>
               </Descriptions.Item>
               {testResult.message && (
-                <Descriptions.Item label="消息">
+                <Descriptions.Item label={t('pages.system.printDevices.message')}>
                   {testResult.message}
                 </Descriptions.Item>
               )}
               {testResult.error && (
-                <Descriptions.Item label="错误信息">
+                <Descriptions.Item label={t('pages.system.printDevices.errorInfo')}>
                   <Alert
                     message={testResult.error}
                     type="error"

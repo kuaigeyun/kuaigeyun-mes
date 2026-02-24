@@ -77,7 +77,7 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取仓库详情失败');
+        messageApi.error(err?.message || t('app.master-data.warehouses.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -86,7 +86,7 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await warehouseApi.update(editUuid, values as WarehouseUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await warehouseApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -106,14 +106,14 @@ export const WarehouseFormModal: React.FC<WarehouseFormModalProps> = ({
           values.isActive = true;
         }
         const created = await warehouseApi.create(values as WarehouseCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

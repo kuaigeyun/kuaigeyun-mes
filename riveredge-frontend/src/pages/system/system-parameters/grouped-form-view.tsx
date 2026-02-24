@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Form, Input, Switch, Button, Space, message, Drawer, Table, Tag, Typography, Divider, Upload, Modal, Tabs, Timeline, Empty } from 'antd';
 import { SaveOutlined, ReloadOutlined, DownloadOutlined, UploadOutlined, HistoryOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -47,40 +48,19 @@ interface ParameterGroup {
   keys?: string[];
 }
 
-/**
- * 默认参数分组
- */
-const DEFAULT_GROUPS: ParameterGroup[] = [
-  {
-    name: '文件管理',
-    description: '文件上传、预览、存储相关配置',
-    keyPrefix: 'file.',
-  },
-  {
-    name: '备份管理',
-    description: '数据备份策略和配置',
-    keyPrefix: 'backup.',
-  },
-  {
-    name: '消息通知',
-    description: '消息推送、邮件、短信相关配置',
-    keyPrefix: 'message.',
-  },
-  {
-    name: '系统功能',
-    description: '系统核心功能开关和配置',
-    keyPrefix: 'system.',
-  },
-  {
-    name: '其他参数',
-    description: '其他未分类的系统参数',
-  },
+const DEFAULT_GROUPS: (ParameterGroup & { nameKey: string; descKey?: string })[] = [
+  { name: 'file', nameKey: 'groupFile', descKey: 'groupFileDesc', keyPrefix: 'file.' },
+  { name: 'backup', nameKey: 'groupBackup', descKey: 'groupBackupDesc', keyPrefix: 'backup.' },
+  { name: 'message', nameKey: 'groupMessage', descKey: 'groupMessageDesc', keyPrefix: 'message.' },
+  { name: 'system', nameKey: 'groupSystem', descKey: 'groupSystemDesc', keyPrefix: 'system.' },
+  { name: 'other', nameKey: 'groupOther', descKey: 'groupOtherDesc' },
 ];
 
 /**
  * 分组表单视图组件
  */
 const GroupedFormView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -115,7 +95,7 @@ const GroupedFormView: React.FC = () => {
       });
       form.setFieldsValue(initialValues);
     } catch (error: any) {
-      handleError(error, '加载参数失败');
+      handleError(error, t('pages.system.parameters.grouped.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -155,7 +135,7 @@ const GroupedFormView: React.FC = () => {
       }
       
       if (!assigned) {
-        groups['其他参数'].push(param);
+        groups['other'].push(param);
       }
     });
     
@@ -184,14 +164,14 @@ const GroupedFormView: React.FC = () => {
                 processedValue = JSON.parse(processedValue);
               }
             } catch (e) {
-              messageApi.error(`参数 ${key} 的 JSON 格式不正确`);
-              throw new Error(`参数 ${key} 的 JSON 格式不正确`);
+              messageApi.error(t('pages.system.parameters.grouped.paramJsonInvalid', { key }));
+              throw new Error(t('pages.system.parameters.grouped.paramJsonInvalid', { key }));
             }
           } else if (param.type === 'number') {
             processedValue = Number(processedValue);
             if (isNaN(processedValue)) {
-              messageApi.error(`参数 ${key} 必须是有效的数字`);
-              throw new Error(`参数 ${key} 必须是有效的数字`);
+              messageApi.error(t('pages.system.parameters.grouped.paramMustBeNumber', { key }));
+              throw new Error(t('pages.system.parameters.grouped.paramMustBeNumber', { key }));
             }
           } else if (param.type === 'boolean') {
             processedValue = processedValue === true || processedValue === 'true' || processedValue === 1;
@@ -209,15 +189,15 @@ const GroupedFormView: React.FC = () => {
       });
       
       if (Object.keys(updates).length === 0) {
-        messageApi.info('没有需要更新的参数');
+        messageApi.info(t('pages.system.parameters.grouped.noUpdates'));
         return;
       }
       
       await batchUpdateSystemParameters(updates);
-      handleSuccess('保存成功');
+      handleSuccess(t('pages.system.parameters.saveSuccess'));
       loadParameters();
     } catch (error: any) {
-      handleError(error, '保存失败');
+      handleError(error, t('pages.system.parameters.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -229,14 +209,14 @@ const GroupedFormView: React.FC = () => {
   const handleExport = () => {
     try {
       // 构建 CSV 数据
-      const headers = ['参数键', '参数值', '参数类型', '描述', '是否系统参数', '是否启用'];
+      const headers = ['key', 'value', 'type', 'description', 'is_system', 'is_active'];
       const rows = (parameters || []).map((param) => [
         param.key,
         typeof param.value === 'object' ? JSON.stringify(param.value) : String(param.value),
         param.type,
         param.description || '',
-        param.is_system ? '是' : '否',
-        param.is_active ? '启用' : '禁用',
+        param.is_system ? 'Y' : 'N',
+        param.is_active ? 'Y' : 'N',
       ]);
       
       const csvContent = [
@@ -255,9 +235,9 @@ const GroupedFormView: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       
-      handleSuccess('导出成功');
+      handleSuccess(t('pages.system.parameters.grouped.exportSuccess'));
     } catch (error: any) {
-      handleError(error, '导出失败');
+      handleError(error, t('pages.system.parameters.grouped.exportFailed'));
     }
   };
 
@@ -270,7 +250,7 @@ const GroupedFormView: React.FC = () => {
       const lines = text.split('\n').filter((line) => line.trim());
       
       if (lines.length < 2) {
-        messageApi.error('CSV 文件格式不正确');
+        messageApi.error(t('pages.system.parameters.grouped.csvInvalid'));
         return;
       }
       
@@ -280,8 +260,8 @@ const GroupedFormView: React.FC = () => {
       
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map((v) => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
-        const keyIndex = headers.indexOf('参数键');
-        const valueIndex = headers.indexOf('参数值');
+        const keyIndex = headers.indexOf('key');
+        const valueIndex = headers.indexOf('value');
         
         if (keyIndex >= 0 && valueIndex >= 0) {
           const key = values[keyIndex];
@@ -299,15 +279,15 @@ const GroupedFormView: React.FC = () => {
       }
       
       if (Object.keys(updates).length === 0) {
-        messageApi.error('没有有效的参数数据');
+        messageApi.error(t('pages.system.parameters.grouped.noValidData'));
         return;
       }
       
       await batchUpdateSystemParameters(updates);
-      handleSuccess('导入成功');
+      handleSuccess(t('pages.system.parameters.grouped.importSuccess'));
       loadParameters();
     } catch (error: any) {
-      handleError(error, '导入失败');
+      handleError(error, t('pages.system.parameters.grouped.importFailed'));
     }
     
     return false; // 阻止默认上传行为
@@ -331,7 +311,7 @@ const GroupedFormView: React.FC = () => {
       });
       setHistoryData(response.items);
     } catch (error: any) {
-      handleError(error, '加载历史记录失败');
+      handleError(error, t('pages.system.parameters.grouped.loadHistoryFailed'));
     } finally {
       setHistoryLoading(false);
     }
@@ -341,7 +321,7 @@ const GroupedFormView: React.FC = () => {
    * 渲染参数输入框
    */
   const renderParameterInput = (param: SystemParameter) => {
-    const helpText = param.description || `参数类型：${param.type}`;
+    const helpText = param.description || `${t('pages.system.parameters.grouped.enterValue')} (${param.type})`;
     
     switch (param.type) {
       case 'number':
@@ -362,14 +342,14 @@ const GroupedFormView: React.FC = () => {
               {
                 validator: (_, value) => {
                   if (value !== undefined && value !== null && isNaN(Number(value))) {
-                    return Promise.reject(new Error('请输入有效的数字'));
+                    return Promise.reject(new Error(t('pages.system.parameters.grouped.enterValidNumber')));
                   }
                   return Promise.resolve();
                 },
               },
             ]}
           >
-            <Input type="number" placeholder="请输入数字" />
+            <Input type="number" placeholder={t('pages.system.parameters.grouped.enterNumber')} />
           </Form.Item>
         );
       
@@ -418,7 +398,7 @@ const GroupedFormView: React.FC = () => {
                     JSON.parse(jsonValue);
                     return Promise.resolve();
                   } catch {
-                    return Promise.reject(new Error('JSON 格式不正确'));
+                    return Promise.reject(new Error(t('pages.system.parameters.grouped.jsonInvalid')));
                   }
                 },
               },
@@ -430,7 +410,7 @@ const GroupedFormView: React.FC = () => {
           >
             <TextArea
               rows={4}
-              placeholder='请输入 JSON 格式的值，例如：{"key": "value"}'
+              placeholder={t('pages.system.parameters.grouped.enterJson')}
             />
           </Form.Item>
         );
@@ -450,7 +430,7 @@ const GroupedFormView: React.FC = () => {
             }
             tooltip={helpText}
           >
-            <Input placeholder="请输入参数值" />
+            <Input placeholder={t('pages.system.parameters.grouped.enterValue')} />
           </Form.Item>
         );
     }
@@ -459,7 +439,7 @@ const GroupedFormView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="系统参数设置"
+        title={t('pages.system.parameters.grouped.pageTitle')}
         extra={[
           <Button
             key="history"
@@ -478,21 +458,21 @@ const GroupedFormView: React.FC = () => {
                   setHistoryData(response.items);
                 })
                 .catch((error: any) => {
-                  handleError(error, '加载历史记录失败');
+                  handleError(error, t('pages.system.parameters.grouped.loadHistoryFailed'));
                 })
                 .finally(() => {
                   setHistoryLoading(false);
                 });
             }}
           >
-            变更历史
+            {t('pages.system.parameters.grouped.changeHistory')}
           </Button>,
           <Button
             key="export"
             icon={<DownloadOutlined />}
             onClick={handleExport}
           >
-            导出
+            {t('pages.system.parameters.grouped.export')}
           </Button>,
           <Upload
             key="import"
@@ -500,7 +480,7 @@ const GroupedFormView: React.FC = () => {
             beforeUpload={handleImport}
             showUploadList={false}
           >
-            <Button icon={<UploadOutlined />}>导入</Button>
+            <Button icon={<UploadOutlined />}>{t('pages.system.parameters.grouped.import')}</Button>
           </Upload>,
           <Button
             key="reload"
@@ -508,7 +488,7 @@ const GroupedFormView: React.FC = () => {
             onClick={loadParameters}
             loading={loading}
           >
-            刷新
+            {t('pages.system.parameters.grouped.refresh')}
           </Button>,
           <Button
             key="save"
@@ -517,7 +497,7 @@ const GroupedFormView: React.FC = () => {
             onClick={handleSave}
             loading={saving}
           >
-            保存
+            {t('pages.system.parameters.grouped.save')}
           </Button>,
         ]}
       >
@@ -540,17 +520,17 @@ const GroupedFormView: React.FC = () => {
                   type="inner"
                   title={
                     <Space>
-                      <span>{group.name}</span>
-                      {group.description && (
+                      <span>{t(`pages.system.parameters.grouped.${group.nameKey}`)}</span>
+                      {group.descKey && (
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          {group.description}
+                          {t(`pages.system.parameters.grouped.${group.descKey}`)}
                         </Text>
                       )}
                     </Space>
                   }
                   style={{ marginBottom: 16 }}
                   extra={
-                    <Tag color="blue">{groupParams.length} 个参数</Tag>
+                    <Tag color="blue">{t('pages.system.parameters.grouped.paramsCount', { count: groupParams.length })}</Tag>
                   }
                 >
                   {groupParams.map((param) => (
@@ -562,10 +542,10 @@ const GroupedFormView: React.FC = () => {
                             {param.type}
                           </Tag>
                           {param.is_system && (
-                            <Tag color="default">系统参数</Tag>
+                            <Tag color="default">{t('pages.system.parameters.grouped.systemParam')}</Tag>
                           )}
                           <Tag color={param.is_active ? 'success' : 'default'}>
-                            {param.is_active ? '启用' : '禁用'}
+                            {param.is_active ? t('pages.system.parameters.grouped.enabled') : t('pages.system.parameters.grouped.disabled')}
                           </Tag>
                         </Space>
                         <Button
@@ -574,7 +554,7 @@ const GroupedFormView: React.FC = () => {
                           icon={<HistoryOutlined />}
                           onClick={() => handleViewHistory(param)}
                         >
-                          历史
+                          {t('pages.system.parameters.grouped.history')}
                         </Button>
                       </div>
                     </div>
@@ -588,7 +568,7 @@ const GroupedFormView: React.FC = () => {
 
       {/* 变更历史抽屉 */}
       <Drawer
-        title={selectedParameter ? `参数变更历史 - ${selectedParameter.key}` : '参数变更历史'}
+        title={selectedParameter ? `${t('pages.system.parameters.grouped.historyTitle')} - ${selectedParameter.key}` : t('pages.system.parameters.grouped.historyTitle')}
         placement="right"
         size={700}
         open={historyDrawerVisible}
@@ -618,13 +598,13 @@ const GroupedFormView: React.FC = () => {
                   <div>
                     <div style={{ marginBottom: 4 }}>
                       <Text strong>
-                        {log.operation_type === 'create' ? '创建' :
-                         log.operation_type === 'update' ? '更新' :
-                         log.operation_type === 'delete' ? '删除' :
+                        {log.operation_type === 'create' ? t('pages.system.parameters.grouped.create') :
+                         log.operation_type === 'update' ? t('pages.system.parameters.grouped.update') :
+                         log.operation_type === 'delete' ? t('pages.system.parameters.grouped.delete') :
                          log.operation_type}
                       </Text>
                       <Text type="secondary" style={{ marginLeft: 8 }}>
-                        用户 ID: {log.user_id}
+                        {t('pages.system.parameters.grouped.userId')}: {log.user_id}
                       </Text>
                     </div>
                     {log.operation_content && (
@@ -643,7 +623,7 @@ const GroupedFormView: React.FC = () => {
             })}
           </Timeline>
         ) : (
-          <Empty description="暂无变更历史" />
+          <Empty description={t('pages.system.parameters.grouped.noHistory')} />
         )}
       </Drawer>
     </>

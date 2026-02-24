@@ -73,7 +73,7 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取不良品详情失败');
+        messageApi.error(err?.message || t('app.master-data.defectTypes.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -82,7 +82,7 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await defectTypeApi.update(editUuid, values as DefectTypeUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await defectTypeApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -102,14 +102,14 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
           values.isActive = true;
         }
         const created = await defectTypeApi.create(values as DefectTypeCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

@@ -97,13 +97,13 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
                 ...(previewCodeValue ? { code: previewCodeValue } : {}),
               });
               if (!previewCodeValue) {
-                messageApi.info('未获取到工序编码预览，请检查「编码规则」中是否已为当前组织配置并启用「工序管理」规则；也可直接手动输入编码。');
+                messageApi.info(t('app.master-data.codeRulePreviewHint'));
               }
             })
             .catch(() => {
               setPreviewCode(null);
               formRef.current?.setFieldsValue(initValues);
-              messageApi.info('自动编码获取失败，请手动输入工序编码，或在「编码规则」中配置「工序管理」后重试。');
+              messageApi.info(t('app.master-data.codeRuleAutoFailed'));
             });
         } else {
           setPreviewCode(null);
@@ -133,7 +133,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取工序详情失败');
+        messageApi.error(err?.message || t('app.master-data.operations.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -152,7 +152,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           defaultOperatorUuids,
         };
         await operationApi.update(editUuid, updatePayload);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await operationApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -179,7 +179,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           }
         }
         if (!values.code?.trim?.()) {
-          messageApi.error('工序编码不能为空');
+          messageApi.error(t('app.master-data.operations.codeRequired'));
           return;
         }
         const createPayload: OperationCreate = {
@@ -189,14 +189,14 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           defaultOperatorUuids,
         };
         const created = await operationApi.create(createPayload);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

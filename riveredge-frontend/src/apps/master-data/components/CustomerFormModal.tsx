@@ -81,7 +81,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取客户详情失败');
+        messageApi.error(err?.message || t('app.master-data.customers.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -90,7 +90,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await customerApi.update(editUuid, values as CustomerUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await customerApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -110,14 +110,14 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           values.isActive = true;
         }
         const created = await customerApi.create(values as CustomerCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

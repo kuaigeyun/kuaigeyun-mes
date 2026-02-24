@@ -136,7 +136,7 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
         }
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取车间详情失败');
+        messageApi.error(err?.message || t('app.master-data.workshops.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -157,7 +157,7 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
       if (isEdit && editUuid) {
         const updated = await workshopApi.update(editUuid, standardValues as WorkshopUpdate);
         workshopId = updated.id;
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const detail = await workshopApi.get(editUuid);
         onSuccess(detail);
       } else {
@@ -174,7 +174,7 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
         }
         const created = await workshopApi.create(standardValues as WorkshopCreate);
         workshopId = created.id;
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
 
@@ -204,7 +204,7 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
       setEffectiveRuleCode(null);
       setCustomFieldValues({});
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }
@@ -338,7 +338,7 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
           <div style={{ gridColumn: 'span 24', marginTop: 16, marginBottom: 8, width: '100%' }}>
             <Divider style={{ margin: 0, fontSize: 12 }}>
               <Typography.Text type="secondary" style={{ fontSize: 12, padding: '0 8px' }}>
-                自定义字段
+                {t('app.master-data.customFields')}
               </Typography.Text>
             </Divider>
           </div>

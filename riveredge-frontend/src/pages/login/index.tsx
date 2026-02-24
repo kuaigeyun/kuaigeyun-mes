@@ -808,7 +808,7 @@ export default function LoginPage() {
       // 调用后端 API 完成登录
       const handleWechatCallback = async () => {
         try {
-          message.loading('正在登录...', 0);
+          message.loading(t('pages.login.loading'), 0);
           const response = await wechatLoginCallback(code);
           message.destroy();
           handleLoginSuccess(response);
@@ -1046,7 +1046,7 @@ export default function LoginPage() {
       const needVerify = checkRequireVerification(updatedFailTimes);
       
       // 提取错误信息（支持多种错误格式）
-      let errorMessage = '登录失败，请稍后重试';
+      let errorMessage = t('pages.login.loginFailed');
 
       if (error?.response?.data) {
         const errorData = error.response.data;
@@ -1102,7 +1102,7 @@ export default function LoginPage() {
             (() => {
               const tenants = response.tenants || [];
               const selectedTenant = tenants.find(t => t.id === tenantId);
-              return selectedTenant?.name || '默认组织';  // 体验用户默认使用"默认组织"
+              return selectedTenant?.name || t('pages.login.defaultTenantName');
             })();
 
           // 更新用户状态
@@ -1141,7 +1141,7 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       // 提取错误信息
-      let errorMessage = '体验登录失败，请稍后重试';
+      let errorMessage = t('pages.login.guestFailed');
 
       if (error?.response?.data) {
         const errorData = error.response.data;
@@ -1230,7 +1230,7 @@ export default function LoginPage() {
         message.error(t('pages.login.tenantSelectFailed'));
       }
     } catch (error: any) {
-      let errorMessage = '选择组织失败，请重试';
+      let errorMessage = t('pages.login.tenantSelectFailed');
 
       if (error?.response?.data) {
         const errorData = error.response.data;

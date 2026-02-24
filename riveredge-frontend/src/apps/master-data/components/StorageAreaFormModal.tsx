@@ -86,7 +86,7 @@ export const StorageAreaFormModal: React.FC<StorageAreaFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取库区详情失败');
+        messageApi.error(err?.message || t('app.master-data.storageAreas.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -95,7 +95,7 @@ export const StorageAreaFormModal: React.FC<StorageAreaFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await storageAreaApi.update(editUuid, values as StorageAreaUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await storageAreaApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -115,14 +115,14 @@ export const StorageAreaFormModal: React.FC<StorageAreaFormModalProps> = ({
           values.isActive = true;
         }
         const created = await storageAreaApi.create(values as StorageAreaCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

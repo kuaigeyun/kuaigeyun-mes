@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
@@ -20,6 +21,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
  * 仓库管理列表页面组件
  */
 const WarehousesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -56,10 +58,10 @@ const WarehousesPage: React.FC = () => {
   const handleDelete = async (record: Warehouse) => {
     try {
       await warehouseApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -68,7 +70,7 @@ const WarehousesPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请至少选择一条记录');
+      messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
@@ -77,9 +79,9 @@ const WarehousesPage: React.FC = () => {
       const result = await warehouseApi.batchDelete(uuids);
       
       if (result.success) {
-        messageApi.success(result.message || '批量删除成功');
+        messageApi.success(result.message || t('app.master-data.batchDeleteSuccess'));
       } else {
-        messageApi.warning(result.message || '部分删除失败');
+        messageApi.warning(result.message || t('app.master-data.batchDeletePartial'));
       }
       
       // 清空选择
@@ -87,7 +89,7 @@ const WarehousesPage: React.FC = () => {
       // 刷新列表
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
     }
   };
 
@@ -99,7 +101,7 @@ const WarehousesPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('app.master-data.importEmpty'));
       return;
     }
 
@@ -117,7 +119,7 @@ const WarehousesPage: React.FC = () => {
     });
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
 
@@ -155,11 +157,11 @@ const WarehousesPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(`缺少必需字段：仓库编码。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: '仓库编码', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(`缺少必需字段：仓库名称。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: '仓库名称', headers: headers.join(', ') }));
       return;
     }
 
@@ -256,7 +258,7 @@ const WarehousesPage: React.FC = () => {
     }
 
     if (importData.length === 0) {
-      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
 
@@ -298,7 +300,7 @@ const WarehousesPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${result.successCount} 条仓库数据`);
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -306,7 +308,7 @@ const WarehousesPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
+      messageApi.error(error.message || t('app.master-data.importFailed'));
     }
   };
 
@@ -325,7 +327,7 @@ const WarehousesPage: React.FC = () => {
       if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
         // 导出选中的数据
         if (!currentPageData) {
-          messageApi.warning('无法获取选中数据，请重试');
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
@@ -342,7 +344,7 @@ const WarehousesPage: React.FC = () => {
       }
 
       if (exportData.length === 0) {
-        messageApi.warning('没有可导出的数据');
+        messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
 
@@ -364,9 +366,9 @@ const WarehousesPage: React.FC = () => {
 
       // 下载文件
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
-      messageApi.success('导出成功');
+      messageApi.success(t('app.master-data.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
+      messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
   };
 
@@ -382,7 +384,7 @@ const WarehousesPage: React.FC = () => {
       const detail = await warehouseApi.get(record.uuid);
       setWarehouseDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取仓库详情失败');
+      messageApi.error(error.message || t('app.master-data.warehouses.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -555,7 +557,7 @@ const WarehousesPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取仓库列表失败:', error);
-            messageApi.error(error?.message || '获取仓库列表失败');
+            messageApi.error(error?.message || t('app.master-data.warehouses.getListFailed'));
             return {
               data: [],
               success: false,
