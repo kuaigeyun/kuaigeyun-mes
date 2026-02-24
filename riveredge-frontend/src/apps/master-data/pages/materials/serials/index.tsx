@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect, ProFormInstance, ProDescriptionsItemType, ProFormDigit } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, InputNumber } from 'antd';
@@ -37,6 +38,7 @@ const SERIAL_STATUS_OPTIONS = [
  * 物料序列号管理列表页面组件
  */
 const MaterialSerialPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
@@ -114,7 +116,7 @@ const MaterialSerialPage: React.FC = () => {
         remark: detail.remark,
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取序列号详情失败');
+      messageApi.error(error.message || t('app.master-data.serials.getDetailFailed'));
     }
   };
 
@@ -128,7 +130,7 @@ const MaterialSerialPage: React.FC = () => {
       setCurrentSerial(detail);
       setDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取序列号详情失败');
+      messageApi.error(error.message || t('app.master-data.serials.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -140,10 +142,10 @@ const MaterialSerialPage: React.FC = () => {
   const handleDelete = async (record: MaterialSerial) => {
     try {
       await materialSerialApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -152,15 +154,15 @@ const MaterialSerialPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -174,21 +176,21 @@ const MaterialSerialPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -203,16 +205,16 @@ const MaterialSerialPage: React.FC = () => {
       
       if (isEdit && currentSerialUuid) {
         await materialSerialApi.update(currentSerialUuid, values as MaterialSerialUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await materialSerialApi.create(values as MaterialSerialCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
       throw error;
     } finally {
       setFormLoading(false);
@@ -224,22 +226,22 @@ const MaterialSerialPage: React.FC = () => {
    */
   const handleGenerateSerials = async () => {
     if (!selectedMaterialUuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.master-data.serials.selectMaterial'));
       return;
     }
     
     if (generateCount < 1 || generateCount > 1000) {
-      messageApi.warning('生成数量必须在1-1000之间');
+      messageApi.warning(t('app.master-data.serials.generateCountRange'));
       return;
     }
     
     try {
       const result = await materialSerialApi.generate(selectedMaterialUuid, generateCount);
       setGeneratedSerialNos(result.serial_nos);
-      messageApi.success(`成功生成 ${result.count} 个序列号`);
+      messageApi.success(t('app.master-data.serials.generateSuccess', { count: result.count }));
       setGenerateModalVisible(false);
     } catch (error: any) {
-      messageApi.error(error.message || '生成序列号失败');
+      messageApi.error(error.message || t('app.master-data.serials.generateFailed'));
     }
   };
 

@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Select, Modal, Input, message, App, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProFormSelect } from '@ant-design/pro-components';
@@ -65,6 +66,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   rules,
   formRef,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -98,7 +100,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       setOptions(optionsList);
     } catch (error: any) {
       console.error(`加载字典项失败 (${dictionaryCode}):`, error);
-      messageApi.error(`加载${label}选项失败`);
+      messageApi.error(t('components.dictionarySelect.loadOptionsFailed', { label }));
     } finally {
       setLoading(false);
     }
@@ -152,14 +154,14 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
    */
   const handleCreateItem = async () => {
     if (!createLabel.trim() || !createValue.trim()) {
-      messageApi.warning('请输入标签和值');
+      messageApi.warning(t('components.dictionarySelect.enterLabelAndValue'));
       return;
     }
 
     // 检查值是否已存在
     const exists = options.some(option => option.value === createValue.trim());
     if (exists) {
-      messageApi.warning('该值已存在，请使用其他值');
+      messageApi.warning(t('components.dictionarySelect.valueExists'));
       return;
     }
 
@@ -174,7 +176,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         sort_order: options.length, // 添加到末尾
       });
 
-      messageApi.success('创建成功');
+      messageApi.success(t('common.createSuccess'));
       setCreateModalVisible(false);
       setCreateLabel('');
       setCreateValue('');
@@ -195,7 +197,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       return newValue;
     } catch (error: any) {
       console.error('创建字典项失败:', error);
-      messageApi.error(error?.response?.data?.detail || '创建失败');
+      messageApi.error(error?.response?.data?.detail || t('components.dictionarySelect.createFailed'));
     } finally {
       setCreating(false);
     }

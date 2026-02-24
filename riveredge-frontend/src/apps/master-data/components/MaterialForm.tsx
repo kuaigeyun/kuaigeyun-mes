@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
@@ -39,15 +40,6 @@ import { getFileDownloadUrl, uploadMultipleFiles } from '../../../services/file'
 
 const { Panel } = Collapse;
 
-/** 物料来源类型选项（共享常量） */
-const SOURCE_TYPE_OPTIONS = [
-  { label: '自制件 (Make)', value: 'Make' },
-  { label: '采购件 (Buy)', value: 'Buy' },
-  { label: '虚拟件 (Phantom)', value: 'Phantom' },
-  { label: '委外件 (Outsource)', value: 'Outsource' },
-  { label: '配置件 (Configure)', value: 'Configure' },
-];
-
 /** 每种物料来源类型的合法字段白名单（用于过滤混合字段） */
 const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
@@ -56,12 +48,6 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Phantom: [],
   Configure: [],
 };
-
-/** 自制件制造模式选项（存于 sourceConfig.manufacturing_mode） */
-const MANUFACTURING_MODE_OPTIONS = [
-  { label: '加工型（材料+工艺→零件）', value: 'fabrication' },
-  { label: '装配型（原材料组装→成品/半成品）', value: 'assembly' },
-];
 
 /**
  * 物料表单组件属性
@@ -98,8 +84,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   loading = false,
   initialValues,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
+  const sourceTypeOptions = useMemo(() => [
+    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
+    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
+    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
+    { label: t('app.master-data.materialForm.sourceConfigure'), value: 'Configure' },
+  ], [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
   
@@ -250,7 +244,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await materialSourceApi.suggest(material.uuid);
       setSuggestionResult(result);
     } catch (error: any) {
-      messageApi.error(`获取建议失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('app.master-data.materialForm.getSuggestionFailedWithError', { error: error.message || t('common.unknownError') }));
     } finally {
       setLoadingSuggestion(false);
     }
@@ -263,7 +257,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await materialSourceApi.validate(material.uuid);
       setValidationResult(result);
     } catch (error: any) {
-      messageApi.error(`验证失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('app.master-data.materialForm.validationFailedWithError', { error: error.message || t('common.unknownError') }));
     } finally {
       setLoadingValidation(false);
     }
@@ -276,7 +270,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await materialSourceApi.checkCompleteness(material.uuid);
       setCompletenessResult(result);
     } catch (error: any) {
-      messageApi.error(`检查失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('app.master-data.materialForm.checkFailedWithError', { error: error.message || t('common.unknownError') }));
     } finally {
       setLoadingCompleteness(false);
     }
@@ -316,7 +310,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     // 调试信息：检查规则代码是否正确
     if (ruleCode === 'PROCESS_ROUTE_CODE') {
       console.error('错误：物料页面使用了工艺路线的编码规则！请检查 localStorage 中的 codeRulePageConfigs 配置。');
-      messageApi.error('编码规则配置错误：物料页面不应使用工艺路线的编码规则。请清除浏览器缓存或联系管理员。');
+      messageApi.error(t('app.master-data.materialForm.codeRuleConfigError'));
       return;
     }
 
@@ -449,7 +443,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             formRef.current?.setFieldsValue({
               images: materialImages.map((uuid: string) => ({
                 uid: uuid,
-                name: '图片',
+                name: t('app.master-data.materialForm.images'),
                 status: 'done',
                 url: getFileDownloadUrl(uuid),
               }))
@@ -816,7 +810,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       
       return result;
     } catch (error: any) {
-      messageApi.error(error.message || '提交失败');
+      messageApi.error(error.message || t('app.master-data.materialForm.submitFailed'));
       throw error;
     }
   };
@@ -883,7 +877,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         validationResult={activeTab === 'basic' ? validationResult : null}
         completenessResult={activeTab === 'basic' ? completenessResult : null}
         messages={activeTab === 'units' ? unitMessages : undefined}
-        sourceTypeOptions={SOURCE_TYPE_OPTIONS}
+        sourceTypeOptions={sourceTypeOptions}
         onApply={activeTab === 'basic' ? handleApplySuggestion : undefined}
         onRevalidate={activeTab === 'basic' ? validateSourceConfig : undefined}
         loadingValidation={activeTab === 'basic' ? loadingValidation : false}
@@ -949,7 +943,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       `}</style>
       <Modal
         className="material-form-modal"
-        title={isEdit ? '编辑物料' : '新建物料'}
+        title={isEdit ? t('app.master-data.materialForm.editMaterial') : t('app.master-data.materialForm.createMaterial')}
         open={open}
         onCancel={onClose}
         footer={null}
@@ -996,8 +990,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }}
         submitter={{
           searchConfig: {
-            submitText: isEdit ? '更新' : '创建',
-            resetText: '取消',
+            submitText: isEdit ? t('app.master-data.materialForm.update') : t('app.master-data.materialForm.create'),
+            resetText: t('app.master-data.materialForm.cancel'),
           },
           resetButtonProps: {
             onClick: onClose,
@@ -1011,7 +1005,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           items={[
             {
               key: 'basic',
-              label: '基本信息',
+              label: t('app.master-data.materialForm.basicInfo'),
               children: (
                 <>
                   <BasicInfoTab part={1} formRef={formRef} materialGroups={materialGroups} isEdit={isEdit} />
@@ -1034,7 +1028,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             },
             {
               key: 'variant',
-              label: '变体管理',
+              label: t('app.master-data.materialForm.variantManagement'),
               disabled: !variantManaged,
               children: (
                 <VariantManagementTab />
@@ -1042,14 +1036,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             },
             {
               key: 'units',
-              label: '多单位管理',
+              label: t('app.master-data.materialForm.multiUnit'),
               children: (
                 <MaterialUnitsManager formRef={formRef} onMessagesChange={setUnitMessages} />
               ),
             },
             {
               key: 'mapping',
-              label: '编码映射',
+              label: t('app.master-data.materialForm.codeMapping'),
               children: (
                 <CodeMappingTab
                   departmentCodes={departmentCodes}
@@ -1072,7 +1066,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             },
             {
               key: 'defaults',
-              label: '默认值设置',
+              label: t('app.master-data.materialForm.defaults'),
               children: (
                 <DefaultsTab
                   suppliers={suppliers}
@@ -1101,6 +1095,7 @@ interface MaterialUnitsManagerProps {
 }
 
 const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, onMessagesChange }) => {
+  const { t } = useTranslation();
   const [units, setUnits] = useState<MaterialUnit[]>([]);
   const [scenarios, setScenarios] = useState<{
     purchase?: string;
@@ -1217,12 +1212,12 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
 
   const columns = [
     {
-      title: '单位名称',
+      title: t('app.master-data.materialForm.unitName'),
       dataIndex: 'unit',
       render: (_: any, record: MaterialUnit, index: number) => (
         <Select
           value={record.unit}
-          placeholder="请选择单位"
+          placeholder={t('app.master-data.materialForm.unitPlaceholder')}
           onChange={(value: string) => handleUnitChange(index, 'unit', value)}
           style={{ width: '100%' }}
           showSearch
@@ -1236,7 +1231,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
       ),
     },
     {
-      title: '换算关系',
+      title: t('app.master-data.materialForm.conversionRelation'),
       dataIndex: 'conversion',
       render: (_: any, record: MaterialUnit, index: number) => {
         const numerator = record.numerator || 1;
@@ -1251,7 +1246,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
                 style={{ width: '28%' }}
                 type="number"
                 value={numerator}
-                placeholder="分子"
+                placeholder={t('app.master-data.materialForm.numerator')}
                 onChange={(e) => {
                   const num = parseInt(e.target.value) || 1;
                   handleUnitChange(index, 'numerator', num);
@@ -1266,7 +1261,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
                 style={{ width: '28%' }}
                 type="number"
                 value={denominator}
-                placeholder="分母"
+                placeholder={t('app.master-data.materialForm.denominator')}
                 onChange={(e) => {
                   const den = parseInt(e.target.value) || 1;
                   handleUnitChange(index, 'denominator', den);
@@ -1283,26 +1278,26 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
       },
     },
     {
-      title: '使用场景',
+      title: t('app.master-data.materialForm.useScenario'),
       dataIndex: 'scenarios',
       render: (_: any, record: MaterialUnit, index: number) => (
         <Select
           mode="multiple"
           value={record.scenarios || []}
           onChange={(value: string[]) => handleUnitChange(index, 'scenarios', value)}
-          placeholder="选择使用场景"
+          placeholder={t('app.master-data.materialForm.useScenarioPlaceholder')}
           style={{ width: '100%' }}
           options={[
-            { label: '采购', value: 'purchase' },
-            { label: '销售', value: 'sale' },
-            { label: '生产', value: 'production' },
-            { label: '库存', value: 'inventory' },
+            { label: t('app.master-data.materialForm.purchase'), value: 'purchase' },
+            { label: t('app.master-data.materialForm.sale'), value: 'sale' },
+            { label: t('app.master-data.materialForm.production'), value: 'production' },
+            { label: t('app.master-data.materialForm.inventory'), value: 'inventory' },
           ]}
         />
       ),
     },
     {
-      title: '操作',
+      title: t('app.master-data.materialForm.action'),
       render: (_: any, __: MaterialUnit, index: number) => (
         <Button
           type="link"
@@ -1310,7 +1305,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
           icon={<DeleteOutlined />}
           onClick={() => handleDeleteUnit(index)}
         >
-          删除
+          {t('app.master-data.materialForm.delete')}
         </Button>
       ),
     },
@@ -1323,25 +1318,25 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
     
     units.forEach((unit, index) => {
       if (!unit.unit || !unit.unit.trim()) {
-        errors.push(`第${index + 1}行的单位名称不能为空`);
+        errors.push(t('app.master-data.materialForm.unitNameEmpty', { index: index + 1 }));
       } else {
         const unitName = unit.unit.trim();
         if (unitNames.has(unitName)) {
-          errors.push(`单位"${unitName}"重复，请使用不同的单位名称`);
+          errors.push(t('app.master-data.materialForm.unitNameDuplicate', { name: unitName }));
         }
         unitNames.add(unitName);
       }
       
       if (unit.unit && unit.unit.trim() === baseUnit) {
-        errors.push(`单位"${unit.unit}"与基础单位重复，辅助单位不能与基础单位相同`);
+        errors.push(t('app.master-data.materialForm.unitSameAsBase', { unit: unit.unit }));
       }
       
       if (!unit.numerator || unit.numerator <= 0) {
-        errors.push(`单位"${unit.unit || `第${index + 1}行`}"的换算分子必须大于0`);
+        errors.push(t('app.master-data.materialForm.numeratorMin', { unit: unit.unit || `第${index + 1}行` }));
       }
       
       if (!unit.denominator || unit.denominator <= 0) {
-        errors.push(`单位"${unit.unit || `第${index + 1}行`}"的换算分母必须大于0`);
+        errors.push(t('app.master-data.materialForm.denominatorMin', { unit: unit.unit || `第${index + 1}行` }));
       }
     });
     
@@ -1356,18 +1351,18 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
     const messages: Array<{ text: string; title?: string }> = [];
 
     if (!baseUnit) {
-      messages.push({ text: '请先在「基本信息」标签页设置基础单位', title: '基础设置' });
+      messages.push({ text: t('app.master-data.materialForm.setBaseUnitFirst'), title: t('app.master-data.materialForm.baseSettings') });
     }
 
     messages.push({
-      text: '换算关系设置：使用分子/分母表示，避免精度丢失。例如1吨=1000kg，则分子=1000，分母=1。\n\n换算公式：1个辅助单位 = (分子/分母) × 1个基础单位',
-      title: '换算说明',
+      text: t('app.master-data.materialForm.conversionHint'),
+      title: t('app.master-data.materialForm.conversionTitle'),
     });
 
     if (hasErrors) {
       messages.push({
         text: `配置错误：\n${validationErrors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`,
-        title: '配置验证',
+        title: t('app.master-data.materialForm.configValidation'),
       });
     } else if (units.length > 0 && baseUnit) {
       const baseLabel = unitValueToLabel[baseUnit] || baseUnit;
@@ -1389,16 +1384,16 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
         if (scenarios.production) configText += `\n• 生产单位：${unitValueToLabel[scenarios.production] || scenarios.production}`;
         configText += `\n• 库存单位：${baseLabel}（基础单位）`;
       }
-      messages.push({ text: configText, title: '配置概览' });
+      messages.push({ text: configText, title: t('app.master-data.materialForm.configOverview') });
     }
 
     onMessagesChange(messages);
-  }, [baseUnit, units, scenarios, hasErrors, validationErrors, unitValueToLabel, onMessagesChange]);
+  }, [baseUnit, units, scenarios, hasErrors, validationErrors, unitValueToLabel, onMessagesChange, t]);
 
   return (
     <div style={{ width: '100%', display: 'block', boxSizing: 'border-box' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ fontWeight: 500 }}>多单位管理</div>
+        <div style={{ fontWeight: 500 }}>{t('app.master-data.materialForm.multiUnit')}</div>
         {baseUnit && (
           <div style={{ 
             padding: '4px 12px', 
@@ -1442,7 +1437,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               <Select
                 value={scenarios.purchase}
                 onChange={(value: string) => handleScenarioChange('purchase', value)}
-                placeholder="选择采购单位"
+                placeholder={t('app.master-data.materialForm.selectPurchaseUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
@@ -1458,7 +1453,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               <Select
                 value={scenarios.sale}
                 onChange={(value: string) => handleScenarioChange('sale', value)}
-                placeholder="选择销售单位"
+                placeholder={t('app.master-data.materialForm.selectSaleUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
@@ -1474,7 +1469,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               <Select
                 value={scenarios.production}
                 onChange={(value: string) => handleScenarioChange('production', value)}
-                placeholder="选择生产单位"
+                placeholder={t('app.master-data.materialForm.selectProductionUnit')}
                 allowClear
                 style={{ width: '100%' }}
                 showSearch
@@ -1490,7 +1485,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               <Input
                 value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
                 disabled
-                placeholder="基础单位"
+                placeholder={t('app.master-data.materialForm.baseUnitLabel')}
               />
             </Col>
           </Row>
@@ -1520,38 +1515,39 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   onVariantManagedChange,
   isEdit,
 }) => {
+  const { t } = useTranslation();
   if (part === 1) {
     return (
       <Row gutter={16}>
         <Col span={6}>
           <ProFormText
             name="mainCode"
-            label="物料主编码"
-            placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入物料主编码'}
+            label={t('app.master-data.materialForm.mainCode')}
+            placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
             rules={[
-              { required: true, message: '请输入物料主编码' },
-              { max: 50, message: '物料主编码不能超过50个字符' },
+              { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
+              { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
             ]}
             fieldProps={{ style: { textTransform: 'uppercase' } }}
-            extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '选择物料分组后会自动更新编码。' : undefined}
+            extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeExtra') : undefined}
           />
         </Col>
         <Col span={6}>
           <ProFormText
             name="name"
-            label="物料名称"
-            placeholder="请输入物料名称"
+            label={t('app.master-data.materialForm.materialName')}
+            placeholder={t('app.master-data.materialForm.materialNamePlaceholder')}
             rules={[
-              { required: true, message: '请输入物料名称' },
-              { max: 200, message: '物料名称不能超过200个字符' },
+              { required: true, message: t('app.master-data.materialForm.materialNameRequired') },
+              { max: 200, message: t('app.master-data.materialForm.materialNameMax') },
             ]}
           />
         </Col>
         <Col span={6}>
           <SafeProFormSelect
             name="groupId"
-            label="物料分组"
-            placeholder="请选择物料分组（可选）"
+            label={t('app.master-data.materialForm.materialGroup')}
+            placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
             options={materialGroups.map(g => ({
               label: `${g.code} - ${g.name}`,
               value: g.id,
@@ -1563,33 +1559,33 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           <DictionarySelect
             dictionaryCode="MATERIAL_TYPE"
             name="materialType"
-            label="物料类型"
-            placeholder="请选择物料类型（可选）"
+            label={t('app.master-data.materialForm.materialType')}
+            placeholder={t('app.master-data.materialForm.materialTypePlaceholder')}
             formRef={formRef}
           />
         </Col>
         <Col span={6}>
           <ProFormText
             name="specification"
-            label="规格"
-            placeholder="请输入规格"
-            rules={[{ max: 500, message: '规格不能超过500个字符' }]}
+            label={t('app.master-data.materialForm.specification')}
+            placeholder={t('app.master-data.materialForm.specificationPlaceholder')}
+            rules={[{ max: 500, message: t('app.master-data.materialForm.specificationMax') }]}
           />
         </Col>
         <Col span={6}>
           <ProFormText
             name="model"
-            label="型号"
-            placeholder="请输入型号"
-            rules={[{ max: 100, message: '型号不能超过100个字符' }]}
+            label={t('app.master-data.materialForm.model')}
+            placeholder={t('app.master-data.materialForm.modelPlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.modelMax') }]}
           />
         </Col>
         <Col span={6}>
           <DictionarySelect
             dictionaryCode="MATERIAL_UNIT"
             name="baseUnit"
-            label="基础单位"
-            placeholder="请选择基础单位"
+            label={t('app.master-data.materialForm.baseUnit')}
+            placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
             required
             formRef={formRef}
           />
@@ -1597,9 +1593,9 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         <Col span={6}>
           <ProFormText
             name="brand"
-            label="品牌"
-            placeholder="请输入品牌"
-            rules={[{ max: 100, message: '品牌不能超过100个字符' }]}
+            label={t('app.master-data.materialForm.brand')}
+            placeholder={t('app.master-data.materialForm.brandPlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.brandMax') }]}
           />
         </Col>
       </Row>
@@ -1609,22 +1605,22 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   return (
     <Row gutter={16}>
       <Col span={6}>
-        <ProFormSwitch name="batchManaged" label="批号管理" />
+        <ProFormSwitch name="batchManaged" label={t('app.master-data.materialForm.batchManaged')} />
       </Col>
       <Col span={6}>
         <ProFormSwitch
           name="variantManaged"
-          label="变体管理"
+          label={t('app.master-data.materialForm.variantManaged')}
           fieldProps={{ onChange: onVariantManagedChange }}
         />
       </Col>
       <Col span={6}>
-        <ProFormSwitch name="isActive" label="是否启用" />
+        <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
       </Col>
       <Col span={24}>
         <ProFormUploadButton
           name="images"
-          label="物料图片"
+          label={t('app.master-data.materialForm.materialImages')}
           max={5}
           fieldProps={{
             multiple: true,
@@ -1647,8 +1643,8 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       <Col span={24}>
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="请输入描述"
+          label={t('app.master-data.materialForm.description')}
+          placeholder={t('app.master-data.materialForm.descriptionPlaceholder')}
           fieldProps={{ rows: 3, maxLength: 500 }}
         />
       </Col>
@@ -1660,6 +1656,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
  * 变体管理标签页
  */
 const VariantManagementTab: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [variantAttributeDefinitions, setVariantAttributeDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
@@ -1674,7 +1671,7 @@ const VariantManagementTab: React.FC = () => {
         definitions.sort((a, b) => a.display_order - b.display_order);
         setVariantAttributeDefinitions(definitions);
       } catch (error: any) {
-        messageApi.error(error.message || '加载变体属性定义失败');
+        messageApi.error(error.message || t('app.master-data.materialForm.loadVariantDefFailed'));
       } finally {
         setDefinitionsLoading(false);
       }
@@ -1684,14 +1681,14 @@ const VariantManagementTab: React.FC = () => {
   }, []);
 
   if (definitionsLoading) {
-    return <div>加载中...</div>;
+    return <div>{t('app.master-data.materialForm.loading')}</div>;
   }
 
   if (variantAttributeDefinitions.length === 0) {
     return (
       <div>
-        <p>暂无变体属性定义</p>
-        <p>请先在"物料数据 → 变体属性"中配置变体属性定义</p>
+        <p>{t('app.master-data.materialForm.noVariantDef')}</p>
+        <p>{t('app.master-data.materialForm.configVariantFirst')}</p>
       </div>
     );
   }
@@ -1709,19 +1706,19 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormSelect
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请选择${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   options={def.enum_values?.map(v => ({ label: v, value: v }))}
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请选择${def.display_name}`,
+                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_: any, value: any) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请选择${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value) {
@@ -1731,10 +1728,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -1750,7 +1747,7 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormText
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请输入${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   fieldProps={{
@@ -1759,12 +1756,12 @@ const VariantManagementTab: React.FC = () => {
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请输入${def.display_name}`,
+                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_: any, value: any) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请输入${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value) {
@@ -1774,10 +1771,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -1793,7 +1790,7 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormDigit
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请输入${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   fieldProps={{
@@ -1803,12 +1800,12 @@ const VariantManagementTab: React.FC = () => {
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请输入${def.display_name}`,
+                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_: any, value: any) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请输入${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value) {
@@ -1818,10 +1815,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -1837,7 +1834,7 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormText
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请选择${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   fieldProps={{
@@ -1846,12 +1843,12 @@ const VariantManagementTab: React.FC = () => {
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请选择${def.display_name}`,
+                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_: any, value: any) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请选择${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value) {
@@ -1861,10 +1858,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -1880,22 +1877,22 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormSelect
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请选择${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   options={[
-                    { label: '是', value: true },
-                    { label: '否', value: false },
+                    { label: t('app.master-data.bom.yes'), value: true },
+                    { label: t('app.master-data.bom.no'), value: false },
                   ]}
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请选择${def.display_name}`,
+                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_, value) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请选择${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value !== undefined && value !== null) {
@@ -1905,10 +1902,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -1924,18 +1921,18 @@ const VariantManagementTab: React.FC = () => {
                 <ProFormText
                   name={fieldName}
                   label={def.display_name}
-                  placeholder={`请输入${def.display_name}`}
+                  placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
                   rules={[
                     {
                       required: def.is_required,
-                      message: `请输入${def.display_name}`,
+                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
                     },
                     {
                       validator: async (_: any, value: any) => {
                         if (!value && def.is_required) {
-                          throw new Error(`请输入${def.display_name}`);
+                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
                         }
                         // 验证属性值
                         if (value) {
@@ -1945,10 +1942,10 @@ const VariantManagementTab: React.FC = () => {
                               attribute_value: value,
                             });
                             if (!result.is_valid) {
-                              throw new Error(result.error_message || '属性值验证失败');
+                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                             }
                           } catch (error: any) {
-                            throw new Error(error.message || '属性值验证失败');
+                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
                         }
                       },
@@ -2003,21 +2000,6 @@ interface CodeMappingRow {
   extra?: string | React.ReactNode;
 }
 
-const CODE_MAPPING_TYPE_OPTIONS: { label: string; value: CodeMappingSourceType }[] = [
-  { label: '部门编码', value: 'department' },
-  { label: '客户编码', value: 'customer' },
-  { label: '供应商编码', value: 'supplier' },
-  { label: '外部系统', value: 'external' },
-];
-
-const DEPARTMENT_CODE_TYPE_LABELS: Record<string, string> = {
-  SALE: '销售编码',
-  DES: '设计编码',
-  PUR: '采购编码',
-  WH: '仓库编码',
-  PROD: '生产编码',
-};
-
 const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   departmentCodes,
   customerCodes,
@@ -2035,6 +2017,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   onExternalSystemCodesChange,
   onReloadExternalSystemCodes,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [addForm] = Form.useForm();
   const [externalSystemForm] = Form.useForm();
@@ -2044,13 +2027,28 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   const [externalSystemModalVisible, setExternalSystemModalVisible] = useState(false);
   const [editingExternalSystemCode, setEditingExternalSystemCode] = useState<MaterialCodeMapping | null>(null);
 
-  const departmentCodeTypes = [
-    { label: '销售编码', value: 'SALE' },
-    { label: '设计编码', value: 'DES' },
-    { label: '采购编码', value: 'PUR' },
-    { label: '仓库编码', value: 'WH' },
-    { label: '生产编码', value: 'PROD' },
-  ];
+  const codeMappingTypeOptions = useMemo(() => [
+    { label: t('app.master-data.codeMapping.department'), value: 'department' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.customer'), value: 'customer' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.supplier'), value: 'supplier' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.external'), value: 'external' as CodeMappingSourceType },
+  ], [t]);
+
+  const departmentCodeTypeLabels = useMemo(() => ({
+    SALE: t('app.master-data.codeMapping.sale'),
+    DES: t('app.master-data.codeMapping.des'),
+    PUR: t('app.master-data.codeMapping.pur'),
+    WH: t('app.master-data.codeMapping.wh'),
+    PROD: t('app.master-data.codeMapping.prod'),
+  }), [t]);
+
+  const departmentCodeTypes = useMemo(() => [
+    { label: t('app.master-data.codeMapping.sale'), value: 'SALE' },
+    { label: t('app.master-data.codeMapping.des'), value: 'DES' },
+    { label: t('app.master-data.codeMapping.pur'), value: 'PUR' },
+    { label: t('app.master-data.codeMapping.wh'), value: 'WH' },
+    { label: t('app.master-data.codeMapping.prod'), value: 'PROD' },
+  ], [t]);
 
   // 合并为统一表格数据源
   const codeMappingRows: CodeMappingRow[] = useMemo(() => {
@@ -2060,9 +2058,9 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         key: `dept-${i}`,
         sourceType: 'department',
         sourceIndex: i,
-        typeLabel: '部门编码',
+        typeLabel: t('app.master-data.codeMapping.department'),
         code: r.code,
-        relation: DEPARTMENT_CODE_TYPE_LABELS[r.code_type] ?? r.code_type,
+        relation: departmentCodeTypeLabels[r.code_type] ?? r.code_type,
         name: r.name,
         description: r.description,
         extra: r.department,
@@ -2073,7 +2071,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         key: `cust-${i}`,
         sourceType: 'customer',
         sourceIndex: i,
-        typeLabel: '客户编码',
+        typeLabel: t('app.master-data.codeMapping.customer'),
         code: r.code,
         relation: r.customerName ?? '',
         name: r.name,
@@ -2085,7 +2083,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         key: `supp-${i}`,
         sourceType: 'supplier',
         sourceIndex: i,
-        typeLabel: '供应商编码',
+        typeLabel: t('app.master-data.codeMapping.supplier'),
         code: r.code,
         relation: r.supplierName ?? '',
         name: r.name,
@@ -2098,19 +2096,19 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           key: `ext-${r.uuid}`,
           sourceType: 'external',
           externalUuid: r.uuid,
-          typeLabel: '外部系统',
+          typeLabel: t('app.master-data.codeMapping.external'),
           code: r.externalCode,
           relation: r.externalSystem,
           name: r.internalCode,
           description: r.description,
           extra: (
-            <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? '启用' : '禁用'}</Tag>
+            <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.codeMapping.enabled') : t('app.master-data.codeMapping.disabled')}</Tag>
           ),
         });
       });
     }
     return rows;
-  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid]);
+  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid, departmentCodeTypeLabels, t]);
 
   const handleDeleteRow = (record: CodeMappingRow) => {
     if (record.sourceType === 'department' && record.sourceIndex !== undefined) {
@@ -2127,10 +2125,10 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
       onSupplierCodesChange(newCodes);
     } else if (record.sourceType === 'external' && record.externalUuid) {
       materialCodeMappingApi.delete(record.externalUuid!).then(() => {
-        messageApi.success('删除成功');
+        messageApi.success(t('common.deleteSuccess'));
         onReloadExternalSystemCodes?.();
       }).catch((err: any) => {
-        messageApi.error(err.message || '删除失败');
+        messageApi.error(err.message || t('common.deleteFailed'));
       });
     }
   };
@@ -2193,7 +2191,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           description: values.description,
           isActive: values.isActive !== false,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         addForm.resetFields();
         setAddModalVisible(false);
         onReloadExternalSystemCodes?.();
@@ -2219,14 +2217,14 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         dataSource={codeMappingRows}
         loading={externalSystemCodesLoading}
         columns={[
-          { title: '映射类型', dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
-          { title: '编码', dataIndex: 'code', key: 'code', width: 140 },
-          { title: '关联方/类型', dataIndex: 'relation', key: 'relation', width: 140 },
-          { title: '名称', dataIndex: 'name', key: 'name', width: 120, ellipsis: true },
-          { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-          { title: '其他', dataIndex: 'extra', key: 'extra', width: 100 },
+          { title: t('app.master-data.codeMapping.mappingType'), dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
+          { title: t('app.master-data.codeMapping.code'), dataIndex: 'code', key: 'code', width: 140 },
+          { title: t('app.master-data.codeMapping.relation'), dataIndex: 'relation', key: 'relation', width: 140 },
+          { title: t('app.master-data.codeMapping.name'), dataIndex: 'name', key: 'name', width: 120, ellipsis: true },
+          { title: t('app.master-data.codeMapping.description'), dataIndex: 'description', key: 'description', ellipsis: true },
+          { title: t('app.master-data.codeMapping.extra'), dataIndex: 'extra', key: 'extra', width: 100 },
           {
-            title: '操作',
+            title: t('app.master-data.materialForm.action'),
             key: 'action',
             width: 120,
             fixed: 'right' as const,
@@ -2242,7 +2240,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                       if (ext) openEditExternalModal(ext);
                     }}
                   >
-                    编辑
+                    {t('app.master-data.codeMapping.edit')}
                   </Button>
                 )}
                 <Button
@@ -2252,7 +2250,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                   icon={<DeleteOutlined />}
                   onClick={() => handleDeleteRow(record)}
                 >
-                  删除
+                  {t('app.master-data.materialForm.delete')}
                 </Button>
               </Space>
             ),
@@ -2260,7 +2258,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         ]}
         pagination={false}
         size="small"
-        locale={{ emptyText: '暂无编码映射' }}
+        locale={{ emptyText: t('app.master-data.codeMapping.noMapping') }}
         footer={() => (
           <Button
             type="dashed"
@@ -2268,24 +2266,24 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
             onClick={() => handleOpenAddModal()}
             block
           >
-            添加编码映射
+            {t('app.master-data.codeMapping.addMapping')}
           </Button>
         )}
       />
 
       {/* 统一添加编码映射 Modal */}
       <Modal
-        title="添加编码映射"
+        title={t('app.master-data.codeMapping.addMapping')}
         open={addModalVisible}
         onOk={handleAddSubmit}
         onCancel={() => { setAddModalVisible(false); addForm.resetFields(); }}
         width={600}
       >
         <Form form={addForm} layout="vertical">
-          <Form.Item label="映射类型">
+          <Form.Item label={t('app.master-data.codeMapping.mappingType')}>
             <Select
               value={addModalType}
-              options={CODE_MAPPING_TYPE_OPTIONS.filter(o => o.value !== 'external' || materialUuid)}
+              options={codeMappingTypeOptions.filter(o => o.value !== 'external' || materialUuid)}
               onChange={(v) => {
                 setAddModalType(v as CodeMappingSourceType);
                 addForm.resetFields();
@@ -2295,28 +2293,28 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           </Form.Item>
           {addModalType === 'department' && (
             <>
-              <Form.Item name="code_type" label="编码类型" rules={[{ required: true, message: '请选择编码类型' }]}>
-                <Select placeholder="编码类型" options={departmentCodeTypes} />
+              <Form.Item name="code_type" label={t('app.master-data.codeMapping.codeType')} rules={[{ required: true, message: t('app.master-data.codeMapping.codeTypeRequired') }]}>
+                <Select placeholder={t('app.master-data.codeMapping.codeTypePlaceholder')} options={departmentCodeTypes} />
               </Form.Item>
-              <Form.Item name="code" label="编码" rules={[{ required: true, message: '请输入编码' }]}>
-                <Input placeholder="编码" />
+              <Form.Item name="code" label={t('app.master-data.codeMapping.code')} rules={[{ required: true, message: t('app.master-data.codeMapping.codeRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.codePlaceholder')} />
               </Form.Item>
-              <Form.Item name="name" label="名称（可选）">
-                <Input placeholder="名称（可选）" />
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
               </Form.Item>
-              <Form.Item name="department" label="部门（可选）">
-                <Input placeholder="部门（可选）" />
+              <Form.Item name="department" label={t('app.master-data.codeMapping.departmentOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.departmentOptional')} />
               </Form.Item>
-              <Form.Item name="description" label="描述（可选）">
-                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
               </Form.Item>
             </>
           )}
           {addModalType === 'customer' && (
             <>
-              <Form.Item name="customerId" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+              <Form.Item name="customerId" label={t('app.master-data.codeMapping.customerLabel')} rules={[{ required: true, message: t('app.master-data.codeMapping.selectCustomer') }]}>
                 <Select
-                  placeholder="选择客户"
+                  placeholder={t('app.master-data.codeMapping.selectCustomerPlaceholder')}
                   loading={customersLoading}
                   showSearch
                   filterOption={(input, option) =>
@@ -2325,22 +2323,22 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                   options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
                 />
               </Form.Item>
-              <Form.Item name="code" label="客户编码" rules={[{ required: true, message: '请输入客户编码' }]}>
-                <Input placeholder="客户编码" />
+              <Form.Item name="code" label={t('app.master-data.codeMapping.customerCode')} rules={[{ required: true, message: t('field.customer.codeRequired') }]}>
+                <Input placeholder={t('field.customer.codePlaceholder')} />
               </Form.Item>
-              <Form.Item name="name" label="名称（可选）">
-                <Input placeholder="名称（可选）" />
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
               </Form.Item>
-              <Form.Item name="description" label="描述（可选）">
-                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
               </Form.Item>
             </>
           )}
           {addModalType === 'supplier' && (
             <>
-              <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}>
+              <Form.Item name="supplierId" label={t('app.master-data.codeMapping.supplierLabel')} rules={[{ required: true, message: t('app.master-data.codeMapping.selectSupplier') }]}>
                 <Select
-                  placeholder="选择供应商"
+                  placeholder={t('app.master-data.codeMapping.selectSupplierPlaceholder')}
                   loading={suppliersLoading}
                   showSearch
                   filterOption={(input, option) =>
@@ -2349,32 +2347,32 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                   options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                 />
               </Form.Item>
-              <Form.Item name="code" label="供应商编码" rules={[{ required: true, message: '请输入供应商编码' }]}>
-                <Input placeholder="供应商编码" />
+              <Form.Item name="code" label={t('app.master-data.codeMapping.supplierCode')} rules={[{ required: true, message: t('field.supplier.codeRequired') }]}>
+                <Input placeholder={t('field.supplier.codePlaceholder')} />
               </Form.Item>
-              <Form.Item name="name" label="名称（可选）">
-                <Input placeholder="名称（可选）" />
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
               </Form.Item>
-              <Form.Item name="description" label="描述（可选）">
-                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
               </Form.Item>
             </>
           )}
           {addModalType === 'external' && materialUuid && (
             <>
-              <Form.Item name="externalSystem" label="外部系统" rules={[{ required: true, message: '请输入外部系统名称' }]}>
-                <Input placeholder="如：ERP、WMS、MES等" />
+              <Form.Item name="externalSystem" label={t('app.master-data.codeMapping.externalSystem')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalSystemRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.externalSystemPlaceholder')} />
               </Form.Item>
-              <Form.Item name="externalCode" label="外部编码" rules={[{ required: true, message: '请输入外部编码' }]}>
-                <Input placeholder="外部系统中的物料编码" />
+              <Form.Item name="externalCode" label={t('app.master-data.codeMapping.externalCode')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalCodeRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.externalCodePlaceholder')} />
               </Form.Item>
-              <Form.Item name="internalCode" label="内部编码（可选）" tooltip="如果不填写，将使用物料主编码">
-                <Input placeholder="内部编码（可选）" />
+              <Form.Item name="internalCode" label={t('app.master-data.codeMapping.internalCodeOptional')} tooltip={t('app.master-data.codeMapping.internalCodeTooltip')}>
+                <Input placeholder={t('app.master-data.codeMapping.internalCodeOptional')} />
               </Form.Item>
-              <Form.Item name="description" label="描述（可选）">
-                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
               </Form.Item>
-              <Form.Item name="isActive" label="是否启用" valuePropName="checked" initialValue={true}>
+              <Form.Item name="isActive" label={t('app.master-data.materialForm.isActive')} valuePropName="checked" initialValue={true}>
                 <Switch />
               </Form.Item>
             </>
@@ -2385,7 +2383,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
       {/* 编辑外部系统编码映射 Modal */}
       {materialUuid && (
         <Modal
-          title="编辑外部系统编码映射"
+          title={t('app.master-data.codeMapping.editExternal')}
           open={externalSystemModalVisible}
           onOk={async () => {
             try {
@@ -2398,14 +2396,14 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
                   description: values.description,
                   isActive: values.isActive,
                 });
-                messageApi.success('更新成功');
+                messageApi.success(t('common.updateSuccess'));
               }
               setExternalSystemModalVisible(false);
               setEditingExternalSystemCode(null);
               externalSystemForm.resetFields();
               onReloadExternalSystemCodes?.();
             } catch (error: any) {
-              messageApi.error(error.message || '更新失败');
+              messageApi.error(error.message || t('common.updateFailed'));
             }
           }}
           onCancel={() => {
@@ -2416,19 +2414,19 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           width={600}
         >
           <Form form={externalSystemForm} layout="vertical">
-            <Form.Item name="externalSystem" label="外部系统" rules={[{ required: true, message: '请输入外部系统名称' }]}>
-              <Input placeholder="如：ERP、WMS、MES等" />
+            <Form.Item name="externalSystem" label={t('app.master-data.codeMapping.externalSystem')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalSystemRequired') }]}>
+              <Input placeholder={t('app.master-data.codeMapping.externalSystemPlaceholder')} />
             </Form.Item>
-            <Form.Item name="externalCode" label="外部编码" rules={[{ required: true, message: '请输入外部编码' }]}>
-              <Input placeholder="外部系统中的物料编码" />
+            <Form.Item name="externalCode" label={t('app.master-data.codeMapping.externalCode')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalCodeRequired') }]}>
+              <Input placeholder={t('app.master-data.codeMapping.externalCodePlaceholder')} />
             </Form.Item>
-            <Form.Item name="internalCode" label="内部编码（可选）" tooltip="如果不填写，将使用物料主编码">
-              <Input placeholder="内部编码（可选）" />
+            <Form.Item name="internalCode" label={t('app.master-data.codeMapping.internalCodeOptional')} tooltip={t('app.master-data.codeMapping.internalCodeTooltip')}>
+              <Input placeholder={t('app.master-data.codeMapping.internalCodeOptional')} />
             </Form.Item>
-            <Form.Item name="description" label="描述（可选）">
-              <Input.TextArea placeholder="描述（可选）" rows={3} />
+            <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+              <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
             </Form.Item>
-            <Form.Item name="isActive" label="是否启用" valuePropName="checked">
+            <Form.Item name="isActive" label={t('app.master-data.materialForm.isActive')} valuePropName="checked">
               <Switch />
             </Form.Item>
           </Form>
@@ -2458,16 +2456,16 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   customersLoading,
   warehousesLoading,
 }) => {
+  const { t } = useTranslation();
   return (
     <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
-        {/* 财务默认值 */}
-        <Panel header="财务默认值" key="finance">
+        <Panel header={t('app.master-data.defaults.finance')} key="finance">
           <Row gutter={16}>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.defaultTaxRate"
-                label="默认税率（%）"
-                placeholder="请输入默认税率，如：13表示13%"
+                label={t('app.master-data.defaults.defaultTaxRate')}
+                placeholder={t('app.master-data.defaults.defaultTaxRatePlaceholder')}
                 min={0}
                 max={100}
               />
@@ -2475,17 +2473,17 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultAccount"
-                label="默认科目"
-                placeholder="请输入默认科目"
+                label={t('app.master-data.defaults.defaultAccount')}
+                placeholder={t('app.master-data.defaults.defaultAccountPlaceholder')}
               />
             </Col>
           </Row>
         </Panel>
 
         {/* 采购默认值 */}
-        <Panel header="采购默认值" key="purchase">
+        <Panel header={t('app.master-data.defaults.purchase')} key="purchase">
           <Alert
-            message="采购件的主默认供应商请在【基本信息】中的物料来源区域配置；此处为采购默认值列表（多选），用于扩展用途。"
+            message={t('app.master-data.defaults.purchaseAlert')}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -2494,8 +2492,8 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             <Col span={12}>
               <ProFormSelect
                 name="defaults.defaultSupplierIds"
-                label="默认供应商（可多选，按优先级排序）"
-                placeholder="请选择默认供应商"
+                label={t('app.master-data.defaults.defaultSuppliers')}
+                placeholder={t('app.master-data.defaults.selectSuppliers')}
                 options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                 fieldProps={{
                   mode: 'multiple',
@@ -2509,23 +2507,23 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             <Col span={12}>
               <ProFormDigit
                 name="defaults.defaultPurchasePrice"
-                label="默认采购价格"
-                placeholder="请输入默认采购价格"
+                label={t('app.master-data.defaults.defaultPurchasePrice')}
+                placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
                 min={0}
               />
             </Col>
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultPurchaseUnit"
-                label="默认采购单位"
-                placeholder="请输入默认采购单位"
+                label={t('app.master-data.defaults.defaultPurchaseUnit')}
+                placeholder={t('app.master-data.defaults.defaultPurchaseUnitPlaceholder')}
               />
             </Col>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.defaultPurchaseLeadTime"
-                label="默认采购周期（天）"
-                placeholder="请输入默认采购周期"
+                label={t('app.master-data.defaults.defaultPurchaseLeadTime')}
+                placeholder={t('app.master-data.defaults.defaultPurchaseLeadTimePlaceholder')}
                 min={0}
               />
             </Col>
@@ -2533,28 +2531,28 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         </Panel>
 
         {/* 销售默认值 */}
-        <Panel header="销售默认值" key="sale">
+        <Panel header={t('app.master-data.defaults.sale')} key="sale">
           <Row gutter={16}>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.defaultSalePrice"
-                label="默认销售价格"
-                placeholder="请输入默认销售价格"
+                label={t('app.master-data.defaults.defaultSalePrice')}
+                placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
                 min={0}
               />
             </Col>
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultSaleUnit"
-                label="默认销售单位"
-                placeholder="请输入默认销售单位"
+                label={t('app.master-data.defaults.defaultSaleUnit')}
+                placeholder={t('app.master-data.defaults.defaultSaleUnitPlaceholder')}
               />
             </Col>
             <Col span={12}>
               <ProFormSelect
                 name="defaults.defaultCustomerIds"
-                label="默认客户（可多选）"
-                placeholder="请选择默认客户"
+                label={t('app.master-data.defaults.defaultCustomers')}
+                placeholder={t('app.master-data.defaults.selectCustomers')}
                 options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
                 fieldProps={{
                   mode: 'multiple',
@@ -2569,13 +2567,13 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         </Panel>
 
         {/* 库存默认值 */}
-        <Panel header="库存默认值" key="inventory">
+        <Panel header={t('app.master-data.defaults.inventory')} key="inventory">
           <Row gutter={16}>
             <Col span={12}>
               <ProFormSelect
                 name="defaults.defaultWarehouseIds"
-                label="默认仓库（可多选，按优先级排序）"
-                placeholder="请选择默认仓库"
+                label={t('app.master-data.defaults.defaultWarehouses')}
+                placeholder={t('app.master-data.defaults.selectWarehouses')}
                 options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
                 fieldProps={{
                   mode: 'multiple',
@@ -2589,31 +2587,31 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultLocation"
-                label="默认库位"
-                placeholder="请输入默认库位"
+                label={t('app.master-data.defaults.defaultLocation')}
+                placeholder={t('app.master-data.defaults.defaultLocationPlaceholder')}
               />
             </Col>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.safetyStock"
-                label="安全库存"
-                placeholder="请输入安全库存"
+                label={t('app.master-data.defaults.safetyStock')}
+                placeholder={t('app.master-data.defaults.safetyStockPlaceholder')}
                 min={0}
               />
             </Col>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.maxStock"
-                label="最大库存"
-                placeholder="请输入最大库存"
+                label={t('app.master-data.defaults.maxStock')}
+                placeholder={t('app.master-data.defaults.maxStockPlaceholder')}
                 min={0}
               />
             </Col>
             <Col span={12}>
               <ProFormDigit
                 name="defaults.minStock"
-                label="最小库存"
-                placeholder="请输入最小库存"
+                label={t('app.master-data.defaults.minStock')}
+                placeholder={t('app.master-data.defaults.minStockPlaceholder')}
                 min={0}
               />
             </Col>
@@ -2621,13 +2619,13 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         </Panel>
 
         {/* 生产默认值：默认工艺路线仅在【基本信息】中的物料来源区域（自制件时）配置，此处仅保留默认生产单位 */}
-        <Panel header="生产默认值" key="production">
+        <Panel header={t('app.master-data.defaults.production')} key="production">
           <Row gutter={16}>
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultProductionUnit"
-                label="默认生产单位"
-                placeholder="请输入默认生产单位"
+                label={t('app.master-data.defaults.defaultProductionUnit')}
+                placeholder={t('app.master-data.defaults.defaultProductionUnitPlaceholder')}
               />
             </Col>
           </Row>
@@ -2648,6 +2646,7 @@ interface MaterialSourceTabProps {
   suppliersLoading: boolean;
   processRoutesLoading: boolean;
   operationsLoading: boolean;
+  sourceTypeOptions: Array<{ label: string; value: string }>;
   onValidate?: () => void;
   onCheckCompleteness?: () => void;
 }
@@ -2656,15 +2655,18 @@ const MaterialSourceTab = forwardRef<
   { applySuggestion: (type: string, manufacturingMode?: string) => void },
   MaterialSourceTabProps
 >(
-  ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, onValidate, onCheckCompleteness }, ref) => {
+  ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, sourceTypeOptions, onValidate, onCheckCompleteness }, ref) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
+    const manufacturingModeOptions = useMemo(() => [
+      { label: t('app.master-data.materialForm.manufacturingFabrication'), value: 'fabrication' },
+      { label: t('app.master-data.materialForm.manufacturingAssembly'), value: 'assembly' },
+    ], [t]);
 
     const handleGotoProcessRoutes = () => {
       navigate('/apps/master-data/process/routes');
     };
-
-    const sourceTypeOptions = SOURCE_TYPE_OPTIONS;
 
   /**
    * 处理物料来源类型变化
@@ -2741,14 +2743,14 @@ const MaterialSourceTab = forwardRef<
         <Col span={12}>
           <ProFormSelect
             name="sourceType"
-            label="物料来源类型"
-            placeholder="请选择物料来源类型"
+            label={t('app.master-data.materialForm.sourceTypeLabel')}
+            placeholder={t('app.master-data.materialForm.sourceTypePlaceholder')}
             options={sourceTypeOptions}
             fieldProps={{
               value: sourceType,
               onChange: handleSourceTypeChange,
             }}
-            extra="物料来源类型决定了物料的获取方式（自制/采购/委外等）"
+            extra={t('app.master-data.materialForm.sourceTypeExtra')}
           />
         </Col>
       </Row>
@@ -2761,11 +2763,11 @@ const MaterialSourceTab = forwardRef<
                 <Col span={6}>
                   <ProFormSelect
                     name="sourceConfig.manufacturing_mode"
-                    label="制造模式"
-                    placeholder="请选择制造模式"
-                    options={MANUFACTURING_MODE_OPTIONS}
+                    label={t('app.master-data.materialForm.manufacturingMode')}
+                    placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
+                    options={manufacturingModeOptions}
                     fieldProps={{ allowClear: true }}
-                    extra="加工型需工艺路线；装配型需BOM"
+                    extra={t('app.master-data.materialForm.manufacturingModeExtra')}
                   />
                 </Col>
                 <Col span={12}>
@@ -2773,20 +2775,20 @@ const MaterialSourceTab = forwardRef<
                     name="defaults.defaultProcessRouteUuid"
                     label={
                       <Space>
-                        <span>默认工艺路线</span>
+                        <span>{t('app.master-data.source.defaultProcessRoute')}</span>
                         <Button
                           type="link"
                           size="small"
                           icon={<LinkOutlined />}
                           onClick={handleGotoProcessRoutes}
-                          title="跳转到工艺路线管理页面"
+                          title={t('app.master-data.source.gotoRoutes')}
                           style={{ padding: 0, height: 'auto' }}
                         >
-                          工艺路线
+                          {t('app.master-data.source.routes')}
                         </Button>
                       </Space>
                     }
-                    placeholder="请选择默认工艺路线"
+                    placeholder={t('app.master-data.source.selectProcessRoute')}
                     options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
                     fieldProps={{
                       loading: processRoutesLoading,
@@ -2800,24 +2802,24 @@ const MaterialSourceTab = forwardRef<
                 <Col span={6}>
                   <ProFormDigit
                     name="sourceConfig.production_lead_time"
-                    label="生产提前期（天）"
-                    placeholder="提前期"
+                    label={t('app.master-data.source.productionLeadTime')}
+                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={6}>
                   <ProFormDigit
                     name="sourceConfig.min_production_batch"
-                    label="最小生产批量"
-                    placeholder="最小批量"
+                    label={t('app.master-data.source.minProductionBatch')}
+                    placeholder={t('app.master-data.source.minBatchPlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={6}>
                   <ProFormDigit
                     name="sourceConfig.production_waste_rate"
-                    label="生产损耗率（%）"
-                    placeholder="损耗率"
+                    label={t('app.master-data.source.productionWasteRate')}
+                    placeholder={t('app.master-data.source.wasteRatePlaceholder')}
                     min={0}
                     max={100}
                   />
@@ -2831,8 +2833,8 @@ const MaterialSourceTab = forwardRef<
                 <Col span={12}>
                   <SafeProFormSelect
                     name="sourceConfig.default_supplier_id"
-                    label="默认供应商"
-                    placeholder="请选择默认供应商（建议配置）"
+                    label={t('app.master-data.source.defaultSupplier')}
+                    placeholder={t('app.master-data.source.selectDefaultSupplier')}
                     options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                     fieldProps={{
                       loading: suppliersLoading,
@@ -2844,26 +2846,26 @@ const MaterialSourceTab = forwardRef<
                   />
                 </Col>
                 <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.purchase_lead_time"
-                    label="采购提前期（天）"
-                    placeholder="提前期"
+              <ProFormDigit
+                name="sourceConfig.purchase_lead_time"
+                label={t('app.master-data.source.purchaseLeadTime')}
+                placeholder={t('app.master-data.source.leadTimePlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.min_purchase_batch"
-                    label="最小采购批量"
-                    placeholder="最小批量"
+              <ProFormDigit
+                name="sourceConfig.min_purchase_batch"
+                label={t('app.master-data.source.minPurchaseBatch')}
+                placeholder={t('app.master-data.source.minBatchPlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={4}>
-                  <ProFormDigit
-                    name="sourceConfig.purchase_price"
-                    label="采购价格"
-                    placeholder="价格"
+              <ProFormDigit
+                name="sourceConfig.purchase_price"
+                label={t('app.master-data.source.purchasePrice')}
+                placeholder={t('app.master-data.source.pricePlaceholder')}
                     min={0}
                     fieldProps={{ precision: 2 }}
                   />
@@ -2878,9 +2880,9 @@ const MaterialSourceTab = forwardRef<
                   <Col span={6}>
                     <SafeProFormSelect
                       name="sourceConfig.outsource_supplier_id"
-                      label="委外供应商"
-                      placeholder="请选择委外供应商"
-                      rules={[{ required: true, message: '请选择委外供应商' }]}
+                      label={t('app.master-data.source.outsourceSupplier')}
+                      placeholder={t('app.master-data.source.selectOutsourceSupplier')}
+                      rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
                       options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                       fieldProps={{
                         loading: suppliersLoading,
@@ -2893,9 +2895,9 @@ const MaterialSourceTab = forwardRef<
                   <Col span={6}>
                     <SafeProFormSelect
                       name="sourceConfig.outsource_operation"
-                      label="委外工序"
-                      placeholder="请选择委外工序"
-                      rules={[{ required: true, message: '请选择委外工序' }]}
+                      label={t('app.master-data.source.outsourceOperation')}
+                      placeholder={t('app.master-data.source.selectOutsourceOperation')}
+                      rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
                       options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
                       fieldProps={{
                         loading: operationsLoading,
@@ -2908,16 +2910,16 @@ const MaterialSourceTab = forwardRef<
                   <Col span={6}>
                     <ProFormDigit
                       name="sourceConfig.outsource_lead_time"
-                      label="委外提前期（天）"
-                      placeholder="提前期"
+                      label={t('app.master-data.source.outsourceLeadTime')}
+                      placeholder={t('app.master-data.source.leadTimePlaceholder')}
                       min={0}
                     />
                   </Col>
                   <Col span={6}>
                     <ProFormDigit
                       name="sourceConfig.outsource_price"
-                      label="委外价格"
-                      placeholder="价格"
+                      label={t('app.master-data.source.outsourcePrice')}
+                      placeholder={t('app.master-data.source.pricePlaceholder')}
                       min={0}
                       fieldProps={{ precision: 2 }}
                     />
@@ -2927,11 +2929,11 @@ const MaterialSourceTab = forwardRef<
                   <Col span={6}>
                     <ProFormSelect
                       name="sourceConfig.material_provided_by"
-                      label="物料提供方"
-                      placeholder="请选择"
+                      label={t('app.master-data.source.materialProvidedBy')}
+                      placeholder={t('app.master-data.source.selectPlaceholder')}
                       options={[
-                        { label: '企业提供', value: 'enterprise' },
-                        { label: '供应商提供', value: 'supplier' },
+                        { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
+                        { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
                       ]}
                       initialValue="enterprise"
                     />
@@ -2945,8 +2947,8 @@ const MaterialSourceTab = forwardRef<
               <Row gutter={16} style={{ marginTop: 0 }}>
                 <Col span={24}>
                   <Alert
-                    message="配置件说明"
-                    description="配置件需要配置变体属性和BOM变体，请在「变体管理」标签页配置变体属性。"
+                    message={t('app.master-data.source.configureTip')}
+                    description={t('app.master-data.source.configureTipDesc')}
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
@@ -2955,16 +2957,16 @@ const MaterialSourceTab = forwardRef<
                 <Col span={12}>
                   <ProFormTextArea
                     name="sourceConfig.bom_variants"
-                    label="BOM变体配置（JSON格式）"
-                    placeholder='格式：{"variant1": {...}, "variant2": {...}}'
+                    label={t('app.master-data.source.bomVariantsLabel')}
+                    placeholder={t('app.master-data.source.bomVariantsPlaceholder')}
                     fieldProps={{ rows: 4 }}
                   />
                 </Col>
                 <Col span={6}>
                   <ProFormText
                     name="sourceConfig.default_variant"
-                    label="默认变体"
-                    placeholder="请输入默认变体"
+                    label={t('app.master-data.source.defaultVariant')}
+                    placeholder={t('app.master-data.source.defaultVariantPlaceholder')}
                   />
                 </Col>
               </Row>
@@ -2975,8 +2977,8 @@ const MaterialSourceTab = forwardRef<
               <Row gutter={16} style={{ marginTop: 0 }}>
                 <Col span={24}>
                   <Alert
-                    message="虚拟件说明"
-                    description="虚拟件不实际存在，仅用于BOM展开。须配置完整BOM结构，系统将自动跳过虚拟件展开下层物料。"
+                    message={t('app.master-data.source.phantomTip')}
+                    description={t('app.master-data.source.phantomTipDesc')}
                     type="info"
                     showIcon
                   />

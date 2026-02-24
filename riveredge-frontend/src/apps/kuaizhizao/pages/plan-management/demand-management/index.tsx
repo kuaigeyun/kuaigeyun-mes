@@ -798,7 +798,12 @@ const DemandManagementPage: React.FC = () => {
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                               {mainStages.length > 0 && (
-                                <UniLifecycleStepper steps={mainStages} status={lifecycle.status} showLabels />
+                                <UniLifecycleStepper
+                                  steps={mainStages}
+                                  status={lifecycle.status}
+                                  showLabels
+                                  nextStepSuggestions={lifecycle.nextStepSuggestions}
+                                />
                               )}
                               {subStages.length > 0 && (
                                 <div>

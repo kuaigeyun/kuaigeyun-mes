@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Table, Tag, Tabs, Descriptions, Spin, message, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { getEquipmentTrace, EquipmentTrace } from '../../../../services/equipmentTrace';
@@ -18,6 +19,7 @@ import { getEquipmentByUuid, Equipment } from '../../../../services/equipment';
  * 设备使用记录追溯页面组件
  */
 const EquipmentTracePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
@@ -32,7 +34,7 @@ const EquipmentTracePage: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       if (!uuid) {
-        messageApi.error('设备UUID不能为空');
+        messageApi.error(t('pages.system.equipmentTrace.uuidRequired'));
         navigate('/system/equipment');
         return;
       }
@@ -49,7 +51,7 @@ const EquipmentTracePage: React.FC = () => {
         setEquipment(equipmentData);
         setTraceData(trace);
       } catch (error: any) {
-        messageApi.error(error.message || '加载设备追溯数据失败');
+        messageApi.error(error.message || t('pages.system.equipmentTrace.loadFailed'));
         navigate('/system/equipment');
       } finally {
         setLoading(false);
@@ -57,7 +59,7 @@ const EquipmentTracePage: React.FC = () => {
     };
 
     loadData();
-  }, [uuid, navigate, messageApi]);
+  }, [uuid, navigate, messageApi, t]);
 
   /**
    * 维护计划表格列

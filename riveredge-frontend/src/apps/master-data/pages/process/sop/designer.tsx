@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, message, Space, Drawer, Form, Input, theme } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -125,6 +126,7 @@ const EndNode: React.FC<NodeProps> = () => {
  * eSOP 可视化编辑器页面组件
  */
 const ESOPDesignerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -152,7 +154,7 @@ const ESOPDesignerPage: React.FC = () => {
     if (sopUuid) {
       loadSOPData();
     } else {
-      messageApi.warning('缺少SOP UUID参数');
+      messageApi.warning(t('app.master-data.sop.missingUuid'));
       navigate('/apps/master-data/process/sop');
     }
   }, [sopUuid]);
@@ -218,7 +220,7 @@ const ESOPDesignerPage: React.FC = () => {
         setEdges(edgesData);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '加载SOP数据失败');
+      messageApi.error(error.message || t('app.master-data.sop.loadFailed'));
       navigate('/apps/master-data/process/sop');
     } finally {
       setLoading(false);
@@ -265,7 +267,7 @@ const ESOPDesignerPage: React.FC = () => {
   const handleDeleteNode = (nodeId: string) => {
     // 不允许删除开始和结束节点
     if (nodeId === 'start' || nodeId === 'end') {
-      messageApi.warning('不能删除开始或结束节点');
+      messageApi.warning(t('app.master-data.sop.cannotDeleteStartEnd'));
       return;
     }
     setNodes(nodes.filter((n) => n.id !== nodeId));
@@ -312,7 +314,7 @@ const ESOPDesignerPage: React.FC = () => {
         });
         setNodes(updatedNodes);
         setNodeConfigVisible(false);
-        messageApi.success('节点配置已保存');
+        messageApi.success(t('app.master-data.sop.nodeConfigSaved'));
       }
     });
   };
@@ -346,9 +348,9 @@ const ESOPDesignerPage: React.FC = () => {
         formConfig: Object.keys(formConfig).length > 0 ? formConfig : null,
       });
       
-      messageApi.success('SOP设计已保存');
+      messageApi.success(t('app.master-data.sop.designSaved'));
     } catch (error: any) {
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('app.master-data.sop.saveFailed'));
     } finally {
       setSaving(false);
     }

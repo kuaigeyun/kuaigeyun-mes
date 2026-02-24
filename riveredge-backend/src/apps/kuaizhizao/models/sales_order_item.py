@@ -32,8 +32,9 @@ class SalesOrderItem(BaseModel):
     delivered_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已交货数量")
     remaining_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="剩余数量")
 
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
+    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价（不含税）")
+    tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
+    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="价税合计")
 
     # 交货信息
     delivery_date = fields.DateField(description="交货日期")

@@ -6,6 +6,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Upload, Button, message, UploadProps, UploadFile } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { uploadFile, uploadMultipleFiles, FileUploadResponse } from '../../services/file';
@@ -108,6 +109,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   buttonIcon = <UploadOutlined />,
   disabled = false,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [fileList, setFileList] = useState<UploadFile[]>(defaultFileList);
   const [uploading, setUploading] = useState(false);
@@ -123,7 +125,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       
       // 检查文件大小
       if (maxSize && file.size > maxSize) {
-        throw new Error(`文件大小超过限制（${(maxSize / 1024 / 1024).toFixed(2)}MB）`);
+        throw new Error(t('components.fileUpload.sizeExceeded', { size: (maxSize / 1024 / 1024).toFixed(2) }));
       }
       
       if (multiple) {
@@ -146,7 +148,7 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         onChange?.(newFileList);
         onUploadSuccess?.(response);
         onSuccess?.(response);
-        messageApi.success(`成功上传 ${response.length} 个文件`);
+        messageApi.success(t('components.fileUpload.uploadMultiSuccess', { count: response.length }));
       } else {
         // 单文件上传
         const response = await uploadFile(file as File, {
@@ -167,12 +169,12 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
         onChange?.(newFileList);
         onUploadSuccess?.(response);
         onSuccess?.(response);
-        messageApi.success('文件上传成功');
+        messageApi.success(t('components.fileUpload.uploadSuccess'));
       }
     } catch (error: any) {
       onUploadError?.(error);
       onError?.(error);
-      messageApi.error(error.message || '文件上传失败');
+      messageApi.error(error.message || t('components.fileUpload.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -201,13 +203,13 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     // 检查文件大小
     if (maxSize && file.size > maxSize) {
-      messageApi.error(`文件大小超过限制（${(maxSize / 1024 / 1024).toFixed(2)}MB）`);
+      messageApi.error(t('components.fileUpload.sizeExceeded', { size: (maxSize / 1024 / 1024).toFixed(2) }));
       return Upload.LIST_IGNORE;
     }
     
     // 检查文件数量（多文件上传时）
     if (multiple && maxCount && fileList.length >= maxCount) {
-      messageApi.error(`最多只能上传 ${maxCount} 个文件`);
+      messageApi.error(t('components.fileUpload.maxCountExceeded', { count: maxCount }));
       return Upload.LIST_IGNORE;
     }
     

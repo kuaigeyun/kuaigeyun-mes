@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormJsonSchema } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, message, Card, Modal } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
@@ -33,6 +34,7 @@ import { qrcodeApi } from '../../../../services/qrcode';
  * 设备管理列表页面组件
  */
 const EquipmentListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -72,7 +74,7 @@ const EquipmentListPage: React.FC = () => {
    */
   const handleBatchGenerateQRCode = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要生成二维码的设备');
+      messageApi.warning(t('pages.system.equipment.selectEquipmentForQrcode'));
       return;
     }
 
@@ -92,7 +94,7 @@ const EquipmentListPage: React.FC = () => {
       const validEquipments = equipments.filter((eq) => eq !== null) as Equipment[];
 
       if (validEquipments.length === 0) {
-        messageApi.error('无法获取选中的设备数据');
+        messageApi.error(t('pages.system.equipment.getSelectedFailed'));
         return;
       }
 
@@ -106,11 +108,11 @@ const EquipmentListPage: React.FC = () => {
       );
 
       const qrcodes = await Promise.all(qrcodePromises);
-      messageApi.success(`成功生成 ${qrcodes.length} 个设备二维码`);
+      messageApi.success(t('pages.system.equipment.qrcodeSuccess', { count: qrcodes.length }));
       
       // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
     } catch (error: any) {
-      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+      messageApi.error(`${t('pages.system.equipment.qrcodeFailed')}: ${error.message || t('common.unknownError')}`);
     }
   };
 
@@ -159,7 +161,7 @@ const EquipmentListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取设备详情失败');
+      messageApi.error(error.message || t('pages.system.equipment.getDetailFailed'));
     }
   };
 
@@ -173,7 +175,7 @@ const EquipmentListPage: React.FC = () => {
       const detail = await getEquipmentByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取设备详情失败');
+      messageApi.error(error.message || t('pages.system.equipment.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -185,10 +187,10 @@ const EquipmentListPage: React.FC = () => {
   const handleDelete = async (record: Equipment) => {
     try {
       await deleteEquipment(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -197,13 +199,13 @@ const EquipmentListPage: React.FC = () => {
    */
   const handleBatchDelete = (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请先选择要删除的设备');
+      messageApi.warning(t('pages.system.equipment.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${keys.length} 个设备吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.equipment.confirmDeleteContent', { count: keys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -218,14 +220,14 @@ const EquipmentListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.equipment.batchDeletePartial', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个设备`);
+            messageApi.success(t('pages.system.equipment.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -240,16 +242,16 @@ const EquipmentListPage: React.FC = () => {
       
       if (isEdit && currentEquipmentUuid) {
         await updateEquipment(currentEquipmentUuid, values as UpdateEquipmentData);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createEquipment(values as CreateEquipmentData);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error; // 重新抛出错误，让 FormModalTemplate 处理
     } finally {
       setFormLoading(false);
@@ -391,7 +393,7 @@ const EquipmentListPage: React.FC = () => {
             追溯
           </Button>
           <Popconfirm
-            title="确定要删除这个设备吗？"
+            title={t('pages.system.equipment.confirmDeleteOne')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -452,7 +454,7 @@ const EquipmentListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -462,9 +464,9 @@ const EquipmentListPage: React.FC = () => {
               a.download = `equipment-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           pagination={{

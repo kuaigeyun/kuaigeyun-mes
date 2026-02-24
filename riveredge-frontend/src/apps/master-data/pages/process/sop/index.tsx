@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Divider, theme } from 'antd';
@@ -25,6 +26,7 @@ import type { ISchema } from '@formily/core';
 const { useToken } = theme;
 
 const SOPPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -132,7 +134,7 @@ const SOPPage: React.FC = () => {
       setActiveTab(initialTab ?? 'basic');
       // 注意：attachments 是 JSON 字段，这里暂时不处理，后续可以扩展为文件上传组件
     } catch (error: any) {
-      messageApi.error(error.message || '获取SOP详情失败');
+      messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
     }
   };
 
@@ -142,10 +144,10 @@ const SOPPage: React.FC = () => {
   const handleDelete = async (record: SOP) => {
     try {
       await sopApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -154,15 +156,15 @@ const SOPPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -176,21 +178,21 @@ const SOPPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -208,7 +210,7 @@ const SOPPage: React.FC = () => {
       const detail = await sopApi.get(record.uuid);
       setSopDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取SOP详情失败');
+      messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -244,11 +246,11 @@ const SOPPage: React.FC = () => {
       if (isEdit && currentSOPUuid) {
         // 更新SOP
         await sopApi.update(currentSOPUuid, payload as SOPUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         // 创建SOP
         await sopApi.create(payload as SOPCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
@@ -257,7 +259,7 @@ const SOPPage: React.FC = () => {
       setActiveTab('basic');
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

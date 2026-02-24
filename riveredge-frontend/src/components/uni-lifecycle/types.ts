@@ -29,4 +29,6 @@ export interface LifecycleResult {
   mainStages?: SubStage[];
   /** 全链路子阶段列表（如执行中 7 步），可选 */
   subStages?: SubStage[];
+  /** 当前阶段的下一步操作建议，可选 */
+  nextStepSuggestions?: string[];
 }

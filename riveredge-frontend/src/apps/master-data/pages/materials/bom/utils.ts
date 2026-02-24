@@ -118,13 +118,14 @@ export const handleAddChildNode = (
   setSelectedNodeId: (id: string) => void,
   mindMapInstanceRef: React.MutableRefObject<any>,
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
-  nodeConfigForm: any
+  nodeConfigForm: any,
+  materialNotSelectedLabel: string = '未选择物料'
 ) => {
   if (!mindMapDataRef.current) return;
 
   const newNode: MindMapNode = {
     id: `material_new_${Date.now()}`,
-    value: '未选择物料',
+    value: materialNotSelectedLabel,
     quantity: 1,
     unit: '',
     wasteRate: 0,
@@ -188,7 +189,8 @@ export const handleAddSiblingNode = (
   setSelectedNodeId: (id: string) => void,
   mindMapInstanceRef: React.MutableRefObject<any>,
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
-  nodeConfigForm: any
+  nodeConfigForm: any,
+  materialNotSelectedLabel: string = '未选择物料'
 ) => {
   if (!mindMapDataRef.current) return;
 
@@ -201,7 +203,8 @@ export const handleAddSiblingNode = (
       setSelectedNodeId,
       mindMapInstanceRef,
       selectedIdInGraphRef,
-      nodeConfigForm
+      nodeConfigForm,
+      materialNotSelectedLabel
     );
     return;
   }
@@ -213,7 +216,8 @@ export const handleAddSiblingNode = (
     setSelectedNodeId,
     mindMapInstanceRef,
     selectedIdInGraphRef,
-    nodeConfigForm
+    nodeConfigForm,
+    materialNotSelectedLabel
   );
 };
 
@@ -225,10 +229,11 @@ export const handleDeleteNode = (
   mindMapDataRef: React.MutableRefObject<MindMapNode | null>,
   setMindMapData: (data: MindMapNode) => void,
   setSelectedNodeId: (id: string | null) => void,
-  messageApi: any
+  messageApi: any,
+  t: (key: string) => string
 ) => {
   if (nodeId === 'root') {
-    messageApi.warning('不能删除根节点（主物料）');
+    messageApi.warning(t('app.master-data.bom.cannotDeleteRoot'));
     return;
   }
 
@@ -238,7 +243,7 @@ export const handleDeleteNode = (
   if (updated) {
     setMindMapData(updated as MindMapNode);
     setSelectedNodeId(null);
-    messageApi.success('节点已删除');
+    messageApi.success(t('app.master-data.bom.nodeDeleted'));
   }
 };
 

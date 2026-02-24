@@ -48,10 +48,21 @@ class DocumentTrackingService:
         Returns:
             Dict: { document_type, document_id, document_code, timeline, relations }
         """
-        document_code = await self._resolve_document_code(tenant_id, document_type, document_id)
+        document_code, doc_meta = await self._resolve_document_meta(tenant_id, document_type, document_id)
 
         timeline: List[Dict[str, Any]] = []
         relations: Dict[str, List[Dict]] = {"upstream": [], "downstream": []}
+
+        # 0. 创建记录（从单据 created_at 生成）
+        if doc_meta and doc_meta.get("created_at"):
+            creator_name = doc_meta.get("creator_name") or str(doc_meta.get("created_by", ""))
+            timeline.append({
+                "type": "create",
+                "at": doc_meta["created_at"],
+                "by": creator_name,
+                "by_id": doc_meta.get("created_by"),
+                "detail": "创建单据",
+            })
 
         # 1. StateTransitionLog
         try:
@@ -64,15 +75,37 @@ class DocumentTrackingService:
             ).order_by("transition_time").all()
 
             for log in logs:
+                is_edit = (
+                    log.from_state == log.to_state
+                    and log.transition_reason == "编辑"
+                )
+                changed_fields = []
+                field_changes = []
+                if is_edit and log.transition_comment:
+                    try:
+                        import json
+                        parsed = json.loads(log.transition_comment)
+                        changed_fields = parsed.get("changed_fields", [])
+                        field_changes = parsed.get("field_changes", [])
+                    except Exception:
+                        pass
+                if is_edit:
+                    detail = f"编辑：修改了 {', '.join(changed_fields)}" if changed_fields else "编辑订单"
+                else:
+                    detail = f"{log.from_state} → {log.to_state}"
+                is_auto_approve = log.transition_reason == "自动审核"
                 timeline.append({
-                    "type": "state_transition",
+                    "type": "edit" if is_edit else "state_transition",
                     "at": log.transition_time.isoformat() if log.transition_time else None,
                     "by": log.operator_name or str(log.operator_id),
                     "by_id": log.operator_id,
-                    "detail": f"{log.from_state} → {log.to_state}",
+                    "detail": detail,
                     "from_state": log.from_state,
                     "to_state": log.to_state,
                     "reason": log.transition_reason,
+                    "is_auto_approve": is_auto_approve,
+                    "changed_fields": changed_fields if is_edit else None,
+                    "field_changes": field_changes if is_edit else None,
                 })
         except Exception:
             pass
@@ -173,17 +206,34 @@ class DocumentTrackingService:
             "relations": relations,
         }
 
-    async def _resolve_document_code(
+    async def _resolve_document_meta(
         self, tenant_id: int, document_type: str, document_id: int
-    ) -> Optional[str]:
-        """解析单据编码"""
+    ) -> tuple:
+        """解析单据编码及元数据（created_at, created_by, creator_name）"""
         reg_dict = DOCUMENT_MODEL_REGISTRY()
         reg = reg_dict.get(document_type)
         if not reg:
-            return None
+            return None, None
         try:
             model, code_field = reg
             obj = await model.get_or_none(tenant_id=tenant_id, id=document_id)
-            return getattr(obj, code_field, None) if obj else None
+            if not obj:
+                return None, None
+            code = getattr(obj, code_field, None)
+            created_at = getattr(obj, "created_at", None)
+            created_by = getattr(obj, "created_by", None)
+            meta = None
+            if created_at is not None:
+                meta = {
+                    "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                    "created_by": created_by,
+                }
+                if created_by:
+                    try:
+                        from apps.base_service import AppBaseService
+                        meta["creator_name"] = await AppBaseService().get_user_name(created_by)
+                    except Exception:
+                        meta["creator_name"] = str(created_by)
+            return code, meta
         except Exception:
-            return None
+            return None, None

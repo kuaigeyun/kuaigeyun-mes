@@ -28,6 +28,10 @@ export interface SalesOrder {
   customer_phone?: string;
   total_quantity?: number;
   total_amount?: number;
+  /** 价格类型：含税(tax_inclusive)/不含税(tax_exclusive) */
+  price_type?: 'tax_inclusive' | 'tax_exclusive';
+  /** 整单优惠金额 */
+  discount_amount?: number;
   status?: string;
   submit_time?: string;
   reviewer_id?: number;
@@ -85,6 +89,8 @@ export interface SalesOrderItem {
   remaining_quantity?: number;
   delivery_status?: string;
   unit_price?: number;
+  /** 税率（%） */
+  tax_rate?: number;
   item_amount?: number;
   work_order_id?: number;
   work_order_code?: string;
@@ -103,6 +109,7 @@ export interface SalesOrderListParams {
   review_status?: string;
   start_date?: string;
   end_date?: string;
+  order_by?: string;
 }
 
 /**
@@ -192,18 +199,71 @@ export async function rejectSalesOrder(id: number, rejectionReason: string): Pro
 }
 
 /**
+ * 下推预览响应（通用）
+ */
+export interface PushPreviewResponse {
+  target_type: string;
+  summary: string;
+  items: { material_code: string; material_name: string; quantity: number; delivery_date?: string; suggested_action?: string }[];
+  tip?: string;
+  plan_name_preview?: string;
+  demand_exists?: boolean;
+}
+
+/**
+ * 下推需求计算预览
+ */
+export async function previewPushSalesOrderToComputation(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-computation/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
  * 下推销售订单到需求计算
  */
 export interface PushToComputationResponse {
   success: boolean;
   message: string;
-  order_code: string;
-  computation_code: string;
+  order_code?: string;
+  computation_code?: string;
   note?: string;
 }
 
 export async function pushSalesOrderToComputation(salesOrderId: number): Promise<PushToComputationResponse> {
   return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-computation`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 下推销售订单到发货通知单
+ */
+export interface PushToShipmentNoticeResponse {
+  success: boolean;
+  message: string;
+  notice_id?: number;
+  notice_code?: string;
+}
+
+export async function pushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushToShipmentNoticeResponse> {
+  return apiRequest<PushToShipmentNoticeResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-shipment-notice`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 下推销售订单到销售发票
+ */
+export interface PushToInvoiceResponse {
+  success: boolean;
+  message: string;
+  invoice_id?: number;
+  invoice_code?: string;
+}
+
+export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<PushToInvoiceResponse> {
+  return apiRequest<PushToInvoiceResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-invoice`, {
     method: 'POST',
   });
 }
@@ -215,6 +275,78 @@ export async function withdrawSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/withdraw`, {
     method: 'POST',
   });
+}
+
+/**
+ * 直推生产计划预览
+ */
+export async function previewPushSalesOrderToProductionPlan(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-production-plan/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 直推销售订单到生产计划（跳过需求计算）
+ * 订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购
+ */
+export interface PushToProductionPlanResponse {
+  success: boolean;
+  message: string;
+  target_document?: { type: string; id: number; code: string };
+}
+
+export async function pushSalesOrderToProductionPlan(salesOrderId: number): Promise<PushToProductionPlanResponse> {
+  return apiRequest<PushToProductionPlanResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-production-plan`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 直推工单预览
+ */
+export async function previewPushSalesOrderToWorkOrder(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-work-order/preview`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 直推销售订单到工单（跳过需求计算）
+ * 订单明细直接转为工单，不要求BOM，原材料由用户自行计算采购
+ */
+export interface PushToWorkOrderResponse {
+  success: boolean;
+  message: string;
+  target_documents?: { type: string; id: number; code: string }[];
+}
+
+export async function pushSalesOrderToWorkOrder(salesOrderId: number): Promise<PushToWorkOrderResponse> {
+  return apiRequest<PushToWorkOrderResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-work-order`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 发送销售订单提醒
+ */
+export interface SalesOrderRemindCreate {
+  recipient_user_uuid: string;
+  action_type: string;
+  remarks?: string;
+}
+
+export async function createSalesOrderReminder(
+  salesOrderId: number,
+  data: SalesOrderRemindCreate
+): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/remind`,
+    {
+      method: 'POST',
+      data,
+    }
+  );
 }
 
 /**

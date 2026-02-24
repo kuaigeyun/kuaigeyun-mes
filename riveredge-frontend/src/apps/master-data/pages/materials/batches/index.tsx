@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
@@ -40,6 +41,7 @@ const BATCH_STATUS_OPTIONS = [
  * 物料批号管理列表页面组件
  */
 const MaterialBatchPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
@@ -119,7 +121,7 @@ const MaterialBatchPage: React.FC = () => {
         remark: detail.remark,
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取批号详情失败');
+      messageApi.error(error.message || t('app.master-data.batches.getDetailFailed'));
     }
   };
 
@@ -139,7 +141,7 @@ const MaterialBatchPage: React.FC = () => {
           setSearchParams({}, { replace: true });
         })
         .catch((error) => {
-          messageApi.error('获取批号记录失败');
+          messageApi.error(t('app.master-data.batches.getRecordFailed'));
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,7 +152,7 @@ const MaterialBatchPage: React.FC = () => {
    */
   const handleBatchGenerateQRCode = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要生成二维码的批号记录');
+      messageApi.warning(t('app.master-data.batches.selectForQRCode'));
       return;
     }
 
@@ -170,7 +172,7 @@ const MaterialBatchPage: React.FC = () => {
       const validBatches = batches.filter((batch) => batch !== null) as MaterialBatch[];
 
       if (validBatches.length === 0) {
-        messageApi.error('无法获取选中的批号记录数据');
+        messageApi.error(t('app.master-data.batches.getSelectedFailed'));
         return;
       }
 
@@ -184,11 +186,11 @@ const MaterialBatchPage: React.FC = () => {
       );
 
       const qrcodes = await Promise.all(qrcodePromises);
-      messageApi.success(`成功生成 ${qrcodes.length} 个追溯二维码`);
+      messageApi.success(t('app.master-data.batches.qrCodeGenerated', { count: qrcodes.length }));
       
       // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
     } catch (error: any) {
-      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+      messageApi.error(`${t('app.master-data.batches.batchGenerateQrCodeFailed')}: ${error.message || t('common.unknownError')}`);
     }
   };
 
@@ -202,7 +204,7 @@ const MaterialBatchPage: React.FC = () => {
       setCurrentBatch(detail);
       setDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取批号详情失败');
+      messageApi.error(error.message || t('app.master-data.batches.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -214,10 +216,10 @@ const MaterialBatchPage: React.FC = () => {
   const handleDelete = async (record: MaterialBatch) => {
     try {
       await materialBatchApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -226,15 +228,15 @@ const MaterialBatchPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -248,21 +250,21 @@ const MaterialBatchPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -277,16 +279,16 @@ const MaterialBatchPage: React.FC = () => {
       
       if (isEdit && currentBatchUuid) {
         await materialBatchApi.update(currentBatchUuid, values as MaterialBatchUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await materialBatchApi.create(values as MaterialBatchCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
       throw error;
     } finally {
       setFormLoading(false);
@@ -298,7 +300,7 @@ const MaterialBatchPage: React.FC = () => {
    */
   const handleGenerateBatchNo = async () => {
     if (!selectedMaterialUuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.master-data.batches.selectMaterial'));
       return;
     }
     
@@ -310,9 +312,9 @@ const MaterialBatchPage: React.FC = () => {
         batchNo: result.batch_no,
         materialUuid: selectedMaterialUuid,
       });
-      messageApi.success('批号生成成功');
+      messageApi.success(t('app.master-data.batches.generateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '生成批号失败');
+      messageApi.error(error.message || t('app.master-data.batches.generateFailed'));
     }
   };
 

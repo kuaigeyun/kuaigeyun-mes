@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Card, Spin, message } from 'antd';
 import { QRCodeScanner } from '../../components/qrcode';
@@ -17,6 +18,7 @@ import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
  * 二维码扫描页面组件
  */
 const QRCodeScanPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -35,9 +37,9 @@ const QRCodeScanPage: React.FC = () => {
           const materialUuid = data.material_uuid;
           if (materialUuid) {
             navigate(`/apps/master-data/materials?uuid=${materialUuid}&action=detail`);
-            messageApi.success('正在跳转到物料详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToMaterial'));
           } else {
-            messageApi.error('物料二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.materialDataIncomplete'));
           }
           break;
         }
@@ -46,9 +48,9 @@ const QRCodeScanPage: React.FC = () => {
           const workOrderUuid = data.work_order_uuid;
           if (workOrderUuid) {
             navigate(`/apps/kuaizhizao/production-execution/work-orders?uuid=${workOrderUuid}&action=detail`);
-            messageApi.success('正在跳转到工单详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToWorkOrder'));
           } else {
-            messageApi.error('工单二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.workOrderDataIncomplete'));
           }
           break;
         }
@@ -57,9 +59,9 @@ const QRCodeScanPage: React.FC = () => {
           const operationUuid = data.operation_uuid;
           if (operationUuid) {
             navigate(`/apps/master-data/process/operations?operationUuid=${operationUuid}&action=detail`);
-            messageApi.success('正在跳转到工序详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToOperation'));
           } else {
-            messageApi.error('工序二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.operationDataIncomplete'));
           }
           break;
         }
@@ -68,9 +70,9 @@ const QRCodeScanPage: React.FC = () => {
           const equipmentUuid = data.equipment_uuid;
           if (equipmentUuid) {
             navigate(`/system/equipment?uuid=${equipmentUuid}&action=detail`);
-            messageApi.success('正在跳转到设备详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToEquipment'));
           } else {
-            messageApi.error('设备二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.equipmentDataIncomplete'));
           }
           break;
         }
@@ -79,9 +81,9 @@ const QRCodeScanPage: React.FC = () => {
           const employeeUuid = data.employee_uuid;
           if (employeeUuid) {
             navigate(`/system/users?uuid=${employeeUuid}&action=detail`);
-            messageApi.success('正在跳转到人员详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToEmployee'));
           } else {
-            messageApi.error('人员二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.employeeDataIncomplete'));
           }
           break;
         }
@@ -90,9 +92,9 @@ const QRCodeScanPage: React.FC = () => {
           const boxUuid = data.box_uuid;
           if (boxUuid) {
             navigate(`/apps/kuaizhizao/warehouse-management/packing?uuid=${boxUuid}&action=detail`);
-            messageApi.success('正在跳转到装箱详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToBox'));
           } else {
-            messageApi.error('装箱二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.boxDataIncomplete'));
           }
           break;
         }
@@ -101,17 +103,17 @@ const QRCodeScanPage: React.FC = () => {
           const traceUuid = data.trace_uuid;
           if (traceUuid) {
             navigate(`/apps/kuaizhizao/quality-management/trace?uuid=${traceUuid}&action=detail`);
-            messageApi.success('正在跳转到追溯详情...');
+            messageApi.success(t('pages.qrcode.scan.navigatingToTrace'));
           } else {
-            messageApi.error('追溯二维码数据不完整');
+            messageApi.error(t('pages.qrcode.scan.traceDataIncomplete'));
           }
           break;
         }
         default:
-          messageApi.warning(`未知的二维码类型: ${qrcode_type}`);
+          messageApi.warning(t('pages.qrcode.scan.unknownType', { type: qrcode_type }));
       }
     } catch (error: any) {
-      messageApi.error(`处理二维码失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('pages.qrcode.scan.processFailed', { error: error.message || t('common.unknownError') }));
     }
   };
 
@@ -125,7 +127,7 @@ const QRCodeScanPage: React.FC = () => {
       qrcodeApi.parse({ qrcode_text: qrcodeText })
         .then(handleScanSuccess)
         .catch((error: any) => {
-          messageApi.error(`解析二维码失败: ${error.message || '未知错误'}`);
+          messageApi.error(t('pages.qrcode.scan.parseFailed', { error: error.message || t('common.unknownError') }));
         });
     }
   }, [searchParams]);

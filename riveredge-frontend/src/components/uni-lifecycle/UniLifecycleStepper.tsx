@@ -6,6 +6,8 @@
 
 import React from 'react';
 import { Tooltip } from 'antd';
+import { BulbOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { SubStage } from './types';
 
 export interface UniLifecycleStepperProps {
@@ -19,6 +21,8 @@ export interface UniLifecycleStepperProps {
   showLabels?: boolean;
   /** 圆环内文字字号（默认 9，非常小） */
   innerFontSize?: number;
+  /** 当前阶段的下一步操作建议，可选 */
+  nextStepSuggestions?: string[];
 }
 
 const NODE_SIZE = 40;
@@ -99,36 +103,57 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
   nodeSize = NODE_SIZE,
   showLabels = true,
   innerFontSize = INNER_FONT_SIZE,
+  nextStepSuggestions,
 }) => {
+  const { t } = useTranslation();
   const isException = status === 'exception';
   if (!steps.length) return null;
 
   return (
-    <div className="uni-lifecycle-stepper" style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 0 }}>
-      {steps.map((step, idx) => (
-        <React.Fragment key={step.key}>
-          {idx > 0 && (
-            <span
-              style={{
-                alignSelf: 'center',
-                width: LINE_WIDTH,
-                minWidth: LINE_WIDTH,
-                height: LINE_HEIGHT,
-                backgroundColor: 'var(--ant-color-border)',
-                marginBottom: showLabels ? 20 : 0,
-              }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="uni-lifecycle-stepper" style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 0 }}>
+        {steps.map((step, idx) => (
+          <React.Fragment key={step.key}>
+            {idx > 0 && (
+              <span
+                style={{
+                  alignSelf: 'center',
+                  width: LINE_WIDTH,
+                  minWidth: LINE_WIDTH,
+                  height: LINE_HEIGHT,
+                  backgroundColor: 'var(--ant-color-border)',
+                  marginBottom: showLabels ? 20 : 0,
+                }}
+              />
+            )}
+            <NodeCircle
+              status={step.status}
+              isException={isException && step.status === 'active'}
+              size={nodeSize}
+              label={step.label}
+              showLabelBelow={showLabels}
+              innerFontSize={innerFontSize}
             />
-          )}
-          <NodeCircle
-            status={step.status}
-            isException={isException && step.status === 'active'}
-            size={nodeSize}
-            label={step.label}
-            showLabelBelow={showLabels}
-            innerFontSize={innerFontSize}
-          />
-        </React.Fragment>
-      ))}
+          </React.Fragment>
+        ))}
+      </div>
+      {nextStepSuggestions && nextStepSuggestions.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 6,
+            fontSize: 12,
+            color: 'var(--ant-color-text-secondary)',
+          }}
+        >
+          <BulbOutlined style={{ marginTop: 2, color: 'var(--ant-color-warning)' }} />
+          <span>
+            <span style={{ fontWeight: 500 }}>{t('components.uniLifecycle.nextStep')}：</span>
+            {nextStepSuggestions.join(t('components.uniLifecycle.nextStepSeparator'))}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

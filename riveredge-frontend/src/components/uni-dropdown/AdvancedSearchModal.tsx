@@ -96,7 +96,7 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
       onCancel={handleClose}
       footer={null}
       width={480}
-      destroyOnClose
+      destroyOnHidden
       styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
     >
       <Form form={form} layout="vertical" onFinish={handleSearch}>

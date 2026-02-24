@@ -28,8 +28,9 @@ class SalesOrderItemBase(BaseSchema):
     material_unit: Optional[str] = Field(None, max_length=20, description="物料单位")
     required_quantity: Decimal = Field(..., gt=0, description="需求数量")
     delivery_date: date = Field(..., description="交货日期")
-    unit_price: Optional[Decimal] = Field(None, ge=0, description="单价")
-    item_amount: Optional[Decimal] = Field(None, ge=0, description="金额")
+    unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
+    item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -48,6 +49,7 @@ class SalesOrderItemUpdate(BaseSchema):
     required_quantity: Optional[Decimal] = Field(None, gt=0)
     delivery_date: Optional[date] = None
     unit_price: Optional[Decimal] = Field(None, ge=0)
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     item_amount: Optional[Decimal] = Field(None, ge=0)
     notes: Optional[str] = None
 
@@ -88,6 +90,8 @@ class SalesOrderBase(BaseSchema):
     # 金额信息
     total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
+    price_type: Optional[str] = Field("tax_exclusive", max_length=20, description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)")
+    discount_amount: Decimal = Field(Decimal("0"), ge=0, description="整单优惠金额")
     
     # 状态
     status: DemandStatus = Field(DemandStatus.DRAFT, description="订单状态")
@@ -128,7 +132,7 @@ class SalesOrderCreate(SalesOrderBase):
 
 
 class SalesOrderUpdate(BaseSchema):
-    """更新销售订单schema"""
+    """更新销售订单schema。status/review_status 由工作流控制，不允许客户端直接修改。"""
     order_name: Optional[str] = Field(None, max_length=200)
     order_date: Optional[date] = None
     delivery_date: Optional[date] = None
@@ -138,7 +142,8 @@ class SalesOrderUpdate(BaseSchema):
     customer_phone: Optional[str] = Field(None, max_length=20)
     total_quantity: Optional[Decimal] = Field(None, ge=0)
     total_amount: Optional[Decimal] = Field(None, ge=0)
-    status: Optional[str] = Field(None, max_length=20)
+    price_type: Optional[str] = Field(None, max_length=20)
+    discount_amount: Optional[Decimal] = Field(None, ge=0)
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = Field(None, max_length=100)
     shipping_address: Optional[str] = None
@@ -178,3 +183,10 @@ class SalesOrderListResponse(BaseSchema):
     data: List[SalesOrderResponse]
     total: int
     success: bool = True
+
+
+class SalesOrderRemindCreate(BaseSchema):
+    """销售订单提醒创建schema"""
+    recipient_user_uuid: str = Field(..., description="提醒对象（用户UUID）")
+    action_type: str = Field(..., description="提醒操作：review/delivery/invoice/follow_up/other")
+    remarks: Optional[str] = Field(None, max_length=500, description="备注")

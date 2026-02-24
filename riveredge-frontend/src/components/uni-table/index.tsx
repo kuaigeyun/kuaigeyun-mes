@@ -496,6 +496,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 为 false 时表格直接展示数据，无 loading 遮罩
    */
   showLoading?: boolean
+  /**
+   * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
+   * middle 为 Ant Design 默认尺寸
+   */
+  toolBarButtonSize?: 'large' | 'middle' | 'small'
 }
 
 /**
@@ -547,6 +552,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   kanbanViewConfig,
   statsViewConfig,
   touchViewConfig,
+  toolBarButtonSize,
   loadingDelay: loadingDelayProp,
   showLoading = false,
   actionRef: externalActionRef,
@@ -951,7 +957,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     // 新建按钮（第一位）
     if (showCreateButton && onCreate) {
       actions.push(
-        <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate}>
+        <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
           {createButtonText ?? t('components.uniTable.create')}
         </Button>
       )
@@ -964,6 +970,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           key="delete"
           danger
           icon={<DeleteOutlined />}
+          size={toolBarButtonSize}
           onClick={() => {
             if (selectedRowKeys.length > 0) {
               onDelete(selectedRowKeys)
@@ -982,6 +989,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           key="edit"
           icon={<EditOutlined />}
+          size={toolBarButtonSize}
           onClick={() => {
             if (selectedRowKeys.length === 1) {
               onEdit(selectedRowKeys)
@@ -1031,6 +1039,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           key="import"
           icon={<UploadOutlined />}
+          size={toolBarButtonSize}
           onClick={handleImportClick}
           style={{
             backgroundColor: token.colorSuccessBg || token.colorFillTertiary,
@@ -1058,6 +1067,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           key="sync"
           icon={<SyncOutlined />}
+          size={toolBarButtonSize}
           onClick={() => (onSync ? onSync() : message.warning(t('components.uniTable.configOnSync')))}
           style={{
             backgroundColor: token.colorWarningBg || token.colorFillTertiary,
@@ -1131,6 +1141,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         >
           <Button
             icon={<DownloadOutlined />}
+            size={toolBarButtonSize}
             style={{
               backgroundColor: token.colorPrimaryBg || token.colorFillTertiary,
               border: 'none',

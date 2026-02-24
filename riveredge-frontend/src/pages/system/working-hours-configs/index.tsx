@@ -96,7 +96,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
           remarks: detailData.remarks,
         });
       } catch (error) {
-        messageApi.error('获取配置详情失败');
+        messageApi.error(t('pages.system.workingHoursConfigs.getDetailFailed'));
       }
     }
   };

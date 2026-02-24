@@ -48,7 +48,7 @@ function isRejected(reviewStatus: string | undefined): boolean {
 
 function isApproved(reviewStatus: string | undefined): boolean {
   const r = norm(reviewStatus);
-  return r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过';
+  return r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过' || r === '已审核';
 }
 
 function isCancelled(status: string | undefined): boolean {
@@ -186,13 +186,31 @@ import { parseBackendLifecycle } from './backendLifecycle';
 export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) {
-    return parseBackendLifecycle(backend);
+    const result = parseBackendLifecycle(backend);
+    // 兜底：当 record 的 status/review_status 已表明已审核，但 lifecycle 仍为待审核时（如列表未刷新），以 record 为准
+    const s = norm(record?.status);
+    const r = norm(record?.review_status);
+    const isRecordAudited = (s === 'AUDITED' || s === '已审核') && (r === 'APPROVED' || r === '审核通过' || r === '通过' || r === '已通过');
+    if (isRecordAudited && result.stageName === '待审核') {
+      return { ...result, stageName: '已审核', mainStages: buildMainStages('已审核', false) };
+    }
+    return result;
   }
   const status = norm(record?.status);
   const reviewStatus = norm(record?.review_status);
   const delivery = deliveryProgress(record);
   const invoice = invoiceProgress(record);
   const isException = (s?: string) => s === 'exception';
+
+  const EXEC_SUGGESTIONS: Record<string, string[]> = {
+    bom_check: ['完成 BOM 检查'],
+    demand_compute: ['执行需求计算（MRP）'],
+    material_ready: ['确认物料齐套'],
+    work_order_create: ['建立工单'],
+    work_order_exec: ['执行工单生产'],
+    product_inbound: ['成品入库'],
+    sales_delivery: ['销售出库/交货'],
+  };
 
   // 异常分支
   if (isRejected(reviewStatus)) {
@@ -201,6 +219,7 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       stageName: '已驳回',
       status: 'exception',
       mainStages: buildMainStages('已驳回', true),
+      nextStepSuggestions: ['修改订单后重新提交审核'],
     };
   }
   if (isCancelled(status)) {
@@ -209,18 +228,24 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       stageName: '已取消',
       status: 'exception',
       mainStages: buildMainStages('已取消', true),
+      nextStepSuggestions: [],
     };
   }
 
   // 主流程
   if (isDraft(status)) {
-    return { percent: 0, stageName: '草稿', mainStages: buildMainStages('草稿', false) };
+    return { percent: 0, stageName: '草稿', mainStages: buildMainStages('草稿', false), nextStepSuggestions: ['提交审核'] };
   }
-  if (isPendingReview(status)) {
-    return { percent: 15, stageName: '待审核', mainStages: buildMainStages('待审核', false) };
+  // 兜底：status 可能仍为 PENDING_REVIEW 但 review_status 已 APPROVED（数据不同步），以 review_status 为准
+  if (isPendingReview(status) && isApproved(reviewStatus)) {
+    return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] };
+  }
+  // 以 review_status 为准：若已审核通过则显示已审核，避免 status 未同步导致 lifecycle 显示待审核
+  if (isPendingReview(status) && !isApproved(reviewStatus)) {
+    return { percent: 15, stageName: '待审核', mainStages: buildMainStages('待审核', false), nextStepSuggestions: ['审核通过', '驳回'] };
   }
   if (isAudited(status) && !isEffective(record)) {
-    return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false) };
+    return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false), nextStepSuggestions: ['下推需求计算'] };
   }
   if (isEffective(record) && delivery >= 100 && invoice >= 100) {
     return {
@@ -228,6 +253,7 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       stageName: '已完成',
       status: 'success',
       mainStages: buildMainStages('已完成', false),
+      nextStepSuggestions: [],
     };
   }
   if (isEffective(record) && delivery >= 100 && invoice < 100) {
@@ -237,11 +263,27 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       subPercent: invoice,
       subLabel: '开票',
       mainStages: buildMainStages('已交货', false),
+      nextStepSuggestions: ['下推销售发票'],
     };
+  }
+  /** 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度） */
+  if (isEffective(record) && delivery <= 0) {
+    const hasWO = hasWorkOrder(record);
+    const pushed = !!record.pushed_to_computation;
+    if (!pushed && !hasWO) {
+      return {
+        percent: 50,
+        stageName: '已生效',
+        mainStages: buildMainStages('已生效', false),
+        nextStepSuggestions: ['前往需求计算执行 MRP', '建立工单'],
+      };
+    }
   }
   if (isEffective(record) && delivery < 100) {
     const subStages = buildExecutionSubStages(record);
     const percentBlend = 50 + (delivery / 100) * 25;
+    const activeKey = subStages.find((s) => s.status === 'active')?.key;
+    const suggestions = (activeKey && EXEC_SUGGESTIONS[activeKey]) || ['推进执行进度'];
     return {
       percent: percentBlend,
       stageName: '执行中',
@@ -249,12 +291,14 @@ export function getSalesOrderLifecycle(record: SalesOrder): LifecycleResult {
       subLabel: currentSubStageLabel(subStages),
       mainStages: buildMainStages('执行中', false),
       subStages,
+      nextStepSuggestions: suggestions,
     };
   }
 
-  if (isEffective(record)) {
-    return { percent: 50, stageName: '已生效', mainStages: buildMainStages('已生效', false) };
-  }
-
-  return { percent: 30, stageName: '已审核', mainStages: buildMainStages('已审核', false) };
+  return {
+    percent: 30,
+    stageName: '已审核',
+    mainStages: buildMainStages('已审核', false),
+    nextStepSuggestions: ['下推需求计算'],
+  };
 }

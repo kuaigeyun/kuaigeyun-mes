@@ -461,4 +461,9 @@ async def delete_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
 

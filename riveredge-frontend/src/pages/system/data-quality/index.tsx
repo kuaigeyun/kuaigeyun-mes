@@ -8,6 +8,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Table, Tag, Space, Typography, Button, Progress, Alert, List, Empty } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -20,6 +21,7 @@ const { Title, Paragraph, Text } = Typography;
  * 数据质量保障页面组件
  */
 const DataQualityPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [importVisible, setImportVisible] = useState(false);
@@ -35,14 +37,14 @@ const DataQualityPage: React.FC = () => {
    */
   const handleImportConfirm = (data: any[][]) => {
     if (data.length === 0) {
-      messageApi.error('请至少填写一行数据');
+      messageApi.error(t('pages.system.dataQuality.importAtLeastOneRow'));
       return;
     }
     
     setImportData(data);
     setHeaders(data[0] || []);
     setImportVisible(false);
-    messageApi.success('数据导入成功，请进行验证');
+    messageApi.success(t('pages.system.dataQuality.importSuccess'));
   };
 
   /**
@@ -50,7 +52,7 @@ const DataQualityPage: React.FC = () => {
    */
   const handleValidate = async () => {
     if (importData.length === 0) {
-      messageApi.warning('请先导入数据');
+      messageApi.warning(t('pages.system.dataQuality.importDataFirst'));
       return;
     }
 
@@ -65,9 +67,9 @@ const DataQualityPage: React.FC = () => {
       });
       setValidationReport(report);
       setActiveTab('validate');
-      messageApi.success('数据验证完成');
+      messageApi.success(t('pages.system.dataQuality.validateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '数据验证失败');
+      messageApi.error(error.message || t('pages.system.dataQuality.validateFailed'));
     } finally {
       setLoading(false);
     }
@@ -78,7 +80,7 @@ const DataQualityPage: React.FC = () => {
    */
   const handleDetectIssues = async () => {
     if (importData.length === 0) {
-      messageApi.warning('请先导入数据');
+      messageApi.warning(t('pages.system.dataQuality.importDataFirst'));
       return;
     }
 
@@ -91,9 +93,9 @@ const DataQualityPage: React.FC = () => {
       });
       setCleaningSuggestions(suggestions);
       setActiveTab('cleaning');
-      messageApi.success('数据问题检测完成');
+      messageApi.success(t('pages.system.dataQuality.detectSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '检测数据问题失败');
+      messageApi.error(error.message || t('pages.system.dataQuality.detectFailed'));
     } finally {
       setLoading(false);
     }
@@ -104,7 +106,7 @@ const DataQualityPage: React.FC = () => {
    */
   const handleGenerateReport = async () => {
     if (importData.length === 0) {
-      messageApi.warning('请先导入数据');
+      messageApi.warning(t('pages.system.dataQuality.importDataFirst'));
       return;
     }
 
@@ -126,9 +128,9 @@ const DataQualityPage: React.FC = () => {
       );
       setQualityReport(report);
       setActiveTab('report');
-      messageApi.success('数据质量报告生成完成');
+      messageApi.success(t('pages.system.dataQuality.reportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '生成数据质量报告失败');
+      messageApi.error(error.message || t('pages.system.dataQuality.reportFailed'));
     } finally {
       setLoading(false);
     }

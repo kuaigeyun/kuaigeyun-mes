@@ -400,7 +400,14 @@ const DataDictionaryListPage: React.FC = () => {
             title={t('field.dataDictionary.itemDeleteConfirm')}
             onConfirm={() => handleDeleteItem(record)}
           >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              disabled={currentDictionaryForItems?.is_system}
+              title={currentDictionaryForItems?.is_system ? t('field.dataDictionary.systemItemNoDelete') : undefined}
+            >
               {t('field.dataDictionary.delete')}
             </Button>
           </Popconfirm>

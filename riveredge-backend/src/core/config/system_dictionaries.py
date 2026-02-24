@@ -152,4 +152,31 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "(UTC+13:00) 努库阿洛法", "value": "Pacific/Tongatapu", "description": "努库阿洛法", "sort_order": 37},
         ],
     },
+    {
+        "code": "SHIPPING_METHOD",
+        "name": "发货方式",
+        "description": "销售订单、出库单等单据的发货方式",
+        "items": [
+            {"label": "快递", "value": "EXPRESS", "description": "快递配送", "sort_order": 1},
+            {"label": "物流", "value": "LOGISTICS", "description": "物流配送", "sort_order": 2},
+            {"label": "自提", "value": "SELF_PICKUP", "description": "客户自提", "sort_order": 3},
+            {"label": "专车配送", "value": "DEDICATED", "description": "专车配送", "sort_order": 4},
+            {"label": "空运", "value": "AIR", "description": "航空运输", "sort_order": 5},
+            {"label": "海运", "value": "SEA", "description": "海运", "sort_order": 6},
+        ],
+    },
+    {
+        "code": "PAYMENT_TERMS",
+        "name": "付款条件",
+        "description": "销售订单、采购订单等单据的付款条件",
+        "items": [
+            {"label": "月结30天", "value": "NET30", "description": "月结30天", "sort_order": 1},
+            {"label": "月结60天", "value": "NET60", "description": "月结60天", "sort_order": 2},
+            {"label": "货到付款", "value": "COD", "description": "货到付款", "sort_order": 3},
+            {"label": "预付", "value": "PREPAID", "description": "预付全款", "sort_order": 4},
+            {"label": "预付30%", "value": "PREPAID_30", "description": "预付30%定金", "sort_order": 5},
+            {"label": "账期30天", "value": "CREDIT_30", "description": "账期30天", "sort_order": 6},
+            {"label": "账期60天", "value": "CREDIT_60", "description": "账期60天", "sort_order": 7},
+        ],
+    },
 ]

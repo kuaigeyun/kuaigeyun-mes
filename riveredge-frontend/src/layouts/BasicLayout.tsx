@@ -2476,7 +2476,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           line-height: 14px;
           min-width: 14px;
           height: 14px;
-          padding: 0 4px;
+          padding: 0 2px;
         }
         /* 使用 ProLayout 原生收起按钮，保持原生行为 */
         /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */

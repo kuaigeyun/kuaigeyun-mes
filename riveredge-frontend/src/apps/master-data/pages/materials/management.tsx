@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   App,
@@ -67,6 +68,7 @@ import { getFileDownloadUrl } from '../../../../services/file'
  * 物料管理合并页面组件
  */
 const MaterialsManagementPage: React.FC = () => {
+  const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -148,14 +150,14 @@ const MaterialsManagementPage: React.FC = () => {
 
     return [
       {
-        title: '全部物料',
+        title: t('app.master-data.materials.allMaterials'),
         key: 'all',
         icon: <FolderOutlined />,
         isLeaf: false,
         children: treeResponse.map(convertNode),
       },
     ]
-  }, [])
+  }, [t])
 
   /**
    * 递归收集所有节点的key
@@ -195,7 +197,7 @@ const MaterialsManagementPage: React.FC = () => {
       setExpandedKeys(allKeys)
     } catch (error: any) {
       console.error('加载物料分组树形结构失败:', error)
-      messageApi.error('加载物料分组失败')
+      messageApi.error(t('app.master-data.materials.loadGroupFailed'))
     } finally {
       setMaterialGroupsLoading(false)
     }
@@ -399,10 +401,10 @@ const MaterialsManagementPage: React.FC = () => {
     async (group: MaterialGroup) => {
       try {
         await materialGroupApi.delete(group.uuid)
-        messageApi.success('删除成功')
+        messageApi.success(t('common.deleteSuccess'))
         loadMaterialGroups()
       } catch (error: any) {
-        messageApi.error(error.message || '删除失败')
+        messageApi.error(error.message || t('common.deleteFailed'))
       }
     },
     [messageApi, loadMaterialGroups]
@@ -414,16 +416,16 @@ const MaterialsManagementPage: React.FC = () => {
 
       if (groupIsEdit && currentGroup) {
         await materialGroupApi.update(currentGroup.uuid, values as MaterialGroupUpdate)
-        messageApi.success('更新成功')
+        messageApi.success(t('common.updateSuccess'))
       } else {
         await materialGroupApi.create(values as MaterialGroupCreate)
-        messageApi.success('创建成功')
+        messageApi.success(t('common.createSuccess'))
       }
 
       setGroupModalVisible(false)
       loadMaterialGroups()
     } catch (error: any) {
-      messageApi.error(error.message || (groupIsEdit ? '更新失败' : '创建失败'))
+      messageApi.error(error.message || (groupIsEdit ? t('common.updateFailed') : t('common.createFailed')))
     } finally {
       setGroupFormLoading(false)
     }
@@ -448,7 +450,7 @@ const MaterialsManagementPage: React.FC = () => {
         setCurrentMaterial(detail)
         setMaterialModalVisible(true)
       } catch (error: any) {
-        messageApi.error(error.message || '获取物料详情失败')
+        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
       }
     },
     [messageApi]
@@ -463,7 +465,7 @@ const MaterialsManagementPage: React.FC = () => {
         setCurrentMaterial(detail)
         setMaterialDrawerVisible(true)
       } catch (error: any) {
-        messageApi.error(error.message || '获取物料详情失败')
+        messageApi.error(error.message || t('app.master-data.materials.getDetailFailed'))
       } finally {
         setMaterialDetailLoading(false)
       }
@@ -476,7 +478,7 @@ const MaterialsManagementPage: React.FC = () => {
    */
   const handleBatchGenerateQRCode = useCallback(async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要生成二维码的物料')
+      messageApi.warning(t('app.master-data.materials.selectForQRCode'))
       return
     }
 
@@ -496,7 +498,7 @@ const MaterialsManagementPage: React.FC = () => {
       const validMaterials = materials.filter(m => m !== null) as Material[]
 
       if (validMaterials.length === 0) {
-        messageApi.error('无法获取选中的物料数据')
+        messageApi.error(t('app.master-data.materials.getSelectedFailed'))
         return
       }
 
@@ -510,11 +512,11 @@ const MaterialsManagementPage: React.FC = () => {
       )
 
       const qrcodes = await Promise.all(qrcodePromises)
-      messageApi.success(`成功生成 ${qrcodes.length} 个物料二维码`)
+      messageApi.success(t('app.master-data.materials.qrCodeGenerated', { count: qrcodes.length }))
 
       // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
     } catch (error: any) {
-      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`)
+      messageApi.error(`${t('app.master-data.materials.batchQrCodeFailed')}: ${error.message || t('common.unknownError')}`)
     }
   }, [selectedRowKeys, messageApi])
 
@@ -522,10 +524,10 @@ const MaterialsManagementPage: React.FC = () => {
     async (record: Material) => {
       try {
         await materialApi.delete(record.uuid)
-        messageApi.success('删除成功')
+        messageApi.success(t('common.deleteSuccess'))
         actionRef.current?.reload()
       } catch (error: any) {
-        messageApi.error(error.message || '删除失败')
+        messageApi.error(error.message || t('common.deleteFailed'))
       }
     },
     [messageApi]
@@ -536,15 +538,15 @@ const MaterialsManagementPage: React.FC = () => {
    */
   const handleBatchDelete = useCallback(() => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录')
+      messageApi.warning(t('common.selectToDelete'))
       return
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -558,23 +560,21 @@ const MaterialsManagementPage: React.FC = () => {
               successCount++
             } catch (error: any) {
               failCount++
-              errors.push(error.message || '删除失败')
+              errors.push(error.message || t('common.deleteFailed'))
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`)
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }))
           }
           if (failCount > 0) {
-            messageApi.error(
-              `删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`
-            )
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }))
           }
 
           setSelectedRowKeys([])
           actionRef.current?.reload()
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败')
+          messageApi.error(error.message || t('common.batchDeleteFailed'))
         }
       },
     })
@@ -586,7 +586,7 @@ const MaterialsManagementPage: React.FC = () => {
 
       if (materialIsEdit && currentMaterial) {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate)
-        messageApi.success('更新成功，可在右上角「消息通知」或「个人中心-消息」中查看物料变更提示')
+        messageApi.success(t('app.master-data.materials.updateSuccessNotify'))
       } else {
         // 新建物料时，如果启用了自动编码，不传递编码，让后端自动生成
         // 这样序号只在真正创建成功时才更新（表单可能传 mainCode 或 main_code）
@@ -596,13 +596,13 @@ const MaterialsManagementPage: React.FC = () => {
           delete submitValues.main_code
         }
         await materialApi.create(submitValues as MaterialCreate)
-        messageApi.success('创建成功')
+        messageApi.success(t('common.createSuccess'))
       }
 
       setMaterialModalVisible(false)
       actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || (materialIsEdit ? '更新失败' : '创建失败'))
+      messageApi.error(error.message || (materialIsEdit ? t('common.updateFailed') : t('common.createFailed')))
     } finally {
       setMaterialFormLoading(false)
     }
@@ -623,19 +623,19 @@ const MaterialsManagementPage: React.FC = () => {
   const columns = useMemo<ProColumns<Material>[]>(
     () => [
       {
-        title: '物料编码',
+        title: t('app.master-data.materials.materialCode'),
         dataIndex: ['mainCode', 'code'],
         width: 150,
         fixed: 'left',
         render: (_, record) => (record as any).mainCode || (record as any).code || '-',
       },
       {
-        title: '物料名称',
+        title: t('app.master-data.materials.materialName'),
         dataIndex: 'name',
         width: 200,
       },
       {
-        title: '产品图片',
+        title: t('app.master-data.materials.productImage'),
         dataIndex: 'images',
         width: 100,
         hideInSearch: true,
@@ -647,7 +647,7 @@ const MaterialsManagementPage: React.FC = () => {
             return (
               <Image
                 src={url}
-                alt={firstImage.name || '图片'}
+                alt={firstImage.name || t('app.master-data.materials.image')}
                 width={40}
                 height={40}
                 style={{ objectFit: 'cover', borderRadius: 4 }}
@@ -659,7 +659,7 @@ const MaterialsManagementPage: React.FC = () => {
         },
       },
       {
-        title: '物料分组',
+        title: t('app.master-data.materials.materialGroup'),
         dataIndex: 'groupId',
         width: 150,
         valueType: 'select',
@@ -673,7 +673,7 @@ const MaterialsManagementPage: React.FC = () => {
         render: (_, record) => getMaterialGroupName(record.groupId),
       },
       {
-        title: '工艺路线',
+        title: t('app.master-data.materials.processRoute'),
         dataIndex: ['processRouteName', 'process_route_name'],
         width: 140,
         hideInSearch: true,
@@ -681,7 +681,7 @@ const MaterialsManagementPage: React.FC = () => {
           (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
       },
       {
-        title: '物料类型',
+        title: t('app.master-data.materials.materialType'),
         dataIndex: 'materialType',
         width: 120,
         valueType: 'select',
@@ -703,13 +703,13 @@ const MaterialsManagementPage: React.FC = () => {
         },
       },
       {
-        title: '规格',
+        title: t('app.master-data.materials.specification'),
         dataIndex: 'specification',
         width: 150,
         ellipsis: true,
       },
       {
-        title: '基础单位',
+        title: t('app.master-data.materials.baseUnit'),
         dataIndex: 'baseUnit',
         width: 100,
         valueType: 'select',
@@ -731,54 +731,54 @@ const MaterialsManagementPage: React.FC = () => {
         },
       },
       {
-        title: '批号管理',
+        title: t('app.master-data.materials.batchManaged'),
         dataIndex: 'batchManaged',
         width: 100,
         hideInSearch: true,
         render: (_, record) => (
           <Tag color={record.batchManaged ? 'blue' : 'default'}>
-            {record.batchManaged ? '是' : '否'}
+            {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
           </Tag>
         ),
       },
       {
-        title: '变体管理',
+        title: t('app.master-data.materials.variantManaged'),
         dataIndex: 'variantManaged',
         width: 100,
         hideInSearch: true,
         render: (_, record) => (
           <Tag color={record.variantManaged ? 'purple' : 'default'}>
-            {record.variantManaged ? '是' : '否'}
+            {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
           </Tag>
         ),
       },
       {
-        title: '品牌',
+        title: t('app.master-data.materials.brand'),
         dataIndex: 'brand',
         width: 120,
       },
       {
-        title: '型号',
+        title: t('app.master-data.materials.model'),
         dataIndex: 'model',
         width: 120,
       },
       {
-        title: '启用状态',
+        title: t('app.master-data.materials.enabledStatus'),
         dataIndex: 'isActive',
         width: 100,
         valueType: 'select',
         valueEnum: {
-          true: { text: '启用', status: 'Success' },
-          false: { text: '禁用', status: 'Default' },
+          true: { text: t('app.master-data.materials.enabled'), status: 'Success' },
+          false: { text: t('app.master-data.materials.disabled'), status: 'Default' },
         },
         render: (_, record) => (
           <Tag color={record.isActive ? 'success' : 'default'}>
-            {record.isActive ? '启用' : '禁用'}
+            {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
           </Tag>
         ),
       },
       {
-        title: '创建时间',
+        title: t('app.master-data.materials.createTime'),
         dataIndex: 'createdAt',
         width: 180,
         valueType: 'dateTime',
@@ -786,14 +786,14 @@ const MaterialsManagementPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: '操作',
+        title: t('app.master-data.materials.action'),
         valueType: 'option',
         width: 150,
         fixed: 'right',
         render: (_, record) => (
           <Space>
             <Button type="link" size="small" onClick={() => handleViewMaterial(record)}>
-              详情
+              {t('app.master-data.bom.detail')}
             </Button>
             <Button
               type="link"
@@ -801,15 +801,15 @@ const MaterialsManagementPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEditMaterial(record)}
             >
-              编辑
+              {t('app.master-data.bom.editTitle')}
             </Button>
             <Popconfirm
-              title="确定要删除这个物料吗？"
-              description="删除物料前需要检查是否有关联的BOM"
+              title={t('app.master-data.materials.deleteMaterialConfirm')}
+              description={t('app.master-data.materials.deleteMaterialDesc')}
               onConfirm={() => handleDeleteMaterial(record)}
             >
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                删除
+                {t('app.master-data.bom.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -817,6 +817,7 @@ const MaterialsManagementPage: React.FC = () => {
       },
     ],
     [
+      t,
       materialGroups,
       materialTypeOptions,
       baseUnitOptions,
@@ -833,7 +834,7 @@ const MaterialsManagementPage: React.FC = () => {
       <TwoColumnLayout
         leftPanel={{
           search: {
-            placeholder: '搜索分组',
+            placeholder: t('app.master-data.materials.searchGroup'),
             value: groupSearchValue,
             onChange: setGroupSearchValue,
             allowClear: true,
@@ -851,7 +852,7 @@ const MaterialsManagementPage: React.FC = () => {
               <Button
                 icon={expandedKeys.length > 1 ? <CompressOutlined /> : <ExpandOutlined />}
                 onClick={handleToggleExpand}
-                title={expandedKeys.length > 1 ? "折叠全部" : "展开全部"}
+                title={expandedKeys.length > 1 ? t('app.master-data.materials.collapseAll') : t('app.master-data.materials.expandAll')}
               />
             </div>,
           ],
@@ -992,7 +993,7 @@ const MaterialsManagementPage: React.FC = () => {
                   }
                 } catch (error: any) {
                   console.error('获取物料列表失败:', error)
-                  messageApi.error(error?.message || '获取物料列表失败')
+                  messageApi.error(error?.message || t('app.master-data.materials.getListFailed'))
                   return {
                     data: [],
                     success: false,
@@ -1018,7 +1019,7 @@ const MaterialsManagementPage: React.FC = () => {
 
       {/* 分组创建/编辑 Modal */}
       <Modal
-        title={groupIsEdit ? '编辑物料分组' : '新建物料分组'}
+        title={groupIsEdit ? t('app.master-data.materials.editGroup') : t('app.master-data.materials.createGroup')}
         open={groupModalVisible}
         onCancel={() => setGroupModalVisible(false)}
         footer={null}
@@ -1029,7 +1030,7 @@ const MaterialsManagementPage: React.FC = () => {
           formRef={groupFormRef}
           submitter={{
             searchConfig: {
-              submitText: groupIsEdit ? '更新' : '创建',
+              submitText: groupIsEdit ? t('app.master-data.materials.update') : t('app.master-data.materials.create'),
             },
             resetButtonProps: {
               style: { display: 'none' },
@@ -1053,8 +1054,8 @@ const MaterialsManagementPage: React.FC = () => {
         >
           <SafeProFormSelect
             name="parentId"
-            label="父分组"
-            placeholder="请选择父分组（可选）"
+            label={t('app.master-data.materials.parentGroup')}
+            placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
             options={materialGroups
               .filter(g => !groupIsEdit || g.id !== currentGroup?.id) // 编辑时排除自己
               .map(g => ({
@@ -1073,11 +1074,11 @@ const MaterialsManagementPage: React.FC = () => {
           />
           <ProFormText
             name="code"
-            label="分组编码"
-            placeholder="请输入分组编码"
+            label={t('app.master-data.materials.groupCode')}
+            placeholder={t('app.master-data.materials.groupCodePlaceholder')}
             rules={[
-              { required: true, message: '请输入分组编码' },
-              { max: 50, message: '分组编码不能超过50个字符' },
+              { required: true, message: t('app.master-data.materials.groupCodeRequired') },
+              { max: 50, message: t('app.master-data.materials.groupCodeMax') },
             ]}
             fieldProps={{
               style: { textTransform: 'uppercase' },
@@ -1085,17 +1086,17 @@ const MaterialsManagementPage: React.FC = () => {
           />
           <ProFormText
             name="name"
-            label="分组名称"
-            placeholder="请输入分组名称"
+            label={t('app.master-data.materials.groupName')}
+            placeholder={t('app.master-data.materials.groupNamePlaceholder')}
             rules={[
-              { required: true, message: '请输入分组名称' },
-              { max: 200, message: '分组名称不能超过200个字符' },
+              { required: true, message: t('app.master-data.materials.groupNameRequired') },
+              { max: 200, message: t('app.master-data.materials.groupNameMax') },
             ]}
           />
           <ProFormTextArea
             name="description"
-            label="描述"
-            placeholder="请输入分组描述"
+            label={t('app.master-data.materials.description')}
+            placeholder={t('app.master-data.materials.descriptionPlaceholder')}
             rows={3}
             fieldProps={{
               maxLength: 500,
@@ -1103,9 +1104,9 @@ const MaterialsManagementPage: React.FC = () => {
           />
           <ProFormSwitch
             name="isActive"
-            label="启用状态"
-            checkedChildren="启用"
-            unCheckedChildren="禁用"
+            label={t('app.master-data.materials.enabledStatusLabel')}
+            checkedChildren={t('app.master-data.materials.checkedChildren')}
+            unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
           />
         </ProForm>
       </Modal>
@@ -1156,7 +1157,7 @@ const MaterialsManagementPage: React.FC = () => {
 
       {/* 物料详情 Drawer */}
       <Drawer
-        title="物料详情"
+        title={t('app.master-data.materials.materialDetail')}
         size={720}
         open={materialDrawerVisible}
         onClose={() => setMaterialDrawerVisible(false)}
@@ -1169,79 +1170,79 @@ const MaterialsManagementPage: React.FC = () => {
               column={2}
               columns={[
                 {
-                  title: '物料编码',
+                  title: t('app.master-data.materials.materialCode'),
                   dataIndex: 'code',
                 },
                 {
-                  title: '物料名称',
+                  title: t('app.master-data.materials.materialName'),
                   dataIndex: 'name',
                 },
                 {
-                  title: '物料分组',
+                  title: t('app.master-data.materials.materialGroup'),
                   dataIndex: 'groupId',
                   render: (_, record) => getMaterialGroupName(record.groupId),
                 },
                 {
-                  title: '工艺路线',
+                  title: t('app.master-data.materials.processRoute'),
                   dataIndex: ['processRouteName', 'process_route_name'],
                   render: (_, record) =>
                     (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
                 },
                 {
-                  title: '规格',
+                  title: t('app.master-data.materials.specification'),
                   dataIndex: 'specification',
                 },
                 {
-                  title: '基础单位',
+                  title: t('app.master-data.materials.baseUnit'),
                   dataIndex: 'baseUnit',
                 },
                 {
-                  title: '品牌',
+                  title: t('app.master-data.materials.brand'),
                   dataIndex: 'brand',
                 },
                 {
-                  title: '型号',
+                  title: t('app.master-data.materials.model'),
                   dataIndex: 'model',
                 },
                 {
-                  title: '批号管理',
+                  title: t('app.master-data.materials.batchManaged'),
                   dataIndex: 'batchManaged',
                   render: (_, record) => (
                     <Tag color={record.batchManaged ? 'blue' : 'default'}>
-                      {record.batchManaged ? '是' : '否'}
+                      {record.batchManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                     </Tag>
                   ),
                 },
                 {
-                  title: '变体管理',
+                  title: t('app.master-data.materials.variantManaged'),
                   dataIndex: 'variantManaged',
                   render: (_, record) => (
                     <Tag color={record.variantManaged ? 'purple' : 'default'}>
-                      {record.variantManaged ? '是' : '否'}
+                      {record.variantManaged ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                     </Tag>
                   ),
                 },
                 {
-                  title: '描述',
+                  title: t('app.master-data.materials.description'),
                   dataIndex: 'description',
                   span: 2,
                 },
                 {
-                  title: '启用状态',
+                  title: t('app.master-data.materials.enabledStatusLabel'),
                   dataIndex: 'isActive',
                   render: (_, record) => (
                     <Tag color={record.isActive ? 'success' : 'default'}>
-                      {record.isActive ? '启用' : '禁用'}
+                      {record.isActive ? t('app.master-data.materials.enabled') : t('app.master-data.materials.disabled')}
                     </Tag>
                   ),
                 },
                 {
-                  title: '创建时间',
+                  title: t('app.master-data.materials.createTime'),
                   dataIndex: 'createdAt',
                   valueType: 'dateTime',
                 },
                 {
-                  title: '更新时间',
+                  title: t('app.master-data.materials.updateTime'),
                   dataIndex: 'updatedAt',
                   valueType: 'dateTime',
                 },

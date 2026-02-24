@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Select, Button, Table, App, Spin, Empty } from 'antd';
 import { SyncOutlined } from '@ant-design/icons';
 import { getDatasetList, executeDatasetQuery } from '../../services/dataset';
@@ -39,6 +40,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
   fieldMapping,
   limit = 500,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [datasetOptions, setDatasetOptions] = useState<{ label: string; value: string }[]>([]);
   const [selectedDatasetUuid, setSelectedDatasetUuid] = useState<string | undefined>();
@@ -68,7 +70,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
         }))
       );
     } catch (e: any) {
-      messageApi.error(e?.message || '加载数据集列表失败');
+      messageApi.error(e?.message || t('components.syncFromDataset.loadListFailed'));
     } finally {
       setLoadingDatasets(false);
     }
@@ -76,7 +78,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
 
   const handleExecute = async () => {
     if (!selectedDatasetUuid) {
-      messageApi.warning('请先选择数据集');
+      messageApi.warning(t('components.syncFromDataset.selectFirst'));
       return;
     }
     setExecuting(true);
@@ -87,15 +89,15 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
         offset: 0,
       });
       if (!res.success) {
-        messageApi.error(res.error || '查询执行失败');
+        messageApi.error(res.error || t('components.syncFromDataset.queryFailed'));
         return;
       }
       const data = res.data || [];
       const columns = res.columns || (data.length > 0 ? Object.keys(data[0]) : []);
       setQueryResult({ data, columns });
-      messageApi.success(`获取到 ${data.length} 条数据`);
+      messageApi.success(t('components.syncFromDataset.dataFetched', { count: data.length }));
     } catch (e: any) {
-      messageApi.error(e?.message || '查询执行失败');
+      messageApi.error(e?.message || t('components.syncFromDataset.queryFailed'));
     } finally {
       setExecuting(false);
     }
@@ -103,7 +105,7 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
 
   const handleConfirm = () => {
     if (!queryResult || queryResult.data.length === 0) {
-      messageApi.warning('暂无数据可同步');
+      messageApi.warning(t('components.syncFromDataset.noDataToSync'));
       return;
     }
     const rows = fieldMapping && Object.keys(fieldMapping).length > 0

@@ -17,6 +17,7 @@ export interface BackendLifecycle {
   status?: 'success' | 'exception' | 'normal' | 'active';
   main_stages?: BackendLifecycleStage[];
   sub_stages?: BackendLifecycleStage[];
+  next_step_suggestions?: string[];
 }
 
 const STAGE_PERCENT: Record<string, number> = {
@@ -56,5 +57,6 @@ export function parseBackendLifecycle(lifecycle: BackendLifecycle | null | undef
     status: lifecycle.status,
     mainStages: mainStages.length ? mainStages : undefined,
     subStages,
+    nextStepSuggestions: lifecycle.next_step_suggestions,
   };
 }
