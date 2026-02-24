@@ -79,7 +79,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取供应商详情失败');
+        messageApi.error(err?.message || t('app.master-data.suppliers.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -88,7 +88,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await supplierApi.update(editUuid, values as SupplierUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await supplierApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -108,14 +108,14 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
           values.isActive = true;
         }
         const created = await supplierApi.create(values as SupplierCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

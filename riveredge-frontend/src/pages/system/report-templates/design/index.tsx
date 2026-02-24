@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import { App, message, Modal } from 'antd';
 import ReportDesigner, { ReportConfig } from '../../../../components/report-designer';
@@ -17,6 +18,7 @@ import { apiRequest } from '../../../../services/api';
  * 报表设计页面组件
  */
 const ReportDesignPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -47,7 +49,7 @@ const ReportDesignPage: React.FC = () => {
         components: [],
       });
     } catch (error) {
-      messageApi.error('加载模板失败');
+      messageApi.error(t('pages.system.reportTemplates.designLoadFailed'));
       navigate('/system/report-templates');
     } finally {
       setLoading(false);
@@ -67,9 +69,9 @@ const ReportDesignPage: React.FC = () => {
           config: reportConfig,
         },
       });
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.reportTemplates.designSaveSuccess'));
     } catch (error) {
-      messageApi.error('保存失败');
+      messageApi.error(t('pages.system.reportTemplates.designSaveFailed'));
     }
   };
 
@@ -78,11 +80,11 @@ const ReportDesignPage: React.FC = () => {
    */
   const handlePreview = (reportConfig: ReportConfig) => {
     Modal.info({
-      title: '报表预览',
+      title: t('pages.system.reportTemplates.designPreviewTitle'),
       width: 800,
       content: (
         <div>
-          <p>预览功能开发中...</p>
+          <p>{t('pages.system.reportTemplates.designPreviewContent')}</p>
           <pre>{JSON.stringify(reportConfig, null, 2)}</pre>
         </div>
       ),
@@ -90,7 +92,7 @@ const ReportDesignPage: React.FC = () => {
   };
 
   if (loading || !config) {
-    return <div>加载中...</div>;
+    return <div>{t('pages.system.reportTemplates.designLoading')}</div>;
   }
 
   return (

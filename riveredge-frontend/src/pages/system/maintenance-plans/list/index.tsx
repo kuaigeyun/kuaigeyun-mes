@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, message, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
@@ -30,6 +31,7 @@ import { getEquipmentList, Equipment } from '../../../../services/equipment';
  * 维护保养计划管理列表页面组件
  */
 const MaintenancePlanListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -105,7 +107,7 @@ const MaintenancePlanListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取维护计划详情失败');
+      messageApi.error(error.message || t('pages.system.maintenancePlans.getDetailFailed'));
     }
   };
 
@@ -119,7 +121,7 @@ const MaintenancePlanListPage: React.FC = () => {
       const detail = await getMaintenancePlanByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取维护计划详情失败');
+      messageApi.error(error.message || t('pages.system.maintenancePlans.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -131,10 +133,10 @@ const MaintenancePlanListPage: React.FC = () => {
   const handleDelete = async (record: MaintenancePlan) => {
     try {
       await deleteMaintenancePlan(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.maintenancePlans.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.maintenancePlans.deleteFailed'));
     }
   };
 
@@ -143,13 +145,13 @@ const MaintenancePlanListPage: React.FC = () => {
    */
   const handleBatchDelete = (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请先选择要删除的维护计划');
+      messageApi.warning(t('pages.system.maintenancePlans.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${keys.length} 个维护计划吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.maintenancePlans.confirmBatchDelete', { count: keys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -164,14 +166,14 @@ const MaintenancePlanListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.maintenancePlans.batchDeletePartial', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个维护计划`);
+            messageApi.success(t('pages.system.maintenancePlans.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('pages.system.maintenancePlans.batchDeleteFailed'));
         }
       },
     });
@@ -186,16 +188,16 @@ const MaintenancePlanListPage: React.FC = () => {
       
       if (isEdit && currentMaintenancePlanUuid) {
         await updateMaintenancePlan(currentMaintenancePlanUuid, values as UpdateMaintenancePlanData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.maintenancePlans.updateSuccess'));
       } else {
         await createMaintenancePlan(values as CreateMaintenancePlanData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.maintenancePlans.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.maintenancePlans.operationFailed'));
       throw error; // 重新抛出错误，让 FormModalTemplate 处理
     } finally {
       setFormLoading(false);
@@ -207,59 +209,59 @@ const MaintenancePlanListPage: React.FC = () => {
    */
   const columns: ProColumns<MaintenancePlan>[] = [
     {
-      title: '计划编号',
+      title: t('pages.system.maintenancePlans.columnPlanNo'),
       dataIndex: 'plan_no',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '计划名称',
+      title: t('pages.system.maintenancePlans.columnPlanName'),
       dataIndex: 'plan_name',
       width: 200,
     },
     {
-      title: '设备名称',
+      title: t('pages.system.maintenancePlans.columnEquipment'),
       dataIndex: 'equipment_name',
       width: 200,
     },
     {
-      title: '计划类型',
+      title: t('pages.system.maintenancePlans.columnPlanType'),
       dataIndex: 'plan_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '定期保养': { text: '定期保养' },
-        '预防性维护': { text: '预防性维护' },
-        '故障维修': { text: '故障维修' },
-        '其他': { text: '其他' },
+        '定期保养': { text: t('pages.system.maintenancePlans.planTypeRegular') },
+        '预防性维护': { text: t('pages.system.maintenancePlans.planTypePreventive') },
+        '故障维修': { text: t('pages.system.maintenancePlans.planTypeFault') },
+        '其他': { text: t('pages.system.maintenancePlans.planTypeOther') },
       },
     },
     {
-      title: '保养类型',
+      title: t('pages.system.maintenancePlans.columnMaintenanceType'),
       dataIndex: 'maintenance_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '日常保养': { text: '日常保养' },
-        '一级保养': { text: '一级保养' },
-        '二级保养': { text: '二级保养' },
-        '三级保养': { text: '三级保养' },
-        '大修': { text: '大修' },
+        '日常保养': { text: t('pages.system.maintenancePlans.maintenanceDaily') },
+        '一级保养': { text: t('pages.system.maintenancePlans.maintenanceLevel1') },
+        '二级保养': { text: t('pages.system.maintenancePlans.maintenanceLevel2') },
+        '三级保养': { text: t('pages.system.maintenancePlans.maintenanceLevel3') },
+        '大修': { text: t('pages.system.maintenancePlans.maintenanceOverhaul') },
       },
     },
     {
-      title: '周期类型',
+      title: t('pages.system.maintenancePlans.columnCycleType'),
       dataIndex: 'cycle_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '按时间': { text: '按时间' },
-        '按使用次数': { text: '按使用次数' },
-        '按运行时长': { text: '按运行时长' },
+        '按时间': { text: t('pages.system.maintenancePlans.cycleByTime') },
+        '按使用次数': { text: t('pages.system.maintenancePlans.cycleByCount') },
+        '按运行时长': { text: t('pages.system.maintenancePlans.cycleByRuntime') },
       },
     },
     {
-      title: '周期值',
+      title: t('pages.system.maintenancePlans.columnCycleValue'),
       dataIndex: 'cycle_value',
       width: 100,
       hideInSearch: true,
@@ -271,49 +273,49 @@ const MaintenancePlanListPage: React.FC = () => {
       },
     },
     {
-      title: '计划开始日期',
+      title: t('pages.system.maintenancePlans.columnPlannedStart'),
       dataIndex: 'planned_start_date',
       width: 150,
       valueType: 'date',
       hideInSearch: true,
     },
     {
-      title: '计划结束日期',
+      title: t('pages.system.maintenancePlans.columnPlannedEnd'),
       dataIndex: 'planned_end_date',
       width: 150,
       valueType: 'date',
       hideInSearch: true,
     },
     {
-      title: '负责人',
+      title: t('pages.system.maintenancePlans.columnResponsible'),
       dataIndex: 'responsible_person_name',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '状态',
+      title: t('pages.system.maintenancePlans.columnStatus'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        '待执行': { text: '待执行', status: 'Default' },
-        '执行中': { text: '执行中', status: 'Processing' },
-        '已完成': { text: '已完成', status: 'Success' },
-        '已取消': { text: '已取消', status: 'Error' },
+        '待执行': { text: t('pages.system.maintenancePlans.statusPending'), status: 'Default' },
+        '执行中': { text: t('pages.system.maintenancePlans.statusRunning'), status: 'Processing' },
+        '已完成': { text: t('pages.system.maintenancePlans.statusCompleted'), status: 'Success' },
+        '已取消': { text: t('pages.system.maintenancePlans.statusCancelled'), status: 'Error' },
       },
       render: (_, record) => {
         const statusMap: Record<string, { color: string; text: string }> = {
-          '待执行': { color: 'default', text: '待执行' },
-          '执行中': { color: 'processing', text: '执行中' },
-          '已完成': { color: 'success', text: '已完成' },
-          '已取消': { color: 'error', text: '已取消' },
+          '待执行': { color: 'default', text: t('pages.system.maintenancePlans.statusPending') },
+          '执行中': { color: 'processing', text: t('pages.system.maintenancePlans.statusRunning') },
+          '已完成': { color: 'success', text: t('pages.system.maintenancePlans.statusCompleted') },
+          '已取消': { color: 'error', text: t('pages.system.maintenancePlans.statusCancelled') },
         };
         const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
     {
-      title: '创建时间',
+      title: t('pages.system.maintenancePlans.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -321,7 +323,7 @@ const MaintenancePlanListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.maintenancePlans.columnActions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -333,7 +335,7 @@ const MaintenancePlanListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.maintenancePlans.view')}
           </Button>
           <Button
             type="link"
@@ -341,10 +343,10 @@ const MaintenancePlanListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.maintenancePlans.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个维护计划吗？"
+            title={t('pages.system.maintenancePlans.confirmDelete')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -353,7 +355,7 @@ const MaintenancePlanListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.maintenancePlans.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -385,13 +387,13 @@ const MaintenancePlanListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建维护计划"
+          createButtonText={t('pages.system.maintenancePlans.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.maintenancePlans.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -404,7 +406,7 @@ const MaintenancePlanListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.maintenancePlans.noDataToExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -414,9 +416,9 @@ const MaintenancePlanListPage: React.FC = () => {
               a.download = `maintenance-plans-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.maintenancePlans.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.maintenancePlans.exportFailed'));
             }
           }}
           pagination={{
@@ -430,7 +432,7 @@ const MaintenancePlanListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑维护计划' : '新建维护计划'}
+        title={isEdit ? t('pages.system.maintenancePlans.modalEdit') : t('pages.system.maintenancePlans.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -444,114 +446,114 @@ const MaintenancePlanListPage: React.FC = () => {
       >
         <ProFormText
           name="plan_name"
-          label="计划名称"
-          rules={[{ required: true, message: '请输入计划名称' }]}
-          placeholder="请输入计划名称"
+          label={t('pages.system.maintenancePlans.labelPlanName')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.planNameRequired') }]}
+          placeholder={t('pages.system.maintenancePlans.planNamePlaceholder')}
         />
         <ProFormSelect
           name="equipment_uuid"
-          label="设备"
-          rules={[{ required: true, message: '请选择设备' }]}
+          label={t('pages.system.maintenancePlans.labelEquipment')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.equipmentRequired') }]}
           options={equipmentList.map((eq) => ({
             label: `${eq.name} (${eq.code})`,
             value: eq.uuid,
           }))}
-          placeholder="请选择设备"
+          placeholder={t('pages.system.maintenancePlans.equipmentPlaceholder')}
         />
         <ProFormSelect
           name="plan_type"
-          label="计划类型"
-          rules={[{ required: true, message: '请选择计划类型' }]}
+          label={t('pages.system.maintenancePlans.labelPlanType')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.planTypeRequired') }]}
           options={[
-            { label: '定期保养', value: '定期保养' },
-            { label: '预防性维护', value: '预防性维护' },
-            { label: '故障维修', value: '故障维修' },
-            { label: '其他', value: '其他' },
+            { label: t('pages.system.maintenancePlans.planTypeRegular'), value: '定期保养' },
+            { label: t('pages.system.maintenancePlans.planTypePreventive'), value: '预防性维护' },
+            { label: t('pages.system.maintenancePlans.planTypeFault'), value: '故障维修' },
+            { label: t('pages.system.maintenancePlans.planTypeOther'), value: '其他' },
           ]}
         />
         <ProFormSelect
           name="maintenance_type"
-          label="保养类型"
-          rules={[{ required: true, message: '请选择保养类型' }]}
+          label={t('pages.system.maintenancePlans.labelMaintenanceType')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.maintenanceTypeRequired') }]}
           options={[
-            { label: '日常保养', value: '日常保养' },
-            { label: '一级保养', value: '一级保养' },
-            { label: '二级保养', value: '二级保养' },
-            { label: '三级保养', value: '三级保养' },
-            { label: '大修', value: '大修' },
+            { label: t('pages.system.maintenancePlans.maintenanceDaily'), value: '日常保养' },
+            { label: t('pages.system.maintenancePlans.maintenanceLevel1'), value: '一级保养' },
+            { label: t('pages.system.maintenancePlans.maintenanceLevel2'), value: '二级保养' },
+            { label: t('pages.system.maintenancePlans.maintenanceLevel3'), value: '三级保养' },
+            { label: t('pages.system.maintenancePlans.maintenanceOverhaul'), value: '大修' },
           ]}
         />
         <ProFormSelect
           name="cycle_type"
-          label="周期类型"
-          rules={[{ required: true, message: '请选择周期类型' }]}
+          label={t('pages.system.maintenancePlans.labelCycleType')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.cycleTypeRequired') }]}
           options={[
-            { label: '按时间', value: '按时间' },
-            { label: '按使用次数', value: '按使用次数' },
-            { label: '按运行时长', value: '按运行时长' },
+            { label: t('pages.system.maintenancePlans.cycleByTime'), value: '按时间' },
+            { label: t('pages.system.maintenancePlans.cycleByCount'), value: '按使用次数' },
+            { label: t('pages.system.maintenancePlans.cycleByRuntime'), value: '按运行时长' },
           ]}
         />
         <ProFormDigit
           name="cycle_value"
-          label="周期值"
-          placeholder="请输入周期值"
+          label={t('pages.system.maintenancePlans.labelCycleValue')}
+          placeholder={t('pages.system.maintenancePlans.cycleValuePlaceholder')}
           fieldProps={{ min: 0 }}
         />
         <ProFormText
           name="cycle_unit"
-          label="周期单位"
-          placeholder="请输入周期单位（如：天、次、小时）"
+          label={t('pages.system.maintenancePlans.labelCycleUnit')}
+          placeholder={t('pages.system.maintenancePlans.cycleUnitPlaceholder')}
         />
         <ProFormDatePicker
           name="planned_start_date"
-          label="计划开始日期"
-          placeholder="请选择计划开始日期"
+          label={t('pages.system.maintenancePlans.labelPlannedStart')}
+          placeholder={t('pages.system.maintenancePlans.plannedStartPlaceholder')}
         />
         <ProFormDatePicker
           name="planned_end_date"
-          label="计划结束日期"
-          placeholder="请选择计划结束日期"
+          label={t('pages.system.maintenancePlans.labelPlannedEnd')}
+          placeholder={t('pages.system.maintenancePlans.plannedEndPlaceholder')}
         />
         <ProFormText
           name="responsible_person_name"
-          label="负责人姓名"
-          placeholder="请输入负责人姓名"
+          label={t('pages.system.maintenancePlans.labelResponsible')}
+          placeholder={t('pages.system.maintenancePlans.responsiblePlaceholder')}
         />
         <ProFormSelect
           name="status"
-          label="状态"
-          rules={[{ required: true, message: '请选择状态' }]}
+          label={t('pages.system.maintenancePlans.labelStatus')}
+          rules={[{ required: true, message: t('pages.system.maintenancePlans.statusRequired') }]}
           options={[
-            { label: '待执行', value: '待执行' },
-            { label: '执行中', value: '执行中' },
-            { label: '已完成', value: '已完成' },
-            { label: '已取消', value: '已取消' },
+            { label: t('pages.system.maintenancePlans.statusPending'), value: '待执行' },
+            { label: t('pages.system.maintenancePlans.statusRunning'), value: '执行中' },
+            { label: t('pages.system.maintenancePlans.statusCompleted'), value: '已完成' },
+            { label: t('pages.system.maintenancePlans.statusCancelled'), value: '已取消' },
           ]}
         />
         <ProFormTextArea
           name="remark"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('pages.system.maintenancePlans.labelRemark')}
+          placeholder={t('pages.system.maintenancePlans.remarkPlaceholder')}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="维护计划详情"
+        title={t('pages.system.maintenancePlans.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
         columns={[
-          { title: '计划编号', dataIndex: 'plan_no' },
-          { title: '计划名称', dataIndex: 'plan_name' },
-          { title: '设备名称', dataIndex: 'equipment_name' },
-          { title: '计划类型', dataIndex: 'plan_type' },
-          { title: '保养类型', dataIndex: 'maintenance_type' },
-          { title: '周期类型', dataIndex: 'cycle_type' },
+          { title: t('pages.system.maintenancePlans.columnPlanNo'), dataIndex: 'plan_no' },
+          { title: t('pages.system.maintenancePlans.columnPlanName'), dataIndex: 'plan_name' },
+          { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name' },
+          { title: t('pages.system.maintenancePlans.columnPlanType'), dataIndex: 'plan_type' },
+          { title: t('pages.system.maintenancePlans.columnMaintenanceType'), dataIndex: 'maintenance_type' },
+          { title: t('pages.system.maintenancePlans.columnCycleType'), dataIndex: 'cycle_type' },
           {
-            title: '周期值',
+            title: t('pages.system.maintenancePlans.columnCycleValue'),
             dataIndex: 'cycle_value',
             render: (value: number, record: MaintenancePlan) => {
               if (value && record.cycle_unit) {
@@ -560,14 +562,14 @@ const MaintenancePlanListPage: React.FC = () => {
               return value || '-';
             },
           },
-          { title: '周期单位', dataIndex: 'cycle_unit' },
-          { title: '计划开始日期', dataIndex: 'planned_start_date' },
-          { title: '计划结束日期', dataIndex: 'planned_end_date' },
-          { title: '负责人', dataIndex: 'responsible_person_name' },
-          { title: '状态', dataIndex: 'status' },
-          { title: '备注', dataIndex: 'remark', span: 2 },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: t('pages.system.maintenancePlans.columnCycleUnit'), dataIndex: 'cycle_unit' },
+          { title: t('pages.system.maintenancePlans.columnPlannedStart'), dataIndex: 'planned_start_date' },
+          { title: t('pages.system.maintenancePlans.columnPlannedEnd'), dataIndex: 'planned_end_date' },
+          { title: t('pages.system.maintenancePlans.columnResponsible'), dataIndex: 'responsible_person_name' },
+          { title: t('pages.system.maintenancePlans.columnStatus'), dataIndex: 'status' },
+          { title: t('pages.system.maintenancePlans.labelRemark'), dataIndex: 'remark', span: 2 },
+          { title: t('pages.system.maintenancePlans.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('pages.system.maintenancePlans.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ]}
       />
     </>

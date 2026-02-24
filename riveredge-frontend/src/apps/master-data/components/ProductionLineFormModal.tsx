@@ -86,7 +86,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取产线详情失败');
+        messageApi.error(err?.message || t('app.master-data.productionLines.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -95,7 +95,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
       setFormLoading(true);
       if (isEdit && editUuid) {
         await productionLineApi.update(editUuid, values as ProductionLineUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await productionLineApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -115,14 +115,14 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
           values.isActive = true;
         }
         const created = await productionLineApi.create(values as ProductionLineCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

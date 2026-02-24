@@ -86,7 +86,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取库位详情失败');
+        messageApi.error(err?.message || t('app.master-data.storageLocations.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -95,7 +95,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
       setFormLoading(true);
       if (isEdit && editUuid) {
         await storageLocationApi.update(editUuid, values as StorageLocationUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await storageLocationApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -115,14 +115,14 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
           values.isActive = true;
         }
         const created = await storageLocationApi.create(values as StorageLocationCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

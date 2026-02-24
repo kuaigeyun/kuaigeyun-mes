@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Tabs, Input, Table, Badge, Space, Spin, Form } from 'antd';
 import { SaveOutlined, CloseOutlined, PlayCircleOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -25,6 +26,7 @@ import {
 const { TextArea } = Input;
 
 const DatasetDesignerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,7 +45,7 @@ const DatasetDesignerPage: React.FC = () => {
 
   useEffect(() => {
     if (!uuid) {
-      messageApi.error('缺少数据集 UUID');
+      messageApi.error(t('pages.system.datasets.missingUuid'));
       navigate('/system/datasets');
       return;
     }
@@ -63,7 +65,7 @@ const DatasetDesignerPage: React.FC = () => {
         );
         setQueryConfigForVisual(cfg);
       } catch (error: any) {
-        messageApi.error(error?.message || '加载数据集失败');
+        messageApi.error(error?.message || t('pages.system.datasets.loadFailed'));
         navigate('/system/datasets');
       } finally {
         setLoading(false);
@@ -92,11 +94,11 @@ const DatasetDesignerPage: React.FC = () => {
         query_type: saveQueryType,
         query_config: queryConfig,
       });
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.datasets.saveSuccess'));
       setDataset((prev) => (prev ? { ...prev, query_type: saveQueryType, query_config: queryConfig } : null));
       setQueryType(saveQueryType);
     } catch (error: any) {
-      messageApi.error(error?.message || '保存失败');
+      messageApi.error(error?.message || t('pages.system.datasets.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -110,19 +112,19 @@ const DatasetDesignerPage: React.FC = () => {
       const result = await executeDatasetQuery(uuid, { limit: 100, offset: 0 });
       setExecuteResult(result);
       if (result.success) {
-        messageApi.success('查询执行成功');
+        messageApi.success(t('pages.system.datasets.executeSuccess'));
       } else {
-        messageApi.error(result.error || '查询执行失败');
+        messageApi.error(result.error || t('pages.system.datasets.executeFailed'));
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '查询执行失败');
+      messageApi.error(error?.message || t('pages.system.datasets.executeFailed'));
       setExecuteResult({
         success: false,
         data: [],
         total: 0,
         columns: [],
         elapsed_time: 0,
-        error: error.message || '查询执行失败',
+        error: error.message || t('pages.system.datasets.executeFailed'),
       });
     } finally {
       setExecuting(false);
@@ -136,7 +138,7 @@ const DatasetDesignerPage: React.FC = () => {
   if (loading) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
-        <Spin size="large" tip="加载中..." />
+        <Spin size="large" tip={t('pages.system.datasets.loading')} />
       </div>
     );
   }
@@ -148,13 +150,13 @@ const DatasetDesignerPage: React.FC = () => {
   const toolbar = (
     <Space>
       <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>
-        保存
+        {t('pages.system.datasets.save')}
       </Button>
       <Button icon={<PlayCircleOutlined />} loading={executing} onClick={handleExecute}>
-        执行查询
+        {t('pages.system.datasets.executeQuery')}
       </Button>
       <Button icon={<CloseOutlined />} onClick={handleBack}>
-        返回
+        {t('pages.system.datasets.back')}
       </Button>
       <span style={{ marginLeft: 16, color: '#666' }}>
         {dataset.name} ({dataset.code})
@@ -174,27 +176,27 @@ const DatasetDesignerPage: React.FC = () => {
       items={[
         {
           key: 'sql',
-          label: 'SQL 配置',
+          label: t('pages.system.datasets.sqlConfig'),
           children: (
             <div style={{ padding: '8px 0' }}>
               <div style={{ marginBottom: 8, padding: '8px 12px', background: '#e6f7ff', borderRadius: 4, fontSize: 12, color: '#0050b3' }}>
-                共享库租户隔离：系统自动注入 tenant_id 过滤，仅返回当前租户数据。
+                {t('pages.system.datasets.tenantIsolationTip')}
               </div>
               <Form layout="vertical" size="small">
-                <Form.Item label="SQL 语句" style={{ marginBottom: 12 }}>
+                <Form.Item label={t('pages.system.datasets.sqlLabel')} style={{ marginBottom: 12 }}>
                   <TextArea
                     value={sqlText}
                     onChange={(e) => setSqlText(e.target.value)}
                     rows={10}
-                    placeholder="SELECT * FROM users WHERE status = :status"
+                    placeholder={t('pages.system.datasets.sqlPlaceholder')}
                     style={{ fontFamily: CODE_FONT_FAMILY, width: '100%', resize: 'vertical' }}
                   />
                 </Form.Item>
-                <Form.Item label="查询参数（SQL 中用 :参数名 引用）" style={{ marginBottom: 8 }}>
+                <Form.Item label={t('pages.system.datasets.paramsLabel')} style={{ marginBottom: 8 }}>
                   {parametersList.map((item, idx) => (
                     <Space key={idx} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
                       <Input
-                        placeholder="参数名"
+                        placeholder={t('pages.system.datasets.paramNamePlaceholder')}
                         value={item.key}
                         onChange={(e) => {
                           const next = [...parametersList];
@@ -204,7 +206,7 @@ const DatasetDesignerPage: React.FC = () => {
                         style={{ width: 120 }}
                       />
                       <Input
-                        placeholder="值"
+                        placeholder={t('pages.system.datasets.paramValuePlaceholder')}
                         value={item.value}
                         onChange={(e) => {
                           const next = [...parametersList];
@@ -226,7 +228,7 @@ const DatasetDesignerPage: React.FC = () => {
                     onClick={() => setParametersList([...parametersList, { key: '', value: '' }])}
                     style={{ width: '100%' }}
                   >
-                    添加参数
+                    {t('pages.system.datasets.addParam')}
                   </Button>
                 </Form.Item>
               </Form>
@@ -235,7 +237,7 @@ const DatasetDesignerPage: React.FC = () => {
         },
         {
           key: 'visual',
-          label: '图形化查询',
+          label: t('pages.system.datasets.visualQuery'),
           children: (
             <div style={{ padding: '8px 0' }}>
               <DatasetQueryBuilder
@@ -256,10 +258,10 @@ const DatasetDesignerPage: React.FC = () => {
         {executeResult && (
           <>
             <Badge status={executeResult.success ? 'success' : 'error'} />
-            <span>{executeResult.success ? '执行成功' : '执行失败'}</span>
-            <span style={{ color: '#999' }}>耗时: {executeResult.elapsed_time}s</span>
+            <span>{executeResult.success ? t('pages.system.datasets.executeSuccessShort') : t('pages.system.datasets.executeFailedShort')}</span>
+            <span style={{ color: '#999' }}>{t('pages.system.datasets.elapsedTime')}: {executeResult.elapsed_time}s</span>
             {executeResult.total !== undefined && (
-              <span style={{ color: '#999' }}>总行数: {executeResult.total}</span>
+              <span style={{ color: '#999' }}>{t('pages.system.datasets.totalRows')}: {executeResult.total}</span>
             )}
           </>
         )}
@@ -288,7 +290,7 @@ const DatasetDesignerPage: React.FC = () => {
               color: '#999',
             }}
           >
-            点击「执行查询」预览结果
+            {t('pages.system.datasets.clickExecuteTip')}
           </div>
         ) : executeResult.success && executeResult.data && executeResult.data.length > 0 ? (
           <Table
@@ -306,7 +308,7 @@ const DatasetDesignerPage: React.FC = () => {
             size="small"
           />
         ) : executeResult.success && (!executeResult.data || executeResult.data.length === 0) ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>查询结果为空</div>
+          <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>{t('pages.system.datasets.emptyResult')}</div>
         ) : null}
       </div>
     </div>
@@ -323,14 +325,14 @@ const DatasetDesignerPage: React.FC = () => {
       }}
     >
       <Card
-        title="查询配置"
+        title={t('pages.system.datasets.queryConfigTitle')}
         style={{ flex: '0 0 50%', minWidth: 320, overflow: 'auto' }}
         styles={{ body: { padding: 16 } }}
       >
         {queryConfigPanel}
       </Card>
       <Card
-        title="查询结果预览"
+        title={t('pages.system.datasets.resultPreviewTitle')}
         style={{ flex: 1, minWidth: 320, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         styles={{ body: { flex: 1, overflow: 'hidden', padding: 16 } }}
       >
@@ -343,7 +345,7 @@ const DatasetDesignerPage: React.FC = () => {
     <CanvasPageTemplate
       toolbar={toolbar}
       canvas={canvas}
-      functionalTitle={`数据集设计 - ${dataset.name}`}
+      functionalTitle={`${t('pages.system.datasets.designTitle')} - ${dataset.name}`}
     />
   );
 };

@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
@@ -21,6 +22,7 @@ import { getCustomFieldsByTable, getFieldValues, CustomField } from '../../../..
  * 车间管理列表页面组件
  */
 const WorkshopsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
 
     const actionRef = useRef<ActionType>(null);
@@ -122,7 +124,7 @@ const WorkshopsPage: React.FC = () => {
         setCustomFieldValues({});
       }
     } catch (error: any) {
-      messageApi.error(error.message || '获取车间详情失败');
+      messageApi.error(error.message || t('app.master-data.workshops.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -142,7 +144,7 @@ const WorkshopsPage: React.FC = () => {
   const handleDelete = async (record: Workshop) => {
     try {
       await workshopApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
@@ -154,7 +156,7 @@ const WorkshopsPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请至少选择一条记录');
+      messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
@@ -190,7 +192,7 @@ const WorkshopsPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('app.master-data.importEmpty'));
       return;
     }
 
@@ -221,7 +223,7 @@ const WorkshopsPage: React.FC = () => {
     });
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
 
@@ -271,11 +273,11 @@ const WorkshopsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(`缺少必需字段：车间编码。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workshops.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(`缺少必需字段：车间名称。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workshops.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -315,7 +317,7 @@ const WorkshopsPage: React.FC = () => {
 
         // 确保数组有足够的长度
         if (codeIndex === undefined || nameIndex === undefined) {
-          errors.push({ row: actualRowIndex, message: '表头映射错误，无法找到必需字段' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
           return;
         }
 
@@ -336,11 +338,11 @@ const WorkshopsPage: React.FC = () => {
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '车间编码不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.workshops.codeRequired') });
           return;
         }
         if (!nameValue) {
-          errors.push({ row: actualRowIndex, message: '车间名称不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.workshops.nameRequired') });
           return;
         }
 
@@ -358,7 +360,7 @@ const WorkshopsPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `厂区编码 "${plantCodeValue}" 不存在，请检查厂区编码是否正确` 
+                message: t('app.master-data.plantCodeNotFound', { code: plantCodeValue }) 
               });
               return;
             }
@@ -371,7 +373,7 @@ const WorkshopsPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `厂区名称 "${plantNameValue}" 不存在，请检查厂区名称是否正确` 
+                message: t('app.master-data.plantNameNotFound', { name: plantNameValue }) 
               });
               return;
             }
@@ -391,7 +393,7 @@ const WorkshopsPage: React.FC = () => {
       } catch (error: any) {
         errors.push({
           row: actualRowIndex,
-          message: error.message || '数据解析失败',
+          message: error.message || t('app.master-data.dataParseFailed'),
         });
       }
     });
@@ -402,18 +404,18 @@ const WorkshopsPage: React.FC = () => {
       const hasPlantError = errors.some(e => e.message.includes('厂区'));
       
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.dataValidationFailed'),
         width: 700,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
                   <Typography.Text type="danger">
-                    第 {item.row} 行：{item.message}
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
                   </Typography.Text>
                 </List.Item>
               )}
@@ -421,7 +423,7 @@ const WorkshopsPage: React.FC = () => {
             {hasPlantError && plants.length > 0 && (
               <div style={{ marginTop: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  当前可用的厂区列表：
+                  {t('app.master-data.availablePlantsList')}
                 </Typography.Text>
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {plants.map(plant => (
@@ -434,7 +436,7 @@ const WorkshopsPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属厂区列可以填写厂区编码（如：{plants[0]?.code}）或厂区名称（如：{plants[0]?.name}）
+                  {t('app.master-data.plantImportHint', { code: plants[0]?.code || '', name: plants[0]?.name || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -445,7 +447,7 @@ const WorkshopsPage: React.FC = () => {
     }
 
     if (importData.length === 0) {
-      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
 
@@ -456,19 +458,19 @@ const WorkshopsPage: React.FC = () => {
         importFn: async (item: WorkshopCreate) => {
           return await workshopApi.create(item);
         },
-        title: '正在导入车间数据',
+        title: t('app.master-data.workshops.importTitle'),
         concurrency: 5,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
               <p>
-                <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
               </p>
               {result.errors.length > 0 && (
                 <List
@@ -477,7 +479,7 @@ const WorkshopsPage: React.FC = () => {
                   renderItem={(item) => (
                     <List.Item>
                       <Typography.Text type="danger">
-                        第 {item.row} 行：{item.error}
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
                       </Typography.Text>
                     </List.Item>
                   )}
@@ -487,7 +489,7 @@ const WorkshopsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${result.successCount} 条车间数据`);
+        messageApi.success(t('app.master-data.workshops.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -495,7 +497,7 @@ const WorkshopsPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
+      messageApi.error(error.message || t('app.master-data.importFailed'));
     }
   };
 
@@ -514,7 +516,7 @@ const WorkshopsPage: React.FC = () => {
       if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
         // 导出选中的数据
         if (!currentPageData) {
-          messageApi.warning('无法获取选中数据，请重试');
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
@@ -531,7 +533,7 @@ const WorkshopsPage: React.FC = () => {
       }
 
       if (exportData.length === 0) {
-        messageApi.warning('没有可导出的数据');
+        messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
 
@@ -563,9 +565,9 @@ const WorkshopsPage: React.FC = () => {
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // 添加 BOM 以支持 Excel 正确显示中文
       
       downloadFile(blob, filename);
-      messageApi.success(`成功导出 ${exportData.length} 条数据`);
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
+      messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
   };
 

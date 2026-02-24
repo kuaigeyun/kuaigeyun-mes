@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
@@ -20,6 +21,7 @@ import { batchImport } from '../../../../../utils/batchOperations';
  * 库位管理列表页面组件
  */
 const StorageLocationsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -71,10 +73,10 @@ const StorageLocationsPage: React.FC = () => {
   const handleDelete = async (record: StorageLocation) => {
     try {
       await storageLocationApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -84,7 +86,7 @@ const StorageLocationsPage: React.FC = () => {
   const handleBatchDelete = async (keys?: React.Key[]) => {
     const toDelete = keys ?? selectedRowKeys;
     if (toDelete.length === 0) {
-      messageApi.warning('请至少选择一条记录');
+      messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
@@ -93,10 +95,10 @@ const StorageLocationsPage: React.FC = () => {
       const result = await storageLocationApi.batchDelete(uuids);
       
       if (result.success) {
-        messageApi.success(result.message || '批量删除成功');
+        messageApi.success(result.message || t('app.master-data.batchDeleteSuccess'));
         setSelectedRowKeys([]);
       } else {
-        messageApi.warning(result.message || '部分删除失败');
+        messageApi.warning(result.message || t('app.master-data.batchDeletePartial'));
       }
       
       // 清空选择
@@ -104,7 +106,7 @@ const StorageLocationsPage: React.FC = () => {
       // 刷新列表
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
     }
   };
 
@@ -121,15 +123,15 @@ const StorageLocationsPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('app.master-data.importEmpty'));
       return;
     }
 
     // 如果库区列表为空，提示用户先创建库区
     if (storageAreas.length === 0) {
       Modal.warning({
-        title: '无法导入',
-        content: '当前没有可用的库区数据，请先创建库区后再导入库位数据。',
+        title: t('app.master-data.importDisabled'),
+        content: t('app.master-data.importNoStorageArea'),
       });
       return;
     }
@@ -148,7 +150,7 @@ const StorageLocationsPage: React.FC = () => {
     });
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
 
@@ -194,11 +196,11 @@ const StorageLocationsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(`缺少必需字段：库位编码。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: '库位编码', headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(`缺少必需字段：库位名称。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: '库位名称', headers: headers.join(', ') }));
       return;
     }
 
@@ -366,7 +368,7 @@ const StorageLocationsPage: React.FC = () => {
     }
 
     if (importData.length === 0) {
-      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
 
@@ -408,7 +410,7 @@ const StorageLocationsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${result.successCount} 条库位数据`);
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -416,7 +418,7 @@ const StorageLocationsPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
+      messageApi.error(error.message || t('app.master-data.importFailed'));
     }
   };
 
@@ -435,7 +437,7 @@ const StorageLocationsPage: React.FC = () => {
       if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
         // 导出选中的数据
         if (!currentPageData) {
-          messageApi.warning('无法获取选中数据，请重试');
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
@@ -452,7 +454,7 @@ const StorageLocationsPage: React.FC = () => {
       }
 
       if (exportData.length === 0) {
-        messageApi.warning('没有可导出的数据');
+        messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
 
@@ -478,9 +480,9 @@ const StorageLocationsPage: React.FC = () => {
 
       // 下载文件
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
-      messageApi.success('导出成功');
+      messageApi.success(t('app.master-data.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
+      messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
   };
 
@@ -496,7 +498,7 @@ const StorageLocationsPage: React.FC = () => {
       const detail = await storageLocationApi.get(record.uuid);
       setStorageLocationDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取库位详情失败');
+      messageApi.error(error.message || t('app.master-data.storageLocations.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -691,7 +693,7 @@ const StorageLocationsPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取库位列表失败:', error);
-            messageApi.error(error?.message || '获取库位列表失败');
+            messageApi.error(error?.message || t('app.master-data.storageLocations.getListFailed'));
             return {
               data: [],
               success: false,

@@ -73,7 +73,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取厂区详情失败');
+        messageApi.error(err?.message || t('app.master-data.plants.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -82,7 +82,7 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await plantApi.update(editUuid, values as PlantUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await plantApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -102,14 +102,14 @@ export const PlantFormModal: React.FC<PlantFormModalProps> = ({
           values.isActive = true;
         }
         const created = await plantApi.create(values as PlantCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

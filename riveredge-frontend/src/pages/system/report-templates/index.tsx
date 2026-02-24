@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -38,6 +39,7 @@ interface ReportTemplate {
  * 报表模板管理页面组件
  */
 const ReportTemplatesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -73,7 +75,7 @@ const ReportTemplatesPage: React.FC = () => {
         });
         formRef.current?.setFieldsValue(data);
       } catch (error) {
-        messageApi.error('加载数据失败');
+        messageApi.error(t('pages.system.reportTemplates.loadFailed'));
       }
     }
   };
@@ -94,13 +96,13 @@ const ReportTemplatesPage: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要删除的模板');
+      messageApi.warning(t('pages.system.reportTemplates.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除选中的 ${keys.length} 个模板吗？`,
+      title: t('pages.system.reportTemplates.confirmDelete'),
+      content: t('pages.system.reportTemplates.confirmDeleteContent', { count: keys.length }),
       onOk: async () => {
         try {
           await Promise.all(
@@ -110,10 +112,10 @@ const ReportTemplatesPage: React.FC = () => {
               })
             )
           );
-          messageApi.success('删除成功');
+          messageApi.success(t('pages.system.reportTemplates.deleteSuccess'));
           actionRef.current?.reload();
         } catch (error) {
-          messageApi.error('删除失败');
+          messageApi.error(t('pages.system.reportTemplates.deleteFailed'));
         }
       },
     });
@@ -129,18 +131,18 @@ const ReportTemplatesPage: React.FC = () => {
           method: 'PUT',
           data: values,
         });
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.reportTemplates.updateSuccess'));
       } else {
         await apiRequest('/core/reports/templates', {
           method: 'POST',
           data: values,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.reportTemplates.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error) {
-      messageApi.error(isEdit ? '更新失败' : '创建失败');
+      messageApi.error(isEdit ? t('pages.system.reportTemplates.updateFailed') : t('pages.system.reportTemplates.createFailed'));
     }
   };
 
@@ -156,68 +158,68 @@ const ReportTemplatesPage: React.FC = () => {
    */
   const columns: ProColumns<ReportTemplate>[] = [
     {
-      title: '模板名称',
+      title: t('pages.system.reportTemplates.columnName'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '模板编码',
+      title: t('pages.system.reportTemplates.columnCode'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '报表类型',
+      title: t('pages.system.reportTemplates.columnType'),
       dataIndex: 'type',
       width: 120,
       valueEnum: {
-        inventory: { text: '库存报表', status: 'default' },
-        production: { text: '生产报表', status: 'processing' },
-        quality: { text: '质量报表', status: 'success' },
-        custom: { text: '自定义', status: 'warning' },
+        inventory: { text: t('pages.system.reportTemplates.typeInventory'), status: 'default' },
+        production: { text: t('pages.system.reportTemplates.typeProduction'), status: 'processing' },
+        quality: { text: t('pages.system.reportTemplates.typeQuality'), status: 'success' },
+        custom: { text: t('pages.system.reportTemplates.typeCustom'), status: 'warning' },
       },
     },
     {
-      title: '分类',
+      title: t('pages.system.reportTemplates.columnCategory'),
       dataIndex: 'category',
       width: 100,
       valueEnum: {
-        system: { text: '系统', status: 'default' },
-        department: { text: '部门', status: 'processing' },
-        personal: { text: '个人', status: 'warning' },
+        system: { text: t('pages.system.reportTemplates.categorySystem'), status: 'default' },
+        department: { text: t('pages.system.reportTemplates.categoryDepartment'), status: 'processing' },
+        personal: { text: t('pages.system.reportTemplates.categoryPersonal'), status: 'warning' },
       },
     },
     {
-      title: '状态',
+      title: t('pages.system.reportTemplates.columnStatus'),
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        published: { text: '已发布', status: 'success' },
-        archived: { text: '已归档', status: 'error' },
+        draft: { text: t('pages.system.reportTemplates.statusDraft'), status: 'default' },
+        published: { text: t('pages.system.reportTemplates.statusPublished'), status: 'success' },
+        archived: { text: t('pages.system.reportTemplates.statusArchived'), status: 'error' },
       },
     },
     {
-      title: '是否默认',
+      title: t('pages.system.reportTemplates.columnIsDefault'),
       dataIndex: 'is_default',
       width: 100,
       render: (_, record) => (
-        record.is_default ? <Tag color="green">是</Tag> : <Tag>否</Tag>
+        record.is_default ? <Tag color="green">{t('pages.system.reportTemplates.yes')}</Tag> : <Tag>{t('pages.system.reportTemplates.no')}</Tag>
       ),
     },
     {
-      title: '创建人',
+      title: t('pages.system.reportTemplates.columnCreatedBy'),
       dataIndex: 'created_by_name',
       width: 100,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.reportTemplates.columnCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('pages.system.reportTemplates.columnActions'),
       width: 250,
       fixed: 'right',
       render: (_, record) => (
@@ -228,7 +230,7 @@ const ReportTemplatesPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail([record.id!])}
           >
-            详情
+            {t('pages.system.reportTemplates.view')}
           </Button>
           <Button
             type="link"
@@ -236,7 +238,7 @@ const ReportTemplatesPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleDesign(record)}
           >
-            设计
+            {t('pages.system.reportTemplates.design')}
           </Button>
           <Button
             type="link"
@@ -245,84 +247,40 @@ const ReportTemplatesPage: React.FC = () => {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete([record.id!])}
           >
-            删除
+            {t('pages.system.reportTemplates.delete')}
           </Button>
         </Space>
       ),
     },
   ];
 
-  /**
-   * 表单字段定义
-   */
   const formFields = [
-    {
-      name: 'name',
-      label: '模板名称',
-      type: 'input' as const,
-      required: true,
-      rules: [{ required: true, message: '请输入模板名称' }],
-    },
-    {
-      name: 'code',
-      label: '模板编码',
-      type: 'input' as const,
-      required: true,
-      rules: [{ required: true, message: '请输入模板编码' }],
-    },
-    {
-      name: 'type',
-      label: '报表类型',
-      type: 'select' as const,
-      required: true,
-      options: [
-        { label: '库存报表', value: 'inventory' },
-        { label: '生产报表', value: 'production' },
-        { label: '质量报表', value: 'quality' },
-        { label: '自定义', value: 'custom' },
-      ],
-      rules: [{ required: true, message: '请选择报表类型' }],
-    },
-    {
-      name: 'category',
-      label: '分类',
-      type: 'select' as const,
-      required: true,
-      options: [
-        { label: '系统', value: 'system' },
-        { label: '部门', value: 'department' },
-        { label: '个人', value: 'personal' },
-      ],
-      rules: [{ required: true, message: '请选择分类' }],
-    },
-    {
-      name: 'status',
-      label: '状态',
-      type: 'select' as const,
-      required: true,
-      options: [
-        { label: '草稿', value: 'draft' },
-        { label: '已发布', value: 'published' },
-        { label: '已归档', value: 'archived' },
-      ],
-      rules: [{ required: true, message: '请选择状态' }],
-    },
-    {
-      name: 'is_default',
-      label: '是否默认',
-      type: 'switch' as const,
-    },
-    {
-      name: 'description',
-      label: '描述',
-      type: 'textarea' as const,
-    },
+    { name: 'name', label: t('pages.system.reportTemplates.labelName'), type: 'input' as const, required: true, rules: [{ required: true, message: t('pages.system.reportTemplates.nameRequired') }] },
+    { name: 'code', label: t('pages.system.reportTemplates.labelCode'), type: 'input' as const, required: true, rules: [{ required: true, message: t('pages.system.reportTemplates.codeRequired') }] },
+    { name: 'type', label: t('pages.system.reportTemplates.labelType'), type: 'select' as const, required: true, options: [
+      { label: t('pages.system.reportTemplates.typeInventory'), value: 'inventory' },
+      { label: t('pages.system.reportTemplates.typeProduction'), value: 'production' },
+      { label: t('pages.system.reportTemplates.typeQuality'), value: 'quality' },
+      { label: t('pages.system.reportTemplates.typeCustom'), value: 'custom' },
+    ], rules: [{ required: true, message: t('pages.system.reportTemplates.typeRequired') }] },
+    { name: 'category', label: t('pages.system.reportTemplates.labelCategory'), type: 'select' as const, required: true, options: [
+      { label: t('pages.system.reportTemplates.categorySystem'), value: 'system' },
+      { label: t('pages.system.reportTemplates.categoryDepartment'), value: 'department' },
+      { label: t('pages.system.reportTemplates.categoryPersonal'), value: 'personal' },
+    ], rules: [{ required: true, message: t('pages.system.reportTemplates.categoryRequired') }] },
+    { name: 'status', label: t('pages.system.reportTemplates.labelStatus'), type: 'select' as const, required: true, options: [
+      { label: t('pages.system.reportTemplates.statusDraft'), value: 'draft' },
+      { label: t('pages.system.reportTemplates.statusPublished'), value: 'published' },
+      { label: t('pages.system.reportTemplates.statusArchived'), value: 'archived' },
+    ], rules: [{ required: true, message: t('pages.system.reportTemplates.statusRequired') }] },
+    { name: 'is_default', label: t('pages.system.reportTemplates.labelIsDefault'), type: 'switch' as const },
+    { name: 'description', label: t('pages.system.reportTemplates.labelDescription'), type: 'textarea' as const },
   ];
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="报表模板管理"
+        headerTitle={t('pages.system.reportTemplates.headerTitle')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -344,7 +302,7 @@ const ReportTemplatesPage: React.FC = () => {
               total: result?.length || 0,
             };
           } catch (error) {
-            messageApi.error('获取模板列表失败');
+            messageApi.error(t('pages.system.reportTemplates.loadListFailed'));
             return {
               data: [],
               success: false,
@@ -353,7 +311,7 @@ const ReportTemplatesPage: React.FC = () => {
           }
         }}
         showCreateButton
-        createButtonText="新建报表模板"
+        createButtonText={t('pages.system.reportTemplates.createButton')}
         onCreate={handleCreate}
         onEdit={handleEdit}
         onDetail={handleDetail}
@@ -370,7 +328,7 @@ const ReportTemplatesPage: React.FC = () => {
             const items = Array.isArray(result) ? result : [];
             const toExport = type === 'currentPage' && pageData?.length ? pageData : items;
             if (toExport.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.reportTemplates.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
@@ -380,16 +338,16 @@ const ReportTemplatesPage: React.FC = () => {
             a.download = `report-templates-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success(`已导出 ${toExport.length} 条记录`);
+            messageApi.success(t('pages.system.reportTemplates.exportSuccess', { count: toExport.length }));
           } catch (error: any) {
-            messageApi.error('导出失败');
+            messageApi.error(t('pages.system.reportTemplates.exportFailed'));
           }
         }}
       />
 
       {/* 表单Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑报表模板' : '新建报表模板'}
+        title={isEdit ? t('pages.system.reportTemplates.modalEdit') : t('pages.system.reportTemplates.modalCreate')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={async () => {
@@ -402,7 +360,7 @@ const ReportTemplatesPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={`报表模板详情 - ${currentId || ''}`}
+        title={`${t('pages.system.reportTemplates.detailTitle')} - ${currentId || ''}`}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH}

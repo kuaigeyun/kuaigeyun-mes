@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Dropdown } from 'antd';
@@ -34,6 +35,7 @@ import {
  * 数据集管理列表页面组件
  */
 const DatasetListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -103,7 +105,7 @@ const DatasetListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取数据集详情失败');
+      messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
     }
   };
 
@@ -124,7 +126,7 @@ const DatasetListPage: React.FC = () => {
       const detail = await getDatasetByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取数据集详情失败');
+      messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -135,7 +137,7 @@ const DatasetListPage: React.FC = () => {
    */
   const handleBatchStatus = async (enable: boolean) => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要操作的数据集');
+      messageApi.warning(t('pages.system.datasets.selectToOperate'));
       return;
     }
     try {
@@ -144,11 +146,11 @@ const DatasetListPage: React.FC = () => {
         await updateDataset(String(uuid), { is_active: enable });
         done++;
       }
-      messageApi.success(`已${enable ? '启用' : '禁用'} ${done} 个数据集`);
+      messageApi.success(t('pages.system.datasets.batchStatusSuccess', { action: enable ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled'), count: done }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '操作失败');
+      messageApi.error(error?.message || t('pages.system.datasets.operationFailed'));
     }
   };
 
@@ -158,10 +160,10 @@ const DatasetListPage: React.FC = () => {
   const handleDelete = async (record: Dataset) => {
     try {
       await deleteDataset(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.datasets.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.datasets.deleteFailed'));
     }
   };
 
@@ -170,13 +172,13 @@ const DatasetListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的数据集');
+      messageApi.warning(t('pages.system.datasets.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${selectedRowKeys.length} 个数据集吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -191,14 +193,14 @@ const DatasetListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.datasets.batchDeletePartial', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个数据集`);
+            messageApi.success(t('pages.system.datasets.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('pages.system.datasets.batchDeleteFailed'));
         }
       },
     });
@@ -219,11 +221,11 @@ const DatasetListPage: React.FC = () => {
         data_source_uuid: detail.data_source_uuid,
         is_active: true,
       } as CreateDatasetData);
-      messageApi.success('复制成功，即将打开设计器');
+      messageApi.success(t('pages.system.datasets.copySuccess'));
       actionRef.current?.reload();
       navigate(`/system/datasets/designer?uuid=${created.uuid}`);
     } catch (error: any) {
-      messageApi.error(error?.message || '复制数据集失败');
+      messageApi.error(error?.message || t('pages.system.datasets.copyFailed'));
     }
   };
 
@@ -244,19 +246,19 @@ const DatasetListPage: React.FC = () => {
       
       setExecuteResult(result);
       if (result.success) {
-        messageApi.success('查询执行成功');
+        messageApi.success(t('pages.system.datasets.executeSuccess'));
       } else {
-        messageApi.error(result.error || '查询执行失败');
+        messageApi.error(result.error || t('pages.system.datasets.executeFailed'));
       }
     } catch (error: any) {
-      messageApi.error(error.message || '查询执行失败');
+      messageApi.error(error.message || t('pages.system.datasets.executeFailed'));
       setExecuteResult({
         success: false,
         data: [],
         total: 0,
         columns: [],
         elapsed_time: 0,
-        error: error.message || '查询执行失败',
+        error: error.message || t('pages.system.datasets.executeFailed'),
       });
     } finally {
       setExecuteLoading(false);
@@ -279,7 +281,7 @@ const DatasetListPage: React.FC = () => {
           description: values.description,
           is_active: values.is_active,
         } as UpdateDatasetData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.datasets.updateSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
@@ -293,14 +295,14 @@ const DatasetListPage: React.FC = () => {
           data_source_uuid: values.data_source_uuid,
           is_active: values.is_active,
         } as CreateDatasetData);
-        messageApi.success('创建成功，即将打开设计器');
+        messageApi.success(t('pages.system.datasets.createSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
         navigate(`/system/datasets/designer?uuid=${created.uuid}`);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.datasets.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -312,18 +314,18 @@ const DatasetListPage: React.FC = () => {
    */
   const columns: ProColumns<Dataset>[] = [
     {
-      title: '数据集名称',
+      title: t('pages.system.datasets.columnName'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '数据集代码',
+      title: t('pages.system.datasets.columnCode'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '数据连接',
+      title: t('pages.system.datasets.columnDataConnection'),
       dataIndex: 'data_source_uuid',
       width: 200,
       hideInSearch: true,
@@ -333,46 +335,46 @@ const DatasetListPage: React.FC = () => {
       },
     },
     {
-      title: '查询类型',
+      title: t('pages.system.datasets.columnQueryType'),
       dataIndex: 'query_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        sql: { text: 'SQL', status: 'Success' },
-        api: { text: 'API', status: 'Processing' },
+        sql: { text: t('pages.system.datasets.queryTypeSql'), status: 'Success' },
+        api: { text: t('pages.system.datasets.queryTypeApi'), status: 'Processing' },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          sql: { color: 'blue', text: 'SQL' },
-          api: { color: 'orange', text: 'API' },
+          sql: { color: 'blue', text: t('pages.system.datasets.queryTypeSql') },
+          api: { color: 'orange', text: t('pages.system.datasets.queryTypeApi') },
         };
         const typeInfo = typeMap[record.query_type] || { color: 'default', text: record.query_type };
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
     {
-      title: '描述',
+      title: t('pages.system.datasets.columnDescription'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('pages.system.datasets.columnEnabled'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.datasets.enabled'), status: 'Success' },
+        false: { text: t('pages.system.datasets.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后执行时间',
+      title: t('pages.system.datasets.columnLastExecuted'),
       dataIndex: 'last_executed_at',
       width: 180,
       valueType: 'dateTime',
@@ -380,7 +382,7 @@ const DatasetListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.datasets.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -388,20 +390,20 @@ const DatasetListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.datasets.columnActions'),
       valueType: 'option',
       width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<FormOutlined />} onClick={() => handleDesign(record)}>
-            设计
+            {t('pages.system.datasets.design')}
           </Button>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
+            {t('pages.system.datasets.view')}
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('pages.system.datasets.edit')}
           </Button>
           <Dropdown
             menu={{
@@ -409,25 +411,25 @@ const DatasetListPage: React.FC = () => {
                 {
                   key: 'execute',
                   icon: <PlayCircleOutlined />,
-                  label: '执行查询',
+                  label: t('pages.system.datasets.executeQuery'),
                   onClick: () => handleExecute(record),
                 },
                 {
                   key: 'copy',
                   icon: <CopyOutlined />,
-                  label: '复制',
+                  label: t('pages.system.datasets.copy'),
                   onClick: () => handleCopy(record),
                 },
                 {
                   key: 'delete',
                   icon: <DeleteOutlined />,
-                  label: '删除',
+                  label: t('pages.system.datasets.delete'),
                   danger: true,
                   onClick: () => {
                     Modal.confirm({
-                      title: '确定要删除这个数据集吗？',
-                      okText: '确定',
-                      cancelText: '取消',
+                      title: t('pages.system.datasets.confirmDelete'),
+                      okText: t('common.confirm'),
+                      cancelText: t('common.cancel'),
                       okType: 'danger',
                       onOk: () => handleDelete(record),
                     });
@@ -437,7 +439,7 @@ const DatasetListPage: React.FC = () => {
             }}
           >
             <Button type="link" size="small" icon={<MoreOutlined />} loading={executingUuid === record.uuid}>
-              更多
+              {t('pages.system.datasets.more')}
             </Button>
           </Dropdown>
         </Space>
@@ -487,7 +489,7 @@ const DatasetListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取数据集列表失败:', error);
-              messageApi.error(error?.message || '获取数据集列表失败');
+              messageApi.error(error?.message || t('pages.system.datasets.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -503,7 +505,7 @@ const DatasetListPage: React.FC = () => {
           }}
           showCreateButton
           onCreate={handleCreate}
-          createButtonText="新建数据集"
+          createButtonText={t('pages.system.datasets.createButton')}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{
@@ -512,19 +514,19 @@ const DatasetListPage: React.FC = () => {
           }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.datasets.batchDelete')}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>批量启用</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>批量禁用</Button>,
+                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.datasets.batchEnable')}</Button>,
+                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.datasets.batchDisable')}</Button>,
                 ]
               : []
           }
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('请填写导入数据');
+              messageApi.warning(t('pages.system.datasets.fillImportData'));
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
@@ -569,7 +571,7 @@ const DatasetListPage: React.FC = () => {
                 done++;
               }
             }
-            messageApi.success(`成功导入 ${done} 个数据集`);
+            messageApi.success(t('pages.system.datasets.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
           importHeaders={['*数据集名称', '*数据集代码', '*数据连接UUID', '*查询类型', '描述', '启用状态', '*查询配置(JSON)']}
@@ -586,7 +588,7 @@ const DatasetListPage: React.FC = () => {
               items = res.items;
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.datasets.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -596,14 +598,14 @@ const DatasetListPage: React.FC = () => {
             a.download = `datasets-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('pages.system.datasets.exportSuccess'));
           }}
         />
       </ListPageTemplate>
 
       {/* 创建/编辑数据集 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑数据集' : '新建数据集'}
+        title={isEdit ? t('pages.system.datasets.modalEdit') : t('pages.system.datasets.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -617,44 +619,44 @@ const DatasetListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="数据集名称"
-          rules={[{ required: true, message: '请输入数据集名称' }]}
-          placeholder="请输入数据集名称"
+          label={t('pages.system.datasets.labelName')}
+          rules={[{ required: true, message: t('pages.system.datasets.nameRequired') }]}
+          placeholder={t('pages.system.datasets.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
-          label="数据集代码"
+          label={t('pages.system.datasets.labelCode')}
           rules={[
-            { required: true, message: '请输入数据集代码' },
-            { pattern: /^[a-z0-9_]+$/, message: '数据集代码只能包含小写字母、数字和下划线' },
+            { required: true, message: t('pages.system.datasets.codeRequired') },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.datasets.codePattern') },
           ]}
-          placeholder="请输入数据集代码（唯一标识，如：user_list）"
+          placeholder={t('pages.system.datasets.codePlaceholder')}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         {!isEdit && (
           <SafeProFormSelect
             name="data_source_uuid"
-            label="数据连接"
-            rules={[{ required: true, message: '请选择数据连接' }]}
+            label={t('pages.system.datasets.labelDataConnection')}
+            rules={[{ required: true, message: t('pages.system.datasets.dataConnectionRequired') }]}
             options={dataConnectionGroups}
             colProps={{ span: 12 }}
           />
         )}
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="选填"
+          label={t('pages.system.datasets.labelDescription')}
+          placeholder={t('pages.system.datasets.descriptionOptional')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label="是否启用" colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('pages.system.datasets.labelEnabled')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate
-        title="数据集详情"
+        title={t('pages.system.datasets.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -671,26 +673,26 @@ const DatasetListPage: React.FC = () => {
                   handleEdit(detailData);
                 }}
               >
-                编辑
+                {t('pages.system.datasets.edit')}
               </Button>
               <Button
                 icon={<PlayCircleOutlined />}
                 loading={executingUuid === detailData.uuid}
                 onClick={() => handleExecute(detailData)}
               >
-                执行查询
+                {t('pages.system.datasets.executeQuery')}
               </Button>
               <Popconfirm
-                title="确定要删除这个数据集吗？"
+                title={t('pages.system.datasets.confirmDelete')}
                 onConfirm={() => {
                   handleDelete(detailData);
                   setDrawerVisible(false);
                 }}
-                okText="确定"
-                cancelText="取消"
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
               >
                 <Button danger icon={<DeleteOutlined />}>
-                  删除
+                  {t('pages.system.datasets.delete')}
                 </Button>
               </Popconfirm>
             </Space>
@@ -698,15 +700,15 @@ const DatasetListPage: React.FC = () => {
         }
         columns={[
           {
-            title: '数据集名称',
+            title: t('pages.system.datasets.columnName'),
             dataIndex: 'name',
           },
           {
-            title: '数据集代码',
+            title: t('pages.system.datasets.columnCode'),
             dataIndex: 'code',
           },
           {
-            title: '数据连接',
+            title: t('pages.system.datasets.columnDataConnection'),
             dataIndex: 'data_source_uuid',
             render: (value: string) => {
               const conn = dataConnectionsFlat.find(c => c.uuid === value);
@@ -714,22 +716,22 @@ const DatasetListPage: React.FC = () => {
             },
           },
           {
-            title: '查询类型',
+            title: t('pages.system.datasets.columnQueryType'),
             dataIndex: 'query_type',
             render: (value: string) => {
               const typeMap: Record<string, string> = {
-                sql: 'SQL',
-                api: 'API',
+                sql: t('pages.system.datasets.queryTypeSql'),
+                api: t('pages.system.datasets.queryTypeApi'),
               };
               return typeMap[value] || value;
             },
           },
           {
-            title: '数据集描述',
+            title: t('pages.system.datasets.labelDescription'),
             dataIndex: 'description',
           },
           {
-            title: '查询配置',
+            title: t('pages.system.datasets.columnQueryConfig'),
             dataIndex: 'query_config',
             render: (value: Record<string, any>) => (
               <pre style={{
@@ -746,33 +748,33 @@ const DatasetListPage: React.FC = () => {
             ),
           },
           {
-            title: '启用状态',
+            title: t('pages.system.datasets.columnEnabled'),
             dataIndex: 'is_active',
             render: (value: boolean) => (
               <Tag color={value ? 'success' : 'default'}>
-                {value ? '启用' : '禁用'}
+                {value ? t('pages.system.datasets.enabled') : t('pages.system.datasets.disabled')}
               </Tag>
             ),
           },
           {
-            title: '最后执行时间',
+            title: t('pages.system.datasets.columnLastExecuted'),
             dataIndex: 'last_executed_at',
             valueType: 'dateTime',
           },
           {
-            title: '最后错误',
+            title: t('pages.system.datasets.columnLastError'),
             dataIndex: 'last_error',
             render: (value: string) => value ? (
               <Tag color="error">{value}</Tag>
             ) : '-',
           },
           {
-            title: '创建时间',
+            title: t('pages.system.datasets.columnCreatedAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: '更新时间',
+            title: t('pages.system.datasets.columnUpdatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },
@@ -781,33 +783,33 @@ const DatasetListPage: React.FC = () => {
 
       {/* 执行查询结果 Modal */}
       <Modal
-        title="查询执行结果"
+        title={t('pages.system.datasets.executeResultTitle')}
         open={executeVisible}
         onCancel={() => setExecuteVisible(false)}
         footer={[
           <Button key="close" onClick={() => setExecuteVisible(false)}>
-            关闭
+            {t('pages.system.datasets.close')}
           </Button>,
         ]}
         width={1000}
       >
         {executeLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            执行中...
+            {t('pages.system.datasets.executing')}
           </div>
         ) : executeResult ? (
           <div>
             <Space style={{ marginBottom: 16 }}>
               <Badge status={executeResult.success ? 'success' : 'error'} />
-              <span>{executeResult.success ? '执行成功' : '执行失败'}</span>
-              <span>耗时: {executeResult.elapsed_time}s</span>
+              <span>{executeResult.success ? t('pages.system.datasets.executeSuccessShort') : t('pages.system.datasets.executeFailedShort')}</span>
+              <span>{t('pages.system.datasets.elapsedTime')}: {executeResult.elapsed_time}s</span>
               {executeResult.total !== undefined && (
-                <span>总行数: {executeResult.total}</span>
+                <span>{t('pages.system.datasets.totalRows')}: {executeResult.total}</span>
               )}
             </Space>
             {executeResult.error && (
               <div style={{ marginBottom: 16, padding: '8px', backgroundColor: '#fff2f0', borderRadius: '4px' }}>
-                <Tag color="error">错误: {executeResult.error}</Tag>
+                <Tag color="error">{t('pages.system.datasets.errorLabel')}: {executeResult.error}</Tag>
               </div>
             )}
             {executeResult.success && executeResult.data && executeResult.data.length > 0 && (
@@ -828,7 +830,7 @@ const DatasetListPage: React.FC = () => {
             )}
             {executeResult.success && (!executeResult.data || executeResult.data.length === 0) && (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                查询结果为空
+                {t('pages.system.datasets.emptyResult')}
               </div>
             )}
           </div>

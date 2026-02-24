@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -20,6 +21,7 @@ import { downloadFile } from '../../../../../utils';
  * 厂区管理列表页面组件
  */
 const PlantsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
 
   const actionRef = useRef<ActionType>(null);
@@ -60,7 +62,7 @@ const PlantsPage: React.FC = () => {
       const detail = await plantApi.get(record.uuid);
       setPlantDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取厂区详情失败');
+      messageApi.error(error.message || t('app.master-data.plants.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -80,10 +82,10 @@ const PlantsPage: React.FC = () => {
   const handleDelete = async (record: Plant) => {
     try {
       await plantApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -92,7 +94,7 @@ const PlantsPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请至少选择一条记录');
+      messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
@@ -101,9 +103,9 @@ const PlantsPage: React.FC = () => {
       const result = await plantApi.batchDelete(uuids);
       
       if (result.success) {
-        messageApi.success(result.message || '批量删除成功');
+        messageApi.success(result.message || t('app.master-data.batchDeleteSuccess'));
       } else {
-        messageApi.warning(result.message || '部分删除失败');
+        messageApi.warning(result.message || t('app.master-data.batchDeletePartial'));
       }
       
       // 清空选择
@@ -111,7 +113,7 @@ const PlantsPage: React.FC = () => {
       // 刷新列表
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
     }
   };
 
@@ -120,7 +122,7 @@ const PlantsPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('app.master-data.importEmpty'));
       return;
     }
 
@@ -142,7 +144,7 @@ const PlantsPage: React.FC = () => {
     });
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
 
@@ -186,11 +188,11 @@ const PlantsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(`缺少必需字段：厂区编码。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.plants.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(`缺少必需字段：厂区名称。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.plants.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -229,7 +231,7 @@ const PlantsPage: React.FC = () => {
 
         // 确保数组有足够的长度
         if (codeIndex === undefined || nameIndex === undefined) {
-          errors.push({ row: actualRowIndex, message: '表头映射错误，无法找到必需字段' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
           return;
         }
 
@@ -247,11 +249,11 @@ const PlantsPage: React.FC = () => {
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '厂区编码不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.plants.codeRequired') });
           return;
         }
         if (!nameValue) {
-          errors.push({ row: actualRowIndex, message: '厂区名称不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.plants.nameRequired') });
           return;
         }
 
@@ -268,7 +270,7 @@ const PlantsPage: React.FC = () => {
       } catch (error: any) {
         errors.push({
           row: actualRowIndex,
-          message: error.message || '数据解析失败',
+          message: error.message || t('app.master-data.dataParseFailed'),
         });
       }
     });
@@ -276,18 +278,18 @@ const PlantsPage: React.FC = () => {
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
                   <Typography.Text type="danger">
-                    第 {item.row} 行：{item.message}
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
                   </Typography.Text>
                 </List.Item>
               )}
@@ -299,7 +301,7 @@ const PlantsPage: React.FC = () => {
     }
 
     if (importData.length === 0) {
-      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
 
@@ -310,19 +312,19 @@ const PlantsPage: React.FC = () => {
         importFn: async (item: PlantCreate) => {
           return await plantApi.create(item);
         },
-        title: '正在导入厂区数据',
+        title: t('app.master-data.plants.importTitle'),
         concurrency: 5,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
               <p>
-                <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
               </p>
               {result.errors.length > 0 && (
                 <List
@@ -331,7 +333,7 @@ const PlantsPage: React.FC = () => {
                   renderItem={(item) => (
                     <List.Item>
                       <Typography.Text type="danger">
-                        第 {item.row} 行：{item.error}
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
                       </Typography.Text>
                     </List.Item>
                   )}
@@ -341,7 +343,7 @@ const PlantsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${result.successCount} 条厂区数据`);
+        messageApi.success(t('app.master-data.plants.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -349,7 +351,7 @@ const PlantsPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
+      messageApi.error(error.message || t('app.master-data.importFailed'));
     }
   };
 
@@ -368,7 +370,7 @@ const PlantsPage: React.FC = () => {
       if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
         // 导出选中的数据
         if (!currentPageData) {
-          messageApi.warning('无法获取选中数据，请重试');
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
@@ -385,7 +387,7 @@ const PlantsPage: React.FC = () => {
       }
 
       if (exportData.length === 0) {
-        messageApi.warning('没有可导出的数据');
+        messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
 
@@ -416,9 +418,9 @@ const PlantsPage: React.FC = () => {
       const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // 添加 BOM 以支持 Excel 正确显示中文
       
       downloadFile(blob, filename);
-      messageApi.success(`成功导出 ${exportData.length} 条数据`);
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
+      messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
   };
 

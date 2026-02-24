@@ -51,7 +51,7 @@ export const HolidayFormModal: React.FC<HolidayFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取假期详情失败');
+        messageApi.error(err?.message || t('app.master-data.holidays.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -64,7 +64,7 @@ export const HolidayFormModal: React.FC<HolidayFormModalProps> = ({
       }
       if (isEdit && editUuid) {
         await holidayApi.update(editUuid, payload as HolidayUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await holidayApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -72,13 +72,13 @@ export const HolidayFormModal: React.FC<HolidayFormModalProps> = ({
           payload.isActive = true;
         }
         const created = await holidayApi.create(payload as HolidayCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

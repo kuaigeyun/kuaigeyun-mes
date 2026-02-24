@@ -50,7 +50,7 @@ export const SkillFormModal: React.FC<SkillFormModalProps> = ({
         });
       })
       .catch((err: any) => {
-        messageApi.error(err?.message || '获取技能详情失败');
+        messageApi.error(err?.message || t('app.master-data.skills.getDetailFailed'));
       });
   }, [open, editUuid]);
 
@@ -59,7 +59,7 @@ export const SkillFormModal: React.FC<SkillFormModalProps> = ({
       setFormLoading(true);
       if (isEdit && editUuid) {
         await skillApi.update(editUuid, values as SkillUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         const updated = await skillApi.get(editUuid);
         onSuccess(updated);
       } else {
@@ -67,13 +67,13 @@ export const SkillFormModal: React.FC<SkillFormModalProps> = ({
           values.isActive = true;
         }
         const created = await skillApi.create(values as SkillCreate);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }

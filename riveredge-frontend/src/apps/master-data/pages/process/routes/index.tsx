@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, BranchesOutlined } from '@ant-design/icons';
@@ -21,6 +22,7 @@ import { DRAWER_CONFIG } from '../../../../../components/layout-templates/consta
  * 工艺路线管理列表页面组件
  */
 const ProcessRoutesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -64,10 +66,10 @@ const ProcessRoutesPage: React.FC = () => {
   const handleDelete = async (record: ProcessRoute) => {
     try {
       await processRouteApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -76,15 +78,15 @@ const ProcessRoutesPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -98,21 +100,21 @@ const ProcessRoutesPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -140,7 +142,7 @@ const ProcessRoutesPage: React.FC = () => {
       
       setBindModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '加载绑定信息失败');
+      messageApi.error(error.message || t('app.master-data.routes.loadBindFailed'));
     } finally {
       setBindLoading(false);
     }
@@ -154,12 +156,12 @@ const ProcessRoutesPage: React.FC = () => {
     
     try {
       await processRouteApi.bindMaterialGroup(currentBindProcessRouteUuid, materialGroupUuid);
-      messageApi.success('绑定成功');
+      messageApi.success(t('app.master-data.routes.bindSuccess'));
       // 重新加载绑定信息
       const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
       setBoundMaterials(bound);
     } catch (error: any) {
-      messageApi.error(error.message || '绑定失败');
+      messageApi.error(error.message || t('app.master-data.routes.bindFailed'));
     }
   };
 
@@ -171,12 +173,12 @@ const ProcessRoutesPage: React.FC = () => {
     
     try {
       await processRouteApi.unbindMaterialGroup(currentBindProcessRouteUuid, materialGroupUuid);
-      messageApi.success('解绑成功');
+      messageApi.success(t('app.master-data.routes.unbindSuccess'));
       // 重新加载绑定信息
       const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
       setBoundMaterials(bound);
     } catch (error: any) {
-      messageApi.error(error.message || '解绑失败');
+      messageApi.error(error.message || t('app.master-data.routes.unbindFailed'));
     }
   };
 
@@ -188,12 +190,12 @@ const ProcessRoutesPage: React.FC = () => {
     
     try {
       await processRouteApi.bindMaterial(currentBindProcessRouteUuid, materialUuid);
-      messageApi.success('绑定成功');
+      messageApi.success(t('app.master-data.routes.bindSuccess'));
       // 重新加载绑定信息
       const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
       setBoundMaterials(bound);
     } catch (error: any) {
-      messageApi.error(error.message || '绑定失败');
+      messageApi.error(error.message || t('app.master-data.routes.bindFailed'));
     }
   };
 
@@ -205,12 +207,12 @@ const ProcessRoutesPage: React.FC = () => {
     
     try {
       await processRouteApi.unbindMaterial(currentBindProcessRouteUuid, materialUuid);
-      messageApi.success('解绑成功');
+      messageApi.success(t('app.master-data.routes.unbindSuccess'));
       // 重新加载绑定信息
       const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
       setBoundMaterials(bound);
     } catch (error: any) {
-      messageApi.error(error.message || '解绑失败');
+      messageApi.error(error.message || t('app.master-data.routes.unbindFailed'));
     }
   };
 
@@ -225,7 +227,7 @@ const ProcessRoutesPage: React.FC = () => {
       const detail = await processRouteApi.get(record.uuid);
       setProcessRouteDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取工艺路线详情失败');
+      messageApi.error(error.message || t('app.master-data.routes.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }

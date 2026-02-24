@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Progress, Divider, theme } from 'antd';
 import { EyeOutlined, DeleteOutlined, ReloadOutlined, CloudDownloadOutlined, SettingOutlined, DatabaseOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -41,6 +42,7 @@ const formatFileSize = (bytes?: number): string => {
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -62,7 +64,7 @@ const CardView: React.FC = () => {
       });
       setBackups(response.items);
     } catch (error: any) {
-      handleError(error, '加载备份列表失败');
+      handleError(error, t('pages.system.dataBackups.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ const CardView: React.FC = () => {
       setCurrentBackup(detail);
       setDetailModalVisible(true);
     } catch (error: any) {
-      handleError(error, '获取备份详情失败');
+      handleError(error, t('pages.system.dataBackups.getDetailFailed'));
     }
   };
 
@@ -110,13 +112,13 @@ const CardView: React.FC = () => {
     try {
       const result = await restoreBackup(backup.uuid, true);
       if (result.success) {
-        handleSuccess(result.message || '备份恢复成功');
+        handleSuccess(result.message || t('pages.system.dataBackups.restoreSuccess'));
         loadBackups();
       } else {
-        handleError(new Error(result.error || '备份恢复失败'), '备份恢复失败');
+        handleError(new Error(result.error || t('pages.system.dataBackups.restoreFailed')), t('pages.system.dataBackups.restoreFailed'));
       }
     } catch (error: any) {
-      handleError(error, '备份恢复失败');
+      handleError(error, t('pages.system.dataBackups.restoreFailed'));
     }
   };
 
@@ -126,10 +128,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (backup: DataBackup) => {
     try {
       await deleteBackup(backup.uuid);
-      handleSuccess('删除成功');
+      handleSuccess(t('pages.system.dataBackups.deleteSuccess'));
       loadBackups();
     } catch (error: any) {
-      handleError(error, '删除失败');
+      handleError(error, t('pages.system.dataBackups.deleteFailed'));
     }
   };
 
@@ -144,37 +146,33 @@ const CardView: React.FC = () => {
    * 获取备份类型标签
    */
   const getBackupTypeTag = (type: string): { color: string; text: string } => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      full: { color: 'blue', text: '全量' },
-      incremental: { color: 'green', text: '增量' },
+    const typeMap: Record<string, { color: string; textKey: string }> = {
+      full: { color: 'blue', textKey: 'pages.system.dataBackups.typeFull' },
+      incremental: { color: 'green', textKey: 'pages.system.dataBackups.typeIncremental' },
     };
-    return typeMap[type] || { color: 'default', text: type };
+    const info = typeMap[type] || { color: 'default', textKey: '' };
+    return { color: info.color, text: info.textKey ? t(info.textKey) : type };
   };
 
-  /**
-   * 获取备份状态显示
-   */
   const getStatusInfo = (status: string): { 
     status: 'success' | 'error' | 'processing' | 'default'; 
     text: string;
   } => {
-    const statusMap: Record<string, { status: 'success' | 'error' | 'processing' | 'default'; text: string }> = {
-      pending: { status: 'default', text: '待执行' },
-      running: { status: 'processing', text: '执行中' },
-      success: { status: 'success', text: '成功' },
-      failed: { status: 'error', text: '失败' },
+    const statusMap: Record<string, { status: 'success' | 'error' | 'processing' | 'default'; textKey: string }> = {
+      pending: { status: 'default', textKey: 'pages.system.dataBackups.statusPending' },
+      running: { status: 'processing', textKey: 'pages.system.dataBackups.statusRunning' },
+      success: { status: 'success', textKey: 'pages.system.dataBackups.statusSuccess' },
+      failed: { status: 'error', textKey: 'pages.system.dataBackups.statusFailed' },
     };
-    return statusMap[status] || { status: 'default', text: status };
+    const info = statusMap[status] || { status: 'default', textKey: '' };
+    return { status: info.status, text: info.textKey ? t(info.textKey) : status };
   };
 
-  /**
-   * 获取备份范围文本
-   */
   const getBackupScopeText = (scope: string): string => {
     const scopeMap: Record<string, string> = {
-      all: '全部',
-      tenant: '组织',
-      table: '表',
+      all: t('pages.system.dataBackups.scopeAll'),
+      tenant: t('pages.system.dataBackups.scopeTenant'),
+      table: t('pages.system.dataBackups.scopeTable'),
     };
     return scopeMap[scope] || scope;
   };
@@ -199,14 +197,14 @@ const CardView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="数据备份管理"
+        title={t('pages.system.dataBackups.cardViewTitle')}
         extra={[
           <Button
             key="strategy"
             icon={<SettingOutlined />}
             onClick={handleGoToStrategy}
           >
-            备份策略配置
+            {t('pages.system.dataBackups.strategyConfig')}
           </Button>,
           <Button
             key="refresh"
@@ -214,16 +212,16 @@ const CardView: React.FC = () => {
             onClick={loadBackups}
             loading={loading}
           >
-            刷新
+            {t('pages.system.dataBackups.refresh')}
           </Button>,
         ]}
       >
         {/* 统计仪表盘 */}
-        <Card style={{ marginBottom: 16 }} title="备份统计">
+        <Card style={{ marginBottom: 16 }} title={t('pages.system.dataBackups.statsTitle')}>
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总备份数"
+                title={t('pages.system.dataBackups.statTotal')}
                 value={stats.total}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -231,7 +229,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="成功备份"
+                title={t('pages.system.dataBackups.statSuccess')}
                 value={stats.success}
                 prefix={<CheckCircleOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -239,7 +237,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="失败备份"
+                title={t('pages.system.dataBackups.statFailed')}
                 value={stats.failed}
                 prefix={<CloseCircleOutlined />}
                 styles={{ content: { color: '#ff4d4f' } }}
@@ -247,7 +245,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="执行中"
+                title={t('pages.system.dataBackups.statRunning')}
                 value={stats.running}
                 prefix={<ClockCircleOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -257,7 +255,7 @@ const CardView: React.FC = () => {
           <Row gutter={16} style={{ marginTop: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="全量备份"
+                title={t('pages.system.dataBackups.statFull')}
                 value={stats.full}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -265,7 +263,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="增量备份"
+                title={t('pages.system.dataBackups.statIncremental')}
                 value={stats.incremental}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -273,7 +271,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总备份大小"
+                title={t('pages.system.dataBackups.statTotalSize')}
                 value={formatFileSize(stats.totalSize)}
                 prefix={<CloudDownloadOutlined />}
                 styles={{ content: { color: '#722ed1' } }}
@@ -281,7 +279,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="成功备份大小"
+                title={t('pages.system.dataBackups.statSuccessSize')}
                 value={formatFileSize(stats.successSize)}
                 prefix={<CloudDownloadOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -304,21 +302,21 @@ const CardView: React.FC = () => {
                       hoverable
                       style={{ height: '100%' }}
                       actions={[
-                        <Tooltip key="view" title="查看详情">
+                        <Tooltip key="view" title={t('pages.system.dataBackups.viewDetail')}>
                           <EyeOutlined
                             onClick={() => handleViewDetail(backup)}
                             style={{ fontSize: 16 }}
                           />
                         </Tooltip>,
                         backup.status === 'success' ? (
-                          <Tooltip key="restore" title="恢复备份">
+                          <Tooltip key="restore" title={t('pages.system.dataBackups.restoreBackup')}>
                             <ReloadOutlined
                               onClick={() => {
                                 Modal.confirm({
-                                  title: '确定要恢复此备份吗？',
-                                  content: '此操作将覆盖当前数据库数据，请谨慎操作！',
-                                  okText: '确定',
-                                  cancelText: '取消',
+                                  title: t('pages.system.dataBackups.restoreConfirmTitle'),
+                                  content: t('pages.system.dataBackups.restoreConfirmContent'),
+                                  okText: t('common.confirm'),
+                                  cancelText: t('common.cancel'),
                                   onOk: () => handleRestore(backup),
                                 });
                               }}
@@ -328,12 +326,12 @@ const CardView: React.FC = () => {
                         ) : null,
                         <Popconfirm
                           key="delete"
-                          title="确定要删除这个备份吗？"
+                          title={t('pages.system.dataBackups.deleteConfirmTitle')}
                           onConfirm={() => handleDelete(backup)}
-                          okText="确定"
-                          cancelText="取消"
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
                         >
-                          <Tooltip title="删除">
+                          <Tooltip title={t('pages.system.dataBackups.deleteTooltip')}>
                             <DeleteOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -353,7 +351,7 @@ const CardView: React.FC = () => {
                           </div>
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>备份范围：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelScope')}</Text>
                             <Text style={{ fontSize: 12 }}>{getBackupScopeText(backup.backup_scope)}</Text>
                           </div>
                         </Space>
@@ -362,7 +360,7 @@ const CardView: React.FC = () => {
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelStatus')}</Text>
                             <Badge
                               status={statusInfo.status}
                               text={statusInfo.text}
@@ -371,14 +369,14 @@ const CardView: React.FC = () => {
                           
                           {backup.file_size && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>文件大小：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelFileSize')}</Text>
                               <Text style={{ fontSize: 12 }}>{formatFileSize(backup.file_size)}</Text>
                             </div>
                           )}
                           
                           {backup.started_at && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>开始时间：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelStartedAt')}</Text>
                               <Text style={{ fontSize: 12 }}>
                                 {dayjs(backup.started_at).format('MM-DD HH:mm')}
                               </Text>
@@ -387,7 +385,7 @@ const CardView: React.FC = () => {
                           
                           {backup.completed_at && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>完成时间：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelCompletedAt')}</Text>
                               <Text style={{ fontSize: 12 }}>
                                 {dayjs(backup.completed_at).format('MM-DD HH:mm')}
                               </Text>
@@ -415,14 +413,14 @@ const CardView: React.FC = () => {
               })}
             </Row>
           ) : (
-            <Empty description="暂无备份记录" />
+            <Empty description={t('pages.system.dataBackups.noBackups')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 备份详情 Modal */}
       <Modal
-        title="备份详情"
+        title={t('pages.system.dataBackups.detailTitle')}
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
@@ -433,46 +431,46 @@ const CardView: React.FC = () => {
       >
         {currentBackup && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="备份名称">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnName')}>
               {currentBackup.name}
             </Descriptions.Item>
-            <Descriptions.Item label="备份类型">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnType')}>
               <Tag color={getBackupTypeTag(currentBackup.backup_type).color}>
                 {getBackupTypeTag(currentBackup.backup_type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="备份范围">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnScope')}>
               {getBackupScopeText(currentBackup.backup_scope)}
             </Descriptions.Item>
             {currentBackup.backup_tables && currentBackup.backup_tables.length > 0 && (
-              <Descriptions.Item label="备份表">
+              <Descriptions.Item label={t('pages.system.dataBackups.backupTables')}>
                 {currentBackup.backup_tables.join(', ')}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnStatus')}>
               <Badge
                 status={getStatusInfo(currentBackup.status).status}
                 text={getStatusInfo(currentBackup.status).text}
               />
             </Descriptions.Item>
-            <Descriptions.Item label="文件路径">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnFilePath')}>
               {currentBackup.file_path || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="文件大小">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnFileSize')}>
               {formatFileSize(currentBackup.file_size)}
             </Descriptions.Item>
-            <Descriptions.Item label="开始时间">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnStartedAt')}>
               {currentBackup.started_at
                 ? dayjs(currentBackup.started_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="完成时间">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnCompletedAt')}>
               {currentBackup.completed_at
                 ? dayjs(currentBackup.completed_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             {currentBackup.error_message && (
-              <Descriptions.Item label="错误信息">
+              <Descriptions.Item label={t('pages.system.dataBackups.columnError')}>
                 <Alert
                   message={currentBackup.error_message}
                   type="error"
@@ -481,10 +479,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="创建时间">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnCreatedAt')}>
               {dayjs(currentBackup.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
+            <Descriptions.Item label={t('pages.system.dataBackups.columnUpdatedAt')}>
               {dayjs(currentBackup.updated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>

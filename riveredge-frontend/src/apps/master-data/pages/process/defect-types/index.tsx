@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -22,6 +23,7 @@ import { batchImport } from '../../../../../utils/import';
  * 不良品信息管理列表页面组件
  */
 const DefectTypesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -57,10 +59,10 @@ const DefectTypesPage: React.FC = () => {
   const handleDelete = async (record: DefectType) => {
     try {
       await defectTypeApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -69,15 +71,15 @@ const DefectTypesPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -91,21 +93,21 @@ const DefectTypesPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -122,7 +124,7 @@ const DefectTypesPage: React.FC = () => {
       const detail = await defectTypeApi.get(record.uuid);
       setDefectTypeDetail(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取不良品详情失败');
+      messageApi.error(error.message || t('app.master-data.defectTypes.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -139,7 +141,7 @@ const DefectTypesPage: React.FC = () => {
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
-      messageApi.warning('导入数据为空');
+      messageApi.warning(t('app.master-data.importEmpty'));
       return;
     }
 
@@ -156,7 +158,7 @@ const DefectTypesPage: React.FC = () => {
     });
 
     if (nonEmptyRows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      messageApi.warning(t('app.master-data.importNoRows'));
       return;
     }
 
@@ -176,11 +178,11 @@ const DefectTypesPage: React.FC = () => {
 
     const autoCodeEnabled = isAutoGenerateEnabled('master-data-defect-type');
     if (!autoCodeEnabled && headerIndexMap['code'] === undefined) {
-      messageApi.error(`缺少必需字段：不良品编码。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.defectTypes.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(`缺少必需字段：不良品名称。当前表头：${headers.join(', ')}`);
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.defectTypes.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -200,11 +202,11 @@ const DefectTypesPage: React.FC = () => {
       const codeValue = code != null ? String(code).trim() : '';
       const nameValue = name != null ? String(name).trim() : '';
       if (!autoCodeEnabled && !codeValue) {
-        errors.push({ row: actualRowIndex, message: '不良品编码不能为空' });
+        errors.push({ row: actualRowIndex, message: t('app.master-data.defectTypes.codeRequired') });
         return;
       }
       if (!nameValue) {
-        errors.push({ row: actualRowIndex, message: '不良品名称不能为空' });
+        errors.push({ row: actualRowIndex, message: t('app.master-data.defectTypes.nameRequired') });
         return;
       }
 
@@ -219,17 +221,17 @@ const DefectTypesPage: React.FC = () => {
 
     if (errors.length > 0) {
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.dataValidationFailed'),
         width: 600,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
-                  <Typography.Text type="danger">第 {item.row} 行：{item.message}</Typography.Text>
+                  <Typography.Text type="danger">{t('app.master-data.rowError', { row: item.row, message: item.message })}</Typography.Text>
                 </List.Item>
               )}
             />
@@ -240,7 +242,7 @@ const DefectTypesPage: React.FC = () => {
     }
 
     if (importData.length === 0) {
-      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      messageApi.warning(t('app.master-data.importAllEmpty'));
       return;
     }
 
@@ -255,11 +257,11 @@ const DefectTypesPage: React.FC = () => {
             data = { ...data, code: res.code };
           }
           if (!data.code) {
-            throw new Error('不良品编码不能为空（未启用自动编码时请填写编码列）');
+            throw new Error(t('app.master-data.defectTypes.codeRequiredAuto'));
           }
           return defectTypeApi.create(data);
         },
-        { title: '正在导入不良品数据' }
+        { title: t('app.master-data.defectTypes.importTitle') }
       );
 
       const successCount = result.filter((r) => r.success).length;
@@ -267,17 +269,17 @@ const DefectTypesPage: React.FC = () => {
 
       if (failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
-              <p><strong>导入结果：</strong>成功 {successCount} 条，失败 {failureCount} 条</p>
+              <p><strong>{t('app.master-data.importPartialResultIntro', { success: successCount, failure: failureCount })}</strong></p>
               <List
                 size="small"
                 dataSource={result.filter((r) => !r.success)}
                 renderItem={(item) => (
                   <List.Item>
-                    <Typography.Text type="danger">第 {item.rowIndex} 行：{item.error?.message ?? item.message}</Typography.Text>
+                    <Typography.Text type="danger">{t('app.master-data.rowError', { row: item.rowIndex, message: item.error?.message ?? item.message })}</Typography.Text>
                   </List.Item>
                 )}
               />
@@ -285,11 +287,11 @@ const DefectTypesPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${successCount} 条不良品数据`);
+        messageApi.success(t('app.master-data.defectTypes.importSuccess', { count: successCount }));
       }
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '导入失败');
+      messageApi.error(error?.message || t('app.master-data.importFailed'));
     }
   };
 

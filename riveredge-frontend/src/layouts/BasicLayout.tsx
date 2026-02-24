@@ -4038,9 +4038,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const businessCount = badgeKey ? (menuBadgeCounts[badgeKey] ?? 0) : 0;
             const badgeEl =
               isReport ? (
-                <span className="menu-item-badge menu-item-badge-report">报表</span>
+                <span className="menu-item-badge menu-item-badge-report">{t('ui.menu.badgeReport')}</span>
               ) : isDashboard ? (
-                <span className="menu-item-badge menu-item-badge-dashboard">大屏</span>
+                <span className="menu-item-badge menu-item-badge-dashboard">{t('ui.menu.badgeDashboard')}</span>
               ) : businessCount > 0 ? (
                 <Badge count={businessCount} size="small" className="menu-item-badge-count" />
               ) : null;
