@@ -160,6 +160,7 @@ async def recompute_computation(
         return await computation_service.recompute_computation(
             tenant_id=tenant_id,
             computation_id=computation_id,
+            operator_id=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -169,6 +170,38 @@ async def recompute_computation(
         logger.error(f"重新计算失败: {e}")
         err_msg = f"{type(e).__name__}: {str(e)}"
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
+
+
+@router.get("/{computation_id}/recalc-history", summary="获取需求计算重算历史")
+async def get_computation_recalc_history(
+    computation_id: int = Path(..., description="计算ID"),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求计算重算历史列表。"""
+    try:
+        return await computation_service.list_computation_recalc_history(
+            tenant_id=tenant_id, computation_id=computation_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/{computation_id}/snapshots", summary="获取需求计算快照列表")
+async def get_computation_snapshots(
+    computation_id: int = Path(..., description="计算ID"),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求计算快照列表。"""
+    try:
+        return await computation_service.list_computation_snapshots(
+            tenant_id=tenant_id, computation_id=computation_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.put("/{computation_id}", response_model=DemandComputationResponse, summary="更新需求计算")

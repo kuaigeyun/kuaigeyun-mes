@@ -18,6 +18,12 @@ from loguru import logger
 
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
+from apps.kuaizhizao.models.demand_snapshot import DemandSnapshot
+from apps.kuaizhizao.models.demand_recalc_history import DemandRecalcHistory
+from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.sales_forecast import SalesForecast
+from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
 
 from apps.kuaizhizao.schemas.demand import (
     DemandCreate, DemandUpdate, DemandResponse, DemandListResponse,
@@ -151,13 +157,38 @@ class DemandService(AppBaseService[Demand]):
         
         response = DemandResponse.model_validate(demand)
         
-        # 如果需要包含明细
+        # 展示与上游一致：若需求来自销售订单/销售预测，用上游的 status/review_status 覆盖展示
+        if getattr(demand, "source_type", None) == "sales_order" and getattr(demand, "source_id", None):
+            order = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, id=demand.source_id, deleted_at__isnull=True
+            )
+            if order:
+                response.status = order.status
+                response.review_status = order.review_status
+        elif getattr(demand, "source_type", None) == "sales_forecast" and getattr(demand, "source_id", None):
+            forecast = await SalesForecast.get_or_none(
+                tenant_id=tenant_id, id=demand.source_id, deleted_at__isnull=True
+            )
+            if forecast:
+                response.status = forecast.status
+                response.review_status = forecast.review_status
+        
+        items = None
         if include_items:
             items = await DemandItem.filter(
                 tenant_id=tenant_id,
                 demand_id=demand_id
             ).all()
             response.items = [DemandItemResponse.model_validate(item) for item in items]
+        
+        # 用覆盖后的 status/review_status 计算 lifecycle，保证与上游展示一致
+        from apps.kuaizhizao.services.document_lifecycle_service import get_demand_lifecycle
+        demand_for_lifecycle = type("DemandView", (), {
+            "status": response.status,
+            "review_status": response.review_status,
+            "pushed_to_computation": getattr(demand, "pushed_to_computation", False),
+        })()
+        response.lifecycle = get_demand_lifecycle(demand_for_lifecycle, items=items)
         
         # 如果需要耗时统计
         if include_duration:
@@ -211,9 +242,39 @@ class DemandService(AppBaseService[Demand]):
         # 获取分页数据
         demands = await query.offset(skip).limit(limit).order_by('-created_at')
         
-        # 返回前端期望的格式
+        # 批量拉取上游单据，保证需求展示与销售订单/销售预测一致
+        order_ids = [d.source_id for d in demands if getattr(d, "source_type", None) == "sales_order" and getattr(d, "source_id", None)]
+        forecast_ids = [d.source_id for d in demands if getattr(d, "source_type", None) == "sales_forecast" and getattr(d, "source_id", None)]
+        order_map = {}
+        forecast_map = {}
+        if order_ids:
+            orders = await SalesOrder.filter(tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True).all()
+            order_map = {o.id: o for o in orders}
+        if forecast_ids:
+            forecasts = await SalesForecast.filter(tenant_id=tenant_id, id__in=forecast_ids, deleted_at__isnull=True).all()
+            forecast_map = {f.id: f for f in forecasts}
+        
+        from apps.kuaizhizao.services.document_lifecycle_service import get_demand_lifecycle
+        data = []
+        for demand in demands:
+            item = DemandListResponse.model_validate(demand)
+            status, review_status = demand.status, demand.review_status
+            if getattr(demand, "source_type", None) == "sales_order" and demand.source_id and demand.source_id in order_map:
+                o = order_map[demand.source_id]
+                status, review_status = o.status, o.review_status
+                item.status = status
+                item.review_status = review_status
+            elif getattr(demand, "source_type", None) == "sales_forecast" and demand.source_id and demand.source_id in forecast_map:
+                f = forecast_map[demand.source_id]
+                status, review_status = f.status, f.review_status
+                item.status = status
+                item.review_status = review_status
+            demand_view = type("DemandView", (), {"status": status, "review_status": review_status, "pushed_to_computation": getattr(demand, "pushed_to_computation", False)})()
+            item.lifecycle = get_demand_lifecycle(demand_view, items=None)
+            data.append(item.model_dump())
+        
         return {
-            "data": [DemandListResponse.model_validate(demand).model_dump() for demand in demands],
+            "data": data,
             "total": total,
             "success": True
         }
@@ -318,21 +379,23 @@ class DemandService(AppBaseService[Demand]):
                 updated_by=submitted_by
             )
             
-            # 启动审核流程（如果配置了审核流程）
+            # 启动审核流程（统一使用 ApprovalInstanceService）
             try:
-                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
-                approval_service = ApprovalFlowService()
-                flow = await approval_service.start_approval_flow(
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
+                instance = await ApprovalInstanceService.start_approval(
                     tenant_id=tenant_id,
+                    user_id=submitted_by,
+                    process_code="demand_approval",
                     entity_type="demand",
                     entity_id=demand_id,
-                    business_mode=demand.business_mode,
-                    demand_type=demand.demand_type
+                    entity_uuid=str(demand.uuid),
+                    title=f"需求审批: {demand.demand_code}",
+                    content=f"需求类型: {demand.demand_type or '-'}, 业务模式: {demand.business_mode or '-'}",
                 )
-                logger.info(f"需求 {demand.demand_code} 已启动审核流程 {flow.flow_code}")
-            except NotFoundError:
-                # 没有配置审核流程，使用简单审核模式
-                logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
+                if instance:
+                    logger.info(f"需求 {demand.demand_code} 已启动审核流程")
+                else:
+                    logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
             except Exception as e:
                 logger.warning(f"启动审核流程失败: {e}，继续使用简单审核模式")
             
@@ -373,32 +436,23 @@ class DemandService(AppBaseService[Demand]):
             # 获取审核人信息
             approver_name = await self.get_user_name(approved_by)
             
-            # 尝试使用审核流程服务执行审核
+            # 使用统一审批服务执行审核
             try:
-                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
-                approval_service = ApprovalFlowService()
-                
-                # 检查是否有审核流程
-                approval_status = await approval_service.get_approval_status(
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
+                approval_status = await ApprovalInstanceService.get_approval_status(
                     tenant_id=tenant_id,
                     entity_type="demand",
-                    entity_id=demand_id
+                    entity_id=demand_id,
                 )
-                
                 if approval_status.get("has_flow"):
-                    # 使用审核流程执行审核
-                    approval_result = "驳回" if rejection_reason else "通过"
-                    result = await approval_service.execute_approval(
+                    result = await ApprovalInstanceService.execute_approval(
                         tenant_id=tenant_id,
                         entity_type="demand",
                         entity_id=demand_id,
                         approver_id=approved_by,
-                        approver_name=approver_name,
-                        approval_result=approval_result,
-                        approval_comment=rejection_reason
+                        approved=not bool(rejection_reason),
+                        comment=rejection_reason,
                     )
-                    
-                    # 根据审核流程结果更新需求状态
                     if result.get("flow_rejected"):
                         review_status = ReviewStatus.REJECTED
                         status = DemandStatus.REJECTED
@@ -406,16 +460,13 @@ class DemandService(AppBaseService[Demand]):
                         review_status = ReviewStatus.APPROVED
                         status = DemandStatus.AUDITED
                     else:
-                        # 流程进行中，保持待审核状态
                         review_status = ReviewStatus.PENDING
                         status = DemandStatus.PENDING_REVIEW
                 else:
-                    # 没有审核流程，使用简单审核模式
                     review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
                     status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
             except Exception as e:
-                logger.warning(f"使用审核流程服务失败: {e}，回退到简单审核模式")
-                # 回退到简单审核模式
+                logger.warning(f"使用审批服务失败: {e}，回退到简单审核模式")
                 review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
                 status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
             
@@ -906,6 +957,131 @@ class DemandService(AppBaseService[Demand]):
             "failed_items": failed_items
         }
 
+    async def inspect_orphan_demands(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        巡检孤儿需求：统计当前租户的销售订单数、销售预测数、需求数，并列出来源已不存在的需求（孤儿）ID。
+        仅查询不修改，用于确认数据后再决定是否调用 clean_orphan_demands。
+
+        Returns:
+            Dict: sales_order_count, sales_forecast_count, demand_count, orphan_demand_ids, orphan_count
+        """
+        sales_order_count = await SalesOrder.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).count()
+        sales_forecast_count = await SalesForecast.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).count()
+        demand_count = await Demand.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).count()
+
+        candidates = await Demand.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            source_type__in=["sales_order", "sales_forecast"],
+        ).exclude(source_id=None).values_list("id", "source_type", "source_id")
+
+        order_source_ids = [s_id for _id, st, s_id in candidates if st == "sales_order" and s_id]
+        forecast_source_ids = [s_id for _id, st, s_id in candidates if st == "sales_forecast" and s_id]
+
+        existing_order_ids = set()
+        if order_source_ids:
+            existing_order_ids = set(
+                await SalesOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=order_source_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            )
+        existing_forecast_ids = set()
+        if forecast_source_ids:
+            existing_forecast_ids = set(
+                await SalesForecast.filter(
+                    tenant_id=tenant_id,
+                    id__in=forecast_source_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            )
+
+        orphan_ids = []
+        for demand_id, source_type, source_id in candidates:
+            if not source_id:
+                continue
+            if source_type == "sales_order" and source_id not in existing_order_ids:
+                orphan_ids.append(demand_id)
+            elif source_type == "sales_forecast" and source_id not in existing_forecast_ids:
+                orphan_ids.append(demand_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "sales_order_count": sales_order_count,
+            "sales_forecast_count": sales_forecast_count,
+            "demand_count": demand_count,
+            "orphan_demand_ids": orphan_ids,
+            "orphan_count": len(orphan_ids),
+        }
+
+    async def clean_orphan_demands(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        清理孤儿需求：来源单据（销售订单或销售预测）已被删除、但需求记录仍存在的需求。
+        直接物理删除（先删明细再删需求），不从库中保留。
+
+        Args:
+            tenant_id: 租户ID
+
+        Returns:
+            Dict: {"cleaned_count": 清理数量, "demand_ids": 被清理的需求ID列表}
+        """
+        # 未删除且有关联来源的需求（销售订单或销售预测）
+        candidates = await Demand.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            source_type__in=["sales_order", "sales_forecast"],
+        ).exclude(source_id=None).values_list("id", "source_type", "source_id")
+
+        if not candidates:
+            return {"cleaned_count": 0, "demand_ids": []}
+
+        order_source_ids = [s_id for _id, st, s_id in candidates if st == "sales_order" and s_id]
+        forecast_source_ids = [s_id for _id, st, s_id in candidates if st == "sales_forecast" and s_id]
+
+        existing_order_ids = set()
+        if order_source_ids:
+            existing_order_ids = set(
+                await SalesOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=order_source_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            )
+        existing_forecast_ids = set()
+        if forecast_source_ids:
+            existing_forecast_ids = set(
+                await SalesForecast.filter(
+                    tenant_id=tenant_id,
+                    id__in=forecast_source_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            )
+
+        orphan_ids = []
+        for demand_id, source_type, source_id in candidates:
+            if not source_id:
+                continue
+            if source_type == "sales_order" and source_id not in existing_order_ids:
+                orphan_ids.append(demand_id)
+            elif source_type == "sales_forecast" and source_id not in existing_forecast_ids:
+                orphan_ids.append(demand_id)
+
+        if not orphan_ids:
+            return {"cleaned_count": 0, "demand_ids": []}
+
+        async with in_transaction():
+            await DemandItem.filter(tenant_id=tenant_id, demand_id__in=orphan_ids).delete()
+            await Demand.filter(tenant_id=tenant_id, id__in=orphan_ids).delete()
+        logger.info("清理孤儿需求(直接删除): tenant_id=%s, 数量=%s, demand_ids=%s", tenant_id, len(orphan_ids), orphan_ids)
+        return {"cleaned_count": len(orphan_ids), "demand_ids": orphan_ids}
+
     async def _update_demand_totals(
         self, 
         tenant_id: int, 
@@ -938,6 +1114,316 @@ class DemandService(AppBaseService[Demand]):
             total_quantity=total_quantity,
             total_amount=total_amount
         )
+
+    async def sync_from_upstream(
+        self,
+        tenant_id: int,
+        source_type: str,
+        source_id: int,
+        operator_id: int,
+    ) -> Dict[str, Any]:
+        """
+        根据上游单据（销售订单/销售预测）同步并重算关联需求。
+        写需求快照与重算历史；若需求已下推计算则仅标记并触发下游重算提醒（策略 A）。
+        """
+        demand = await Demand.get_or_none(
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            deleted_at__isnull=True,
+        )
+        if not demand:
+            return {"synced": False, "reason": "no_demand"}
+
+        trigger_reason = f"upstream_{source_type}_updated"
+        had_pushed = demand.pushed_to_computation
+        computation_id = demand.computation_id
+        computation_code = demand.computation_code or ""
+        snapshot_id_saved: Optional[int] = None
+
+        try:
+            async with in_transaction():
+                # 1. 快照：当前需求 + 明细
+                items_before = await DemandItem.filter(
+                    tenant_id=tenant_id, demand_id=demand.id
+                ).all()
+                demand_snapshot_json = self._demand_to_snapshot_dict(demand)
+                items_snapshot_json = [self._demand_item_to_snapshot_dict(i) for i in items_before]
+                snapshot = await DemandSnapshot.create(
+                    tenant_id=tenant_id,
+                    demand_id=demand.id,
+                    snapshot_type="before_recalc",
+                    snapshot_at=datetime.now(),
+                    demand_snapshot=demand_snapshot_json,
+                    demand_items_snapshot=items_snapshot_json,
+                    trigger_reason=trigger_reason,
+                )
+                snapshot_id_saved = snapshot.id
+
+                # 2. 从上游覆盖需求与明细
+                if source_type == "sales_order":
+                    order = await SalesOrder.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not order:
+                        raise NotFoundError("销售订单", str(source_id))
+                    order_items = await SalesOrderItem.filter(
+                        tenant_id=tenant_id, sales_order_id=source_id
+                    ).order_by("id")
+                    if not order_items:
+                        raise BusinessLogicError("销售订单无明细，无法同步需求")
+                    total_qty = sum(Decimal(str(it.order_quantity)) for it in order_items)
+                    total_amt = sum(Decimal(str(it.total_amount)) for it in order_items)
+                    upd = {
+                        "demand_code": order.order_code,
+                        "demand_name": order.order_code,
+                        "start_date": order.order_date,
+                        "end_date": order.delivery_date,
+                        "order_date": order.order_date,
+                        "delivery_date": order.delivery_date,
+                        "customer_id": order.customer_id,
+                        "customer_name": order.customer_name,
+                        "customer_contact": order.customer_contact,
+                        "customer_phone": order.customer_phone,
+                        "total_quantity": total_qty,
+                        "total_amount": total_amt,
+                        "status": order.status,
+                        "review_status": order.review_status,
+                        "reviewer_id": order.reviewer_id,
+                        "reviewer_name": order.reviewer_name,
+                        "review_time": order.review_time,
+                        "salesman_id": order.salesman_id,
+                        "salesman_name": order.salesman_name,
+                        "shipping_address": order.shipping_address,
+                        "shipping_method": order.shipping_method,
+                        "payment_terms": order.payment_terms,
+                        "notes": order.notes,
+                        "source_code": order.order_code,
+                        "updated_by": operator_id,
+                    }
+                    await Demand.filter(tenant_id=tenant_id, id=demand.id).update(**upd)
+                    await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).delete()
+                    for it in order_items:
+                        await DemandItem.create(
+                            tenant_id=tenant_id,
+                            demand_id=demand.id,
+                            material_id=it.material_id,
+                            material_code=it.material_code,
+                            material_name=it.material_name,
+                            material_spec=it.material_spec,
+                            material_unit=it.material_unit,
+                            required_quantity=it.order_quantity,
+                            delivery_date=it.delivery_date,
+                            unit_price=it.unit_price,
+                            item_amount=it.total_amount,
+                            remaining_quantity=it.order_quantity,
+                            delivery_status=it.delivery_status or "待交货",
+                        )
+                elif source_type == "sales_forecast":
+                    forecast = await SalesForecast.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not forecast:
+                        raise NotFoundError("销售预测", str(source_id))
+                    forecast_items = await SalesForecastItem.filter(
+                        tenant_id=tenant_id, forecast_id=source_id
+                    ).order_by("id")
+                    if not forecast_items:
+                        raise BusinessLogicError("销售预测无明细，无法同步需求")
+                    total_qty = sum(Decimal(str(it.forecast_quantity)) for it in forecast_items)
+                    upd = {
+                        "demand_code": forecast.forecast_code,
+                        "demand_name": forecast.forecast_name or forecast.forecast_code,
+                        "start_date": forecast.start_date,
+                        "end_date": forecast.end_date,
+                        "forecast_period": forecast.forecast_period,
+                        "total_quantity": total_qty,
+                        "total_amount": Decimal("0"),
+                        "status": forecast.status,
+                        "review_status": forecast.review_status,
+                        "reviewer_id": forecast.reviewer_id,
+                        "reviewer_name": forecast.reviewer_name,
+                        "review_time": forecast.review_time,
+                        "updated_by": operator_id,
+                    }
+                    await Demand.filter(tenant_id=tenant_id, id=demand.id).update(**upd)
+                    await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).delete()
+                    for it in forecast_items:
+                        await DemandItem.create(
+                            tenant_id=tenant_id,
+                            demand_id=demand.id,
+                            material_id=it.material_id,
+                            material_code=it.material_code,
+                            material_name=it.material_name,
+                            material_spec=it.material_spec,
+                            material_unit=it.material_unit,
+                            required_quantity=it.forecast_quantity,
+                            forecast_date=it.forecast_date,
+                            remaining_quantity=it.forecast_quantity,
+                            delivered_quantity=Decimal("0"),
+                            delivery_status="待交货",
+                        )
+                else:
+                    raise ValidationError(f"不支持的上游类型: {source_type}")
+
+                # 3. 重算历史
+                await DemandRecalcHistory.create(
+                    tenant_id=tenant_id,
+                    demand_id=demand.id,
+                    recalc_at=datetime.now(),
+                    trigger_type="upstream_change",
+                    source_type=source_type,
+                    source_id=source_id,
+                    trigger_reason=trigger_reason,
+                    snapshot_id=snapshot.id,
+                    operator_id=operator_id,
+                    result="success",
+                    message=f"已从{source_type}同步",
+                )
+            # 4. 策略 A：已下推计算则仅通知下游重算（不自动执行需求计算重算）
+            if had_pushed and computation_id:
+                await self._notify_downstream_recalc(
+                    tenant_id=tenant_id,
+                    demand_id=demand.id,
+                    demand_code=demand.demand_code,
+                    computation_id=computation_id,
+                    computation_code=computation_code,
+                    operator_id=operator_id,
+                )
+            return {
+                "synced": True,
+                "demand_id": demand.id,
+                "demand_code": demand.demand_code,
+                "notified_downstream": had_pushed,
+            }
+        except Exception as e:
+            logger.exception("需求同步上游失败: %s", e)
+            await DemandRecalcHistory.create(
+                tenant_id=tenant_id,
+                demand_id=demand.id,
+                recalc_at=datetime.now(),
+                trigger_type="upstream_change",
+                source_type=source_type,
+                source_id=source_id,
+                trigger_reason=trigger_reason,
+                snapshot_id=snapshot_id_saved,
+                operator_id=operator_id,
+                result="failed",
+                message=str(e)[:500],
+            )
+            raise
+
+    def _demand_to_snapshot_dict(self, demand: Demand) -> Dict[str, Any]:
+        """将 Demand 转为可 JSON 序列化的快照字典"""
+        return {
+            "demand_code": demand.demand_code,
+            "demand_type": demand.demand_type,
+            "demand_name": demand.demand_name,
+            "total_quantity": str(demand.total_quantity),
+            "total_amount": str(demand.total_amount),
+            "start_date": demand.start_date.isoformat() if demand.start_date else None,
+            "end_date": demand.end_date.isoformat() if demand.end_date else None,
+            "source_type": demand.source_type,
+            "source_id": demand.source_id,
+        }
+
+    def _demand_item_to_snapshot_dict(self, item: DemandItem) -> Dict[str, Any]:
+        """将 DemandItem 转为可 JSON 序列化的快照字典"""
+        return {
+            "material_code": item.material_code,
+            "material_name": item.material_name,
+            "required_quantity": str(item.required_quantity),
+            "delivery_date": item.delivery_date.isoformat() if getattr(item, "delivery_date", None) else None,
+        }
+
+    async def _notify_downstream_recalc(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        demand_code: str,
+        computation_id: int,
+        computation_code: str,
+        operator_id: int,
+    ) -> None:
+        """需求重算后通知下游：关联需求计算建议重新执行（策略 A）。"""
+        try:
+            template = await self._get_demand_recalc_notify_template(tenant_id)
+            if not template:
+                logger.warning("未配置 DEMAND_RECALC_NOTIFY 模板，跳过下游重算提醒")
+                return
+            from core.services.messaging.message_service import MessageService
+            from core.schemas.message_template import SendMessageRequest
+            recipient_id = str(operator_id)
+            await MessageService.send_message(
+                tenant_id=tenant_id,
+                request=SendMessageRequest(
+                    type="internal",
+                    recipient=recipient_id,
+                    template_code="DEMAND_RECALC_NOTIFY",
+                    variables={
+                        "demand_code": demand_code,
+                        "computation_code": computation_code,
+                        "computation_id": str(computation_id),
+                    },
+                    content="",
+                ),
+            )
+        except Exception as e:
+            logger.warning("需求重算下游提醒发送失败: %s", e)
+
+    async def _get_demand_recalc_notify_template(self, tenant_id: int):
+        """获取需求重算通知模板（若不存在则返回 None）"""
+        try:
+            from core.services.messaging.message_template_service import MessageTemplateService
+            return await MessageTemplateService.get_message_template_by_code(
+                tenant_id, "DEMAND_RECALC_NOTIFY"
+            )
+        except Exception:
+            return None
+
+    async def list_demand_recalc_history(
+        self, tenant_id: int, demand_id: int, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """获取需求重算历史列表，供前端「重算过程」展示。"""
+        await self.get_demand_by_id(tenant_id, demand_id)
+        rows = await DemandRecalcHistory.filter(
+            tenant_id=tenant_id, demand_id=demand_id
+        ).order_by("-recalc_at").limit(limit)
+        return [
+            {
+                "id": r.id,
+                "recalc_at": r.recalc_at.isoformat() if r.recalc_at else None,
+                "trigger_type": r.trigger_type,
+                "source_type": r.source_type,
+                "source_id": r.source_id,
+                "trigger_reason": r.trigger_reason,
+                "snapshot_id": r.snapshot_id,
+                "operator_id": r.operator_id,
+                "result": r.result,
+                "message": r.message,
+            }
+            for r in rows
+        ]
+
+    async def list_demand_snapshots(
+        self, tenant_id: int, demand_id: int, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """获取需求快照列表。"""
+        await self.get_demand_by_id(tenant_id, demand_id)
+        rows = await DemandSnapshot.filter(
+            tenant_id=tenant_id, demand_id=demand_id
+        ).order_by("-snapshot_at").limit(limit)
+        return [
+            {
+                "id": r.id,
+                "snapshot_type": r.snapshot_type,
+                "snapshot_at": r.snapshot_at.isoformat() if r.snapshot_at else None,
+                "trigger_reason": r.trigger_reason,
+                "demand_snapshot": r.demand_snapshot,
+                "demand_items_snapshot": r.demand_items_snapshot,
+            }
+            for r in rows
+        ]
 
     async def push_to_computation(
         self,
@@ -1081,18 +1567,17 @@ class DemandService(AppBaseService[Demand]):
             if demand.status != DemandStatus.PENDING_REVIEW:
                 raise BusinessLogicError(f"只能撤回待审核状态的需求，当前状态: {demand.status}")
             
-            # 检查是否有正在运行的审核流程，如果有则取消
+            # 检查是否有正在运行的审批流程，如果有则取消
             try:
-                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
-                approval_service = ApprovalFlowService()
-                await approval_service.cancel_approval_flow(
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
+                await ApprovalInstanceService.cancel_approval(
                     tenant_id=tenant_id,
                     entity_type="demand",
                     entity_id=demand_id,
-                    operator_id=withdrawn_by
+                    operator_id=withdrawn_by,
                 )
             except Exception as e:
-                logger.warning(f"取消审核流程失败或无需取消: {e}")
+                logger.warning(f"取消审批流程失败或无需取消: {e}")
             
             # 使用状态流转服务记录
             try:

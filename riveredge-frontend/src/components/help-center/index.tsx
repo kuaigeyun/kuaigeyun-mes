@@ -10,6 +10,7 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer, Input, List, Card, Typography, Space, Empty, Spin } from 'antd';
 import { QuestionCircleOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { listHelpDocuments, getHelpDocument, type HelpDocument } from '../../services/helpDocument';
 
 const { Title, Paragraph, Text } = Typography;
@@ -51,6 +52,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
   onOpen,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(defaultOpen);
   const [documents, setDocuments] = useState<HelpDocument[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<HelpDocument[]>([]);
@@ -253,7 +255,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
           title={
             <Space>
               <QuestionCircleOutlined />
-              <span>帮助中心</span>
+              <span>{t('components.helpCenter.title')}</span>
             </Space>
           }
           open={open}
@@ -263,7 +265,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
         >
           <div style={{ marginBottom: 16 }}>
             <Search
-              placeholder="搜索帮助文档..."
+              placeholder={t('components.helpCenter.searchPlaceholder')}
               allowClear
               enterButton={<SearchOutlined />}
               onSearch={handleSearch}
@@ -277,7 +279,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
           {selectedDocument ? (
             <div>
               <div style={{ marginBottom: 16 }}>
-                <a onClick={() => setSelectedDocument(null)}>← 返回列表</a>
+                <a onClick={() => setSelectedDocument(null)}>{t('components.helpCenter.backToList')}</a>
               </div>
               {renderDocumentDetail()}
             </div>
@@ -298,7 +300,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
         title={
           <Space>
             <QuestionCircleOutlined />
-            <span>帮助中心</span>
+            <span>{t('components.helpCenter.title')}</span>
           </Space>
         }
         open={open}
@@ -308,7 +310,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
       >
         <div style={{ marginBottom: 16 }}>
           <Search
-            placeholder="搜索帮助文档..."
+            placeholder={t('components.helpCenter.searchPlaceholder')}
             allowClear
             enterButton={<SearchOutlined />}
             onSearch={handleSearch}
@@ -322,7 +324,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
         {selectedDocument ? (
           <div>
             <div style={{ marginBottom: 16 }}>
-              <a onClick={() => setSelectedDocument(null)}>← 返回列表</a>
+              <a onClick={() => setSelectedDocument(null)}>{t('components.helpCenter.backToList')}</a>
             </div>
             {renderDocumentDetail()}
           </div>
@@ -340,7 +342,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
     <div>
       <div style={{ marginBottom: 16 }}>
         <Search
-          placeholder="搜索帮助文档..."
+          placeholder={t('components.helpCenter.searchPlaceholder')}
           allowClear
           enterButton={<SearchOutlined />}
           onSearch={handleSearch}
@@ -354,7 +356,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
       {selectedDocument ? (
         <div>
           <div style={{ marginBottom: 16 }}>
-            <a onClick={() => setSelectedDocument(null)}>← 返回列表</a>
+            <a onClick={() => setSelectedDocument(null)}>{t('components.helpCenter.backToList')}</a>
           </div>
           {renderDocumentDetail()}
         </div>

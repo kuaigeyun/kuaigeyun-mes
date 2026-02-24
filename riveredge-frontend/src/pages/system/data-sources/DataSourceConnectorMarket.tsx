@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Card, Row, Col, Input, Radio, Space, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import {
@@ -26,6 +27,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
   onClose,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const [category, setCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -54,7 +56,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
 
   return (
     <Modal
-      title="选择连接器"
+      title={t('pages.system.dataSources.connectorMarket.title')}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -70,12 +72,12 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
         >
           {CONNECTOR_CATEGORIES.map((c) => (
             <Radio.Button key={c.key} value={c.key}>
-              {c.label}
+              {t(c.labelKey)}
             </Radio.Button>
           ))}
         </Radio.Group>
         <Input
-          placeholder="搜索连接器名称、类型..."
+          placeholder={t('pages.system.dataSources.connectorMarket.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -115,7 +117,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
         </Row>
         {filteredConnectors.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-            暂无匹配的连接器
+            {t('pages.system.dataSources.connectorMarket.empty')}
           </div>
         )}
         </div>

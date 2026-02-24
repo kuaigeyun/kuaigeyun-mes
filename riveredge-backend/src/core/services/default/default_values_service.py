@@ -325,12 +325,14 @@ class DefaultValuesService:
         "kuaizhizao-production-outsource-work-order": "OWO",
         # 快格轻制造 - 采购管理
         "kuaizhizao-purchase-order": "PO",
+        "kuaizhizao-receipt-notice": "RN",
         "kuaizhizao-purchase-receipt": "PREC",
         "kuaizhizao-purchase-return": "PRT",
         # 快格轻制造 - 销售管理
         "kuaizhizao-quotation": "BJ",  # 报价单
         "kuaizhizao-sales-order": "SO",
         "kuaizhizao-sales-delivery": "SD",
+        "kuaizhizao-shipment-notice": "SN",
         "kuaizhizao-sales-forecast": "SF",
         "kuaizhizao-sales-return": "SRT",
         # 快格轻制造 - 仓储管理

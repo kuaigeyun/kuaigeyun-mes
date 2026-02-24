@@ -106,9 +106,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         }
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
-        """更新销售预测；若提供 items 则先删后增，覆盖全部明细"""
+        """更新销售预测；若提供 items 则先删后增，覆盖全部明细。已审核预测更新后同步关联需求。"""
+        forecast_before = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
         async with in_transaction():
-            await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             dumped = forecast_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             items_data = dumped.pop('items', None)
             update_data = {k: v for k, v in dumped.items() if k != 'items'}
@@ -126,7 +126,11 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     )
 
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-            return updated_forecast
+        # 只要有关联需求，预测任意保存都同步需求内容，使需求管理动态随上游变化
+        demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, updated_by)
+        out = updated_forecast.model_dump()
+        out["demand_synced"] = demand_synced
+        return SalesForecastResponse(**out)
 
     async def _get_linked_demand_for_forecast(
         self, tenant_id: int, forecast_id: int
@@ -138,6 +142,25 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             source_id=forecast_id,
             deleted_at__isnull=True,
         )
+
+    async def _sync_demand_if_exists(self, tenant_id: int, forecast_id: int, operator_id: int) -> bool:
+        """如果存在关联需求，则同步并重算快照，返回是否同步成功"""
+        demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+        if demand:
+            from apps.kuaizhizao.services.demand_service import DemandService
+            try:
+                sync_result = await DemandService().sync_from_upstream(
+                    tenant_id=tenant_id,
+                    source_type="sales_forecast",
+                    source_id=forecast_id,
+                    operator_id=operator_id,
+                )
+                if sync_result.get("synced"):
+                    logger.info("销售预测 %s 已同步关联需求并更新快照", forecast_id)
+                    return True
+            except Exception as e:
+                logger.warning("销售预测更新后同步需求失败: %s", e)
+        return False
 
     async def _create_demand_from_sales_forecast(
         self, tenant_id: int, forecast_id: int, created_by: int
@@ -227,16 +250,24 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 updated_by=approved_by
             )
 
-            # 审核通过后自动产生 Demand，进入需求池
+            # 审核通过后自动产生 Demand，进入需求池；若已有需求则同步需求
+            demand_synced = False
+            existing_demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
             if not rejection_reason:
-                existing_demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
                 if not existing_demand:
                     await self._create_demand_from_sales_forecast(
                         tenant_id, forecast_id, approved_by
                     )
+                else:
+                    demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, approved_by)
+            else:
+                if existing_demand:
+                    demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, approved_by)
 
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-            return updated_forecast
+            out = updated_forecast.model_dump()
+            out["demand_synced"] = demand_synced
+            return SalesForecastResponse(**out)
 
     async def add_forecast_item(self, tenant_id: int, forecast_id: int, item_data: SalesForecastItemCreate) -> SalesForecastItemResponse:
         """添加销售预测明细"""
@@ -305,6 +336,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.PENDING.value,
                     updated_by=submitted_by
                 )
+                await self._sync_demand_if_exists(tenant_id, forecast_id, submitted_by)
             
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
@@ -536,55 +568,47 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         user_id: int = None
     ) -> Dict[str, Any]:
         """
-        下推到MRP运算
+        下推到需求计算（统一使用 demand_computation，替代原 MRP 运算）
         
-        从销售预测下推到MRP运算，自动执行MRP计算
+        从销售预测获取或创建 Demand，然后下推到 DemandComputation。
         
         Args:
             tenant_id: 租户ID
             forecast_id: 销售预测ID
-            planning_horizon: 计划周期（月数，默认12个月）
-            time_bucket: 时间粒度（week/month，默认week）
+            planning_horizon: 计划周期（月数，默认12个月，保留参数兼容）
+            time_bucket: 时间粒度（week/month，保留参数兼容）
             user_id: 用户ID（可选）
             
         Returns:
-            Dict: MRP运算结果
-            
-        Raises:
-            NotFoundError: 销售预测不存在
-            BusinessLogicError: 销售预测未审核
+            Dict: 需求计算结果，含 computation_id、computation_code 等
         """
-        from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-        from apps.kuaizhizao.schemas.planning import MRPComputationRequest
-        
-        # 验证销售预测存在且已审核（兼容枚举与存量中文值）
+        from apps.kuaizhizao.services.demand_service import DemandService
         from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
+
         forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
         review_approved = forecast.review_status in ("通过", "APPROVED", ReviewStatus.APPROVED.value, "已审核")
         status_audited = forecast.status in LEGACY_AUDITED_VALUES
         if not review_approved or not status_audited:
-            raise BusinessLogicError("只有已审核通过的销售预测才能下推到MRP运算")
-        
-        # 创建MRP运算请求
-        mrp_request = MRPComputationRequest(
-            forecast_id=forecast_id,
-            planning_horizon=planning_horizon,
-            time_bucket=time_bucket
-        )
-        
-        # 执行MRP运算
-        planning_service = ProductionPlanningService()
-        mrp_result = await planning_service.run_mrp_computation(
+            raise BusinessLogicError("只有已审核通过的销售预测才能下推到需求计算")
+
+        demand = await self._get_linked_demand_for_forecast(tenant_id, forecast_id)
+        if not demand:
+            demand = await self._create_demand_from_sales_forecast(
+                tenant_id, forecast_id, user_id or forecast.created_by
+            )
+
+        result = await DemandService().push_to_computation(
             tenant_id=tenant_id,
-            request=mrp_request,
-            user_id=user_id or forecast.created_by
+            demand_id=demand.id,
+            created_by=user_id or forecast.created_by,
         )
-        
         return {
             "forecast_id": forecast_id,
             "forecast_code": forecast.forecast_code,
-            "mrp_result": mrp_result.model_dump() if hasattr(mrp_result, 'model_dump') else mrp_result,
-            "message": "MRP运算执行成功"
+            "demand_computation": result,
+            "computation_id": result.get("computation_id"),
+            "computation_code": result.get("computation_code"),
+            "message": result.get("message", "需求计算下推成功"),
         }
 
 
@@ -803,55 +827,35 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         user_id: int = None
     ) -> Dict[str, Any]:
         """
-        下推到LRP运算
+        下推到需求计算（统一使用 demand_computation，替代原 LRP 运算）
         
-        从销售订单下推到LRP运算，自动执行LRP计算
+        从销售订单获取或创建 Demand，然后下推到 DemandComputation。
+        保留 planning_horizon、consider_capacity 参数以兼容调用方。
         
         Args:
             tenant_id: 租户ID
             order_id: 销售订单ID
-            planning_horizon: 计划周期（月数，默认3个月）
-            consider_capacity: 是否考虑产能（默认：False）
+            planning_horizon: 计划周期（月数，保留参数兼容）
+            consider_capacity: 是否考虑产能（保留参数兼容）
             user_id: 用户ID（可选）
             
         Returns:
-            Dict: LRP运算结果
-            
-        Raises:
-            NotFoundError: 销售订单不存在
-            BusinessLogicError: 销售订单未审核
+            Dict: 需求计算结果，含 computation_id、computation_code 等
         """
-        from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-        from apps.kuaizhizao.schemas.planning import LRPComputationRequest
-        
-        # 验证销售订单存在且已审核
-        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, REVIEW_STATUS_ALIASES, ReviewStatus
-
         order = await self.get_sales_order_by_id(tenant_id, order_id)
-        review_ok = REVIEW_STATUS_ALIASES.get(str(order.review_status or "").strip(), order.review_status) == ReviewStatus.APPROVED.value
-        if not review_ok or order.status not in LEGACY_AUDITED_VALUES:
-            raise BusinessLogicError("只有已审核通过或已确认的销售订单才能下推到LRP运算")
-        
-        # 创建LRP运算请求
-        lrp_request = LRPComputationRequest(
-            sales_order_id=order_id,
-            planning_horizon=planning_horizon,
-            consider_capacity=consider_capacity
-        )
-        
-        # 执行LRP运算
-        planning_service = ProductionPlanningService()
-        lrp_result = await planning_service.run_lrp_computation(
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService as SalesOrderSvc
+        result = await SalesOrderSvc().push_sales_order_to_computation(
             tenant_id=tenant_id,
-            request=lrp_request,
-            user_id=user_id or order.created_by
+            sales_order_id=order_id,
+            created_by=user_id or order.created_by,
         )
-        
         return {
             "order_id": order_id,
             "order_code": order.order_code,
-            "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
-            "message": "LRP运算执行成功"
+            "demand_computation": result,
+            "computation_id": result.get("computation_id"),
+            "computation_code": result.get("computation_code"),
+            "message": result.get("message", "需求计算下推成功"),
         }
 
     async def push_to_delivery(

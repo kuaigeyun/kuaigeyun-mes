@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Avatar, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, theme } from 'antd';
 import { EyeOutlined, LogoutOutlined, ReloadOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -31,6 +32,7 @@ const { useToken } = theme;
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -55,7 +57,7 @@ const CardView: React.FC = () => {
       setUsers(response.items);
     } catch (error: any) {
       if (error?.response?.status !== 401) {
-        handleError(error, '加载在线用户列表失败');
+        handleError(error, t('pages.system.onlineUsers.loadListFailed'));
       }
     } finally {
       setLoading(false);
@@ -75,7 +77,7 @@ const CardView: React.FC = () => {
       setStats(data);
     } catch (error: any) {
       if (error?.response?.status !== 401) {
-        handleError(error, '加载统计信息失败');
+        handleError(error, t('pages.system.onlineUsers.loadStatsFailed'));
       }
     }
   };
@@ -123,11 +125,11 @@ const CardView: React.FC = () => {
   const handleForceLogout = async (user: OnlineUser) => {
     try {
       await forceLogout(user.user_id);
-      handleSuccess('强制下线成功');
+      handleSuccess(t('pages.system.onlineUsers.forceLogoutSuccess'));
       loadUsers();
       loadStats();
     } catch (error: any) {
-      handleError(error, '强制下线失败');
+      handleError(error, t('pages.system.onlineUsers.forceLogoutFailed'));
     }
   };
 
@@ -136,20 +138,14 @@ const CardView: React.FC = () => {
    */
   const getUserStatus = (user: OnlineUser): { status: 'success' | 'warning' | 'default'; text: string } => {
     if (!user.last_activity_time) {
-      return { status: 'default', text: '未知' };
+      return { status: 'default', text: t('pages.system.onlineUsers.statusUnknown') };
     }
-    
     const lastActivity = dayjs(user.last_activity_time);
     const now = dayjs();
     const minutesAgo = now.diff(lastActivity, 'minute');
-    
-    if (minutesAgo <= 5) {
-      return { status: 'success', text: '活跃' };
-    } else if (minutesAgo <= 15) {
-      return { status: 'warning', text: '空闲' };
-    } else {
-      return { status: 'default', text: '离线' };
-    }
+    if (minutesAgo <= 5) return { status: 'success', text: t('pages.system.onlineUsers.statusActive') };
+    if (minutesAgo <= 15) return { status: 'warning', text: t('pages.system.onlineUsers.statusIdle') };
+    return { status: 'default', text: t('pages.system.onlineUsers.statusOffline') };
   };
 
   /**
@@ -169,27 +165,19 @@ const CardView: React.FC = () => {
    * 获取最后活动时间显示
    */
   const getLastActivityDisplay = (user: OnlineUser): string => {
-    if (!user.last_activity_time) {
-      return '-';
-    }
-    
+    if (!user.last_activity_time) return '-';
     const lastActivity = dayjs(user.last_activity_time);
     const now = dayjs();
     const minutesAgo = now.diff(lastActivity, 'minute');
-    
-    if (minutesAgo < 1) {
-      return '刚刚';
-    } else if (minutesAgo < 60) {
-      return `${minutesAgo} 分钟前`;
-    } else {
-      return lastActivity.format('YYYY-MM-DD HH:mm:ss');
-    }
+    if (minutesAgo < 1) return t('pages.system.onlineUsers.justNow');
+    if (minutesAgo < 60) return t('pages.system.onlineUsers.minutesAgo', { count: minutesAgo });
+    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
   };
 
   return (
     <>
       <PageContainer
-        title="在线用户"
+        title={t('pages.system.onlineUsers.headerTitle')}
         extra={[
           <Button
             key="refresh"
@@ -200,7 +188,7 @@ const CardView: React.FC = () => {
             }}
             loading={loading}
           >
-            刷新
+            {t('pages.system.onlineUsers.refresh')}
           </Button>,
         ]}
       >
@@ -210,7 +198,7 @@ const CardView: React.FC = () => {
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8}>
                 <Statistic
-                  title="总在线用户数"
+                  title={t('pages.system.onlineUsers.statTotal')}
                   value={stats.total}
                   prefix={<UserOutlined />}
                   styles={{ content: { color: '#1890ff' } }}
@@ -218,7 +206,7 @@ const CardView: React.FC = () => {
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <Statistic
-                  title="活跃用户数（最近5分钟）"
+                  title={t('pages.system.onlineUsers.statActive')}
                   value={stats.active}
                   prefix={<ClockCircleOutlined />}
                   styles={{ content: { color: '#52c41a' } }}
@@ -226,7 +214,7 @@ const CardView: React.FC = () => {
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <Statistic
-                  title="组织数量"
+                  title={t('pages.system.onlineUsers.statTenantCount')}
                   value={Object.keys(stats.by_tenant).length}
                   prefix={<GlobalOutlined />}
                   styles={{ content: { color: '#faad14' } }}
@@ -235,11 +223,11 @@ const CardView: React.FC = () => {
             </Row>
             {Object.keys(stats.by_tenant).length > 0 && (
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
-                <Text type="secondary" style={{ marginRight: 8 }}>按组织统计：</Text>
+                <Text type="secondary" style={{ marginRight: 8 }}>{t('pages.system.onlineUsers.statByTenantLabel')}：</Text>
                 <Space wrap>
                   {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
                     <Tag key={tenantId} color="blue">
-                      组织 {tenantId}: {count} 人
+                      {t('pages.system.onlineUsers.tenantCountLabel', { id: tenantId, count })}
                     </Tag>
                   ))}
                 </Space>
@@ -261,7 +249,7 @@ const CardView: React.FC = () => {
                       hoverable
                       style={{ height: '100%' }}
                       actions={[
-                        <Tooltip title="查看详情">
+                        <Tooltip title={t('pages.system.onlineUsers.viewDetail')}>
                           <EyeOutlined
                             key="view"
                             onClick={() => handleViewDetail(user)}
@@ -270,12 +258,12 @@ const CardView: React.FC = () => {
                         </Tooltip>,
                         <Popconfirm
                           key="logout"
-                          title="确定要强制该用户下线吗？"
+                          title={t('pages.system.onlineUsers.forceLogoutConfirm')}
                           onConfirm={() => handleForceLogout(user)}
-                          okText="确定"
-                          cancelText="取消"
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
                         >
-                          <Tooltip title="强制下线">
+                          <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
                             <LogoutOutlined
                               style={{ fontSize: 16, color: '#ff4d4f' }}
                             />
@@ -321,7 +309,7 @@ const CardView: React.FC = () => {
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                         <Space direction="vertical" size="small" style={{ width: '100%' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.statusLabel')}：</Text>
                             <Tag color={statusInfo.status === 'success' ? 'success' : statusInfo.status === 'warning' ? 'warning' : 'default'}>
                               {statusInfo.text}
                             </Tag>
@@ -329,21 +317,21 @@ const CardView: React.FC = () => {
                           
                           {user.login_time && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>在线时长：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.onlineDuration')}：</Text>
                               <Text style={{ fontSize: 12 }}>{getOnlineDuration(user)}</Text>
                             </div>
                           )}
                           
                           {user.last_activity_time && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>最后活动：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.lastActivity')}：</Text>
                               <Text style={{ fontSize: 12 }}>{getLastActivityDisplay(user)}</Text>
                             </div>
                           )}
                           
                           {user.login_ip && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>登录IP：</Text>
+                              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.onlineUsers.loginIp')}：</Text>
                               <Text style={{ fontSize: 12 }}>{user.login_ip}</Text>
                             </div>
                           )}
@@ -355,14 +343,14 @@ const CardView: React.FC = () => {
               })}
             </Row>
           ) : (
-            <Empty description="暂无在线用户" />
+            <Empty description={t('pages.system.onlineUsers.emptyOnlineUsers')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 用户详情 Modal */}
       <Modal
-        title="在线用户详情"
+        title={t('pages.system.onlineUsers.detailTitle')}
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
@@ -373,44 +361,44 @@ const CardView: React.FC = () => {
       >
         {currentUserInfo && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="用户ID">
+            <Descriptions.Item label={t('pages.system.onlineUsers.userId')}>
               {currentUserInfo.user_id}
             </Descriptions.Item>
-            <Descriptions.Item label="用户名">
+            <Descriptions.Item label={t('pages.system.onlineUsers.username')}>
               {currentUserInfo.username}
             </Descriptions.Item>
-            <Descriptions.Item label="用户全名">
+            <Descriptions.Item label={t('pages.system.onlineUsers.fullName')}>
               {currentUserInfo.full_name || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
+            <Descriptions.Item label={t('pages.system.onlineUsers.email')}>
               {currentUserInfo.email || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="组织ID">
+            <Descriptions.Item label={t('pages.system.onlineUsers.tenantId')}>
               {currentUserInfo.tenant_id}
             </Descriptions.Item>
-            <Descriptions.Item label="登录IP">
+            <Descriptions.Item label={t('pages.system.onlineUsers.loginIp')}>
               {currentUserInfo.login_ip || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="登录时间">
+            <Descriptions.Item label={t('pages.system.onlineUsers.loginTime')}>
               {currentUserInfo.login_time
                 ? dayjs(currentUserInfo.login_time).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="最后活动时间">
+            <Descriptions.Item label={t('pages.system.onlineUsers.lastActivityTime')}>
               {currentUserInfo.last_activity_time
                 ? dayjs(currentUserInfo.last_activity_time).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="在线时长">
+            <Descriptions.Item label={t('pages.system.onlineUsers.onlineDuration')}>
               {getOnlineDuration(currentUserInfo)}
             </Descriptions.Item>
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label={t('pages.system.onlineUsers.statusLabel')}>
               <Tag color={getUserStatus(currentUserInfo).status === 'success' ? 'success' : getUserStatus(currentUserInfo).status === 'warning' ? 'warning' : 'default'}>
                 {getUserStatus(currentUserInfo).text}
               </Tag>
             </Descriptions.Item>
             {currentUserInfo.session_id && (
-              <Descriptions.Item label="会话ID">
+              <Descriptions.Item label={t('pages.system.onlineUsers.sessionId')}>
                 {currentUserInfo.session_id}
               </Descriptions.Item>
             )}

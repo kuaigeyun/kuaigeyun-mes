@@ -15,6 +15,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.rework_order import ReworkOrder
@@ -38,6 +39,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
     def __init__(self):
         super().__init__(ReworkOrder)
+        self.business_config_service = BusinessConfigService()
 
     async def create_rework_order(
         self,
@@ -59,6 +61,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         Raises:
             ValidationError: 数据验证失败
         """
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "rework_order")
+        if not is_enabled:
+            raise BusinessLogicError("返工工单节点未启用，无法创建返工工单")
         async with in_transaction():
             # 生成返工单编码（如果未提供）
             if not rework_order_data.code:

@@ -76,7 +76,7 @@ class WarehouseService:
         try:
             warehouse = await Warehouse.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -205,7 +205,7 @@ class WarehouseService:
                 raise ValidationError(f"仓库编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(warehouse, key, value)
         
@@ -395,7 +395,7 @@ class WarehouseService:
         try:
             storage_area = await StorageArea.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -541,7 +541,7 @@ class WarehouseService:
                 raise ValidationError(f"库区编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(storage_area, key, value)
         
@@ -731,7 +731,7 @@ class WarehouseService:
         try:
             storage_location = await StorageLocation.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -877,7 +877,7 @@ class WarehouseService:
                 raise ValidationError(f"库位编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(storage_location, key, value)
         

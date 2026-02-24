@@ -9,6 +9,7 @@ import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { message } from 'antd';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPackage, updatePackage, type PackageCreate, type PackageUpdate } from '../../../services/tenant';
+import { useTranslation } from 'react-i18next';
 
 interface PackageFormProps {
   initialValues?: any;
@@ -20,6 +21,7 @@ interface PackageFormProps {
  * 套餐表单组件
  */
 export default function PackageForm({ initialValues, onSubmit, onCancel }: PackageFormProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const isEdit = !!initialValues;
 
@@ -35,12 +37,12 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
   const createMutation = useMutation({
     mutationFn: (data: PackageCreate) => createPackage(data),
     onSuccess: () => {
-      message.success('创建成功');
+      message.success(t('pages.infra.package.createSuccess'));
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       onSubmit();
     },
     onError: (error: any) => {
-      message.error(error?.message || '创建失败');
+      message.error(error?.message || t('pages.infra.package.createFailed'));
     },
   });
 
@@ -48,12 +50,12 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: PackageUpdate }) => updatePackage(id, data),
     onSuccess: () => {
-      message.success('更新成功');
+      message.success(t('pages.infra.package.updateSuccess'));
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       onSubmit();
     },
     onError: (error: any) => {
-      message.error(error?.message || '更新失败');
+      message.error(error?.message || t('pages.infra.package.updateFailed'));
     },
   });
 
@@ -82,10 +84,10 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
   };
 
   const planOptions = [
-    { label: '体验套餐', value: 'trial' },
-    { label: '基础版', value: 'basic' },
-    { label: '专业版', value: 'professional' },
-    { label: '企业版', value: 'enterprise' },
+    { label: t('pages.infra.package.planTrial'), value: 'trial' },
+    { label: t('pages.infra.package.planBasic'), value: 'basic' },
+    { label: t('pages.infra.package.planProfessional'), value: 'professional' },
+    { label: t('pages.infra.package.planEnterprise'), value: 'enterprise' },
   ];
 
   return (
@@ -100,51 +102,51 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
     >
       <ProFormText
         name="name"
-        label="套餐名称"
-        rules={[{ required: true, message: '请输入套餐名称' }]}
+        label={t('pages.infra.package.name')}
+        rules={[{ required: true, message: t('pages.infra.package.nameRequired') }]}
       />
 
       <SafeProFormSelect
         name="plan"
-        label="套餐类型"
+        label={t('pages.infra.package.plan')}
         options={planOptions}
-        rules={[{ required: true, message: '请选择套餐类型' }]}
+        rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
       />
 
       <ProFormDigit
         name="max_users"
-        label="用户数限制"
+        label={t('pages.infra.package.maxUsers')}
         min={1}
-        rules={[{ required: true, message: '请输入用户数限制' }]}
+        rules={[{ required: true, message: t('pages.infra.package.maxUsersRequired') }]}
       />
 
       <ProFormDigit
         name="max_storage_mb"
-        label="存储空间(MB)"
+        label={t('pages.infra.package.maxStorage')}
         min={1}
-        rules={[{ required: true, message: '请输入存储空间' }]}
+        rules={[{ required: true, message: t('pages.infra.package.maxStorageRequired') }]}
       />
 
       <ProFormSwitch
         name="allow_pro_apps"
-        label="允许PRO应用"
+        label={t('pages.infra.package.allowProApps')}
       />
 
       <ProFormText
         name="description"
-        label="描述"
+        label={t('pages.infra.package.description')}
       />
 
       <ProFormTextArea
         name="features"
-        label="功能列表"
-        placeholder="请输入套餐功能列表，每行一个功能"
-        help="支持换行分隔的功能列表，将自动转换为数组格式"
+        label={t('pages.infra.package.features')}
+        placeholder={t('pages.infra.package.featuresPlaceholder')}
+        help={t('pages.infra.package.featuresHelp')}
       />
 
       <ProFormSwitch
         name="is_active"
-        label="是否激活"
+        label={t('pages.infra.package.isActive')}
         initialValue={true}
       />
     </ProForm>

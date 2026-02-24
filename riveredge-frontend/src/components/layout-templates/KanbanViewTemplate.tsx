@@ -10,6 +10,7 @@
 
 import React, { ReactNode } from 'react';
 import { Card, theme, Empty } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { PAGE_SPACING, ANT_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
@@ -71,6 +72,7 @@ export const KanbanViewTemplate: React.FC<KanbanViewTemplateProps> = ({
   className,
   style,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
 
   return (
@@ -121,7 +123,7 @@ export const KanbanViewTemplate: React.FC<KanbanViewTemplateProps> = ({
               </div>
             ) : (
               <Empty
-                description="暂无数据"
+                description={t('components.kanban.noData')}
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
             )}

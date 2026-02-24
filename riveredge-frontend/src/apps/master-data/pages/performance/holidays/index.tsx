@@ -5,14 +5,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDatePicker, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { holidayApi } from '../../../services/performance';
-import type { Holiday, HolidayCreate, HolidayUpdate } from '../../../types/performance';
-import dayjs from 'dayjs';
+import { HolidayFormModal } from '../../../components/HolidayFormModal';
+import type { Holiday } from '../../../types/performance';
 
 /**
  * 假期管理列表页面组件
@@ -20,7 +20,6 @@ import dayjs from 'dayjs';
 const HolidaysPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -31,43 +30,22 @@ const HolidaysPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑假期）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
   /**
    * 处理新建假期
    */
   const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentHolidayUuid(null);
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
   };
 
   /**
    * 处理编辑假期
    */
-  const handleEdit = async (record: Holiday) => {
-    try {
-      setIsEdit(true);
-      setCurrentHolidayUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取假期详情
-      const detail = await holidayApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        name: detail.name,
-        holidayDate: detail.holidayDate ? dayjs(detail.holidayDate) : undefined,
-        holidayType: detail.holidayType,
-        description: detail.description,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取假期详情失败');
-    }
+  const handleEdit = (record: Holiday) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
   };
 
   /**
@@ -138,7 +116,6 @@ const HolidaysPage: React.FC = () => {
       setCurrentHolidayUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
-      
       const detail = await holidayApi.get(record.uuid);
       setHolidayDetail(detail);
     } catch (error: any) {
@@ -146,6 +123,12 @@ const HolidaysPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -160,44 +143,6 @@ const HolidaysPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新假期）
    */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      // 转换日期格式
-      const submitData: any = { ...values };
-      if (submitData.holidayDate) {
-        submitData.holidayDate = dayjs(submitData.holidayDate).format('YYYY-MM-DD');
-      }
-      
-      if (isEdit && currentHolidayUuid) {
-        // 更新假期
-        await holidayApi.update(currentHolidayUuid, submitData as HolidayUpdate);
-        messageApi.success('更新成功');
-      } else {
-        // 创建假期
-        await holidayApi.create(submitData as HolidayCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    formRef.current?.resetFields();
-  };
-
   /**
    * 表格列定义
    */
@@ -237,8 +182,8 @@ const HolidaysPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -314,8 +259,8 @@ const HolidaysPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -410,68 +355,12 @@ const HolidaysPage: React.FC = () => {
       />
 
       {/* 创建/编辑假期 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑假期' : '新建假期'}
+      <HolidayFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-        layout="vertical"
-        grid={true}
-      >
-          <ProFormText
-            name="name"
-            label="假期名称"
-            placeholder="请输入假期名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入假期名称' },
-              { max: 200, message: '假期名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormDatePicker
-            name="holidayDate"
-            label="假期日期"
-            placeholder="请选择假期日期"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请选择假期日期' },
-            ]}
-            fieldProps={{
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormText
-            name="holidayType"
-            label="假期类型"
-            placeholder="请输入假期类型（如：法定节假日、公司假期等）"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 50, message: '假期类型不能超过50个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

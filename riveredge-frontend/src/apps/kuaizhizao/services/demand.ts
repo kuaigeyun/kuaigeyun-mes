@@ -71,6 +71,14 @@ export interface Demand {
   created_at?: string;
   updated_at?: string;
   items?: DemandItem[];
+  /** 生命周期（后端计算，列表/详情接口返回，供 UniLifecycleStepper 展示） */
+  lifecycle?: {
+    current_stage_key?: string;
+    current_stage_name?: string;
+    status?: 'success' | 'exception' | 'normal' | 'active';
+    main_stages?: { key: string; label: string; status: 'done' | 'active' | 'pending' }[];
+    sub_stages?: { key: string; label: string; status: 'done' | 'active' | 'pending' }[];
+  };
   duration_info?: {
     created_at?: string;
     submit_time?: string;
@@ -275,6 +283,71 @@ export interface PushToComputationResponse {
  */
 export async function pushDemandToComputation(demandId: number): Promise<PushToComputationResponse> {
   return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/demands/${demandId}/push-to-computation`, {
+    method: 'POST',
+  });
+}
+
+/** 需求重算历史项（与后端 list_demand_recalc_history 返回一致） */
+export interface DemandRecalcHistoryItem {
+  id: number;
+  recalc_at?: string;
+  trigger_type?: string;
+  source_type?: string;
+  source_id?: number;
+  trigger_reason?: string;
+  snapshot_id?: number;
+  operator_id?: number;
+  result?: string;
+  message?: string;
+}
+
+/** 需求快照项（与后端 list_demand_snapshots 返回一致） */
+export interface DemandSnapshotItem {
+  id: number;
+  snapshot_type?: string;
+  snapshot_at?: string;
+  trigger_reason?: string;
+  demand_snapshot?: Record<string, any>;
+  demand_items_snapshot?: any[];
+}
+
+/**
+ * 获取需求重算历史列表
+ */
+export async function listDemandRecalcHistory(
+  demandId: number,
+  params?: { limit?: number }
+): Promise<DemandRecalcHistoryItem[]> {
+  return apiRequest<DemandRecalcHistoryItem[]>(`/apps/kuaizhizao/demands/${demandId}/recalc-history`, {
+    method: 'GET',
+    params,
+  });
+}
+
+/**
+ * 获取需求快照列表
+ */
+export async function listDemandSnapshots(
+  demandId: number,
+  params?: { limit?: number }
+): Promise<DemandSnapshotItem[]> {
+  return apiRequest<DemandSnapshotItem[]>(`/apps/kuaizhizao/demands/${demandId}/snapshots`, {
+    method: 'GET',
+    params,
+  });
+}
+
+/** 清理孤儿需求接口返回 */
+export interface CleanOrphanDemandsResponse {
+  cleaned_count: number;
+  demand_ids: number[];
+}
+
+/**
+ * 清理孤儿需求（直接物理删除：来源单据已删除的需求）
+ */
+export async function cleanOrphanDemands(): Promise<CleanOrphanDemandsResponse> {
+  return apiRequest<CleanOrphanDemandsResponse>('/apps/kuaizhizao/demands/clean-orphans', {
     method: 'POST',
   });
 }

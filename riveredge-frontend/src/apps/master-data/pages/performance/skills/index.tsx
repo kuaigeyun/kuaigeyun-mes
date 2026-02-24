@@ -5,13 +5,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { skillApi } from '../../../services/performance';
-import type { Skill, SkillCreate, SkillUpdate } from '../../../types/performance';
+import { SkillFormModal } from '../../../components/SkillFormModal';
+import type { Skill } from '../../../types/performance';
 
 /**
  * 技能管理列表页面组件
@@ -19,7 +20,6 @@ import type { Skill, SkillCreate, SkillUpdate } from '../../../types/performance
 const SkillsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -30,43 +30,22 @@ const SkillsPage: React.FC = () => {
   
   // Modal 相关状态（创建/编辑技能）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
   /**
    * 处理新建技能
    */
   const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentSkillUuid(null);
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
   };
 
   /**
    * 处理编辑技能
    */
-  const handleEdit = async (record: Skill) => {
-    try {
-      setIsEdit(true);
-      setCurrentSkillUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取技能详情
-      const detail = await skillApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        category: detail.category,
-        description: detail.description,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '获取技能详情失败');
-    }
+  const handleEdit = (record: Skill) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
   };
 
   /**
@@ -159,36 +138,10 @@ const SkillsPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新技能）
    */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      if (isEdit && currentSkillUuid) {
-        // 更新技能
-        await skillApi.update(currentSkillUuid, values as SkillUpdate);
-        messageApi.success('更新成功');
-      } else {
-        // 创建技能
-        await skillApi.create(values as SkillCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
+  const handleModalSuccess = () => {
     setModalVisible(false);
-    formRef.current?.resetFields();
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -228,8 +181,8 @@ const SkillsPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -304,8 +257,8 @@ const SkillsPage: React.FC = () => {
       title: '启用状态',
       dataIndex: 'isActive',
       render: (_, record) => (
-        <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
         </Tag>
       ),
     },
@@ -405,69 +358,12 @@ const SkillsPage: React.FC = () => {
       />
 
       {/* 创建/编辑技能 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑技能' : '新建技能'}
+      <SkillFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-        layout="vertical"
-        grid={true}
-      >
-          <ProFormText
-            name="code"
-            label="技能编码"
-            placeholder="请输入技能编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入技能编码' },
-              { max: 50, message: '技能编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="技能名称"
-            placeholder="请输入技能名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入技能名称' },
-              { max: 200, message: '技能名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="category"
-            label="技能分类"
-            placeholder="请输入技能分类"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 50, message: '技能分类不能超过50个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

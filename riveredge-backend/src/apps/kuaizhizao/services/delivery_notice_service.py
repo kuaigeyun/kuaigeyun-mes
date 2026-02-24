@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticeItemResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
@@ -32,6 +33,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
 
     def __init__(self):
         super().__init__(DeliveryNotice)
+        self.business_config_service = BusinessConfigService()
 
     async def create_delivery_notice(
         self,
@@ -40,6 +42,9 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         created_by: int
     ) -> DeliveryNoticeResponse:
         """创建送货单"""
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "delivery_notice")
+        if not is_enabled:
+            raise BusinessLogicError("送货单节点未启用，无法创建送货单")
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "DELIVERY_NOTICE_CODE", prefix=f"DN{today}")

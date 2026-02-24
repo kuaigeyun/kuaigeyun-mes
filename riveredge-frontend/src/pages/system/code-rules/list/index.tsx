@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse, Spin } from 'antd';
@@ -39,6 +40,7 @@ const { Text, Paragraph } = Typography;
  * 编码规则管理列表页面组件
  */
 const CodeRuleListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
 
@@ -302,7 +304,7 @@ const CodeRuleListPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('加载页面配置列表失败:', error);
-      messageApi.error('加载页面配置失败');
+      messageApi.error(t('pages.system.codeRules.loadPageConfigFailed'));
     } finally {
       setPageConfigsLoading(false);
     }
@@ -516,19 +518,19 @@ const CodeRuleListPage: React.FC = () => {
         // 规则已存在，更新现有规则
         try {
           await updateCodeRule(existingRule.uuid, saveData as UpdateCodeRuleData);
-          messageApi.success('规则更新成功');
+          messageApi.success(t('pages.system.codeRules.updateRuleSuccess'));
         } catch (updateError: any) {
           // 更新失败，显示错误信息
           const errorMessage = updateError?.message || updateError?.error?.message || String(updateError);
           console.error('更新规则失败:', updateError);
-          messageApi.error(`更新规则失败: ${errorMessage}`);
+          messageApi.error(`${t('pages.system.codeRules.updateRuleFailed')}: ${errorMessage}`);
           throw updateError;
         }
       } else {
         // 规则不存在，尝试创建新规则
         try {
           await createCodeRule(saveData as CreateCodeRuleData);
-          messageApi.success('规则创建成功');
+          messageApi.success(t('pages.system.codeRules.createRuleSuccess'));
         } catch (createError: any) {
           // 如果创建失败，可能是规则代码已存在（并发情况或其他原因）
           const errorMessage = createError?.message || createError?.error?.message || String(createError);
@@ -546,11 +548,11 @@ const CodeRuleListPage: React.FC = () => {
               // 如果找到了，更新它
               try {
                 await updateCodeRule(ruleAfterReload.uuid, saveData as UpdateCodeRuleData);
-                messageApi.success('规则更新成功');
+                messageApi.success(t('pages.system.codeRules.updateRuleSuccess'));
               } catch (updateError: any) {
                 const updateErrorMessage = updateError?.message || updateError?.error?.message || String(updateError);
                 console.error('更新规则失败:', updateError);
-                messageApi.error(`更新规则失败: ${updateErrorMessage}`);
+                messageApi.error(`${t('pages.system.codeRules.updateRuleFailed')}: ${updateErrorMessage}`);
                 throw updateError;
               }
             } else {
@@ -561,13 +563,13 @@ const CodeRuleListPage: React.FC = () => {
                 allRuleCodes: reloadRules.map(r => r.code),
                 error: createError
               });
-              messageApi.error(`规则代码 "${values.code}" 已存在，但无法找到该规则。请刷新页面后重试。`);
+              messageApi.error(t('pages.system.codeRules.ruleCodeExistsHint', { code: values.code }));
               throw createError;
             }
           } else {
             // 其他错误直接抛出
             console.error('创建规则失败:', createError);
-            messageApi.error(`创建规则失败: ${errorMessage}`);
+            messageApi.error(`${t('pages.system.codeRules.createRuleFailed')}: ${errorMessage}`);
             throw createError;
           }
         }
@@ -588,7 +590,7 @@ const CodeRuleListPage: React.FC = () => {
       }, 200);
 
     } catch (error: any) {
-      const errorMessage = error?.message || error?.error?.message || '保存规则失败';
+      const errorMessage = error?.message || error?.error?.message || t('pages.system.codeRules.saveRuleFailed');
       messageApi.error(errorMessage);
       console.error('保存规则失败:', error);
     } finally {
@@ -668,7 +670,7 @@ const CodeRuleListPage: React.FC = () => {
       localStorage.setItem('codeRulePageConfigs', JSON.stringify(configsToSave));
       return updated;
     });
-    messageApi.success('配置已保存');
+    messageApi.success(t('pages.system.codeRules.configSaved'));
   };
 
 
@@ -728,7 +730,7 @@ const CodeRuleListPage: React.FC = () => {
             {/* 搜索栏 */}
             <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
               <Input
-                placeholder="搜索功能页面"
+                placeholder={t('pages.system.codeRules.searchPagePlaceholder')}
                 prefix={<SearchOutlined />}
                 value={pageSearchValue}
                 onChange={(e) => setPageSearchValue(e.target.value)}
@@ -743,7 +745,7 @@ const CodeRuleListPage: React.FC = () => {
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="large" />
                   <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
-                    加载页面配置中...
+                    {t('pages.system.codeRules.loadingPageConfig')}
                   </div>
                 </div>
               ) : (
@@ -751,19 +753,19 @@ const CodeRuleListPage: React.FC = () => {
                   {/* 提示：如果页面配置数量较少，提示可能遗漏的页面 */}
                   {pageConfigs.length < 30 && (
                     <Alert
-                      message="提示"
+                      message={t('pages.system.codeRules.tip')}
                       description={
                         <div>
                           <p style={{ margin: 0, marginBottom: '8px' }}>
-                            如果发现新增的单据页面未显示在此列表中，请检查：
+                            {t('pages.system.codeRules.tipDescription')}
                           </p>
                           <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
-                            <li>是否在页面代码中使用了 <code>isAutoGenerateEnabled</code> 或 <code>getPageRuleCode</code></li>
-                            <li>是否在后端配置文件 <code>code_rule_pages.py</code> 中添加了页面配置</li>
-                            <li>是否在前端配置文件 <code>codeRulePages.ts</code> 中添加了页面配置</li>
+                            <li>{t('pages.system.codeRules.tipCheck1')} <code>isAutoGenerateEnabled</code> / <code>getPageRuleCode</code></li>
+                            <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
+                            <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
                           </ul>
                           <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: token.colorTextSecondary }}>
-                            💡 建议：新增单据页面时，请同步更新编码规则配置文件
+                            💡 {t('pages.system.codeRules.tipSuggestion')}
                           </p>
                         </div>
                       }
@@ -836,7 +838,7 @@ const CodeRuleListPage: React.FC = () => {
                               </div>
                               {currentPageConfig?.autoGenerate && (
                                 <Tag color="success" size="small" style={{ marginLeft: '8px' }}>
-                                  已启用
+                                  {t('pages.system.codeRules.enabled')}
                                 </Tag>
                               )}
                             </div>
@@ -888,14 +890,14 @@ const CodeRuleListPage: React.FC = () => {
                     loading={pageRuleFormLoading}
                     onClick={handleSavePageRule}
                   >
-                    保存规则
+                    {t('pages.system.codeRules.saveRule')}
                   </Button>
                 </div>
 
                 {/* 配置表单 */}
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
                   <Card
-                    title="编码规则配置"
+                    title={t('pages.system.codeRules.configTitle')}
                     size="small"
                   >
                     <ProForm
@@ -911,7 +913,7 @@ const CodeRuleListPage: React.FC = () => {
                     >
                       <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: token.colorFillAlter, borderRadius: token.borderRadius }}>
                         <div style={{ fontSize: '12px', color: token.colorTextSecondary, marginBottom: '4px' }}>
-                          编码字段
+                          {t('pages.system.codeRules.codeField')}
                         </div>
                         <div style={{ fontWeight: 500 }}>
                           {selectedPage.codeFieldLabel} ({selectedPage.codeField})
@@ -922,18 +924,18 @@ const CodeRuleListPage: React.FC = () => {
                       <ProFormText
                         name="name"
                         hidden
-                        rules={[{ required: true, message: '请输入规则名称' }]}
+                        rules={[{ required: true, message: t('pages.system.codeRules.ruleNameRequired') }]}
                       />
 
                       <ProFormText
                         name="code"
                         hidden
-                        rules={[{ required: true, message: '请输入规则代码' }]}
+                        rules={[{ required: true, message: t('pages.system.codeRules.ruleCodeRequired') }]}
                       />
 
                       <div>
                         <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label style={{ fontWeight: 500 }}>规则表达式</label>
+                          <label style={{ fontWeight: 500 }}>{t('pages.system.codeRules.expressionLabel')}</label>
                           <Radio.Group
                             value={expressionMode}
                             onChange={(e) => {
@@ -956,8 +958,8 @@ const CodeRuleListPage: React.FC = () => {
                             }}
                             size="small"
                           >
-                            <Radio.Button value="component">组件配置</Radio.Button>
-                            <Radio.Button value="advanced">高级模式</Radio.Button>
+                            <Radio.Button value="component">{t('pages.system.codeRules.modeComponent')}</Radio.Button>
+                            <Radio.Button value="advanced">{t('pages.system.codeRules.modeAdvanced')}</Radio.Button>
                           </Radio.Group>
                         </div>
 
@@ -992,11 +994,11 @@ const CodeRuleListPage: React.FC = () => {
                             {/* 高级模式：直接编辑表达式 */}
                             <ProFormTextArea
                               name="expression"
-                              label="规则表达式"
-                              rules={[{ required: true, message: '请输入规则表达式' }]}
-                              placeholder="例如：{YYYY}{MM}{DD}-{SEQ:4}"
+                              label={t('pages.system.codeRules.expressionLabel')}
+                              rules={[{ required: true, message: t('pages.system.codeRules.expressionRequired') }]}
+                              placeholder={t('pages.system.codeRules.expressionPlaceholder')}
                               fieldProps={{ rows: 3 }}
-                              extra="支持变量：{YYYY}、{YY}、{MM}、{DD}、{SEQ:位数}、{FIELD:字段名}"
+                              extra={t('pages.system.codeRules.expressionExtra')}
                             />
                           </div>
                         )}
@@ -1020,31 +1022,31 @@ const CodeRuleListPage: React.FC = () => {
                           marginBottom: '16px'
                         }}>
                           <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                            序号配置已集成到"自动计数"组件中，请在组件配置中设置
+                            {t('pages.system.codeRules.seqIntegratedHint')}
                           </div>
                         </div>
                       ) : (
                         <Space style={{ width: '100%' }} size="large">
                           <ProFormDigit
                             name="seq_start"
-                            label="序号起始值"
+                            label={t('pages.system.codeRules.seqStart')}
                             fieldProps={{ min: 0 }}
                             width="md"
                           />
                           <ProFormDigit
                             name="seq_step"
-                            label="序号步长"
+                            label={t('pages.system.codeRules.seqStep')}
                             fieldProps={{ min: 1 }}
                             width="md"
                           />
                           <SafeProFormSelect
                             name="seq_reset_rule"
-                            label="序号重置规则"
+                            label={t('pages.system.codeRules.seqResetRule')}
                             options={[
-                              { label: '不重置', value: 'never' },
-                              { label: '每日重置', value: 'daily' },
-                              { label: '每月重置', value: 'monthly' },
-                              { label: '每年重置', value: 'yearly' },
+                              { label: t('pages.system.codeRules.seqResetNever'), value: 'never' },
+                              { label: t('pages.system.codeRules.seqResetDaily'), value: 'daily' },
+                              { label: t('pages.system.codeRules.seqResetMonthly'), value: 'monthly' },
+                              { label: t('pages.system.codeRules.seqResetYearly'), value: 'yearly' },
                             ]}
                             width="md"
                           />
@@ -1053,7 +1055,7 @@ const CodeRuleListPage: React.FC = () => {
 
                       <ProFormSwitch
                         name="is_active"
-                        label="是否启用"
+                        label={t('pages.system.codeRules.isActive')}
                       />
                     </ProForm>
                   </Card>
@@ -1069,7 +1071,7 @@ const CodeRuleListPage: React.FC = () => {
                   color: token.colorTextSecondary,
                 }}
               >
-                请从左侧选择一个功能页面进行配置
+                {t('pages.system.codeRules.selectPageHint')}
               </div>
             )}
           </div>

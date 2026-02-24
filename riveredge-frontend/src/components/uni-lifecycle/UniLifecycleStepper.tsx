@@ -114,7 +114,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
                 width: LINE_WIDTH,
                 minWidth: LINE_WIDTH,
                 height: LINE_HEIGHT,
-                backgroundColor: steps[idx - 1].status === 'done' ? 'var(--ant-color-primary)' : 'var(--ant-color-border)',
+                backgroundColor: 'var(--ant-color-border)',
                 marginBottom: showLabels ? 20 : 0,
               }}
             />

@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Drawer, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, Collapse, Divider, theme } from 'antd';
 import { EyeOutlined, CheckOutlined, ReloadOutlined, BellOutlined, SearchOutlined, MailOutlined, MessageOutlined, NotificationOutlined, MobileOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -32,6 +33,7 @@ const { useToken } = theme;
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ const CardView: React.FC = () => {
       setMessages(messagesResponse.items);
       setStats(statsData);
     } catch (error: any) {
-      handleError(error, '加载消息列表失败');
+      handleError(error, t('pages.personal.messages.getListFailed'));
     } finally {
       setLoading(false);
     }
@@ -109,7 +111,7 @@ const CardView: React.FC = () => {
         }
       }
     } catch (error: any) {
-      handleError(error, '获取消息详情失败');
+      handleError(error, t('pages.personal.messages.getDetailFailed'));
     }
   };
 
@@ -121,10 +123,10 @@ const CardView: React.FC = () => {
       await markMessagesRead({
         message_uuids: [message.uuid],
       });
-      handleSuccess('已标记为已读');
+      handleSuccess(t('pages.personal.messages.markedRead'));
       loadMessages();
     } catch (error: any) {
-      handleError(error, '标记失败');
+      handleError(error, t('pages.personal.messages.markFailed'));
     }
   };
 
@@ -133,7 +135,7 @@ const CardView: React.FC = () => {
    */
   const handleBatchMarkRead = async (messageUuids: string[]) => {
     if (messageUuids.length === 0) {
-      messageApi.warning('请选择要标记的消息');
+      messageApi.warning(t('pages.personal.messages.selectToMark'));
       return;
     }
 
@@ -141,10 +143,10 @@ const CardView: React.FC = () => {
       await markMessagesRead({
         message_uuids: messageUuids,
       });
-      handleSuccess('标记成功');
+      handleSuccess(t('pages.personal.messages.markSuccess'));
       loadMessages();
     } catch (error: any) {
-      handleError(error, '标记失败');
+      handleError(error, t('pages.personal.messages.markFailed'));
     }
   };
 
@@ -153,43 +155,21 @@ const CardView: React.FC = () => {
    */
   const getChannelInfo = (channel: string): { color: string; text: string; icon: React.ReactNode } => {
     const channelMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      email: { 
-        color: 'blue', 
-        text: '邮件',
-        icon: <MailOutlined />,
-      },
-      sms: { 
-        color: 'green', 
-        text: '短信',
-        icon: <MobileOutlined />,
-      },
-      internal: { 
-        color: 'purple', 
-        text: '站内信',
-        icon: <MessageOutlined />,
-      },
-      push: { 
-        color: 'orange', 
-        text: '推送',
-        icon: <NotificationOutlined />,
-      },
+      email: { color: 'blue', text: t('pages.personal.messages.channelEmail'), icon: <MailOutlined /> },
+      sms: { color: 'green', text: t('pages.personal.messages.channelSms'), icon: <MobileOutlined /> },
+      internal: { color: 'purple', text: t('pages.personal.messages.channelInternal'), icon: <MessageOutlined /> },
+      push: { color: 'orange', text: t('pages.personal.messages.channelPush'), icon: <NotificationOutlined /> },
     };
     return channelMap[channel] || { color: 'default', text: channel, icon: <BellOutlined /> };
   };
 
-  /**
-   * 获取消息状态显示
-   */
-  const getStatusInfo = (status: string): { 
-    status: 'success' | 'error' | 'processing' | 'default'; 
-    text: string;
-  } => {
+  const getStatusInfo = (status: string): { status: 'success' | 'error' | 'processing' | 'default'; text: string } => {
     const statusMap: Record<string, { status: 'success' | 'error' | 'processing' | 'default'; text: string }> = {
-      pending: { status: 'default', text: '待发送' },
-      sending: { status: 'processing', text: '发送中' },
-      success: { status: 'default', text: '已发送' },
-      read: { status: 'success', text: '已读' },
-      failed: { status: 'error', text: '失败' },
+      pending: { status: 'default', text: t('pages.personal.messages.statusPending') },
+      sending: { status: 'processing', text: t('pages.personal.messages.statusSending') },
+      success: { status: 'default', text: t('pages.personal.messages.statusSuccess') },
+      read: { status: 'success', text: t('pages.personal.messages.statusRead') },
+      failed: { status: 'error', text: t('pages.personal.messages.statusFailed') },
     };
     return statusMap[status] || { status: 'default', text: status };
   };
@@ -233,7 +213,7 @@ const CardView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="我的消息"
+        title={t('pages.personal.messages.headerTitle')}
         extra={[
           <Button
             key="refresh"
@@ -241,7 +221,7 @@ const CardView: React.FC = () => {
             onClick={loadMessages}
             loading={loading}
           >
-            刷新
+            {t('pages.personal.messages.refresh')}
           </Button>,
         ]}
       >
@@ -251,7 +231,7 @@ const CardView: React.FC = () => {
             <Row gutter={16}>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="总消息数"
+                  title={t('pages.personal.messages.totalCount')}
                   value={stats.total}
                   prefix={<BellOutlined />}
                   styles={{ content: { color: '#1890ff' } }}
@@ -259,7 +239,7 @@ const CardView: React.FC = () => {
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="未读消息"
+                  title={t('pages.personal.messages.unreadMessages')}
                   value={stats.unread}
                   prefix={<BellOutlined />}
                   styles={{ content: { color: '#ff4d4f' } }}
@@ -267,7 +247,7 @@ const CardView: React.FC = () => {
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="已读消息"
+                  title={t('pages.personal.messages.readMessages')}
                   value={stats.read}
                   prefix={<CheckOutlined />}
                   styles={{ content: { color: '#52c41a' } }}
@@ -275,7 +255,7 @@ const CardView: React.FC = () => {
               </Col>
               <Col xs={24} sm={12} md={6}>
                 <Statistic
-                  title="失败消息"
+                  title={t('pages.personal.messages.failedMessages')}
                   value={stats.failed}
                   prefix={<BellOutlined />}
                   styles={{ content: { color: '#faad14' } }}
@@ -288,7 +268,7 @@ const CardView: React.FC = () => {
         {/* 搜索框 */}
         <Card style={{ marginBottom: 16 }}>
           <Search
-            placeholder="搜索消息主题、内容或收件人"
+            placeholder={t('pages.personal.messages.searchPlaceholder')}
             allowClear
             enterButton={<SearchOutlined />}
             size="large"
@@ -325,13 +305,13 @@ const CardView: React.FC = () => {
                           {channelInfo.text}
                         </Tag>
                         <Text type="secondary">
-                          {typeStats.total} 条消息
+                          {t('pages.personal.messages.itemsCount', { count: typeStats.total })}
                         </Text>
                         <Divider orientation="vertical" />
                         <Badge count={typeStats.unread} showZero={false}>
-                          <Text type="secondary">未读: {typeStats.unread}</Text>
+                          <Text type="secondary">{t('pages.personal.messages.unreadCount')}: {typeStats.unread}</Text>
                         </Badge>
-                        <Badge status="success" text={`已读: ${typeStats.read}`} />
+                        <Badge status="success" text={`${t('pages.personal.messages.readCount')}: ${typeStats.read}`} />
                       </Space>
                     }
                     extra={
@@ -345,7 +325,7 @@ const CardView: React.FC = () => {
                             handleBatchMarkRead(typeMessages.filter((m) => isUnread(m)).map((m) => m.uuid));
                           }}
                         >
-                          全部标记已读
+                          {t('pages.personal.messages.markAllRead')}
                         </Button>
                       )
                     }
@@ -364,7 +344,7 @@ const CardView: React.FC = () => {
                                 border: unread ? '2px solid #1890ff' : '1px solid #d9d9d9',
                               }}
                               actions={[
-                                <Tooltip title="查看详情">
+                                <Tooltip title={t('pages.personal.messages.viewDetail')}>
                                   <EyeOutlined
                                     key="view"
                                     onClick={() => handleViewDetail(message)}
@@ -372,7 +352,7 @@ const CardView: React.FC = () => {
                                   />
                                 </Tooltip>,
                                 ...(unread ? [
-                                  <Tooltip title="标记已读">
+                                  <Tooltip title={t('pages.personal.messages.markRead')}>
                                     <CheckOutlined
                                       key="mark"
                                       onClick={() => handleMarkRead(message)}
@@ -386,7 +366,7 @@ const CardView: React.FC = () => {
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text strong style={{ fontSize: 16, fontWeight: unread ? 'bold' : 'normal' }}>
-                                      {message.subject || '(无主题)'}
+                                      {message.subject || t('common.noSubject')}
                                     </Text>
                                     {unread && <Badge dot />}
                                   </div>
@@ -403,14 +383,14 @@ const CardView: React.FC = () => {
                               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>渠道：</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.personal.messages.channel')}：</Text>
                                     <Tag color={channelInfo.color} icon={channelInfo.icon}>
                                       {channelInfo.text}
                                     </Tag>
                                   </div>
                                   
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>状态：</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.personal.messages.status')}：</Text>
                                     <Badge
                                       status={statusInfo.status}
                                       text={statusInfo.text}
@@ -419,7 +399,7 @@ const CardView: React.FC = () => {
                                   
                                   {message.sent_at && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <Text type="secondary" style={{ fontSize: 12 }}>发送时间：</Text>
+                                      <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.personal.messages.sentTime')}：</Text>
                                       <Text style={{ fontSize: 12 }}>
                                         {dayjs(message.sent_at).fromNow()}
                                       </Text>
@@ -447,14 +427,14 @@ const CardView: React.FC = () => {
               })}
             </Collapse>
           ) : (
-            <Empty description={searchText ? '没有找到匹配的消息' : '暂无消息'} />
+            <Empty description={searchText ? t('pages.personal.messages.noMatch') : t('common.noMessages')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 消息详情抽屉 */}
       <Drawer
-        title={currentMessage?.subject || '(无主题)'}
+        title={currentMessage?.subject || t('common.noSubject')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -465,24 +445,24 @@ const CardView: React.FC = () => {
         {currentMessage && (
           <div>
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="消息主题">
-                {currentMessage.subject || '(无主题)'}
+              <Descriptions.Item label={t('pages.personal.messages.messageSubject')}>
+                {currentMessage.subject || t('common.noSubject')}
               </Descriptions.Item>
-              <Descriptions.Item label="消息渠道">
+              <Descriptions.Item label={t('pages.personal.messages.messageChannel')}>
                 <Tag color={getChannelInfo(currentMessage.type).color} icon={getChannelInfo(currentMessage.type).icon}>
                   {getChannelInfo(currentMessage.type).text}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="收件人">
+              <Descriptions.Item label={t('pages.personal.messages.recipient')}>
                 {currentMessage.recipient}
               </Descriptions.Item>
-              <Descriptions.Item label="状态">
+              <Descriptions.Item label={t('pages.personal.messages.status')}>
                 <Badge
                   status={getStatusInfo(currentMessage.status).status}
                   text={getStatusInfo(currentMessage.status).text}
                 />
               </Descriptions.Item>
-              <Descriptions.Item label="消息内容">
+              <Descriptions.Item label={t('pages.personal.messages.messageContent')}>
                 <div style={{ 
                   padding: '12px', 
                   background: '#f5f5f5', 
@@ -493,7 +473,7 @@ const CardView: React.FC = () => {
                 </div>
               </Descriptions.Item>
               {currentMessage.variables && Object.keys(currentMessage.variables).length > 0 && (
-                <Descriptions.Item label="变量">
+                <Descriptions.Item label={t('pages.personal.messages.variables')}>
                   <pre style={{
                     margin: 0,
                     padding: '8px',
@@ -508,7 +488,7 @@ const CardView: React.FC = () => {
                 </Descriptions.Item>
               )}
               {currentMessage.error_message && (
-                <Descriptions.Item label="错误信息">
+                <Descriptions.Item label={t('pages.personal.messages.errorInfo')}>
                   <Alert
                     message={currentMessage.error_message}
                     type="error"
@@ -518,11 +498,11 @@ const CardView: React.FC = () => {
                 </Descriptions.Item>
               )}
               {currentMessage.sent_at && (
-                <Descriptions.Item label="发送时间">
+                <Descriptions.Item label={t('pages.personal.messages.sentTime')}>
                   {dayjs(currentMessage.sent_at).format('YYYY-MM-DD HH:mm:ss')}
                 </Descriptions.Item>
               )}
-              <Descriptions.Item label="创建时间">
+              <Descriptions.Item label={t('pages.personal.messages.createdAt')}>
                 {dayjs(currentMessage.created_at).format('YYYY-MM-DD HH:mm:ss')}
               </Descriptions.Item>
             </Descriptions>

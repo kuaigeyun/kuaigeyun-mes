@@ -15,7 +15,8 @@ from apps.kuaizhizao.schemas.invoice import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceListResponse
 )
 from apps.base_service import AppBaseService
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class InvoiceService(AppBaseService[Invoice]):
@@ -24,11 +25,15 @@ class InvoiceService(AppBaseService[Invoice]):
     """
     def __init__(self):
         super().__init__(Invoice)
+        self.business_config_service = BusinessConfigService()
 
     async def create_invoice(self, tenant_id: int, data: InvoiceCreate, created_by: int) -> Invoice:
         """
         创建发票
         """
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "invoice")
+        if not is_enabled:
+            raise BusinessLogicError("发票节点未启用，无法创建发票")
         async with in_transaction():
             # 生成系统编号
             prefix = "INV-IN-" if data.category == "IN" else "INV-OUT-"

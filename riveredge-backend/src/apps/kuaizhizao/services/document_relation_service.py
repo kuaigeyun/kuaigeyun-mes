@@ -26,8 +26,7 @@ from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-from apps.kuaizhizao.models.mrp_result import MRPResult
-from apps.kuaizhizao.models.lrp_result import LRPResult
+from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.payable import Payable
 from apps.kuaizhizao.models.receivable import Receivable
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
@@ -48,8 +47,7 @@ class DocumentRelationService:
         "quotation": {"model": Quotation, "code_field": "quotation_code", "name_field": None},
         "material_borrow": {"model": MaterialBorrow, "code_field": "borrow_code", "name_field": None},
         "material_return": {"model": MaterialReturn, "code_field": "return_code", "name_field": None},
-        "mrp_result": {"model": MRPResult, "code_field": None, "name_field": None},
-        "lrp_result": {"model": LRPResult, "code_field": None, "name_field": None},
+        "demand_computation": {"model": DemandComputation, "code_field": "computation_code", "name_field": None},
         "work_order": {"model": WorkOrder, "code_field": "code", "name_field": "name"},
         "production_picking": {"model": ProductionPicking, "code_field": "picking_code", "name_field": None},
         "production_return": {"model": ProductionReturn, "code_field": "return_code", "name_field": None},
@@ -120,15 +118,10 @@ class DocumentRelationService:
             upstream_documents = await self._get_material_return_upstream(tenant_id, document_id)
             downstream_documents = []
 
-        elif document_type == "mrp_result":
-            # MRP运算结果的上游：销售预测，下游：工单、采购单
-            upstream_documents = await self._get_mrp_result_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_mrp_result_downstream(tenant_id, document_id)
-
-        elif document_type == "lrp_result":
-            # LRP运算结果的上游：销售订单，下游：工单、采购单
-            upstream_documents = await self._get_lrp_result_upstream(tenant_id, document_id)
-            downstream_documents = await self._get_lrp_result_downstream(tenant_id, document_id)
+        elif document_type == "demand_computation":
+            # 需求计算的上游：需求/销售预测/销售订单，下游：工单、采购单
+            upstream_documents = await self._get_demand_computation_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_demand_computation_downstream(tenant_id, document_id)
 
         elif document_type == "work_order":
             # 工单的上游：销售预测/销售订单、MRP/LRP运算，下游：生产领料、报工记录、成品入库、销售出库
@@ -248,43 +241,51 @@ class DocumentRelationService:
         """获取销售订单的上游单据（通常没有）"""
         return []
 
-    async def _get_mrp_result_upstream(self, tenant_id: int, result_id: int) -> List[Dict[str, Any]]:
-        """获取MRP运算结果的上游单据（销售预测）"""
-        result = await MRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
-        if not result:
+    async def _get_demand_computation_upstream(self, tenant_id: int, computation_id: int) -> List[Dict[str, Any]]:
+        """获取需求计算的上游单据（需求、销售预测/销售订单）"""
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
             return []
 
-        forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=result.forecast_id)
-        if not forecast:
-            return []
+        upstream = []
 
-        return [{
-            "document_type": "sales_forecast",
-            "document_id": forecast.id,
-            "document_code": forecast.forecast_code,
-            "document_name": forecast.forecast_name,
-            "status": forecast.status,
-            "created_at": forecast.created_at.isoformat() if forecast.created_at else None
-        }]
+        # 需求
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
+        if demand:
+            upstream.append({
+                "document_type": "demand",
+                "document_id": demand.id,
+                "document_code": demand.demand_code,
+                "document_name": getattr(demand, "demand_name", None) or demand.demand_code,
+                "status": getattr(demand, "status", None),
+                "created_at": demand.created_at.isoformat() if demand.created_at else None
+            })
 
-    async def _get_lrp_result_upstream(self, tenant_id: int, result_id: int) -> List[Dict[str, Any]]:
-        """获取LRP运算结果的上游单据（销售订单）"""
-        result = await LRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
-        if not result:
-            return []
+            # 根据需求来源追溯销售预测或销售订单
+            if demand.source_type == "sales_forecast" and demand.source_id:
+                forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                if forecast:
+                    upstream.append({
+                        "document_type": "sales_forecast",
+                        "document_id": forecast.id,
+                        "document_code": forecast.forecast_code,
+                        "document_name": forecast.forecast_name,
+                        "status": forecast.status,
+                        "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                    })
+            elif demand.source_type == "sales_order" and demand.source_id:
+                order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                if order:
+                    upstream.append({
+                        "document_type": "sales_order",
+                        "document_id": order.id,
+                        "document_code": order.order_code,
+                        "document_name": getattr(order, "order_name", None) or order.order_code,
+                        "status": order.status,
+                        "created_at": order.created_at.isoformat() if order.created_at else None
+                    })
 
-        order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=result.sales_order_id)
-        if not order:
-            return []
-
-        return [{
-            "document_type": "sales_order",
-            "document_id": order.id,
-            "document_code": order.order_code,
-            "document_name": getattr(order, "order_name", None) or order.order_code,
-            "status": order.status,
-            "created_at": order.created_at.isoformat() if order.created_at else None
-        }]
+        return upstream
 
     async def _get_work_order_upstream(
         self,
@@ -298,7 +299,7 @@ class DocumentRelationService:
 
         upstream = []
 
-        # 如果是MTO模式，关联销售订单
+        # MTO模式：关联销售订单及需求计算
         if work_order.sales_order_id:
             order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=work_order.sales_order_id)
             if order:
@@ -310,50 +311,56 @@ class DocumentRelationService:
                     "status": order.status,
                     "created_at": order.created_at.isoformat() if order.created_at else None
                 })
-
-                # 查找关联的LRP运算结果
-                lrp_results = await LRPResult.filter(
+                # 通过 Demand 查找关联的需求计算
+                demand = await Demand.get_or_none(
                     tenant_id=tenant_id,
-                    sales_order_id=order.id
-                ).limit(5)
-                for lrp_result in lrp_results:
-                    upstream.append({
-                        "document_type": "lrp_result",
-                        "document_id": lrp_result.id,
-                        "document_code": None,
-                        "document_name": f"LRP运算结果-{order.order_code}",
-                        "status": lrp_result.computation_status,
-                        "created_at": lrp_result.computation_time.isoformat() if lrp_result.computation_time else None
-                    })
+                    source_type="sales_order",
+                    source_id=order.id,
+                    deleted_at__isnull=True,
+                )
+                if demand and demand.computation_id:
+                    comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=demand.computation_id)
+                    if comp:
+                        upstream.append({
+                            "document_type": "demand_computation",
+                            "document_id": comp.id,
+                            "document_code": comp.computation_code,
+                            "document_name": f"需求计算-{comp.computation_code}",
+                            "status": comp.computation_status,
+                            "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                        })
 
-        # 查找MRP运算结果（通过物料ID和预测关联）
-        # 首先查找销售预测（MTS模式可能来自销售预测）
-        # 通过物料ID查找MRP结果
-        mrp_results = await MRPResult.filter(
+        # MTS模式：通过 DocumentRelation 查找需求计算（工单作为 target 时）
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        comp_relations = await DocumentRelation.filter(
             tenant_id=tenant_id,
-            material_id=work_order.product_id
+            target_type="work_order",
+            target_id=work_order_id,
+            source_type="demand_computation",
         ).limit(5)
-        for mrp_result in mrp_results:
-            # 验证是否与工单相关（通过预测日期和物料匹配）
-            forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=mrp_result.forecast_id)
-            if forecast:
+        for rel in comp_relations:
+            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=rel.source_id)
+            if comp and not any(u.get("document_type") == "demand_computation" and u.get("document_id") == comp.id for u in upstream):
                 upstream.append({
-                    "document_type": "mrp_result",
-                    "document_id": mrp_result.id,
-                    "document_code": None,
-                    "document_name": f"MRP运算结果-{forecast.forecast_code}",
-                    "status": mrp_result.computation_status,
-                    "created_at": mrp_result.computation_time.isoformat() if mrp_result.computation_time else None
+                    "document_type": "demand_computation",
+                    "document_id": comp.id,
+                    "document_code": comp.computation_code,
+                    "document_name": f"需求计算-{comp.computation_code}",
+                    "status": comp.computation_status,
+                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
                 })
-                # 添加关联的销售预测
-                upstream.append({
-                    "document_type": "sales_forecast",
-                    "document_id": forecast.id,
-                    "document_code": forecast.forecast_code,
-                    "document_name": forecast.forecast_name,
-                    "status": forecast.status,
-                    "created_at": forecast.created_at.isoformat() if forecast.created_at else None
-                })
+                demand = await Demand.get_or_none(tenant_id=tenant_id, id=comp.demand_id)
+                if demand and demand.source_type == "sales_forecast" and demand.source_id:
+                    forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                    if forecast and not any(u.get("document_type") == "sales_forecast" and u.get("document_id") == forecast.id for u in upstream):
+                        upstream.append({
+                            "document_type": "sales_forecast",
+                            "document_id": forecast.id,
+                            "document_code": forecast.forecast_code,
+                            "document_name": forecast.forecast_name,
+                            "status": forecast.status,
+                            "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                        })
 
         return upstream
 
@@ -465,62 +472,49 @@ class DocumentRelationService:
         tenant_id: int,
         order_id: int
     ) -> List[Dict[str, Any]]:
-        """获取采购单的上游单据（MRP/LRP运算）"""
+        """获取采购单的上游单据（需求计算，统一替代 MRP/LRP）"""
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order or not order.source_type or not order.source_id:
             return []
 
         upstream = []
 
-        if order.source_type == "MRP":
-            # 查找MRP运算结果
-            mrp_result = await MRPResult.get_or_none(tenant_id=tenant_id, id=order.source_id)
-            if mrp_result:
+        # source_type 为 MRP/LRP 或 demand_computation 时，source_id 均为 DemandComputation.id
+        if order.source_type in ("MRP", "LRP", "demand_computation"):
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=order.source_id)
+            if computation:
                 upstream.append({
-                    "document_type": "mrp_result",
-                    "document_id": mrp_result.id,
-                    "document_code": None,
-                    "document_name": f"MRP运算结果",
-                    "status": mrp_result.computation_status,
-                    "created_at": mrp_result.computation_time.isoformat() if mrp_result.computation_time else None
+                    "document_type": "demand_computation",
+                    "document_id": computation.id,
+                    "document_code": computation.computation_code,
+                    "document_name": f"需求计算-{computation.computation_code}",
+                    "status": computation.computation_status,
+                    "created_at": computation.computation_start_time.isoformat() if computation.computation_start_time else None
                 })
-
-                # 查找关联的销售预测
-                forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=mrp_result.forecast_id)
-                if forecast:
-                    upstream.append({
-                        "document_type": "sales_forecast",
-                        "document_id": forecast.id,
-                        "document_code": forecast.forecast_code,
-                        "document_name": forecast.forecast_name,
-                        "status": forecast.status,
-                        "created_at": forecast.created_at.isoformat() if forecast.created_at else None
-                    })
-
-        elif order.source_type == "LRP":
-            # 查找LRP运算结果
-            lrp_result = await LRPResult.get_or_none(tenant_id=tenant_id, id=order.source_id)
-            if lrp_result:
-                upstream.append({
-                    "document_type": "lrp_result",
-                    "document_id": lrp_result.id,
-                    "document_code": None,
-                    "document_name": f"LRP运算结果",
-                    "status": lrp_result.computation_status,
-                    "created_at": lrp_result.computation_time.isoformat() if lrp_result.computation_time else None
-                })
-
-                # 查找关联的销售订单
-                sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=lrp_result.sales_order_id)
-                if sales_order:
-                    upstream.append({
-                        "document_type": "sales_order",
-                        "document_id": sales_order.id,
-                        "document_code": sales_order.order_code,
-                        "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
-                        "status": sales_order.status,
-                        "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
-                    })
+                demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
+                if demand:
+                    if demand.source_type == "sales_forecast" and demand.source_id:
+                        forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                        if forecast:
+                            upstream.append({
+                                "document_type": "sales_forecast",
+                                "document_id": forecast.id,
+                                "document_code": forecast.forecast_code,
+                                "document_name": forecast.forecast_name,
+                                "status": forecast.status,
+                                "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                            })
+                    elif demand.source_type == "sales_order" and demand.source_id:
+                        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                        if sales_order:
+                            upstream.append({
+                                "document_type": "sales_order",
+                                "document_id": sales_order.id,
+                                "document_code": sales_order.order_code,
+                                "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                                "status": sales_order.status,
+                                "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
+                            })
 
         return upstream
 
@@ -548,50 +542,42 @@ class DocumentRelationService:
                 "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
             })
 
-            # 如果采购单有来源，继续向上追溯
-            if purchase_order.source_type and purchase_order.source_id:
-                if purchase_order.source_type == "MRP":
-                    mrp_result = await MRPResult.get_or_none(tenant_id=tenant_id, id=purchase_order.source_id)
-                    if mrp_result:
-                        upstream.append({
-                            "document_type": "mrp_result",
-                            "document_id": mrp_result.id,
-                            "document_code": None,
-                            "document_name": f"MRP运算结果",
-                            "status": mrp_result.computation_status,
-                            "created_at": mrp_result.computation_time.isoformat() if mrp_result.computation_time else None
-                        })
-                        forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=mrp_result.forecast_id)
-                        if forecast:
-                            upstream.append({
-                                "document_type": "sales_forecast",
-                                "document_id": forecast.id,
-                                "document_code": forecast.forecast_code,
-                                "document_name": forecast.forecast_name,
-                                "status": forecast.status,
-                                "created_at": forecast.created_at.isoformat() if forecast.created_at else None
-                            })
-                elif purchase_order.source_type == "LRP":
-                    lrp_result = await LRPResult.get_or_none(tenant_id=tenant_id, id=purchase_order.source_id)
-                    if lrp_result:
-                        upstream.append({
-                            "document_type": "lrp_result",
-                            "document_id": lrp_result.id,
-                            "document_code": None,
-                            "document_name": f"LRP运算结果",
-                            "status": lrp_result.computation_status,
-                            "created_at": lrp_result.computation_time.isoformat() if lrp_result.computation_time else None
-                        })
-                        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=lrp_result.sales_order_id)
-                        if sales_order:
-                            upstream.append({
-                                "document_type": "sales_order",
-                                "document_id": sales_order.id,
-                                "document_code": sales_order.order_code,
-                                "document_name": sales_order.order_name,
-                                "status": sales_order.status,
-                                "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
-                            })
+            # 如果采购单有来源，继续向上追溯（需求计算）
+            if purchase_order.source_type and purchase_order.source_id and purchase_order.source_type in ("MRP", "LRP", "demand_computation"):
+                computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=purchase_order.source_id)
+                if computation:
+                    upstream.append({
+                        "document_type": "demand_computation",
+                        "document_id": computation.id,
+                        "document_code": computation.computation_code,
+                        "document_name": f"需求计算-{computation.computation_code}",
+                        "status": computation.computation_status,
+                        "created_at": computation.computation_start_time.isoformat() if computation.computation_start_time else None
+                    })
+                    demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
+                    if demand:
+                        if demand.source_type == "sales_forecast" and demand.source_id:
+                            forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                            if forecast:
+                                upstream.append({
+                                    "document_type": "sales_forecast",
+                                    "document_id": forecast.id,
+                                    "document_code": forecast.forecast_code,
+                                    "document_name": forecast.forecast_name,
+                                    "status": forecast.status,
+                                    "created_at": forecast.created_at.isoformat() if forecast.created_at else None
+                                })
+                        elif demand.source_type == "sales_order" and demand.source_id:
+                            sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                            if sales_order:
+                                upstream.append({
+                                    "document_type": "sales_order",
+                                    "document_id": sales_order.id,
+                                    "document_code": sales_order.order_code,
+                                    "document_name": getattr(sales_order, "order_name", None) or sales_order.order_code,
+                                    "status": sales_order.status,
+                                    "created_at": sales_order.created_at.isoformat() if sales_order.created_at else None
+                                })
 
         return upstream
 
@@ -919,54 +905,58 @@ class DocumentRelationService:
         tenant_id: int,
         forecast_id: int
     ) -> List[Dict[str, Any]]:
-        """获取销售预测的下游单据（MRP运算结果、工单、销售出库单）"""
+        """获取销售预测的下游单据（需求计算、工单、采购单、销售出库单）"""
         downstream = []
 
-        # MRP运算结果
-        mrp_results = await MRPResult.filter(tenant_id=tenant_id, forecast_id=forecast_id).limit(10)
-        for result in mrp_results:
-            downstream.append({
-                "document_type": "mrp_result",
-                "document_id": result.id,
-                "document_code": None,
-                "document_name": f"MRP运算结果",
-                "status": result.computation_status,
-                "created_at": result.computation_time.isoformat() if result.computation_time else None
-            })
-
-        # 通过MRP结果查找工单（MTS模式，通过物料ID匹配）
-        for result in mrp_results:
-            work_orders = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                product_id=result.material_id,
-                production_mode="MTS"
-            ).limit(5)
-            for wo in work_orders:
+        # 通过 Demand 查找需求计算
+        demand = await Demand.get_or_none(
+            tenant_id=tenant_id,
+            source_type="sales_forecast",
+            source_id=forecast_id,
+            deleted_at__isnull=True,
+        )
+        if demand and demand.computation_id:
+            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=demand.computation_id)
+            if comp:
                 downstream.append({
-                    "document_type": "work_order",
-                    "document_id": wo.id,
-                    "document_code": wo.code,
-                    "document_name": wo.name,
-                    "status": wo.status,
-                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    "document_type": "demand_computation",
+                    "document_id": comp.id,
+                    "document_code": comp.computation_code,
+                    "document_name": f"需求计算-{comp.computation_code}",
+                    "status": comp.computation_status,
+                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
                 })
+                # 通过需求计算查找采购单（source_type 为 MRP 或 demand_computation，source_id 为 computation_id）
+                purchase_orders = await PurchaseOrder.filter(
+                    tenant_id=tenant_id,
+                    source_id=comp.id,
+                ).limit(10)
+                for po in purchase_orders:
+                    downstream.append({
+                        "document_type": "purchase_order",
+                        "document_id": po.id,
+                        "document_code": po.order_code,
+                        "document_name": po.order_name if hasattr(po, 'order_name') else None,
+                        "status": po.status,
+                        "created_at": po.created_at.isoformat() if po.created_at else None
+                    })
 
-        # 通过MRP结果查找采购单
-        for result in mrp_results:
-            purchase_orders = await PurchaseOrder.filter(
-                tenant_id=tenant_id,
-                source_type="MRP",
-                source_id=result.id
-            ).limit(5)
-            for po in purchase_orders:
-                downstream.append({
-                    "document_type": "purchase_order",
-                    "document_id": po.id,
-                    "document_code": po.order_code,
-                    "document_name": po.order_name if hasattr(po, 'order_name') else None,
-                    "status": po.status,
-                    "created_at": po.created_at.isoformat() if po.created_at else None
-                })
+        # 通过 DemandItem 查找工单（MTS 模式）
+        from apps.kuaizhizao.models.demand_item import DemandItem
+        if demand:
+            demand_items = await DemandItem.filter(tenant_id=tenant_id, demand_id=demand.id).limit(20)
+            work_order_ids = [di.work_order_id for di in demand_items if di.work_order_id]
+            if work_order_ids:
+                work_orders = await WorkOrder.filter(tenant_id=tenant_id, id__in=work_order_ids).limit(10)
+                for wo in work_orders:
+                    downstream.append({
+                        "document_type": "work_order",
+                        "document_id": wo.id,
+                        "document_code": wo.code,
+                        "document_name": wo.name,
+                        "status": wo.status,
+                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    })
 
         return downstream
 
@@ -1071,20 +1061,27 @@ class DocumentRelationService:
         tenant_id: int,
         order_id: int
     ) -> List[Dict[str, Any]]:
-        """获取销售订单的下游单据（LRP运算结果、工单、销售出库单）"""
+        """获取销售订单的下游单据（需求计算、工单、销售出库单）"""
         downstream = []
 
-        # LRP运算结果
-        lrp_results = await LRPResult.filter(tenant_id=tenant_id, sales_order_id=order_id).limit(10)
-        for result in lrp_results:
-            downstream.append({
-                "document_type": "lrp_result",
-                "document_id": result.id,
-                "document_code": None,
-                "document_name": f"LRP运算结果",
-                "status": result.computation_status,
-                "created_at": result.computation_time.isoformat() if result.computation_time else None
-            })
+        # 通过 Demand 查找需求计算
+        demand = await Demand.get_or_none(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=order_id,
+            deleted_at__isnull=True,
+        )
+        if demand and demand.computation_id:
+            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=demand.computation_id)
+            if comp:
+                downstream.append({
+                    "document_type": "demand_computation",
+                    "document_id": comp.id,
+                    "document_code": comp.computation_code,
+                    "document_name": f"需求计算-{comp.computation_code}",
+                    "status": comp.computation_status,
+                    "created_at": comp.computation_start_time.isoformat() if comp.computation_start_time else None
+                })
 
         # 工单（MTO模式）
         work_orders = await WorkOrder.filter(
@@ -1225,31 +1222,29 @@ class DocumentRelationService:
                 })
         return upstream
 
-    async def _get_mrp_result_downstream(
+    async def _get_demand_computation_downstream(
         self,
         tenant_id: int,
-        result_id: int
+        computation_id: int
     ) -> List[Dict[str, Any]]:
-        """获取MRP运算结果的下游单据（工单、采购单）"""
+        """获取需求计算的下游单据（工单、采购单）"""
         downstream = []
 
-        # 获取MRP结果
-        mrp_result = await MRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
-        if not mrp_result:
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
             return downstream
 
-        # 通过物料ID和预测ID查找工单（MTS模式，通过物料ID匹配）
-        # 注意：由于工单没有直接关联MRP结果，我们通过物料ID和预测ID来查找
-        # 首先获取销售预测
-        forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=mrp_result.forecast_id)
-        if forecast:
-            # 查找相同物料的工单（MTS模式，且物料ID匹配）
-            work_orders = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                product_id=mrp_result.material_id,
-                production_mode="MTS"
-            ).limit(10)
-            for wo in work_orders:
+        # 通过 DocumentRelation 查找工单（demand_computation 下推时创建）
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        wo_relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            target_type="work_order",
+        ).limit(10)
+        for rel in wo_relations:
+            wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id, deleted_at__isnull=True)
+            if wo:
                 downstream.append({
                     "document_type": "work_order",
                     "document_id": wo.id,
@@ -1259,59 +1254,10 @@ class DocumentRelationService:
                     "created_at": wo.created_at.isoformat() if wo.created_at else None
                 })
 
-        # 通过source_type和source_id查找采购单
+        # 通过 source_id 查找采购单（PurchaseOrder.source_id 为 DemandComputation.id）
         purchase_orders = await PurchaseOrder.filter(
             tenant_id=tenant_id,
-            source_type="MRP",
-            source_id=result_id
-        ).limit(10)
-        for po in purchase_orders:
-            downstream.append({
-                "document_type": "purchase_order",
-                "document_id": po.id,
-                "document_code": po.order_code,
-                "document_name": po.order_name if hasattr(po, 'order_name') else None,
-                "status": po.status,
-                "created_at": po.created_at.isoformat() if po.created_at else None
-            })
-
-        return downstream
-
-    async def _get_lrp_result_downstream(
-        self,
-        tenant_id: int,
-        result_id: int
-    ) -> List[Dict[str, Any]]:
-        """获取LRP运算结果的下游单据（工单、采购单）"""
-        downstream = []
-
-        # 获取LRP结果
-        lrp_result = await LRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
-        if not lrp_result:
-            return downstream
-
-        # 通过销售订单ID和物料ID查找工单（MTO模式）
-        work_orders = await WorkOrder.filter(
-            tenant_id=tenant_id,
-            sales_order_id=lrp_result.sales_order_id,
-            product_id=lrp_result.material_id,
-            production_mode="MTO"
-        ).limit(10)
-        for wo in work_orders:
-            downstream.append({
-                "document_type": "work_order",
-                "document_id": wo.id,
-                "document_code": wo.code,
-                "document_name": wo.name,
-                "status": wo.status,
-                "created_at": wo.created_at.isoformat() if wo.created_at else None
-            })
-
-        # 通过source_type和source_id查找采购单
-        purchase_orders = await PurchaseOrder.filter(
-            tenant_id=tenant_id,
-            source_type="LRP",
-            source_id=result_id
+            source_id=computation_id,
         ).limit(10)
         for po in purchase_orders:
             downstream.append({

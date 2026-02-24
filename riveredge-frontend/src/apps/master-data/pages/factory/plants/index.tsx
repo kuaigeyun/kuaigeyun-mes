@@ -4,16 +4,15 @@
  * 提供厂区的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import React, { useRef, useState } from 'react';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { plantApi } from '../../../services/factory';
-import type { Plant, PlantCreate, PlantUpdate } from '../../../types/factory';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { PlantFormModal } from '../../../components/PlantFormModal';
+import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
 
@@ -24,16 +23,11 @@ const PlantsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态（创建/编辑厂区）
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  const [currentPlantUuid, setCurrentPlantUuid] = useState<string | null>(null);
-  // 保存预览编码，用于在提交时判断是否需要正式生成
-  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -43,55 +37,17 @@ const PlantsPage: React.FC = () => {
   /**
    * 处理新建厂区
    */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentPlantUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
-    
-    // 检查是否启用自动编码
-    if (isAutoGenerateEnabled('master-data-factory-plant')) {
-      const ruleCode = getPageRuleCode('master-data-factory-plant');
-      if (ruleCode) {
-        try {
-          // 使用测试生成（不更新序号），仅用于预览
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-        }
-      }
-    } else {
-      setPreviewCode(null);
-    }
   };
 
   /**
    * 处理编辑厂区
    */
-  const handleEdit = async (record: Plant) => {
-    setIsEdit(true);
-    setCurrentPlantUuid(record.uuid);
+  const handleEdit = (record: Plant) => {
+    setEditUuid(record.uuid);
     setModalVisible(true);
-    
-    // 加载厂区详情
-    try {
-      const detail = await plantApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        description: detail.description,
-        address: detail.address,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-    } catch (error: any) {
-      messageApi.error(error.message || '加载厂区详情失败');
-    }
   };
 
   /**
@@ -443,7 +399,7 @@ const PlantsPage: React.FC = () => {
           item.name || '',
           item.address || '',
           item.description || '',
-          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
+          item.isActive ? '启用' : '禁用',
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -466,58 +422,10 @@ const PlantsPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理提交表单（创建/更新厂区）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      if (isEdit && currentPlantUuid) {
-        // 更新厂区
-        await plantApi.update(currentPlantUuid, values as PlantUpdate);
-        messageApi.success('更新成功');
-      } else {
-        // 创建厂区
-        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
-        if (!isEdit && isAutoGenerateEnabled('master-data-factory-plant')) {
-          const ruleCode = getPageRuleCode('master-data-factory-plant');
-          const currentCode = values.code;
-          
-          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成编码失败，使用预览编码:', error);
-              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
-            }
-          }
-        }
-        
-        await plantApi.create(values as PlantCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      setPreviewCode(null);
-      formRef.current?.resetFields();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
+  const handleModalSuccess = () => {
     setModalVisible(false);
-    setPreviewCode(null);
-    formRef.current?.resetFields();
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -562,10 +470,9 @@ const PlantsPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
-          <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+          <Tag color={record?.isActive ? 'success' : 'default'}>
+            {record?.isActive ? '启用' : '禁用'}
           </Tag>
         );
       },
@@ -624,7 +531,7 @@ const PlantsPage: React.FC = () => {
   /**
    * 详情 Drawer 的列定义
    */
-  const detailColumns: ProDescriptionsItemType<Plant>[] = [
+  const detailColumns: ProDescriptionsItemProps<Plant>[] = [
     { title: '厂区编码', dataIndex: 'code' },
     { title: '厂区名称', dataIndex: 'name' },
     { title: '地址', dataIndex: 'address', span: 2 },
@@ -632,14 +539,11 @@ const PlantsPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'isActive',
-      render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
-        return (
-          <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
-          </Tag>
-        );
-      },
+      render: (_: React.ReactNode, record: Plant) => (
+        <Tag color={record?.isActive ? 'success' : 'default'}>
+          {record?.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
       span: 2,
     },
     { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
@@ -766,62 +670,12 @@ const PlantsPage: React.FC = () => {
       />
 
       {/* 创建/编辑厂区 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑厂区' : '新建厂区'}
+      <PlantFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-      >
-        <ProFormText
-          name="code"
-          label="厂区编码"
-          placeholder="请输入厂区编码"
-          rules={[
-            { required: true, message: '请输入厂区编码' },
-            { max: 50, message: '厂区编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            disabled: isEdit, // 编辑时不允许修改编码
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="厂区名称"
-          placeholder="请输入厂区名称"
-          rules={[
-            { required: true, message: '请输入厂区名称' },
-            { max: 200, message: '厂区名称不能超过200个字符' },
-          ]}
-        />
-        <ProFormText
-          name="address"
-          label="地址"
-          placeholder="请输入厂区地址"
-          rules={[
-            { max: 500, message: '地址不能超过500个字符' },
-          ]}
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述信息"
-          fieldProps={{
-            rows: 4,
-            maxLength: 1000,
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-        />
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
   );
 };

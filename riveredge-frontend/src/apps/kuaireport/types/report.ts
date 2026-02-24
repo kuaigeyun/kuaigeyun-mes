@@ -6,8 +6,8 @@ export interface Report {
     code: string;
     name: string;
     report_type: ReportType;
-    content?: any; // For Univer
-    template_config?: any; // For JimuReport
+    content?: any; 
+    template_config?: any; 
     status: string;
     description?: string;
     tenant_id: number;

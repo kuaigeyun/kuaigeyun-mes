@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
 import { materialApi } from '../../../../master-data/services/material';
@@ -76,8 +77,7 @@ const StocktakingPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentStocktaking, setCurrentStocktaking] = useState<Stocktaking | null>(null);
 
-  // 仓库列表状态
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  // 仓库列表状态 (由 UniWarehouseSelect 内部接管，不再需要手工维护)
   // 物料列表状态
   const [materialList, setMaterialList] = useState<any[]>([]);
   // 当前盘点单ID（用于添加明细）
@@ -85,25 +85,7 @@ const StocktakingPage: React.FC = () => {
   // 当前执行盘点的明细ID
   const [currentItemId, setCurrentItemId] = useState<number | null>(null);
 
-  /**
-   * 加载仓库列表
-   */
-  React.useEffect(() => {
-    const loadWarehouses = async () => {
-      try {
-        // TODO: 调用仓库API获取仓库列表
-        // const warehouses = await warehouseApi.list();
-        // setWarehouseList(warehouses || []);
-        setWarehouseList([
-          { id: 1, name: '原材料仓库' },
-          { id: 2, name: '成品仓库' },
-        ]);
-      } catch (error) {
-        console.error('加载仓库列表失败:', error);
-      }
-    };
-    loadWarehouses();
-  }, []);
+  // 仓库加载交由 UniWarehouseSelect
 
   /**
    * 加载物料列表
@@ -139,7 +121,7 @@ const StocktakingPage: React.FC = () => {
     try {
       await stocktakingApi.create({
         warehouse_id: values.warehouse_id,
-        warehouse_name: warehouseList.find((w: any) => w.id === values.warehouse_id)?.name || '',
+        warehouse_name: values._warehouse_name || '', // _warehouse_name 可以由 UniWarehouseSelect 暴露或我们在 onChange 截获
         stocktaking_date: values.stocktaking_date?.toISOString() || new Date().toISOString(),
         stocktaking_type: values.stocktaking_type || 'full',
         remarks: values.remarks,
@@ -490,15 +472,15 @@ const StocktakingPage: React.FC = () => {
         formRef={formRef}
         {...MODAL_CONFIG}
       >
-        <ProFormSelect
+        <UniWarehouseSelect
           name="warehouse_id"
           label="仓库"
           placeholder="请选择仓库"
-          rules={[{ required: true, message: '请选择仓库' }]}
-          options={warehouseList.map((w: any) => ({
-            label: w.name,
-            value: w.id,
-          }))}
+          required
+          onChange={(_, option) => {
+             // 如果 stocktakingApi.create 确实需要 name，可以在这里附加上一个隐藏字段
+             formRef.current?.setFieldsValue({ _warehouse_name: option?.name });
+          }}
         />
         <ProFormDatePicker
           name="stocktaking_date"
@@ -673,7 +655,7 @@ const StocktakingPage: React.FC = () => {
           {
             title: '差异总金额',
             dataIndex: 'total_difference_amount',
-            render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
+            render: (dom: React.ReactNode, entity: Stocktaking) => `¥${entity.total_difference_amount?.toFixed(2) || '0.00'}`,
           },
           {
             title: '备注',

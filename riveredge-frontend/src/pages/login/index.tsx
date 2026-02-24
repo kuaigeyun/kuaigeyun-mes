@@ -9,6 +9,7 @@
 import { ProForm, ProFormText, ProFormGroup } from '@ant-design/pro-components';
 import { App, Typography, Button, Space, Tooltip, ConfigProvider, Card, Row, Col, Drawer, Alert, AutoComplete, Input } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined, MobileOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import Lottie from 'lottie-react';
@@ -45,6 +46,7 @@ interface LoginFormData {
  */
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
   // 使用全局状态管理（Zustand状态管理规范）
@@ -215,24 +217,24 @@ export default function LoginPage() {
         if (cachedSettings) {
           const parsed = JSON.parse(cachedSettings);
           if (parsed?.platform_name) {
-            document.title = `${parsed.platform_name} - 登录`;
+            document.title = `${parsed.platform_name} - ${t('pages.login.pageTitleSuffix')}`;
             return;
           }
         }
       } catch (error) {
         // 忽略解析错误
       }
-      document.title = 'RiverEdge SaaS - 登录';
+      document.title = `${t('pages.login.defaultPlatformName')} - ${t('pages.login.pageTitleSuffix')}`;
     } else {
-      const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
-      document.title = `${platformName} - 登录`;
+      const platformName = platformSettings?.platform_name || t('pages.login.defaultPlatformName');
+      document.title = `${platformName} - ${t('pages.login.pageTitleSuffix')}`;
     }
     
     // 组件卸载时恢复默认标题
     return () => {
-      document.title = 'RiverEdge SaaS - 多组织管理框架';
+      document.title = t('pages.login.defaultDocTitle');
     };
-  }, [platformSettings?.platform_name, isLoadingPlatformSettings]);
+  }, [platformSettings?.platform_name, isLoadingPlatformSettings, t]);
 
   // 组织选择弹窗状态
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
@@ -393,7 +395,7 @@ export default function LoginPage() {
     try {
       // 验证密码确认
       if (values.password !== values.confirm_password) {
-        message.error('两次输入的密码不一致');
+        message.error(t('pages.login.passwordMismatch'));
         return;
       }
 
@@ -403,7 +405,7 @@ export default function LoginPage() {
         tenant_id = selectedTenant.tenant_id;
       } else if (values.tenant_domain && values.tenant_domain.trim().length > 0) {
         // 如果没有选中组织但输入了组织代码，提示用户选择
-        message.warning('请从搜索结果中选择一个组织，或清空输入框以注册到默认组织');
+        message.warning(t('pages.login.selectTenantHint'));
         return;
       }
       // 如果不填写组织代码，tenant_id 为 undefined，将注册到默认组织
@@ -415,7 +417,7 @@ export default function LoginPage() {
       } else {
         // 这里可以添加简单的格式验证
         if (!/^\d{6}$/.test(values.phone_verification_code)) {
-          message.error('验证码格式不正确，应为6位数字');
+          message.error(t('pages.login.verificationCodeInvalid'));
           return;
         }
       }
@@ -432,7 +434,7 @@ export default function LoginPage() {
       });
 
       if (registerResponse) {
-        message.success('注册成功，正在自动登录...');
+        message.success(t('pages.login.registerSuccessLogin'));
 
         // 注册成功后自动登录
         try {
@@ -479,18 +481,18 @@ export default function LoginPage() {
       setRegisterType('select');
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
-        message.success('登录成功');
+        message.success(t('pages.login.success'));
         navigate('/system/dashboard/workplace', { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
-          message.warning('注册成功，但自动登录失败，请手动登录');
+          message.warning(t('pages.login.registerSuccessManual'));
           setRegisterDrawerVisible(false);
           setRegisterType('select');
         }
       }
     } catch (error: any) {
-      let errorMessage = '注册失败，请稍后重试';
+      let errorMessage = t('pages.login.registerFailed');
       if (error?.response?.data) {
         const errorData = error.response.data;
         if (errorData.error?.message) {
@@ -514,7 +516,7 @@ export default function LoginPage() {
     try {
       // 验证密码确认
       if (values.password !== values.confirm_password) {
-        message.error('两次输入的密码不一致');
+        message.error(t('pages.login.passwordMismatch'));
         return;
       }
 
@@ -528,7 +530,7 @@ export default function LoginPage() {
       });
 
       if (registerResponse && registerResponse.success) {
-        message.success('注册成功，正在自动登录...');
+        message.success(t('pages.login.registerSuccessLogin'));
 
         // 注册成功后自动登录（使用手机号作为用户名）
         try {
@@ -576,18 +578,18 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       // 新注册的组织跳转到初始化向导
       setTimeout(() => {
-        message.success('登录成功');
+        message.success(t('pages.login.success'));
         navigate('/init/wizard', { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
-          message.warning('注册成功，但自动登录失败，请手动登录');
+          message.warning(t('pages.login.registerSuccessManual'));
           setRegisterDrawerVisible(false);
           setRegisterType('select');
         }
       }
     } catch (error: any) {
-      let errorMessage = '注册失败，请稍后重试';
+      let errorMessage = t('pages.login.registerFailed');
       if (error?.response?.data) {
         const errorData = error.response.data;
         if (errorData.error?.message) {
@@ -620,7 +622,7 @@ export default function LoginPage() {
    */
   const handleLoginSuccess = (response: LoginResponse, credentials?: LoginFormData) => {
     if (!response || !response.access_token) {
-      message.error('登录失败，请检查用户名和密码');
+      message.error(t('pages.login.loginFailedCheck'));
       return;
     }
 
@@ -669,7 +671,7 @@ export default function LoginPage() {
       
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
-        message.success('登录成功');
+        message.success(t('pages.login.success'));
         navigate('/system/dashboard/workplace');
       }, 0);
       return;
@@ -722,11 +724,11 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       const urlParams = new URL(window.location.href).searchParams;
       setTimeout(() => {
-        message.success('登录成功');
+        message.success(t('pages.login.success'));
         navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
       }, 0);
     } else {
-      message.error('登录失败，无法确定组织');
+      message.error(t('pages.login.loginFailed'));
     }
   };
 
@@ -745,7 +747,7 @@ export default function LoginPage() {
       
       // 如果 AppID 未配置，提示用户
       if (!WECHAT_APPID) {
-        message.warning('微信登录功能未配置，请联系管理员配置 VITE_WECHAT_APPID');
+        message.warning(t('pages.login.wechatNotConfigured'));
         return;
       }
 
@@ -763,7 +765,7 @@ export default function LoginPage() {
       const wechatAuthUrl = `https://open.weixin.qq.com/connect/qrconnect?appid=${WECHAT_APPID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`;
       window.location.href = wechatAuthUrl;
     } catch (error: any) {
-      message.error('微信登录跳转失败，请稍后重试');
+      message.error(t('pages.login.wechatRedirectFailed'));
     }
   };
 
@@ -794,7 +796,7 @@ export default function LoginPage() {
       // 验证 state（防止 CSRF 攻击）
       const savedState = sessionStorage.getItem('wechat_login_state');
       if (savedState !== state) {
-        message.error('微信登录验证失败，请重试');
+        message.error(t('pages.login.wechatVerifyFailed'));
         // 清除 URL 参数，避免重复处理
         window.history.replaceState({}, '', '/login');
         return;
@@ -812,7 +814,7 @@ export default function LoginPage() {
           handleLoginSuccess(response);
         } catch (error: any) {
           message.destroy();
-          let errorMessage = '微信登录失败，请稍后重试';
+          let errorMessage = t('pages.login.wechatLoginFailed');
           
           if (error?.response?.data) {
             const errorData = error.response.data;
@@ -1000,7 +1002,7 @@ export default function LoginPage() {
   const handleSubmit = async (values: LoginFormData) => {
     // 检查是否需要验证 - 如果需要验证但未通过，直接阻止登录请求，不发送到后端
     if (requireVerification && !isVerified) {
-      message.warning('检测到频繁操作，请先完成长按验证后再登录');
+      message.warning(t('pages.login.verifyRequired'));
       return;
     }
 
@@ -1010,7 +1012,7 @@ export default function LoginPage() {
       if (!hasValidToken) {
         setIsVerified(false);
         setRequireVerification(true);
-        message.warning('验证已过期，请重新完成长按验证');
+        message.warning(t('pages.login.verifyExpired'));
         return;
       }
     }
@@ -1031,7 +1033,7 @@ export default function LoginPage() {
       if (isVerified) {
         setIsVerified(false);
         localStorage.removeItem(VERIFIED_KEY);
-        message.warning('登录失败，请重新完成长按验证');
+        message.warning(t('pages.login.verifyRetry'));
       }
       
       // 记录失败时间和次数
@@ -1072,7 +1074,7 @@ export default function LoginPage() {
       
       // 如果触发验证要求，提示用户
       if (needVerify) {
-        message.warning('检测到频繁操作，请完成长按验证后重试');
+        message.warning(t('pages.login.verifyRetryTip'));
       }
     }
   };
@@ -1128,14 +1130,14 @@ export default function LoginPage() {
           // 延迟执行消息提示和导航，避免阻塞主线程
           const urlParams = new URL(window.location.href).searchParams;
           setTimeout(() => {
-            message.success('体验登录成功（仅浏览权限）');
+            message.success(t('pages.login.guestSuccess'));
             navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
           }, 0);
         } else {
-          message.error('体验登录失败，无法确定组织');
+          message.error(t('pages.login.guestFailedNoTenant'));
         }
       } else {
-        message.error('体验登录失败，请稍后重试');
+        message.error(t('pages.login.guestFailed'));
       }
     } catch (error: any) {
       // 提取错误信息
@@ -1221,11 +1223,11 @@ export default function LoginPage() {
         // 延迟执行消息提示和导航，避免阻塞主线程
         const urlParams = new URL(window.location.href).searchParams;
         setTimeout(() => {
-          message.success('已选择组织');
+          message.success(t('pages.login.tenantSelected'));
           navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
         }, 0);
       } else {
-        message.error('选择组织失败，请重试');
+        message.error(t('pages.login.tenantSelectFailed'));
       }
     } catch (error: any) {
       let errorMessage = '选择组织失败，请重试';
@@ -1278,7 +1280,7 @@ export default function LoginPage() {
         }}
       >
         <Tooltip
-          title="切换语言"
+          title={t('pages.login.switchLanguage')}
           placement="bottomLeft"
           getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
           styles={{ root: { maxWidth: '200px' } }}
@@ -1441,10 +1443,10 @@ export default function LoginPage() {
             ) : (
               <>
                 <Title level={3} className="description-title">
-                  多组织管理框架
+                  {t('pages.login.descriptionTitle')}
                 </Title>
                 <Text className="description-text">
-                  为企业提供安全、高效、可扩展的 SaaS 解决方案
+                  {t('pages.login.descriptionText')}
                 </Text>
               </>
             )}
@@ -1460,16 +1462,16 @@ export default function LoginPage() {
               opacity: 1, // 不再因平台设置加载中隐藏，避免 API 不可达时长期空白
               transition: 'opacity 0.3s ease-in-out',
             }}>
-              {(platformSettings?.platform_name || cachedPlatformName) ? `欢迎登录 ${platformSettings?.platform_name || cachedPlatformName}` : '欢迎登录'}
+              {(platformSettings?.platform_name || cachedPlatformName) ? t('pages.login.welcomeWithName', { name: platformSettings?.platform_name || cachedPlatformName || '' }) : t('pages.login.welcome')}
             </Title>
-            <Text className="form-subtitle">请输入您的账号信息</Text>
+            <Text className="form-subtitle">{t('pages.login.formSubtitle')}</Text>
           </div>
 
           <ProForm<LoginFormData>
             onFinish={handleSubmit}
             submitter={{
               searchConfig: {
-                submitText: '登录',
+                submitText: t('pages.login.submit'),
               },
               submitButtonProps: {
                 size: 'large',
@@ -1489,13 +1491,13 @@ export default function LoginPage() {
               rules={[
                 {
                   required: true,
-                  message: '请输入用户名',
+                  message: t('pages.login.usernameRequired'),
                 },
               ]}
               fieldProps={{
                 size: 'large',
                 prefix: <UserOutlined />,
-                placeholder: '请输入用户名',
+                placeholder: t('pages.login.usernamePlaceholder'),
                 autoComplete: 'username',
               }}
             />
@@ -1505,13 +1507,13 @@ export default function LoginPage() {
               rules={[
                 {
                   required: true,
-                  message: '请输入密码',
+                  message: t('pages.login.passwordRequired'),
                 },
               ]}
               fieldProps={{
                 size: 'large',
                 prefix: <LockOutlined />,
-                placeholder: '请输入密码',
+                placeholder: t('pages.login.passwordPlaceholder'),
                 autoComplete: 'current-password',
               }}
             />
@@ -1523,14 +1525,14 @@ export default function LoginPage() {
               return (
                 <div style={{  marginBottom: 24 }}>
                   <Tooltip 
-                    title={`检测到频繁操作，请完成验证（${verifyDuration / 1000}秒）`} 
+                    title={t('pages.login.verifyTip', { seconds: verifyDuration / 1000 })} 
                     placement="top"
                   >
                     <div>
                       <LongPressVerify
                         duration={verifyDuration}
                         onVerify={handleVerify}
-                        text={`长按验证 ${verifyDuration / 1000}秒`}
+                        text={t('pages.login.longPressVerify', { seconds: verifyDuration / 1000 })}
                         size="large"
                         disabled={false}
                       />
@@ -1567,7 +1569,7 @@ export default function LoginPage() {
                   flexWrap: 'wrap'
                 }}>
                   {/* 微信登录 */}
-                  <Tooltip title="微信登录">
+                  <Tooltip title={t('pages.login.wechatLogin')}>
                     <Button
                       type="default"
                       shape="circle"
@@ -1597,13 +1599,13 @@ export default function LoginPage() {
                     >
                       <img 
                         src="/social/wechat.svg" 
-                        alt="微信" 
+                        alt={t('pages.login.wechatLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
                   {/* QQ登录 */}
-                  <Tooltip title="QQ登录">
+                  <Tooltip title={t('pages.login.qqLogin')}>
                     <Button
                       type="default"
                       shape="circle"
@@ -1633,13 +1635,13 @@ export default function LoginPage() {
                     >
                       <img 
                         src="/social/qq.svg" 
-                        alt="QQ" 
+                        alt={t('pages.login.qqLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
                   {/* 企业微信登录 */}
-                  <Tooltip title="企业微信登录">
+                  <Tooltip title={t('pages.login.wechatWorkLogin')}>
                     <Button
                       type="default"
                       shape="circle"
@@ -1669,13 +1671,13 @@ export default function LoginPage() {
                     >
                       <img 
                         src="/social/qwei.svg" 
-                        alt="企业微信" 
+                        alt={t('pages.login.wechatWorkLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
                   {/* 钉钉登录 */}
-                  <Tooltip title="钉钉登录">
+                  <Tooltip title={t('pages.login.dingtalkLogin')}>
                     <Button
                       type="default"
                       shape="circle"
@@ -1705,13 +1707,13 @@ export default function LoginPage() {
                     >
                       <img 
                         src="/social/dingtalk.svg" 
-                        alt="钉钉" 
+                        alt={t('pages.login.dingtalkLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
                   {/* 飞书登录 */}
-                  <Tooltip title="飞书登录">
+                  <Tooltip title={t('pages.login.feishuLogin')}>
                     <Button
                       type="default"
                       shape="circle"
@@ -1741,7 +1743,7 @@ export default function LoginPage() {
                     >
                       <img 
                         src="/social/feishu.svg" 
-                        alt="飞书" 
+                        alt={t('pages.login.feishuLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
@@ -1771,7 +1773,7 @@ export default function LoginPage() {
                   color: themeColor,
                 }}
               >
-                免注册体验登录
+                {t('pages.login.guestLogin')}
               </Button>
             </div>
 
@@ -1781,10 +1783,10 @@ export default function LoginPage() {
                 color: themeColor,
               }}
             >
-              还没有账号？<Button type="link" style={{ padding: 0, color: themeColor }} onClick={() => {
+              {t('pages.login.noAccount')}<Button type="link" style={{ padding: 0, color: themeColor }} onClick={() => {
                 setRegisterDrawerVisible(true);
                 setRegisterType('select');
-              }}>立即注册</Button>
+              }}>{t('pages.login.registerNow')}</Button>
             </Text>
           </div>
 
@@ -1793,7 +1795,7 @@ export default function LoginPage() {
             <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
               {platformSettings?.icp_license && (
                 <Text type="secondary" style={{ fontSize: '12px' }}>
-                  ICP备案：{platformSettings.icp_license}
+                  {t('pages.login.icpLicense')}{platformSettings.icp_license}
                 </Text>
               )}
               <Button
@@ -1805,7 +1807,7 @@ export default function LoginPage() {
                   setTermsModalVisible(true);
                 }}
               >
-                用户条款
+                {t('pages.login.userTerms')}
               </Button>
               <Button
                 type="link"
@@ -1816,7 +1818,7 @@ export default function LoginPage() {
                   setTermsModalVisible(true);
                 }}
               >
-                隐私条款
+                {t('pages.login.privacyTerms')}
               </Button>
             </Space>
           </div>
@@ -1834,7 +1836,7 @@ export default function LoginPage() {
             setTenantSelectionVisible(false);
             // 取消选择时，清除 Token，返回登录页面
             setToken('');
-            message.info('请重新登录');
+            message.info(t('pages.login.pleaseLoginAgain'));
           }}
         />
       )}
@@ -1852,10 +1854,10 @@ export default function LoginPage() {
           registerType === 'select' ? (
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
               <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
-                选择注册方式
+                {t('pages.login.registerTypeTitle')}
               </Title>
               <Text type="secondary" style={{ fontSize: 14 }}>
-                请选择适合您的注册方式
+                {t('pages.login.registerTypeSubtitle')}
               </Text>
             </div>
           ) : registerType === 'personal' ? (
@@ -1866,10 +1868,10 @@ export default function LoginPage() {
                 onClick={() => setRegisterType('select')}
                 style={{ padding: 0, marginRight: 8 }}
               >
-                返回
+                {t('pages.login.back')}
               </Button>
               <Title level={4} style={{ margin: 0 }}>
-                个人注册
+                {t('pages.login.personalRegister')}
               </Title>
             </Space>
           ) : (
@@ -1880,10 +1882,10 @@ export default function LoginPage() {
                 onClick={() => setRegisterType('select')}
                 style={{ padding: 0, marginRight: 8 }}
               >
-                返回
+                {t('pages.login.back')}
               </Button>
               <Title level={4} style={{ margin: 0 }}>
-                组织注册
+                {t('pages.login.orgRegister')}
               </Title>
             </Space>
           )
@@ -1980,13 +1982,13 @@ export default function LoginPage() {
                 {/* 内容区域 */}
                 <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
                   <Title level={4} style={{ margin: '0 0 12px 0', color: themeColor, fontWeight: 600 }}>
-                    个人注册
+                    {t('pages.login.personalRegister')}
                   </Title>
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block' }}>
-                    快速创建个人账户
+                    {t('pages.login.personalRegisterDesc')}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block', marginTop: 4 }}>
-                    可加入现有组织或使用默认组织
+                    {t('pages.login.personalRegisterDesc2')}
                   </Text>
                 </div>
               </Card>
@@ -2043,13 +2045,13 @@ export default function LoginPage() {
                 {/* 内容区域 */}
                 <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
                   <Title level={4} style={{ margin: '0 0 12px 0', color: '#52c41a', fontWeight: 600 }}>
-                    组织注册
+                    {t('pages.login.orgRegister')}
                   </Title>
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block' }}>
-                    创建新组织并成为管理员
+                    {t('pages.login.orgRegisterDesc')}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block', marginTop: 4 }}>
-                    可邀请团队成员加入
+                    {t('pages.login.orgRegisterDesc2')}
                   </Text>
                 </div>
               </Card>
@@ -2064,7 +2066,7 @@ export default function LoginPage() {
           width: '100%'
         }}>
           <Text type="secondary" style={{ fontSize: 14 }}>
-            已有账号？
+            {t('pages.login.hasAccount')}
             <Button
               type="link"
               style={{ padding: 0, fontSize: 14, height: 'auto', marginLeft: 4 }}
@@ -2073,7 +2075,7 @@ export default function LoginPage() {
                 setRegisterType('select');
               }}
             >
-              立即登录
+              {t('pages.login.loginNow')}
             </Button>
           </Text>
         </div>
@@ -2126,27 +2128,21 @@ export default function LoginPage() {
                 <div style={{ flex: 1, height: 2, backgroundColor: '#d9d9d9' }}></div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text style={{ fontSize: 12, color: '#52c41a', fontWeight: 500 }}>填写信息</Text>
-                <Text style={{ fontSize: 12, color: '#666' }}>验证邮箱</Text>
+                <Text style={{ fontSize: 12, color: '#52c41a', fontWeight: 500 }}>{t('pages.login.stepFillInfo')}</Text>
+                <Text style={{ fontSize: 12, color: '#666' }}>{t('pages.login.stepVerifyEmail')}</Text>
               </div>
               <Text type="secondary" style={{ fontSize: 14 }}>
-                填写以下信息创建您的个人账户
+                {t('pages.login.fillInfoHint')}
               </Text>
             </div>
 
             <Alert
-              title="注册说明"
+              title={t('pages.login.registerNoticeTitle')}
               description={
                 <div>
-                  <div style={{ marginBottom: 6 }}>
-                    • <strong>不填写组织</strong>：自动加入默认组织，拥有完整操作权限
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    • <strong>填写组织</strong>：可申请加入指定组织，需管理员审核通过
-                  </div>
-                  <div>
-                    • <strong>提示</strong>：输入组织代码或名称搜索，未找到可创建新组织
-                  </div>
+                  <div style={{ marginBottom: 6 }}>• {t('pages.login.registerNoticeBullet1')}</div>
+                  <div style={{ marginBottom: 6 }}>• {t('pages.login.registerNoticeBullet2')}</div>
+                  <div>• {t('pages.login.registerNoticeBullet3')}</div>
                 </div>
               }
               type="info"
@@ -2159,7 +2155,7 @@ export default function LoginPage() {
               onFinish={handlePersonalRegister}
               submitter={{
                 searchConfig: {
-                  submitText: '注册',
+                  submitText: t('pages.login.registerSubmit'),
                 },
                 submitButtonProps: {
                   size: 'large',
@@ -2186,55 +2182,55 @@ export default function LoginPage() {
                 }
               }}
             >
-              <ProFormGroup title="用户信息">
+              <ProFormGroup title={t('pages.login.userInfoGroup')}>
                 <ProFormText
                   name="username"
-                  label="用户名"
+                  label={t('pages.login.username')}
                   colProps={{ span: 12 }}
                   rules={[
-                    { required: true, message: '请输入用户名' },
-                    { min: 3, max: 50, message: '用户名长度为 3-50 个字符' },
+                    { required: true, message: t('pages.login.usernameRequired') },
+                    { min: 3, max: 50, message: t('pages.login.usernameLen') },
                     {
                       pattern: /^[a-zA-Z0-9_-]+$/,
-                      message: '用户名只能包含字母、数字、下划线和连字符'
+                      message: t('pages.login.usernamePattern')
                     },
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <UserOutlined />,
-                    placeholder: '请输入用户名（3-50个字符）',
+                    placeholder: t('pages.login.usernamePlaceholderLong'),
                     autoComplete: 'username',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      <div>这是您登录时使用的账号，注册后无法修改，请谨慎填写</div>
+                      <div>{t('pages.login.usernameExtra')}</div>
                     </div>
                   }
                 />
 
                 <ProFormText
                   name="phone"
-                  label="手机号"
+                  label={t('pages.login.phone')}
                   colProps={{ span: 12 }}
                   rules={[
-                    { required: true, message: '请输入手机号' },
+                    { required: true, message: t('pages.login.phoneRequired') },
                     {
                       pattern: /^1[3-9]\d{9}$/,
-                      message: '请输入有效的11位手机号'
+                      message: t('pages.login.phoneInvalid')
                     }
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <MobileOutlined />,
-                    placeholder: '请输入11位手机号',
+                    placeholder: t('pages.login.phonePlaceholder'),
                     autoComplete: 'tel',
                     maxLength: 11,
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      <div>手机号用于接收短信验证码，保障账户安全</div>
+                      <div>{t('pages.login.phoneExtra')}</div>
                       <div style={{ marginTop: 4, color: '#52c41a' }}>
-                        ✅ 支持中国大陆手机号
+                        {t('pages.login.phoneSupport')}
                       </div>
                     </div>
                   }
@@ -2242,15 +2238,15 @@ export default function LoginPage() {
 
                   <ProFormText
                     name="phone_verification_code"
-                    label="短信验证码"
+                    label={t('pages.login.smsCode')}
                     colProps={{ span: 12 }}
                     rules={[
-                      { required: false, message: '请输入短信验证码' }, // TODO(登录): 短信服务接入后改为必填
-                      { pattern: /^\d{6}$/, message: '验证码格式不正确' },
+                      { required: false },
+                      { pattern: /^\d{6}$/, message: t('pages.login.verificationCodeInvalid') },
                     ]}
                     fieldProps={{
                       size: 'large',
-                      placeholder: '请输入6位验证码（暂未接入）',
+                      placeholder: t('pages.login.smsCodePlaceholder'),
                       maxLength: 6,
                     addonAfter: (
                   <Button
@@ -2259,19 +2255,18 @@ export default function LoginPage() {
                         onClick={async (e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                      // 获取手机号值
                       const form = document.querySelector('.register-form') as any;
                       if (form && form.getFieldsValue) {
                         const values = form.getFieldsValue();
                         const phone = values.phone;
 
                         if (!phone) {
-                          message.warning('请先输入手机号');
+                          message.warning(t('pages.login.pleaseEnterPhone'));
                           return;
                         }
 
                         if (!/^1[3-9]\d{9}$/.test(phone)) {
-                          message.warning('请输入有效的手机号');
+                          message.warning(t('pages.login.pleaseEnterValidPhone'));
                           return;
                         }
 
@@ -2283,54 +2278,52 @@ export default function LoginPage() {
                             message.error(result.message);
                           }
                         } catch (error) {
-                          message.error('验证码发送失败，请稍后重试');
+                          message.error(t('pages.login.codeSendFailed'));
                         }
                       }
                     }}
                   >
-                    获取验证码
+                    {t('pages.login.getCode')}
                   </Button>
                     ),
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      <div style={{ color: '#faad14' }}>⚠️ 验证码服务暂未完全接入，可留空跳过</div>
-                      <div>输入手机号后点击"获取验证码"按钮接收短信验证码</div>
-                </div>
+                      <div style={{ color: '#faad14' }}>{t('pages.login.codeNotConnected')}</div>
+                      <div>{t('pages.login.codeExtra')}</div>
+                    </div>
                   }
                 />
 
                 <ProFormText
                   name="email"
-                  label="邮箱（可选）"
+                  label={t('pages.login.emailOptional')}
                   colProps={{ span: 12 }}
                   rules={[
                     {
                       validator: (_, value) => {
-                        // 如果为空，则通过验证（非必填）
                         if (!value || value.trim() === '') {
                           return Promise.resolve();
                         }
-                        // 如果有值，则验证邮箱格式
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                         if (emailRegex.test(value)) {
                           return Promise.resolve();
                         }
-                        return Promise.reject(new Error('请输入有效的邮箱地址格式'));
+                        return Promise.reject(new Error(t('pages.login.emailInvalid')));
                       }
                     }
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <MailOutlined />,
-                    placeholder: '请输入邮箱地址',
+                    placeholder: t('pages.login.emailPlaceholder'),
                     autoComplete: 'email',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      <div>邮箱用于接收重要通知和密码找回，可选填</div>
+                      <div>{t('pages.login.emailExtra')}</div>
                       <div style={{ marginTop: 4, color: '#1890ff' }}>
-                        💡 支持 Gmail、Outlook、QQ、163 等主流邮箱
+                        {t('pages.login.emailSupport')}
                       </div>
                     </div>
                   }
@@ -2338,72 +2331,72 @@ export default function LoginPage() {
 
                 <ProFormText.Password
                   name="password"
-                  label="密码"
+                  label={t('pages.login.password')}
                   colProps={{ span: 12 }}
                   rules={[
-                    { required: true, message: '请输入密码' },
-                    { min: 8, message: '密码长度至少 8 个字符' },
-                    { max: 128, message: '密码长度不能超过 128 个字符' },
+                    { required: true, message: t('pages.login.passwordRequired') },
+                    { min: 8, message: t('pages.login.passwordLen') },
+                    { max: 128, message: t('pages.login.passwordLenMax') },
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <LockOutlined />,
-                    placeholder: '请输入密码（8-128个字符）',
+                    placeholder: t('pages.login.passwordPlaceholderLong'),
                     autoComplete: 'new-password',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      为了账户安全，建议使用字母、数字和特殊符号的组合，至少8个字符
+                      {t('pages.login.passwordExtra')}
                     </div>
                   }
                 />
 
                 <ProFormText.Password
                   name="confirm_password"
-                  label="确认密码"
+                  label={t('pages.login.confirmPassword')}
                   colProps={{ span: 12 }}
                   rules={[
-                    { required: true, message: '请再次输入密码' },
+                    { required: true, message: t('pages.login.confirmPasswordRequired') },
                     ({ getFieldValue }) => ({
                       validator(_, value) {
                         if (!value || getFieldValue('password') === value) {
                           return Promise.resolve();
                         }
-                        return Promise.reject(new Error('两次输入的密码不一致，请重新输入'));
+                        return Promise.reject(new Error(t('pages.login.confirmPasswordMismatch')));
                       },
                     }),
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <LockOutlined />,
-                    placeholder: '请再次输入密码以确认',
+                    placeholder: t('pages.login.confirmPasswordPlaceholder'),
                     autoComplete: 'new-password',
                   }}
                 />
               </ProFormGroup>
 
-              <ProFormGroup title="组织信息（可选）">
+              <ProFormGroup title={t('pages.login.orgInfoGroup')}>
                 <Row gutter={16}>
                   <Col span={12}>
                     <ProForm.Item
                       name="tenant_domain"
-                      label="加入组织（可选）"
+                      label={t('pages.login.joinOrgOptional')}
                       extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
                       <div style={{ marginBottom: 4, fontSize: '12px' }}>
-                        如果您要加入某个组织，请输入组织代码或组织名称进行搜索。不填写则自动加入默认组织
+                        {t('pages.login.joinOrgExtra')}
                       </div>
                       {tenantCheckResult?.exists && selectedTenant && (
                         <div style={{ marginTop: 4 }}>
                           <Text type="success" style={{ fontSize: 11 }}>
-                            ✓ 已选择：{selectedTenant.tenant_name}（{selectedTenant.tenant_domain}）
+                            {t('pages.login.selectedTenant', { name: selectedTenant.tenant_name, domain: selectedTenant.tenant_domain })}
                           </Text>
                         </div>
                       )}
                       {tenantSearchOptions.length > 0 && !selectedTenant && (
                         <div style={{ marginTop: 4 }}>
                           <Text type="warning" style={{ fontSize: 11 }}>
-                            找到 {tenantSearchOptions.length} 个匹配的组织，请从下拉列表中选择您要加入的组织
+                            {t('pages.login.foundTenants', { count: tenantSearchOptions.length })}
                           </Text>
                         </div>
                       )}
@@ -2411,7 +2404,7 @@ export default function LoginPage() {
                         <div style={{ marginTop: 4 }}>
                           <Space>
                             <Text type="danger" style={{ fontSize: 11 }}>
-                              ✗ 未找到匹配的组织
+                              {t('pages.login.noTenantFound')}
                             </Text>
                             <Button
                               type="link"
@@ -2421,7 +2414,7 @@ export default function LoginPage() {
                                 setRegisterType('organization');
                               }}
                             >
-                              创建新组织
+                              {t('pages.login.createNewOrg')}
                             </Button>
                           </Space>
                         </div>
@@ -2443,14 +2436,14 @@ export default function LoginPage() {
                     onSearch={handleSearchTenant}
                     onSelect={(value, option) => handleSelectTenant(value, option)}
                     filterOption={false}
-                    notFoundContent={searchingTenant ? '搜索中...' : '未找到匹配的组织'}
+                    notFoundContent={searchingTenant ? t('pages.login.searching') : t('pages.login.noOrgMatch')}
                     style={{ width: '100%' }}
                   >
                     <Input
                       size="large"
                       prefix={<ApartmentOutlined />}
                       allowClear
-                      placeholder="输入组织代码或组织名称搜索"
+                      placeholder={t('pages.login.tenantSearchPlaceholder')}
                       style={{ height: '40px' }}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -2467,14 +2460,14 @@ export default function LoginPage() {
                   <Col span={12}>
                     <ProFormText
                       name="invite_code"
-                      label="邀请码（可选）"
-                      placeholder="输入组织提供的邀请码"
+                      label={t('pages.login.inviteCodeOptional')}
+                      placeholder={t('pages.login.inviteCodePlaceholder')}
                       rules={[
-                        { max: 100, message: '邀请码长度不能超过 100 个字符' },
+                        { max: 100, message: t('pages.login.inviteCodeMaxLen') },
                         ({ getFieldValue }) => ({
                           validator(_, value) {
                             if (value && !getFieldValue('tenant_domain')) {
-                              return Promise.reject(new Error('使用邀请码时，必须同时填写组织代码'));
+                              return Promise.reject(new Error(t('pages.login.inviteCodeWithTenantRequired')));
                             }
                             return Promise.resolve();
                           },
@@ -2485,7 +2478,7 @@ export default function LoginPage() {
                       }}
                       extra={
                         <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                          填写邀请码可免审核直接加入组织，需同时填写组织代码
+                          {t('pages.login.inviteCodeExtra')}
                         </div>
                       }
                     />
@@ -2501,23 +2494,17 @@ export default function LoginPage() {
           <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
             <div style={{ marginBottom: 24 }}>
               <Text type="secondary" style={{ fontSize: 14 }}>
-                创建新组织，成为组织管理员
+                {t('pages.login.orgRegisterSubtitle')}
               </Text>
             </div>
 
             <Alert
-              title="注册说明"
+              title={t('pages.login.registerNoticeTitle')}
               description={
                 <div>
-                  <div style={{ marginBottom: 8 }}>
-                    • 注册成功后，您将成为该组织的管理员
-                  </div>
-                  <div style={{ marginBottom: 8 }}>
-                    • 组织域名可选，留空将自动生成8位随机域名
-                  </div>
-                  <div>
-                    • 组织域名格式：riveredge.cn/xxxxx
-                  </div>
+                  <div style={{ marginBottom: 8 }}>• {t('pages.login.orgRegisterNotice1')}</div>
+                  <div style={{ marginBottom: 8 }}>• {t('pages.login.orgRegisterNotice2')}</div>
+                  <div>• {t('pages.login.orgRegisterNotice3')}</div>
                 </div>
               }
               type="info"
@@ -2530,7 +2517,7 @@ export default function LoginPage() {
               onFinish={handleOrganizationRegister}
               submitter={{
                 searchConfig: {
-                  submitText: '注册',
+                  submitText: t('pages.login.registerSubmit'),
                 },
                 submitButtonProps: {
                   size: 'large',
@@ -2549,79 +2536,79 @@ export default function LoginPage() {
               {/* 极简注册表单：仅3个必填字段 */}
               <ProFormText
                 name="tenant_name"
-                label="组织名称"
+                label={t('pages.login.tenantName')}
                 rules={[
-                  { required: true, message: '请输入组织名称' },
-                  { min: 1, max: 100, message: '组织名称长度为 1-100 个字符' },
+                  { required: true, message: t('pages.login.tenantNameRequired') },
+                  { min: 1, max: 100, message: t('pages.login.tenantNameLen') },
                 ]}
                 fieldProps={{
                   size: 'large',
                   prefix: <ApartmentOutlined />,
-                  placeholder: '请输入组织名称',
+                  placeholder: t('pages.login.tenantNamePlaceholder'),
                 }}
                 extra={
                   <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
-                    这是您组织的显示名称，用于标识您的组织
+                    {t('pages.login.tenantNameExtra')}
                   </div>
                 }
               />
               <ProFormText
                 name="phone"
-                label="手机号"
+                label={t('pages.login.phone')}
                 rules={[
-                  { required: true, message: '请输入手机号' },
-                  { pattern: /^1[3-9]\d{9}$/, message: '请输入有效的11位中国大陆手机号' },
+                  { required: true, message: t('pages.login.phoneRequired') },
+                  { pattern: /^1[3-9]\d{9}$/, message: t('pages.login.phoneInvalid') },
                 ]}
                 fieldProps={{
                   size: 'large',
                   prefix: <MobileOutlined />,
-                  placeholder: '请输入手机号（11位）',
+                  placeholder: t('pages.login.phonePlaceholder'),
                   autoComplete: 'tel',
                 }}
                 extra={
                   <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
-                    手机号将作为您的登录账号，请确保手机号正确
+                    {t('pages.login.orgPhoneExtra')}
                   </div>
                 }
               />
               <ProFormText.Password
                 name="password"
-                label="密码"
+                label={t('pages.login.password')}
                 rules={[
-                  { required: true, message: '请输入密码' },
-                  { min: 8, message: '密码长度至少 8 个字符' },
-                  { max: 128, message: '密码长度不能超过 128 个字符' },
+                  { required: true, message: t('pages.login.passwordRequired') },
+                  { min: 8, message: t('pages.login.passwordLen') },
+                  { max: 128, message: t('pages.login.passwordLenMax') },
                 ]}
                 fieldProps={{
                   size: 'large',
                   prefix: <LockOutlined />,
-                  placeholder: '请输入密码（至少8个字符）',
+                  placeholder: t('pages.login.passwordPlaceholderLong'),
                   autoComplete: 'new-password',
                 }}
                 extra={
                   <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
-                    为了账户安全，建议使用字母、数字和特殊符号的组合
+                    {t('pages.login.orgPasswordExtra')}
                   </div>
                 }
               />
               <ProFormText.Password
                 name="confirm_password"
-                label="确认密码"
+                label={t('pages.login.confirmPassword')}
                 rules={[
-                  { required: true, message: '请再次输入密码' },
+                  { required: true, message: t('pages.login.confirmPasswordRequired') },
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       if (!value || getFieldValue('password') === value) {
                         return Promise.resolve();
                       }
-                      return Promise.reject(new Error('两次输入的密码不一致'));
+                      return Promise.reject(new Error(t('pages.login.confirmPasswordMismatch')));
                     },
                   }),
                 ]}
                 fieldProps={{
                   size: 'large',
                   prefix: <LockOutlined />,
-                  placeholder: '请再次输入密码以确认',
+                  placeholder: t('pages.login.confirmPasswordPlaceholder'),
                   autoComplete: 'new-password',
                 }}
               />

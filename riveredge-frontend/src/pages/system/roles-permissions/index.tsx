@@ -120,7 +120,7 @@ const RolesPermissionsPage: React.FC = () => {
       const response = await getRoleList({ page_size: 100 });
       setRoles(response.items);
     } catch (error: any) {
-      messageApi.error(error.message || '加载角色列表失败');
+      messageApi.error(error.message || t('pages.system.roles.loadRolesFailed'));
     } finally {
       setRolesLoading(false);
     }
@@ -148,9 +148,9 @@ const RolesPermissionsPage: React.FC = () => {
         });
       }, 100);
     } catch (error: any) {
-      messageApi.error(error.message || '获取角色详情失败');
+      messageApi.error(error.message || t('pages.system.roles.getDetailFailed'));
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   /**
    * 删除角色
@@ -158,7 +158,7 @@ const RolesPermissionsPage: React.FC = () => {
   const handleDeleteRole = useCallback(async (role: Role) => {
     try {
       await deleteRole(role.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.roles.deleteSuccess'));
 
       // 如果删除的是当前选中的角色，清空选择
       setSelectedRole((prev) => {
@@ -176,14 +176,14 @@ const RolesPermissionsPage: React.FC = () => {
         const response = await getRoleList({ page_size: 100 });
         setRoles(response.items);
       } catch (error: any) {
-        messageApi.error(error.message || '加载角色列表失败');
+        messageApi.error(error.message || t('pages.system.roles.loadRolesFailed'));
       } finally {
         setRolesLoading(false);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.roles.deleteFailed'));
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   /**
    * 过滤角色列表
@@ -221,11 +221,11 @@ const RolesPermissionsPage: React.FC = () => {
               }}
             />
             <span style={{ display: 'flex', alignItems: 'center', lineHeight: '1.5' }}>{role.name}</span>
-            {role.is_system && <Tag color="default">系统</Tag>}
-            {!role.is_active && <Tag color="default">禁用</Tag>}
+            {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
+            {!role.is_active && <Tag color="default">{t('pages.system.roles.disabled')}</Tag>}
           </Space>
           <Space size="small" onClick={(e) => e.stopPropagation()}>
-            <Tooltip title="编辑">
+            <Tooltip title={t('pages.system.roles.edit')}>
               <Button
                 type="text"
                 size="small"
@@ -238,14 +238,14 @@ const RolesPermissionsPage: React.FC = () => {
               />
             </Tooltip>
             <Popconfirm
-              title="确定要删除这个角色吗？"
+              title={t('pages.system.roles.deleteConfirm')}
               onConfirm={(e) => {
                 e?.stopPropagation();
                 handleDeleteRole(role);
               }}
               disabled={role.is_system}
             >
-              <Tooltip title="删除">
+              <Tooltip title={t('pages.system.roles.delete')}>
                 <Button
                   type="text"
                   danger
@@ -315,7 +315,7 @@ const RolesPermissionsPage: React.FC = () => {
 
       setAllPermissions(allItems);
     } catch (error: any) {
-      messageApi.error(error.message || '加载权限列表失败');
+      messageApi.error(error.message || t('pages.system.roles.loadPermissionsFailed'));
     } finally {
       setPermissionsLoading(false);
     }
@@ -435,10 +435,10 @@ const RolesPermissionsPage: React.FC = () => {
                     {permission.code}
                   </Tag>
                   {permission.permission_type === 'field' && (
-                    <Tag color="orange" style={{ fontSize: '10px' }}>字段</Tag>
+                    <Tag color="orange" style={{ fontSize: '10px' }}>{t('pages.system.roles.permissionTypeField')}</Tag>
                   )}
                   {permission.permission_type === 'data' && (
-                    <Tag color="green" style={{ fontSize: '10px' }}>数据</Tag>
+                    <Tag color="green" style={{ fontSize: '10px' }}>{t('pages.system.roles.permissionTypeData')}</Tag>
                   )}
                 </Space>
               ),
@@ -529,10 +529,10 @@ const RolesPermissionsPage: React.FC = () => {
     (templateKey: string) => {
       const uuids = getPermissionUuidsByTemplate(templateKey, allPermissions);
       setCheckedKeys(uuids);
-      const template = PERMISSION_TEMPLATES.find((t) => t.key === templateKey);
-      messageApi.success(`已应用模板「${template?.name || templateKey}」，共 ${uuids.length} 个权限，请保存以生效`);
+      const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
+      messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: uuids.length }));
     },
-    [allPermissions, messageApi]
+    [allPermissions, messageApi, t]
   );
 
   /**
@@ -562,7 +562,7 @@ const RolesPermissionsPage: React.FC = () => {
       const rolePermissionUuids = rolePermissions.map(p => p.uuid);
       setCheckedKeys(rolePermissionUuids);
     } catch (error: any) {
-      messageApi.error(error.message || '加载角色权限失败');
+      messageApi.error(error.message || t('pages.system.roles.loadRolePermissionsFailed'));
     } finally {
       setSelectedRoleLoading(false);
     }
@@ -573,7 +573,7 @@ const RolesPermissionsPage: React.FC = () => {
    */
   const handleSavePermissions = async () => {
     if (!selectedRole) {
-      messageApi.warning('请先选择一个角色');
+      messageApi.warning(t('pages.system.roles.selectRoleFirst'));
       return;
     }
 
@@ -584,12 +584,12 @@ const RolesPermissionsPage: React.FC = () => {
       ) as string[];
 
       await assignPermissions(selectedRole.uuid, permissionUuids);
-      messageApi.success('权限分配成功');
+      messageApi.success(t('pages.system.roles.assignSuccess'));
 
       // 重新加载角色列表（更新权限数）
       await loadRoles();
     } catch (error: any) {
-      messageApi.error(error.message || '权限分配失败');
+      messageApi.error(error.message || t('pages.system.roles.assignFailed'));
     } finally {
       setSavingPermissions(false);
     }
@@ -615,10 +615,10 @@ const RolesPermissionsPage: React.FC = () => {
 
       if (isEditRole && currentEditRole) {
         await updateRole(currentEditRole.uuid, values as UpdateRoleData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.roles.updateSuccess'));
       } else {
         await createRole(values as CreateRoleData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.roles.createSuccess'));
       }
 
       setRoleModalVisible(false);
@@ -630,7 +630,7 @@ const RolesPermissionsPage: React.FC = () => {
         await handleSelectRole(currentEditRole);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.roles.operationFailed'));
     } finally {
       setRoleFormLoading(false);
     }
@@ -649,11 +649,11 @@ const RolesPermissionsPage: React.FC = () => {
       
       // 更新当前勾选状态（覆盖）
       setCheckedKeys(uuids);
-      messageApi.success('已从源角色复制权限，请点击保存以生效');
+      messageApi.success(t('pages.system.roles.copySuccess'));
       setCopyModalVisible(false);
       setSourceRoleUuid(null);
     } catch (error: any) {
-      messageApi.error(error.message || '获取源角色权限失败');
+      messageApi.error(error.message || t('pages.system.roles.copySourceFailed'));
     } finally {
       setCopying(false);
     }
@@ -722,7 +722,7 @@ const RolesPermissionsPage: React.FC = () => {
         {/* 搜索栏 */}
         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
           <Input
-            placeholder="搜索角色"
+            placeholder={t('pages.system.roles.searchRole')}
             prefix={<SearchOutlined />}
             value={roleSearchKeyword}
             onChange={(e) => setRoleSearchKeyword(e.target.value)}
@@ -739,7 +739,7 @@ const RolesPermissionsPage: React.FC = () => {
             block
             onClick={handleCreateRole}
           >
-            新建角色
+            {t('pages.system.roles.createRole')}
           </Button>
         </div>
 
@@ -791,7 +791,7 @@ const RolesPermissionsPage: React.FC = () => {
                 }
               }}
             >
-              刷新
+              {t('pages.system.roles.refresh')}
             </Button>
           </Space>
 
@@ -801,11 +801,11 @@ const RolesPermissionsPage: React.FC = () => {
               <Space>
                 <span style={{ fontWeight: 500 }}>{selectedRole.name}</span>
                 <Tag color="blue">{selectedRole.code}</Tag>
-                {selectedRole.is_system && <Tag color="default">系统角色</Tag>}
-                {!selectedRole.is_active && <Tag color="default">已禁用</Tag>}
+                {selectedRole.is_system && <Tag color="default">{t('pages.system.roles.systemRole')}</Tag>}
+                {!selectedRole.is_active && <Tag color="default">{t('pages.system.roles.disabledRole')}</Tag>}
               </Space>
             ) : (
-              <span style={{ color: token.colorTextSecondary }}>请从左侧选择一个角色</span>
+              <span style={{ color: token.colorTextSecondary }}>{t('pages.system.roles.selectRoleHint')}</span>
             )}
           </div>
 
@@ -815,7 +815,7 @@ const RolesPermissionsPage: React.FC = () => {
                 icon={<CopyOutlined />}
                 onClick={() => setCopyModalVisible(true)}
               >
-                从角色复制
+                {t('pages.system.roles.copyFromRole')}
               </Button>
               <Button
                 type="primary"
@@ -823,7 +823,7 @@ const RolesPermissionsPage: React.FC = () => {
                 onClick={handleSavePermissions}
                 loading={savingPermissions}
               >
-                保存权限
+                {t('pages.system.roles.savePermissions')}
               </Button>
             </Space>
           )}
@@ -836,15 +836,15 @@ const RolesPermissionsPage: React.FC = () => {
               <div style={{ marginBottom: 16 }}>
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <div>
-                    <span style={{ color: token.colorTextSecondary }}>角色描述：</span>
+                    <span style={{ color: token.colorTextSecondary }}>{t('pages.system.roles.roleDescription')}</span>
                     <span style={{ color: token.colorText }}>
-                      {selectedRole.description || '暂无描述'}
+                      {selectedRole.description || t('pages.system.roles.noDescription')}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: token.colorTextSecondary }}>权限数：</span>
+                    <span style={{ color: token.colorTextSecondary }}>{t('pages.system.roles.permissionCount')}</span>
                     <Tag color="blue">{selectedRole.permission_count || 0}</Tag>
-                    <span style={{ color: token.colorTextSecondary, marginLeft: 16 }}>用户数：</span>
+                    <span style={{ color: token.colorTextSecondary, marginLeft: 16 }}>{t('pages.system.roles.userCount')}</span>
                     <Tag color="green">{selectedRole.user_count || 0}</Tag>
                   </div>
                 </Space>
@@ -853,7 +853,7 @@ const RolesPermissionsPage: React.FC = () => {
               {/* 权限树搜索、类型筛选与批量操作 */}
               <Flex gap="middle" style={{ marginBottom: 16 }} wrap="wrap" align="center">
                 <Input
-                  placeholder="搜索权限（名称、代码、描述）"
+                  placeholder={t('pages.system.roles.searchPermission')}
                   prefix={<SearchOutlined />}
                   value={permissionSearchKeyword}
                   onChange={(e) => setPermissionSearchKeyword(e.target.value)}
@@ -865,39 +865,39 @@ const RolesPermissionsPage: React.FC = () => {
                   onChange={setPermissionTypeFilter}
                   style={{ width: 120 }}
                   options={[
-                    { value: 'all', label: '全部类型' },
-                    { value: 'function', label: '功能权限' },
-                    { value: 'data', label: '数据权限' },
-                    { value: 'field', label: '字段权限' },
+                    { value: 'all', label: t('pages.system.roles.allTypes') },
+                    { value: 'function', label: t('pages.system.roles.functionPermission') },
+                    { value: 'data', label: t('pages.system.roles.dataPermission') },
+                    { value: 'field', label: t('pages.system.roles.fieldPermission') },
                   ]}
                 />
                 <Divider orientation="vertical" />
                 <Space size="small">
-                  <Tooltip title="全选当前筛选条件下的权限，保存后生效">
+                  <Tooltip title={t('pages.system.roles.selectAllTooltip')}>
                     <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
-                      全选
+                      {t('pages.system.roles.selectAll')}
                     </Button>
                   </Tooltip>
-                  <Tooltip title="取消勾选当前展示的权限">
+                  <Tooltip title={t('pages.system.roles.selectNoneTooltip')}>
                     <Button size="small" icon={<BorderOutlined />} onClick={handleSelectNone}>
-                      全不选
+                      {t('pages.system.roles.selectNone')}
                     </Button>
                   </Tooltip>
-                  <Tooltip title="反选当前展示的权限">
+                  <Tooltip title={t('pages.system.roles.selectInvertTooltip')}>
                     <Button size="small" icon={<SwapOutlined />} onClick={handleSelectInvert}>
-                      反选
+                      {t('pages.system.roles.selectInvert')}
                     </Button>
                   </Tooltip>
                 </Space>
                 <Divider orientation="vertical" />
                 <Select
-                  placeholder="应用权限模板"
+                  placeholder={t('pages.system.roles.applyTemplate')}
                   style={{ width: 160 }}
                   allowClear
                   onChange={(key) => key && handleApplyTemplate(key)}
-                  options={PERMISSION_TEMPLATES.map((t) => ({
-                    value: t.key,
-                    label: t.name + (t.description ? ` (${t.description})` : ''),
+                  options={PERMISSION_TEMPLATES.map((tmpl) => ({
+                    value: tmpl.key,
+                    label: tmpl.name + (tmpl.description ? ` (${tmpl.description})` : ''),
                   }))}
                 />
               </Flex>
@@ -919,7 +919,7 @@ const RolesPermissionsPage: React.FC = () => {
             </Spin>
           ) : (
             <Empty
-              description="请从左侧选择一个角色来编辑权限"
+              description={t('pages.system.roles.selectRoleToEdit')}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           )}
@@ -939,10 +939,10 @@ const RolesPermissionsPage: React.FC = () => {
             }}
           >
             <span>
-              已选择 {checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')).length} 个权限
+              {t('pages.system.roles.selectedCount', { count: checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-') && !key.startsWith('module-')).length })}
             </span>
             <span>
-              共 {allPermissions.length} 个权限
+              {t('pages.system.roles.totalPermissions', { count: allPermissions.length })}
             </span>
           </div>
         )}
@@ -950,7 +950,7 @@ const RolesPermissionsPage: React.FC = () => {
 
       {/* 角色编辑 Modal */}
       <Modal
-        title={isEditRole ? '编辑角色' : '新建角色'}
+        title={isEditRole ? t('pages.system.roles.editRole') : t('pages.system.roles.createRole')}
         open={roleModalVisible}
         onCancel={() => setRoleModalVisible(false)}
         onOk={handleSubmitRole}
@@ -964,27 +964,27 @@ const RolesPermissionsPage: React.FC = () => {
         >
           <ProFormText
             name="name"
-            label="角色名称"
-            rules={[{ required: true, message: '请输入角色名称' }]}
-            placeholder="请输入角色名称"
+            label={t('pages.system.roles.roleName')}
+            rules={[{ required: true, message: t('pages.system.roles.roleNameRequired') }]}
+            placeholder={t('pages.system.roles.roleNamePlaceholder')}
           />
           <ProFormText
             name="code"
-            label="角色代码"
+            label={t('pages.system.roles.roleCode')}
             rules={[
-              { required: true, message: '请输入角色代码' },
-              { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
+              { required: true, message: t('pages.system.roles.roleCodeRequired') },
+              { pattern: /^[a-zA-Z0-9_]+$/, message: t('pages.system.roles.roleCodePattern') },
             ]}
-            placeholder="请输入角色代码（如：admin、user）"
+            placeholder={t('pages.system.roles.roleCodePlaceholder')}
           />
           <ProFormTextArea
             name="description"
-            label="描述"
-            placeholder="请输入角色描述"
+            label={t('pages.system.roles.description')}
+            placeholder={t('pages.system.roles.descriptionPlaceholder')}
           />
           <ProFormSwitch
             name="is_active"
-            label="是否启用"
+            label={t('pages.system.roles.isEnabled')}
             initialValue={true}
           />
         </ProForm>
@@ -992,7 +992,7 @@ const RolesPermissionsPage: React.FC = () => {
 
       {/* 复制权限 Modal */}
       <Modal
-        title="从其他角色复制权限"
+        title={t('pages.system.roles.copyFromRoleTitle')}
         open={copyModalVisible}
         onCancel={() => {
           setCopyModalVisible(false);
@@ -1003,9 +1003,9 @@ const RolesPermissionsPage: React.FC = () => {
         okButtonProps={{ disabled: !sourceRoleUuid }}
       >
         <div style={{ marginBottom: 16 }}>
-          <p>请选择要从中复制权限的角色：</p>
+          <p>{t('pages.system.roles.copySourceHint')}</p>
           <Select
-            placeholder="请选择源角色"
+            placeholder={t('pages.system.roles.selectSourceRole')}
             style={{ width: '100%' }}
             onChange={setSourceRoleUuid}
             value={sourceRoleUuid}
@@ -1022,7 +1022,7 @@ const RolesPermissionsPage: React.FC = () => {
           />
         </div>
         <p style={{ color: token.colorTextSecondary, fontSize: '12px' }}>
-          注意：此操作将覆盖当前已勾选的权限，但不会立即保存到数据库。
+          {t('pages.system.roles.copyWarning')}
         </p>
       </Modal>
     </div>

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Switch, Card, Dropdown } from 'antd';
@@ -82,6 +83,7 @@ const getApplicationIcon = (code: string, icon?: string | null) => {
  * 应用中心列表页面组件
  */
 const ApplicationListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const queryClient = useQueryClient();
@@ -111,7 +113,7 @@ const ApplicationListPage: React.FC = () => {
       const detail = await getApplicationByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取应用详情失败');
+      messageApi.error(error.message || t('pages.system.applications.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -124,7 +126,7 @@ const ApplicationListPage: React.FC = () => {
   const handleInstall = async (record: Application) => {
     try {
       await installApplication(record.uuid);
-      messageApi.success('安装成功');
+      messageApi.success(t('pages.system.applications.installSuccess'));
       actionRef.current?.reload();
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
@@ -132,7 +134,7 @@ const ApplicationListPage: React.FC = () => {
       useGlobalStore.getState().incrementApplicationMenuVersion();
       console.log(`📢 已触发应用安装事件: ${record.name}`);
     } catch (error: any) {
-      messageApi.error(error.message || '安装失败');
+      messageApi.error(error.message || t('pages.system.applications.installFailed'));
     }
   };
 
@@ -142,7 +144,7 @@ const ApplicationListPage: React.FC = () => {
   const handleUninstall = async (record: Application) => {
     try {
       await uninstallApplication(record.uuid);
-      messageApi.success('卸载成功');
+      messageApi.success(t('pages.system.applications.uninstallSuccess'));
       actionRef.current?.reload();
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
@@ -150,7 +152,7 @@ const ApplicationListPage: React.FC = () => {
       useGlobalStore.getState().incrementApplicationMenuVersion();
       console.log(`📢 已触发应用卸载事件: ${record.name}`);
     } catch (error: any) {
-      messageApi.error(error.message || '卸载失败');
+      messageApi.error(error.message || t('pages.system.applications.uninstallFailed'));
     }
   };
 
@@ -161,10 +163,10 @@ const ApplicationListPage: React.FC = () => {
     try {
       if (checked) {
         await enableApplication(record.uuid);
-        messageApi.success('启用成功');
+        messageApi.success(t('pages.system.applications.enableSuccess'));
       } else {
         await disableApplication(record.uuid);
-        messageApi.success('禁用成功');
+        messageApi.success(t('pages.system.applications.disableSuccess'));
       }
       actionRef.current?.reload();
 
@@ -173,7 +175,7 @@ const ApplicationListPage: React.FC = () => {
 
       useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     }
   };
 
@@ -184,7 +186,7 @@ const ApplicationListPage: React.FC = () => {
     try {
       setSubmitting(true);
       await updateApplication(record.uuid, updateData);
-      messageApi.success('应用配置更新成功');
+      messageApi.success(t('pages.system.applications.configUpdateSuccess'));
       setEditModalVisible(false);
       actionRef.current?.reload();
       // 使应用菜单缓存失效，自动更新菜单
@@ -192,7 +194,7 @@ const ApplicationListPage: React.FC = () => {
 
       useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -207,11 +209,11 @@ const ApplicationListPage: React.FC = () => {
     try {
       setSubmitting(true);
       await updateApplication(record.uuid, { version, changelog });
-      messageApi.success('应用升版成功');
+      messageApi.success(t('pages.system.applications.upgradeSuccess'));
       setUpgradeModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.applications.operationFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -223,83 +225,83 @@ const ApplicationListPage: React.FC = () => {
    */
   const columns: ProColumns<Application>[] = [
     {
-      title: '应用名称',
+      title: t('pages.system.applications.name'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '应用代码',
+      title: t('pages.system.applications.code'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '应用描述',
+      title: t('pages.system.applications.description'),
       dataIndex: 'description',
       width: 250,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '排序顺序',
+      title: t('pages.system.applications.sortOrder'),
       dataIndex: 'sort_order',
       width: 100,
       sorter: (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
     },
     {
-      title: '系统应用',
+      title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Default' },
-        false: { text: '否', status: 'Processing' },
+        true: { text: t('field.customField.yes'), status: 'Default' },
+        false: { text: t('field.customField.no'), status: 'Processing' },
       },
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? '是' : '否'}
+          {record.is_system ? t('field.customField.yes') : t('field.customField.no')}
         </Tag>
       ),
     },
     {
-      title: '安装状态',
+      title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '已安装', status: 'Success' },
-        false: { text: '未安装', status: 'Default' },
+        true: { text: t('pages.system.applications.installed'), status: 'Success' },
+        false: { text: t('pages.system.applications.notInstalled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_installed ? 'success' : 'default'}>
-          {record.is_installed ? '已安装' : '未安装'}
+          {record.is_installed ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled')}
         </Tag>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.applications.activeStatus'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.applications.enabled'), status: 'Success' },
+        false: { text: t('pages.system.applications.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },
     {
-      title: '应用版本',
+      title: t('pages.system.applications.version'),
       dataIndex: 'version',
       width: 100,
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.applications.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -311,7 +313,7 @@ const ApplicationListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.applications.view')}
           </Button>
         </Space>
       ),
@@ -326,54 +328,53 @@ const ApplicationListPage: React.FC = () => {
     const menuItems = [
       {
         key: 'view',
-        label: '查看详情',
+        label: t('pages.system.applications.viewDetail'),
         icon: <EyeOutlined />,
         onClick: () => handleView(application),
       },
       {
         key: 'sync-manifest',
-        label: '菜单同步',
+        label: t('pages.system.applications.syncMenu'),
         icon: <AppstoreOutlined />,
         onClick: async () => {
           try {
             Modal.confirm({
-              title: '菜单同步',
-              content: `确定要从 manifest.json 同步应用菜单配置吗？`,
+              title: t('pages.system.applications.syncMenu'),
+              content: t('pages.system.applications.syncMenuConfirm'),
               onOk: async () => {
-                messageApi.loading({ content: '正在同步菜单...', key: 'sync-manifest' });
+                messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
                 try {
                   const result = await syncApplicationManifest(application.code);
 
                   if (result.success) {
                     messageApi.success({
-                      content: result.message || '菜单同步成功',
+                      content: result.message || t('pages.system.applications.syncMenuSuccess'),
                       key: 'sync-manifest'
                     });
 
-                    // 刷新应用列表
                     actionRef.current?.reload();
 
                     useGlobalStore.getState().incrementApplicationMenuVersion();
                   } else {
-                    throw new Error(result.message || '同步失败');
+                    throw new Error(result.message || t('pages.system.applications.syncFailed'));
                   }
 
                 } catch (error: any) {
                   messageApi.error({
-                    content: error.message || '同步失败',
+                    content: error.message || t('pages.system.applications.syncFailed'),
                     key: 'sync-manifest'
                   });
                 }
               },
             });
           } catch (error: any) {
-            messageApi.error(error.message || '操作失败');
+            messageApi.error(error.message || t('pages.system.applications.operationFailed'));
           }
         },
       },
       {
         key: 'edit-app',
-        label: '应用设置',
+        label: t('pages.system.applications.appSettings'),
         icon: <SettingOutlined />,
         onClick: () => {
           setEditingApp(application);
@@ -382,7 +383,7 @@ const ApplicationListPage: React.FC = () => {
       },
       {
         key: 'upgrade-app',
-        label: '应用升版',
+        label: t('pages.system.applications.appUpgrade'),
         icon: <ArrowUpOutlined />,
         onClick: () => {
           setUpgradingApp(application);
@@ -395,25 +396,25 @@ const ApplicationListPage: React.FC = () => {
       !application.is_installed
         ? {
           key: 'install',
-          label: '安装',
+          label: t('pages.system.applications.install'),
           icon: <DownloadOutlined />,
           onClick: () => {
             Modal.confirm({
-              title: '确定要安装这个应用吗？',
+              title: t('pages.system.applications.installConfirm'),
               onOk: () => handleInstall(application),
             });
           },
         }
         : {
           key: 'uninstall',
-          label: '卸载',
+          label: t('pages.system.applications.uninstall'),
           icon: <StopOutlined />,
           danger: true,
           disabled: application.is_system,
           onClick: () => {
             if (application.is_system) return;
             Modal.confirm({
-              title: '确定要卸载这个应用吗？',
+              title: t('pages.system.applications.uninstallConfirm'),
               onOk: () => handleUninstall(application),
             });
           },
@@ -474,19 +475,19 @@ const ApplicationListPage: React.FC = () => {
         }
         actions={[
           <div key="active" style={{ padding: '0 12px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: '#666' }}>启用状态</span>
+            <span style={{ fontSize: 12, color: '#666' }}>{t('pages.system.applications.activeStatus')}</span>
             <Switch
               checked={application.is_active}
               onChange={(checked) => handleToggleActive(application, checked)}
               disabled={!application.is_installed}
-              checkedChildren="启用"
-              unCheckedChildren="禁用"
+              checkedChildren={t('pages.system.applications.enabled')}
+              unCheckedChildren={t('pages.system.applications.disabled')}
             />
           </div>,
           <div key="more" style={{ padding: '0 12px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>
               <Button type="text" icon={<MoreOutlined />} style={{ width: '100%' }}>
-                更多操作
+                {t('pages.system.applications.moreActions')}
               </Button>
             </Dropdown>
           </div>,
@@ -499,8 +500,8 @@ const ApplicationListPage: React.FC = () => {
                 <span style={{ fontWeight: 600, fontSize: 16, color: '#262626', display: 'flex', alignItems: 'center' }}>
                   {application.name}
                   {application.is_custom_name && (
-                    <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 'normal', color: '#faad14' }} title="已自定义名称">
-                      (已修改)
+                    <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 'normal', color: '#faad14' }} title={t('pages.system.applications.customNameTag')}>
+                      ({t('pages.system.applications.customNameTag')})
                     </span>
                   )}
                   {application.code === 'master-data' && (
@@ -515,12 +516,12 @@ const ApplicationListPage: React.FC = () => {
                 </span>
                 <Space size={4}>
                   {application.is_system && (
-                    <Tag color="default" style={{ margin: 0 }}>系统</Tag>
+                    <Tag color="default" style={{ margin: 0 }}>{t('pages.system.applications.systemTag')}</Tag>
                   )}
                   {application.is_installed ? (
-                    <Tag color="success" style={{ margin: 0 }}>已安装</Tag>
+                    <Tag color="success" style={{ margin: 0 }}>{t('pages.system.applications.installed')}</Tag>
                   ) : (
-                    <Tag style={{ margin: 0 }}>未安装</Tag>
+                    <Tag style={{ margin: 0 }}>{t('pages.system.applications.notInstalled')}</Tag>
                   )}
                 </Space>
               </div>
@@ -541,7 +542,7 @@ const ApplicationListPage: React.FC = () => {
                   overflow: 'hidden',
                 }}
               >
-                {application.description || '暂无描述'}
+                {application.description || t('pages.system.applications.noDescription')}
               </div>
               <div
                 style={{
@@ -554,7 +555,7 @@ const ApplicationListPage: React.FC = () => {
                   borderTop: `1px solid ${themeToken.colorBorder}`,
                 }}
               >
-                <span>代码: {application.code}</span>
+                <span>{t('pages.system.applications.codeLabel')}: {application.code}</span>
                 {application.version && (
                   <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
                     v{application.version}
@@ -573,47 +574,47 @@ const ApplicationListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '应用名称', dataIndex: 'name' },
-    { title: '应用代码', dataIndex: 'code' },
-    { title: '应用描述', dataIndex: 'description' },
-    { title: '应用版本', dataIndex: 'version' },
-    { title: '更新日志', dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
-    { title: '路由路径', dataIndex: 'route_path' },
-    { title: '入口点', dataIndex: 'entry_point' },
-    { title: '权限代码', dataIndex: 'permission_code' },
+    { title: t('pages.system.applications.name'), dataIndex: 'name' },
+    { title: t('pages.system.applications.code'), dataIndex: 'code' },
+    { title: t('pages.system.applications.description'), dataIndex: 'description' },
+    { title: t('pages.system.applications.version'), dataIndex: 'version' },
+    { title: t('pages.system.applications.changelog'), dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
+    { title: t('pages.system.applications.routePath'), dataIndex: 'route_path' },
+    { title: t('pages.system.applications.entryPoint'), dataIndex: 'entry_point' },
+    { title: t('pages.system.applications.permissionCode'), dataIndex: 'permission_code' },
     {
-      title: '系统应用',
+      title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
-      render: (dom: any) => (dom ? '是' : '否'),
+      render: (dom: any) => (dom ? t('field.customField.yes') : t('field.customField.no')),
     },
     {
-      title: '安装状态',
+      title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
       render: (dom: any) => (
         <Tag color={dom ? 'success' : 'default'}>
-          {dom ? '已安装' : '未安装'}
+          {dom ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled')}
         </Tag>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.applications.activeStatus'),
       dataIndex: 'is_active',
       render: (dom: any) => (
         <Tag color={dom ? 'success' : 'default'}>
-          {dom ? '启用' : '禁用'}
+          {dom ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },
-    { title: '排序顺序', dataIndex: 'sort_order' },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('pages.system.applications.sortOrder'), dataIndex: 'sort_order' },
+    { title: t('pages.system.applications.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.applications.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Application>
-          headerTitle="应用中心"
+          headerTitle={t('pages.system.applications.headerTitle')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -657,7 +658,7 @@ const ApplicationListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取应用列表失败:', error);
-              messageApi.error(error?.message || '获取应用列表失败');
+              messageApi.error(error?.message || t('pages.system.applications.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -680,7 +681,7 @@ const ApplicationListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.applications.noDataExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -690,9 +691,9 @@ const ApplicationListPage: React.FC = () => {
               a.download = `applications-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('pages.system.applications.exportSuccessCount', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.applications.exportFailed'));
             }
           }}
           pagination={{
@@ -712,7 +713,7 @@ const ApplicationListPage: React.FC = () => {
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<Application>
-        title="应用详情"
+        title={t('pages.system.applications.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -724,7 +725,7 @@ const ApplicationListPage: React.FC = () => {
 
       {/* 编辑应用 Modal */}
       <Modal
-        title={`应用设置 - ${editingApp?.name}`}
+        title={t('pages.system.applications.editModalTitle', { name: editingApp?.name ?? '' })}
         open={editModalVisible}
         onOk={() => {
           const form = document.getElementById('edit-app-form') as HTMLFormElement;
@@ -746,7 +747,7 @@ const ApplicationListPage: React.FC = () => {
         onCancel={() => setEditModalVisible(false)}
         footer={[
           <Button key="cancel" onClick={() => setEditModalVisible(false)}>
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button
             key="restore"
@@ -754,23 +755,21 @@ const ApplicationListPage: React.FC = () => {
             onClick={async () => {
               if (editingApp) {
                 Modal.confirm({
-                  title: '恢复默认设置',
-                  content: '确定要恢复应用的默认名称和配置吗？这将从manifest.json重新同步。',
+                  title: t('pages.system.applications.restoreDefault'),
+                  content: t('pages.system.applications.restoreDefaultConfirm'),
                   onOk: async () => {
                     setSubmitting(true);
                     try {
-                      // 1. 先把自定义名称和排序标志位设为 false
                       await updateApplication(editingApp.uuid, {
                         is_custom_name: false,
                         is_custom_sort: false
                       });
-                      // 2. 触发同步
                       await syncApplicationManifest(editingApp.code);
-                      messageApi.success('已恢复默认设置');
+                      messageApi.success(t('pages.system.applications.restoreSuccess'));
                       setEditModalVisible(false);
                       actionRef.current?.reload();
                     } catch (error: any) {
-                      messageApi.error(error.message || '恢复失败');
+                      messageApi.error(error.message || t('pages.system.applications.restoreFailed'));
                     } finally {
                       setSubmitting(false);
                     }
@@ -779,13 +778,13 @@ const ApplicationListPage: React.FC = () => {
               }
             }}
           >
-            恢复默认
+            {t('pages.system.applications.restoreDefault')}
           </Button>,
           <Button key="submit" type="primary" loading={submitting} onClick={() => {
             const form = document.getElementById('edit-app-form') as HTMLFormElement;
             form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
           }}>
-            保存
+            {t('pages.dashboard.save')}
           </Button>
         ]}
         destroyOnHidden
@@ -812,7 +811,7 @@ const ApplicationListPage: React.FC = () => {
           }}
         >
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>应用名称:</label>
+            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.nameLabel')}:</label>
             <input
               type="text"
               name="name"
@@ -826,7 +825,7 @@ const ApplicationListPage: React.FC = () => {
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>排序顺序 (越小越靠前):</label>
+            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.sortOrderHint')}:</label>
             <input
               type="number"
               name="sort_order"
@@ -840,25 +839,25 @@ const ApplicationListPage: React.FC = () => {
             />
           </div>
           <div style={{ color: '#8c8c8c', fontSize: 12 }}>
-            提示：您可以自定义应用显示的名称。点击“恢复默认”将重新应用来自 manifest.json 的原始名称。
+            {t('pages.system.applications.editHint')}
           </div>
         </form>
       </Modal>
 
       {/* 应用升版 Modal */}
       <Modal
-        title={`应用升版 - ${upgradingApp?.name}`}
+        title={t('pages.system.applications.upgradeModalTitle', { name: upgradingApp?.name ?? '' })}
         open={upgradeModalVisible}
         onCancel={() => setUpgradeModalVisible(false)}
         footer={[
           <Button key="cancel" onClick={() => setUpgradeModalVisible(false)}>
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" loading={submitting} onClick={() => {
             const form = document.getElementById('upgrade-app-form') as HTMLFormElement;
             form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
           }}>
-            保存
+            {t('pages.dashboard.save')}
           </Button>
         ]}
         destroyOnHidden
@@ -877,13 +876,13 @@ const ApplicationListPage: React.FC = () => {
           }}
         >
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>新版本号:</label>
+            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.newVersionLabel')}:</label>
             <input
               type="text"
               name="version"
               required
               defaultValue={upgradingApp?.version}
-              placeholder="例如: 1.0.1"
+              placeholder={t('pages.system.applications.newVersionPlaceholder')}
               style={{
                 width: '100%',
                 padding: '8px',
@@ -893,10 +892,10 @@ const ApplicationListPage: React.FC = () => {
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>更新内容:</label>
+            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.changelogLabel')}:</label>
             <textarea
               name="changelog"
-              placeholder="请输入本次更新的内容..."
+              placeholder={t('pages.system.applications.changelogPlaceholder')}
               rows={5}
               style={{
                 width: '100%',
@@ -907,7 +906,7 @@ const ApplicationListPage: React.FC = () => {
             />
           </div>
           <div style={{ color: '#8c8c8c', fontSize: 12 }}>
-            提示：版本升级后，所有使用该应用的组织都将看到最新的版本和更新内容。
+            {t('pages.system.applications.upgradeHint')}
           </div>
         </form>
       </Modal>

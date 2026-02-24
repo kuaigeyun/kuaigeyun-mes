@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormList, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
@@ -27,6 +28,7 @@ import {
  * 消息模板管理列表页面组件
  */
 const MessageTemplateListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -85,7 +87,7 @@ const MessageTemplateListPage: React.FC = () => {
         is_active: detail.is_active,
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取消息模板详情失败');
+      messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
     }
   };
 
@@ -99,7 +101,7 @@ const MessageTemplateListPage: React.FC = () => {
       const detail = await getMessageTemplateByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取消息模板详情失败');
+      messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -111,10 +113,10 @@ const MessageTemplateListPage: React.FC = () => {
   const handleDelete = async (record: MessageTemplate) => {
     try {
       await deleteMessageTemplate(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.messageConfig.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.messageConfig.deleteFailed'));
     }
   };
 
@@ -123,15 +125,15 @@ const MessageTemplateListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.messageConfig.batchDeleteConfirmTitle'),
+      content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -145,21 +147,21 @@ const MessageTemplateListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.messageConfig.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.messageConfig.batchDeleteSuccessCount', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('pages.system.messageConfig.batchDeleteFailCount', { count: failCount }) + (errors.length > 0 ? '：' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.messageConfig.batchDeleteFailed'));
         }
       },
     });
@@ -192,7 +194,7 @@ const MessageTemplateListPage: React.FC = () => {
           variables: variables,
           is_active: values.is_active,
         } as UpdateMessageTemplateData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.messageConfig.updateSuccess'));
       } else {
         await createMessageTemplate({
           name: values.name,
@@ -204,13 +206,13 @@ const MessageTemplateListPage: React.FC = () => {
           variables: variables,
           is_active: values.is_active,
         } as CreateMessageTemplateData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.messageConfig.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.messageConfig.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -222,67 +224,67 @@ const MessageTemplateListPage: React.FC = () => {
    */
   const columns: ProColumns<MessageTemplate>[] = [
     {
-      title: '模板名称',
+      title: t('pages.system.messageTemplate.templateName'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '模板代码',
+      title: t('pages.system.messageTemplate.templateCode'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '消息类型',
+      title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        email: { text: '邮件', status: 'Success' },
-        sms: { text: '短信', status: 'Processing' },
-        internal: { text: '站内信', status: 'Warning' },
-        push: { text: '推送通知', status: 'Default' },
+        email: { text: t('pages.system.messageConfig.typeEmail'), status: 'Success' },
+        sms: { text: t('pages.system.messageConfig.typeSms'), status: 'Processing' },
+        internal: { text: t('pages.system.messageConfig.typeInternal'), status: 'Warning' },
+        push: { text: t('pages.system.messageConfig.typePush'), status: 'Default' },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          email: { color: 'blue', text: '邮件' },
-          sms: { color: 'orange', text: '短信' },
-          internal: { color: 'green', text: '站内信' },
-          push: { color: 'default', text: '推送通知' },
+          email: { color: 'blue', text: t('pages.system.messageConfig.typeEmail') },
+          sms: { color: 'orange', text: t('pages.system.messageConfig.typeSms') },
+          internal: { color: 'green', text: t('pages.system.messageConfig.typeInternal') },
+          push: { color: 'default', text: t('pages.system.messageConfig.typePush') },
         };
         const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
     {
-      title: '主题',
+      title: t('pages.system.messageTemplate.subject'),
       dataIndex: 'subject',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '描述',
+      title: t('pages.system.messageConfig.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.applications.enabled'), status: 'Success' },
+        false: { text: t('pages.system.applications.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('pages.system.messageConfig.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -290,7 +292,7 @@ const MessageTemplateListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.messageConfig.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -302,7 +304,7 @@ const MessageTemplateListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.messageConfig.view')}
           </Button>
           <Button
             type="link"
@@ -310,10 +312,10 @@ const MessageTemplateListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.messageConfig.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个消息模板吗？"
+            title={t('pages.system.messageTemplate.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -322,7 +324,7 @@ const MessageTemplateListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.messageConfig.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -334,24 +336,24 @@ const MessageTemplateListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '模板名称', dataIndex: 'name' },
-    { title: '模板代码', dataIndex: 'code' },
+    { title: t('pages.system.messageTemplate.templateName'), dataIndex: 'name' },
+    { title: t('pages.system.messageTemplate.templateCode'), dataIndex: 'code' },
     {
-      title: '消息类型',
+      title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
       render: (value: string) => {
         const typeMap: Record<string, string> = {
-          email: '邮件',
-          sms: '短信',
-          internal: '站内信',
-          push: '推送通知',
+          email: t('pages.system.messageConfig.typeEmail'),
+          sms: t('pages.system.messageConfig.typeSms'),
+          internal: t('pages.system.messageConfig.typeInternal'),
+          push: t('pages.system.messageConfig.typePush'),
         };
         return typeMap[value] || value;
       },
     },
-    { title: '主题', dataIndex: 'subject' },
+    { title: t('pages.system.messageTemplate.subject'), dataIndex: 'subject' },
     {
-      title: '模板内容',
+      title: t('pages.system.messageTemplate.templateContent'),
       dataIndex: 'content',
       render: (value: string) => (
         <pre style={{
@@ -369,7 +371,7 @@ const MessageTemplateListPage: React.FC = () => {
       ),
     },
     {
-      title: '模板变量',
+      title: t('pages.system.messageTemplate.templateVars'),
       dataIndex: 'variables',
       render: (value: Record<string, any>) => value ? (
         <pre style={{
@@ -385,18 +387,18 @@ const MessageTemplateListPage: React.FC = () => {
         </pre>
       ) : '-',
     },
-    { title: '模板描述', dataIndex: 'description' },
+    { title: t('pages.system.messageTemplate.templateDescription'), dataIndex: 'description' },
     {
-      title: '启用状态',
+      title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
       render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '启用' : '禁用'}
+          {value ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
         </Tag>
       ),
     },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('pages.system.messageConfig.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.messageConfig.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -431,7 +433,7 @@ const MessageTemplateListPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取消息模板列表失败:', error);
-            messageApi.error(error?.message || '获取消息模板列表失败');
+            messageApi.error(error?.message || t('pages.system.messageTemplate.loadListFailed'));
             return {
               data: [],
               success: false,
@@ -442,13 +444,13 @@ const MessageTemplateListPage: React.FC = () => {
         rowKey="uuid"
         showAdvancedSearch={true}
         showCreateButton
-        createButtonText="新建消息模板"
+        createButtonText={t('pages.system.messageTemplate.createButton')}
         onCreate={handleCreate}
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText="批量删除"
+        deleteButtonText={t('pages.system.messageTemplate.batchDeleteButton')}
         showImportButton={false}
         showExportButton={true}
         onExport={async (type, keys, pageData) => {
@@ -461,7 +463,7 @@ const MessageTemplateListPage: React.FC = () => {
               items = items.filter((d: any) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.messageTemplate.noDataExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -471,9 +473,9 @@ const MessageTemplateListPage: React.FC = () => {
             a.download = `message-templates-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success(`已导出 ${items.length} 条记录`);
-          } catch (error: any) {
-            messageApi.error(error?.message || '导出失败');
+            messageApi.success(t('pages.system.messageTemplate.exportSuccessCount', { count: items.length }));
+            } catch (error: any) {
+              messageApi.error(error?.message || t('pages.system.messageTemplate.exportFailed'));
           }
         }}
         pagination={{
@@ -485,7 +487,7 @@ const MessageTemplateListPage: React.FC = () => {
 
       {/* 创建/编辑消息模板 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑消息模板' : '新建消息模板'}
+        title={isEdit ? t('pages.system.messageTemplate.editTitle') : t('pages.system.messageTemplate.createTitle')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
@@ -496,51 +498,51 @@ const MessageTemplateListPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="模板代码"
+          label={t('pages.system.messageTemplate.templateCode')}
           rules={[
-            { required: true, message: '请输入模板代码' },
-            { pattern: /^[A-Z0-9_]+$/, message: '建议使用大写字母、数字和下划线' },
+            { required: true, message: t('pages.system.messageTemplate.codeRequired') },
+            { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageTemplate.codePattern') },
           ]}
-          placeholder="例如：MATERIAL_CHANGE_NOTIFY"
+          placeholder={t('pages.system.messageTemplate.codePlaceholder')}
           disabled={isEdit}
           colProps={{ md: 12, xs: 24 }}
         />
         <ProFormText
           name="name"
-          label="模板名称"
-          rules={[{ required: true, message: '请输入模板名称' }]}
-          placeholder="例如：物料变更通知"
+          label={t('pages.system.messageTemplate.templateName')}
+          rules={[{ required: true, message: t('pages.system.messageTemplate.nameRequired') }]}
+          placeholder={t('pages.system.messageTemplate.namePlaceholder')}
           colProps={{ md: 12, xs: 24 }}
         />
         <SafeProFormSelect
           name="type"
-          label="消息类型"
-          rules={[{ required: true, message: '请选择消息类型' }]}
+          label={t('pages.system.messageConfig.type')}
+          rules={[{ required: true, message: t('pages.system.messageTemplate.typeRequired') }]}
           options={[
-            { label: '邮件', value: 'email' },
-            { label: '短信', value: 'sms' },
-            { label: '站内信', value: 'internal' },
-            { label: '推送通知', value: 'push' },
+            { label: t('pages.system.messageConfig.typeEmail'), value: 'email' },
+            { label: t('pages.system.messageConfig.typeSms'), value: 'sms' },
+            { label: t('pages.system.messageConfig.typeInternal'), value: 'internal' },
+            { label: t('pages.system.messageConfig.typePush'), value: 'push' },
           ]}
           disabled={isEdit}
           colProps={{ md: 12, xs: 24 }}
         />
         <ProFormSwitch
           name="is_active"
-          label="启用状态"
+          label={t('pages.system.messageConfig.activeStatus')}
           colProps={{ md: 12, xs: 24 }}
         />
         <ProFormText
           name="subject"
-          label="消息主题"
-          placeholder="请输入邮件或推送消息的主题"
+          label={t('pages.system.messageTemplate.messageSubject')}
+          placeholder={t('pages.system.messageTemplate.subjectPlaceholder')}
           colProps={{ span: 24 }}
         />
         <ProFormTextArea
           name="content"
-          label="模板正文"
-          rules={[{ required: true, message: '请输入模板内容' }]}
-          placeholder="支持变量替换，例如：您好 {name}，验证码为 {code}"
+          label={t('pages.system.messageTemplate.templateBody')}
+          rules={[{ required: true, message: t('pages.system.messageTemplate.contentRequired') }]}
+          placeholder={t('pages.system.messageTemplate.contentPlaceholder')}
           fieldProps={{
             rows: 6,
           }}
@@ -548,9 +550,9 @@ const MessageTemplateListPage: React.FC = () => {
         />
         <ProFormList
           name="variableList"
-          label="变量声明"
+          label={t('pages.system.messageTemplate.variableDeclaration')}
           creatorButtonProps={{
-            creatorButtonText: '添加变量',
+            creatorButtonText: t('pages.system.messageTemplate.addVariable'),
           }}
           itemRender={({ listDom, action }) => (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -562,20 +564,20 @@ const MessageTemplateListPage: React.FC = () => {
           <ProFormGroup key="group">
             <ProFormText 
               name="key" 
-              placeholder="变量名 (如: name)" 
-              rules={[{ required: true, message: '必填' }]}
+              placeholder={t('pages.system.messageTemplate.varKeyPlaceholder')} 
+              rules={[{ required: true, message: t('pages.system.messageTemplate.required') }]}
             />
             <ProFormText 
               name="label" 
-              placeholder="变量描述 (如: 用户姓名)" 
+              placeholder={t('pages.system.messageTemplate.varLabelPlaceholder')} 
             />
           </ProFormGroup>
         </ProFormList>
 
         <ProFormTextArea
           name="description"
-          label="模板描述"
-          placeholder="该模板的详细用途备注"
+          label={t('pages.system.messageTemplate.templateDescription')}
+          placeholder={t('pages.system.messageTemplate.descriptionPlaceholder')}
           fieldProps={{
             rows: 2,
           }}
@@ -585,7 +587,7 @@ const MessageTemplateListPage: React.FC = () => {
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<MessageTemplate>
-        title="消息模板详情"
+        title={t('pages.system.messageTemplate.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

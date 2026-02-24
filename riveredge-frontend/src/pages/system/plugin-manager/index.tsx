@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ProColumns,
   ActionType,
@@ -39,6 +40,7 @@ interface PluginInfo {
 }
 
 const PluginManagerPage: React.FC = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const actionRef = React.useRef<ActionType>();
 
@@ -52,7 +54,7 @@ const PluginManagerPage: React.FC = () => {
       };
     } catch (error) {
       console.error('获取插件列表失败:', error);
-      message.error('获取插件列表失败');
+      message.error(t('pages.system.pluginManager.fetchFailed'));
       return {
         data: [],
         success: false,
@@ -68,15 +70,15 @@ const PluginManagerPage: React.FC = () => {
 
       if (response.success) {
         message.success(
-          `插件发现完成：注册 ${response.data.registered} 个，更新 ${response.data.updated} 个`
+          t('pages.system.pluginManager.discoverSuccess', { registered: response.data.registered, updated: response.data.updated })
         );
         actionRef.current?.reload();
       } else {
-        message.error('插件发现失败');
+        message.error(t('pages.system.pluginManager.discoverFailed'));
       }
     } catch (error) {
       console.error('插件发现失败:', error);
-      message.error('插件发现失败');
+      message.error(t('pages.system.pluginManager.discoverFailed'));
     } finally {
       setLoading(false);
     }
@@ -91,11 +93,11 @@ const PluginManagerPage: React.FC = () => {
         message.success(response.message);
         actionRef.current?.reload();
       } else {
-        message.error(response.message || '启用插件失败');
+        message.error(response.message || t('pages.system.pluginManager.enableFailed'));
       }
     } catch (error) {
       console.error('启用插件失败:', error);
-      message.error('启用插件失败');
+      message.error(t('pages.system.pluginManager.enableFailed'));
     }
   };
 
@@ -108,18 +110,18 @@ const PluginManagerPage: React.FC = () => {
         message.success(response.message);
         actionRef.current?.reload();
       } else {
-        message.error(response.message || '停用插件失败');
+        message.error(response.message || t('pages.system.pluginManager.disableFailed'));
       }
     } catch (error) {
       console.error('停用插件失败:', error);
-      message.error('停用插件失败');
+      message.error(t('pages.system.pluginManager.disableFailed'));
     }
   };
 
   // 表格列定义
   const columns: ProColumns<PluginInfo>[] = [
     {
-      title: '插件信息',
+      title: t('pages.system.pluginManager.columnInfo'),
       dataIndex: 'name',
       width: 200,
       render: (_, record) => (
@@ -129,18 +131,18 @@ const PluginManagerPage: React.FC = () => {
             {record.name}
           </div>
           <div style={{ fontSize: '12px', color: '#666' }}>
-            代码: {record.code} | 版本: {record.version}
+            {t('pages.system.pluginManager.codeVersion', { code: record.code, version: record.version })}
           </div>
           {record.author && (
             <div style={{ fontSize: '12px', color: '#999' }}>
-              作者: {record.author}
+              {t('pages.system.pluginManager.author', { author: record.author })}
             </div>
           )}
         </Space>
       ),
     },
     {
-      title: '描述',
+      title: t('pages.system.pluginManager.columnDesc'),
       dataIndex: 'description',
       width: 250,
       render: (text) => (
@@ -151,48 +153,43 @@ const PluginManagerPage: React.FC = () => {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap'
           }}>
-            {text || '暂无描述'}
+            {text || t('pages.system.pluginManager.noDesc')}
           </div>
         </Tooltip>
       ),
     },
     {
-      title: '状态',
+      title: t('pages.system.pluginManager.columnStatus'),
       dataIndex: 'is_active',
       width: 200,
       render: (_, record) => (
         <Space direction="vertical" size={4}>
-          {/* 有效性状态 */}
           <div>
             {record.is_valid ? (
               <Tag color="green" icon={<CheckCircleOutlined />}>
-                有效
+                {t('pages.system.pluginManager.valid')}
               </Tag>
             ) : (
               <Tag color="red" icon={<CloseCircleOutlined />}>
-                无效
+                {t('pages.system.pluginManager.invalid')}
               </Tag>
             )}
           </div>
-
-          {/* 注册状态 */}
           <div>
             {record.is_registered ? (
-              <Tag color="blue">已注册</Tag>
+              <Tag color="blue">{t('pages.system.pluginManager.registered')}</Tag>
             ) : (
-              <Tag color="orange">未注册</Tag>
+              <Tag color="orange">{t('pages.system.pluginManager.unregistered')}</Tag>
             )}
           </div>
-
-          {/* 启用状态 */}
           <div>
             {record.is_active ? (
               <Tag color="green" icon={<CheckCircleOutlined />}>
-                已启用
+                {t('pages.system.pluginManager.enabled')}
               </Tag>
             ) : (
               <Tag color="default" icon={<CloseCircleOutlined />}>
-                未启用
+                {t('pages.system.pluginManager.disabled')}
               </Tag>
             )}
           </div>
@@ -200,7 +197,7 @@ const PluginManagerPage: React.FC = () => {
       ),
     },
     {
-      title: '操作',
+      title: t('pages.system.pluginManager.actions'),
       width: 200,
       render: (_, record) => (
         <Space>
@@ -208,26 +205,26 @@ const PluginManagerPage: React.FC = () => {
             <>
               {record.is_active ? (
                 <Popconfirm
-                  title={`确定要停用插件 "${record.name}" 吗？`}
-                  description="停用后，该插件的功能将不再可用。"
+                  title={t('pages.system.pluginManager.disableConfirmTitle', { name: record.name })}
+                  description={t('pages.system.pluginManager.disableConfirmDesc')}
                   onConfirm={() => handleDisablePlugin(record.code)}
-                  okText="确定"
-                  cancelText="取消"
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
                 >
                   <Button size="small" danger>
-                    停用
+                    {t('pages.system.pluginManager.disable')}
                   </Button>
                 </Popconfirm>
               ) : (
                 <Popconfirm
-                  title={`确定要启用插件 "${record.name}" 吗？`}
-                  description="启用后，该插件的功能将立即可用。"
+                  title={t('pages.system.pluginManager.enableConfirmTitle', { name: record.name })}
+                  description={t('pages.system.pluginManager.enableConfirmDesc')}
                   onConfirm={() => handleEnablePlugin(record.code)}
-                  okText="确定"
-                  cancelText="取消"
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
                 >
                   <Button size="small" type="primary">
-                    启用
+                    {t('pages.system.pluginManager.enable')}
                   </Button>
                 </Popconfirm>
               )}
@@ -237,7 +234,7 @@ const PluginManagerPage: React.FC = () => {
           {!record.is_valid && record.error_message && (
             <Tooltip title={record.error_message}>
               <Button size="small" icon={<ExclamationCircleOutlined />} danger>
-                查看错误
+                {t('pages.system.pluginManager.viewError')}
               </Button>
             </Tooltip>
           )}
@@ -250,7 +247,7 @@ const PluginManagerPage: React.FC = () => {
     <ListPageTemplate>
       <Card>
         <UniTable<PluginInfo>
-          headerTitle="插件管理"
+          headerTitle={t('pages.system.pluginManager.title')}
           actionRef={actionRef}
           rowKey="code"
           request={fetchPlugins}
@@ -271,7 +268,7 @@ const PluginManagerPage: React.FC = () => {
                 toExport = items.filter((d) => keys.includes(d.code));
               }
               if (toExport.length === 0) {
-                message.warning('暂无数据可导出');
+                message.warning(t('pages.system.pluginManager.noDataToExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
@@ -281,9 +278,9 @@ const PluginManagerPage: React.FC = () => {
               a.download = `plugins-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              message.success(`已导出 ${toExport.length} 条记录`);
+              message.success(t('pages.system.pluginManager.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
-              message.error('导出失败');
+              message.error(t('pages.system.pluginManager.exportFailed'));
             }
           }}
           toolBarActions={[
@@ -294,14 +291,14 @@ const PluginManagerPage: React.FC = () => {
               loading={loading}
               onClick={handleDiscoverPlugins}
             >
-              发现插件
+              {t('pages.system.pluginManager.discover')}
             </Button>,
             <Button
               key="reload"
               icon={<ReloadOutlined />}
               onClick={() => actionRef.current?.reload()}
             >
-              刷新
+              {t('pages.system.pluginManager.refresh')}
             </Button>,
           ]}
         />

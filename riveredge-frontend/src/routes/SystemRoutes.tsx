@@ -11,6 +11,7 @@
 import React, { Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Modal } from 'antd';
+import { useTranslation } from 'react-i18next';
 import PageSkeleton from '../components/page-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
@@ -49,6 +50,7 @@ const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: Reac
   permissionCodes,
   children,
 }) => {
+  const { t } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const denied = !hasAnyPermission(currentUser, permissionCodes);
   const notifiedRef = useRef(false);
@@ -56,11 +58,11 @@ const RoutePermissionGuard: React.FC<{ permissionCodes: string[]; children: Reac
     if (denied && !notifiedRef.current) {
       notifiedRef.current = true;
       Modal.warning({
-        title: '无权限访问',
-        content: `缺少权限：${permissionCodes.join(' / ')}`,
+        title: t('common.permissionDenied'),
+        content: t('common.permissionDeniedDetail', { permissions: permissionCodes.join(' / ') }),
       });
     }
-  }, [denied, permissionCodes]);
+  }, [denied, permissionCodes, t]);
   if (denied) {
     return <PageSkeleton />;
   }

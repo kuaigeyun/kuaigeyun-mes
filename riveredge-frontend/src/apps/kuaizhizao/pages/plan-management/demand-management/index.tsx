@@ -10,11 +10,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert } from 'antd';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
   listDemands,
@@ -24,19 +25,57 @@ import {
   approveDemand,
   rejectDemand,
   pushDemandToComputation,
+  cleanOrphanDemands,
+  listDemandRecalcHistory,
+  listDemandSnapshots,
   Demand,
   DemandItem,
   DemandStatus,
   ReviewStatus,
+  DemandRecalcHistoryItem,
+  DemandSnapshotItem,
 } from '../../../services/demand';
 import { createDemandComputation } from '../../../services/demand-computation';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { getDemandLifecycle } from '../../../utils/demandLifecycle';
+
+/** 统一状态判断（兼容枚举与中文） */
+function isDemandDraft(d: Demand): boolean {
+  const s = (d?.status ?? '').trim();
+  return s === DemandStatus.DRAFT || s === '草稿';
+}
+function isDemandPendingReview(d: Demand): boolean {
+  const s = (d?.status ?? '').trim();
+  return s === DemandStatus.PENDING_REVIEW || s === '待审核' || s === '已提交';
+}
+function isDemandAuditedAndApproved(d: Demand): boolean {
+  const s = (d?.status ?? '').trim();
+  const r = (d?.review_status ?? '').trim();
+  return (s === DemandStatus.AUDITED || s === '已审核') && (r === ReviewStatus.APPROVED || r === '审核通过' || r === '通过' || r === '已通过');
+}
+function statusDisplayText(status: string | undefined): string {
+  const s = (status ?? '').trim();
+  if (s === DemandStatus.DRAFT || s === '草稿') return '草稿';
+  if (s === DemandStatus.PENDING_REVIEW || s === '待审核') return '待审核';
+  if (s === DemandStatus.AUDITED || s === '已审核') return '已审核';
+  if (s === DemandStatus.REJECTED || s === '已驳回') return '已驳回';
+  return s || '-';
+}
+function reviewStatusDisplayText(reviewStatus: string | undefined): string {
+  const r = (reviewStatus ?? '').trim();
+  if (r === ReviewStatus.APPROVED || r === '审核通过' || r === '通过' || r === '已通过') return '审核通过';
+  if (r === ReviewStatus.REJECTED || r === '审核驳回' || r === '驳回') return '审核驳回';
+  if (r === ReviewStatus.PENDING || r === '待审核') return '待审核';
+  return r || '-';
+}
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [searchParams] = useSearchParams();
@@ -50,6 +89,11 @@ const DemandManagementPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
+  const [recalcHistory, setRecalcHistory] = useState<DemandRecalcHistoryItem[]>([]);
+  const [snapshots, setSnapshots] = useState<DemandSnapshotItem[]>([]);
+  const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [detailTabKey, setDetailTabKey] = useState<string>('detail');
 
   // 需求类型选择（销售预测/销售订单），支持从 URL 参数读取
   const urlDemandType = searchParams.get('demand_type') as 'sales_forecast' | 'sales_order' | null;
@@ -171,44 +215,6 @@ const DemandManagementPage: React.FC = () => {
   };
 
   /**
-   * 处理提交需求
-   */
-  const handleSubmitDemand = async (id: number) => {
-    Modal.confirm({
-      title: '提交需求',
-      content: '确定要提交此需求吗？提交后将进入审核流程。',
-      onOk: async () => {
-        try {
-          await submitDemand(id);
-          messageApi.success('需求提交成功');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '提交失败');
-        }
-      },
-    });
-  };
-
-  /**
-   * 处理审核通过
-   */
-  const handleApprove = async (id: number) => {
-    Modal.confirm({
-      title: '审核通过',
-      content: '确定要审核通过此需求吗？',
-      onOk: async () => {
-        try {
-          await approveDemand(id);
-          messageApi.success('需求审核通过');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '审核失败');
-        }
-      },
-    });
-  };
-
-  /**
    * 处理下推需求到物料需求运算
    */
   const handlePushToComputation = async (id: number) => {
@@ -225,37 +231,6 @@ const DemandManagementPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '下推失败');
-        }
-      },
-    });
-  };
-
-  /**
-   * 处理驳回需求
-   */
-  const handleReject = async (id: number) => {
-    Modal.confirm({
-      title: '驳回需求',
-      content: (
-        <Input.TextArea
-          placeholder="请输入驳回原因"
-          rows={4}
-          id="rejection-reason-input"
-        />
-      ),
-      onOk: async () => {
-        const reasonInput = document.getElementById('rejection-reason-input') as HTMLTextAreaElement;
-        const reason = reasonInput?.value?.trim();
-        if (!reason) {
-          messageApi.warning('请输入驳回原因');
-          return;
-        }
-        try {
-          await rejectDemand(id, reason);
-          messageApi.success('需求已驳回');
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '驳回失败');
         }
       },
     });
@@ -381,22 +356,21 @@ const DemandManagementPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
-      valueEnum: {
-        [DemandStatus.DRAFT]: { text: '草稿', status: 'Default' },
-        [DemandStatus.PENDING_REVIEW]: { text: '待审核', status: 'Processing' },
-        [DemandStatus.AUDITED]: { text: '已审核', status: 'Success' },
-        [DemandStatus.REJECTED]: { text: '已驳回', status: 'Error' },
-      },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      valueEnum: {
-        [ReviewStatus.PENDING]: { text: '待审核', status: 'Default' },
-        [ReviewStatus.APPROVED]: { text: '审核通过', status: 'Success' },
-        [ReviewStatus.REJECTED]: { text: '审核驳回', status: 'Error' },
+      width: 320,
+      fixed: 'right',
+      render: (_: unknown, record: Demand) => {
+        const lifecycle = getDemandLifecycle(record);
+        const mainStages = lifecycle.mainStages ?? [];
+        if (mainStages.length === 0) return statusDisplayText(record.status);
+        return (
+          <UniLifecycleStepper
+            steps={mainStages}
+            status={lifecycle.status}
+            nodeSize={36}
+            showLabels={false}
+            innerFontSize={9}
+          />
+        );
       },
     },
     {
@@ -411,70 +385,48 @@ const DemandManagementPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail([record.id!])}
-          >
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>
-          {record.status === DemandStatus.DRAFT && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => handleEdit([record.id!])}
-              >
-                编辑
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<SendOutlined />}
-                onClick={() => handleSubmitDemand(record.id!)}
-                style={{ color: '#1890ff' }}
-              >
-                提交
-              </Button>
-            </>
+          {isDemandDraft(record) && (
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
+              编辑
+            </Button>
           )}
-          {record.status === DemandStatus.PENDING_REVIEW && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleApprove(record.id!)}
-                style={{ color: '#52c41a' }}
-              >
-                审核
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => handleReject(record.id!)}
-              >
-                驳回
-              </Button>
-            </>
+          <UniWorkflowActions
+            record={record}
+            entityName="需求"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[DemandStatus.DRAFT, '草稿']}
+            pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
+            approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
+            rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
+            theme="link"
+            size="small"
+            actions={{
+              submit: submitDemand,
+              approve: approveDemand,
+              reject: async (id, reason) => {
+              if (!reason?.trim()) {
+                throw new Error('请输入驳回原因');
+              }
+              return rejectDemand(id, reason.trim());
+            },
+            }}
+            onSuccess={() => actionRef.current?.reload()}
+          />
+          {isDemandAuditedAndApproved(record) && !record.pushed_to_computation && (
+            <Button
+              type="link"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              onClick={() => handlePushToComputation(record.id!)}
+              style={{ color: '#1890ff' }}
+            >
+              下推
+            </Button>
           )}
-          {record.status === DemandStatus.AUDITED &&
-            record.review_status === ReviewStatus.APPROVED &&
-            !record.pushed_to_computation && (
-              <Button
-                type="link"
-                size="small"
-                icon={<ArrowDownOutlined />}
-                onClick={() => handlePushToComputation(record.id!)}
-                style={{ color: '#1890ff' }}
-              >
-                下推
-              </Button>
-            )}
         </Space>
       ),
     },
@@ -734,246 +686,372 @@ const DemandManagementPage: React.FC = () => {
         extra={
           currentDemand && (
             <Space>
-              {currentDemand.status === DemandStatus.DRAFT && (
-                <>
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    onClick={() => handleSubmitDemand(currentDemand.id!)}
-                  >
-                    提交
-                  </Button>
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={() => {
-                      setDrawerVisible(false);
-                      handleEdit([currentDemand.id!]);
-                    }}
-                  >
-                    编辑
-                  </Button>
-                </>
+              <UniWorkflowActions
+                record={currentDemand}
+                entityName="需求"
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={[DemandStatus.DRAFT, '草稿']}
+                pendingStatuses={[DemandStatus.PENDING_REVIEW, '待审核', '已提交']}
+                approvedStatuses={[DemandStatus.AUDITED, '已审核', ReviewStatus.APPROVED, '审核通过', '通过', '已通过']}
+                rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
+                theme="default"
+                size="middle"
+                actions={{
+                  submit: submitDemand,
+                  approve: approveDemand,
+                  reject: async (id, reason) => {
+                    if (!reason?.trim()) throw new Error('请输入驳回原因');
+                    return rejectDemand(id, reason.trim());
+                  },
+                }}
+                onSuccess={async () => {
+                  actionRef.current?.reload();
+                  if (currentDemand?.id) {
+                    const updated = await getDemand(currentDemand.id);
+                    setCurrentDemand(updated);
+                  }
+                }}
+              />
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setDrawerVisible(false);
+                  handleEdit([currentDemand.id!]);
+                }}
+              >
+                编辑
+              </Button>
+              {isDemandAuditedAndApproved(currentDemand) && !currentDemand.pushed_to_computation && (
+                <Button
+                  type="primary"
+                  icon={<ArrowDownOutlined />}
+                  onClick={() => handlePushToComputation(currentDemand.id!)}
+                >
+                  下推到物料需求运算
+                </Button>
               )}
-              {currentDemand.status === '待审核' && (
-                <>
-                  <Button
-                    type="primary"
-                    icon={<CheckCircleOutlined />}
-                    onClick={() => handleApprove(currentDemand.id!)}
-                    style={{ color: '#52c41a', borderColor: '#52c41a' }}
-                  >
-                    审核通过
-                  </Button>
-                  <Button
-                    danger
-                    icon={<CloseCircleOutlined />}
-                    onClick={() => handleReject(currentDemand.id!)}
-                  >
-                    驳回
-                  </Button>
-                </>
-              )}
-              {currentDemand.status === '已审核' &&
-                currentDemand.review_status === '通过' &&
-                !currentDemand.pushed_to_computation && (
-                  <Button
-                    type="primary"
-                    icon={<ArrowDownOutlined />}
-                    onClick={() => handlePushToComputation(currentDemand.id!)}
-                  >
-                    下推到物料需求运算
-                  </Button>
-                )}
             </Space>
           )
         }
       >
         {currentDemand && (
           <div style={{ padding: '16px 0' }}>
-            <ProDescriptions
-              column={2}
-              title="基本信息"
-              dataSource={currentDemand}
-            >
-              <ProDescriptions.Item label="需求编码" dataIndex="demand_code" />
-              <ProDescriptions.Item label="需求类型" dataIndex="demand_type">
-                <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : 'success'}>
-                  {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : '销售订单'}
-                </Tag>
-              </ProDescriptions.Item>
-              <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />
-              <ProDescriptions.Item label="业务模式" dataIndex="business_mode">
-                <Tag color={currentDemand.business_mode === 'MTS' ? 'processing' : 'success'}>
-                  {currentDemand.business_mode === 'MTS' ? '按库存生产' : '按订单生产'}
-                </Tag>
-              </ProDescriptions.Item>
-              <ProDescriptions.Item label="开始日期" dataIndex="start_date" valueType="date" />
-              <ProDescriptions.Item label="结束日期" dataIndex="end_date" valueType="date" />
-              {currentDemand.demand_type === 'sales_forecast' && (
-                <ProDescriptions.Item label="预测周期" dataIndex="forecast_period" />
-              )}
-              {currentDemand.demand_type === 'sales_order' && (
-                <>
-                  <ProDescriptions.Item label="订单日期" dataIndex="order_date" valueType="date" />
-                  <ProDescriptions.Item label="交货日期" dataIndex="delivery_date" valueType="date" />
-                </>
-              )}
-              <ProDescriptions.Item label="客户名称" dataIndex="customer_name" />
-              {currentDemand.demand_type === 'sales_order' && (
-                <>
-                  <ProDescriptions.Item label="客户联系人" dataIndex="customer_contact" />
-                  <ProDescriptions.Item label="客户电话" dataIndex="customer_phone" />
-                  <ProDescriptions.Item label="销售员" dataIndex="salesman_name" />
-                  <ProDescriptions.Item label="收货地址" dataIndex="shipping_address" span={2} />
-                  <ProDescriptions.Item label="发货方式" dataIndex="shipping_method" />
-                  <ProDescriptions.Item label="付款条件" dataIndex="payment_terms" />
-                </>
-              )}
-              <ProDescriptions.Item label="总数量" dataIndex="total_quantity" />
-              <ProDescriptions.Item label="总金额" dataIndex="total_amount">
-                {currentDemand.total_amount ? `¥${Number(currentDemand.total_amount).toLocaleString()}` : '-'}
-              </ProDescriptions.Item>
-              <ProDescriptions.Item label="状态" dataIndex="status">
-                <Tag
-                  color={
-                    currentDemand.status === '已审核' ? 'success' :
-                      currentDemand.status === '待审核' ? 'processing' :
-                        currentDemand.status === '已驳回' ? 'error' : 'default'
-                  }
-                >
-                  {currentDemand.status}
-                </Tag>
-              </ProDescriptions.Item>
-              <ProDescriptions.Item label="审核状态" dataIndex="review_status">
-                <Tag
-                  color={
-                    currentDemand.review_status === '通过' ? 'success' :
-                      currentDemand.review_status === '驳回' ? 'error' : 'default'
-                  }
-                >
-                  {currentDemand.review_status}
-                </Tag>
-              </ProDescriptions.Item>
-              {currentDemand.reviewer_name && (
-                <>
-                  <ProDescriptions.Item label="审核人" dataIndex="reviewer_name" />
-                  <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
-                </>
-              )}
-              {currentDemand.review_remarks && (
-                <ProDescriptions.Item label="审核备注" dataIndex="review_remarks" span={2} />
-              )}
-              {currentDemand.notes && (
-                <ProDescriptions.Item label="备注" dataIndex="notes" span={2} />
-              )}
-              {currentDemand.submit_time && (
-                <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
-              )}
-            </ProDescriptions>
-
-            {/* 耗时统计 */}
-            {(currentDemand as any).duration_info && (
-              <div style={{ marginTop: 24 }}>
-                <h4>耗时统计</h4>
-                <ProDescriptions
-                  column={2}
-                  dataSource={(currentDemand as any).duration_info}
-                >
-                  <ProDescriptions.Item label="创建时间" dataIndex="created_at" valueType="dateTime" />
-                  {currentDemand.submit_time && (
-                    <>
-                      <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
-                      {(currentDemand as any).duration_info?.duration_to_submit !== null && (
-                        <ProDescriptions.Item
-                          label="创建到提交耗时"
-                          dataIndex="duration_to_submit"
-                        >
-                          {(currentDemand as any).duration_info?.duration_to_submit
-                            ? `${(currentDemand as any).duration_info.duration_to_submit} 小时`
-                            : '-'}
-                        </ProDescriptions.Item>
-                      )}
-                    </>
-                  )}
-                  {currentDemand.review_time && (
-                    <>
-                      <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
-                      {(currentDemand as any).duration_info?.duration_to_review !== null && (
-                        <ProDescriptions.Item
-                          label="创建到审核耗时"
-                          dataIndex="duration_to_review"
-                        >
-                          {(currentDemand as any).duration_info?.duration_to_review
-                            ? `${(currentDemand as any).duration_info.duration_to_review} 小时`
-                            : '-'}
-                        </ProDescriptions.Item>
-                      )}
-                      {(currentDemand as any).duration_info?.duration_submit_to_review !== null && (
-                        <ProDescriptions.Item
-                          label="提交到审核耗时"
-                          dataIndex="duration_submit_to_review"
-                        >
-                          {(currentDemand as any).duration_info?.duration_submit_to_review
-                            ? `${(currentDemand as any).duration_info.duration_submit_to_review} 小时`
-                            : '-'}
-                        </ProDescriptions.Item>
-                      )}
-                    </>
-                  )}
-                </ProDescriptions>
-              </div>
-            )}
-
-            {/* 需求明细表格 */}
-            {currentDemand.items && currentDemand.items.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <h4>需求明细</h4>
-                <Table<DemandItem>
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { title: '物料规格', dataIndex: 'material_spec', width: 120 },
-                    { title: '单位', dataIndex: 'material_unit', width: 80 },
-                    { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
-                    ...(currentDemand.demand_type === 'sales_forecast' ? [
-                      { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
-                      { title: '预测月份', dataIndex: 'forecast_month', width: 100 },
-                    ] : [
-                      { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
-                      { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
-                      { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
-                    ]),
-                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
-                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
-                  ]}
-                  dataSource={currentDemand.items}
-                  pagination={false}
-                  bordered
-                  rowKey="id"
-                />
-              </div>
-            )}
-
-            {/* 操作记录与上下游 */}
-            {currentDemand.id && (
-              <div style={{ marginTop: 24 }}>
-                <DocumentTrackingPanel
-                  documentType="demand"
-                  documentId={currentDemand.id}
-                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                />
-              </div>
-            )}
-
-            {/* 单据关联 */}
-            <DocumentRelationDisplay
-              relations={documentRelations}
-              onDocumentClick={(documentType, documentId) => {
-                // TODO: 根据单据类型跳转到对应的详情页面
-                messageApi.info(`跳转到${documentType}#${documentId}的详情页面`);
+            <Tabs
+              activeKey={detailTabKey}
+              onChange={(key) => {
+                setDetailTabKey(key);
+                if (key === 'recalc' && currentDemand.id) {
+                  setRecalcHistoryLoading(true);
+                  listDemandRecalcHistory(currentDemand.id, { limit: 50 })
+                    .then(setRecalcHistory)
+                    .catch(() => messageApi.error('获取重算历史失败'))
+                    .finally(() => setRecalcHistoryLoading(false));
+                }
+                if (key === 'snapshots' && currentDemand.id) {
+                  setSnapshotsLoading(true);
+                  listDemandSnapshots(currentDemand.id, { limit: 20 })
+                    .then(setSnapshots)
+                    .catch(() => messageApi.error('获取快照列表失败'))
+                    .finally(() => setSnapshotsLoading(false));
+                }
               }}
-              style={{ marginTop: 24 }}
+              items={[
+                {
+                  key: 'detail',
+                  label: '详情',
+                  children: (
+                    <>
+                      {currentDemand.pushed_to_computation && currentDemand.computation_id && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          message="需求已变更时，请前往需求计算重新执行计算"
+                          description={
+                            <span>
+                              本需求已下推至需求计算
+                              {currentDemand.computation_code && `（${currentDemand.computation_code}）`}
+                              。若上游已修改并同步，请
+                              <Button
+                                type="link"
+                                size="small"
+                                style={{ padding: 0 }}
+                                onClick={() => {
+                                  setDrawerVisible(false);
+                                  navigate(`/apps/kuaizhizao/plan-management/demand-computation?highlight=${currentDemand.computation_id}`);
+                                }}
+                              >
+                                前往需求计算
+                              </Button>
+                              重新执行计算。
+                            </span>
+                          }
+                          style={{ marginBottom: 16 }}
+                        />
+                      )}
+                      <div style={{ marginBottom: 24 }}>
+                        <h4 style={{ marginBottom: 12 }}>状态</h4>
+                        {(() => {
+                          const lifecycle = getDemandLifecycle(currentDemand);
+                          const mainStages = lifecycle.mainStages ?? [];
+                          const subStages = lifecycle.subStages ?? [];
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                              {mainStages.length > 0 && (
+                                <UniLifecycleStepper steps={mainStages} status={lifecycle.status} showLabels />
+                              )}
+                              {subStages.length > 0 && (
+                                <div>
+                                  <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                                    执行中 · 全链路
+                                  </div>
+                                  <UniLifecycleStepper steps={subStages} showLabels />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <ProDescriptions
+                        column={2}
+                        title="基本信息"
+                        dataSource={currentDemand}
+                      >
+                        <ProDescriptions.Item label="需求编码" dataIndex="demand_code" />
+                        <ProDescriptions.Item label="需求类型" dataIndex="demand_type">
+                          <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : 'success'}>
+                            {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : '销售订单'}
+                          </Tag>
+                        </ProDescriptions.Item>
+                        <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />
+                        <ProDescriptions.Item label="业务模式" dataIndex="business_mode">
+                          <Tag color={currentDemand.business_mode === 'MTS' ? 'processing' : 'success'}>
+                            {currentDemand.business_mode === 'MTS' ? '按库存生产' : '按订单生产'}
+                          </Tag>
+                        </ProDescriptions.Item>
+                        <ProDescriptions.Item label="开始日期" dataIndex="start_date" valueType="date" />
+                        <ProDescriptions.Item label="结束日期" dataIndex="end_date" valueType="date" />
+                        {currentDemand.demand_type === 'sales_forecast' && (
+                          <ProDescriptions.Item label="预测周期" dataIndex="forecast_period" />
+                        )}
+                        {currentDemand.demand_type === 'sales_order' && (
+                          <>
+                            <ProDescriptions.Item label="订单日期" dataIndex="order_date" valueType="date" />
+                            <ProDescriptions.Item label="交货日期" dataIndex="delivery_date" valueType="date" />
+                          </>
+                        )}
+                        <ProDescriptions.Item label="客户名称" dataIndex="customer_name" />
+                        {currentDemand.demand_type === 'sales_order' && (
+                          <>
+                            <ProDescriptions.Item label="客户联系人" dataIndex="customer_contact" />
+                            <ProDescriptions.Item label="客户电话" dataIndex="customer_phone" />
+                            <ProDescriptions.Item label="销售员" dataIndex="salesman_name" />
+                            <ProDescriptions.Item label="收货地址" dataIndex="shipping_address" span={2} />
+                            <ProDescriptions.Item label="发货方式" dataIndex="shipping_method" />
+                            <ProDescriptions.Item label="付款条件" dataIndex="payment_terms" />
+                          </>
+                        )}
+                        <ProDescriptions.Item label="总数量" dataIndex="total_quantity" />
+                        <ProDescriptions.Item label="总金额" dataIndex="total_amount">
+                          {currentDemand.total_amount ? `¥${Number(currentDemand.total_amount).toLocaleString()}` : '-'}
+                        </ProDescriptions.Item>
+                        <ProDescriptions.Item label="状态" dataIndex="status">
+                          <Tag
+                            color={
+                              statusDisplayText(currentDemand.status) === '已审核' ? 'success' :
+                                statusDisplayText(currentDemand.status) === '待审核' ? 'processing' :
+                                  statusDisplayText(currentDemand.status) === '已驳回' ? 'error' : 'default'
+                            }
+                          >
+                            {statusDisplayText(currentDemand.status)}
+                          </Tag>
+                        </ProDescriptions.Item>
+                        <ProDescriptions.Item label="审核状态" dataIndex="review_status">
+                          <Tag
+                            color={
+                              reviewStatusDisplayText(currentDemand.review_status) === '审核通过' ? 'success' :
+                                reviewStatusDisplayText(currentDemand.review_status) === '审核驳回' ? 'error' : 'default'
+                            }
+                          >
+                            {reviewStatusDisplayText(currentDemand.review_status)}
+                          </Tag>
+                        </ProDescriptions.Item>
+                        {currentDemand.reviewer_name && (
+                          <>
+                            <ProDescriptions.Item label="审核人" dataIndex="reviewer_name" />
+                            <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
+                          </>
+                        )}
+                        {currentDemand.review_remarks && (
+                          <ProDescriptions.Item label="审核备注" dataIndex="review_remarks" span={2} />
+                        )}
+                        {currentDemand.notes && (
+                          <ProDescriptions.Item label="备注" dataIndex="notes" span={2} />
+                        )}
+                        {currentDemand.submit_time && (
+                          <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
+                        )}
+                      </ProDescriptions>
+
+                      {(currentDemand as any).duration_info && (
+                        <div style={{ marginTop: 24 }}>
+                          <h4>耗时统计</h4>
+                          <ProDescriptions
+                            column={2}
+                            dataSource={(currentDemand as any).duration_info}
+                          >
+                            <ProDescriptions.Item label="创建时间" dataIndex="created_at" valueType="dateTime" />
+                            {currentDemand.submit_time && (
+                              <>
+                                <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
+                                {(currentDemand as any).duration_info?.duration_to_submit !== null && (
+                                  <ProDescriptions.Item label="创建到提交耗时" dataIndex="duration_to_submit">
+                                    {(currentDemand as any).duration_info?.duration_to_submit
+                                      ? `${(currentDemand as any).duration_info.duration_to_submit} 小时`
+                                      : '-'}
+                                  </ProDescriptions.Item>
+                                )}
+                              </>
+                            )}
+                            {currentDemand.review_time && (
+                              <>
+                                <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
+                                {(currentDemand as any).duration_info?.duration_to_review !== null && (
+                                  <ProDescriptions.Item label="创建到审核耗时" dataIndex="duration_to_review">
+                                    {(currentDemand as any).duration_info?.duration_to_review
+                                      ? `${(currentDemand as any).duration_info.duration_to_review} 小时`
+                                      : '-'}
+                                  </ProDescriptions.Item>
+                                )}
+                                {(currentDemand as any).duration_info?.duration_submit_to_review !== null && (
+                                  <ProDescriptions.Item label="提交到审核耗时" dataIndex="duration_submit_to_review">
+                                    {(currentDemand as any).duration_info?.duration_submit_to_review
+                                      ? `${(currentDemand as any).duration_info.duration_submit_to_review} 小时`
+                                      : '-'}
+                                  </ProDescriptions.Item>
+                                )}
+                              </>
+                            )}
+                          </ProDescriptions>
+                        </div>
+                      )}
+
+                      {currentDemand.items && currentDemand.items.length > 0 && (
+                        <div style={{ marginTop: 24 }}>
+                          <h4>需求明细</h4>
+                          <Table<DemandItem>
+                            size="small"
+                            columns={[
+                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                              { title: '物料规格', dataIndex: 'material_spec', width: 120 },
+                              { title: '单位', dataIndex: 'material_unit', width: 80 },
+                              { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+                              ...(currentDemand.demand_type === 'sales_forecast' ? [
+                                { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
+                                { title: '预测月份', dataIndex: 'forecast_month', width: 100 },
+                              ] : [
+                                { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
+                                { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
+                                { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
+                              ]),
+                              { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                              { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                            ]}
+                            dataSource={currentDemand.items}
+                            pagination={false}
+                            bordered
+                            rowKey="id"
+                          />
+                        </div>
+                      )}
+
+                      {currentDemand.id && (
+                        <div style={{ marginTop: 24 }}>
+                          <DocumentTrackingPanel
+                            documentType="demand"
+                            documentId={currentDemand.id}
+                            onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                          />
+                        </div>
+                      )}
+
+                      <DocumentRelationDisplay
+                        relations={documentRelations}
+                        onDocumentClick={(documentType, documentId) => {
+                          messageApi.info(`跳转到${documentType}#${documentId}的详情页面`);
+                        }}
+                        style={{ marginTop: 24 }}
+                      />
+                    </>
+                  ),
+                },
+                {
+                  key: 'recalc',
+                  label: '重算历史',
+                  children: (
+                    <Table<DemandRecalcHistoryItem>
+                      size="small"
+                      loading={recalcHistoryLoading}
+                      dataSource={recalcHistory}
+                      rowKey="id"
+                      columns={[
+                        { title: '重算时间', dataIndex: 'recalc_at', width: 180, render: (t) => t || '-' },
+                        { title: '触发类型', dataIndex: 'trigger_type', width: 100 },
+                        { title: '来源类型', dataIndex: 'source_type', width: 100 },
+                        { title: '来源ID', dataIndex: 'source_id', width: 90 },
+                        { title: '触发原因', dataIndex: 'trigger_reason', ellipsis: true },
+                        { title: '结果', dataIndex: 'result', width: 80 },
+                        { title: '备注', dataIndex: 'message', ellipsis: true },
+                      ]}
+                      pagination={false}
+                    />
+                  ),
+                },
+                {
+                  key: 'snapshots',
+                  label: '快照',
+                  children: (
+                    <Table<DemandSnapshotItem>
+                      size="small"
+                      loading={snapshotsLoading}
+                      dataSource={snapshots}
+                      rowKey="id"
+                      expandable={{
+                        expandedRowRender: (record) => (
+                          <div style={{ padding: 8 }}>
+                            {record.demand_snapshot && (
+                              <div style={{ marginBottom: 12 }}>
+                                <strong>需求快照：</strong>
+                                <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                                  {JSON.stringify(record.demand_snapshot, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                            {record.demand_items_snapshot && record.demand_items_snapshot.length > 0 && (
+                              <>
+                                <strong>需求明细快照：</strong>
+                                <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                                  {JSON.stringify(record.demand_items_snapshot, null, 2)}
+                                </pre>
+                              </>
+                            )}
+                            {!record.demand_snapshot && (!record.demand_items_snapshot || record.demand_items_snapshot.length === 0) && (
+                              <span style={{ color: '#999' }}>无快照内容</span>
+                            )}
+                          </div>
+                        ),
+                      }}
+                      columns={[
+                        { title: '快照时间', dataIndex: 'snapshot_at', width: 180, render: (t) => t || '-' },
+                        { title: '类型', dataIndex: 'snapshot_type', width: 100 },
+                        { title: '触发原因', dataIndex: 'trigger_reason', ellipsis: true },
+                      ]}
+                      pagination={false}
+                    />
+                  ),
+                },
+              ]}
             />
           </div>
         )}

@@ -14,6 +14,7 @@ import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';
 import { getPlatformSettingsPublic } from '../../services/platformSettings';
+import { useTranslation } from 'react-i18next';
 
 /**
  * 平台超级管理员登录表单数据
@@ -27,6 +28,7 @@ interface LoginFormData {
  * 平台超级管理员登录页面组件
  */
 export default function PlatformLoginPage() {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [form] = Form.useForm<LoginFormData>();
@@ -45,13 +47,13 @@ export default function PlatformLoginPage() {
   // 设置页面标题
   useEffect(() => {
     const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
-    document.title = `${platformName} - 平台登录`;
+    document.title = `${platformName} - ${t('pages.infra.login.pageTitle')}`;
     
     // 组件卸载时恢复默认标题
     return () => {
-      document.title = 'RiverEdge SaaS - 多组织管理框架';
+      document.title = t('pages.infra.login.defaultDocTitle');
     };
-  }, [platformSettings?.platform_name]);
+  }, [platformSettings?.platform_name, t]);
 
   // 登录请求
   const loginMutation = useMutation({
@@ -81,12 +83,12 @@ export default function PlatformLoginPage() {
         tenant_id: response.default_tenant_id, // 使用默认租户 ID
       });
 
-      messageApi.success('登录成功');
+      messageApi.success(t('pages.infra.login.success'));
       // 登录成功后跳转到平台运营看板
       navigate('/infra/operation', { replace: true });
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || '登录失败，请检查用户名和密码');
+      messageApi.error(error?.message || t('pages.infra.login.error'));
     },
   });
 
@@ -124,7 +126,7 @@ export default function PlatformLoginPage() {
           }}
           title={
             <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold' }}>
-              {platformSettings?.platform_name ? `${platformSettings.platform_name} 平台登录` : 'RiverEdge SaaS 平台登录'}
+              {platformSettings?.platform_name ? `${platformSettings.platform_name} ${t('pages.infra.login.pageTitle')}` : t('pages.infra.login.defaultTitle')}
             </div>
           }
         >
@@ -137,13 +139,13 @@ export default function PlatformLoginPage() {
             <Form.Item
               name="username"
               rules={[
-                { required: true, message: '请输入用户名' },
-                { min: 3, message: '用户名至少3个字符' },
+                { required: true, message: t('pages.infra.login.usernameRequired') },
+                { min: 3, message: t('pages.infra.login.usernameMin') },
               ]}
             >
               <Input
                 prefix={<UserOutlined />}
-                placeholder="用户名"
+                placeholder={t('pages.infra.login.usernamePlaceholder')}
                 autoComplete="username"
               />
             </Form.Item>
@@ -151,14 +153,14 @@ export default function PlatformLoginPage() {
             <Form.Item
               name="password"
               rules={[
-                { required: true, message: '请输入密码' },
-                { min: 8, message: '密码长度至少 8 个字符' },
-                { max: 128, message: '密码长度不能超过 128 个字符' },
+                { required: true, message: t('pages.infra.login.passwordRequired') },
+                { min: 8, message: t('pages.infra.login.passwordMin') },
+                { max: 128, message: t('pages.infra.login.passwordMax') },
               ]}
             >
               <Input.Password
                 prefix={<LockOutlined />}
-                placeholder="密码（8-128个字符）"
+                placeholder={t('pages.infra.login.passwordPlaceholder')}
                 autoComplete="current-password"
               />
             </Form.Item>
@@ -171,7 +173,7 @@ export default function PlatformLoginPage() {
                 block
                 style={{ height: '40px', fontSize: '16px' }}
               >
-                登录
+                {t('pages.infra.login.submit')}
               </Button>
             </Form.Item>
           </Form>

@@ -2,11 +2,14 @@
 审批实例管理服务模块
 
 提供审批实例的 CRUD 操作和审批操作功能。
+统一入口：start_approval、get_approval_status、execute_approval 供业务单据调用。
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
+from loguru import logger
+
 from core.models.approval_history import ApprovalHistory
 
 from tortoise.exceptions import IntegrityError
@@ -105,7 +108,238 @@ class ApprovalInstanceService:
             return approval_instance
         except IntegrityError:
             raise ValidationError("创建审批实例失败")
-    
+
+    # ========== 统一入口：供业务单据调用 ==========
+
+    @staticmethod
+    async def start_approval(
+        tenant_id: int,
+        user_id: int,
+        process_code: str,
+        entity_type: str,
+        entity_id: int,
+        entity_uuid: str,
+        title: str,
+        content: Optional[str] = None,
+    ) -> Optional[ApprovalInstance]:
+        """
+        按 process_code 启动审批流程（统一入口）
+
+        若流程不存在则返回 None，调用方走简单审核；若流程存在则创建实例并返回。
+
+        Args:
+            tenant_id: 租户ID
+            user_id: 提交人ID
+            process_code: 流程代码（如 demand_approval、purchase_order_approval、sales_order_approval）
+            entity_type: 实体类型
+            entity_id: 实体ID
+            entity_uuid: 实体UUID
+            title: 审批标题
+            content: 审批内容（可选）
+
+        Returns:
+            ApprovalInstance 或 None（流程不存在时）
+        """
+        process = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=process_code,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).first()
+
+        if not process:
+            return None
+
+        data = ApprovalInstanceCreate(
+            process_uuid=str(process.uuid),
+            title=title,
+            content=content or "",
+            data={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "entity_uuid": entity_uuid,
+            },
+        )
+        return await ApprovalInstanceService.create_approval_instance(
+            tenant_id=tenant_id, user_id=user_id, data=data
+        )
+
+    @staticmethod
+    async def get_approval_status(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+    ) -> Dict[str, Any]:
+        """
+        按 entity_type + entity_id 获取审批状态（统一入口）
+
+        Returns:
+            {
+                has_flow: bool,
+                status: str | None,  # pending | approved | rejected | cancelled
+                current_node: str | None,
+                tasks: list,
+                history: list,
+            }
+        """
+        # 查询 data 中包含 entity_type 和 entity_id 的实例（最近一条）
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).prefetch_related("process").order_by("-created_at").limit(100)
+
+        instance = None
+        for inst in instances:
+            d = inst.data or {}
+            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+                instance = inst
+                break
+
+        if not instance:
+            return {"has_flow": False, "status": None, "current_node": None, "tasks": [], "history": []}
+
+        tasks = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+        ).order_by("-created_at").all()
+
+        history = await ApprovalHistory.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+        ).order_by("action_at").all()
+
+        return {
+            "has_flow": True,
+            "status": instance.status,
+            "current_node": instance.current_node,
+            "current_approver_id": instance.current_approver_id,
+            "tasks": [
+                {
+                    "uuid": str(t.uuid),
+                    "node_id": t.node_id,
+                    "approver_id": t.approver_id,
+                    "status": t.status,
+                    "action_at": t.action_at.isoformat() if t.action_at else None,
+                    "comment": t.comment,
+                }
+                for t in tasks
+            ],
+            "history": [
+                {
+                    "action": h.action,
+                    "action_by": h.action_by,
+                    "action_at": h.action_at.isoformat() if h.action_at else None,
+                    "comment": h.comment,
+                }
+                for h in history
+            ],
+        }
+
+    @staticmethod
+    async def execute_approval(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        approver_id: int,
+        approved: bool,
+        comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        按 entity 执行审批（统一入口）
+
+        查找该 entity 的待办任务，调用 perform_task_action。
+
+        Returns:
+            {"success": bool, "flow_completed": bool, "flow_rejected": bool, "instance": ApprovalInstance}
+        """
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            status="pending",
+            deleted_at__isnull=True,
+        ).prefetch_related("process").order_by("-created_at").limit(100)
+
+        instance = None
+        for inst in instances:
+            d = inst.data or {}
+            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+                instance = inst
+                break
+
+        if not instance:
+            raise NotFoundError(f"实体 {entity_type}:{entity_id} 未找到待审批的流程实例")
+
+        task = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            approver_id=approver_id,
+            status="pending",
+        ).first()
+
+        if not task:
+            raise ValidationError("您没有该审批任务或任务已处理")
+
+        action = ApprovalInstanceAction(
+            action="approve" if approved else "reject",
+            comment=comment,
+        )
+        updated = await ApprovalInstanceService.perform_task_action(
+            tenant_id=tenant_id,
+            task_uuid=str(task.uuid),
+            user_id=approver_id,
+            action_data=action,
+        )
+
+        return {
+            "success": True,
+            "flow_completed": updated.status in ("approved", "rejected"),
+            "flow_rejected": updated.status == "rejected",
+            "instance": updated,
+        }
+
+    @staticmethod
+    async def cancel_approval(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        operator_id: int,
+    ) -> bool:
+        """
+        取消/撤回审批流程（统一入口）
+        若存在待审批的实例则取消，返回 True；否则返回 False。
+        """
+        instance = await ApprovalInstanceService.get_instance_by_entity(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        if not instance or instance.status != "pending":
+            return False
+        instance.status = "cancelled"
+        instance.completed_at = datetime.now()
+        instance.current_node = None
+        instance.current_approver_id = None
+        await instance.save()
+        logger.info(f"审批流程已取消: {entity_type}:{entity_id}")
+        return True
+
+    @staticmethod
+    async def get_instance_by_entity(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+    ) -> Optional[ApprovalInstance]:
+        """按 entity 查找审批实例（最近一条）"""
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).prefetch_related("process").order_by("-created_at").limit(100)
+
+        for inst in instances:
+            d = inst.data or {}
+            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+                return inst
+        return None
+
     @staticmethod
     async def get_approval_instance_by_uuid(
         tenant_id: int,
@@ -833,25 +1067,34 @@ class ApprovalInstanceService:
         approval_instance: ApprovalInstance
     ) -> None:
         """
-        处理审批完成后的业务回调
+        处理审批完成后的业务回调（统一处理 demand、purchase_order、sales_order）
         """
         try:
-            # 从审批数据中获取业务对象信息
             data = approval_instance.data or {}
             entity_type = data.get("entity_type")
+            entity_id = data.get("entity_id")
             entity_uuid = data.get("entity_uuid")
-            
-            if not entity_type or not entity_uuid:
+
+            if not entity_type:
                 return
 
+            # 获取最后审批人（从 ApprovalHistory）
+            last_history = (
+                await ApprovalHistory.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=approval_instance.id,
+                )
+                .order_by("-action_at")
+                .first()
+            )
+            approver_id = last_history.action_by if last_history else approval_instance.submitter_id
+
             if entity_type == "sales_order":
-                # 处理销售订单审批回调（销售订单存储于 SalesOrder 表）
                 from apps.kuaizhizao.models.sales_order import SalesOrder
                 order = await SalesOrder.filter(tenant_id=tenant_id, uuid=entity_uuid, deleted_at__isnull=True).first()
                 if order:
                     from apps.kuaizhizao.services.sales_order_service import SalesOrderService
                     service = SalesOrderService()
-                    approver_id = approval_instance.submitter_id
                     if approval_instance.status == "approved":
                         await service.approve_sales_order(
                             tenant_id=tenant_id,
@@ -865,10 +1108,48 @@ class ApprovalInstanceService:
                             approved_by=approver_id,
                             rejection_reason="审批驳回",
                         )
-                    from loguru import logger
-                    logger.info(f"销售订单 {order.id} 审批回调处理完成: {approval_instance.status}")
-                    
+                    logger.info(f"销售订单 {order.id} 审批回调完成: {approval_instance.status}")
+
+            elif entity_type == "demand":
+                from apps.kuaizhizao.models.demand import Demand
+                from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+                from infra.models.user import User
+                demand = await Demand.get_or_none(tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True)
+                if demand:
+                    approver = await User.get_or_none(id=approver_id)
+                    approver_name = approver.name if approver else f"用户{approver_id}"
+                    remark = "审批通过" if approval_instance.status == "approved" else "审批驳回"
+                    await Demand.filter(tenant_id=tenant_id, id=entity_id).update(
+                        reviewer_id=approver_id,
+                        reviewer_name=approver_name,
+                        review_time=datetime.now(),
+                        review_status=ReviewStatus.APPROVED.value if approval_instance.status == "approved" else ReviewStatus.REJECTED.value,
+                        review_remarks=remark,
+                        status=DemandStatus.AUDITED.value if approval_instance.status == "approved" else DemandStatus.REJECTED.value,
+                        updated_by=approver_id,
+                    )
+                    logger.info(f"需求 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            elif entity_type == "purchase_order":
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+                from apps.kuaizhizao.constants import ReviewStatus, DocumentStatus
+                from infra.models.user import User
+                order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True)
+                if order:
+                    approver = await User.get_or_none(id=approver_id)
+                    approver_name = approver.name if approver else f"用户{approver_id}"
+                    remark = "审批通过" if approval_instance.status == "approved" else "审批驳回"
+                    await PurchaseOrder.filter(tenant_id=tenant_id, id=entity_id).update(
+                        reviewer_id=approver_id,
+                        reviewer_name=approver_name,
+                        review_time=datetime.now(),
+                        review_status=ReviewStatus.APPROVED.value if approval_instance.status == "approved" else ReviewStatus.REJECTED.value,
+                        review_remarks=remark,
+                        status=DocumentStatus.AUDITED.value if approval_instance.status == "approved" else DocumentStatus.REJECTED.value,
+                        updated_by=approver_id,
+                    )
+                    logger.info(f"采购订单 {entity_id} 审批回调完成: {approval_instance.status}")
+
         except Exception as e:
-            from loguru import logger
             logger.error(f"处理审批完成回调失败: {str(e)}")
 

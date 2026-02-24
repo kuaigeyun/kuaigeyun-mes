@@ -5,28 +5,17 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-
-// 安全处理 options 的工具函数
-const safeOptions = (options: any): any[] => {
-  if (Array.isArray(options)) {
-    return options;
-  }
-  console.warn('ProFormSelect options 不是数组:', options);
-  return [];
-};
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProDescriptions } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
 import { workshopApi, plantApi } from '../../../services/factory';
-import type { Workshop, WorkshopCreate, WorkshopUpdate, Plant } from '../../../types/factory';
+import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../../../services/customField';
+import { getCustomFieldsByTable, getFieldValues, CustomField } from '../../../../../services/customField';
 
 /**
  * 车间管理列表页面组件
@@ -35,31 +24,18 @@ const WorkshopsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
     const actionRef = useRef<ActionType>(null);
-    const formRef = useRef<ProFormInstance>();
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-    // Drawer 相关状态（详情查看）
     const [drawerVisible, setDrawerVisible] = useState(false);
-    const [currentWorkshopUuid, setCurrentWorkshopUuid] = useState<string | null>(null);
     const [workshopDetail, setWorkshopDetail] = useState<Workshop | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
-    // Modal 相关状态（创建/编辑车间）
     const [modalVisible, setModalVisible] = useState(false);
-    const [isEdit, setIsEdit] = useState(false);
-    const [formLoading, setFormLoading] = useState(false);
+    const [editUuid, setEditUuid] = useState<string | null>(null);
 
-    // 自定义字段相关状态
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
-
-    // 厂区列表状态
     const [plants, setPlants] = useState<Plant[]>([]);
-    
-    // 保存预览编码，用于在提交时判断是否需要正式生成
-    const [previewCode, setPreviewCode] = useState<string | null>(null);
-    // 当前创建流程有效的规则代码（来自后端或本地配置），用于提交时正式生成
-    const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
 
   /**
    * 加载自定义字段
@@ -110,90 +86,20 @@ const WorkshopsPage: React.FC = () => {
     }
   }, [customFields.length]);
 
-  /**
-   * 处理新建车间
-   */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setCurrentWorkshopUuid(null);
+  const handleCreate = () => {
+    setEditUuid(null);
     setModalVisible(true);
-    setCustomFieldValues({});
-    formRef.current?.resetFields();
-    
-    // 优先从后端获取页面配置（含数据库中的规则关联），否则使用本地配置
-    let ruleCode = getPageRuleCode('master-data-factory-workshop');
-    let autoGenerate = isAutoGenerateEnabled('master-data-factory-workshop');
-    try {
-      const pageConfig = await getCodeRulePageConfig('master-data-factory-workshop');
-      if (pageConfig?.ruleCode) {
-        ruleCode = pageConfig.ruleCode;
-        autoGenerate = !!pageConfig.autoGenerate;
-      }
-    } catch {
-      // 忽略接口错误，使用本地配置
-    }
-
-    // 检查是否启用自动编码
-    if (autoGenerate && ruleCode) {
-      setEffectiveRuleCode(ruleCode);
-      try {
-        // 使用测试生成（不更新序号），仅用于预览
-        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-        const previewCodeValue = codeResponse.code;
-        setPreviewCode(previewCodeValue);
-        formRef.current?.setFieldsValue({
-          code: previewCodeValue,
-          isActive: true,
-        });
-      } catch (error: any) {
-        console.warn('自动生成编码失败:', error);
-        setPreviewCode(null);
-        formRef.current?.setFieldsValue({
-          isActive: true,
-        });
-      }
-    } else {
-      setPreviewCode(null);
-      setEffectiveRuleCode(null);
-      formRef.current?.setFieldsValue({
-        isActive: true,
-      });
-    }
   };
 
-  /**
-   * 处理编辑车间
-   */
-  const handleEdit = async (record: Workshop) => {
-    try {
-      setIsEdit(true);
-      setCurrentWorkshopUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取车间详情
-      const detail = await workshopApi.get(record.uuid);
-      formRef.current?.setFieldsValue({
-        code: detail.code,
-        name: detail.name,
-        description: detail.description,
-        plantId: detail.plantId,
-        isActive: detail.isActive ?? (detail as any).is_active ?? true,
-      });
-      
-      // 加载自定义字段值
-      try {
-        const fieldValues = await getFieldValues('master_data_factory_workshops', detail.id);
-        setCustomFieldValues(fieldValues);
-        // 将自定义字段值设置到表单
-        Object.keys(fieldValues).forEach(fieldCode => {
-          formRef.current?.setFieldValue(`custom_${fieldCode}`, fieldValues[fieldCode]);
-        });
-      } catch (error) {
-        console.error('加载自定义字段值失败:', error);
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || '获取车间详情失败');
-    }
+  const handleEdit = (record: Workshop) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
   };
 
   /**
@@ -201,7 +107,6 @@ const WorkshopsPage: React.FC = () => {
    */
   const handleOpenDetail = async (record: Workshop) => {
     try {
-      setCurrentWorkshopUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
       
@@ -228,7 +133,6 @@ const WorkshopsPage: React.FC = () => {
    */
   const handleCloseDetail = () => {
     setDrawerVisible(false);
-    setCurrentWorkshopUuid(null);
     setWorkshopDetail(null);
   };
 
@@ -271,209 +175,6 @@ const WorkshopsPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '批量删除失败');
     }
-  };
-
-  /**
-   * 处理提交表单（创建/更新车间）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-      
-      // 分离自定义字段值和标准字段值
-      const customFieldData: Record<string, any> = {};
-      const standardValues: any = {};
-      
-      Object.keys(values).forEach(key => {
-        if (key.startsWith('custom_')) {
-          const fieldCode = key.replace('custom_', '');
-          customFieldData[fieldCode] = values[key];
-        } else {
-          standardValues[key] = values[key];
-        }
-      });
-      
-      let workshopId: number;
-      
-      if (isEdit && currentWorkshopUuid) {
-        // 更新车间
-        const updated = await workshopApi.update(currentWorkshopUuid, standardValues as WorkshopUpdate);
-        workshopId = updated.id;
-        messageApi.success('更新成功');
-      } else {
-        // 创建车间
-        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
-        const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('master-data-factory-workshop');
-        if (!isEdit && ruleCodeToUse && (isAutoGenerateEnabled('master-data-factory-workshop') || effectiveRuleCode)) {
-          const currentCode = standardValues.code;
-          
-          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
-          if (currentCode === previewCode || !currentCode) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-              standardValues.code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成编码失败，使用预览编码:', error);
-              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
-            }
-          }
-        }
-        
-        const created = await workshopApi.create(standardValues as WorkshopCreate);
-        workshopId = created.id;
-        messageApi.success('创建成功');
-      }
-      
-      // 保存自定义字段值
-      if (Object.keys(customFieldData).length > 0) {
-        try {
-          const fieldValues = Object.keys(customFieldData).map(fieldCode => {
-            const field = customFields.find(f => f.code === fieldCode);
-            return field ? {
-              field_uuid: field.uuid,
-              value: customFieldData[fieldCode],
-            } : null;
-          }).filter(Boolean);
-          
-          if (fieldValues.length > 0) {
-            await batchSetFieldValues({
-              record_id: workshopId,
-              record_table: 'master_data_factory_workshops',
-              values: fieldValues as any[],
-            });
-          }
-        } catch (error) {
-          console.error('保存自定义字段值失败:', error);
-          // 不阻止表单提交，只记录错误
-        }
-      }
-      
-      setModalVisible(false);
-      setPreviewCode(null);
-      setEffectiveRuleCode(null);
-      formRef.current?.resetFields();
-      setCustomFieldValues({});
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
-    } finally {
-      setFormLoading(false);
-    }
-  };
-  
-  /**
-   * 渲染自定义字段表单项
-   */
-  const renderCustomFields = () => {
-    if (customFields.length === 0) return null;
-    
-    return customFields
-      .filter(field => field.is_active)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(field => {
-        const fieldName = `custom_${field.code}`;
-        const label = field.label || field.name;
-        const placeholder = field.placeholder || `请输入${label}`;
-        
-        switch (field.field_type) {
-          case 'text':
-            return (
-              <ProFormText
-                key={field.uuid}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 12 }}
-                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
-                fieldProps={{
-                  maxLength: field.config?.maxLength,
-                }}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-          case 'number':
-            return (
-              <ProFormDigit
-                key={field.uuid}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 12 }}
-                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
-                fieldProps={{
-                  min: field.config?.min,
-                  max: field.config?.max,
-                }}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-          case 'date':
-            return (
-              <ProFormDatePicker
-                key={field.uuid}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 12 }}
-                rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-                fieldProps={{
-                  format: field.config?.format || 'YYYY-MM-DD',
-                }}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-          case 'select':
-            return (
-              <SafeProFormSelect
-                key={`${field.uuid}-${JSON.stringify(safeOptions(field.config?.options))}`}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 12 }}
-                rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-                options={safeOptions(field.config?.options)}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-          case 'textarea':
-            return (
-              <ProFormTextArea
-                key={field.uuid}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 24 }}
-                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
-                fieldProps={{
-                  rows: field.config?.rows || 4,
-                }}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-          default:
-            return (
-              <ProFormText
-                key={field.uuid}
-                name={fieldName}
-                label={label}
-                placeholder={placeholder}
-                colProps={{ span: 12 }}
-                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
-                initialValue={customFieldValues[field.code] || field.config?.default}
-              />
-            );
-        }
-      });
-  };
-
-  /**
-   * 处理关闭 Modal
-   */
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setPreviewCode(null);
-    setEffectiveRuleCode(null);
-    formRef.current?.resetFields();
   };
 
   /**
@@ -1269,79 +970,12 @@ const WorkshopsPage: React.FC = () => {
         customContent={renderDetailContent()}
       />
 
-      {/* 创建/编辑车间 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑车间' : '新建车间'}
+      <WorkshopFormModal
         open={modalVisible}
-        onClose={handleCloseModal}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        initialValues={{
-          isActive: true,
-        }}
-      >
-        <ProFormText
-          name="code"
-          label="车间编码"
-          placeholder="请输入车间编码"
-          rules={[
-            { required: true, message: '请输入车间编码' },
-            { max: 50, message: '车间编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            disabled: isEdit, // 编辑时不允许修改编码
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="车间名称"
-          placeholder="请输入车间名称"
-          rules={[
-            { required: true, message: '请输入车间名称' },
-            { max: 200, message: '车间名称不能超过200个字符' },
-          ]}
-        />
-        <SafeProFormSelect
-          name="plantId"
-          label="所属厂区"
-          placeholder="请选择所属厂区（可选）"
-          options={plants.map(plant => ({
-            label: `${plant.code} - ${plant.name}`,
-            value: plant.id,
-          }))}
-          allowClear
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述信息"
-          fieldProps={{
-            rows: 4,
-            maxLength: 1000,
-          }}
-        />
-          
-          {/* 自定义字段分割线 */}
-          {customFields.length > 0 && (
-            <>
-              <div style={{ gridColumn: 'span 24', marginTop: 16, marginBottom: 8, width: '100%' }}>
-                <Divider style={{ margin: 0, fontSize: 12 }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12, padding: '0 8px' }}>
-                    自定义字段
-                  </Typography.Text>
-                </Divider>
-              </div>
-              {renderCustomFields()}
-            </>
-          )}
-      </FormModalTemplate>
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
     </>
     );
 };

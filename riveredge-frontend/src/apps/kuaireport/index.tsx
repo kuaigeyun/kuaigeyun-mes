@@ -1,6 +1,5 @@
 /**
  * 报表与看板 APP 入口文件（重构版）
- * 弃用 Univer / JimuReport，改用自研报表中心
  */
 
 import React from 'react';

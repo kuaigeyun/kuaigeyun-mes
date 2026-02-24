@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Card,
   Row,
@@ -175,52 +176,32 @@ interface QuickActionItem {
   sort_order: number;
 }
 
-/**
- * 工作台系统操作小 TIPS（随机展示一条）
- */
-const WORKPLACE_TIPS = [
-  '物料管理中配置好「物料来源」和默认工艺路线/供应商，需求计算与工单生成会更顺畅。',
-  '需求计算完成后可一键生成工单与采购单，建议先做「物料来源验证」再生成。',
-  '工单报工可在「生产执行-报工」快速录入，支持扫码与批量报工。',
-  '消息通知会推送物料变更、审批等，请留意右上角铃铛图标。',
-  '工作台日期切换可查看不同时间段（今天/近7天/近30天）的工单与产量统计。',
-  '左侧快捷入口可拖拽排序，把常用功能放在前面更方便。',
-  '销售订单审核通过后，在需求管理中创建需求并执行需求计算，再生成工单与采购。',
-  '工艺路线与 BOM 配置完整后，工单排产与用料计算会更准确。',
-  '自定义字段在「系统-自定义字段」中配置，可扩展各单据的显示与录入项。',
-  '多单位物料在物料管理中维护换算关系，下单与库存会按单位自动换算。',
-  '物料变更后会触发下游提示，可在「消息通知」中查看影响范围与建议操作。',
-  '需求计算按需求来源自动选择计算模式（按预测/按订单），创建时系统会按需求类型推荐。',
+/** 工作台 TIPS 的 i18n 键（共 12 条，随机展示一条） */
+const WORKPLACE_TIP_KEYS = [
+  'pages.dashboard.tip1', 'pages.dashboard.tip2', 'pages.dashboard.tip3', 'pages.dashboard.tip4',
+  'pages.dashboard.tip5', 'pages.dashboard.tip6', 'pages.dashboard.tip7', 'pages.dashboard.tip8',
+  'pages.dashboard.tip9', 'pages.dashboard.tip10', 'pages.dashboard.tip11', 'pages.dashboard.tip12',
 ];
 
 /**
- * 获取问候语（精细时间段划分，按北京时间）
+ * 获取问候语 i18n 键（精细时间段划分，按北京时间）
  */
-const getGreeting = () => {
+const getGreetingKey = (): string => {
   const hour = new Date().getHours();
-  
-  // 更精细的时间段划分（按北京时间）
-  if (hour >= 0 && hour < 6) {
-    return '凌晨好';
-  } else if (hour >= 6 && hour < 9) {
-    return '早上好';
-  } else if (hour >= 9 && hour < 12) {
-    return '上午好';
-  } else if (hour >= 12 && hour < 13) {
-    return '中午好';
-  } else if (hour >= 13 && hour < 17) {
-    return '下午好';
-  } else if (hour >= 17 && hour < 18) {
-    return '傍晚好';
-  } else {
-    return '晚上好';
-  }
+  if (hour >= 0 && hour < 6) return 'pages.dashboard.greetingEarlyMorning';
+  if (hour >= 6 && hour < 9) return 'pages.dashboard.greetingMorning';
+  if (hour >= 9 && hour < 12) return 'pages.dashboard.greetingLateMorning';
+  if (hour >= 12 && hour < 13) return 'pages.dashboard.greetingNoon';
+  if (hour >= 13 && hour < 17) return 'pages.dashboard.greetingAfternoon';
+  if (hour >= 17 && hour < 18) return 'pages.dashboard.greetingEvening';
+  return 'pages.dashboard.greetingNight';
 };
 
 /**
  * 工作台页面组件
  */
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -237,21 +218,21 @@ export default function DashboardPage() {
 
   // 工作台小 TIPS：每 10 秒随机换一条（避免与当前相同）
   const [tipIndex, setTipIndex] = useState(() =>
-    Math.floor(Math.random() * WORKPLACE_TIPS.length),
+    Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length),
   );
   useEffect(() => {
     const timer = setInterval(() => {
       setTipIndex((prev) => {
-        let next = Math.floor(Math.random() * WORKPLACE_TIPS.length);
-        if (WORKPLACE_TIPS.length > 1) {
-          while (next === prev) next = Math.floor(Math.random() * WORKPLACE_TIPS.length);
+        let next = Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length);
+        if (WORKPLACE_TIP_KEYS.length > 1) {
+          while (next === prev) next = Math.floor(Math.random() * WORKPLACE_TIP_KEYS.length);
         }
         return next;
       });
     }, 10000);
     return () => clearInterval(timer);
   }, []);
-  const currentTip = WORKPLACE_TIPS[tipIndex];
+  const currentTip = t(WORKPLACE_TIP_KEYS[tipIndex]);
   
   // 实时更新时间
   useEffect(() => {
@@ -263,7 +244,7 @@ export default function DashboardPage() {
 
   // 获取用户信息
   const userInfo = useMemo(() => getUserInfo(), []);
-  const userName = currentUser?.full_name || currentUser?.username || userInfo?.full_name || userInfo?.username || '用户';
+  const userName = currentUser?.full_name || currentUser?.username || userInfo?.full_name || userInfo?.username || t('pages.dashboard.userFallback');
 
   const currentUsername = currentUser?.username || userInfo?.username;
   const currentUserUuid = (currentUser as any)?.uuid || userInfo?.uuid;
@@ -469,12 +450,12 @@ export default function DashboardPage() {
       await updatePreferences(prefs);
     },
     onSuccess: () => {
-      message.success('快捷操作配置已保存');
+      message.success(t('pages.dashboard.quickActionsSaved'));
       refetchUserPreference();
       setConfigModalVisible(false);
     },
     onError: (error: any) => {
-      message.error(`保存失败: ${error.message || '未知错误'}`);
+      message.error(t('pages.dashboard.saveFailed', { message: error.message || t('pages.dashboard.unknownError') }));
     },
   });
 
@@ -498,19 +479,19 @@ export default function DashboardPage() {
       // 如果没有配置，返回默认快捷操作
       return [
         {
-          title: '用户管理',
+          title: t('menu.system.users'),
           icon: <UserOutlined />,
           onClick: () => navigate('/system/users'),
           type: 'default' as const,
         },
         {
-          title: '角色管理',
+          title: t('menu.system.roles'),
           icon: <TeamOutlined />,
           onClick: () => navigate('/system/roles'),
           type: 'default' as const,
         },
         {
-          title: '部门管理',
+          title: t('menu.system.departments'),
           icon: <ShopOutlined />,
           onClick: () => navigate('/system/departments'),
           type: 'default' as const,
@@ -535,7 +516,7 @@ export default function DashboardPage() {
         };
       })
       .filter((action): action is QuickAction => action !== null);
-  }, [userPreference, menuTree, navigate]);
+  }, [userPreference, menuTree, navigate, t]);
 
   // 打开配置模态框
   const handleOpenConfig = () => {
@@ -573,7 +554,7 @@ export default function DashboardPage() {
   const handleTodoMutation = useMutation({
     mutationFn: ({ todoId, action }: { todoId: string; action: string }) => handleTodo(todoId, action),
     onSuccess: (data: any) => {
-      message.success(data.message || '处理成功');
+      message.success(data.message || t('pages.dashboard.handleSuccess'));
       // 如果有跳转链接，自动跳转
       if (data.redirect) {
         navigate(data.redirect);
@@ -582,7 +563,7 @@ export default function DashboardPage() {
       }
     },
     onError: (error: any) => {
-      message.error(`处理失败: ${error.message || '未知错误'}`);
+      message.error(t('pages.dashboard.handleFailed', { message: error.message || t('pages.dashboard.unknownError') }));
     },
   });
 
@@ -598,12 +579,12 @@ export default function DashboardPage() {
     low: 'default',
   };
 
-  // 优先级文本映射
-  const priorityTextMap: Record<string, string> = {
-    high: '高',
-    medium: '中',
-    low: '低',
-  };
+  // 优先级文本映射（i18n）
+  const priorityTextMap: Record<string, string> = useMemo(() => ({
+    high: t('pages.dashboard.priorityHigh'),
+    medium: t('pages.dashboard.priorityMedium'),
+    low: t('pages.dashboard.priorityLow'),
+  }), [t]);
 
   // 树形数据
   const treeData = useMemo(() => {
@@ -666,11 +647,11 @@ export default function DashboardPage() {
                     color: '#ffffff',
                   }}
                 >
-                  {getGreeting()}，{userName}
+                  {t(getGreetingKey())}，{userName}
                 </Title>
                 <Space size="middle" wrap>
                   <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14 }}>
-                    {currentTime.format('YYYY年MM月DD日 dddd')}
+                    {currentTime.format(t('pages.dashboard.dateFormatFull'))}
                   </Text>
                   <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14, fontWeight: 500 }}>
                     {currentTime.format('HH:mm:ss')}
@@ -747,13 +728,13 @@ export default function DashboardPage() {
                   }
                 }}
                 options={[
-                  { label: '今天', value: 'today' },
-                  { label: '昨天', value: 'yesterday' },
-                  { label: '本周', value: 'thisWeek' },
-                  { label: '本月', value: 'thisMonth' },
-                  { label: '近7天', value: 'last7days' },
-                  { label: '近30天', value: 'last30days' },
-                  { label: '自定义', value: 'custom' },
+                  { label: t('pages.dashboard.timeToday'), value: 'today' },
+                  { label: t('pages.dashboard.timeYesterday'), value: 'yesterday' },
+                  { label: t('pages.dashboard.timeThisWeek'), value: 'thisWeek' },
+                  { label: t('pages.dashboard.timeThisMonth'), value: 'thisMonth' },
+                  { label: t('pages.dashboard.timeLast7Days'), value: 'last7days' },
+                  { label: t('pages.dashboard.timeLast30Days'), value: 'last30days' },
+                  { label: t('pages.dashboard.timeCustom'), value: 'custom' },
                 ]}
               />
               {timeRange === 'custom' && (
@@ -808,11 +789,11 @@ export default function DashboardPage() {
             />
             <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
-                工单总数
+                {t('pages.dashboard.statWorkOrderTotal')}
               </Text>
               <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
                 {statistics?.production?.total || 0}
-                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>单</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>{t('pages.dashboard.unitOrder')}</Text>
               </Title>
             </Space>
           </Card>
@@ -851,11 +832,11 @@ export default function DashboardPage() {
             />
             <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
-                进行中工单
+                {t('pages.dashboard.statWorkOrderInProgress')}
               </Text>
               <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
                 {statistics?.production?.in_progress || 0}
-                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>单</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>{t('pages.dashboard.unitOrder')}</Text>
               </Title>
             </Space>
           </Card>
@@ -894,7 +875,7 @@ export default function DashboardPage() {
             />
             <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
-                工单完成率
+                {t('pages.dashboard.statWorkOrderCompletion')}
               </Text>
               <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
                 {statistics?.production?.completion_rate || 0}%
@@ -936,11 +917,11 @@ export default function DashboardPage() {
             />
             <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
-                完工数量
+                {t('pages.dashboard.statCompletedQuantity')}
               </Text>
               <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
                 {statistics?.production?.completed_quantity || 0}
-                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>件</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>{t('pages.dashboard.unitPiece')}</Text>
               </Title>
             </Space>
           </Card>
@@ -979,7 +960,7 @@ export default function DashboardPage() {
             />
             <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
-                产能达成率
+                {t('pages.dashboard.statCapacityRate')}
               </Text>
               <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
                 {statistics?.production?.capacity_achievement_rate || 0}%
@@ -1013,7 +994,7 @@ export default function DashboardPage() {
             title={
               <Space>
                 <AppstoreOutlined />
-                <span>快捷入口</span>
+                <span>{t('pages.dashboard.quickEntry')}</span>
               </Space>
             }
             items={useMemo(() => {
@@ -1039,15 +1020,15 @@ export default function DashboardPage() {
               
               // 默认快捷入口
               const defaultEntries: QuickEntryItem[] = [
-                { menu_uuid: 'work-orders', menu_name: '工单管理', menu_path: '/apps/kuaizhizao/production-execution/work-orders', menu_icon: <FileTextOutlined />, sort_order: 0 },
-                { menu_uuid: 'inventory', menu_name: '库存管理', menu_path: '/apps/kuaizhizao/warehouse-management/inventory', menu_icon: <DatabaseOutlined />, sort_order: 1 },
-                { menu_uuid: 'quality', menu_name: '质量管理', menu_path: '/apps/kuaizhizao/quality-management', menu_icon: <SafetyOutlined />, sort_order: 2 },
-                { menu_uuid: 'equipment', menu_name: '设备管理', menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 3 },
-                { menu_uuid: 'plan', menu_name: '计划管理', menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 4 },
+                { menu_uuid: 'work-orders', menu_name: t('pages.dashboard.defaultWorkOrders'), menu_path: '/apps/kuaizhizao/production-execution/work-orders', menu_icon: <FileTextOutlined />, sort_order: 0 },
+                { menu_uuid: 'inventory', menu_name: t('pages.dashboard.defaultInventory'), menu_path: '/apps/kuaizhizao/warehouse-management/inventory', menu_icon: <DatabaseOutlined />, sort_order: 1 },
+                { menu_uuid: 'quality', menu_name: t('pages.dashboard.defaultQuality'), menu_path: '/apps/kuaizhizao/quality-management', menu_icon: <SafetyOutlined />, sort_order: 2 },
+                { menu_uuid: 'equipment', menu_name: t('pages.dashboard.defaultEquipment'), menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 3 },
+                { menu_uuid: 'plan', menu_name: t('pages.dashboard.defaultPlan'), menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 4 },
               ];
               
               return defaultEntries;
-            }, [userPreference, menuTree])}
+            }, [userPreference, menuTree, t])}
             menuTree={useMemo(() => {
               if (!menuTree) return [];
               return convertMenuTreeToTreeData(menuTree);
@@ -1071,7 +1052,7 @@ export default function DashboardPage() {
             title={
               <Space>
                 <PlayCircleOutlined />
-                <span>实时播报</span>
+                <span>{t('pages.dashboard.realtimeReport')}</span>
               </Space>
             }
             loading={productionBroadcastLoading}
@@ -1083,7 +1064,7 @@ export default function DashboardPage() {
                   navigate('/apps/kuaizhizao/production-execution/reporting');
                 }}
               >
-                查看更多 <RightOutlined />
+                {t('pages.dashboard.viewMore')} <RightOutlined />
               </Button>
             }
             style={{ width: '100%' }}
@@ -1123,18 +1104,18 @@ export default function DashboardPage() {
                       </Text>
                     </div>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                      工单号：{item.work_order_no}
+                      {t('pages.dashboard.labelWorkOrderNo')}：{item.work_order_no}
                     </Text>
                     <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                      产品：{item.product_code} | {item.product_name}
+                      {t('pages.dashboard.labelProduct')}：{item.product_code} | {item.product_name}
                     </Text>
                     <Space>
                       <Text type="success" style={{ fontSize: 12 }}>
-                        合格 {item.qualified_quantity.toFixed(0)}
+                        {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
                       </Text>
                       {item.unqualified_quantity > 0 && (
                         <Text type="danger" style={{ fontSize: 12 }}>
-                          不合格 {item.unqualified_quantity.toFixed(0)}
+                          {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
                         </Text>
                       )}
                     </Space>
@@ -1143,7 +1124,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <Empty 
-                description="暂无生产播报" 
+                description={t('pages.dashboard.emptyBroadcast')} 
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 style={{ padding: '40px 0' }}
               />
@@ -1157,7 +1138,7 @@ export default function DashboardPage() {
             title={
               <Space>
                 <CheckCircleOutlined />
-                <span>待办事项</span>
+                <span>{t('pages.dashboard.todoList')}</span>
                 {todos && todos.length > 0 && (
                   <Badge count={todos.length} />
                 )}
@@ -1172,7 +1153,7 @@ export default function DashboardPage() {
                   navigate('/apps/kuaizhizao/production-execution/work-orders');
                 }}
               >
-                查看全部 <RightOutlined />
+                {t('pages.dashboard.viewAll')} <RightOutlined />
               </Button>
             }
             style={{ width: '100%' }}
@@ -1192,7 +1173,7 @@ export default function DashboardPage() {
               items={[
                 {
                   key: 'all',
-                  label: `全部 (${todos.length})`,
+                  label: `${t('pages.dashboard.tabAll')} (${todos.length})`,
                   children: (
                     <div style={{ flex: 1, overflow: 'auto', maxHeight: '400px' }}>
                       {todos.length > 0 ? (
@@ -1227,7 +1208,7 @@ export default function DashboardPage() {
                                 <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <Text strong={item.priority === 'high'}>{item.title}</Text>
                                   <Tag color={priorityColorMap[item.priority]}>
-                                    {priorityTextMap[item.priority]}优先级
+                                    {priorityTextMap[item.priority]}{t('pages.dashboard.priorityLabel')}
                                   </Tag>
                                 </div>
                                 {item.description && (
@@ -1237,7 +1218,7 @@ export default function DashboardPage() {
                                 )}
                                 {item.due_date && (
                                   <Text type="secondary" style={{ fontSize: '12px' }}>
-                                    截止日期：{dayjs(item.due_date).format('YYYY-MM-DD')}
+                                    {t('pages.dashboard.dueDate')}：{dayjs(item.due_date).format('YYYY-MM-DD')}
                                   </Text>
                                 )}
                                 <div style={{ marginTop: 8 }}>
@@ -1249,7 +1230,7 @@ export default function DashboardPage() {
                                       handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
                                     }}
                                   >
-                                    处理
+                                    {t('pages.dashboard.handle')}
                                   </Button>
                                 </div>
                               </div>
@@ -1257,14 +1238,14 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       ) : (
-                        <Empty description="暂无待办事项" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        <Empty description={t('pages.dashboard.emptyTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                       )}
                     </div>
                   ),
                 },
                 {
                   key: 'work_order',
-                  label: `工单 (${todos.filter(t => t.type === 'work_order').length})`,
+                  label: `${t('pages.dashboard.tabWorkOrder')} (${todos.filter(t => t.type === 'work_order').length})`,
                   children: (
                     <div>
                       {todos.filter(t => t.type === 'work_order').length > 0 ? (
@@ -1284,14 +1265,14 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       ) : (
-                        <Empty description="暂无工单待办" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        <Empty description={t('pages.dashboard.emptyWorkOrderTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                       )}
                     </div>
                   ),
                 },
                 {
                   key: 'exception',
-                  label: `异常 (${todos.filter(t => t.type === 'exception').length})`,
+                  label: `${t('pages.dashboard.tabException')} (${todos.filter(t => t.type === 'exception').length})`,
                   children: (
                     <div>
                       {todos.filter(t => t.type === 'exception').length > 0 ? (
@@ -1311,7 +1292,7 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       ) : (
-                        <Empty description="暂无异常待办" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        <Empty description={t('pages.dashboard.emptyExceptionTodo')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                       )}
                     </div>
                   ),
@@ -1327,7 +1308,7 @@ export default function DashboardPage() {
             title={
               <Space>
                 <BellOutlined />
-                <span>消息通知</span>
+                <span>{t('pages.dashboard.messageNotify')}</span>
                 {unreadCount > 0 && (
                   <Badge count={unreadCount} />
                 )}
@@ -1342,7 +1323,7 @@ export default function DashboardPage() {
                   navigate('/personal/messages');
                 }}
               >
-                查看全部 <RightOutlined />
+                {t('pages.dashboard.viewAll')} <RightOutlined />
               </Button>
             }
             style={{ width: '100%' }}
@@ -1396,7 +1377,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <Empty description="暂无消息" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description={t('pages.dashboard.emptyMessage')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
           </Card>
         </Col>
@@ -1407,18 +1388,18 @@ export default function DashboardPage() {
 
       {/* 快捷操作配置模态框 */}
       <Modal
-        title="配置快捷操作"
+        title={t('pages.dashboard.configQuickActions')}
         open={configModalVisible}
         onOk={handleSaveQuickActions}
         onCancel={() => setConfigModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
+        okText={t('pages.dashboard.save')}
+        cancelText={t('pages.dashboard.cancel')}
         width={600}
         confirmLoading={updatePreferenceMutation.isPending}
       >
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            请选择要添加到快捷操作的菜单项。只能选择有路径的菜单项。
+            {t('pages.dashboard.configQuickActionsHint')}
           </Text>
         </div>
         <Tree

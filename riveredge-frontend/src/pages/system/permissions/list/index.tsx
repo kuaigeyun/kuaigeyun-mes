@@ -1,11 +1,13 @@
 /**
  * 权限管理列表页面
- * 
+ *
  * 用于系统管理员查看组织内的权限列表。
  * 权限主要用于分配给角色，通常由系统初始化创建。
+ * 国际化
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, message } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
@@ -17,19 +19,14 @@ import {
   Permission,
 } from '../../../../services/permission';
 
-/**
- * 权限管理列表页面组件
- */
 const PermissionListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Permission | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  /**
-   * 处理查看详情
-   */
   const handleView = async (record: Permission) => {
     try {
       setDetailLoading(true);
@@ -37,96 +34,90 @@ const PermissionListPage: React.FC = () => {
       const detail = await getPermissionByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取权限详情失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  // 新建权限
   const handleCreate = () => {
-    message.info('新建权限功能开发中...');
+    message.info(t('field.permission.createDeveloping'));
   };
 
-  // 导入处理函数
   const handleImport = async (data: any[][]) => {
-    message.info('导入功能开发中...');
+    message.info(t('pages.system.importDeveloping'));
     console.log('导入数据:', data);
   };
 
-  // 导出处理函数
   const handleExport = (
     type: 'selected' | 'currentPage' | 'all',
     selectedRowKeys?: React.Key[],
     currentPageData?: Permission[]
   ) => {
-    message.info('导出功能开发中...');
+    message.info(t('pages.system.exportDeveloping'));
     console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
   };
 
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<Permission>[] = [
     {
-      title: '权限名称',
+      title: t('field.permission.name'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '权限代码',
+      title: t('field.permission.code'),
       dataIndex: 'code',
       width: 200,
     },
     {
-      title: '资源',
+      title: t('field.permission.resource'),
       dataIndex: 'resource',
       width: 150,
     },
     {
-      title: '操作',
+      title: t('field.permission.action'),
       dataIndex: 'action',
       width: 150,
     },
     {
-      title: '权限类型',
+      title: t('field.permission.type'),
       dataIndex: 'permission_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        function: { text: '功能权限', status: 'Success' },
-        data: { text: '数据权限', status: 'Processing' },
-        field: { text: '字段权限', status: 'Warning' },
+        function: { text: t('field.permission.typeFunction'), status: 'Success' },
+        data: { text: t('field.permission.typeData'), status: 'Processing' },
+        field: { text: t('field.permission.typeField'), status: 'Warning' },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          function: { color: 'success', text: '功能权限' },
-          data: { color: 'processing', text: '数据权限' },
-          field: { color: 'warning', text: '字段权限' },
+          function: { color: 'success', text: t('field.permission.typeFunction') },
+          data: { color: 'processing', text: t('field.permission.typeData') },
+          field: { color: 'warning', text: t('field.permission.typeField') },
         };
         const type = typeMap[record.permission_type] || { color: 'default', text: record.permission_type };
         return <Tag color={type.color}>{type.text}</Tag>;
       },
     },
     {
-      title: '系统权限',
+      title: t('field.permission.systemPermission'),
       dataIndex: 'is_system',
       width: 100,
       render: (_, record) => (
         <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? '是' : '否'}
+          {record.is_system ? t('field.role.yes') : t('field.role.no')}
         </Tag>
       ),
     },
     {
-      title: '描述',
+      title: t('field.permission.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -134,7 +125,7 @@ const PermissionListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 100,
       fixed: 'right',
@@ -145,7 +136,7 @@ const PermissionListPage: React.FC = () => {
           icon={<EyeOutlined />}
           onClick={() => handleView(record)}
         >
-          查看
+          {t('field.permission.view')}
         </Button>
       ),
     },
@@ -157,7 +148,7 @@ const PermissionListPage: React.FC = () => {
         <UniTable<Permission>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const response = await getPermissionList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
@@ -176,7 +167,7 @@ const PermissionListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建权限"
+          createButtonText={t('field.permission.createTitle')}
           onCreate={handleCreate}
           pagination={{
             defaultPageSize: 20,
@@ -191,39 +182,38 @@ const PermissionListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="权限详情"
+        title={t('field.permission.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
         columns={[
-          { title: '权限名称', dataIndex: 'name' },
-          { title: '权限代码', dataIndex: 'code' },
-          { title: '资源', dataIndex: 'resource' },
-          { title: '操作', dataIndex: 'action' },
+          { title: t('field.permission.name'), dataIndex: 'name' },
+          { title: t('field.permission.code'), dataIndex: 'code' },
+          { title: t('field.permission.resource'), dataIndex: 'resource' },
+          { title: t('field.permission.action'), dataIndex: 'action' },
           {
-            title: '权限类型',
+            title: t('field.permission.type'),
             dataIndex: 'permission_type',
             render: (value: string) => {
               const typeMap: Record<string, string> = {
-                function: '功能权限',
-                data: '数据权限',
-                field: '字段权限',
+                function: t('field.permission.typeFunction'),
+                data: t('field.permission.typeData'),
+                field: t('field.permission.typeField'),
               };
               return typeMap[value] || value;
             },
           },
           {
-            title: '系统权限',
+            title: t('field.permission.systemPermission'),
             dataIndex: 'is_system',
-            render: (value: boolean) => (value ? '是' : '否'),
+            render: (value: boolean) => (value ? t('field.role.yes') : t('field.role.no')),
           },
-          { title: '描述', dataIndex: 'description', span: 2 },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: t('field.permission.description'), dataIndex: 'description', span: 2 },
+          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ]}
       />
     </>
@@ -231,4 +221,3 @@ const PermissionListPage: React.FC = () => {
 };
 
 export default PermissionListPage;
-

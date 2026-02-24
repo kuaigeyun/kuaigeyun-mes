@@ -1,7 +1,7 @@
 /**
  * 保存搜索条件排序版本 Store
  *
- * 用于通知 riveredge-query 在拖拽排序后刷新钉住条件列表，
+ * 用于通知 uni-query 在拖拽排序后刷新钉住条件列表，
  * 替代 CustomEvent savedSearchOrderChanged
  */
 

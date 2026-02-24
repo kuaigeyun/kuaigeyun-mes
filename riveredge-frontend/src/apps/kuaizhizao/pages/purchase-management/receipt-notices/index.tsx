@@ -1,0 +1,500 @@
+/**
+ * 收货通知单管理页面
+ *
+ * 采购通知仓库收货，不直接动库存。来源为采购订单。
+ *
+ * @author RiverEdge Team
+ * @date 2026-02-22
+ */
+
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { receiptNoticeApi } from '../../../services/receipt-notice';
+import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
+import { materialApi } from '../../../../master-data/services/material';
+
+interface ReceiptNotice {
+  id?: number;
+  notice_code?: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  supplier_contact?: string;
+  supplier_phone?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  planned_receipt_date?: string;
+  status?: string;
+  notified_at?: string;
+  purchase_receipt_id?: number;
+  purchase_receipt_code?: string;
+  total_quantity?: number;
+  total_amount?: number;
+  notes?: string;
+  created_at?: string;
+}
+
+interface ReceiptNoticeDetail extends ReceiptNotice {
+  items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
+}
+
+const STATUS_MAP: Record<string, { text: string; color: string }> = {
+  待收货: { text: '待收货', color: 'default' },
+  已通知: { text: '已通知', color: 'processing' },
+  已入库: { text: '已入库', color: 'success' },
+};
+
+const ReceiptNoticesPage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [noticeDetail, setNoticeDetail] = useState<ReceiptNoticeDetail | null>(null);
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const formRef = useRef<any>(null);
+  const [materialList, setMaterialList] = useState<any[]>([]);
+  const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
+  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price: number }>>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [mat, ordersRes] = await Promise.all([
+          materialApi.list({ limit: 2000, isActive: true }),
+          listPurchaseOrders({ limit: 500 }).catch(() => ({ data: [], total: 0 })),
+        ]);
+        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        setPurchaseOrderList(ordersRes?.data || []);
+      } catch (e) {
+        console.error('加载物料/采购订单失败', e);
+      }
+    };
+    load();
+  }, []);
+
+  const columns: ProColumns<ReceiptNotice>[] = [
+    { title: '通知单号', dataIndex: 'notice_code', width: 140, ellipsis: true, fixed: 'left' },
+    { title: '采购订单号', dataIndex: 'purchase_order_code', width: 140, ellipsis: true },
+    { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
+    { title: '入库仓库', dataIndex: 'warehouse_name', width: 120 },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (status: any) => {
+        const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
+        return <Tag color={c.color}>{c.text}</Tag>;
+      },
+    },
+    { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date', width: 120 },
+    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    {
+      title: '操作',
+      width: 200,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+          {record.status === '待收货' && (
+            <>
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record)} style={{ color: '#1890ff' }}>通知仓库</Button>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+            </>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  const handleDetail = async (record: ReceiptNotice) => {
+    try {
+      const detail = await receiptNoticeApi.get(record.id!.toString());
+      setNoticeDetail(detail as ReceiptNoticeDetail);
+      setDetailDrawerVisible(true);
+    } catch {
+      messageApi.error('获取收货通知单详情失败');
+    }
+  };
+
+  const handleEdit = async (record: ReceiptNotice) => {
+    try {
+      const detail = await receiptNoticeApi.get(record.id!.toString()) as ReceiptNoticeDetail;
+      setFormItems((detail.items || []).map((it: any) => ({
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        material_unit: it.material_unit || '',
+        notice_quantity: Number(it.notice_quantity) || 0,
+        unit_price: Number(it.unit_price) || 0,
+      })));
+      formRef.current?.setFieldsValue({
+        purchase_order_id: detail.purchase_order_id,
+        purchase_order_code: detail.purchase_order_code,
+        supplier_id: detail.supplier_id,
+        supplier_name: detail.supplier_name,
+        supplier_contact: detail.supplier_contact,
+        supplier_phone: detail.supplier_phone,
+        warehouse_name: detail.warehouse_name,
+        planned_receipt_date: detail.planned_receipt_date ? dayjs(detail.planned_receipt_date) : undefined,
+        notes: detail.notes,
+      });
+      setEditingId(record.id!);
+      setEditModalVisible(true);
+    } catch {
+      messageApi.error('获取详情失败');
+    }
+  };
+
+  const handleNotify = (record: ReceiptNotice) => {
+    Modal.confirm({
+      title: '通知仓库',
+      content: `确定要通知仓库收货 "${record.notice_code}" 吗？`,
+      onOk: async () => {
+        try {
+          await receiptNoticeApi.notify(record.id!.toString());
+          messageApi.success('已通知仓库');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '通知失败');
+        }
+      },
+    });
+  };
+
+  const handleDelete = (record: ReceiptNotice) => {
+    Modal.confirm({
+      title: '删除收货通知单',
+      content: `确定要删除 "${record.notice_code}" 吗？`,
+      onOk: async () => {
+        try {
+          await receiptNoticeApi.delete(record.id!.toString());
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${keys.length} 条收货通知单吗？`,
+      onOk: async () => {
+        try {
+          for (const k of keys) {
+            await receiptNoticeApi.delete(String(k));
+          }
+          messageApi.success(`已删除 ${keys.length} 条收货通知单`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  const handleCreate = () => {
+    setFormItems([]);
+    formRef.current?.resetFields();
+    setEditingId(null);
+    setCreateModalVisible(true);
+  };
+
+  const onPurchaseOrderSelect = async (orderId: number) => {
+    let order = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === orderId);
+    if (!order) return;
+    try {
+      const detail = await getPurchaseOrder(orderId);
+      order = detail;
+    } catch {
+      // use list data
+    }
+    const code = order.order_code || order.purchase_order_code || order.code;
+    formRef.current?.setFieldsValue({
+      purchase_order_code: code,
+      supplier_id: order.supplier_id,
+      supplier_name: order.supplier_name,
+      supplier_contact: order.supplier_contact,
+      supplier_phone: order.supplier_phone,
+    });
+    if (order.items && order.items.length > 0) {
+      setFormItems(order.items.map((it: any) => ({
+        material_id: it.material_id ?? it.materialId,
+        material_code: it.material_code || it.materialCode || '',
+        material_name: it.material_name || it.materialName || '',
+        material_unit: it.unit || it.material_unit || it.materialUnit || '',
+        notice_quantity: Number(it.ordered_quantity ?? it.quantity) || 0,
+        unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
+      })));
+    }
+  };
+
+  const handleCreateSubmit = async (values: any) => {
+    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    if (!validItems.length) {
+      messageApi.error('请至少添加一条有效明细');
+      throw new Error('请至少添加一条有效明细');
+    }
+    if (!values.purchase_order_id || !values.purchase_order_code) {
+      messageApi.error('请选择采购订单');
+      throw new Error('请选择采购订单');
+    }
+    const supplier = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === values.purchase_order_id) || {};
+    try {
+      await receiptNoticeApi.create({
+        purchase_order_id: values.purchase_order_id,
+        purchase_order_code: values.purchase_order_code,
+        supplier_id: values.supplier_id ?? supplier.supplier_id,
+        supplier_name: values.supplier_name ?? supplier.supplier_name,
+        supplier_contact: values.supplier_contact,
+        supplier_phone: values.supplier_phone,
+        warehouse_id: values.warehouse_id,
+        warehouse_name: values.warehouse_name,
+        planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
+        notes: values.notes,
+        items: validItems.map((it) => ({
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          material_unit: it.material_unit,
+          notice_quantity: it.notice_quantity,
+          unit_price: it.unit_price || 0,
+        })),
+      });
+      messageApi.success('创建成功');
+      setCreateModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建失败');
+      throw error;
+    }
+  };
+
+  const handleEditSubmit = async (values: any) => {
+    if (!editingId) return;
+    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    if (!validItems.length) {
+      messageApi.error('请至少添加一条有效明细');
+      throw new Error('请至少添加一条有效明细');
+    }
+    try {
+      await receiptNoticeApi.update(editingId.toString(), {
+        supplier_contact: values.supplier_contact,
+        supplier_phone: values.supplier_phone,
+        warehouse_id: values.warehouse_id,
+        warehouse_name: values.warehouse_name,
+        planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
+        notes: values.notes,
+      });
+      messageApi.success('更新成功');
+      setEditModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '更新失败');
+      throw error;
+    }
+  };
+
+  const addItem = () => {
+    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 }]);
+  };
+
+  const onMaterialSelect = (idx: number, materialId: number) => {
+    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
+    if (!m) return;
+    const updated = [...formItems];
+    updated[idx] = {
+      ...updated[idx],
+      material_id: m.id || m.material_id,
+      material_code: m.mainCode || m.code || m.material_code || '',
+      material_name: m.name || m.material_name || '',
+      material_unit: m.baseUnit || m.material_unit || m.unit || '',
+    };
+    setFormItems(updated);
+  };
+
+  const detailColumns: ProDescriptionsItemProps<ReceiptNoticeDetail>[] = [
+    { title: '通知单号', dataIndex: 'notice_code' },
+    { title: '采购订单号', dataIndex: 'purchase_order_code' },
+    { title: '供应商', dataIndex: 'supplier_name' },
+    { title: '联系人', dataIndex: 'supplier_contact' },
+    { title: '电话', dataIndex: 'supplier_phone' },
+    { title: '入库仓库', dataIndex: 'warehouse_name' },
+    { title: '计划收货日期', dataIndex: 'planned_receipt_date', valueType: 'date' },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      render: (s) => {
+        const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
+        return <Tag color={c.color}>{c.text}</Tag>;
+      },
+    },
+    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime' },
+    { title: '备注', dataIndex: 'notes', span: 2 },
+  ];
+
+  const renderForm = (onFinish: (values: any) => Promise<void>) => (
+    <>
+      <Form.Item name="purchase_order_id" label="采购订单" rules={[{ required: true }]}>
+        <Select
+          placeholder="请选择采购订单"
+          options={purchaseOrderList.map((o: any) => ({
+            value: o.id ?? o.purchase_order_id,
+            label: `${o.order_code || o.purchase_order_code || o.code || ''} - ${o.supplier_name || ''}`,
+          }))}
+          onChange={onPurchaseOrderSelect}
+        />
+      </Form.Item>
+      <Form.Item name="purchase_order_code" label="采购订单号" hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name="supplier_id" label="供应商ID" hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name="supplier_name" label="供应商" rules={[{ required: true }]}>
+        <Input placeholder="供应商名称" />
+      </Form.Item>
+      <Form.Item name="supplier_contact" label="联系人">
+        <Input placeholder="联系人" />
+      </Form.Item>
+      <Form.Item name="supplier_phone" label="电话">
+        <Input placeholder="电话" />
+      </Form.Item>
+      <Form.Item name="warehouse_name" label="入库仓库">
+        <Input placeholder="入库仓库名称" />
+      </Form.Item>
+      <Form.Item name="planned_receipt_date" label="计划收货日期">
+        <DatePicker style={{ width: '100%' }} />
+      </Form.Item>
+      <Form.Item label="明细">
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
+          {formItems.map((it, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Select
+                placeholder="物料"
+                style={{ width: 200 }}
+                options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
+                onChange={(v) => onMaterialSelect(idx, v)}
+              />
+              <InputNumber placeholder="数量" min={0.01} value={it.notice_quantity} onChange={(v) => {
+                const u = [...formItems]; u[idx] = { ...u[idx], notice_quantity: v ?? 0 }; setFormItems(u);
+              }} />
+              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
+                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
+              }} />
+              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
+            </div>
+          ))}
+        </Space>
+      </Form.Item>
+      <Form.Item name="notes" label="备注">
+        <Input.TextArea rows={2} />
+      </Form.Item>
+    </>
+  );
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable
+          headerTitle="收货通知单"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch={true}
+          showCreateButton
+          createButtonText="新建收货通知单"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          request={async (params) => {
+            try {
+              const response = await receiptNoticeApi.list({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                status: params.status,
+                supplier_id: params.supplier_id,
+                purchase_order_id: params.purchase_order_id,
+              });
+              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
+              return { data, success: true, total };
+            } catch {
+              messageApi.error('获取列表失败');
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          scroll={{ x: 1200 }}
+        />
+      </ListPageTemplate>
+
+      <DetailDrawerTemplate
+        title={`收货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
+        open={detailDrawerVisible}
+        onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        columns={detailColumns}
+        dataSource={noticeDetail || {}}
+      >
+        {noticeDetail?.items && noticeDetail.items.length > 0 && (
+          <Table
+            size="small"
+            rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+            columns={[
+              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+              { title: '物料名称', dataIndex: 'material_name', width: 150 },
+              { title: '单位', dataIndex: 'material_unit', width: 60 },
+              { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+            ]}
+            dataSource={noticeDetail.items}
+            pagination={false}
+          />
+        )}
+      </DetailDrawerTemplate>
+
+      <FormModalTemplate
+        title="新建收货通知单"
+        open={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        formRef={formRef}
+        onFinish={handleCreateSubmit}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        {renderForm(handleCreateSubmit)}
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title="编辑收货通知单"
+        open={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        formRef={formRef}
+        onFinish={handleEditSubmit}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        {renderForm(handleEditSubmit)}
+      </FormModalTemplate>
+    </>
+  );
+};
+
+export default ReceiptNoticesPage;

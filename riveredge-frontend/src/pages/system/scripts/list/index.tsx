@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form } from 'antd';
@@ -32,6 +33,7 @@ const { TextArea } = Input;
  * 脚本管理列表页面组件
  */
 const ScriptListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -89,7 +91,7 @@ const ScriptListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取脚本详情失败');
+      messageApi.error(error.message || t('pages.system.scripts.getDetailFailed'));
     }
   };
 
@@ -103,7 +105,7 @@ const ScriptListPage: React.FC = () => {
       const detail = await getScriptByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取脚本详情失败');
+      messageApi.error(error.message || t('pages.system.scripts.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -141,14 +143,14 @@ const ScriptListPage: React.FC = () => {
       setExecuteResult(result);
       
       if (result.success) {
-        messageApi.success('脚本执行成功');
+        messageApi.success(t('pages.system.scripts.executeSuccess'));
       } else {
-        messageApi.error(result.error || '脚本执行失败');
+        messageApi.error(result.error || t('pages.system.scripts.executeFailed'));
       }
       
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '脚本执行失败');
+      messageApi.error(error.message || t('pages.system.scripts.executeFailed'));
     } finally {
       setExecuteFormLoading(false);
     }
@@ -160,10 +162,10 @@ const ScriptListPage: React.FC = () => {
   const handleDelete = async (record: Script) => {
     try {
       await deleteScript(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.scripts.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.scripts.deleteFailed'));
     }
   };
 
@@ -172,17 +174,17 @@ const ScriptListPage: React.FC = () => {
    */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请选择要删除的脚本');
+      messageApi.warning(t('pages.system.scripts.selectToDelete'));
       return;
     }
     
     try {
       await Promise.all(selectedRowKeys.map((key) => deleteScript(key as string)));
-      messageApi.success('批量删除成功');
+      messageApi.success(t('pages.system.scripts.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error('批量删除失败');
+      messageApi.error(t('pages.system.scripts.batchDeleteFailed'));
     }
   };
 
@@ -199,8 +201,8 @@ const ScriptListPage: React.FC = () => {
         try {
           config = JSON.parse(values.config);
         } catch (e) {
-          messageApi.error('脚本配置 JSON 格式错误');
-          throw new Error('脚本配置 JSON 格式错误');
+          messageApi.error(t('pages.system.scripts.configJsonError'));
+          throw new Error(t('pages.system.scripts.configJsonError'));
         }
       }
       
@@ -211,17 +213,17 @@ const ScriptListPage: React.FC = () => {
       
       if (isEdit && currentScriptUuid) {
         await updateScript(currentScriptUuid, data as UpdateScriptData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.scripts.updateSuccess'));
       } else {
         await createScript(data as CreateScriptData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.scripts.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.scripts.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -233,99 +235,99 @@ const ScriptListPage: React.FC = () => {
    */
   const columns: ProColumns<Script>[] = [
     {
-      title: '脚本名称',
+      title: t('pages.system.scripts.columnName'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '脚本代码',
+      title: t('pages.system.scripts.columnCode'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '脚本类型',
+      title: t('pages.system.scripts.columnType'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        python: { text: 'Python' },
-        shell: { text: 'Shell' },
-        sql: { text: 'SQL' },
-        javascript: { text: 'JavaScript' },
-        other: { text: '其他' },
+        python: { text: t('pages.system.scripts.typePython') },
+        shell: { text: t('pages.system.scripts.typeShell') },
+        sql: { text: t('pages.system.scripts.typeSql') },
+        javascript: { text: t('pages.system.scripts.typeJavascript') },
+        other: { text: t('pages.system.scripts.typeOther') },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
-          python: { color: 'blue', text: 'Python' },
-          shell: { color: 'green', text: 'Shell' },
-          sql: { color: 'purple', text: 'SQL' },
-          javascript: { color: 'orange', text: 'JavaScript' },
-          other: { color: 'default', text: '其他' },
+          python: { color: 'blue', text: t('pages.system.scripts.typePython') },
+          shell: { color: 'green', text: t('pages.system.scripts.typeShell') },
+          sql: { color: 'purple', text: t('pages.system.scripts.typeSql') },
+          javascript: { color: 'orange', text: t('pages.system.scripts.typeJavascript') },
+          other: { color: 'default', text: t('pages.system.scripts.typeOther') },
         };
         const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
     {
-      title: '是否启用',
+      title: t('pages.system.scripts.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.scripts.activeEnabled'), status: 'Success' },
+        false: { text: t('pages.system.scripts.activeDisabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.scripts.activeEnabled') : t('pages.system.scripts.activeDisabled')}
         </Tag>
       ),
     },
     {
-      title: '运行状态',
+      title: t('pages.system.scripts.columnRunning'),
       dataIndex: 'is_running',
       width: 100,
       hideInSearch: true,
       render: (_, record) => (
         <Tag color={record.is_running ? 'processing' : 'default'}>
-          {record.is_running ? '运行中' : '空闲'}
+          {record.is_running ? t('pages.system.scripts.runningRunning') : t('pages.system.scripts.runningIdle')}
         </Tag>
       ),
     },
     {
-      title: '最后执行状态',
+      title: t('pages.system.scripts.columnLastRunStatus'),
       dataIndex: 'last_run_status',
       width: 120,
       hideInSearch: true,
       render: (_, record) => {
         if (!record.last_run_status) return '-';
         const statusMap: Record<string, { color: string; text: string }> = {
-          success: { color: 'success', text: '成功' },
-          failed: { color: 'error', text: '失败' },
-          running: { color: 'processing', text: '运行中' },
+          success: { color: 'success', text: t('pages.system.scripts.statusSuccess') },
+          failed: { color: 'error', text: t('pages.system.scripts.statusFailed') },
+          running: { color: 'processing', text: t('pages.system.scripts.statusRunning') },
         };
         const statusInfo = statusMap[record.last_run_status] || { color: 'default', text: record.last_run_status };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
     {
-      title: '最后执行时间',
+      title: t('pages.system.scripts.columnLastRunAt'),
       dataIndex: 'last_run_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.scripts.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.scripts.columnActions'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
@@ -338,7 +340,7 @@ const ScriptListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.scripts.view')}
           </Button>,
           <Button
             key="edit"
@@ -347,7 +349,7 @@ const ScriptListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.scripts.edit')}
           </Button>,
           <Button
             key="execute"
@@ -357,11 +359,11 @@ const ScriptListPage: React.FC = () => {
             onClick={() => handleExecute(record)}
             disabled={!record.is_active || record.is_running}
           >
-            执行
+            {t('pages.system.scripts.execute')}
           </Button>,
           <Popconfirm
             key="delete"
-            title="确定要删除这个脚本吗？"
+            title={t('pages.system.scripts.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -370,7 +372,7 @@ const ScriptListPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.scripts.delete')}
             </Button>
           </Popconfirm>,
         ];
@@ -382,7 +384,7 @@ const ScriptListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Script>
-          headerTitle="脚本管理"
+          headerTitle={t('pages.system.scripts.title')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -410,11 +412,11 @@ const ScriptListPage: React.FC = () => {
           }}
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建脚本"
+          createButtonText={t('pages.system.scripts.createButton')}
           onCreate={handleCreate}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.scripts.batchDelete')}
           showImportButton
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -424,7 +426,7 @@ const ScriptListPage: React.FC = () => {
               items = allData.filter((d) => keys.includes(d.uuid));
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.scripts.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -434,7 +436,7 @@ const ScriptListPage: React.FC = () => {
             a.download = `scripts-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('pages.system.scripts.exportSuccess'));
           }}
           search={{
             labelWidth: 'auto',
@@ -444,7 +446,7 @@ const ScriptListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑脚本' : '新建脚本'}
+        title={isEdit ? t('pages.system.scripts.modalEdit') : t('pages.system.scripts.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -458,43 +460,43 @@ const ScriptListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="脚本名称"
-          rules={[{ required: true, message: '请输入脚本名称' }]}
+          label={t('pages.system.scripts.labelName')}
+          rules={[{ required: true, message: t('pages.system.scripts.nameRequired') }]}
         />
         <ProFormText
           name="code"
-          label="脚本代码"
+          label={t('pages.system.scripts.labelCode')}
           rules={[
-            { required: true, message: '请输入脚本代码' },
-            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '脚本代码只能包含字母、数字和下划线，且必须以字母开头' },
+            { required: true, message: t('pages.system.scripts.codeRequired') },
+            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: t('pages.system.scripts.codePattern') },
           ]}
           disabled={isEdit}
-          tooltip="脚本代码用于程序识别，创建后不可修改"
+          tooltip={t('pages.system.scripts.codeTooltip')}
         />
         <SafeProFormSelect
           name="type"
-          label="脚本类型"
-          rules={[{ required: true, message: '请选择脚本类型' }]}
+          label={t('pages.system.scripts.labelType')}
+          rules={[{ required: true, message: t('pages.system.scripts.typeRequired') }]}
           options={[
-            { label: 'Python', value: 'python' },
-            { label: 'Shell', value: 'shell' },
-            { label: 'SQL', value: 'sql' },
-            { label: 'JavaScript', value: 'javascript' },
-            { label: '其他', value: 'other' },
+            { label: t('pages.system.scripts.typePython'), value: 'python' },
+            { label: t('pages.system.scripts.typeShell'), value: 'shell' },
+            { label: t('pages.system.scripts.typeSql'), value: 'sql' },
+            { label: t('pages.system.scripts.typeJavascript'), value: 'javascript' },
+            { label: t('pages.system.scripts.typeOther'), value: 'other' },
           ]}
           disabled={isEdit}
         />
         <ProFormTextArea
           name="description"
-          label="脚本描述"
+          label={t('pages.system.scripts.labelDescription')}
           fieldProps={{
             rows: 3,
           }}
         />
         <ProFormTextArea
           name="content"
-          label="脚本内容"
-          rules={[{ required: true, message: '请输入脚本内容' }]}
+          label={t('pages.system.scripts.labelContent')}
+          rules={[{ required: true, message: t('pages.system.scripts.contentRequired') }]}
           fieldProps={{
             rows: 12,
             style: { fontFamily: 'monospace' },
@@ -502,24 +504,24 @@ const ScriptListPage: React.FC = () => {
         />
         <ProFormTextArea
           name="config"
-          label="脚本配置（JSON，可选）"
+          label={t('pages.system.scripts.labelConfig')}
           fieldProps={{
             rows: 4,
             style: { fontFamily: 'monospace' },
           }}
-          tooltip="脚本配置，JSON 格式，如参数、环境变量等"
+          tooltip={t('pages.system.scripts.configTooltip')}
         />
         {isEdit && (
           <ProFormSwitch
             name="is_active"
-            label="是否启用"
+            label={t('pages.system.scripts.labelActive')}
           />
         )}
       </FormModalTemplate>
 
       {/* 执行脚本 Modal */}
       <Modal
-        title="执行脚本"
+        title={t('pages.system.scripts.executeModalTitle')}
         open={executeModalVisible}
         onCancel={() => setExecuteModalVisible(false)}
         footer={null}
@@ -531,38 +533,38 @@ const ScriptListPage: React.FC = () => {
           onFinish={handleExecuteSubmit}
           submitter={{
             searchConfig: {
-              submitText: '执行',
+              submitText: t('pages.system.scripts.submitExecute'),
             },
           }}
         >
           <ProFormTextArea
             name="parameters"
-            label="脚本参数（JSON，可选）"
+            label={t('pages.system.scripts.labelParams')}
             fieldProps={{
               rows: 4,
               style: { fontFamily: 'monospace' },
-              placeholder: '{"key": "value"}',
+              placeholder: t('pages.system.scripts.paramsPlaceholder'),
             }}
-            tooltip="脚本执行参数，JSON 格式"
+            tooltip={t('pages.system.scripts.paramsTooltip')}
           />
           <ProFormSwitch
             name="async_execution"
-            label="异步执行（通过 Inngest）"
-            tooltip="如果启用，脚本将通过 Inngest 异步执行"
+            label={t('pages.system.scripts.labelAsync')}
+            tooltip={t('pages.system.scripts.asyncTooltip')}
           />
         </ProForm>
         
         {executeResult && (
           <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
-            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>执行结果：</div>
+            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>{t('pages.system.scripts.resultTitle')}</div>
             {executeResult.success ? (
-              <div style={{ color: '#52c41a' }}>✓ 执行成功</div>
+              <div style={{ color: '#52c41a' }}>{t('pages.system.scripts.resultSuccess')}</div>
             ) : (
-              <div style={{ color: '#ff4d4f' }}>✗ 执行失败</div>
+              <div style={{ color: '#ff4d4f' }}>{t('pages.system.scripts.resultFailed')}</div>
             )}
             {executeResult.output && (
               <div style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>输出：</div>
+                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('pages.system.scripts.outputLabel')}</div>
                 <pre style={{ background: '#fff', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto' }}>
                   {executeResult.output}
                 </pre>
@@ -570,7 +572,7 @@ const ScriptListPage: React.FC = () => {
             )}
             {executeResult.error && (
               <div style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>错误：</div>
+                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('pages.system.scripts.errorLabel')}</div>
                 <pre style={{ background: '#fff', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto', color: '#ff4d4f' }}>
                   {executeResult.error}
                 </pre>
@@ -578,7 +580,7 @@ const ScriptListPage: React.FC = () => {
             )}
             {executeResult.execution_time && (
               <div style={{ marginTop: 8, color: '#666' }}>
-                执行时间：{executeResult.execution_time.toFixed(2)} 秒
+                {t('pages.system.scripts.executionTime', { seconds: executeResult.execution_time.toFixed(2) })}
               </div>
             )}
           </div>
@@ -587,7 +589,7 @@ const ScriptListPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="脚本详情"
+        title={t('pages.system.scripts.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -595,41 +597,41 @@ const ScriptListPage: React.FC = () => {
         dataSource={detailData}
         columns={[
           {
-            title: '脚本名称',
+            title: t('pages.system.scripts.columnName'),
             dataIndex: 'name',
           },
           {
-            title: '脚本代码',
+            title: t('pages.system.scripts.columnCode'),
             dataIndex: 'code',
           },
           {
-            title: '脚本类型',
+            title: t('pages.system.scripts.columnType'),
             dataIndex: 'type',
           },
           {
-            title: '脚本描述',
+            title: t('pages.system.scripts.labelDescription'),
             dataIndex: 'description',
           },
           {
-            title: '是否启用',
+            title: t('pages.system.scripts.columnActive'),
             dataIndex: 'is_active',
             render: (value: boolean) => (
               <Tag color={value ? 'success' : 'default'}>
-                {value ? '启用' : '禁用'}
+                {value ? t('pages.system.scripts.activeEnabled') : t('pages.system.scripts.activeDisabled')}
               </Tag>
             ),
           },
           {
-            title: '运行状态',
+            title: t('pages.system.scripts.columnRunning'),
             dataIndex: 'is_running',
             render: (value: boolean) => (
               <Tag color={value ? 'processing' : 'default'}>
-                {value ? '运行中' : '空闲'}
+                {value ? t('pages.system.scripts.runningRunning') : t('pages.system.scripts.runningIdle')}
               </Tag>
             ),
           },
           {
-            title: '脚本内容',
+            title: t('pages.system.scripts.columnContent'),
             dataIndex: 'content',
             render: (value: string) => (
               <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
@@ -638,7 +640,7 @@ const ScriptListPage: React.FC = () => {
             ),
           },
           {
-            title: '脚本配置',
+            title: t('pages.system.scripts.columnConfig'),
             dataIndex: 'config',
             render: (value: Record<string, any>) => (
               value ? (
@@ -649,26 +651,26 @@ const ScriptListPage: React.FC = () => {
             ),
           },
           {
-            title: '最后执行状态',
+            title: t('pages.system.scripts.columnLastRunStatus'),
             dataIndex: 'last_run_status',
             render: (value: string) => {
               if (!value) return '-';
               const statusMap: Record<string, { color: string; text: string }> = {
-                success: { color: 'success', text: '成功' },
-                failed: { color: 'error', text: '失败' },
-                running: { color: 'processing', text: '运行中' },
+                success: { color: 'success', text: t('pages.system.scripts.statusSuccess') },
+                failed: { color: 'error', text: t('pages.system.scripts.statusFailed') },
+                running: { color: 'processing', text: t('pages.system.scripts.statusRunning') },
               };
               const statusInfo = statusMap[value] || { color: 'default', text: value };
               return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
             },
           },
           {
-            title: '最后执行时间',
+            title: t('pages.system.scripts.columnLastRunAt'),
             dataIndex: 'last_run_at',
             valueType: 'dateTime',
           },
           {
-            title: '最后执行错误',
+            title: t('pages.system.scripts.columnLastError'),
             dataIndex: 'last_error',
             render: (value: string) => (
               value ? (
@@ -679,12 +681,12 @@ const ScriptListPage: React.FC = () => {
             ),
           },
           {
-            title: '创建时间',
+            title: t('pages.system.scripts.columnCreatedAt'),
             dataIndex: 'created_at',
             valueType: 'dateTime',
           },
           {
-            title: '更新时间',
+            title: t('pages.system.scripts.columnUpdatedAt'),
             dataIndex: 'updated_at',
             valueType: 'dateTime',
           },

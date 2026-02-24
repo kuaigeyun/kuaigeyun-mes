@@ -72,15 +72,15 @@ class DefectTypeUpdate(BaseModel):
 
 class DefectTypeResponse(DefectTypeBase):
     """不良品响应 Schema（含 alias 便于前端 camelCase 一致）"""
-    
+
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
-    
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
 class DefectTypeListResponse(BaseModel):
@@ -181,19 +181,19 @@ class OperationUpdate(BaseModel):
 
 class OperationResponse(OperationBase):
     """工序响应 Schema"""
-    
+
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
-    defect_types: List[DefectTypeMinimal] = Field(default_factory=list, description="允许绑定的不良品项")
-    default_operator_ids: List[int] = Field(default_factory=list, description="默认生产人员（用户ID列表）")
-    default_operator_uuids: List[str] = Field(default_factory=list, description="默认生产人员 UUID列表")
-    default_operator_names: List[str] = Field(default_factory=list, description="默认生产人员姓名列表")
-    
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    defect_types: List[DefectTypeMinimal] = Field(default_factory=list, alias="defectTypes", description="允许绑定的不良品项")
+    default_operator_ids: List[int] = Field(default_factory=list, alias="defaultOperatorIds", description="默认生产人员（用户ID列表）")
+    default_operator_uuids: List[str] = Field(default_factory=list, alias="defaultOperatorUuids", description="默认生产人员 UUID列表")
+    default_operator_names: List[str] = Field(default_factory=list, alias="defaultOperatorNames", description="默认生产人员姓名列表")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
 class ProcessRouteBase(BaseModel):

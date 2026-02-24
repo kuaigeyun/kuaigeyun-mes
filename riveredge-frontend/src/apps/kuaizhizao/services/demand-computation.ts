@@ -372,3 +372,49 @@ export async function validateMaterialSources(computationId: number): Promise<Ma
     method: 'POST',
   });
 }
+
+/** 需求计算重算历史项（与后端 list_computation_recalc_history 返回一致） */
+export interface ComputationRecalcHistoryItem {
+  id: number;
+  recalc_at?: string;
+  trigger?: string;
+  operator_id?: number;
+  result?: string;
+  snapshot_id?: number;
+  message?: string;
+}
+
+/** 需求计算快照项（与后端 list_computation_snapshots 返回一致） */
+export interface ComputationSnapshotItem {
+  id: number;
+  snapshot_at?: string;
+  trigger?: string;
+  computation_summary_snapshot?: Record<string, any>;
+  items_snapshot?: any[];
+}
+
+/**
+ * 获取需求计算重算历史列表
+ */
+export async function listComputationRecalcHistory(
+  computationId: number,
+  params?: { limit?: number }
+): Promise<ComputationRecalcHistoryItem[]> {
+  return apiRequest<ComputationRecalcHistoryItem[]>(
+    `/apps/kuaizhizao/demand-computations/${computationId}/recalc-history`,
+    { method: 'GET', params }
+  );
+}
+
+/**
+ * 获取需求计算快照列表
+ */
+export async function listComputationSnapshots(
+  computationId: number,
+  params?: { limit?: number }
+): Promise<ComputationSnapshotItem[]> {
+  return apiRequest<ComputationSnapshotItem[]>(
+    `/apps/kuaizhizao/demand-computations/${computationId}/snapshots`,
+    { method: 'GET', params }
+  );
+}

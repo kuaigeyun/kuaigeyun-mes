@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Progress, Alert, Collapse, Divider, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, LinkOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
@@ -31,6 +32,7 @@ const { useToken } = theme;
  * 卡片视图组件
  */
 const CardView: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const [loading, setLoading] = useState(false);
@@ -51,7 +53,7 @@ const CardView: React.FC = () => {
       const configs = await getIntegrationConfigList();
       setIntegrationConfigs(configs);
     } catch (error: any) {
-      handleError(error, '加载集成配置列表失败');
+      handleError(error, t('pages.system.integrationConfigs.getListFailed'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +90,7 @@ const CardView: React.FC = () => {
       setCurrentIntegration(detail);
       setDetailModalVisible(true);
     } catch (error: any) {
-      handleError(error, '获取集成配置详情失败');
+      handleError(error, t('pages.system.integrationConfigs.getDetailFailed'));
     }
   };
 
@@ -105,17 +107,17 @@ const CardView: React.FC = () => {
       setTestResult(result);
       
       if (result.success) {
-        handleSuccess(result.message || '连接测试成功');
+        handleSuccess(result.message || t('pages.system.integrationConfigs.testSuccess'));
         // 刷新列表以更新连接状态
         loadIntegrationConfigs();
       } else {
-        handleError(new Error(result.message || '连接测试失败'), '连接测试失败');
+        handleError(new Error(result.message || t('pages.system.integrationConfigs.testFailed')), t('pages.system.integrationConfigs.testFailed'));
       }
     } catch (error: any) {
-      handleError(error, '连接测试失败');
+      handleError(error, t('pages.system.integrationConfigs.testFailed'));
       setTestResult({
         success: false,
-        message: error.message || '连接测试失败',
+        message: error.message || t('pages.system.integrationConfigs.testFailed'),
         error: error.message,
       });
     } finally {
@@ -129,10 +131,10 @@ const CardView: React.FC = () => {
   const handleDelete = async (integration: IntegrationConfig) => {
     try {
       await deleteIntegrationConfig(integration.uuid);
-      handleSuccess('删除成功');
+      handleSuccess(t('pages.system.integrationConfigs.deleteSuccess'));
       loadIntegrationConfigs();
     } catch (error: any) {
-      handleError(error, '删除失败');
+      handleError(error, t('pages.system.integrationConfigs.deleteFailed'));
     }
   };
 
@@ -170,19 +172,16 @@ const CardView: React.FC = () => {
    */
   const getConnectionStatus = (integration: IntegrationConfig): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
     if (!integration.is_active) {
-      return { status: 'default', text: '已禁用' };
-    }
-    
-    if (integration.is_connected) {
-      return { status: 'success', text: '已连接' };
-    }
-    
-    if (integration.last_error) {
-      return { status: 'error', text: '连接失败' };
-    }
-    
-    return { status: 'warning', text: '未连接' };
-  };
+      return { status: 'default', text: t('pages.system.integrationConfigs.statusDisabled') };
+  }
+  if (integration.is_connected) {
+    return { status: 'success', text: t('pages.system.integrationConfigs.statusConnected') };
+  }
+  if (integration.last_error) {
+    return { status: 'error', text: t('pages.system.integrationConfigs.statusFailed') };
+  }
+  return { status: 'warning', text: t('pages.system.integrationConfigs.statusDisconnected') };
+};
 
   /**
    * 按类型分组集成配置
@@ -217,7 +216,7 @@ const CardView: React.FC = () => {
   return (
     <>
       <PageContainer
-        title="集成设置"
+        title={t('pages.system.integrationConfigs.cardViewTitle')}
         extra={[
           <Button
             key="refresh"
@@ -225,7 +224,7 @@ const CardView: React.FC = () => {
             onClick={loadIntegrationConfigs}
             loading={loading}
           >
-            刷新
+            {t('pages.system.integrationConfigs.refresh')}
           </Button>,
         ]}
       >
@@ -234,7 +233,7 @@ const CardView: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="总集成数"
+                title={t('pages.system.integrationConfigs.totalCount')}
                 value={stats.total}
                 prefix={<ApiOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
@@ -242,7 +241,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已连接"
+                title={t('pages.system.integrationConfigs.connectedCount')}
                 value={stats.connected}
                 prefix={<CheckCircleOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
@@ -250,7 +249,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="未连接"
+                title={t('pages.system.integrationConfigs.disconnectedCount')}
                 value={stats.disconnected}
                 prefix={<CloseCircleOutlined />}
                 styles={{ content: { color: '#ff4d4f' } }}
@@ -258,7 +257,7 @@ const CardView: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title="已禁用"
+                title={t('pages.system.integrationConfigs.disabledCount')}
                 value={stats.inactive}
                 prefix={<ExclamationCircleOutlined />}
                 styles={{ content: { color: '#faad14' } }}
@@ -267,7 +266,7 @@ const CardView: React.FC = () => {
           </Row>
           {Object.keys(stats.byType).length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${token.colorBorder}` }}>
-              <Text type="secondary" style={{ marginRight: 8 }}>按类型统计：</Text>
+              <Text type="secondary" style={{ marginRight: 8 }}>{t('pages.system.integrationConfigs.byTypeStats')}</Text>
               <Space wrap>
                 {Object.entries(stats.byType).map(([type, count]) => {
                   const typeInfo = getTypeInfo(type);
@@ -309,11 +308,11 @@ const CardView: React.FC = () => {
                           {typeInfo.text}
                         </Tag>
                         <Text type="secondary">
-                          {typeStats.total} 个集成
+                          {t('pages.system.integrationConfigs.itemsCount', { count: typeStats.total })}
                         </Text>
                         <Divider orientation="vertical" />
-                        <Badge status="success" text={`已连接: ${typeStats.connected}`} />
-                        <Badge status="warning" text={`未连接: ${typeStats.disconnected}`} />
+                        <Badge status="success" text={`${t('pages.system.integrationConfigs.connectedLabel')}: ${typeStats.connected}`} />
+                        <Badge status="warning" text={`${t('pages.system.integrationConfigs.disconnectedLabel')}: ${typeStats.disconnected}`} />
                       </Space>
                     }
                   >
@@ -327,14 +326,14 @@ const CardView: React.FC = () => {
                               hoverable
                               style={{ height: '100%' }}
                               actions={[
-                                <Tooltip title="查看详情">
+                                <Tooltip title={t('pages.system.integrationConfigs.viewDetail')}>
                                   <EyeOutlined
                                     key="view"
                                     onClick={() => handleViewDetail(integration)}
                                     style={{ fontSize: 16 }}
                                   />
                                 </Tooltip>,
-                                <Tooltip title="测试连接">
+                                <Tooltip title={t('pages.system.integrationConfigs.testConnection')}>
                                   <ApiOutlined
                                     key="test"
                                     onClick={() => handleTestConnection(integration)}
@@ -343,12 +342,12 @@ const CardView: React.FC = () => {
                                 </Tooltip>,
                                 <Popconfirm
                                   key="delete"
-                                  title="确定要删除这个集成配置吗？"
+                                  title={t('pages.system.integrationConfigs.confirmDelete')}
                                   onConfirm={() => handleDelete(integration)}
-                                  okText="确定"
-                                  cancelText="取消"
+                                  okText={t('common.confirm')}
+                                  cancelText={t('common.cancel')}
                                 >
-                                  <Tooltip title="删除">
+                                  <Tooltip title={t('pages.system.integrationConfigs.delete')}>
                                     <DeleteOutlined
                                       style={{ fontSize: 16, color: '#ff4d4f' }}
                                     />
@@ -369,7 +368,7 @@ const CardView: React.FC = () => {
                                   
                                   {integration.code && (
                                     <Text type="secondary" style={{ fontSize: 12 }}>
-                                      代码: {integration.code}
+                                      {t('pages.system.integrationConfigs.code')}: {integration.code}
                                     </Text>
                                   )}
                                   
@@ -387,7 +386,7 @@ const CardView: React.FC = () => {
                               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.connectionStatus')}：</Text>
                                     <Badge
                                       status={connectionStatus.status}
                                       text={connectionStatus.text}
@@ -395,15 +394,15 @@ const CardView: React.FC = () => {
                                   </div>
                                   
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.enableStatus')}：</Text>
                                     <Tag color={integration.is_active ? 'success' : 'default'}>
-                                      {integration.is_active ? '启用' : '禁用'}
+                                      {integration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
                                     </Tag>
                                   </div>
                                   
                                   {integration.last_connected_at && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                                      <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.integrationConfigs.lastConnection')}：</Text>
                                       <Text style={{ fontSize: 12 }}>
                                         {dayjs(integration.last_connected_at).fromNow()}
                                       </Text>
@@ -431,14 +430,14 @@ const CardView: React.FC = () => {
               })}
             </Collapse>
           ) : (
-            <Empty description="暂无集成配置" />
+            <Empty description={t('pages.system.integrationConfigs.noData')} />
           )}
         </Card>
       </PageContainer>
 
       {/* 集成配置详情 Modal */}
       <Modal
-        title="集成配置详情"
+        title={t('pages.system.integrationConfigs.detailTitle')}
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
@@ -449,21 +448,21 @@ const CardView: React.FC = () => {
       >
         {currentIntegration && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="集成名称">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.name')}>
               {currentIntegration.name}
             </Descriptions.Item>
-            <Descriptions.Item label="集成代码">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.codeLabel')}>
               {currentIntegration.code}
             </Descriptions.Item>
-            <Descriptions.Item label="集成类型">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.type')}>
               <Tag color={getTypeInfo(currentIntegration.type).color}>
                 {getTypeInfo(currentIntegration.type).text}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="集成描述">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.description')}>
               {currentIntegration.description || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="配置信息">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.configInfo')}>
               <pre style={{
                 margin: 0,
                 padding: '8px',
@@ -476,24 +475,24 @@ const CardView: React.FC = () => {
                 {JSON.stringify(currentIntegration.config, null, 2)}
               </pre>
             </Descriptions.Item>
-            <Descriptions.Item label="连接状态">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.connectionStatusLabel')}>
               <Badge
                 status={getConnectionStatus(currentIntegration).status}
                 text={getConnectionStatus(currentIntegration).text}
               />
             </Descriptions.Item>
-            <Descriptions.Item label="启用状态">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.enableStatusLabel')}>
               <Tag color={currentIntegration.is_active ? 'success' : 'default'}>
-                {currentIntegration.is_active ? '启用' : '禁用'}
+                {currentIntegration.is_active ? t('pages.system.integrationConfigs.enabled') : t('pages.system.integrationConfigs.disabled')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="最后连接时间">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.lastConnectionTime')}>
               {currentIntegration.last_connected_at
                 ? dayjs(currentIntegration.last_connected_at).format('YYYY-MM-DD HH:mm:ss')
                 : '-'}
             </Descriptions.Item>
             {currentIntegration.last_error && (
-              <Descriptions.Item label="最后错误">
+              <Descriptions.Item label={t('pages.system.integrationConfigs.lastError')}>
                 <Alert
                   message={currentIntegration.last_error}
                   type="error"
@@ -502,10 +501,10 @@ const CardView: React.FC = () => {
                 />
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="创建时间">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.createdAt')}>
               {dayjs(currentIntegration.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
+            <Descriptions.Item label={t('pages.system.integrationConfigs.updatedAt')}>
               {dayjs(currentIntegration.updated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
@@ -514,7 +513,7 @@ const CardView: React.FC = () => {
 
       {/* 连接测试 Modal */}
       <Modal
-        title="连接测试"
+        title={t('pages.system.integrationConfigs.testModalTitle')}
         open={testModalVisible}
         onCancel={() => {
           setTestModalVisible(false);
@@ -527,7 +526,7 @@ const CardView: React.FC = () => {
             setTestResult(null);
             setTestingUuid(null);
           }}>
-            关闭
+            {t('pages.system.integrationConfigs.close')}
           </Button>,
         ]}
         size={600}
@@ -536,7 +535,7 @@ const CardView: React.FC = () => {
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Progress type="circle" percent={100} status="active" />
             <div style={{ marginTop: 16 }}>
-              <Text>正在测试连接...</Text>
+              <Text>{t('pages.system.integrationConfigs.testing')}</Text>
             </div>
           </div>
         )}
@@ -544,23 +543,23 @@ const CardView: React.FC = () => {
         {testResult && (
           <div>
             <Alert
-              message={testResult.success ? '连接测试成功' : '连接测试失败'}
+              message={testResult.success ? t('pages.system.integrationConfigs.testSuccess') : t('pages.system.integrationConfigs.testFailed')}
               description={testResult.message}
               type={testResult.success ? 'success' : 'error'}
               showIcon
               style={{ marginBottom: 16 }}
             />
             <Descriptions column={1} bordered>
-              <Descriptions.Item label="测试结果">
+              <Descriptions.Item label={t('pages.system.integrationConfigs.testResult')}>
                 <Tag color={testResult.success ? 'success' : 'error'}>
-                  {testResult.success ? '成功' : '失败'}
+                  {testResult.success ? t('pages.system.integrationConfigs.success') : t('pages.system.integrationConfigs.fail')}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="消息">
+              <Descriptions.Item label={t('pages.system.integrationConfigs.message')}>
                 {testResult.message}
               </Descriptions.Item>
               {testResult.data && (
-                <Descriptions.Item label="响应数据">
+                <Descriptions.Item label={t('pages.system.integrationConfigs.responseData')}>
                   <pre style={{
                     margin: 0,
                     padding: '8px',
@@ -575,7 +574,7 @@ const CardView: React.FC = () => {
                 </Descriptions.Item>
               )}
               {testResult.error && (
-                <Descriptions.Item label="错误信息">
+                <Descriptions.Item label={t('pages.system.integrationConfigs.errorInfo')}>
                   <Alert
                     message={testResult.error}
                     type="error"

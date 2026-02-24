@@ -5,7 +5,7 @@ from apps.kuaireport.constants import ReportStatus, ReportCategory
 
 class Report(BaseModel):
     """
-    报表模型（自研报表中心，弃用 Univer/JimuReport）
+    报表模型
 
     支持系统预置报表和用户自定义报表两种模式。
     """

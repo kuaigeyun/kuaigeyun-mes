@@ -164,6 +164,10 @@ class SalesOrderResponse(SalesOrderBase):
     updated_at: datetime
     items: Optional[List[SalesOrderItemResponse]] = Field(None, description="订单明细")
     duration_info: Optional[dict] = Field(None, description="耗时统计信息")
+    delivery_progress: Optional[float] = Field(None, description="交货进度 0-100")
+    invoice_progress: Optional[float] = Field(None, description="开票进度 0-100")
+    demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供前端 UniLifecycleStepper 展示）")
 
     class Config:
         from_attributes = True

@@ -33,6 +33,8 @@ export interface SalesForecast {
   forecast_items?: SalesForecastItem[];
   /** 创建时可选；更新时提供则覆盖全部明细 */
   items?: SalesForecastItemCreatePayload[];
+  /** 本次操作是否已同步至关联需求（更新/审核接口返回） */
+  demand_synced?: boolean;
 }
 
 /** 销售预测明细创建/更新单条 payload（与后端 SalesForecastItemCreate 一致） */

@@ -7,13 +7,13 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
+from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.schemas.approval_instance import (
     ApprovalInstanceCreate,
     ApprovalInstanceUpdate,
     ApprovalInstanceAction,
     ApprovalInstanceResponse,
 )
-from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -93,6 +93,24 @@ async def list_approval_instances(
         current_approver_id=current_approver_id
     )
     return [ApprovalInstanceResponse.model_validate(ai) for ai in approval_instances]
+
+
+@router.get("/status")
+async def get_approval_status(
+    entity_type: str = Query(..., description="实体类型（如 demand、purchase_order、sales_order）"),
+    entity_id: int = Query(..., ge=1, description="实体ID"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按 entity 获取审批状态（统一入口，供 UniApprovalPanel 等使用）
+    """
+    result = await ApprovalInstanceService.get_approval_status(
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    return result
 
 
 @router.get("/{uuid}", response_model=ApprovalInstanceResponse)

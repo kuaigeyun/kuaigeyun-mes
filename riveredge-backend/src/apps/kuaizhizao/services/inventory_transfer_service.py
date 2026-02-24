@@ -29,6 +29,7 @@ from apps.kuaizhizao.schemas.inventory_transfer import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class InventoryTransferService(AppBaseService[InventoryTransfer]):
@@ -40,6 +41,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
     def __init__(self):
         super().__init__(InventoryTransfer)
+        self.business_config_service = BusinessConfigService()
 
     async def create_inventory_transfer(
         self,
@@ -61,6 +63,9 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         Raises:
             ValidationError: 数据验证失败
         """
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inventory_transfer")
+        if not is_enabled:
+            raise BusinessLogicError("调拨单节点未启用，无法创建调拨单")
         async with in_transaction():
             # 验证调出和调入仓库不能相同
             if transfer_data.from_warehouse_id == transfer_data.to_warehouse_id:

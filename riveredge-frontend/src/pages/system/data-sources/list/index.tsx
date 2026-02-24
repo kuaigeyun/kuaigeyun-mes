@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, Dropdown, Modal, theme } from 'antd';
@@ -88,29 +89,29 @@ const getTypeInfo = (type: string): { color: string; text: string; icon: React.R
   return typeMap[type] || { color: 'default', text: type, icon: <DatabaseOutlined /> };
 };
 
+type TFunction = (key: string) => string;
+
 /**
- * 获取连接状态显示
+ * 获取连接状态显示（需传入 t 以支持 i18n）
  */
-const getConnectionStatus = (dataSource: DataSource): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
+const getConnectionStatus = (dataSource: DataSource, t: TFunction): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
   if (!dataSource.is_active) {
-    return { status: 'default', text: '已禁用' };
+    return { status: 'default', text: t('pages.system.dataSources.statusDisabled') };
   }
-  
   if (dataSource.is_connected) {
-    return { status: 'success', text: '已连接' };
+    return { status: 'success', text: t('pages.system.dataSources.statusConnected') };
   }
-  
   if (dataSource.last_error) {
-    return { status: 'error', text: '连接失败' };
+    return { status: 'error', text: t('pages.system.dataSources.statusFailed') };
   }
-  
-  return { status: 'warning', text: '未连接' };
+  return { status: 'warning', text: t('pages.system.dataSources.statusNotConnected') };
 };
 
 /**
  * 数据源管理列表页面组件
  */
 const DataSourceListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
@@ -173,7 +174,7 @@ const DataSourceListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取数据源详情失败');
+      messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
     }
   };
 
@@ -190,7 +191,7 @@ const DataSourceListPage: React.FC = () => {
       ]);
       setDetailData({ ...detail, related_datasets: dsList.items });
     } catch (error: any) {
-      messageApi.error(error.message || '获取数据源详情失败');
+      messageApi.error(error.message || t('pages.system.dataSources.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -201,7 +202,7 @@ const DataSourceListPage: React.FC = () => {
    */
   const handleBatchStatus = async (enable: boolean) => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要操作的数据源');
+      messageApi.warning(t('pages.system.dataSources.selectToOperate'));
       return;
     }
     try {
@@ -210,11 +211,12 @@ const DataSourceListPage: React.FC = () => {
         await updateIntegrationConfig(String(uuid), { is_active: enable });
         done++;
       }
-      messageApi.success(`已${enable ? '启用' : '禁用'} ${done} 个数据源`);
+      const action = enable ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled');
+      messageApi.success(t('pages.system.dataSources.batchStatusSuccess', { action, count: done }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '操作失败');
+      messageApi.error(error?.message || t('pages.system.dataSources.operationFailed'));
     }
   };
 
@@ -223,7 +225,7 @@ const DataSourceListPage: React.FC = () => {
    */
   const handleBatchTest = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要测试的数据源');
+      messageApi.warning(t('pages.system.dataSources.selectToTest'));
       return;
     }
     let ok = 0;
@@ -237,7 +239,7 @@ const DataSourceListPage: React.FC = () => {
         fail++;
       }
     }
-    messageApi.info(`测试完成：成功 ${ok}，失败 ${fail}`);
+    messageApi.info(t('pages.system.dataSources.testComplete', { ok, fail }));
     actionRef.current?.reload();
   };
 
@@ -247,10 +249,10 @@ const DataSourceListPage: React.FC = () => {
   const handleDelete = async (record: DataSource) => {
     try {
       await deleteDataSource(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.dataSources.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.dataSources.deleteFailed'));
     }
   };
 
@@ -259,13 +261,13 @@ const DataSourceListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的数据源');
+      messageApi.warning(t('pages.system.dataSources.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${selectedRowKeys.length} 个数据源吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.dataSources.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -280,14 +282,14 @@ const DataSourceListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.dataSources.batchDeleteDone', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个数据源`);
+            messageApi.success(t('pages.system.dataSources.batchDeleteSuccessCount', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('pages.system.dataSources.batchDeleteFailed'));
         }
       },
     });
@@ -305,15 +307,15 @@ const DataSourceListPage: React.FC = () => {
       setTestingConnection(true);
       const result = await testDataSourceConfig({ type, config });
       if (result.success) {
-        messageApi.success(result.message || '连接测试成功');
+        messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
       } else {
-        messageApi.error(result.message || '连接测试失败');
+        messageApi.error(result.message || t('pages.system.dataSources.testFailed'));
       }
     } catch (error: any) {
       if (error?.errorFields) {
-        messageApi.warning('请先填写完整的连接配置');
+        messageApi.warning(t('pages.system.dataSources.fillConfigFirst'));
       } else {
-        messageApi.error(error?.message || '连接测试失败');
+        messageApi.error(error?.message || t('pages.system.dataSources.testFailed'));
       }
     } finally {
       setTestingConnection(false);
@@ -328,13 +330,13 @@ const DataSourceListPage: React.FC = () => {
       // setTestingUuid(record.uuid);
       const result = await testDataSourceConnection(record.uuid);
       if (result.success) {
-        messageApi.success(result.message || '连接测试成功');
+        messageApi.success(result.message || t('pages.system.dataSources.testSuccess'));
       } else {
-        messageApi.error(result.message || '连接测试失败');
+        messageApi.error(result.message || t('pages.system.dataSources.testFailed'));
       }
       actionRef.current?.reload();
     } catch (error: any) {
-       messageApi.error(error.message || '连接测试失败');
+       messageApi.error(error.message || t('pages.system.dataSources.testFailed'));
     } finally {
       // setTestingUuid(null);
     }
@@ -362,7 +364,7 @@ const DataSourceListPage: React.FC = () => {
           config,
           is_active,
         } as UpdateDataSourceData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.dataSources.updateSuccess'));
       } else {
         await createDataSource({
           name,
@@ -372,14 +374,14 @@ const DataSourceListPage: React.FC = () => {
           config,
           is_active,
         } as CreateDataSourceData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.dataSources.createSuccess'));
       }
       
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.dataSources.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -404,35 +406,19 @@ const DataSourceListPage: React.FC = () => {
     };
 
     return [
-      {
-        title: '总数据源数',
-        value: stats.total,
-        valueStyle: { color: '#1890ff' },
-      },
-      {
-        title: '已连接',
-        value: stats.connected,
-        valueStyle: { color: '#52c41a' },
-      },
-      {
-        title: '未连接',
-        value: stats.disconnected,
-        valueStyle: { color: '#ff4d4f' },
-      },
-      {
-        title: '已禁用',
-        value: stats.inactive,
-        valueStyle: { color: '#faad14' },
-      },
+      { title: t('pages.system.dataSources.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+      { title: t('pages.system.dataSources.statConnected'), value: stats.connected, valueStyle: { color: '#52c41a' } },
+      { title: t('pages.system.dataSources.statDisconnected'), value: stats.disconnected, valueStyle: { color: '#ff4d4f' } },
+      { title: t('pages.system.dataSources.statInactive'), value: stats.inactive, valueStyle: { color: '#faad14' } },
     ];
-  }, [allDataSources]);
+  }, [allDataSources, t]);
 
   /**
    * 卡片渲染函数
    */
   const renderCard = (dataSource: DataSource) => {
     const typeInfo = getTypeInfo(dataSource.type);
-    const connectionStatus = getConnectionStatus(dataSource);
+    const connectionStatus = getConnectionStatus(dataSource, t);
     
     return (
       <Card
@@ -440,19 +426,19 @@ const DataSourceListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title="查看详情">
+          <Tooltip key="view" title={t('pages.system.dataSources.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(dataSource)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="edit" title="编辑数据源">
+          <Tooltip key="edit" title={t('pages.system.dataSources.editDataSource')}>
             <EditOutlined
               onClick={() => handleEdit(dataSource)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="test" title="测试连接">
+          <Tooltip key="test" title={t('pages.system.dataSources.testConnection')}>
             <ThunderboltOutlined
               onClick={() => handleTestConnection(dataSource)}
               style={{ fontSize: 16, color: '#1890ff' }}
@@ -460,12 +446,12 @@ const DataSourceListPage: React.FC = () => {
           </Tooltip>,
           <Popconfirm
             key="delete"
-            title="确定要删除这个数据源吗？"
+            title={t('pages.system.dataSources.deleteConfirmTitle')}
             onConfirm={() => handleDelete(dataSource)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
-            <Tooltip title="删除">
+            <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
               <DeleteOutlined
                 style={{ fontSize: 16, color: '#ff4d4f' }}
               />
@@ -486,7 +472,7 @@ const DataSourceListPage: React.FC = () => {
             
             {dataSource.code && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                代码: {dataSource.code}
+                {t('pages.system.dataSources.codePrefix')}{dataSource.code}
               </Text>
             )}
             
@@ -504,7 +490,7 @@ const DataSourceListPage: React.FC = () => {
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.connectionStatusLabel')}</Text>
               <Badge
                 status={connectionStatus.status}
                 text={connectionStatus.text}
@@ -512,15 +498,15 @@ const DataSourceListPage: React.FC = () => {
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.statusLabel')}</Text>
               <Tag color={dataSource.is_active ? 'success' : 'default'}>
-                {dataSource.is_active ? '启用' : '禁用'}
+                {dataSource.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
               </Tag>
             </div>
             
             {dataSource.last_connected_at && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataSources.lastConnectedLabel')}</Text>
                 <Text style={{ fontSize: 12 }}>
                   {dayjs(dataSource.last_connected_at).fromNow()}
                 </Text>
@@ -547,18 +533,18 @@ const DataSourceListPage: React.FC = () => {
    */
   const columns: ProColumns<DataSource>[] = [
     {
-      title: '数据源名称',
+      title: t('pages.system.dataSources.columnName'),
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
     },
     {
-      title: '数据源代码',
+      title: t('pages.system.dataSources.columnCode'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '连接器类型',
+      title: t('pages.system.dataSources.columnType'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
@@ -585,52 +571,52 @@ const DataSourceListPage: React.FC = () => {
       },
     },
     {
-      title: '描述',
+      title: t('pages.system.dataSources.columnDescription'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '连接状态',
+      title: t('pages.system.dataSources.columnConnectionStatus'),
       dataIndex: 'is_connected',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        true: { text: '已连接', status: 'Success' },
-        false: { text: '未连接', status: 'Default' },
+        true: { text: t('pages.system.dataSources.statusConnected'), status: 'Success' },
+        false: { text: t('pages.system.dataSources.statusNotConnected'), status: 'Default' },
       },
       render: (_, record) => (
         <Space>
           {record.is_connected ? (
-            <Badge status="success" text="已连接" />
+            <Badge status="success" text={t('pages.system.dataSources.statusConnected')} />
           ) : (
-            <Badge status="default" text="未连接" />
+            <Badge status="default" text={t('pages.system.dataSources.statusNotConnected')} />
           )}
           {record.last_error && (
             <Tag color="error" style={{ fontSize: 11 }}>
-              错误
+              {t('pages.system.dataSources.errorTag')}
             </Tag>
           )}
         </Space>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.dataSources.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.dataSources.enabled'), status: 'Success' },
+        false: { text: t('pages.system.dataSources.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后连接时间',
+      title: t('pages.system.dataSources.columnLastConnected'),
       dataIndex: 'last_connected_at',
       width: 180,
       valueType: 'dateTime',
@@ -638,7 +624,7 @@ const DataSourceListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.dataSources.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -646,17 +632,17 @@ const DataSourceListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.dataSources.columnActions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
-            查看
+            {t('pages.system.dataSources.view')}
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('pages.system.dataSources.edit')}
           </Button>
           <Dropdown
             menu={{
@@ -664,19 +650,19 @@ const DataSourceListPage: React.FC = () => {
                 {
                   key: 'test',
                   icon: <ThunderboltOutlined />,
-                  label: '测试连接',
+                  label: t('pages.system.dataSources.testConnection'),
                   onClick: () => handleTestConnection(record),
                 },
                 {
                   key: 'delete',
                   icon: <DeleteOutlined />,
-                  label: '删除',
+                  label: t('pages.system.dataSources.delete'),
                   danger: true,
                   onClick: () => {
                     Modal.confirm({
-                      title: '确定要删除这个数据源吗？',
-                      okText: '确定',
-                      cancelText: '取消',
+                      title: t('pages.system.dataSources.deleteConfirmTitle'),
+                      okText: t('common.confirm'),
+                      cancelText: t('common.cancel'),
                       okType: 'danger',
                       onOk: () => handleDelete(record),
                     });
@@ -686,7 +672,7 @@ const DataSourceListPage: React.FC = () => {
             }}
           >
             <Button type="link" size="small" icon={<MoreOutlined />}>
-              更多
+              {t('pages.system.dataSources.more')}
             </Button>
           </Dropdown>
         </Space>
@@ -698,44 +684,35 @@ const DataSourceListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
+    { title: t('pages.system.dataSources.detailColumnName'), dataIndex: 'name' },
+    { title: t('pages.system.dataSources.detailColumnCode'), dataIndex: 'code' },
     {
-      title: '数据源名称',
-      dataIndex: 'name',
-    },
-    {
-      title: '数据源代码',
-      dataIndex: 'code',
-    },
-    {
-      title: '连接器类型',
+      title: t('pages.system.dataSources.detailColumnType'),
       dataIndex: 'type',
-      render: (value: any) => {
+      render: (value: string) => {
         const typeInfo = getTypeInfo(value);
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
+    { title: t('pages.system.dataSources.detailColumnDescription'), dataIndex: 'description' },
     {
-      title: '数据源描述',
-      dataIndex: 'description',
-    },
-    {
-      title: '关联数据集',
+      title: t('pages.system.dataSources.detailColumnRelatedDatasets'),
       dataIndex: 'related_datasets',
       render: (value: any) => {
         const list = value || [];
-        if (list.length === 0) return <span style={{ color: '#999' }}>无</span>;
+        if (list.length === 0) return <span style={{ color: '#999' }}>{t('pages.system.dataSources.noDatasets')}</span>;
         return (
           <Space direction="vertical" size={4}>
             {list.slice(0, 10).map((d: any) => (
               <Tag key={d.uuid}>{d.name} ({d.code})</Tag>
             ))}
-            {list.length > 10 && <span style={{ color: '#999' }}>等 {list.length} 个</span>}
+            {list.length > 10 && <span style={{ color: '#999' }}>{t('pages.system.dataSources.andMoreCount', { count: list.length })}</span>}
           </Space>
         );
       },
     },
     {
-      title: '连接配置',
+      title: t('pages.system.dataSources.detailColumnConfig'),
       dataIndex: 'config',
       render: (value: any) => {
         const sensitiveKeys = ['password', 'token', 'basic_pass', 'client_secret'];
@@ -759,49 +736,35 @@ const DataSourceListPage: React.FC = () => {
       },
     },
     {
-      title: '连接状态',
+      title: t('pages.system.dataSources.detailColumnConnectionStatus'),
       dataIndex: 'is_connected',
-      render: (value: any) => (
+      render: (value: boolean) => (
         <Space>
           {value ? (
-            <Badge status="success" text="已连接" />
+            <Badge status="success" text={t('pages.system.dataSources.statusConnected')} />
           ) : (
-            <Badge status="default" text="未连接" />
+            <Badge status="default" text={t('pages.system.dataSources.statusNotConnected')} />
           )}
         </Space>
       ),
     },
     {
-      title: '启用状态',
+      title: t('pages.system.dataSources.detailColumnActive'),
       dataIndex: 'is_active',
-      render: (value: any) => (
+      render: (value: boolean) => (
         <Tag color={value ? 'success' : 'default'}>
-          {value ? '启用' : '禁用'}
+          {value ? t('pages.system.dataSources.enabled') : t('pages.system.dataSources.disabled')}
         </Tag>
       ),
     },
+    { title: t('pages.system.dataSources.detailColumnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
     {
-      title: '最后连接时间',
-      dataIndex: 'last_connected_at',
-      valueType: 'dateTime',
-    },
-    {
-      title: '最后错误',
+      title: t('pages.system.dataSources.detailColumnLastError'),
       dataIndex: 'last_error',
-      render: (value: any) => value ? (
-        <Tag color="error">{value}</Tag>
-      ) : '-',
+      render: (value: any) => value ? <Tag color="error">{value}</Tag> : '-',
     },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-    },
+    { title: t('pages.system.dataSources.detailColumnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('pages.system.dataSources.detailColumnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -852,7 +815,7 @@ const DataSourceListPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取数据源列表失败:', error);
-              messageApi.error(error?.message || '获取数据源列表失败');
+              messageApi.error(error?.message || t('pages.system.dataSources.loadListFailed'));
               return {
                 data: [],
                 success: false,
@@ -864,7 +827,7 @@ const DataSourceListPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton
           onCreate={handleCreate}
-          createButtonText="新建数据源"
+          createButtonText={t('pages.system.dataSources.createButton')}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           rowSelection={{
@@ -873,20 +836,20 @@ const DataSourceListPage: React.FC = () => {
           }}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.dataSources.batchDelete')}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-test" onClick={handleBatchTest}>批量测试连接</Button>,
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>批量启用</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>批量禁用</Button>,
+                  <Button key="batch-test" onClick={handleBatchTest}>{t('pages.system.dataSources.batchTest')}</Button>,
+                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.dataSources.batchEnable')}</Button>,
+                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.dataSources.batchDisable')}</Button>,
                 ]
               : []
           }
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('请填写导入数据');
+              messageApi.warning(t('pages.system.dataSources.fillImportData'));
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
@@ -928,7 +891,7 @@ const DataSourceListPage: React.FC = () => {
                 done++;
               }
             }
-            messageApi.success(`成功导入 ${done} 个数据源`);
+            messageApi.success(t('pages.system.dataSources.importSuccessCount', { count: done }));
             actionRef.current?.reload();
           }}
           importHeaders={['*数据源名称', '*数据源代码', '*数据源类型', '描述', '启用状态', '连接配置(JSON)']}
@@ -945,7 +908,7 @@ const DataSourceListPage: React.FC = () => {
               items = res.items;
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('pages.system.dataSources.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -955,7 +918,7 @@ const DataSourceListPage: React.FC = () => {
             a.download = `data-sources-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('pages.system.dataSources.exportSuccess'));
           }}
           viewTypes={['table', 'help']}
           defaultViewType="table"
@@ -967,7 +930,7 @@ const DataSourceListPage: React.FC = () => {
 
       {/* 创建/编辑数据源 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑数据源' : '新建数据源'}
+        title={isEdit ? t('pages.system.dataSources.modalEdit') : t('pages.system.dataSources.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -990,7 +953,7 @@ const DataSourceListPage: React.FC = () => {
                   loading={testingConnection}
                   onClick={handleTestConnectionInForm}
                 >
-                  测试连接
+                  {t('pages.system.dataSources.testConnection')}
                 </Button>
               );
             }}
@@ -999,26 +962,26 @@ const DataSourceListPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="数据源名称"
-          rules={[{ required: true, message: '请输入数据源名称' }]}
-          placeholder="请输入数据源名称"
+          label={t('pages.system.dataSources.labelName')}
+          rules={[{ required: true, message: t('pages.system.dataSources.nameRequired') }]}
+          placeholder={t('pages.system.dataSources.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
-          label="数据源代码"
+          label={t('pages.system.dataSources.labelCode')}
           rules={[
-            { required: true, message: '请输入数据源代码' },
-            { pattern: /^[a-z0-9_]+$/, message: '数据源代码只能包含小写字母、数字和下划线' },
+            { required: true, message: t('pages.system.dataSources.codeRequired') },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.dataSources.codePattern') },
           ]}
-          placeholder="请输入数据源代码（唯一标识，如：main_db）"
+          placeholder={t('pages.system.dataSources.codePlaceholder')}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <SafeProFormSelect
           name="type"
-          label="数据源类型"
-          rules={[{ required: true, message: '请选择数据源类型' }]}
+          label={t('pages.system.dataSources.labelType')}
+          rules={[{ required: true, message: t('pages.system.dataSources.typeRequired') }]}
           options={[
             { label: 'PostgreSQL', value: 'postgresql' },
             { label: 'MySQL', value: 'mysql' },
@@ -1048,14 +1011,14 @@ const DataSourceListPage: React.FC = () => {
                   <>
                     <ProFormText
                       name="host"
-                      label="主机地址"
-                      placeholder="localhost"
-                      rules={[{ required: true, message: '请输入主机地址' }]}
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <ProFormDigit
                       name="port"
-                      label="端口"
+                      label={t('pages.system.dataSources.labelPort')}
                       placeholder={
                         type === 'mysql' ? '3306' : 
                         type === 'postgresql' ? '5432' :
@@ -1065,28 +1028,28 @@ const DataSourceListPage: React.FC = () => {
                         type === 'doris' || type === 'starrocks' ? '9030' :
                         type === 'influxdb' ? '8086' : '5432'
                       }
-                      rules={[{ required: true, message: '请输入端口' }]}
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText
                       name="database"
-                      label="数据库名"
-                      placeholder="请输入数据库名称"
-                      rules={[{ required: true, message: '请输入数据库名' }]}
+                      label={t('pages.system.dataSources.labelDatabase')}
+                      placeholder={t('pages.system.dataSources.databasePlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.databaseRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText
                       name="username"
-                      label="用户名"
-                      placeholder="user"
-                      rules={[{ required: true, message: '请输入用户名' }]}
+                      label={t('pages.system.dataSources.labelUsername')}
+                      placeholder={t('pages.system.dataSources.usernamePlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.usernameRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText.Password
                       name="password"
-                      label="密码"
-                      placeholder="选填（部分数据库可免密）"
+                      label={t('pages.system.dataSources.labelPassword')}
+                      placeholder={t('pages.system.dataSources.passwordPlaceholder')}
                       colProps={{ span: 12 }}
                     />
                   </>
@@ -1098,29 +1061,29 @@ const DataSourceListPage: React.FC = () => {
                   <>
                     <ProFormText
                       name="host"
-                      label="主机地址"
-                      placeholder="localhost"
-                      rules={[{ required: true, message: '请输入主机地址' }]}
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <ProFormDigit
                       name="port"
-                      label="端口"
+                      label={t('pages.system.dataSources.labelPort')}
                       placeholder="27017"
-                      rules={[{ required: true, message: '请输入端口' }]}
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText
                       name="database"
-                      label="数据库名"
+                      label={t('pages.system.dataSources.labelDatabase')}
                       placeholder="admin"
-                      rules={[{ required: true, message: '请输入数据库名' }]}
+                      rules={[{ required: true, message: t('pages.system.dataSources.databaseRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <SafeProFormSelect
                       name="auth_source"
-                      label="认证库"
+                      label={t('pages.system.dataSources.labelAuthSource')}
                       options={[{ label: 'admin', value: 'admin' }, { label: 'default', value: 'default' }]}
                       colProps={{ span: 12 }}
                     />
@@ -1133,28 +1096,28 @@ const DataSourceListPage: React.FC = () => {
                   <>
                     <ProFormText
                       name="host"
-                      label="主机地址"
-                      placeholder="localhost"
-                      rules={[{ required: true, message: '请输入主机地址' }]}
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
                       colProps={{ span: 12 }}
                     />
                     <ProFormDigit
                       name="port"
-                      label="端口"
+                      label={t('pages.system.dataSources.labelPort')}
                       placeholder="6379"
-                      rules={[{ required: true, message: '请输入端口' }]}
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText.Password
                       name="password"
-                      label="密码"
-                      placeholder="选填"
+                      label={t('pages.system.dataSources.labelPassword')}
+                      placeholder={t('pages.system.dataSources.passwordPlaceholderShort')}
                       colProps={{ span: 12 }}
                     />
                     <ProFormDigit
                       name="db"
-                      label="DB Index"
+                      label={t('pages.system.dataSources.labelDbIndex')}
                       initialValue={0}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
                       colProps={{ span: 12 }}
@@ -1168,28 +1131,28 @@ const DataSourceListPage: React.FC = () => {
                   <>
                     <ProFormText
                       name="host"
-                      label="主机地址"
-                      placeholder="localhost"
-                      rules={[{ required: true, message: '请输入主机地址' }]}
+                      label={t('pages.system.dataSources.labelHost')}
+                      placeholder={t('pages.system.dataSources.hostPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.hostRequired') }]}
                       colProps={{ span: 18 }}
                     />
                     <ProFormDigit
                       name="port"
-                      label="端口"
+                      label={t('pages.system.dataSources.labelPort')}
                       placeholder="9200"
                       initialValue={9200}
-                      rules={[{ required: true, message: '请输入端口' }]}
+                      rules={[{ required: true, message: t('pages.system.dataSources.portRequired') }]}
                       fieldProps={{ precision: 0, style: { width: '100%' } }}
                       colProps={{ span: 6 }}
                     />
                     <ProFormText
                       name="username"
-                      label="用户名"
+                      label={t('pages.system.dataSources.labelUsername')}
                       colProps={{ span: 12 }}
                     />
                     <ProFormText.Password
                       name="password"
-                      label="密码"
+                      label={t('pages.system.dataSources.labelPassword')}
                       colProps={{ span: 12 }}
                     />
                   </>
@@ -1201,19 +1164,19 @@ const DataSourceListPage: React.FC = () => {
                   <>
                     <ProFormText
                       name="base_url"
-                      label="Base URL"
-                      placeholder="https://api.example.com/v1"
-                      rules={[{ required: true, message: '请输入 Base URL' }]}
+                      label={t('pages.system.dataSources.labelBaseUrl')}
+                      placeholder={t('pages.system.dataSources.baseUrlPlaceholder')}
+                      rules={[{ required: true, message: t('pages.system.dataSources.baseUrlRequired') }]}
                       colProps={{ span: 24 }}
                     />
                     <ProFormSelect
                       name="auth_type"
-                      label="认证方式"
+                      label={t('pages.system.dataSources.labelAuthType')}
                       options={[
-                        { value: 'none', label: '无' },
-                        { value: 'bearer', label: 'Bearer Token' },
-                        { value: 'basic', label: 'Basic Auth' },
-                        { value: 'header', label: 'Custom Header' },
+                        { value: 'none', label: t('pages.system.dataSources.authNone') },
+                        { value: 'bearer', label: t('pages.system.dataSources.authBearer') },
+                        { value: 'basic', label: t('pages.system.dataSources.authBasic') },
+                        { value: 'header', label: t('pages.system.dataSources.authHeader') },
                       ]}
                       initialValue="bearer"
                       colProps={{ span: 12 }}
@@ -1221,13 +1184,13 @@ const DataSourceListPage: React.FC = () => {
                     <ProFormDependency name={['auth_type']}>
                       {({ auth_type }) => {
                         if (auth_type === 'bearer') {
-                          return <ProFormText.Password name="token" label="Token" placeholder="选填" colProps={{ span: 12 }} />;
+                          return <ProFormText.Password name="token" label={t('pages.system.dataSources.labelToken')} placeholder={t('pages.system.dataSources.passwordPlaceholderShort')} colProps={{ span: 12 }} />;
                         }
                         if (auth_type === 'basic') {
                           return (
                             <>
-                              <ProFormText name="basic_user" label="User" colProps={{ span: 12 }} />
-                              <ProFormText.Password name="basic_pass" label="Password" colProps={{ span: 12 }} />
+                              <ProFormText name="basic_user" label={t('pages.system.dataSources.labelBasicUser')} colProps={{ span: 12 }} />
+                              <ProFormText.Password name="basic_pass" label={t('pages.system.dataSources.labelBasicPass')} colProps={{ span: 12 }} />
                             </>
                           );
                         }
@@ -1239,18 +1202,18 @@ const DataSourceListPage: React.FC = () => {
               }
 
               return (
-                <Alert message={`暂未为 ${type} 类型提供可视化表单，请联系管理员。`} type="info" />
+                <Alert message={t('pages.system.dataSources.typeFormNotSupported', { type })} type="info" />
               );
             }}
           </ProFormDependency>
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="选填"
+          label={t('pages.system.dataSources.labelDescription')}
+          placeholder={t('pages.system.dataSources.descriptionPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label="是否启用" colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('pages.system.dataSources.labelActive')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       {/* 连接器市场 */}
@@ -1262,7 +1225,7 @@ const DataSourceListPage: React.FC = () => {
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<DataSource>
-        title="数据源详情"
+        title={t('pages.system.dataSources.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -1273,18 +1236,18 @@ const DataSourceListPage: React.FC = () => {
           detailData && (
             <Space>
               <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
-                编辑
+                {t('pages.system.dataSources.edit')}
               </Button>
               <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
-                测试连接
+                {t('pages.system.dataSources.testConnection')}
               </Button>
               <Popconfirm
-                title="确定要删除这个数据源吗？"
+                title={t('pages.system.dataSources.deleteConfirmTitle')}
                 onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
-                okText="确定"
-                cancelText="取消"
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
               >
-                <Button danger icon={<DeleteOutlined />}>删除</Button>
+                <Button danger icon={<DeleteOutlined />}>{t('pages.system.dataSources.delete')}</Button>
               </Popconfirm>
             </Space>
           )

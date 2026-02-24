@@ -18,6 +18,8 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
+from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+from apps.kuaizhizao.models.receivable import Receivable
 from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
     SalesOrderItemCreate, SalesOrderItemResponse,
@@ -44,8 +46,18 @@ class SalesOrderService:
         items: Optional[List[SalesOrderItem]] = None,
         demand: Optional[Demand] = None,
         duration_info: Optional[dict] = None,
+        delivery_progress: Optional[float] = None,
+        invoice_progress: Optional[float] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
+        lifecycle = get_sales_order_lifecycle(
+            order,
+            items=items,
+            delivery_progress=delivery_progress,
+            invoice_progress=invoice_progress,
+            pushed_to_computation=bool(demand and getattr(demand, "pushed_to_computation", False)),
+        )
         base = {
             "id": order.id,
             "uuid": str(order.uuid),
@@ -89,6 +101,11 @@ class SalesOrderService:
             base["computation_code"] = None
         if duration_info is not None:
             base["duration_info"] = duration_info
+        if delivery_progress is not None:
+            base["delivery_progress"] = round(delivery_progress, 1)
+        if invoice_progress is not None:
+            base["invoice_progress"] = round(invoice_progress, 1)
+        base["lifecycle"] = lifecycle
         if items is not None:
             base["items"] = [
                 SalesOrderItemResponse(
@@ -128,6 +145,25 @@ class SalesOrderService:
             source_id=sales_order_id,
             deleted_at__isnull=True,
         )
+
+    async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
+        """如果存在关联需求，则同步并重算快照，返回是否同步成功"""
+        demand = await self._get_linked_demand(tenant_id, order_id)
+        if demand:
+            from apps.kuaizhizao.services.demand_service import DemandService
+            try:
+                sync_result = await DemandService().sync_from_upstream(
+                    tenant_id=tenant_id,
+                    source_type="sales_order",
+                    source_id=order_id,
+                    operator_id=operator_id,
+                )
+                if sync_result.get("synced"):
+                    logger.info("销售订单 %s 已同步关联需求并更新快照", order_id)
+                    return True
+            except Exception as e:
+                logger.warning("销售订单更新后同步需求失败: %s", e)
+        return False
 
     def _is_audited(self, status: str) -> bool:
         """判断是否已审核（兼容中英文状态）"""
@@ -280,7 +316,51 @@ class SalesOrderService:
         sales_orders = []
         for order in orders:
             demand = await self._get_linked_demand(tenant_id, order.id)
-            sales_orders.append(self._order_to_response(order, demand=demand))
+
+            # 交货进度：订单明细已交货数量 / 订单总数量
+            delivery_progress: Optional[float] = None
+            items_agg = await SalesOrderItem.filter(
+                tenant_id=tenant_id, sales_order_id=order.id
+            ).values_list("order_quantity", "delivered_quantity")
+            if items_agg:
+                total_qty = sum(Decimal(str(r[0] or 0)) for r in items_agg)
+                total_delivered = sum(Decimal(str(r[1] or 0)) for r in items_agg)
+                if total_qty and total_qty > 0:
+                    delivery_progress = float(min(100, (total_delivered / total_qty) * 100))
+
+            # 开票进度：该订单关联出库单产生的已开票应收金额 / 订单总金额
+            invoice_progress_val: Optional[float] = None
+            order_amount = Decimal(str(order.total_amount or 0))
+            if order_amount and order_amount > 0:
+                delivery_ids = await SalesDelivery.filter(
+                    tenant_id=tenant_id, sales_order_id=order.id, deleted_at__isnull=True
+                ).values_list("id", flat=True)
+                if delivery_ids:
+                    receivables = await Receivable.filter(
+                        tenant_id=tenant_id,
+                        source_type="销售出库",
+                        source_id__in=list(delivery_ids),
+                        invoice_issued=True,
+                        deleted_at__isnull=True,
+                    ).all()
+                    invoiced_sum = sum(Decimal(str(r.total_amount or 0)) for r in receivables)
+                    try:
+                        invoice_progress_val = float(min(100, (invoiced_sum / order_amount) * 100))
+                    except Exception:
+                        invoice_progress_val = 0.0
+                else:
+                    invoice_progress_val = 0.0
+            else:
+                invoice_progress_val = 0.0
+
+            sales_orders.append(
+                self._order_to_response(
+                    order,
+                    demand=demand,
+                    delivery_progress=delivery_progress,
+                    invoice_progress=invoice_progress_val,
+                )
+            )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)
 
     async def update_sales_order(
@@ -290,14 +370,15 @@ class SalesOrderService:
         sales_order_data: SalesOrderUpdate,
         updated_by: int,
     ) -> SalesOrderResponse:
-        """更新销售订单"""
+        """更新销售订单。支持草稿与已审核订单（含反审核后编辑）；已审核订单保存后同步关联需求。"""
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_draft(order.status):
-            raise BusinessLogicError(f"只能更新草稿状态的销售订单，当前状态: {order.status}")
+        # 允许草稿或已审核状态更新（已审核时可能为反审核后再编辑，或直接编辑已审核订单）
+        if order.status not in (DemandStatus.DRAFT, DemandStatus.AUDITED, DemandStatus.PENDING_REVIEW):
+            raise BusinessLogicError(f"只能更新草稿、待审核或已审核的销售订单，当前状态: {order.status}")
 
         async with in_transaction():
             upd = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
@@ -339,7 +420,22 @@ class SalesOrderService:
                     total_amount=total_amt,
                 )
 
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id, include_items=True)
+        result = await self.get_sales_order_by_id(tenant_id, sales_order_id, include_items=True)
+        # 若是自动审核配置，撤回审核后的订单（当前待审核）编辑保存后自动再次审核
+        pending_values = (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核")
+        if order.status in pending_values:
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "sales_order"
+            )
+            if not audit_required:
+                logger.info("销售订单 %s 为待审核且无需审核，保存后自动通过", sales_order_id)
+                return await self.approve_sales_order(tenant_id, sales_order_id, updated_by)
+
+        # 只要有关联需求，订单任意保存都同步需求内容，使需求管理动态随上游变化（策略 A）
+        demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, updated_by)
+        out = result.model_dump()
+        out["demand_synced"] = demand_synced
+        return SalesOrderResponse(**out)
 
     async def submit_sales_order(
         self,
@@ -350,36 +446,23 @@ class SalesOrderService:
         """提交销售订单"""
         order = await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
-        from core.models.approval_process import ApprovalProcess
-        process = await ApprovalProcess.filter(
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        instance = await ApprovalInstanceService.start_approval(
             tenant_id=tenant_id,
-            code="sales_order_approval",
-            is_active=True,
-            deleted_at__isnull=True,
-        ).first()
-
-        if process:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
-            from core.schemas.approval_instance import ApprovalInstanceCreate
-
-            await ApprovalInstanceService.create_approval_instance(
-                tenant_id=tenant_id,
-                user_id=submitted_by,
-                data=ApprovalInstanceCreate(
-                    process_uuid=str(process.uuid),
-                    title=f"销售订单审批: {order.order_code}",
-                    content=f"客户: {order.customer_name}, 金额: {order.total_amount}",
-                    data={
-                        "entity_type": "sales_order",
-                        "entity_id": order.id,
-                        "entity_uuid": str(order.uuid),
-                    },
-                ),
-            )
+            user_id=submitted_by,
+            process_code="sales_order_approval",
+            entity_type="sales_order",
+            entity_id=order.id,
+            entity_uuid=str(order.uuid),
+            title=f"销售订单审批: {order.order_code}",
+            content=f"客户: {order.customer_name}, 金额: {order.total_amount}",
+        )
+        if instance:
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 status=DemandStatus.PENDING_REVIEW,
                 updated_by=submitted_by,
             )
+            await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         audit_required = await self.business_config_service.check_audit_required(
@@ -387,6 +470,12 @@ class SalesOrderService:
         )
         if not audit_required:
             logger.info("销售订单 %s 无需审核，自动通过", sales_order_id)
+            async with in_transaction():
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    status=DemandStatus.PENDING_REVIEW,
+                    review_status=ReviewStatus.PENDING,
+                    updated_by=submitted_by,
+                )
             return await self.approve_sales_order(tenant_id, sales_order_id, submitted_by)
 
         async with in_transaction():
@@ -395,6 +484,7 @@ class SalesOrderService:
                 review_status=ReviewStatus.PENDING,
                 updated_by=submitted_by,
             )
+        await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def approve_sales_order(
@@ -425,13 +515,19 @@ class SalesOrderService:
                 status=DemandStatus.AUDITED,
                 updated_by=approved_by,
             )
-            # 审核通过后自动产生 Demand，进入需求池
+            # 审核通过后自动产生 Demand，进入需求池；若已有需求（如反审核再编辑后重新审核）则同步需求
+            demand_synced = False
             demand = await self._get_linked_demand(tenant_id, sales_order_id)
             if not demand:
                 await self._create_demand_from_sales_order(
                     tenant_id, sales_order_id, approved_by
                 )
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+            else:
+                demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
+        result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        out = result.model_dump()
+        out["demand_synced"] = demand_synced
+        return SalesOrderResponse(**out)
 
     async def reject_sales_order(
         self,
@@ -463,6 +559,7 @@ class SalesOrderService:
                 status=DemandStatus.REJECTED,
                 updated_by=approved_by,
             )
+        await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def unapprove_sales_order(
@@ -494,6 +591,7 @@ class SalesOrderService:
                 review_remarks=None,
                 updated_by=unapproved_by,
             )
+        await self._sync_demand_if_exists(tenant_id, sales_order_id, unapproved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def push_sales_order_to_computation(
@@ -644,6 +742,7 @@ class SalesOrderService:
                 review_remarks=None,
                 updated_by=withdrawn_by,
             )
+        await self._sync_demand_if_exists(tenant_id, sales_order_id, withdrawn_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def delete_sales_order(

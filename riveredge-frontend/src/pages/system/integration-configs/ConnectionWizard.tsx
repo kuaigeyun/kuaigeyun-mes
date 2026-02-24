@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Form, Input, Select, InputNumber, Radio, Card, Space, App, Button } from 'antd';
 import { ApiOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { WizardTemplate } from '../../../components/layout-templates';
@@ -26,6 +27,7 @@ export interface ConnectionWizardProps {
 }
 
 const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [step, setStep] = useState(0);
   const [type, setType] = useState<ConnectionType>('API');
@@ -83,20 +85,20 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       const code = formBasic.getFieldValue('code');
       const description = formBasic.getFieldValue('description');
       if (!name?.trim()) {
-        messageApi.error('请输入连接名称');
+        messageApi.error(t('pages.system.integrationConfigs.connectionNameRequired'));
         return;
       }
       if (!code?.trim()) {
-        messageApi.error('请输入连接代码');
+        messageApi.error(t('pages.system.integrationConfigs.connectionCodeRequired'));
         return;
       }
       const finalConfig = buildConfigFromForms();
       if (type === 'API' && !finalConfig.url) {
-        messageApi.error('请填写接口地址');
+        messageApi.error(t('pages.system.integrationConfigs.fillUrl'));
         return;
       }
       if (type === 'Database' && (!finalConfig.host || !finalConfig.database || !finalConfig.user)) {
-        messageApi.error('请填写主机、数据库名和用户名');
+        messageApi.error(t('pages.system.integrationConfigs.fillDbFields'));
         return;
       }
       setSaving(true);
@@ -108,18 +110,18 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
         config: finalConfig,
         is_active: true,
       } as IntegrationConfigCreate);
-      messageApi.success('连接已创建');
+      messageApi.success(t('pages.system.integrationConfigs.connectionCreated'));
       if (andTest) {
         setTesting(true);
         try {
           const result = await testConnection(created.uuid);
           if (result.success) {
-            messageApi.success(result.message || '连接测试成功');
+            messageApi.success(result.message || t('pages.system.integrationConfigs.testSuccess'));
           } else {
-            messageApi.warning(result.message || '连接测试未通过');
+            messageApi.warning(result.message || t('pages.system.integrationConfigs.testNotPassed'));
           }
         } catch (e: any) {
-          messageApi.warning(e?.message || '连接测试失败');
+          messageApi.warning(e?.message || t('pages.system.integrationConfigs.testFailed'));
         } finally {
           setTesting(false);
         }
@@ -127,7 +129,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       handleClose();
       onSuccess();
     } catch (error: any) {
-      messageApi.error(error?.message || '保存失败');
+      messageApi.error(error?.message || t('pages.system.integrationConfigs.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -150,10 +152,10 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
             <Radio value="API">
               <Space>
                 <ApiOutlined />
-                <span>API 连接</span>
+                <span>{t('pages.system.integrationConfigs.apiConnection')}</span>
               </Space>
               <div style={{ marginTop: 8, marginLeft: 24, color: '#666', fontSize: 12 }}>
-                通过 HTTP(S) 对接外部 REST API
+                {t('pages.system.integrationConfigs.apiConnectionDesc')}
               </div>
             </Radio>
           </Card>
@@ -161,10 +163,10 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
             <Radio value="Database">
               <Space>
                 <DatabaseOutlined />
-                <span>数据库连接</span>
+                <span>{t('pages.system.integrationConfigs.dbConnection')}</span>
               </Space>
               <div style={{ marginTop: 8, marginLeft: 24, color: '#666', fontSize: 12 }}>
-                直连 MySQL、PostgreSQL 等数据库
+                {t('pages.system.integrationConfigs.dbConnectionDesc')}
               </div>
             </Radio>
           </Card>
@@ -175,17 +177,17 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
 
   const step1ContentApi = (
     <Form form={formApi} layout="vertical" style={{ padding: '24px 0', maxWidth: 480 }}>
-      <Form.Item name="url" label="接口地址" rules={[{ required: true, message: '请输入接口地址' }]}>
+      <Form.Item name="url" label={t('pages.system.integrationConfigs.urlLabel')} rules={[{ required: true, message: t('pages.system.integrationConfigs.urlRequired') }]}>
         <Input placeholder="https://api.example.com" />
       </Form.Item>
-      <Form.Item name="method" label="请求方法" initialValue="GET">
+      <Form.Item name="method" label={t('pages.system.integrationConfigs.methodLabel')} initialValue="GET">
         <Select options={[
           { label: 'GET', value: 'GET' },
           { label: 'POST', value: 'POST' },
           { label: 'PUT', value: 'PUT' },
         ]} />
       </Form.Item>
-      <Form.Item name="headers" label="请求头（JSON，可选）">
+      <Form.Item name="headers" label={t('pages.system.integrationConfigs.headersLabel')}>
         <Input.TextArea rows={3} placeholder='{"Authorization": "Bearer xxx"}' />
       </Form.Item>
     </Form>
@@ -193,55 +195,55 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
 
   const step1ContentDb = (
     <Form form={formDb} layout="vertical" style={{ padding: '24px 0', maxWidth: 480 }}>
-      <Form.Item name="host" label="主机" rules={[{ required: true, message: '请输入主机地址' }]}>
-        <Input placeholder="localhost 或 192.168.1.1" />
+      <Form.Item name="host" label={t('pages.system.integrationConfigs.hostLabel')} rules={[{ required: true, message: t('pages.system.integrationConfigs.hostRequired') }]}>
+        <Input placeholder={t('pages.system.integrationConfigs.hostPlaceholder')} />
       </Form.Item>
-      <Form.Item name="port" label="端口" initialValue={5432}>
+      <Form.Item name="port" label={t('pages.system.integrationConfigs.portLabel')} initialValue={5432}>
         <InputNumber min={1} max={65535} style={{ width: '100%' }} />
       </Form.Item>
-      <Form.Item name="database" label="数据库名" rules={[{ required: true, message: '请输入数据库名' }]}>
+      <Form.Item name="database" label={t('pages.system.integrationConfigs.databaseLabel')} rules={[{ required: true, message: t('pages.system.integrationConfigs.databaseRequired') }]}>
         <Input placeholder="mydb" />
       </Form.Item>
-      <Form.Item name="user" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+      <Form.Item name="user" label={t('pages.system.integrationConfigs.userLabel')} rules={[{ required: true, message: t('pages.system.integrationConfigs.userRequired') }]}>
         <Input placeholder="root" />
       </Form.Item>
-      <Form.Item name="password" label="密码">
-        <Input.Password placeholder="选填" />
+      <Form.Item name="password" label={t('pages.system.integrationConfigs.passwordLabel')}>
+        <Input.Password placeholder={t('pages.system.integrationConfigs.passwordOptional')} />
       </Form.Item>
     </Form>
   );
 
   const step2Content = (
     <Form form={formBasic} layout="vertical" style={{ padding: '24px 0', maxWidth: 480 }}>
-      <Form.Item name="name" label="连接名称" rules={[{ required: true, message: '请输入连接名称' }]}>
-        <Input placeholder="如：ERP 接口" />
+      <Form.Item name="name" label={t('pages.system.integrationConfigs.connectionNameLabel')} rules={[{ required: true, message: t('pages.system.integrationConfigs.connectionNameRequired') }]}>
+        <Input placeholder={t('pages.system.integrationConfigs.connectionNamePlaceholder')} />
       </Form.Item>
       <Form.Item
         name="code"
-        label="连接代码"
+        label={t('pages.system.integrationConfigs.connectionCodeLabel')}
         rules={[
-          { required: true, message: '请输入连接代码' },
-          { pattern: /^[a-z0-9_]+$/, message: '只能包含小写字母、数字和下划线' },
+          { required: true, message: t('pages.system.integrationConfigs.connectionCodeRequired') },
+          { pattern: /^[a-z0-9_]+$/, message: t('pages.system.integrationConfigs.connectionCodePattern') },
         ]}
       >
-        <Input placeholder="如：erp_api" />
+        <Input placeholder={t('pages.system.integrationConfigs.connectionCodePlaceholder')} />
       </Form.Item>
-      <Form.Item name="description" label="描述">
-        <Input.TextArea rows={2} placeholder="选填" />
+      <Form.Item name="description" label={t('pages.system.integrationConfigs.descLabel')}>
+        <Input.TextArea rows={2} placeholder={t('pages.system.integrationConfigs.descOptional')} />
       </Form.Item>
     </Form>
   );
 
   const steps = [
-    { title: '选择连接类型', description: 'API 或数据库', content: step0Content },
+    { title: t('pages.system.integrationConfigs.wizardStep0Title'), description: t('pages.system.integrationConfigs.wizardStep0Desc'), content: step0Content },
     {
-      title: '填写连接信息',
-      description: type === 'API' ? '接口地址与请求方式' : '数据库连接参数',
+      title: t('pages.system.integrationConfigs.wizardStep1Title'),
+      description: type === 'API' ? t('pages.system.integrationConfigs.wizardStep1DescApi') : t('pages.system.integrationConfigs.wizardStep1DescDb'),
       content: type === 'API' ? step1ContentApi : step1ContentDb,
     },
     {
-      title: '保存连接',
-      description: '名称与代码',
+      title: t('pages.system.integrationConfigs.wizardStep2Title'),
+      description: t('pages.system.integrationConfigs.wizardStep2Desc'),
       content: step2Content,
     },
   ];
@@ -257,7 +259,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
 
   return (
     <Modal
-      title="通过向导创建连接"
+      title={t('pages.system.integrationConfigs.wizardTitle')}
       open={open}
       onCancel={handleClose}
       footer={null}
@@ -276,12 +278,12 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
       {step === 2 && (
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Space>
-            <Button onClick={handleClose}>取消</Button>
+            <Button onClick={handleClose}>{t('pages.system.integrationConfigs.wizardCancel')}</Button>
             <Button type="primary" loading={saving} onClick={() => handleFinish(false)}>
-              保存
+              {t('pages.system.integrationConfigs.wizardSave')}
             </Button>
             <Button type="primary" loading={saving || testing} onClick={() => handleFinish(true)}>
-              保存并测试连接
+              {t('pages.system.integrationConfigs.wizardSaveAndTest')}
             </Button>
           </Space>
         </div>

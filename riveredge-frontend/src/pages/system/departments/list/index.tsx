@@ -1,71 +1,47 @@
 /**
  * 部门管理列表页面
- * 
+ *
  * 用于系统管理员查看和管理组织内的部门。
  * 使用树形表格展示，支持统计、创建、编辑、删除等功能。
+ * Schema 驱动 + 国际化
  */
 
 import React, { useRef, useState } from 'react';
-import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect } from '@ant-design/pro-components';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, TeamOutlined, CheckCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import { ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, List, Popconfirm, Tooltip } from 'antd';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, TeamOutlined, CheckCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
+import { DepartmentFormModal } from '../components/DepartmentFormModal';
 import {
   getDepartmentTree,
   getDepartmentByUuid,
-  createDepartment,
-  updateDepartment,
   deleteDepartment,
   importDepartments,
   Department,
   DepartmentTreeItem,
-  CreateDepartmentData,
-  UpdateDepartmentData,
 } from '../../../../services/department';
-// import { getUserList, User } from '../../../../services/user';
 
-/**
- * 部门管理列表页面组件
- */
 const DepartmentListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<any>();
-  
-  // 统计数据状态
-  const [stats, setStats] = useState({
-    totalCount: 0,
-    activeCount: 0,
-    userCount: 0,
-  });
 
-  // Modal 相关状态（创建/编辑）
+  const [stats, setStats] = useState({ totalCount: 0, activeCount: 0, userCount: 0 });
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
   const [currentDepartmentUuid, setCurrentDepartmentUuid] = useState<string | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
-  
-  // 部门树数据缓存（用于父部门选择）
+  const [initialParentUuid, setInitialParentUuid] = useState<string | null>(null);
+
   const [deptTreeData, setDeptTreeData] = useState<DepartmentTreeItem[]>([]);
-  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-
-  // 展开/收起状态
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
-
-  // 选中行状态（用于批量删除）
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  // 缓存原始列表数据用于批量操作校验
   const [allDepts, setAllDepts] = useState<Department[]>([]);
 
-  // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Department | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  /**
-   * 递归获取所有部门 UUID（用于一键展开）
-   */
   const getAllKeys = (data: DepartmentTreeItem[]): string[] => {
     let keys: string[] = [];
     data.forEach((item) => {
@@ -77,54 +53,34 @@ const DepartmentListPage: React.FC = () => {
     return keys;
   };
 
-  // 批量导入相关状态
-  // const [importVisible, setImportVisible] = useState(false); // UniTable 自带导入功能，这里预留
-
-  /**
-   * 加载数据
-   */
   const loadData = async (params: any, _sort: any, _filter: any, searchFormValues?: any) => {
     try {
-      // 记录参数以便后续支持后端分页和过滤
-      console.log('加载部门数据参数:', { params, searchFormValues });
-      
-      // ⚠️ 修复：从 searchFormValues 中提取搜索参数
       const keyword = searchFormValues?.keyword || searchFormValues?.name || searchFormValues?.code;
-      const is_active = searchFormValues?.is_active !== undefined && searchFormValues?.is_active !== '' 
-        ? (searchFormValues.is_active === 'true' || searchFormValues.is_active === true)
-        : undefined;
+      const is_active =
+        searchFormValues?.is_active !== undefined && searchFormValues?.is_active !== ''
+          ? searchFormValues.is_active === 'true' || searchFormValues.is_active === true
+          : undefined;
 
-      // 调用后端 API，传入搜索和筛选参数
-      const response = await getDepartmentTree({
-        keyword,
-        is_active,
-      });
-      
-      // 更新统计数据
-      // 需要遍历树来计算
+      const response = await getDepartmentTree({ keyword, is_active });
+
       let active = 0;
       let users = 0;
       const allKeys: string[] = [];
       const traverse = (nodes: DepartmentTreeItem[]) => {
-        nodes.forEach(node => {
+        nodes.forEach((node) => {
           allKeys.push(node.uuid);
           if (node.is_active) active++;
-          users += (node.user_count || 0);
+          users += node.user_count || 0;
           if (node.children) traverse(node.children);
         });
       };
       traverse(response.items);
-      
-      setStats({
-        totalCount: response.total,
-        activeCount: active,
-        userCount: users,
-      });
 
-      // 缓存扁平化数据用于批量操作时的快速查找/校验
+      setStats({ totalCount: response.total, activeCount: active, userCount: users });
+
       const flatDepts: Department[] = [];
       const flatten = (nodes: DepartmentTreeItem[]) => {
-        nodes.forEach(node => {
+        nodes.forEach((node) => {
           const { children, ...rest } = node;
           flatDepts.push(rest as Department);
           if (children) flatten(children);
@@ -132,70 +88,31 @@ const DepartmentListPage: React.FC = () => {
       };
       flatten(response.items);
       setAllDepts(flatDepts);
-
-      // 缓存树数据用于选择父部门
       setDeptTreeData(response.items);
 
-      // 如果是第一次加载，默认全部展开
       if (expandedRowKeys.length === 0) {
         setExpandedRowKeys(allKeys);
       }
 
-      return {
-        data: response.items,
-        success: true,
-        total: response.total,
-      };
+      return { data: response.items, success: true, total: response.total };
     } catch (error: any) {
-      messageApi.error(error.message || '加载部门数据失败');
-      return {
-        data: [],
-        success: false,
-        total: 0,
-      };
+      messageApi.error(error.message || t('common.loadFailed'));
+      return { data: [], success: false, total: 0 };
     }
   };
 
-  /**
-   * 处理新建部门
-   */
   const handleCreate = (parentUuid?: string) => {
-    setIsEdit(false);
     setCurrentDepartmentUuid(null);
-    setFormInitialValues({
-      parent_uuid: parentUuid || null,
-      is_active: true,
-      sort_order: 0,
-    });
+    setInitialParentUuid(parentUuid ?? null);
     setModalVisible(true);
   };
 
-  /**
-   * 处理编辑部门
-   */
   const handleEdit = async (record: Department) => {
-    try {
-      setIsEdit(true);
-      setCurrentDepartmentUuid(record.uuid);
-      
-      const detail = await getDepartmentByUuid(record.uuid);
-      setFormInitialValues({
-        name: detail.name,
-        code: detail.code,
-        description: detail.description,
-        parent_uuid: detail.parent_uuid,
-        sort_order: detail.sort_order,
-        is_active: detail.is_active,
-      });
-      setModalVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || '获取部门详情失败');
-    }
+    setCurrentDepartmentUuid(record.uuid);
+    setInitialParentUuid(null);
+    setModalVisible(true);
   };
 
-  /**
-   * 处理查看详情
-   */
   const handleView = async (record: Department) => {
     try {
       setDetailLoading(true);
@@ -203,65 +120,50 @@ const DepartmentListPage: React.FC = () => {
       const detail = await getDepartmentByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取部门详情失败');
+      messageApi.error(error.message || t('common.loadFailed'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  /**
-   * 处理删除部门
-   */
-  /**
-   * 校验部门是否满足删除条件
-   */
   const checkCanDelete = (record: Department): { can: boolean; reason?: string } => {
-    // 后端接口通常也会校验，但前端提前拦截并提示体验更好
     if ((record.children_count || 0) > 0) {
-      return { can: false, reason: '该部门包含子部门，请先删除或移动子部门' };
+      return { can: false, reason: t('field.department.checkHasChildren') };
     }
-    // 注意：这里同时检查 user_count (关联人员) 和 position_count (关联职位)
     if ((record.position_count || 0) > 0) {
-      return { can: false, reason: '该部门包含关联职位，请先处理关联职位' };
+      return { can: false, reason: t('field.department.checkHasPositions') };
     }
     if ((record.user_count || 0) > 0) {
-      return { can: false, reason: '该部门包含关联人员，请先移除人员' };
+      return { can: false, reason: t('field.department.checkHasUsers') };
     }
     return { can: true };
   };
 
-  /**
-   * 处理删除部门
-   */
   const handleDelete = async (record: Department) => {
     try {
-        await deleteDepartment(record.uuid);
-        messageApi.success('删除成功');
-        actionRef.current?.reload();
+      await deleteDepartment(record.uuid);
+      messageApi.success(t('pages.system.deleteSuccess'));
+      actionRef.current?.reload();
     } catch (error: any) {
-        messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
-  /**
-   * 处理批量删除
-   */
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的部门');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
-    // 筛选出不能删除的部门
     const cannotDeleteNames: string[] = [];
     const canDeleteKeys: string[] = [];
 
-    selectedRowKeys.forEach(key => {
-      const dept = allDepts.find(d => d.uuid === key);
+    selectedRowKeys.forEach((key) => {
+      const dept = allDepts.find((d) => d.uuid === key);
       if (dept) {
         const check = checkCanDelete(dept);
         if (!check.can) {
-          cannotDeleteNames.push(`${dept.name}(${check.reason})`);
+          cannotDeleteNames.push(`${dept.name} (${check.reason})`);
         } else {
           canDeleteKeys.push(dept.uuid);
         }
@@ -270,14 +172,16 @@ const DepartmentListPage: React.FC = () => {
 
     if (cannotDeleteNames.length > 0) {
       modal.error({
-        title: '批量删除受阻',
+        title: t('field.department.batchDeleteBlocked'),
         content: (
           <div>
-            以下部门不满足删除条件：
+            {t('field.department.batchDeleteBlockedList')}
             <ul style={{ marginTop: 8 }}>
-              {cannotDeleteNames.map(name => <li key={name}>{name}</li>)}
+              {cannotDeleteNames.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
             </ul>
-            请处理后再试。
+            {t('field.department.batchDeleteBlockedHint')}
           </div>
         ),
       });
@@ -285,123 +189,97 @@ const DepartmentListPage: React.FC = () => {
     }
 
     modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 个部门吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirm'),
+      content: t('field.department.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
-          // 这里可以考虑后端是否支持批量接口，如果不支持则前端循环调用
-          await Promise.all(canDeleteKeys.map(key => deleteDepartment(key)));
-          messageApi.success('批量删除成功');
+          await Promise.all(canDeleteKeys.map((key) => deleteDepartment(key)));
+          messageApi.success(t('pages.system.deleteSuccess'));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '部分部门删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
           actionRef.current?.reload();
         }
-      }
+      },
     });
   };
 
-  /**
-   * 处理提交表单（创建/更新）
-   */
-  const handleSubmit = async (values: any): Promise<void> => {
+  const handleImport = async (data: any[][]) => {
     try {
-      setFormLoading(true);
-      
-      if (isEdit && currentDepartmentUuid) {
-        await updateDepartment(currentDepartmentUuid, values as UpdateDepartmentData);
-        messageApi.success('更新成功');
-      } else {
-        await createDepartment(values as CreateDepartmentData);
-        messageApi.success('创建成功');
+      const result = await importDepartments(data);
+      if (result.success_count > 0) {
+        messageApi.success(t('field.department.importSuccess', { count: result.success_count }));
+        actionRef.current?.reload();
       }
-      
-      setModalVisible(false);
-      actionRef.current?.reload();
+      if (result.failure_count > 0) {
+        modal.error({
+          title: t('field.department.importPartialFail'),
+          content: (
+            <List
+              size="small"
+              dataSource={result.errors}
+              renderItem={(item) => (
+                <List.Item>
+                  {t('common.row')} {item.row}: {item.error}
+                </List.Item>
+              )}
+            />
+          ),
+        });
+      }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
-      // throw error; // 不抛出，避免 Modal 关闭异常
-    } finally {
-      setFormLoading(false);
+      messageApi.error(error?.message || t('field.department.importFail'));
     }
   };
 
-  /**
-   * 处理导入
-   */
-  const handleImport = async (data: any[][]) => {
-    try {
-        const result = await importDepartments(data);
-        if (result.success_count > 0) {
-            messageApi.success(`成功导入 ${result.success_count} 条数据`);
-            actionRef.current?.reload();
-        }
-        if (result.failure_count > 0) {
-             Modal.error({
-                title: '导入部分失败',
-                content: (
-                    <List
-                        size="small"
-                        dataSource={result.errors}
-                        renderItem={(item) => <List.Item>行 {item.row}: {item.error}</List.Item>}
-                    />
-                ),
-            });
-        }
-    } catch (error: any) {
-         messageApi.error(error.message || '导入失败');
-    }
-  }
-
-
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<Department>[] = [
     {
-      title: '部门名称',
+      title: t('field.department.name'),
       dataIndex: 'name',
       width: 250,
       fixed: 'left',
       render: (_, record) => (
-          <Space>
-              <span style={{ fontWeight: 500 }}>{record.name}</span>
-              {(record.children_count || 0) > 0 && (
-                <Tag color="blue" style={{ marginLeft: 4 }}>
-                  {record.children_count} 子部门
-                </Tag>
-              )}
-          </Space>
-      )
+        <Space>
+          <span style={{ fontWeight: 500 }}>{record.name}</span>
+          {(record.children_count || 0) > 0 && (
+            <Tag color="blue" style={{ marginLeft: 4 }}>
+              {t('field.department.childrenCount', { count: record.children_count })}
+            </Tag>
+          )}
+        </Space>
+      ),
     },
     {
-      title: '部门代码',
+      title: t('field.department.code'),
       dataIndex: 'code',
       width: 150,
       copyable: true,
     },
     {
-      title: '描述',
+      title: t('field.department.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '人员数量',
+      title: t('field.department.userCount'),
       dataIndex: 'user_count',
       width: 100,
       align: 'center',
       hideInSearch: true,
-      render: (_, record) => (
-        record.user_count ? <Tag color="blue">{record.user_count} 人</Tag> : '-'
-      ),
+      render: (_, record) =>
+        record.user_count ? (
+          <Tag color="blue">{t('field.department.userCountTag', { count: record.user_count })}</Tag>
+        ) : (
+          '-'
+        ),
     },
     {
-      title: '排序',
+      title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
       valueType: 'digit',
@@ -409,22 +287,22 @@ const DepartmentListPage: React.FC = () => {
       sorter: (a, b) => a.sort_order - b.sort_order,
     },
     {
-      title: '状态',
+      title: t('field.role.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.role.enabled'), status: 'Success' },
+        false: { text: t('field.role.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.role.enabled') : t('field.role.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -432,7 +310,7 @@ const DepartmentListPage: React.FC = () => {
       sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 180,
       valueType: 'dateTime',
@@ -440,27 +318,17 @@ const DepartmentListPage: React.FC = () => {
       sorter: (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            查看
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            {t('field.department.view')}
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            {t('field.department.edit')}
           </Button>
           <Button
             type="link"
@@ -468,14 +336,14 @@ const DepartmentListPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={() => handleCreate(record.uuid)}
           >
-            添加子部门
+            {t('field.department.addChild')}
           </Button>
           <Popconfirm
-            title={`确定要删除部门 "${record.name}" 吗？`}
-            description="删除后不可恢复。"
+            title={t('field.department.deleteConfirm', { name: record.name })}
+            description={t('field.department.deleteConfirmDesc')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
             disabled={!checkCanDelete(record).can}
           >
             <Tooltip title={checkCanDelete(record).reason}>
@@ -486,7 +354,7 @@ const DepartmentListPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 disabled={!checkCanDelete(record).can}
               >
-                删除
+                {t('field.department.delete')}
               </Button>
             </Tooltip>
           </Popconfirm>
@@ -499,19 +367,19 @@ const DepartmentListPage: React.FC = () => {
     <ListPageTemplate
       statCards={[
         {
-          title: '部门总数',
+          title: t('field.department.totalCount'),
           value: stats.totalCount,
           prefix: <ApartmentOutlined />,
           valueStyle: { color: '#1890ff' },
         },
         {
-          title: '启用部门',
+          title: t('field.department.activeCount'),
           value: stats.activeCount,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#52c41a' },
         },
         {
-          title: '总人员数',
+          title: t('field.department.totalUserCount'),
           value: stats.userCount,
           prefix: <TeamOutlined />,
           valueStyle: { color: '#722ed1' },
@@ -521,16 +389,16 @@ const DepartmentListPage: React.FC = () => {
       <UniTable<Department>
         viewTypes={['table', 'help']}
         actionRef={actionRef}
-        headerTitle="部门列表"
+        headerTitle={t('field.department.listTitle')}
         rowKey="uuid"
         columns={columns}
         request={loadData}
         showCreateButton
-        createButtonText="新建部门"
+        createButtonText={t('field.department.createTitle')}
         onCreate={() => handleCreate()}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteButtonText="批量删除"
+        deleteButtonText={t('pages.system.batchDelete')}
         toolBarRender={() => [
           <Button
             key="toggleExpand"
@@ -542,7 +410,7 @@ const DepartmentListPage: React.FC = () => {
               }
             }}
           >
-            {expandedRowKeys.length > 0 ? '一键收起' : '一键展开'}
+            {expandedRowKeys.length > 0 ? t('field.department.collapseAll') : t('field.department.expandAll')}
           </Button>,
         ]}
         showImportButton={true}
@@ -557,107 +425,52 @@ const DepartmentListPage: React.FC = () => {
           expandedRowKeys,
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-        search={{
-          labelWidth: 'auto',
-        }}
+        rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) }}
+        search={{ labelWidth: 'auto' }}
         showQuickJumper={false}
       />
 
-      {/* 创建/编辑 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑部门' : '新建部门'}
+      <DepartmentFormModal
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
-          setFormInitialValues(undefined);
+          setCurrentDepartmentUuid(null);
+          setInitialParentUuid(null);
         }}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        initialValues={formInitialValues}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-      >
-        <ProFormText
-          name="name"
-          label="部门名称"
-          rules={[{ required: true, message: '请输入部门名称' }]}
-          placeholder="请输入部门名称"
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="code"
-          label="部门代码"
-          rules={[{ required: true, message: '请输入部门代码' }]}
-          placeholder="请输入部门代码"
-          colProps={{ span: 12 }}
-        />
-        <ProFormTreeSelect
-          name="parent_uuid"
-          label="父部门"
-          placeholder="请选择父部门（可选）"
-          allowClear
-          fieldProps={{
-            showSearch: true,
-            filterTreeNode: true,
-            treeNodeFilterProp: 'name',
-            fieldNames: {
-              label: 'name',
-              value: 'uuid',
-              children: 'children',
-            },
-            treeData: deptTreeData,
-            treeDefaultExpandAll: true,
-          }}
-          colProps={{ span: 24 }}
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入部门描述"
-          colProps={{ span: 24 }}
-        />
-        <ProFormText
-          name="sort_order"
-          label="排序"
-          placeholder="数字越小越靠前"
-          fieldProps={{ type: 'number' }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-          initialValue={true}
-          colProps={{ span: 12 }}
-        />
-      </FormModalTemplate>
+        editUuid={currentDepartmentUuid}
+        initialParentUuid={initialParentUuid}
+        onSuccess={() => actionRef.current?.reload()}
+        deptTreeItems={deptTreeData}
+      />
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="部门详情"
+        title={t('field.department.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData as any}
         columns={[
-          { title: '部门名称', dataIndex: 'name' },
-          { title: '部门代码', dataIndex: 'code' },
-          { title: '父部门', dataIndex: ['parent', 'name'], span: 2, render: (_: any, record: any) => record?.parent_name || '-' },
+          { title: t('field.department.name'), dataIndex: 'name' },
+          { title: t('field.department.code'), dataIndex: 'code' },
           {
-            title: '状态',
-            dataIndex: 'is_active',
-            render: (_: any, entity: any) => (entity?.is_active ? '启用' : '禁用'),
+            title: t('field.department.parentName'),
+            dataIndex: ['parent', 'name'],
+            span: 2,
+            render: (_: any, record: any) => record?.parent_name || '-',
           },
-          { title: '人员数量', dataIndex: 'user_count' },
-          { title: '排序', dataIndex: 'sort_order' },
-          { title: '查询码', dataIndex: 'query_code' },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-          { title: '描述', dataIndex: 'description', span: 2 },
+          {
+            title: t('field.role.status'),
+            dataIndex: 'is_active',
+            render: (_: any, entity: any) =>
+              entity?.is_active ? t('field.role.enabled') : t('field.role.disabled'),
+          },
+          { title: t('field.department.userCount'), dataIndex: 'user_count' },
+          { title: t('field.department.sortOrder'), dataIndex: 'sort_order' },
+          { title: t('field.department.queryCode'), dataIndex: 'query_code' },
+          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: t('field.department.description'), dataIndex: 'description', span: 2 },
         ]}
       />
     </ListPageTemplate>

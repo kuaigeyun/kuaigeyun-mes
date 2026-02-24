@@ -20,6 +20,8 @@ from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+from apps.kuaizhizao.models.demand_computation_snapshot import DemandComputationSnapshot
+from apps.kuaizhizao.models.demand_computation_recalc_history import DemandComputationRecalcHistory
 from apps.kuaizhizao.schemas.demand_computation import (
     DemandComputationCreate,
     DemandComputationUpdate,
@@ -526,12 +528,14 @@ class DemandComputationService:
     async def recompute_computation(
         self,
         tenant_id: int,
-        computation_id: int
+        computation_id: int,
+        operator_id: Optional[int] = None,
     ) -> DemandComputationResponse:
         """
         重新计算：仅允许对「完成」或「失败」的计算重新执行。
-        先删除原明细、重置状态与错误信息，再执行计算逻辑。
+        重算前写入需求计算快照与重算历史；再删除原明细、重置状态并执行计算。
         """
+        snapshot_id_saved: Optional[int] = None
         async with in_transaction():
             computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
             if not computation:
@@ -540,6 +544,29 @@ class DemandComputationService:
                 raise BusinessLogicError(
                     f"只能对已完成或失败的计算执行重新计算，当前状态: {computation.computation_status}"
                 )
+            # 重算前快照：当前汇总 + 明细
+            items_before = await DemandComputationItem.filter(
+                tenant_id=tenant_id, computation_id=computation_id
+            ).all()
+            summary_snapshot = computation.computation_summary
+            items_snapshot = [
+                {
+                    "material_code": getattr(i, "material_code", None),
+                    "material_name": getattr(i, "material_name", None),
+                    "suggested_work_order_quantity": str(getattr(i, "suggested_work_order_quantity", 0)),
+                    "suggested_purchase_order_quantity": str(getattr(i, "suggested_purchase_order_quantity", 0)),
+                }
+                for i in items_before
+            ]
+            snapshot = await DemandComputationSnapshot.create(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                snapshot_at=datetime.now(),
+                trigger="manual",
+                computation_summary_snapshot=summary_snapshot,
+                items_snapshot=items_snapshot,
+            )
+            snapshot_id_saved = snapshot.id
             # 删除原计算结果明细
             await DemandComputationItem.filter(
                 tenant_id=tenant_id,
@@ -553,8 +580,76 @@ class DemandComputationService:
                 computation_summary=None,
             )
         # 在事务外调用 execute，避免嵌套事务导致 TransactionManagementError
-        return await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
-    
+        try:
+            result = await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
+            await DemandComputationRecalcHistory.create(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                recalc_at=datetime.now(),
+                trigger="manual",
+                operator_id=operator_id,
+                result="success",
+                snapshot_id=snapshot_id_saved,
+                message="重算完成",
+            )
+            return result
+        except Exception as e:
+            await DemandComputationRecalcHistory.create(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                recalc_at=datetime.now(),
+                trigger="manual",
+                operator_id=operator_id,
+                result="failed",
+                snapshot_id=snapshot_id_saved,
+                message=str(e)[:500],
+            )
+            raise
+
+    async def list_computation_recalc_history(
+        self, tenant_id: int, computation_id: int, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """获取需求计算重算历史列表。"""
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError("需求计算", str(computation_id))
+        rows = await DemandComputationRecalcHistory.filter(
+            tenant_id=tenant_id, computation_id=computation_id
+        ).order_by("-recalc_at").limit(limit)
+        return [
+            {
+                "id": r.id,
+                "recalc_at": r.recalc_at.isoformat() if r.recalc_at else None,
+                "trigger": r.trigger,
+                "operator_id": r.operator_id,
+                "result": r.result,
+                "snapshot_id": r.snapshot_id,
+                "message": r.message,
+            }
+            for r in rows
+        ]
+
+    async def list_computation_snapshots(
+        self, tenant_id: int, computation_id: int, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """获取需求计算快照列表。"""
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError("需求计算", str(computation_id))
+        rows = await DemandComputationSnapshot.filter(
+            tenant_id=tenant_id, computation_id=computation_id
+        ).order_by("-snapshot_at").limit(limit)
+        return [
+            {
+                "id": r.id,
+                "snapshot_at": r.snapshot_at.isoformat() if r.snapshot_at else None,
+                "trigger": r.trigger,
+                "computation_summary_snapshot": r.computation_summary_snapshot,
+                "items_snapshot": r.items_snapshot,
+            }
+            for r in rows
+        ]
+
     async def compare_computations(
         self,
         tenant_id: int,

@@ -51,7 +51,7 @@ class SupplyChainService:
             raise ValidationError(f"客户编码 {data.code} 已存在")
         
         # 创建客户（未传 is_active 时默认为启用）
-        create_data = data.dict()
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
         try:
@@ -173,8 +173,8 @@ class SupplyChainService:
             if existing:
                 raise ValidationError(f"客户编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(customer, key, value)
         
@@ -248,7 +248,7 @@ class SupplyChainService:
             raise ValidationError(f"供应商编码 {data.code} 已存在")
         
         # 创建供应商（未传 is_active 时默认为启用）
-        create_data = data.dict()
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
         try:
@@ -391,8 +391,8 @@ class SupplyChainService:
             if existing:
                 raise ValidationError(f"供应商编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(supplier, key, value)
         

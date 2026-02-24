@@ -79,11 +79,19 @@ from .quotation import Quotation
 from .quotation_item import QuotationItem
 from .delivery_notice import DeliveryNotice
 from .delivery_notice_item import DeliveryNoticeItem
+from .shipment_notice import ShipmentNotice
+from .shipment_notice_item import ShipmentNoticeItem
+from .receipt_notice import ReceiptNotice
+from .receipt_notice_item import ReceiptNoticeItem
 from .sample_trial import SampleTrial
 from .sample_trial_item import SampleTrialItem
 # 统一需求模型（新设计）
 from .demand import Demand
 from .demand_item import DemandItem
+from .demand_snapshot import DemandSnapshot
+from .demand_recalc_history import DemandRecalcHistory
+from .demand_computation_snapshot import DemandComputationSnapshot
+from .demand_computation_recalc_history import DemandComputationRecalcHistory
 
 # BOM管理模块
 # BOM管理已移至master_data APP，不再需要BillOfMaterials模型
@@ -104,8 +112,7 @@ from .equipment_status_monitor import EquipmentStatusMonitor, EquipmentStatusHis
 from .maintenance_reminder import MaintenanceReminder
 from .tool import Tool, ToolUsage, ToolMaintenance, ToolCalibration
 
-# 审核流程和状态流转模块
-from .approval_flow import ApprovalFlow, ApprovalFlowStep, ApprovalRecord
+# 状态流转模块（审核流程已统一至 core ApprovalInstance）
 from .state_transition import StateTransitionRule, StateTransitionLog
 
 # 单据关联逻辑
@@ -196,12 +203,20 @@ __all__ = [
     'QuotationItem',
     'DeliveryNotice',
     'DeliveryNoticeItem',
+    'ShipmentNotice',
+    'ShipmentNoticeItem',
+    'ReceiptNotice',
+    'ReceiptNoticeItem',
     'SampleTrial',
     'SampleTrialItem',
 
     # 统一需求管理模块（新设计）
     'Demand',
     'DemandItem',
+    'DemandSnapshot',
+    'DemandRecalcHistory',
+    'DemandComputationSnapshot',
+    'DemandComputationRecalcHistory',
 
     # BOM管理模块
     # BillOfMaterials和BillOfMaterialsItem已移除，BOM管理在master_data APP中
@@ -233,11 +248,6 @@ __all__ = [
     'Invoice',
     'InvoiceItem',
 
-    # 审核流程
-    'ApprovalFlow',
-    'ApprovalFlowStep',
-    'ApprovalRecord',
-    
     # 状态流转
     'StateTransitionRule',
     'StateTransitionLog',

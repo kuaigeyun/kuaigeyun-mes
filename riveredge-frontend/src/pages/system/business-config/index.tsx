@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Card, Form, Switch, Button, Space, Typography, Modal, Input, List, Popconfirm } from 'antd';
 import { SaveOutlined, ControlOutlined, FileTextOutlined, DeleteOutlined, CheckOutlined, CodeSandboxOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -26,73 +27,21 @@ const { Title, Text, Paragraph } = Typography;
 
 
 
-/**
- * 流程参数配置映射
- */
-const PARAMETER_CONFIG = {
-  work_order: {
-    name: '工单管理参数',
-    params: {
-      auto_generate: { name: '自动生成工单', description: '是否自动根据需求生成工单' },
-      priority: { name: '工单优先级', description: '是否启用工单优先级管理' },
-      split: { name: '工单拆分', description: '是否支持工单拆分' },
-      merge: { name: '工单合并', description: '是否支持工单合并' },
-      allow_production_without_material: {
-        name: '允许不带料生产',
-        description: '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
-      },
-    },
-  },
-  reporting: {
-    name: '报工管理参数',
-    params: {
-      quick_reporting: { name: '快速报工', description: '是否启用快速报工功能' },
-      parameter_reporting: { name: '带参数报工', description: '是否支持带参数报工' },
-      auto_fill: { name: '自动填充', description: '是否自动填充报工数据' },
-      data_correction: { name: '报工数据修正', description: '是否允许修正已提交的报工数据' },
-      auto_approve: { name: '自动审核', description: '开启后，提交的报工记录将自动通过审核，无需人工确认。' },
-    },
-  },
-  warehouse: {
-    name: '仓储管理参数',
-    params: {
-      batch_management: { name: '批号管理', description: '是否启用批号管理' },
-      serial_management: { name: '序列号管理', description: '是否启用序列号管理' },
-      multi_unit: { name: '多单位管理', description: '是否启用多单位管理' },
-      fifo: { name: '先进先出（FIFO）', description: '是否启用先进先出规则' },
-      lifo: { name: '后进先出（LIFO）', description: '是否启用后进先出规则' },
-    },
-  },
-  quality: {
-    name: '质量管理参数',
-    params: {
-      incoming_inspection: { name: '来料检验', description: '是否启用来料检验' },
-      process_inspection: { name: '过程检验', description: '是否启用过程检验' },
-      finished_inspection: { name: '成品检验', description: '是否启用成品检验' },
-      defect_handling: { name: '不合格品处理', description: '是否启用不合格品处理' },
-    },
-  },
-  sales: {
-    name: '销售管理参数',
-    params: {
-      audit_enabled: { name: '销售订单审核', description: '是否启用销售订单审核流程。若关闭，订单提交后将自动通过/生效。' },
-    },
-  },
-  bom: {
-    name: 'BOM 参数',
-    params: {
-      bom_multi_version_allowed: {
-        name: 'BOM 允许多版本共存',
-        description: '开启时，需求计算时可选择 BOM 版本；关闭时，统一使用各物料的默认 BOM 版本。',
-      },
-    },
-  },
+/** 流程参数配置：仅保留 category 与 param key，文案通过 t() 获取 */
+const PARAMETER_KEYS: Record<string, string[]> = {
+  work_order: ['auto_generate', 'priority', 'split', 'merge', 'allow_production_without_material'],
+  reporting: ['quick_reporting', 'parameter_reporting', 'auto_fill', 'data_correction', 'auto_approve'],
+  warehouse: ['batch_management', 'serial_management', 'multi_unit', 'fifo', 'lifo'],
+  quality: ['incoming_inspection', 'process_inspection', 'finished_inspection', 'defect_handling'],
+  sales: ['audit_enabled'],
+  bom: ['bom_multi_version_allowed'],
 };
 
 /**
  * 业务配置页面组件
  */
 const BusinessConfigPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
@@ -118,7 +67,7 @@ const BusinessConfigPage: React.FC = () => {
       const templatesData = await getConfigTemplates();
       setTemplates(templatesData);
     } catch (error: any) {
-      messageApi.error(error.message || '加载业务配置失败');
+      messageApi.error(error.message || t('pages.system.businessConfig.loadFailed'));
     } finally {
       // setLoading(false);
     }
@@ -138,16 +87,15 @@ const BusinessConfigPage: React.FC = () => {
         template_name: values.template_name,
         template_description: values.template_description,
       });
-      messageApi.success('配置模板已保存');
+      messageApi.success(t('pages.system.businessConfig.templateSaved'));
       setTemplateModalVisible(false);
       templateForm.resetFields();
       await loadConfig();
     } catch (error: any) {
       if (error.errorFields) {
-        // 表单验证错误
         return;
       }
-      messageApi.error(error.message || '保存配置模板失败');
+      messageApi.error(error.message || t('pages.system.businessConfig.templateSaveFailed'));
     }
   };
 
@@ -157,10 +105,10 @@ const BusinessConfigPage: React.FC = () => {
   const handleApplyTemplate = async (templateId: number) => {
     try {
       await applyConfigTemplate({ template_id: templateId });
-      messageApi.success('配置模板已应用');
+      messageApi.success(t('pages.system.businessConfig.templateApplied'));
       await loadConfig();
     } catch (error: any) {
-      messageApi.error(error.message || '应用配置模板失败');
+      messageApi.error(error.message || t('pages.system.businessConfig.templateApplyFailed'));
     }
   };
 
@@ -170,10 +118,10 @@ const BusinessConfigPage: React.FC = () => {
   const handleDeleteTemplate = async (templateId: number) => {
     try {
       await deleteConfigTemplate(templateId);
-      messageApi.success('配置模板已删除');
+      messageApi.success(t('pages.system.businessConfig.templateDeleted'));
       await loadConfig();
     } catch (error: any) {
-      messageApi.error(error.message || '删除配置模板失败');
+      messageApi.error(error.message || t('pages.system.businessConfig.templateDeleteFailed'));
     }
   };
 
@@ -189,7 +137,7 @@ const BusinessConfigPage: React.FC = () => {
     link.download = `${template.name}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    messageApi.success('配置模板已导出');
+    messageApi.success(t('pages.system.businessConfig.templateExported'));
   };
 
   /**
@@ -207,12 +155,11 @@ const BusinessConfigPage: React.FC = () => {
         const text = await file.text();
         const importedConfig = JSON.parse(text);
 
-        // 应用导入的配置
         await batchUpdateProcessParameters({ parameters: importedConfig.parameters || {} });
-        messageApi.success('配置模板已导入并应用');
+        messageApi.success(t('pages.system.businessConfig.templateImportedApplied'));
         await loadConfig();
       } catch (error: any) {
-        messageApi.error('导入配置模板失败：' + (error.message || '文件格式错误'));
+        messageApi.error(t('pages.system.businessConfig.templateImportFailed', { reason: error.message || '文件格式错误' }));
       }
     };
     input.click();
@@ -227,21 +174,21 @@ const BusinessConfigPage: React.FC = () => {
         <div>
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <div>
-              <Title level={4}>配置模板管理</Title>
+              <Title level={4}>{t('pages.system.businessConfig.templateManagementTitle')}</Title>
               <Paragraph type="secondary">
-                保存当前配置为模板，方便后续复用。支持导入、导出配置模板。
+                {t('pages.system.businessConfig.templateManagementDesc')}
               </Paragraph>
             </div>
             <Space>
               <Button icon={<FileTextOutlined />} onClick={handleImportTemplate}>
-                导入模板
+                {t('pages.system.businessConfig.importTemplate')}
               </Button>
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
                 onClick={() => setTemplateModalVisible(true)}
               >
-                保存当前配置
+                {t('pages.system.businessConfig.saveCurrentConfig')}
               </Button>
             </Space>
           </Space>
@@ -249,7 +196,7 @@ const BusinessConfigPage: React.FC = () => {
 
         <List
           dataSource={templates}
-          locale={{ emptyText: '暂无配置模板' }}
+          locale={{ emptyText: t('pages.system.businessConfig.noTemplates') }}
           renderItem={(template) => (
             <List.Item
               actions={[
@@ -259,7 +206,7 @@ const BusinessConfigPage: React.FC = () => {
                   icon={<FileTextOutlined />}
                   onClick={() => handleExportTemplate(template)}
                 >
-                  导出
+                  {t('pages.system.businessConfig.export')}
                 </Button>,
                 <Button
                   key="apply"
@@ -267,11 +214,11 @@ const BusinessConfigPage: React.FC = () => {
                   icon={<CheckOutlined />}
                   onClick={() => handleApplyTemplate(template.id)}
                 >
-                  应用
+                  {t('pages.system.businessConfig.apply')}
                 </Button>,
                 <Popconfirm
                   key="delete"
-                  title="确定要删除此配置模板吗？"
+                  title={t('pages.system.businessConfig.confirmDeleteTemplate')}
                   onConfirm={() => handleDeleteTemplate(template.id)}
                 >
                   <Button
@@ -279,7 +226,7 @@ const BusinessConfigPage: React.FC = () => {
                     danger
                     icon={<DeleteOutlined />}
                   >
-                    删除
+                    {t('pages.system.businessConfig.delete')}
                   </Button>
                 </Popconfirm>,
               ]}
@@ -290,7 +237,7 @@ const BusinessConfigPage: React.FC = () => {
                   <Space direction="vertical" size={0}>
                     {template.description && <Text type="secondary">{template.description}</Text>}
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      创建时间：{new Date(template.created_at).toLocaleString()}
+                      {t('pages.system.businessConfig.createdAt')}{new Date(template.created_at).toLocaleString()}
                     </Text>
                   </Space>
                 }
@@ -312,10 +259,10 @@ const BusinessConfigPage: React.FC = () => {
 
       setSaving(true);
       await batchUpdateProcessParameters({ parameters });
-      messageApi.success('流程参数配置已保存');
+      messageApi.success(t('pages.system.businessConfig.parametersSaveSuccess'));
       await loadConfig();
     } catch (error: any) {
-      messageApi.error(error.message || '保存流程参数配置失败');
+      messageApi.error(error.message || t('pages.system.businessConfig.parametersSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -329,24 +276,24 @@ const BusinessConfigPage: React.FC = () => {
       <Form form={form} layout="vertical">
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div>
-            <Title level={4}>流程参数配置</Title>
+            <Title level={4}>{t('pages.system.businessConfig.flowParamsTitle')}</Title>
             <Paragraph type="secondary">
-              配置各流程模块的参数，控制功能的启用和关闭。
+              {t('pages.system.businessConfig.flowParamsDesc')}
             </Paragraph>
           </div>
 
-          {Object.entries(PARAMETER_CONFIG).map(([category, categoryConfig]) => (
-            <Card key={category} title={categoryConfig.name} size="small">
+          {Object.entries(PARAMETER_KEYS).map(([category, keys]) => (
+            <Card key={category} title={t(`pages.system.businessConfig.paramCategory.${category}`)} size="small">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {Object.entries(categoryConfig.params).map(([key, param]) => (
+                {keys.map((key) => (
                   <Form.Item
                     key={key}
                     name={['parameters', category, key]}
                     label={
                       <Space direction="vertical" size={0}>
-                        <Text strong>{param.name}</Text>
+                        <Text strong>{t(`pages.system.businessConfig.param.${category}.${key}.name`)}</Text>
                         <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {param.description}
+                          {t(`pages.system.businessConfig.param.${category}.${key}.description`)}
                         </Text>
                       </Space>
                     }
@@ -366,7 +313,7 @@ const BusinessConfigPage: React.FC = () => {
             onClick={handleSaveParameters}
             block
           >
-            保存流程参数配置
+            {t('pages.system.businessConfig.saveFlowParams')}
           </Button>
         </Space>
       </Form>
@@ -379,17 +326,17 @@ const BusinessConfigPage: React.FC = () => {
       label: (
         <Space>
           <CodeSandboxOutlined />
-          <span>业务蓝图</span>
+          <span>{t('pages.system.businessConfig.tabBlueprint')}</span>
         </Space>
       ),
-      children: <BusinessFlowConfig onSaveAsTemplate={() => setTemplateModalVisible(true)} templates={templates} />,
+      children: <BusinessFlowConfig onSaveAsTemplate={() => setTemplateModalVisible(true)} templates={templates} onRefreshTemplates={loadConfig} />,
     },
     {
       key: 'parameters',
       label: (
         <Space>
           <ControlOutlined />
-          <span>业务参数</span>
+          <span>{t('pages.system.businessConfig.tabParameters')}</span>
         </Space>
       ),
       children: renderParameterConfig(),
@@ -399,7 +346,7 @@ const BusinessConfigPage: React.FC = () => {
       label: (
         <Space>
           <FileTextOutlined />
-          <span>配置模板</span>
+          <span>{t('pages.system.businessConfig.tabTemplates')}</span>
         </Space>
       ),
       children: renderTemplateConfig(),
@@ -416,30 +363,30 @@ const BusinessConfigPage: React.FC = () => {
 
       {/* 保存配置模板Modal */}
       <Modal
-        title="保存配置模板"
+        title={t('pages.system.businessConfig.saveTemplateModalTitle')}
         open={templateModalVisible}
         onOk={handleSaveTemplate}
         onCancel={() => {
           setTemplateModalVisible(false);
           templateForm.resetFields();
         }}
-        okText="保存"
-        cancelText="取消"
+        okText={t('pages.system.businessConfig.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={templateForm} layout="vertical">
           <Form.Item
             name="template_name"
-            label="模板名称"
-            rules={[{ required: true, message: '请输入模板名称' }]}
+            label={t('pages.system.businessConfig.templateName')}
+            rules={[{ required: true, message: t('pages.system.businessConfig.templateNameRequired') }]}
           >
-            <Input placeholder="请输入模板名称" />
+            <Input placeholder={t('pages.system.businessConfig.templateNamePlaceholder')} />
           </Form.Item>
           <Form.Item
             name="template_description"
-            label="模板描述"
+            label={t('pages.system.businessConfig.templateDesc')}
           >
             <Input.TextArea
-              placeholder="请输入模板描述（可选）"
+              placeholder={t('pages.system.businessConfig.templateDescPlaceholder')}
               rows={3}
             />
           </Form.Item>

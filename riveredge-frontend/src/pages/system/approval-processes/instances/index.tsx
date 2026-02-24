@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, message, Input, Typography } from 'antd';
@@ -32,6 +33,7 @@ const { TextArea } = Input;
  * 审批实例管理列表页面组件
  */
 const ApprovalInstanceListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -75,11 +77,11 @@ const ApprovalInstanceListPage: React.FC = () => {
       };
       
       await createApprovalInstance(data);
-      messageApi.success('提交成功');
+      messageApi.success(t('pages.system.approvalInstances.submitSuccess'));
       setSubmitModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '提交失败');
+      messageApi.error(error.message || t('pages.system.approvalInstances.submitFailed'));
       throw error;
     } finally {
       setSubmitFormLoading(false);
@@ -111,11 +113,11 @@ const ApprovalInstanceListPage: React.FC = () => {
       };
       
       await performApprovalAction(currentInstanceUuid, actionData);
-      messageApi.success('操作成功');
+      messageApi.success(t('pages.system.approvalInstances.actionSuccess'));
       setActionModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.approvalInstances.actionFailed'));
       throw error;
     } finally {
       setActionFormLoading(false);
@@ -132,7 +134,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       const detail = await getApprovalInstanceByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取审批实例详情失败');
+      messageApi.error(error.message || t('pages.system.approvalInstances.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -143,63 +145,63 @@ const ApprovalInstanceListPage: React.FC = () => {
    */
   const columns: ProColumns<ApprovalInstance>[] = [
     {
-      title: '审批标题',
+      title: t('pages.system.approvalInstances.title'),
       dataIndex: 'title',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '关联流程',
+      title: t('pages.system.approvalInstances.relatedProcess'),
       dataIndex: 'process_uuid',
       width: 150,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '审批状态',
+      title: t('pages.system.approvalInstances.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        pending: { text: '待审批', status: 'Processing' },
-        approved: { text: '已通过', status: 'Success' },
-        rejected: { text: '已拒绝', status: 'Error' },
-        cancelled: { text: '已取消', status: 'Default' },
+        pending: { text: t('pages.system.approvalInstances.statusPending'), status: 'Processing' },
+        approved: { text: t('pages.system.approvalInstances.statusApproved'), status: 'Success' },
+        rejected: { text: t('pages.system.approvalInstances.statusRejected'), status: 'Error' },
+        cancelled: { text: t('pages.system.approvalInstances.statusCancelled'), status: 'Default' },
       },
       render: (_, record) => {
         const statusMap = {
-          pending: { color: 'processing', text: '待审批' },
-          approved: { color: 'success', text: '已通过' },
-          rejected: { color: 'error', text: '已拒绝' },
-          cancelled: { color: 'default', text: '已取消' },
+          pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+          approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+          rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+          cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
         };
-        const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
+        const statusInfo = statusMap[record.status as keyof typeof statusMap] || { color: 'default', text: record.status };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
     {
-      title: '当前节点',
+      title: t('pages.system.approvalInstances.currentNode'),
       dataIndex: 'current_node',
       width: 150,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '提交时间',
+      title: t('pages.system.approvalInstances.submittedAt'),
       dataIndex: 'submitted_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '完成时间',
+      title: t('pages.system.approvalInstances.completedAt'),
       dataIndex: 'completed_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.approvalInstances.actions'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
@@ -212,14 +214,12 @@ const ApprovalInstanceListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.approvalInstances.view')}
           </Button>,
         ];
         
-        // 根据状态显示不同的操作按钮
         if (record.status === 'pending') {
           if (record.current_approver_id) {
-            // 当前审批人可以看到审批操作
             actions.push(
               <Button
                 key="approve"
@@ -228,7 +228,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                 icon={<CheckOutlined />}
                 onClick={() => handleAction(record, 'approve')}
               >
-                同意
+                {t('pages.system.approvalInstances.approve')}
               </Button>,
               <Button
                 key="reject"
@@ -238,7 +238,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                 icon={<CloseOutlined />}
                 onClick={() => handleAction(record, 'reject')}
               >
-                拒绝
+                {t('pages.system.approvalInstances.reject')}
               </Button>,
               <Button
                 key="transfer"
@@ -247,12 +247,10 @@ const ApprovalInstanceListPage: React.FC = () => {
                 icon={<SwapOutlined />}
                 onClick={() => handleAction(record, 'transfer')}
               >
-                转交
+                {t('pages.system.approvalInstances.transfer')}
               </Button>
             );
           }
-          
-          // 提交人可以取消
           actions.push(
             <Button
               key="cancel"
@@ -261,7 +259,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               icon={<StopOutlined />}
               onClick={() => handleAction(record, 'cancel')}
             >
-              取消
+              {t('pages.system.approvalInstances.cancel')}
             </Button>
           );
         }
@@ -276,10 +274,10 @@ const ApprovalInstanceListPage: React.FC = () => {
    */
   const renderKanbanCard = (item: ApprovalInstance, status: string) => {
     const statusMap = {
-      pending: { color: 'processing', text: '待审批' },
-      approved: { color: 'success', text: '已通过' },
-      rejected: { color: 'error', text: '已拒绝' },
-      cancelled: { color: 'default', text: '已取消' },
+      pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+      approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+      rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
     };
     const statusInfo = statusMap[item.status as keyof typeof statusMap] || { color: 'default', text: item.status };
 
@@ -338,7 +336,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               handleView(item);
             }}
           >
-            查看
+            {t('pages.system.approvalInstances.view')}
           </Button>
         </div>
       </div>
@@ -365,26 +363,26 @@ const ApprovalInstanceListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '审批标题', dataIndex: 'title' },
-    { title: '审批内容', dataIndex: 'content' },
+    { title: t('pages.system.approvalInstances.title'), dataIndex: 'title' },
+    { title: t('pages.system.approvalInstances.content'), dataIndex: 'content' },
     {
-      title: '审批状态',
+      title: t('pages.system.approvalInstances.status'),
       dataIndex: 'status',
       render: (value: string) => {
         const statusMap: Record<string, { color: string; text: string }> = {
-          pending: { color: 'processing', text: '待审批' },
-          approved: { color: 'success', text: '已通过' },
-          rejected: { color: 'error', text: '已拒绝' },
-          cancelled: { color: 'default', text: '已取消' },
+          pending: { color: 'processing', text: t('pages.system.approvalInstances.statusPending') },
+          approved: { color: 'success', text: t('pages.system.approvalInstances.statusApproved') },
+          rejected: { color: 'error', text: t('pages.system.approvalInstances.statusRejected') },
+          cancelled: { color: 'default', text: t('pages.system.approvalInstances.statusCancelled') },
         };
         const statusInfo = statusMap[value] || { color: 'default', text: value };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
-    { title: '当前节点', dataIndex: 'current_node' },
-    { title: '当前审批人ID', dataIndex: 'current_approver_id' },
+    { title: t('pages.system.approvalInstances.currentNode'), dataIndex: 'current_node' },
+    { title: t('pages.system.approvalInstances.currentApproverId'), dataIndex: 'current_approver_id' },
     {
-      title: '审批数据',
+      title: t('pages.system.approvalInstances.approvalData'),
       dataIndex: 'data',
       render: (value: any) => (
         <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
@@ -392,8 +390,8 @@ const ApprovalInstanceListPage: React.FC = () => {
         </pre>
       ),
     },
-    { title: '提交时间', dataIndex: 'submitted_at', valueType: 'dateTime' },
-    { title: '完成时间', dataIndex: 'completed_at', valueType: 'dateTime' },
+    { title: t('pages.system.approvalInstances.submittedAt'), dataIndex: 'submitted_at', valueType: 'dateTime' },
+    { title: t('pages.system.approvalInstances.completedAt'), dataIndex: 'completed_at', valueType: 'dateTime' },
   ];
 
   return (
@@ -403,22 +401,22 @@ const ApprovalInstanceListPage: React.FC = () => {
           stats
             ? [
                 {
-                  title: '总审批数',
+                  title: t('pages.system.approvalInstances.statTotal'),
                   value: stats.total,
                   valueStyle: { color: '#1890ff' },
                 },
                 {
-                  title: '待审批',
+                  title: t('pages.system.approvalInstances.statusPending'),
                   value: stats.pending,
                   valueStyle: { color: '#1890ff' },
                 },
                 {
-                  title: '已通过',
+                  title: t('pages.system.approvalInstances.statusApproved'),
                   value: stats.approved,
                   valueStyle: { color: '#52c41a' },
                 },
                 {
-                  title: '已拒绝',
+                  title: t('pages.system.approvalInstances.statusRejected'),
                   value: stats.rejected,
                   valueStyle: { color: '#ff4d4f' },
                 },
@@ -427,7 +425,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         }
       >
         <UniTable<ApprovalInstance>
-          headerTitle="审批实例管理"
+          headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -458,7 +456,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             showAdvancedSearch: true,
           }}
           showCreateButton
-          createButtonText="发起审批"
+          createButtonText={t('pages.system.approvalInstances.createButton')}
           onCreate={handleSubmit}
           showImportButton={false}
           showExportButton={true}
@@ -473,7 +471,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                 toExport = items.filter((d: any) => keys.includes(d.uuid));
               }
               if (toExport.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('pages.system.approvalInstances.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
@@ -483,9 +481,9 @@ const ApprovalInstanceListPage: React.FC = () => {
               a.download = `approval-instances-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${toExport.length} 条记录`);
+              messageApi.success(t('pages.system.approvalInstances.exportSuccessCount', { count: toExport.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('pages.system.approvalInstances.exportFailed'));
             }
           }}
           viewTypes={['table', 'help']}
@@ -493,10 +491,10 @@ const ApprovalInstanceListPage: React.FC = () => {
           kanbanViewConfig={{
             statusField: 'status',
             statusGroups: {
-              pending: { title: '待审批', color: '#1890ff' },
-              approved: { title: '已通过', color: '#52c41a' },
-              rejected: { title: '已拒绝', color: '#ff4d4f' },
-              cancelled: { title: '已取消', color: '#999' },
+              pending: { title: t('pages.system.approvalInstances.statusPending'), color: '#1890ff' },
+              approved: { title: t('pages.system.approvalInstances.statusApproved'), color: '#52c41a' },
+              rejected: { title: t('pages.system.approvalInstances.statusRejected'), color: '#ff4d4f' },
+              cancelled: { title: t('pages.system.approvalInstances.statusCancelled'), color: '#999' },
             },
             renderCard: renderKanbanCard,
           }}
@@ -505,7 +503,7 @@ const ApprovalInstanceListPage: React.FC = () => {
 
       {/* 提交审批 Modal */}
       <FormModalTemplate
-        title="提交审批"
+        title={t('pages.system.approvalInstances.submitModalTitle')}
         open={submitModalVisible}
         onClose={() => setSubmitModalVisible(false)}
         onFinish={handleSubmitForm}
@@ -514,8 +512,8 @@ const ApprovalInstanceListPage: React.FC = () => {
       >
         <SafeProFormSelect
           name="process_uuid"
-          label="审批流程"
-          rules={[{ required: true, message: '请选择审批流程' }]}
+          label={t('pages.system.approvalInstances.processLabel')}
+          rules={[{ required: true, message: t('pages.system.approvalInstances.processRequired') }]}
           request={async () => {
             const processes = await getApprovalProcessList({ is_active: true });
             return processes.map((p) => ({
@@ -526,19 +524,19 @@ const ApprovalInstanceListPage: React.FC = () => {
         />
         <ProFormText
           name="title"
-          label="审批标题"
-          rules={[{ required: true, message: '请输入审批标题' }]}
+          label={t('pages.system.approvalInstances.title')}
+          rules={[{ required: true, message: t('pages.system.approvalInstances.titleRequired') }]}
         />
         <ProFormTextArea
           name="content"
-          label="审批内容"
+          label={t('pages.system.approvalInstances.contentLabel')}
           fieldProps={{
             rows: 4,
           }}
         />
         <ProFormItem
           name="data"
-          label="审批数据（JSON，可选）"
+          label={t('pages.system.approvalInstances.dataLabel')}
         >
           <TextArea
             rows={6}
@@ -550,10 +548,10 @@ const ApprovalInstanceListPage: React.FC = () => {
       {/* 审批操作 Modal */}
       <FormModalTemplate
         title={
-          actionType === 'approve' ? '同意审批' :
-          actionType === 'reject' ? '拒绝审批' :
-          actionType === 'cancel' ? '取消审批' :
-          '转交审批'
+          actionType === 'approve' ? t('pages.system.approvalInstances.modalApproveTitle') :
+          actionType === 'reject' ? t('pages.system.approvalInstances.modalRejectTitle') :
+          actionType === 'cancel' ? t('pages.system.approvalInstances.modalCancelTitle') :
+          t('pages.system.approvalInstances.modalTransferTitle')
         }
         open={actionModalVisible}
         onClose={() => setActionModalVisible(false)}
@@ -564,13 +562,13 @@ const ApprovalInstanceListPage: React.FC = () => {
         {actionType === 'transfer' && (
           <ProFormText
             name="transfer_to_user_id"
-            label="转交目标用户ID"
-            rules={[{ required: true, message: '请输入转交目标用户ID' }]}
+            label={t('pages.system.approvalInstances.transferTargetLabel')}
+            rules={[{ required: true, message: t('pages.system.approvalInstances.transferTargetRequired') }]}
           />
         )}
         <ProFormTextArea
           name="comment"
-          label="审批意见"
+          label={t('pages.system.approvalInstances.commentLabel')}
           fieldProps={{
             rows: 4,
           }}
@@ -579,7 +577,7 @@ const ApprovalInstanceListPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<ApprovalInstance>
-        title="审批实例详情"
+        title={t('pages.system.approvalInstances.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

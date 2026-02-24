@@ -10,6 +10,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin } from 'antd';
@@ -50,31 +52,33 @@ const getTableNameOptions = (pageConfigs: CustomFieldPageConfig[]) => {
 
 /**
  * 获取表的常用字段选项（用于关联字段名选择框）
- * 
+ *
  * @param tableName - 表名（可选，如果提供则尝试从配置中获取特定字段）
+ * @param t - 国际化函数，用于选项文案
  * @returns 字段选项列表
  */
-const getTableFieldOptions = (tableName?: string): { label: string; value: string }[] => {
-  // 如果没有提供表名，返回空数组
+const getTableFieldOptions = (tableName?: string, t?: TFunction): { label: string; value: string }[] => {
   if (!tableName) {
     return [];
   }
-
-  // 通用字段列表（大多数表都有的字段）
-  const commonFields = [
-    { label: 'ID (id)', value: 'id' },
-    { label: '名称 (name)', value: 'name' },
-    { label: '代码 (code)', value: 'code' },
-    { label: '标题 (title)', value: 'title' },
-    { label: '标签 (label)', value: 'label' },
-    { label: '描述 (description)', value: 'description' },
+  if (!t) {
+    return [
+      { label: 'ID (id)', value: 'id' },
+      { label: 'Name (name)', value: 'name' },
+      { label: 'Code (code)', value: 'code' },
+      { label: 'Title (title)', value: 'title' },
+      { label: 'Label (label)', value: 'label' },
+      { label: 'Description (description)', value: 'description' },
+    ];
+  }
+  return [
+    { label: t('field.customField.optionId'), value: 'id' },
+    { label: t('field.customField.optionName'), value: 'name' },
+    { label: t('field.customField.optionCode'), value: 'code' },
+    { label: t('field.customField.optionTitle'), value: 'title' },
+    { label: t('field.customField.optionLabel'), value: 'label' },
+    { label: t('field.customField.optionDescription'), value: 'description' },
   ];
-
-  // 如果提供了表名，尝试从配置中获取特定字段
-  // 注意：这里需要传入pageConfigs，但由于是组件外部函数，暂时返回通用字段
-  // 后续可以根据实际需求扩展
-
-  return commonFields;
 };
 
 
@@ -82,6 +86,7 @@ const getTableFieldOptions = (tableName?: string): { label: string; value: strin
  * 自定义字段管理列表页面组件
  */
 const CustomFieldListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
@@ -124,12 +129,12 @@ const CustomFieldListPage: React.FC = () => {
         setSelectedPageCode(pages[0].pageCode);
       } else if (pages.length === 0) {
         console.warn('⚠️ 未发现任何自定义字段页面配置，请检查应用的 manifest.json 是否包含 custom_field_pages 配置');
-        messageApi.warning('未发现任何页面配置，请检查应用配置');
+        messageApi.warning(t('field.customField.noPageConfig'));
       }
     } catch (error: any) {
       console.error('❌ 加载页面配置列表失败:', error);
-      const errorMessage = error?.message || error?.error?.message || '加载页面配置失败';
-      messageApi.error(`加载页面配置失败: ${errorMessage}`);
+      const errorMessage = error?.message || error?.error?.message || t('field.customField.pageConfigLoadFailed');
+      messageApi.error(`${t('field.customField.pageConfigLoadFailed')}: ${errorMessage}`);
       // 即使失败也设置空数组，避免页面崩溃
       setPageConfigs([]);
     } finally {
@@ -271,7 +276,7 @@ const CustomFieldListPage: React.FC = () => {
         formula_expression: detail.config?.expression || '',
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取字段详情失败');
+      messageApi.error(error.message || t('field.customField.fetchDetailFailed'));
     }
   };
 
@@ -285,7 +290,7 @@ const CustomFieldListPage: React.FC = () => {
       const detail = await getCustomFieldByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取字段详情失败');
+      messageApi.error(error.message || t('field.customField.fetchDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -297,12 +302,12 @@ const CustomFieldListPage: React.FC = () => {
   const handleDelete = async (record: CustomField) => {
     try {
       await deleteCustomField(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
       // 更新字段数量
       updatePageFieldCounts();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -311,15 +316,15 @@ const CustomFieldListPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('field.customField.batchDeleteTitle'),
+      content: t('field.customField.batchDeleteConfirm', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -333,15 +338,15 @@ const CustomFieldListPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('pages.system.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
@@ -349,7 +354,7 @@ const CustomFieldListPage: React.FC = () => {
           // 更新字段数量
           updatePageFieldCounts();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('pages.system.deleteFailed'));
         }
       },
     });
@@ -369,7 +374,7 @@ const CustomFieldListPage: React.FC = () => {
 
       // 验证表名是否存在
       if (!values.table_name) {
-        messageApi.error('关联表名不能为空，请先选择一个功能页面');
+        messageApi.error(t('field.customField.tableNameRequired'));
         return;
       }
 
@@ -403,7 +408,7 @@ const CustomFieldListPage: React.FC = () => {
           try {
             config.options = JSON.parse(values.select_options);
           } catch (e) {
-            messageApi.error('选项 JSON 格式不正确');
+            messageApi.error(t('field.customField.optionsJsonInvalid'));
             return;
           }
         }
@@ -412,7 +417,7 @@ const CustomFieldListPage: React.FC = () => {
           try {
             config.options = JSON.parse(values.select_options);
           } catch (e) {
-            messageApi.error('选项 JSON 格式不正确');
+            messageApi.error(t('field.customField.optionsJsonInvalid'));
             return;
           }
         }
@@ -435,7 +440,7 @@ const CustomFieldListPage: React.FC = () => {
           try {
             config.default = JSON.parse(values.default_value);
           } catch (e) {
-            messageApi.error('默认值 JSON 格式不正确');
+            messageApi.error(t('field.customField.defaultJsonInvalid'));
             return;
           }
         }
@@ -458,13 +463,13 @@ const CustomFieldListPage: React.FC = () => {
           ...fieldData,
           config: Object.keys(config).length > 0 ? config : undefined,
         } as UpdateCustomFieldData);
-        messageApi.success('更新成功');
+        messageApi.success(t('pages.system.updateSuccess'));
       } else {
         await createCustomField({
           ...fieldData,
           config: Object.keys(config).length > 0 ? config : undefined,
         } as CreateCustomFieldData);
-        messageApi.success('创建成功');
+        messageApi.success(t('pages.system.createSuccess'));
       }
 
       setModalVisible(false);
@@ -472,7 +477,7 @@ const CustomFieldListPage: React.FC = () => {
       // 更新字段数量
       updatePageFieldCounts();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -490,15 +495,15 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认值（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.defaultValuePlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="max_length"
-                label="最大长度"
-                placeholder="请输入最大长度（可选）"
+                label={t('field.customField.maxLength')}
+                placeholder={t('field.customField.maxLengthPlaceholder')}
                 fieldProps={{ min: 1 }}
               />
             </div>
@@ -510,22 +515,22 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认值（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.defaultValuePlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="min_value"
-                label="最小值"
-                placeholder="最小值（可选）"
+                label={t('field.customField.minValue')}
+                placeholder={t('field.customField.minValuePlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="max_value"
-                label="最大值"
-                placeholder="最大值（可选）"
+                label={t('field.customField.maxValue')}
+                placeholder={t('field.customField.maxValuePlaceholder')}
               />
             </div>
           </>
@@ -536,17 +541,17 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认日期，例如：2025-01-01（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.dateDefaultPlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="date_format"
-                label="日期格式"
-                placeholder="例如：YYYY-MM-DD"
+                label={t('field.customField.dateFormat')}
+                placeholder={t('field.customField.dateFormatPlaceholder')}
                 initialValue="YYYY-MM-DD"
-                extra="支持的格式：YYYY-MM-DD、YYYY/MM/DD、YYYY年MM月DD日等"
+                extra={t('field.customField.dateFormatExtra')}
               />
             </div>
           </>
@@ -557,17 +562,17 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认时间，例如：14:30:00（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.timeDefaultPlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="time_format"
-                label="时间格式"
-                placeholder="例如：HH:mm:ss"
+                label={t('field.customField.timeFormat')}
+                placeholder={t('field.customField.timeFormatPlaceholder')}
                 initialValue="HH:mm:ss"
-                extra="支持的格式：HH:mm:ss、HH:mm等"
+                extra={t('field.customField.timeFormatExtra')}
               />
             </div>
           </>
@@ -578,17 +583,17 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认日期时间，例如：2025-01-01 14:30:00（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.datetimeDefaultPlaceholder')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="datetime_format"
-                label="日期时间格式"
-                placeholder="例如：YYYY-MM-DD HH:mm:ss"
+                label={t('field.customField.datetimeFormat')}
+                placeholder={t('field.customField.datetimeFormatPlaceholder')}
                 initialValue="YYYY-MM-DD HH:mm:ss"
-                extra="支持的格式：YYYY-MM-DD HH:mm:ss、YYYY/MM/DD HH:mm等"
+                extra={t('field.customField.datetimeFormatExtra')}
               />
             </div>
           </>
@@ -599,16 +604,16 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 2' }}>
               <ProFormTextArea
                 name="select_options"
-                label="选项配置（JSON）"
-                placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
+                label={t('field.customField.selectOptions')}
+                placeholder={t('field.customField.selectOptionsPlaceholder')}
                 fieldProps={{ rows: 6 }}
                 extra={
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    格式示例：
+                    {t('field.customField.formatExample')}：
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
                       {`[
-  {"label": "选项1", "value": "1"},
-  {"label": "选项2", "value": "2"}
+  {"label": "${t('field.customField.exampleOption1')}", "value": "1"},
+  {"label": "${t('field.customField.exampleOption2')}", "value": "2"}
 ]`}
                     </pre>
                   </div>
@@ -623,16 +628,16 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 2' }}>
               <ProFormTextArea
                 name="select_options"
-                label="选项配置（JSON）"
-                placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
+                label={t('field.customField.selectOptions')}
+                placeholder={t('field.customField.selectOptionsPlaceholder')}
                 fieldProps={{ rows: 6 }}
                 extra={
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    格式示例：
+                    {t('field.customField.formatExample')}：
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
                       {`[
-  {"label": "选项1", "value": "1"},
-  {"label": "选项2", "value": "2"}
+  {"label": "${t('field.customField.exampleOption1')}", "value": "1"},
+  {"label": "${t('field.customField.exampleOption2')}", "value": "2"}
 ]`}
                     </pre>
                   </div>
@@ -647,18 +652,18 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="image_max_size"
-                label="最大文件大小（KB）"
-                placeholder="请输入最大文件大小，例如：2048"
+                label={t('field.customField.imageMaxSize')}
+                placeholder={t('field.customField.imageMaxSizePlaceholder')}
                 fieldProps={{ min: 1 }}
-                extra="单位：KB，例如：2048 表示 2MB"
+                extra={t('field.customField.imageMaxSizeExtra')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="image_allowed_types"
-                label="允许的文件类型"
-                placeholder="例如：jpg,jpeg,png,gif"
-                extra="多个类型用逗号分隔，例如：jpg,jpeg,png,gif"
+                label={t('field.customField.allowedTypes')}
+                placeholder={t('field.customField.allowedTypesImagePlaceholder')}
+                extra={t('field.customField.allowedTypesExtra') + '，' + t('field.customField.allowedTypesImagePlaceholder')}
               />
             </div>
           </>
@@ -669,18 +674,18 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="file_max_size"
-                label="最大文件大小（KB）"
-                placeholder="请输入最大文件大小，例如：10240"
+                label={t('field.customField.fileMaxSize')}
+                placeholder={t('field.customField.fileMaxSizePlaceholder')}
                 fieldProps={{ min: 1 }}
-                extra="单位：KB，例如：10240 表示 10MB"
+                extra={t('field.customField.fileMaxSizeExtra')}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormText
                 name="file_allowed_types"
-                label="允许的文件类型"
-                placeholder="例如：pdf,doc,docx,xls,xlsx"
-                extra="多个类型用逗号分隔，例如：pdf,doc,docx,xls,xlsx"
+                label={t('field.customField.allowedTypes')}
+                placeholder={t('field.customField.allowedTypesFilePlaceholder')}
+                extra={t('field.customField.allowedTypesExtra') + '，' + t('field.customField.allowedTypesFilePlaceholder')}
               />
             </div>
           </>
@@ -691,14 +696,13 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <SafeProFormSelect
                 name="associated_table"
-                label="关联表名"
-                rules={[{ required: true, message: '请选择关联表名' }]}
+                label={t('field.customField.associatedTable')}
+                rules={[{ required: true, message: t('field.customField.associatedTableRequired') }]}
                 options={getTableNameOptions(pageConfigs)}
-                placeholder="请选择关联的数据表"
-                extra="选择要关联的数据表"
+                placeholder={t('field.customField.associatedTablePlaceholder')}
+                extra={t('field.customField.associatedTableExtra')}
                 fieldProps={{
                   onChange: (_value: string) => {
-                    // 当关联表名改变时，清空关联字段名
                     formRef.current?.setFieldsValue({
                       associated_field: undefined,
                     });
@@ -709,17 +713,17 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <SafeProFormSelect
                 name="associated_field"
-                label="关联字段名"
-                rules={[{ required: true, message: '请选择关联字段名' }]}
+                label={t('field.customField.associatedField')}
+                rules={[{ required: true, message: t('field.customField.associatedFieldRequired') }]}
                 dependencies={['associated_table']}
                 options={({ associated_table }: any) => {
                   if (!associated_table) {
                     return [];
                   }
-                  return getTableFieldOptions(associated_table);
+                  return getTableFieldOptions(associated_table, t);
                 }}
-                placeholder="请选择用于显示的字段"
-                extra="选择用于显示的字段名称"
+                placeholder={t('field.customField.associatedFieldPlaceholder')}
+                extra={t('field.customField.associatedFieldExtra')}
               />
             </div>
           </>
@@ -730,10 +734,10 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 2' }}>
               <ProFormTextArea
                 name="formula_expression"
-                label="公式表达式"
-                placeholder="例如：{field1} + {field2} * 2"
+                label={t('field.customField.formulaExpression')}
+                placeholder={t('field.customField.formulaExpressionPlaceholder')}
                 fieldProps={{ rows: 4 }}
-                extra="使用 {字段名} 引用其他字段，支持基本数学运算"
+                extra={t('field.customField.formulaExpressionExtra')}
               />
             </div>
           </>
@@ -744,16 +748,16 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormTextArea
                 name="default_value"
-                label="默认值"
-                placeholder="请输入默认值（可选）"
+                label={t('field.customField.defaultValue')}
+                placeholder={t('field.customField.defaultValuePlaceholder')}
                 fieldProps={{ rows: 3 }}
               />
             </div>
             <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="textarea_rows"
-                label="行数"
-                placeholder="请输入行数"
+                label={t('field.customField.textareaRows')}
+                placeholder={t('field.customField.textareaRowsPlaceholder')}
                 fieldProps={{ min: 1, max: 20 }}
                 initialValue={4}
               />
@@ -766,10 +770,10 @@ const CustomFieldListPage: React.FC = () => {
             <div style={{ gridColumn: 'span 2' }}>
               <ProFormTextArea
                 name="default_value"
-                label="默认值（JSON）"
-                placeholder='请输入 JSON 格式的默认值，例如：{"key": "value"}'
+                label={t('field.customField.defaultValueJson')}
+                placeholder={t('field.customField.defaultValueJsonPlaceholder')}
                 fieldProps={{ rows: 6 }}
-                extra="请输入有效的 JSON 格式"
+                extra={t('field.customField.defaultValueJsonExtra')}
               />
             </div>
           </>
@@ -784,107 +788,107 @@ const CustomFieldListPage: React.FC = () => {
    */
   const columns: ProColumns<CustomField>[] = [
     {
-      title: '字段名称',
+      title: t('field.customField.name'),
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '字段代码',
+      title: t('field.customField.code'),
       dataIndex: 'code',
       width: 150,
     },
     {
-      title: '关联表',
+      title: t('field.customField.tableName'),
       dataIndex: 'table_name',
       width: 150,
-      hideInTable: true, // 在表格中隐藏，因为已经按表名过滤了
+      hideInTable: true,
     },
     {
-      title: '字段类型',
+      title: t('field.customField.fieldType'),
       dataIndex: 'field_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        text: { text: '文本', status: 'Default' },
-        number: { text: '数值', status: 'Processing' },
-        image: { text: '图片', status: 'Success' },
-        file: { text: '文件', status: 'Warning' },
-        date: { text: '日期', status: 'Success' },
-        time: { text: '时间', status: 'Success' },
-        datetime: { text: '日期时间', status: 'Success' },
-        select: { text: '单选', status: 'Warning' },
-        multiselect: { text: '多选', status: 'Warning' },
-        associated_object: { text: '关联对象', status: 'Processing' },
-        formula: { text: '公式', status: 'Error' },
-        textarea: { text: '多行文本', status: 'Error' },
-        json: { text: 'JSON', status: 'Default' },
+        text: { text: t('field.customField.typeText'), status: 'Default' },
+        number: { text: t('field.customField.typeNumber'), status: 'Processing' },
+        image: { text: t('field.customField.typeImage'), status: 'Success' },
+        file: { text: t('field.customField.typeFile'), status: 'Warning' },
+        date: { text: t('field.customField.typeDate'), status: 'Success' },
+        time: { text: t('field.customField.typeTime'), status: 'Success' },
+        datetime: { text: t('field.customField.typeDatetime'), status: 'Success' },
+        select: { text: t('field.customField.typeSelect'), status: 'Warning' },
+        multiselect: { text: t('field.customField.typeMultiselect'), status: 'Warning' },
+        associated_object: { text: t('field.customField.typeAssociatedObject'), status: 'Processing' },
+        formula: { text: t('field.customField.typeFormula'), status: 'Error' },
+        textarea: { text: t('field.customField.typeTextarea'), status: 'Error' },
+        json: { text: t('field.customField.typeJson'), status: 'Default' },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { color: string; text: string }> = {
-          text: { color: 'default', text: '文本' },
-          number: { color: 'blue', text: '数值' },
-          image: { color: 'green', text: '图片' },
-          file: { color: 'orange', text: '文件' },
-          date: { color: 'green', text: '日期' },
-          time: { color: 'cyan', text: '时间' },
-          datetime: { color: 'blue', text: '日期时间' },
-          select: { color: 'orange', text: '单选' },
-          multiselect: { color: 'purple', text: '多选' },
-          associated_object: { color: 'geekblue', text: '关联对象' },
-          formula: { color: 'red', text: '公式' },
-          textarea: { color: 'red', text: '多行文本' },
-          json: { color: 'purple', text: 'JSON' },
+        const typeMap: Record<string, { color: string; textKey: string }> = {
+          text: { color: 'default', textKey: 'field.customField.typeText' },
+          number: { color: 'blue', textKey: 'field.customField.typeNumber' },
+          image: { color: 'green', textKey: 'field.customField.typeImage' },
+          file: { color: 'orange', textKey: 'field.customField.typeFile' },
+          date: { color: 'green', textKey: 'field.customField.typeDate' },
+          time: { color: 'cyan', textKey: 'field.customField.typeTime' },
+          datetime: { color: 'blue', textKey: 'field.customField.typeDatetime' },
+          select: { color: 'orange', textKey: 'field.customField.typeSelect' },
+          multiselect: { color: 'purple', textKey: 'field.customField.typeMultiselect' },
+          associated_object: { color: 'geekblue', textKey: 'field.customField.typeAssociatedObject' },
+          formula: { color: 'red', textKey: 'field.customField.typeFormula' },
+          textarea: { color: 'red', textKey: 'field.customField.typeTextarea' },
+          json: { color: 'purple', textKey: 'field.customField.typeJson' },
         };
-        const typeInfo = typeMap[record.field_type] || { color: 'default', text: record.field_type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        const typeInfo = typeMap[record.field_type] || { color: 'default', textKey: record.field_type };
+        return <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>;
       },
     },
     {
-      title: '字段标签',
+      title: t('field.customField.label'),
       dataIndex: 'label',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '是否必填',
+      title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Success' },
-        false: { text: '否', status: 'Default' },
+        true: { text: t('field.customField.yes'), status: 'Success' },
+        false: { text: t('field.customField.no'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_required ? 'success' : 'default'}>
-          {record.is_required ? '是' : '否'}
+          {record.is_required ? t('field.customField.yes') : t('field.customField.no')}
         </Tag>
       ),
     },
     {
-      title: '排序',
+      title: t('field.customField.sortOrder'),
       dataIndex: 'sort_order',
       width: 80,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '状态',
+      title: t('field.customField.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('field.customField.enabled'), status: 'Success' },
+        false: { text: t('field.customField.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('field.customField.enabled') : t('field.customField.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('field.customField.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -892,7 +896,7 @@ const CustomFieldListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -904,7 +908,7 @@ const CustomFieldListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -912,10 +916,10 @@ const CustomFieldListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个字段吗？"
+            title={t('field.customField.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -924,7 +928,7 @@ const CustomFieldListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -940,14 +944,14 @@ const CustomFieldListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: '字段名称', dataIndex: 'name' },
-    { title: '字段代码', dataIndex: 'code' },
-    { title: '关联表名', dataIndex: 'table_name' },
-    { title: '字段类型', dataIndex: 'field_type' },
-    { title: '字段标签', dataIndex: 'label' },
-    { title: '占位符', dataIndex: 'placeholder' },
+    { title: t('field.customField.name'), dataIndex: 'name' },
+    { title: t('field.customField.code'), dataIndex: 'code' },
+    { title: t('field.customField.tableNameLabel'), dataIndex: 'table_name' },
+    { title: t('field.customField.fieldType'), dataIndex: 'field_type' },
+    { title: t('field.customField.label'), dataIndex: 'label' },
+    { title: t('field.customField.placeholder'), dataIndex: 'placeholder' },
     {
-      title: '字段配置',
+      title: t('field.customField.config'),
       dataIndex: 'config',
       render: (_: any, entity: CustomField) => (
         <pre style={{
@@ -963,28 +967,28 @@ const CustomFieldListPage: React.FC = () => {
       ),
     },
     {
-      title: '是否必填',
+      title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
-      render: (_: any, entity: CustomField) => (entity?.is_required ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_required ? t('field.customField.yes') : t('field.customField.no')),
     },
     {
-      title: '是否可搜索',
+      title: t('field.customField.isSearchable'),
       dataIndex: 'is_searchable',
-      render: (_: any, entity: CustomField) => (entity?.is_searchable ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_searchable ? t('field.customField.yes') : t('field.customField.no')),
     },
     {
-      title: '是否可排序',
+      title: t('field.customField.isSortable'),
       dataIndex: 'is_sortable',
-      render: (_: any, entity: CustomField) => (entity?.is_sortable ? '是' : '否'),
+      render: (_: any, entity: CustomField) => (entity?.is_sortable ? t('field.customField.yes') : t('field.customField.no')),
     },
-    { title: '排序顺序', dataIndex: 'sort_order' },
+    { title: t('field.customField.sortOrderLabel'), dataIndex: 'sort_order' },
     {
-      title: '状态',
+      title: t('field.customField.status'),
       dataIndex: 'is_active',
-      render: (_: any, entity: CustomField) => (entity?.is_active ? '启用' : '禁用'),
+      render: (_: any, entity: CustomField) => (entity?.is_active ? t('field.customField.enabled') : t('field.customField.disabled')),
     },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' as const },
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' as const },
+    { title: t('field.customField.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' as const },
+    { title: t('field.customField.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' as const },
   ];
 
   return (
@@ -1029,7 +1033,7 @@ const CustomFieldListPage: React.FC = () => {
             {/* 搜索栏 */}
             <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
               <Input
-                placeholder="搜索功能页面"
+                placeholder={t('field.customField.searchPagePlaceholder')}
                 prefix={<SearchOutlined />}
                 value={pageSearchValue}
                 onChange={(e) => setPageSearchValue(e.target.value)}
@@ -1044,7 +1048,7 @@ const CustomFieldListPage: React.FC = () => {
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="large" />
                   <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
-                    加载页面配置中...
+                    {t('field.customField.loadingPageConfig')}
                   </div>
                 </div>
               ) : (
@@ -1199,7 +1203,7 @@ const CustomFieldListPage: React.FC = () => {
                         };
                       } catch (error: any) {
                         console.error('获取自定义字段列表失败:', error);
-                        messageApi.error(error?.message || '获取自定义字段列表失败');
+                        messageApi.error(error?.message || t('field.customField.listFetchFailed'));
                         return {
                           data: [],
                           success: false,
@@ -1217,13 +1221,13 @@ const CustomFieldListPage: React.FC = () => {
                     }}
                     showAdvancedSearch={true}
                     showCreateButton
-                    createButtonText="新建字段"
+                    createButtonText={t('field.customField.createButton')}
                     onCreate={handleCreate}
                     enableRowSelection
                     onRowSelectionChange={setSelectedRowKeys}
                     showDeleteButton
                     onDelete={handleBatchDelete}
-                    deleteButtonText="批量删除"
+                    deleteButtonText={t('field.customField.batchDeleteButton')}
                     showImportButton={false}
                     showExportButton={true}
                     onExport={async (type, keys, pageData) => {
@@ -1241,7 +1245,7 @@ const CustomFieldListPage: React.FC = () => {
                           items = items.filter((d) => keys.includes(d.uuid));
                         }
                         if (items.length === 0) {
-                          messageApi.warning('暂无数据可导出');
+                          messageApi.warning(t('field.customField.exportNoData'));
                           return;
                         }
                         const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -1251,9 +1255,9 @@ const CustomFieldListPage: React.FC = () => {
                         a.download = `custom-fields-${selectedPage.tableName}-${new Date().toISOString().slice(0, 10)}.json`;
                         a.click();
                         URL.revokeObjectURL(url);
-                        messageApi.success(`已导出 ${items.length} 条记录`);
+                        messageApi.success(t('field.customField.exportSuccess', { count: items.length }));
                       } catch (error: any) {
-                        messageApi.error(error?.message || '导出失败');
+                        messageApi.error(error?.message || t('pages.system.deleteFailed'));
                       }
                     }}
                   />
@@ -1269,7 +1273,7 @@ const CustomFieldListPage: React.FC = () => {
                   color: token.colorTextSecondary,
                 }}
               >
-                请从左侧选择一个功能页面进行配置
+                {t('field.customField.selectPageHint')}
               </div>
             )}
           </div>
@@ -1278,7 +1282,7 @@ const CustomFieldListPage: React.FC = () => {
 
       {/* 创建/编辑字段 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑字段' : '新建字段'}
+        title={isEdit ? t('field.customField.editTitle') : t('field.customField.createTitle')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
@@ -1289,47 +1293,47 @@ const CustomFieldListPage: React.FC = () => {
       >
           <ProFormText
             name="name"
-            label="字段名称"
-            rules={[{ required: true, message: '请输入字段名称' }]}
-            placeholder="请输入字段名称"
+            label={t('field.customField.name')}
+            rules={[{ required: true, message: t('field.customField.nameRequired') }]}
+            placeholder={t('field.customField.namePlaceholder')}
             colProps={{ span: 12 }}
           />
           <ProFormText
             name="code"
-            label="字段代码"
-            rules={[{ required: true, message: '请输入字段代码' }]}
-            placeholder="请输入字段代码（唯一标识）"
+            label={t('field.customField.code')}
+            rules={[{ required: true, message: t('field.customField.codeRequired') }]}
+            placeholder={t('field.customField.codePlaceholder')}
             disabled={isEdit}
-            extra="字段代码用于程序调用，创建后不可修改"
+            extra={t('field.customField.codeExtra')}
             colProps={{ span: 12 }}
           />
           <ProFormText
             name="table_name"
-            label="关联表名"
-            placeholder="例如：sys_users"
+            label={t('field.customField.tableNameLabel')}
+            placeholder={t('field.customField.tableNamePlaceholder')}
             disabled={true}
             initialValue={selectedPage?.tableName || ''}
-            extra={isEdit ? "关联表名，创建后不可修改" : "关联表名，根据选中的功能页面自动填充"}
+            extra={isEdit ? t('field.customField.tableNameExtraEdit') : t('field.customField.tableNameExtraCreate')}
             colProps={{ span: 12 }}
           />
           <SafeProFormSelect
             name="field_type"
-            label="字段类型"
-            rules={[{ required: true, message: '请选择字段类型' }]}
+            label={t('field.customField.fieldType')}
+            rules={[{ required: true, message: t('field.customField.fieldTypeRequired') }]}
             options={[
-              { label: '文本', value: 'text' },
-              { label: '数值', value: 'number' },
-              { label: '图片', value: 'image' },
-              { label: '文件', value: 'file' },
-              { label: '日期', value: 'date' },
-              { label: '时间', value: 'time' },
-              { label: '日期时间', value: 'datetime' },
-              { label: '单选', value: 'select' },
-              { label: '多选', value: 'multiselect' },
-              { label: '关联对象', value: 'associated_object' },
-              { label: '公式', value: 'formula' },
-              { label: '多行文本', value: 'textarea' },
-              { label: 'JSON', value: 'json' },
+              { label: t('field.customField.typeText'), value: 'text' },
+              { label: t('field.customField.typeNumber'), value: 'number' },
+              { label: t('field.customField.typeImage'), value: 'image' },
+              { label: t('field.customField.typeFile'), value: 'file' },
+              { label: t('field.customField.typeDate'), value: 'date' },
+              { label: t('field.customField.typeTime'), value: 'time' },
+              { label: t('field.customField.typeDatetime'), value: 'datetime' },
+              { label: t('field.customField.typeSelect'), value: 'select' },
+              { label: t('field.customField.typeMultiselect'), value: 'multiselect' },
+              { label: t('field.customField.typeAssociatedObject'), value: 'associated_object' },
+              { label: t('field.customField.typeFormula'), value: 'formula' },
+              { label: t('field.customField.typeTextarea'), value: 'textarea' },
+              { label: t('field.customField.typeJson'), value: 'json' },
             ]}
             fieldProps={{
               onChange: (value: any) => {
@@ -1341,14 +1345,14 @@ const CustomFieldListPage: React.FC = () => {
           />
           <ProFormText
             name="label"
-            label="字段标签"
-            placeholder="请输入字段标签（显示名称）"
+            label={t('field.customField.label')}
+            placeholder={t('field.customField.labelPlaceholder')}
             colProps={{ span: 12 }}
           />
           <ProFormText
             name="placeholder"
-            label="占位符"
-            placeholder="请输入占位符"
+            label={t('field.customField.placeholder')}
+            placeholder={t('field.customField.placeholderPlaceholder')}
             colProps={{ span: 12 }}
           />
           <div style={{
@@ -1359,42 +1363,42 @@ const CustomFieldListPage: React.FC = () => {
             marginBottom: 16,
             gridColumn: '1 / -1',
           }}>
-            <div style={{ marginBottom: 12, fontWeight: 500 }}>字段配置</div>
+            <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               {renderConfigFields()}
             </div>
           </div>
           <ProFormSwitch
             name="is_required"
-            label="是否必填"
+            label={t('field.customField.isRequired')}
             colProps={{ span: 8 }}
           />
           <ProFormSwitch
             name="is_searchable"
-            label="是否可搜索"
+            label={t('field.customField.isSearchable')}
             colProps={{ span: 8 }}
           />
           <ProFormSwitch
             name="is_sortable"
-            label="是否可排序"
+            label={t('field.customField.isSortable')}
             colProps={{ span: 8 }}
           />
           <ProFormDigit
             name="sort_order"
-            label="排序顺序"
+            label={t('field.customField.sortOrderLabel')}
             fieldProps={{ min: 0 }}
             colProps={{ span: 12 }}
           />
           <ProFormSwitch
             name="is_active"
-            label="是否启用"
+            label={t('field.customField.isActiveLabel')}
             colProps={{ span: 12 }}
           />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<CustomField>
-        title="字段详情"
+        title={t('field.customField.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}

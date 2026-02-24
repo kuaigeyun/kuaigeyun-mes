@@ -8,6 +8,7 @@
  * @date 2026-01-06
  */
 
+import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Card, Button, Space, Upload, message, Form, ColorPicker } from 'antd';
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -29,6 +30,7 @@ import { applyFavicon } from '../../../../utils/favicon';
  * 平台设置页面组件
  */
 export default function PlatformSettingsPage() {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = ProForm.useForm<PlatformSettingsUpdateRequest>();
@@ -55,14 +57,13 @@ export default function PlatformSettingsPage() {
   const updateMutation = useMutation({
     mutationFn: (data: PlatformSettingsUpdateRequest) => updatePlatformSettings(data),
     onSuccess: (data) => {
-      messageApi.success('平台设置更新成功');
+      messageApi.success(t('pages.infra.platform.updateSuccess'));
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
       queryClient.invalidateQueries({ queryKey: ['platformSettingsPublic'] });
-      // 立即应用 Favicon
       applyFavicon(data.favicon).catch(() => {});
     },
     onError: (error: any) => {
-      messageApi.error(error?.message || '平台设置更新失败');
+      messageApi.error(error?.message || t('pages.infra.platform.updateFailed'));
     },
   });
 
@@ -126,7 +127,7 @@ export default function PlatformSettingsPage() {
         setLogoUrl(previewInfo.preview_url);
         setLogoFileList([{
           uid: logoValue.trim(),
-          name: '平台Logo',
+          name: t('pages.infra.platform.platformLogo'),
           status: 'done',
           url: previewInfo.preview_url,
         }]);
@@ -140,7 +141,7 @@ export default function PlatformSettingsPage() {
       setLogoUrl(logoValue.trim());
       setLogoFileList([{
         uid: logoValue.trim(),
-        name: '平台Logo',
+        name: t('pages.infra.platform.platformLogo'),
         status: 'done',
         url: logoValue.trim(),
       }]);
@@ -175,9 +176,8 @@ export default function PlatformSettingsPage() {
    * 处理LOGO文件选择（在剪裁之前）
    */
   const handleLogoFileSelect: UploadProps['beforeUpload'] = (file) => {
-    // 检查文件类型
     if (!file.type.startsWith('image/')) {
-      messageApi.error('请选择图片文件');
+      messageApi.error(t('pages.infra.platform.selectImage'));
       return false;
     }
     
@@ -211,7 +211,7 @@ export default function PlatformSettingsPage() {
       // 上传剪裁后的文件（使用category标记为平台logo）
       const response: FileUploadResponse = await uploadFile(croppedFile, {
         category: 'platform-logo',
-        description: '平台Logo',
+        description: t('pages.infra.platform.platformLogo'),
       });
       
       if (response.uuid) {
@@ -242,15 +242,14 @@ export default function PlatformSettingsPage() {
           url: previewUrl || localPreviewUrl,
         }]);
         
-        messageApi.success('LOGO上传成功');
+        messageApi.success(t('pages.infra.platform.logoUploadSuccess'));
       } else {
-        // 上传失败，释放本地预览URL
         URL.revokeObjectURL(localPreviewUrl);
         setLogoUrl(undefined);
-        messageApi.error('LOGO上传失败');
+        messageApi.error(t('pages.infra.platform.logoUploadFailed'));
       }
     } catch (error: any) {
-      messageApi.error(error?.message || 'LOGO上传失败');
+      messageApi.error(error?.message || t('pages.infra.platform.logoUploadFailed'));
       setLogoUrl(undefined);
     }
   };
@@ -272,7 +271,7 @@ export default function PlatformSettingsPage() {
     });
     setLogoUrl(undefined);
     setLogoFileList([]);
-    messageApi.success('LOGO已清除');
+    messageApi.success(t('pages.infra.platform.logoCleared'));
   };
 
   /**
@@ -280,7 +279,7 @@ export default function PlatformSettingsPage() {
    */
   const handleFaviconFileSelect: UploadProps['beforeUpload'] = (file) => {
     if (!file.type.startsWith('image/')) {
-      messageApi.error('请选择图片文件');
+      messageApi.error(t('pages.infra.platform.selectImage'));
       return false;
     }
     setSelectedFaviconFile(file);
@@ -303,7 +302,7 @@ export default function PlatformSettingsPage() {
       setSelectedFaviconFile(null);
       const response: FileUploadResponse = await uploadFile(croppedFile, {
         category: 'platform-favicon',
-        description: '平台 Favicon',
+        description: t('pages.infra.platform.favicon'),
       });
       if (response.uuid) {
         form.setFieldsValue({ favicon: response.uuid });
@@ -323,14 +322,14 @@ export default function PlatformSettingsPage() {
           status: 'done',
           url: previewUrl,
         }]);
-        messageApi.success('Favicon 上传成功');
+        messageApi.success(t('pages.infra.platform.faviconUploadSuccess'));
       } else {
         URL.revokeObjectURL(localPreviewUrl);
         setFaviconUrl(undefined);
-        messageApi.error('Favicon 上传失败');
+        messageApi.error(t('pages.infra.platform.faviconUploadFailed'));
       }
     } catch (error: any) {
-      messageApi.error(error?.message || 'Favicon 上传失败');
+      messageApi.error(error?.message || t('pages.infra.platform.faviconUploadFailed'));
       setFaviconUrl(undefined);
     }
   };
@@ -350,7 +349,7 @@ export default function PlatformSettingsPage() {
     form.setFieldsValue({ favicon: undefined });
     setFaviconUrl(undefined);
     setFaviconFileList([]);
-    messageApi.success('Favicon 已清除');
+    messageApi.success(t('pages.infra.platform.faviconCleared'));
   };
 
   /**
@@ -362,14 +361,14 @@ export default function PlatformSettingsPage() {
 
   return (
     <ListPageTemplate>
-      <Card title="平台设置" loading={isLoading}>
+      <Card title={t('pages.infra.platform.title')} loading={isLoading}>
         <ProForm<PlatformSettingsUpdateRequest>
           form={form}
           layout="vertical"
           onFinish={handleSave}
           submitter={{
             searchConfig: {
-              submitText: '保存设置',
+              submitText: t('pages.infra.platform.saveButton'),
             },
             resetButtonProps: {
               style: { display: 'none' },
@@ -378,11 +377,11 @@ export default function PlatformSettingsPage() {
         >
           <ProFormText
             name="platform_name"
-            label="平台名称"
-            placeholder="请输入平台名称"
+            label={t('pages.infra.platform.platformName')}
+            placeholder={t('pages.infra.platform.platformNamePlaceholder')}
             rules={[
-              { required: true, message: '请输入平台名称' },
-              { max: 200, message: '平台名称不能超过200个字符' },
+              { required: true, message: t('pages.infra.platform.platformNameRequired') },
+              { max: 200, message: t('pages.infra.platform.platformNameMax') },
             ]}
             fieldProps={{
               maxLength: 200,
@@ -391,15 +390,15 @@ export default function PlatformSettingsPage() {
 
           <ProForm.Item
             name="platform_logo"
-            label="平台Logo"
-            tooltip="上传图片作为平台Logo，支持UUID和URL两种格式"
+            label={t('pages.infra.platform.platformLogo')}
+            tooltip={t('pages.infra.platform.platformLogoTooltip')}
           >
             <Space direction="vertical" style={{ width: '100%' }}>
               {logoUrl && (
                 <div style={{ marginBottom: 8 }}>
                   <img
                     src={logoUrl}
-                    alt="平台Logo"
+                    alt={t('pages.infra.platform.platformLogo')}
                     style={{
                       maxWidth: '200px',
                       maxHeight: '100px',
@@ -419,7 +418,7 @@ export default function PlatformSettingsPage() {
                   accept="image/*"
                   showUploadList={false}
                 >
-                  <Button icon={<UploadOutlined />}>上传Logo</Button>
+                  <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadLogo')}</Button>
                 </Upload>
                 {logoUrl && (
                   <Button
@@ -427,13 +426,13 @@ export default function PlatformSettingsPage() {
                     danger
                     onClick={handleClearLogo}
                   >
-                    清除Logo
+                    {t('pages.infra.platform.clearLogo')}
                   </Button>
                 )}
               </Space>
               <ProFormText
                 name="platform_logo"
-                placeholder="或直接输入Logo URL"
+                placeholder={t('pages.infra.platform.logoUrlPlaceholder')}
                 fieldProps={{
                   maxLength: 500,
                 }}
@@ -444,15 +443,15 @@ export default function PlatformSettingsPage() {
 
           <ProForm.Item
             name="favicon"
-            label="Favicon"
-            tooltip="上传图片作为浏览器标签页图标，建议尺寸 32x32 或 64x64 像素，支持 UUID 和 URL 两种格式"
+            label={t('pages.infra.platform.favicon')}
+            tooltip={t('pages.infra.platform.faviconTooltip')}
           >
             <Space direction="vertical" style={{ width: '100%' }}>
               {faviconUrl && (
                 <div style={{ marginBottom: 8 }}>
                   <img
                     src={faviconUrl}
-                    alt="Favicon"
+                    alt={t('pages.infra.platform.favicon')}
                     style={{
                       width: 32,
                       height: 32,
@@ -472,7 +471,7 @@ export default function PlatformSettingsPage() {
                   accept="image/*"
                   showUploadList={false}
                 >
-                  <Button icon={<UploadOutlined />}>上传 Favicon</Button>
+                  <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadFavicon')}</Button>
                 </Upload>
                 {faviconUrl && (
                   <Button
@@ -480,13 +479,13 @@ export default function PlatformSettingsPage() {
                     danger
                     onClick={handleClearFavicon}
                   >
-                    清除 Favicon
+                    {t('pages.infra.platform.clearFavicon')}
                   </Button>
                 )}
               </Space>
               <ProFormText
                 name="favicon"
-                placeholder="或直接输入 Favicon URL"
+                placeholder={t('pages.infra.platform.faviconUrlPlaceholder')}
                 fieldProps={{
                   maxLength: 500,
                 }}
@@ -497,8 +496,8 @@ export default function PlatformSettingsPage() {
 
           <ProFormTextArea
             name="platform_description"
-            label="平台描述"
-            placeholder="请输入平台描述"
+            label={t('pages.infra.platform.platformDescription')}
+            placeholder={t('pages.infra.platform.platformDescriptionPlaceholder')}
             fieldProps={{
               rows: 4,
               maxLength: 1000,
@@ -507,11 +506,11 @@ export default function PlatformSettingsPage() {
 
           <ProFormText
             name="platform_contact_email"
-            label="平台联系邮箱"
-            placeholder="请输入平台联系邮箱"
+            label={t('pages.infra.platform.contactEmail')}
+            placeholder={t('pages.infra.platform.contactEmailPlaceholder')}
             rules={[
-              { type: 'email', message: '请输入有效的邮箱地址' },
-              { max: 255, message: '邮箱地址不能超过255个字符' },
+              { type: 'email', message: t('pages.infra.platform.contactEmailInvalid') },
+              { max: 255, message: t('pages.infra.platform.contactEmailMax') },
             ]}
             fieldProps={{
               maxLength: 255,
@@ -520,10 +519,10 @@ export default function PlatformSettingsPage() {
 
           <ProFormText
             name="platform_contact_phone"
-            label="平台联系电话"
-            placeholder="请输入平台联系电话"
+            label={t('pages.infra.platform.contactPhone')}
+            placeholder={t('pages.infra.platform.contactPhonePlaceholder')}
             rules={[
-              { max: 50, message: '联系电话不能超过50个字符' },
+              { max: 50, message: t('pages.infra.platform.contactPhoneMax') },
             ]}
             fieldProps={{
               maxLength: 50,
@@ -532,23 +531,23 @@ export default function PlatformSettingsPage() {
 
           <ProFormText
             name="platform_website"
-            label="平台网站"
-            placeholder="请输入平台网站URL"
+            label={t('pages.infra.platform.website')}
+            placeholder={t('pages.infra.platform.websitePlaceholder')}
             rules={[
-              { max: 500, message: '网站URL不能超过500个字符' },
+              { max: 500, message: t('pages.infra.platform.websiteMax') },
             ]}
             fieldProps={{
               maxLength: 500,
             }}
           />
 
-          <Card type="inner" title="登录页配置" style={{ marginTop: 16, marginBottom: 16 }}>
+          <Card type="inner" title={t('pages.infra.platform.loginConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
             <ProFormText
               name="login_title"
-              label="登录页标题"
-              placeholder="请输入登录页标题（将显示在登录页左侧）"
+              label={t('pages.infra.platform.loginTitle')}
+              placeholder={t('pages.infra.platform.loginTitlePlaceholder')}
               rules={[
-                { max: 200, message: '标题不能超过200个字符' },
+                { max: 200, message: t('pages.infra.platform.loginTitleMax') },
               ]}
               fieldProps={{
                 maxLength: 200,
@@ -557,8 +556,8 @@ export default function PlatformSettingsPage() {
 
             <ProFormTextArea
               name="login_content"
-              label="登录页内容"
-              placeholder="请输入登录页内容描述（将显示在登录页左侧标题下方）"
+              label={t('pages.infra.platform.loginContent')}
+              placeholder={t('pages.infra.platform.loginContentPlaceholder')}
               fieldProps={{
                 rows: 4,
                 maxLength: 1000,
@@ -567,15 +566,15 @@ export default function PlatformSettingsPage() {
 
             <Form.Item
               name="theme_color"
-              label="主题颜色"
-              tooltip="设置登录页和平台的默认主题色（默认：#1890ff）"
+              label={t('pages.infra.platform.themeColor')}
+              tooltip={t('pages.infra.platform.themeColorTooltip')}
             >
               <ColorPicker
                 showText
                 format="hex"
                 presets={[
                   {
-                    label: '推荐颜色',
+                    label: t('pages.infra.platform.recommendedColors'),
                     colors: [
                       '#1890ff', // 科技蓝（默认）
                       '#F5222D', // 薄暮
@@ -598,10 +597,10 @@ export default function PlatformSettingsPage() {
 
           <ProFormText
             name="icp_license"
-            label="ICP备案信息"
-            placeholder="请输入ICP备案信息（如：京ICP备12345678号）"
+            label={t('pages.infra.platform.icpLicense')}
+            placeholder={t('pages.infra.platform.icpLicensePlaceholder')}
             rules={[
-              { max: 100, message: 'ICP备案信息不能超过100个字符' },
+              { max: 100, message: t('pages.infra.platform.icpLicenseMax') },
             ]}
             fieldProps={{
               maxLength: 100,
@@ -610,10 +609,9 @@ export default function PlatformSettingsPage() {
         </ProForm>
       </Card>
 
-      {/* 图片剪裁弹窗 */}
       <ImageCropper
         open={cropModalVisible}
-        title="剪裁平台Logo"
+        title={t('pages.infra.platform.cropLogoTitle')}
         image={selectedImageFile}
         defaultShape="rect"
         onCancel={handleCropCancel}
@@ -621,7 +619,7 @@ export default function PlatformSettingsPage() {
       />
       <ImageCropper
         open={faviconCropModalVisible}
-        title="剪裁 Favicon（建议正方形）"
+        title={t('pages.infra.platform.cropFaviconTitle')}
         image={selectedFaviconFile}
         defaultShape="rect"
         onCancel={handleFaviconCropCancel}

@@ -30,6 +30,7 @@ import {
   Collapse,
   Switch,
   Input,
+  Tabs,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -54,8 +55,12 @@ import {
   pushToPurchaseRequisition,
   validateMaterialSources,
   getMaterialSources,
+  listComputationRecalcHistory,
+  listComputationSnapshots,
   DemandComputation,
   DemandComputationItem,
+  ComputationRecalcHistoryItem,
+  ComputationSnapshotItem,
 } from '../../../services/demand-computation'
 import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
@@ -144,6 +149,11 @@ const DemandComputationPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null)
+  const [computationRecalcHistory, setComputationRecalcHistory] = useState<ComputationRecalcHistoryItem[]>([])
+  const [computationSnapshots, setComputationSnapshots] = useState<ComputationSnapshotItem[]>([])
+  const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false)
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false)
+  const [detailTabKey, setDetailTabKey] = useState<string>('detail')
 
   // 物料来源信息状态
   const [validationResults, setValidationResults] = useState<any>(null)
@@ -755,128 +765,216 @@ const DemandComputationPage: React.FC = () => {
         styles={{ wrapper: { width: 1300 } }}
       >
         {currentComputation && (
-          <>
-            <ProDescriptions<DemandComputation>
-              dataSource={currentComputation}
-              columns={[
-                { title: '计算编码', dataIndex: 'computation_code' },
-                { title: '需求编码', dataIndex: 'demand_code' },
-                {
-                  title: '计算模式',
-                  dataIndex: 'computation_type',
-                  render: (t: any) => (t === 'MRP' ? '按预测' : '按订单'),
-                },
-                { title: '计算状态', dataIndex: 'computation_status' },
-                { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
-                { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },
-              ]}
-            />
+          <Tabs
+            activeKey={detailTabKey}
+            onChange={(key) => {
+              setDetailTabKey(key)
+              if (key === 'recalc' && currentComputation.id) {
+                setRecalcHistoryLoading(true)
+                listComputationRecalcHistory(currentComputation.id, { limit: 50 })
+                  .then(setComputationRecalcHistory)
+                  .catch(() => messageApi.error('获取重算历史失败'))
+                  .finally(() => setRecalcHistoryLoading(false))
+              }
+              if (key === 'snapshots' && currentComputation.id) {
+                setSnapshotsLoading(true)
+                listComputationSnapshots(currentComputation.id, { limit: 20 })
+                  .then(setComputationSnapshots)
+                  .catch(() => messageApi.error('获取快照列表失败'))
+                  .finally(() => setSnapshotsLoading(false))
+              }
+            }}
+            items={[
+              {
+                key: 'detail',
+                label: '详情',
+                children: (
+                  <>
+                    <ProDescriptions<DemandComputation>
+                      dataSource={currentComputation}
+                      columns={[
+                        { title: '计算编码', dataIndex: 'computation_code' },
+                        { title: '需求编码', dataIndex: 'demand_code' },
+                        {
+                          title: '计算模式',
+                          dataIndex: 'computation_type',
+                          render: (t: any) => (t === 'MRP' ? '按预测' : '按订单'),
+                        },
+                        { title: '计算状态', dataIndex: 'computation_status' },
+                        { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
+                        { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },
+                      ]}
+                    />
 
-            {/* 物料来源验证结果 */}
-            {validationResults && (
-              <div style={{ marginTop: 24, marginBottom: 24 }}>
-                <ProDescriptions
-                  title="物料来源验证结果"
-                  size="small"
-                  column={3}
-                  dataSource={{
-                    all_passed: validationResults.all_passed ? '全部通过' : '存在失败',
-                    passed_count: validationResults.passed_count,
-                    failed_count: validationResults.failed_count,
-                    total_count: validationResults.total_count,
-                  }}
-                  columns={[
-                    {
-                      title: '验证状态',
-                      dataIndex: 'all_passed',
-                      render: (text: any) => (
-                        <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
+                    {validationResults && (
+                      <div style={{ marginTop: 24, marginBottom: 24 }}>
+                        <ProDescriptions
+                          title="物料来源验证结果"
+                          size="small"
+                          column={3}
+                          dataSource={{
+                            all_passed: validationResults.all_passed ? '全部通过' : '存在失败',
+                            passed_count: validationResults.passed_count,
+                            failed_count: validationResults.failed_count,
+                            total_count: validationResults.total_count,
+                          }}
+                          columns={[
+                            {
+                              title: '验证状态',
+                              dataIndex: 'all_passed',
+                              render: (text: any) => (
+                                <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
+                              ),
+                            },
+                            { title: '通过数量', dataIndex: 'passed_count' },
+                            { title: '失败数量', dataIndex: 'failed_count' },
+                            { title: '总数量', dataIndex: 'total_count' },
+                          ]}
+                        />
+
+                        {validationResults.failed_count > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <p style={{ fontWeight: 'bold', color: '#ff4d4f' }}>验证失败的物料：</p>
+                            <ul style={{ marginTop: 8 }}>
+                              {validationResults.validation_results
+                                .filter((r: any) => !r.validation_passed)
+                                .map((r: any, index: number) => (
+                                  <li key={index} style={{ marginBottom: 4 }}>
+                                    <strong>{r.material_code}</strong> ({r.material_name}):{' '}
+                                    {r.errors.join(', ')}
+                                  </li>
+                                ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {currentComputation.items && currentComputation.items.length > 0 && (
+                      <>
+                        <h3 style={{ marginTop: 24, marginBottom: 16 }}>计算结果明细</h3>
+                        <Table<DemandComputationItem>
+                          dataSource={currentComputation.items}
+                          rowKey="id"
+                          columns={[
+                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                            {
+                              title: '物料来源',
+                              dataIndex: 'material_source_type',
+                              width: 100,
+                              render: (type: string) => {
+                                const typeMap: Record<string, { label: string; color: string }> = {
+                                  Make: { label: '自制件', color: 'blue' },
+                                  Buy: { label: '采购件', color: 'green' },
+                                  Phantom: { label: '虚拟件', color: 'orange' },
+                                  Outsource: { label: '委外件', color: 'purple' },
+                                  Configure: { label: '配置件', color: 'cyan' },
+                                }
+                                const info = typeMap[type] || { label: type || '未设置', color: 'default' }
+                                return <Tag color={info.color}>{info.label}</Tag>
+                              },
+                            },
+                            {
+                              title: '验证状态',
+                              dataIndex: 'source_validation_passed',
+                              width: 100,
+                              render: (passed: boolean, record: DemandComputationItem) => {
+                                if (record.material_source_type) {
+                                  return (
+                                    <Tag color={passed ? 'success' : 'error'}>
+                                      {passed ? '通过' : '失败'}
+                                    </Tag>
+                                  )
+                                }
+                                return <span>-</span>
+                              },
+                            },
+                            { title: '需求数量', dataIndex: 'required_quantity', width: 100 },
+                            { title: '可用库存', dataIndex: 'available_inventory', width: 100 },
+                            { title: '净需求', dataIndex: 'net_requirement', width: 100 },
+                            {
+                              title: '建议工单数量',
+                              dataIndex: 'suggested_work_order_quantity',
+                              width: 120,
+                            },
+                            {
+                              title: '建议采购数量',
+                              dataIndex: 'suggested_purchase_order_quantity',
+                              width: 120,
+                            },
+                          ]}
+                          pagination={false}
+                          scroll={{ x: 1200 }}
+                        />
+                      </>
+                    )}
+                  </>
+                ),
+              },
+              {
+                key: 'recalc',
+                label: '重算历史',
+                children: (
+                  <Table<ComputationRecalcHistoryItem>
+                    size="small"
+                    loading={recalcHistoryLoading}
+                    dataSource={computationRecalcHistory}
+                    rowKey="id"
+                    columns={[
+                      { title: '重算时间', dataIndex: 'recalc_at', width: 180, render: (t) => t || '-' },
+                      { title: '触发原因', dataIndex: 'trigger', width: 120 },
+                      { title: '结果', dataIndex: 'result', width: 80 },
+                      { title: '备注', dataIndex: 'message', ellipsis: true },
+                    ]}
+                    pagination={false}
+                  />
+                ),
+              },
+              {
+                key: 'snapshots',
+                label: '快照',
+                children: (
+                  <Table<ComputationSnapshotItem>
+                    size="small"
+                    loading={snapshotsLoading}
+                    dataSource={computationSnapshots}
+                    rowKey="id"
+                    expandable={{
+                      expandedRowRender: (record) => (
+                        <div style={{ padding: 8 }}>
+                          {record.computation_summary_snapshot && (
+                            <div style={{ marginBottom: 12 }}>
+                              <strong>计算汇总快照：</strong>
+                              <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                                {JSON.stringify(record.computation_summary_snapshot, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                          {record.items_snapshot && record.items_snapshot.length > 0 && (
+                            <>
+                              <strong>明细快照：</strong>
+                              <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                                {JSON.stringify(record.items_snapshot, null, 2)}
+                              </pre>
+                            </>
+                          )}
+                          {!record.computation_summary_snapshot && (!record.items_snapshot || record.items_snapshot.length === 0) && (
+                            <span style={{ color: '#999' }}>无快照内容</span>
+                          )}
+                        </div>
                       ),
-                    },
-                    { title: '通过数量', dataIndex: 'passed_count' },
-                    { title: '失败数量', dataIndex: 'failed_count' },
-                    { title: '总数量', dataIndex: 'total_count' },
-                  ]}
-                />
-
-                {validationResults.failed_count > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <p style={{ fontWeight: 'bold', color: '#ff4d4f' }}>验证失败的物料：</p>
-                    <ul style={{ marginTop: 8 }}>
-                      {validationResults.validation_results
-                        .filter((r: any) => !r.validation_passed)
-                        .map((r: any, index: number) => (
-                          <li key={index} style={{ marginBottom: 4 }}>
-                            <strong>{r.material_code}</strong> ({r.material_name}):{' '}
-                            {r.errors.join(', ')}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {currentComputation.items && currentComputation.items.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 24, marginBottom: 16 }}>计算结果明细</h3>
-                <Table<DemandComputationItem>
-                  dataSource={currentComputation.items}
-                  rowKey="id"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    {
-                      title: '物料来源',
-                      dataIndex: 'material_source_type',
-                      width: 100,
-                      render: (type: string) => {
-                        const typeMap: Record<string, { label: string; color: string }> = {
-                          Make: { label: '自制件', color: 'blue' },
-                          Buy: { label: '采购件', color: 'green' },
-                          Phantom: { label: '虚拟件', color: 'orange' },
-                          Outsource: { label: '委外件', color: 'purple' },
-                          Configure: { label: '配置件', color: 'cyan' },
-                        }
-                        const info = typeMap[type] || { label: type || '未设置', color: 'default' }
-                        return <Tag color={info.color}>{info.label}</Tag>
-                      },
-                    },
-                    {
-                      title: '验证状态',
-                      dataIndex: 'source_validation_passed',
-                      width: 100,
-                      render: (passed: boolean, record: DemandComputationItem) => {
-                        if (record.material_source_type) {
-                          return (
-                            <Tag color={passed ? 'success' : 'error'}>
-                              {passed ? '通过' : '失败'}
-                            </Tag>
-                          )
-                        }
-                        return <span>-</span>
-                      },
-                    },
-                    { title: '需求数量', dataIndex: 'required_quantity', width: 100 },
-                    { title: '可用库存', dataIndex: 'available_inventory', width: 100 },
-                    { title: '净需求', dataIndex: 'net_requirement', width: 100 },
-                    {
-                      title: '建议工单数量',
-                      dataIndex: 'suggested_work_order_quantity',
-                      width: 120,
-                    },
-                    {
-                      title: '建议采购数量',
-                      dataIndex: 'suggested_purchase_order_quantity',
-                      width: 120,
-                    },
-                  ]}
-                  pagination={false}
-                  scroll={{ x: 1200 }}
-                />
-              </>
-            )}
-          </>
+                    }}
+                    columns={[
+                      { title: '快照时间', dataIndex: 'snapshot_at', width: 180, render: (t) => t || '-' },
+                      { title: '触发原因', dataIndex: 'trigger', ellipsis: true },
+                    ]}
+                    pagination={false}
+                  />
+                ),
+              },
+            ]}
+          />
         )}
       </Drawer>
     </ListPageTemplate>

@@ -17,6 +17,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import { getSystemInfo, type SystemInfo } from '../../../services/tenant';
+import { useTranslation } from 'react-i18next';
 
 /**
  * 格式化字节大小
@@ -35,20 +36,10 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * 格式化运行时间
- */
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  return `${days}天 ${hours}小时 ${minutes}分钟`;
-}
-
-/**
  * 监控管理页面组件
  */
 export default function MonitoringPage() {
+  const { t } = useTranslation();
   // 获取系统信息
   const { data: systemInfo, isLoading, error } = useQuery({
     queryKey: ['systemInfo'],
@@ -56,12 +47,19 @@ export default function MonitoringPage() {
     refetchInterval: 30000, // 每30秒刷新一次
   });
 
+  const formatUptime = (seconds: number): string => {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return t('pages.infra.monitoring.uptimeFormat', { days, hours, minutes });
+  };
+
   if (error) {
     return (
       <ListPageTemplate>
         <Alert
-          message="获取系统信息失败"
-          description="无法连接到系统监控服务，请稍后重试"
+          message={t('pages.infra.monitoring.fetchFailed')}
+          description={t('pages.infra.monitoring.fetchFailedDesc')}
           type="error"
           showIcon
         />
@@ -70,11 +68,11 @@ export default function MonitoringPage() {
   }
 
   const info = systemInfo || {
-    hostname: '未知',
-    platform: '未知',
-    platform_version: '未知',
-    architecture: '未知',
-    python_version: '未知',
+    hostname: t('pages.infra.monitoring.unknown'),
+    platform: t('pages.infra.monitoring.unknown'),
+    platform_version: t('pages.infra.monitoring.unknown'),
+    architecture: t('pages.infra.monitoring.unknown'),
+    python_version: t('pages.infra.monitoring.unknown'),
     uptime: 0,
     cpu: { count: 0, usage_percent: 0, load_average: [0, 0, 0] },
     memory: { total: 0, available: 0, used: 0, usage_percent: 0 },
@@ -86,31 +84,31 @@ export default function MonitoringPage() {
     <ListPageTemplate
       statCards={[
         {
-          title: '运行时间',
+          title: t('pages.infra.monitoring.uptime'),
           value: formatUptime(info.uptime),
           prefix: <ClockCircleOutlined />,
           valueStyle: { color: '#52c41a' },
         },
         {
-          title: 'CPU使用率',
+          title: t('pages.infra.monitoring.cpuUsage'),
           value: `${info.cpu.usage_percent.toFixed(1)}%`,
           prefix: <ControlOutlined />,
           valueStyle: { color: info.cpu.usage_percent > 80 ? '#ff4d4f' : '#1890ff' },
-          suffix: `核心数: ${info.cpu.count}`,
+          suffix: `${t('pages.infra.monitoring.cores')}: ${info.cpu.count}`,
         },
         {
-          title: '内存使用率',
+          title: t('pages.infra.monitoring.memoryUsage'),
           value: `${info.memory.usage_percent.toFixed(1)}%`,
           prefix: <DatabaseOutlined />,
           valueStyle: { color: info.memory.usage_percent > 90 ? '#ff4d4f' : '#52c41a' },
-          suffix: `已用: ${formatBytes(info.memory.used)}`,
+          suffix: `${t('pages.infra.monitoring.used')}: ${formatBytes(info.memory.used)}`,
         },
         {
-          title: '磁盘使用率',
+          title: t('pages.infra.monitoring.diskUsage'),
           value: `${info.disk.usage_percent.toFixed(1)}%`,
           prefix: <DatabaseOutlined />,
           valueStyle: { color: info.disk.usage_percent > 90 ? '#ff4d4f' : '#722ed1' },
-          suffix: `已用: ${formatBytes(info.disk.used)}`,
+          suffix: `${t('pages.infra.monitoring.used')}: ${formatBytes(info.disk.used)}`,
         },
       ]}
     >
@@ -118,10 +116,10 @@ export default function MonitoringPage() {
       {/* 详细监控信息 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 16 }}>
         <div>
-          <ProCard title="CPU 详情" loading={isLoading}>
+          <ProCard title={t('pages.infra.monitoring.cpuDetail')} loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span>CPU 使用率</span>
+                <span>{t('pages.infra.monitoring.cpuUsageLabel')}</span>
                 <span>{info.cpu.usage_percent.toFixed(1)}%</span>
               </div>
               <Progress
@@ -136,21 +134,21 @@ export default function MonitoringPage() {
               dataSource={info.cpu}
               columns={[
                 {
-                  title: 'CPU 核心数',
+                  title: t('pages.infra.monitoring.cpuCores'),
                   dataIndex: 'count',
                 },
                 {
-                  title: '平均负载 (1分钟)',
+                  title: t('pages.infra.monitoring.loadAvg1'),
                   dataIndex: 'load_average',
                   render: (_, record) => record.load_average[0].toFixed(2),
                 },
                 {
-                  title: '平均负载 (5分钟)',
+                  title: t('pages.infra.monitoring.loadAvg5'),
                   dataIndex: 'load_average',
                   render: (_, record) => record.load_average[1].toFixed(2),
                 },
                 {
-                  title: '平均负载 (15分钟)',
+                  title: t('pages.infra.monitoring.loadAvg15'),
                   dataIndex: 'load_average',
                   render: (_, record) => record.load_average[2].toFixed(2),
                 },
@@ -160,10 +158,10 @@ export default function MonitoringPage() {
         </div>
 
         <div>
-          <ProCard title="内存详情" loading={isLoading}>
+          <ProCard title={t('pages.infra.monitoring.memoryDetail')} loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span>内存使用率</span>
+                <span>{t('pages.infra.monitoring.memoryUsageLabel')}</span>
                 <span>{info.memory.usage_percent.toFixed(1)}%</span>
               </div>
               <Progress
@@ -178,22 +176,22 @@ export default function MonitoringPage() {
               dataSource={info.memory}
               columns={[
                 {
-                  title: '总内存',
+                  title: t('pages.infra.monitoring.totalMemory'),
                   dataIndex: 'total',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '已用内存',
+                  title: t('pages.infra.monitoring.usedMemory'),
                   dataIndex: 'used',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '可用内存',
+                  title: t('pages.infra.monitoring.availableMemory'),
                   dataIndex: 'available',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '使用率',
+                  title: t('pages.infra.monitoring.usageRate'),
                   dataIndex: 'usage_percent',
                   render: (text) => `${Number(text).toFixed(1)}%`,
                 },
@@ -203,10 +201,10 @@ export default function MonitoringPage() {
         </div>
 
         <div>
-          <ProCard title="磁盘详情" loading={isLoading}>
+          <ProCard title={t('pages.infra.monitoring.diskDetail')} loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span>磁盘使用率</span>
+                <span>{t('pages.infra.monitoring.diskUsageLabel')}</span>
                 <span>{info.disk.usage_percent.toFixed(1)}%</span>
               </div>
               <Progress
@@ -221,22 +219,22 @@ export default function MonitoringPage() {
               dataSource={info.disk}
               columns={[
                 {
-                  title: '总容量',
+                  title: t('pages.infra.monitoring.totalDisk'),
                   dataIndex: 'total',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '已用空间',
+                  title: t('pages.infra.monitoring.usedDisk'),
                   dataIndex: 'used',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '可用空间',
+                  title: t('pages.infra.monitoring.freeDisk'),
                   dataIndex: 'free',
                   render: (text) => formatBytes(Number(text)),
                 },
                 {
-                  title: '使用率',
+                  title: t('pages.infra.monitoring.usageRate'),
                   dataIndex: 'usage_percent',
                   render: (text) => `${Number(text).toFixed(1)}%`,
                 },
@@ -246,30 +244,30 @@ export default function MonitoringPage() {
         </div>
 
         <div>
-          <ProCard title="系统信息" loading={isLoading}>
+          <ProCard title={t('pages.infra.monitoring.systemInfo')} loading={isLoading}>
             <div style={{ marginBottom: 14, height: 15 }} />
             <ProDescriptions
               column={1}
               dataSource={info}
               columns={[
                 {
-                  title: '主机名',
+                  title: t('pages.infra.monitoring.hostname'),
                   dataIndex: 'hostname',
                 },
                 {
-                  title: '操作系统',
+                  title: t('pages.infra.monitoring.platform'),
                   dataIndex: 'platform',
                 },
                 {
-                  title: '系统版本',
+                  title: t('pages.infra.monitoring.platformVersion'),
                   dataIndex: 'platform_version',
                 },
                 {
-                  title: '系统架构',
+                  title: t('pages.infra.monitoring.architecture'),
                   dataIndex: 'architecture',
                 },
                 {
-                  title: 'Python版本',
+                  title: t('pages.infra.monitoring.pythonVersion'),
                   dataIndex: 'python_version',
                 },
               ]}

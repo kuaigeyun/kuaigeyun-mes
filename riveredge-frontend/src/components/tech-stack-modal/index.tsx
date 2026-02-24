@@ -7,11 +7,13 @@
  * RiverEdge 为无锡快格信息技术有限公司注册商标
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Alert, Badge, Modal, Tabs, Table, Tag, Typography, Space, Divider, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import { ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { MODAL_CONFIG, PAGE_SPACING } from '../layout-templates/constants';
+import { COPYRIGHT_COMPANY_NAME, COPYRIGHT_TRADEMARK } from '../../constants/copyrightContent';
+import { verifyCopyright } from '../../utils/copyrightIntegrity';
 
 const { Title, Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -551,6 +553,11 @@ interface TechStackModalProps {
 
 const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
   const { token } = useToken();
+
+  useEffect(() => {
+    if (open) verifyCopyright();
+  }, [open]);
+
   const tabContentStyle: React.CSSProperties = {
     padding: `${PAGE_SPACING.PADDING}px 0`,
     minHeight: 480,
@@ -685,26 +692,26 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           
           <Title level={5}>版权归属</Title>
           <Paragraph>
-            <Text strong>Copyright © 无锡快格信息技术有限公司</Text>
+            <Text strong>Copyright © {COPYRIGHT_COMPANY_NAME}</Text>
           </Paragraph>
           <Paragraph type="secondary">
-            无锡快格信息技术有限公司拥有本项目的著作权。使用、修改、分发等权利由下方 Apache License 2.0 许可协议规定。
+            {COPYRIGHT_COMPANY_NAME}拥有本项目的著作权。使用、修改、分发等权利由下方 Apache License 2.0 许可协议规定。
           </Paragraph>
           
           <Divider />
           
           <Title level={5}>商标</Title>
           <Paragraph>
-            <Text strong>riveredge</Text> 为无锡快格信息技术有限公司注册商标，受《中华人民共和国商标法》保护。
+            <Text strong>{COPYRIGHT_TRADEMARK}</Text> 为{COPYRIGHT_COMPANY_NAME}注册商标，受《中华人民共和国商标法》保护。
           </Paragraph>
           <Paragraph>
             Apache License 2.0 不授予商标使用权。未经书面许可，不得：
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            • 使用 "riveredge" 进行商业推广或声称与本公司存在合作关系
+            • 使用 "{COPYRIGHT_TRADEMARK}" 进行商业推广或声称与本公司存在合作关系
           </Paragraph>
           <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            • 将 "riveredge" 作为自研产品或服务名称使用
+            • 将 "{COPYRIGHT_TRADEMARK}" 作为自研产品或服务名称使用
           </Paragraph>
           
           <Divider />
