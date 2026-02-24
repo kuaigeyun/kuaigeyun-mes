@@ -8,6 +8,11 @@
   box-sizing: border-box;
 }
 
+/* 数字输入框：与普通文本框保持一致的边距（使用内边距，减少外边距，避免选中背景被圆角裁剪） */
+.ant-input-number.ant-input-number-sm .ant-input-number-input {
+  padding: 0 4px !important;
+}
+
 /* 全局滚动条样式优化，支持暗黑模式自动适配 */
 ::-webkit-scrollbar {
   width: 10px;

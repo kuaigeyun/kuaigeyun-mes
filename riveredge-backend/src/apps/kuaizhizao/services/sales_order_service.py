@@ -20,6 +20,10 @@ from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.receivable import Receivable
+from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
+from apps.kuaizhizao.models.invoice import Invoice, InvoiceItem
+from apps.kuaizhizao.models.state_transition import StateTransitionLog
 from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
     SalesOrderItemCreate, SalesOrderItemResponse,
@@ -40,6 +44,34 @@ class SalesOrderService:
     def __init__(self):
         self.business_config_service = BusinessConfigService()
 
+    async def _log_state_transition(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        from_state: str,
+        to_state: str,
+        operator_id: int,
+        operator_name: str,
+        reason: Optional[str] = None,
+        reason_extra: Optional[str] = None,
+    ) -> None:
+        """写入状态流转日志，供单据操作记录展示。表不存在时静默跳过，避免阻塞主流程。"""
+        try:
+            await StateTransitionLog.create(
+                tenant_id=tenant_id,
+                entity_type="sales_order",
+                entity_id=sales_order_id,
+                from_state=from_state,
+                to_state=to_state,
+                transition_reason=reason,
+                transition_comment=reason_extra,
+                operator_id=operator_id,
+                operator_name=operator_name,
+                transition_time=datetime.now(),
+            )
+        except Exception as e:
+            logger.warning("写入状态流转日志失败（表可能未创建），跳过: %s", e)
+
     def _order_to_response(
         self,
         order: SalesOrder,
@@ -48,6 +80,7 @@ class SalesOrderService:
         duration_info: Optional[dict] = None,
         delivery_progress: Optional[float] = None,
         invoice_progress: Optional[float] = None,
+        material_code_fallback: Optional[Dict[int, str]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -72,6 +105,8 @@ class SalesOrderService:
             "customer_phone": order.customer_phone,
             "total_quantity": order.total_quantity,
             "total_amount": order.total_amount,
+            "price_type": getattr(order, "price_type", None) or "tax_exclusive",
+            "discount_amount": getattr(order, "discount_amount", None) or Decimal("0"),
             "status": order.status,
             "submit_time": getattr(order, "submit_time", None),
             "reviewer_id": order.reviewer_id,
@@ -106,6 +141,7 @@ class SalesOrderService:
         if invoice_progress is not None:
             base["invoice_progress"] = round(invoice_progress, 1)
         base["lifecycle"] = lifecycle
+        fallback = material_code_fallback or {}
         if items is not None:
             base["items"] = [
                 SalesOrderItemResponse(
@@ -114,13 +150,18 @@ class SalesOrderService:
                     tenant_id=it.tenant_id,
                     sales_order_id=it.sales_order_id,
                     material_id=it.material_id,
-                    material_code=it.material_code,
+                    material_code=(
+                        (it.material_code or fallback.get(it.material_id) or "")[:50]
+                        if it.material_id
+                        else (it.material_code or "")[:50]
+                    ),
                     material_name=it.material_name,
                     material_spec=it.material_spec,
                     material_unit=it.material_unit,
                     required_quantity=it.order_quantity,
                     delivery_date=it.delivery_date,
                     unit_price=it.unit_price,
+                    tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
                     item_amount=it.total_amount,
                     notes=it.notes,
                     delivered_quantity=it.delivered_quantity,
@@ -168,6 +209,11 @@ class SalesOrderService:
     def _is_audited(self, status: str) -> bool:
         """判断是否已审核（兼容中英文状态）"""
         return status in LEGACY_AUDITED_VALUES or status == DemandStatus.AUDITED
+
+    def _is_review_approved(self, review_status: Optional[str]) -> bool:
+        """判断 review_status 是否已审核通过（与 document_lifecycle _is_approved 一致）"""
+        r = (review_status or "").strip()
+        return r in ("APPROVED", "审核通过", "通过", "已通过", "已审核")
 
     def _is_draft(self, status: str) -> bool:
         """判断是否草稿（兼容中英文状态）"""
@@ -228,13 +274,16 @@ class SalesOrderService:
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
 
             total_qty = Decimal("0")
-            total_amt = Decimal("0")
+            subtotal = Decimal("0")
             for item_data in sales_order_data.items:
                 req_qty = item_data.required_quantity
                 unit_pr = item_data.unit_price or Decimal("0")
-                item_amt = item_data.item_amount or (req_qty * unit_pr)
+                tax_r = item_data.tax_rate or Decimal("0")
+                # 未税金额 = 数量×单价，价税合计 = 未税金额×(1+税率/100)
+                excl_amt = req_qty * unit_pr
+                item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
                 total_qty += req_qty
-                total_amt += item_amt
+                subtotal += item_amt
                 await SalesOrderItem.create(
                     tenant_id=tenant_id,
                     sales_order_id=order.id,
@@ -247,12 +296,14 @@ class SalesOrderService:
                     delivered_quantity=Decimal("0"),
                     remaining_quantity=req_qty,
                     unit_price=unit_pr,
+                    tax_rate=tax_r,
                     total_amount=item_amt,
                     delivery_date=item_data.delivery_date,
                     delivery_status="待交货",
                     notes=item_data.notes,
                 )
-
+            discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
+            total_amt = max(Decimal("0"), subtotal - discount)
             await SalesOrder.filter(id=order.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
@@ -277,18 +328,34 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        # 不同步时自动修复
+        if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
+            order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+        elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(review_status=ReviewStatus.APPROVED)
+            order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
         items = None
+        material_code_fallback: Dict[int, str] = {}
         if include_items:
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
             ).order_by("id")
+            # 当明细中 material_code 为空时，从物料表补全（兼容历史数据）
+            need_fallback = [it for it in items if it.material_id and (not it.material_code or not str(it.material_code).strip())]
+            if need_fallback:
+                from apps.master_data.models.material import Material
+                material_ids = list({it.material_id for it in need_fallback})
+                materials = await Material.filter(id__in=material_ids).all()
+                for m in materials:
+                    material_code_fallback[m.id] = (m.main_code or getattr(m, "code", None) or "")[:50]
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         duration_info = None
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
-        return self._order_to_response(order, items=items, demand=demand, duration_info=duration_info)
+        return self._order_to_response(order, items=items, demand=demand, duration_info=duration_info, material_code_fallback=material_code_fallback)
 
     async def list_sales_orders(
         self,
@@ -299,8 +366,9 @@ class SalesOrderService:
         review_status: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        order_by: Optional[str] = None,
     ) -> SalesOrderListResponse:
-        """获取销售订单列表"""
+        """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
         query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
@@ -311,10 +379,18 @@ class SalesOrderService:
         if end_date:
             query = query.filter(order_date__lte=end_date)
         total = await query.count()
-        orders = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_clause = order_by if order_by else "-created_at"
+        orders = await query.offset(skip).limit(limit).order_by(order_clause)
 
         sales_orders = []
         for order in orders:
+            # 不同步时自动修复
+            if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
+                await SalesOrder.filter(tenant_id=tenant_id, id=order.id).update(status=DemandStatus.AUDITED)
+                order = await SalesOrder.get(tenant_id=tenant_id, id=order.id)
+            elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
+                await SalesOrder.filter(tenant_id=tenant_id, id=order.id).update(review_status=ReviewStatus.APPROVED)
+                order = await SalesOrder.get(tenant_id=tenant_id, id=order.id)
             demand = await self._get_linked_demand(tenant_id, order.id)
 
             # 交货进度：订单明细已交货数量 / 订单总数量
@@ -380,9 +456,30 @@ class SalesOrderService:
         if order.status not in (DemandStatus.DRAFT, DemandStatus.AUDITED, DemandStatus.PENDING_REVIEW):
             raise BusinessLogicError(f"只能更新草稿、待审核或已审核的销售订单，当前状态: {order.status}")
 
+        old_values = {
+            "order_date": str(order.order_date) if order.order_date else None,
+            "delivery_date": str(order.delivery_date) if order.delivery_date else None,
+            "customer_name": order.customer_name,
+            "customer_contact": order.customer_contact,
+            "customer_phone": order.customer_phone,
+            "total_quantity": str(order.total_quantity) if order.total_quantity is not None else None,
+            "total_amount": str(order.total_amount) if order.total_amount is not None else None,
+            "price_type": order.price_type,
+            "discount_amount": str(getattr(order, "discount_amount", 0) or 0),
+            "salesman_name": order.salesman_name,
+            "shipping_address": order.shipping_address,
+            "shipping_method": order.shipping_method,
+            "payment_terms": order.payment_terms,
+            "notes": order.notes,
+        }
+        items_changed = sales_order_data.items is not None
+
         async with in_transaction():
             upd = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
             upd["updated_by"] = updated_by
+            # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
+            upd.pop("status", None)
+            upd.pop("review_status", None)
             if upd:
                 await SalesOrder.filter(id=sales_order_id).update(**upd)
 
@@ -391,13 +488,15 @@ class SalesOrderService:
                     tenant_id=tenant_id, sales_order_id=sales_order_id
                 ).delete()
                 total_qty = Decimal("0")
-                total_amt = Decimal("0")
+                subtotal = Decimal("0")
                 for item_data in sales_order_data.items:
                     req_qty = item_data.required_quantity
                     unit_pr = item_data.unit_price or Decimal("0")
-                    item_amt = item_data.item_amount or (req_qty * unit_pr)
+                    tax_r = item_data.tax_rate or Decimal("0")
+                    excl_amt = req_qty * unit_pr
+                    item_amt = item_data.item_amount if item_data.item_amount is not None else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
                     total_qty += req_qty
-                    total_amt += item_amt
+                    subtotal += item_amt
                     await SalesOrderItem.create(
                         tenant_id=tenant_id,
                         sales_order_id=sales_order_id,
@@ -410,17 +509,65 @@ class SalesOrderService:
                         delivered_quantity=Decimal("0"),
                         remaining_quantity=req_qty,
                         unit_price=unit_pr,
+                        tax_rate=tax_r,
                         total_amount=item_amt,
                         delivery_date=item_data.delivery_date,
                         delivery_status="待交货",
                         notes=item_data.notes,
                     )
+                discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
+                total_amt = max(Decimal("0"), subtotal - discount)
                 await SalesOrder.filter(id=sales_order_id).update(
                     total_quantity=total_qty,
                     total_amount=total_amt,
                 )
 
         result = await self.get_sales_order_by_id(tenant_id, sales_order_id, include_items=True)
+        # 记录编辑操作及变更字段（含修改前后值，供操作记录展示）
+        changed_fields = []
+        field_changes = []
+        field_labels = {
+            "order_date": "订单日期", "delivery_date": "交货日期", "customer_name": "客户名称",
+            "customer_contact": "客户联系人", "customer_phone": "客户电话",
+            "total_quantity": "总数量", "total_amount": "总金额", "price_type": "价格类型",
+            "discount_amount": "优惠金额", "salesman_name": "销售员", "shipping_address": "收货地址",
+            "shipping_method": "发货方式", "payment_terms": "付款条件", "notes": "备注",
+        }
+        if upd:
+            for k in upd:
+                if k in ("updated_by",) or k not in old_values:
+                    continue
+                old_val = old_values.get(k)
+                new_val = upd[k]
+                old_str = str(old_val) if old_val is not None else ""
+                new_str = str(new_val) if new_val is not None else ""
+                if old_str != new_str:
+                    label = field_labels.get(k, k)
+                    changed_fields.append(label)
+                    field_changes.append({
+                        "field": k,
+                        "label": label,
+                        "from": old_str,
+                        "to": new_str,
+                    })
+        if items_changed:
+            changed_fields.append("订单明细")
+            field_changes.append({"field": "items", "label": "订单明细", "from": "", "to": "已修改"})
+        if changed_fields:
+            import json as _json
+            from apps.base_service import AppBaseService
+            operator_name = await AppBaseService().get_user_name(updated_by)
+            reason_extra = _json.dumps(
+                {"changed_fields": changed_fields, "field_changes": field_changes},
+                ensure_ascii=False,
+            )
+            await self._log_state_transition(
+                tenant_id, sales_order_id,
+                order.status or "DRAFT", order.status or "DRAFT",
+                updated_by, operator_name,
+                reason="编辑",
+                reason_extra=reason_extra,
+            )
         # 若是自动审核配置，撤回审核后的订单（当前待审核）编辑保存后自动再次审核
         pending_values = (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核")
         if order.status in pending_values:
@@ -429,7 +576,7 @@ class SalesOrderService:
             )
             if not audit_required:
                 logger.info("销售订单 %s 为待审核且无需审核，保存后自动通过", sales_order_id)
-                return await self.approve_sales_order(tenant_id, sales_order_id, updated_by)
+                return await self.approve_sales_order(tenant_id, sales_order_id, updated_by, is_auto_approve=True)
 
         # 只要有关联需求，订单任意保存都同步需求内容，使需求管理动态随上游变化（策略 A）
         demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, updated_by)
@@ -446,6 +593,32 @@ class SalesOrderService:
         """提交销售订单"""
         order = await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
+        # 已审核订单无需重复提交，直接返回（避免编辑流程中 update 已自动审核后，前端再调 submit 产生重复日志）
+        audited_values = (DemandStatus.AUDITED, "AUDITED", "已审核")
+        if order.status in audited_values:
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+
+        # 蓝图设置 auditRequired=False 时表示自动审核，优先于审批流程
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_order"
+        )
+        if not audit_required:
+            logger.info("销售订单 %s 蓝图配置为自动审核，提交后直接通过", sales_order_id)
+            from apps.base_service import AppBaseService
+            submitter_name = await AppBaseService().get_user_name(submitted_by)
+            async with in_transaction():
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    status=DemandStatus.PENDING_REVIEW,
+                    review_status=ReviewStatus.PENDING,
+                    updated_by=submitted_by,
+                )
+                await self._log_state_transition(
+                    tenant_id, sales_order_id,
+                    DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
+                    submitted_by, submitter_name, "提交",
+                )
+            return await self.approve_sales_order(tenant_id, sales_order_id, submitted_by, is_auto_approve=True)
+
         from core.services.approval.approval_instance_service import ApprovalInstanceService
         instance = await ApprovalInstanceService.start_approval(
             tenant_id=tenant_id,
@@ -458,31 +631,35 @@ class SalesOrderService:
             content=f"客户: {order.customer_name}, 金额: {order.total_amount}",
         )
         if instance:
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                status=DemandStatus.PENDING_REVIEW,
-                updated_by=submitted_by,
-            )
-            await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
-            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
-
-        audit_required = await self.business_config_service.check_audit_required(
-            tenant_id, "sales_order"
-        )
-        if not audit_required:
-            logger.info("销售订单 %s 无需审核，自动通过", sales_order_id)
+            from apps.base_service import AppBaseService
+            submitter_name = await AppBaseService().get_user_name(submitted_by)
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                     status=DemandStatus.PENDING_REVIEW,
                     review_status=ReviewStatus.PENDING,
                     updated_by=submitted_by,
                 )
-            return await self.approve_sales_order(tenant_id, sales_order_id, submitted_by)
+                await self._log_state_transition(
+                    tenant_id, sales_order_id,
+                    DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
+                    submitted_by, submitter_name, "提交",
+                )
+            await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
+        # 审批流程不存在，设为待审核，需手动调用审核接口
+        from apps.base_service import AppBaseService
+        submitter_name = await AppBaseService().get_user_name(submitted_by)
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 status=DemandStatus.PENDING_REVIEW,
                 review_status=ReviewStatus.PENDING,
                 updated_by=submitted_by,
+            )
+            await self._log_state_transition(
+                tenant_id, sales_order_id,
+                DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
+                submitted_by, submitter_name, "提交",
             )
         await self._sync_demand_if_exists(tenant_id, sales_order_id, submitted_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -492,6 +669,7 @@ class SalesOrderService:
         tenant_id: int,
         sales_order_id: int,
         approved_by: int,
+        is_auto_approve: bool = False,
     ) -> SalesOrderResponse:
         """审核通过销售订单"""
         order = await SalesOrder.get_or_none(
@@ -514,6 +692,11 @@ class SalesOrderService:
                 review_status=ReviewStatus.APPROVED,
                 status=DemandStatus.AUDITED,
                 updated_by=approved_by,
+            )
+            await self._log_state_transition(
+                tenant_id, sales_order_id,
+                DemandStatus.PENDING_REVIEW, DemandStatus.AUDITED,
+                approved_by, approver_name, "自动审核" if is_auto_approve else "审核通过",
             )
             # 审核通过后自动产生 Demand，进入需求池；若已有需求（如反审核再编辑后重新审核）则同步需求
             demand_synced = False
@@ -559,6 +742,11 @@ class SalesOrderService:
                 status=DemandStatus.REJECTED,
                 updated_by=approved_by,
             )
+            await self._log_state_transition(
+                tenant_id, sales_order_id,
+                DemandStatus.PENDING_REVIEW, DemandStatus.REJECTED,
+                approved_by, approver_name, f"驳回: {rejection_reason}",
+            )
         await self._sync_demand_if_exists(tenant_id, sales_order_id, approved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
@@ -574,13 +762,32 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if order.status not in (DemandStatus.AUDITED, DemandStatus.REJECTED):
-            raise BusinessLogicError(f"只能反审核已审核或已驳回的订单，当前: {order.status}")
+        # 已审核、已驳回 均可反审核。若检测到 status 与 review_status 不同步，先修复再继续
+        rejected_ok = (DemandStatus.REJECTED, "REJECTED", "已驳回", "驳回")
+        can_unapprove = (
+            self._is_audited(order.status)
+            or self._is_review_approved(order.review_status)
+            or order.status in rejected_ok
+        )
+        if not can_unapprove:
+            raise BusinessLogicError(f"只能反审核已审核或已驳回的订单，当前: status={order.status}, review_status={order.review_status}")
 
+        # 不同步时自动修复
+        if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(status=DemandStatus.AUDITED)
+            order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+        elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
+            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(review_status=ReviewStatus.APPROVED)
+            order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+
+        # 需求已下推需求计算：无下游时撤回/作废计算后允许反审核；有下游则阻止
+        # 需求未下推：直接允许反审核，需求状态由 _sync_demand_if_exists 与订单同步
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if demand and demand.pushed_to_computation:
             await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)
 
+        from apps.base_service import AppBaseService
+        unapprover_name = await AppBaseService().get_user_name(unapproved_by)
         async with in_transaction():
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 status=DemandStatus.PENDING_REVIEW,
@@ -590,6 +797,11 @@ class SalesOrderService:
                 review_time=None,
                 review_remarks=None,
                 updated_by=unapproved_by,
+            )
+            await self._log_state_transition(
+                tenant_id, sales_order_id,
+                order.status, DemandStatus.PENDING_REVIEW,
+                unapproved_by, unapprover_name, "反审核",
             )
         await self._sync_demand_if_exists(tenant_id, sales_order_id, unapproved_by)
         return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -625,6 +837,47 @@ class SalesOrderService:
             demand_id=demand.id,
             created_by=created_by,
         )
+
+    async def preview_push_sales_order_to_computation(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推需求计算预览：返回将参与计算的订单明细，不实际创建"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推需求计算")
+
+        demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        demand_exists = demand is not None
+
+        preview_items = []
+        for it in items:
+            qty = float(it.order_quantity or 0)
+            if qty <= 0:
+                continue
+            preview_items.append({
+                "material_code": it.material_code,
+                "material_name": it.material_name,
+                "quantity": float(qty),
+                "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+            })
+
+        return {
+            "target_type": "demand_computation",
+            "summary": "将创建需求计算任务（LRP），基于BOM展开进行物料需求运算",
+            "demand_exists": demand_exists,
+            "items": preview_items,
+            "tip": "计算完成后可下推生产计划或工单",
+        }
 
     async def _create_demand_from_sales_order(
         self, tenant_id: int, sales_order_id: int, created_by: int
@@ -700,6 +953,477 @@ class SalesOrderService:
         logger.info("从销售订单 %s 生成需求 %s", order.order_code, demand.demand_code)
         return demand
 
+    async def push_sales_order_to_production_plan(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        直推销售订单到生产计划（跳过需求计算）。
+        订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购。
+        """
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法直推生产计划")
+
+        from datetime import date, datetime
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+        from core.services.business.code_generation_service import CodeGenerationService
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        dates = [it.delivery_date for it in items if it.delivery_date]
+        plan_start = min(dates) if dates else date.today()
+        plan_end = max(dates) if dates else date.today()
+
+        try:
+            plan_code = await CodeGenerationService.generate_code(
+                tenant_id=tenant_id,
+                rule_code="PRODUCTION_PLAN_CODE",
+                context={"prefix": "LRP-"},
+            )
+        except Exception:
+            plan_code = f"LRP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+        plan = await ProductionPlan.create(
+            tenant_id=tenant_id,
+            plan_code=plan_code,
+            plan_name=f"生产计划-{order.order_code}（直推）",
+            plan_type="LRP",
+            source_type="SalesOrder",
+            source_id=sales_order_id,
+            source_code=order.order_code,
+            plan_start_date=plan_start,
+            plan_end_date=plan_end,
+            status="草稿",
+            execution_status="未执行",
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+        for it in items:
+            qty = float(it.order_quantity or 0)
+            if qty <= 0:
+                continue
+            await ProductionPlanItem.create(
+                tenant_id=tenant_id,
+                plan_id=plan.id,
+                material_id=it.material_id,
+                material_code=it.material_code,
+                material_name=it.material_name,
+                material_type="成品",
+                planned_quantity=Decimal(str(qty)),
+                planned_date=it.delivery_date or plan_start,
+                available_inventory=Decimal(0),
+                safety_stock=Decimal(0),
+                gross_requirement=Decimal(str(qty)),
+                net_requirement=Decimal(str(qty)),
+                suggested_action="生产",
+                work_order_quantity=Decimal(str(qty)),
+                purchase_order_quantity=Decimal(0),
+                lead_time=0,
+            )
+
+        relation_service = DocumentRelationNewService()
+        relation_data = DocumentRelationCreate(
+            source_type="sales_order",
+            source_id=sales_order_id,
+            source_code=order.order_code,
+            source_name=order.order_code,
+            target_type="production_plan",
+            target_id=plan.id,
+            target_code=plan.plan_code,
+            target_name=plan.plan_name,
+            relation_type="source",
+            relation_mode="push",
+            relation_desc="销售订单直推生产计划（跳过需求计算，原材料自行采购）",
+            business_mode="MTO",
+            demand_id=None,
+        )
+        await relation_service.create_relation(
+            tenant_id=tenant_id,
+            relation_data=relation_data,
+            created_by=created_by,
+        )
+
+        return {
+            "success": True,
+            "message": "直推成功，已生成生产计划（原材料由用户自行计算采购）",
+            "target_document": {"type": "production_plan", "id": plan.id, "code": plan.plan_code},
+        }
+
+    async def preview_push_sales_order_to_production_plan(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推生产计划预览：返回将生成的生产计划明细，不实际创建"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法直推生产计划")
+
+        plan_items = []
+        for it in items:
+            qty = float(it.order_quantity or 0)
+            if qty <= 0:
+                continue
+            plan_items.append({
+                "material_code": it.material_code,
+                "material_name": it.material_name,
+                "quantity": float(qty),
+                "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                "suggested_action": "生产",
+            })
+
+        return {
+            "target_type": "production_plan",
+            "summary": f"将生成 1 个生产计划，包含 {len(plan_items)} 条明细",
+            "plan_name_preview": f"生产计划-{order.order_code}（直推）",
+            "items": plan_items,
+            "tip": "原材料由您自行计算采购",
+        }
+
+    async def push_sales_order_to_work_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        直推销售订单到工单（跳过需求计算）。
+        - 若产品无BOM：订单明细直接转为工单，原材料由用户自行计算采购。
+        - 若产品有BOM：展开BOM，成品+半成品（Make/Outsource/Configure）一键生成工单，采购件由用户自行采购。
+        """
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法直推工单")
+
+        from datetime import datetime
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.utils.bom_helper import get_bom_by_material_id
+        from apps.kuaizhizao.utils.material_source_helper import (
+            expand_bom_with_source_control,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_OUTSOURCE,
+            SOURCE_TYPE_CONFIGURE,
+        )
+
+        # 汇总待生成工单的物料：material_id -> {qty, material_code, material_name, delivery_date}
+        wo_pool: Dict[int, Dict[str, Any]] = {}
+
+        def _add_to_pool(material_id: int, material_code: str, material_name: str, qty: float, delivery_date):
+            if qty <= 0:
+                return
+            if material_id not in wo_pool:
+                wo_pool[material_id] = {
+                    "material_id": material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "quantity": Decimal("0"),
+                    "earliest_delivery": delivery_date,
+                }
+            wo_pool[material_id]["quantity"] += Decimal(str(qty))
+            if delivery_date and (
+                wo_pool[material_id]["earliest_delivery"] is None
+                or delivery_date < wo_pool[material_id]["earliest_delivery"]
+            ):
+                wo_pool[material_id]["earliest_delivery"] = delivery_date
+
+        work_order_service = WorkOrderService()
+        relation_service = DocumentRelationNewService()
+
+        for it in items:
+            qty = float(it.order_quantity or 0)
+            if qty <= 0:
+                continue
+            delivery_date = it.delivery_date
+
+            bom = await get_bom_by_material_id(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                only_approved=True,
+                use_default=True,
+            )
+            if bom and bom.bom_code:
+                # 有BOM：展开，成品+半成品（Make/Outsource/Configure）生成工单
+                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=it.material_id,
+                    required_quantity=qty,
+                    only_approved=True,
+                    use_default_bom=True,
+                )
+                for req in requirements:
+                    st = req.get("source_type")
+                    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                        _add_to_pool(
+                            req["material_id"],
+                            req["material_code"],
+                            req["material_name"],
+                            float(req["required_quantity"]),
+                            delivery_date,
+                        )
+            else:
+                # 无BOM：仅成品工单
+                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+
+        work_orders = []
+        for info in wo_pool.values():
+            qty = float(info["quantity"])
+            if qty <= 0:
+                continue
+            wo_data = WorkOrderCreate(
+                code_rule="WORK_ORDER_CODE",
+                product_id=info["material_id"],
+                product_code=info["material_code"],
+                product_name=info["material_name"],
+                quantity=Decimal(str(qty)),
+                production_mode="MTO",
+                planned_start_date=(
+                    datetime.combine(info["earliest_delivery"], datetime.min.time())
+                    if info.get("earliest_delivery") else None
+                ),
+                planned_end_date=(
+                    datetime.combine(info["earliest_delivery"], datetime.min.time())
+                    if info.get("earliest_delivery") else None
+                ),
+                remarks=f"由销售订单 {order.order_code} 直推（含半成品）",
+            )
+            wo = await work_order_service.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=wo_data,
+                created_by=created_by,
+            )
+            wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
+            wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
+            wo_name = wo.name if hasattr(wo, "name") else wo.get("name")
+
+            relation_data = DocumentRelationCreate(
+                source_type="sales_order",
+                source_id=sales_order_id,
+                source_code=order.order_code,
+                source_name=order.order_code,
+                target_type="work_order",
+                target_id=wo_id,
+                target_code=wo_code,
+                target_name=wo_name,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="销售订单直推工单（含半成品，采购件自行采购）",
+                business_mode="MTO",
+                demand_id=None,
+            )
+            await relation_service.create_relation(
+                tenant_id=tenant_id,
+                relation_data=relation_data,
+                created_by=created_by,
+            )
+            work_orders.append(wo)
+
+        if not work_orders:
+            raise BusinessLogicError("销售订单无有效明细数量，无法生成工单")
+
+        return {
+            "success": True,
+            "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
+            "target_documents": [
+                {"type": "work_order", "id": w.id if hasattr(w, "id") else w.get("id"), "code": w.code if hasattr(w, "code") else w.get("code")}
+                for w in work_orders
+            ],
+        }
+
+    async def preview_push_sales_order_to_work_order(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推工单预览：返回将生成的工单列表，不实际创建"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法直推工单")
+
+        from apps.kuaizhizao.utils.bom_helper import get_bom_by_material_id
+        from apps.kuaizhizao.utils.material_source_helper import (
+            expand_bom_with_source_control,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_OUTSOURCE,
+            SOURCE_TYPE_CONFIGURE,
+        )
+
+        wo_pool: Dict[int, Dict[str, Any]] = {}
+
+        def _add_to_pool(material_id: int, material_code: str, material_name: str, qty: float, delivery_date):
+            if qty <= 0:
+                return
+            if material_id not in wo_pool:
+                wo_pool[material_id] = {
+                    "material_id": material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "quantity": Decimal("0"),
+                    "earliest_delivery": delivery_date,
+                }
+            wo_pool[material_id]["quantity"] += Decimal(str(qty))
+            if delivery_date and (
+                wo_pool[material_id]["earliest_delivery"] is None
+                or delivery_date < wo_pool[material_id]["earliest_delivery"]
+            ):
+                wo_pool[material_id]["earliest_delivery"] = delivery_date
+
+        for it in items:
+            qty = float(it.order_quantity or 0)
+            if qty <= 0:
+                continue
+            delivery_date = it.delivery_date
+
+            bom = await get_bom_by_material_id(
+                tenant_id=tenant_id,
+                material_id=it.material_id,
+                only_approved=True,
+                use_default=True,
+            )
+            if bom and bom.bom_code:
+                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                requirements = await expand_bom_with_source_control(
+                    tenant_id=tenant_id,
+                    material_id=it.material_id,
+                    required_quantity=qty,
+                    only_approved=True,
+                    use_default_bom=True,
+                )
+                for req in requirements:
+                    st = req.get("source_type")
+                    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                        _add_to_pool(
+                            req["material_id"],
+                            req["material_code"],
+                            req["material_name"],
+                            float(req["required_quantity"]),
+                            delivery_date,
+                        )
+            else:
+                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+
+        wo_items = []
+        for info in wo_pool.values():
+            qty = float(info["quantity"])
+            if qty <= 0:
+                continue
+            wo_items.append({
+                "material_code": info["material_code"],
+                "material_name": info["material_name"],
+                "quantity": float(qty),
+                "delivery_date": str(info["earliest_delivery"]) if info.get("earliest_delivery") else None,
+            })
+
+        return {
+            "target_type": "work_order",
+            "summary": f"将生成 {len(wo_items)} 个工单",
+            "items": wo_items,
+            "tip": "含半成品，采购件由您自行采购",
+        }
+
+    async def create_sales_order_reminder(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        recipient_user_uuid: str,
+        action_type: str,
+        remarks: Optional[str],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """
+        创建销售订单提醒，发送站内信给指定用户。
+        """
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+
+        from infra.models.user import User
+        from core.services.messaging.message_service import MessageService
+        from core.schemas.message_template import SendMessageRequest
+
+        user = await User.get_or_none(tenant_id=tenant_id, uuid=recipient_user_uuid)
+        if not user:
+            raise NotFoundError(f"提醒对象不存在: {recipient_user_uuid}")
+
+        action_labels = {
+            "review": "审核",
+            "delivery": "安排发货",
+            "invoice": "开票",
+            "follow_up": "跟进",
+            "other": "其他",
+        }
+        action_label = action_labels.get(action_type, action_type)
+
+        subject = f"销售订单提醒：{order.order_code}"
+        content_parts = [
+            f"您有一条销售订单提醒：{order.order_code}",
+            f"提醒操作：{action_label}",
+        ]
+        if remarks:
+            content_parts.append(f"备注：{remarks}")
+        content = "\n".join(content_parts)
+
+        await MessageService.send_message(
+            tenant_id=tenant_id,
+            request=SendMessageRequest(
+                type="internal",
+                recipient=str(user.id),
+                subject=subject,
+                content=content,
+            ),
+        )
+
+        return {
+            "success": True,
+            "message": "提醒已发送",
+        }
+
     async def withdraw_sales_order_from_computation(
         self,
         tenant_id: int,
@@ -756,8 +1480,12 @@ class SalesOrderService:
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
-        if not self._is_draft(order.status):
-            raise BusinessLogicError(f"只能删除草稿状态的订单，当前: {order.status}")
+        deletable = (
+            self._is_draft(order.status)
+            or order.status in (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核", "已提交")
+        )
+        if not deletable:
+            raise BusinessLogicError(f"只能删除草稿或待审核状态的订单，当前: {order.status}")
 
         async with in_transaction():
             demand = await self._get_linked_demand(tenant_id, sales_order_id)
@@ -843,4 +1571,160 @@ class SalesOrderService:
             "message": "已生成销售出库单",
             "delivery_id": delivery.id,
             "delivery_code": delivery.delivery_code,
+        }
+
+    async def push_sales_order_to_shipment_notice(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """下推销售订单到发货通知单"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
+
+        from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
+        today = datetime.now().strftime("%Y%m%d")
+        code = await ShipmentNoticeService().generate_code(
+            tenant_id, "SHIPMENT_NOTICE_CODE", prefix=f"SN{today}"
+        )
+
+        async with in_transaction():
+            notice = await ShipmentNotice.create(
+                tenant_id=tenant_id,
+                notice_code=code,
+                sales_order_id=order.id,
+                sales_order_code=order.order_code or "",
+                customer_id=order.customer_id,
+                customer_name=order.customer_name or "",
+                customer_contact=order.customer_contact,
+                customer_phone=order.customer_phone,
+                shipping_address=order.shipping_address,
+                planned_ship_date=order.delivery_date,
+                status="待发货",
+                notes=order.notes,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            total_qty = Decimal("0")
+            total_amt = Decimal("0")
+            for it in items:
+                qty = it.order_quantity or Decimal("0")
+                amt = it.total_amount or (qty * (it.unit_price or Decimal("0")))
+                await ShipmentNoticeItem.create(
+                    tenant_id=tenant_id,
+                    notice_id=notice.id,
+                    material_id=it.material_id,
+                    material_code=it.material_code or "",
+                    material_name=it.material_name or "",
+                    material_spec=it.material_spec,
+                    material_unit=it.material_unit or "",
+                    notice_quantity=qty,
+                    unit_price=it.unit_price or Decimal("0"),
+                    total_amount=amt,
+                    sales_order_item_id=it.id,
+                )
+                total_qty += qty
+                total_amt += amt
+            await ShipmentNotice.filter(tenant_id=tenant_id, id=notice.id).update(
+                total_quantity=total_qty,
+                total_amount=total_amt,
+            )
+        logger.info("从销售订单 %s 生成发货通知单 %s", order.order_code, code)
+        return {
+            "success": True,
+            "message": "已生成发货通知单",
+            "notice_id": notice.id,
+            "notice_code": code,
+        }
+
+    async def push_sales_order_to_invoice(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """下推销售订单到销售发票（销项发票）"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推销售发票")
+
+        from apps.kuaizhizao.services.invoice_service import InvoiceService
+        from apps.kuaizhizao.schemas.invoice import InvoiceCreate, InvoiceItemCreate
+
+        total_excl = Decimal("0")
+        total_tax = Decimal("0")
+        total_incl = Decimal("0")
+        invoice_items = []
+        for it in items:
+            qty = it.order_quantity or Decimal("0")
+            price = it.unit_price or Decimal("0")
+            rate = (it.tax_rate or Decimal("0")) / Decimal("100")
+            excl = qty * price
+            tax = excl * rate
+            incl = excl + tax
+            total_excl += excl
+            total_tax += tax
+            total_incl += incl
+            invoice_items.append(
+                InvoiceItemCreate(
+                    item_name=it.material_name or f"物料{it.material_id}",
+                    spec_model=it.material_spec,
+                    unit=it.material_unit,
+                    quantity=qty,
+                    unit_price=price,
+                    amount=excl,
+                    tax_rate=rate,
+                    tax_amount=tax,
+                )
+            )
+
+        tax_rate_avg = total_tax / total_excl if total_excl else Decimal("0.13")
+        invoice_data = InvoiceCreate(
+            category="OUT",
+            invoice_type="VAT_SPECIAL",
+            partner_id=order.customer_id,
+            partner_name=order.customer_name or "",
+            partner_tax_no=None,
+            partner_bank_info=None,
+            partner_address_phone=None,
+            amount_excluding_tax=total_excl,
+            tax_amount=total_tax,
+            total_amount=total_incl,
+            tax_rate=tax_rate_avg,
+            invoice_date=date.today(),
+            invoice_number=f"待开票-{order.order_code}",
+            status="DRAFT",
+            source_document_code=order.order_code,
+            description=f"由销售订单 {order.order_code} 下推",
+            items=invoice_items,
+        )
+        invoice = await InvoiceService().create_invoice(tenant_id, invoice_data, created_by)
+        logger.info("从销售订单 %s 生成销售发票 %s", order.order_code, invoice.invoice_code)
+        return {
+            "success": True,
+            "message": "已生成销售发票",
+            "invoice_id": invoice.id,
+            "invoice_code": invoice.invoice_code,
         }

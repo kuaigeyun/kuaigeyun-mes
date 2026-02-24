@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Table, Button, Space, Typography, Modal, Form, Input, InputNumber, Select, message } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, QuestionCircleOutlined, BookOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -23,6 +24,7 @@ const { TextArea } = Input;
  * 操作引导和帮助系统管理页面组件
  */
 const OperationGuidePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [guides, setGuides] = useState<OperationGuide[]>([]);
@@ -43,7 +45,7 @@ const OperationGuidePage: React.FC = () => {
       const data = await listOperationGuides();
       setGuides(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载操作引导失败');
+      messageApi.error(error.message || t('pages.system.operationGuide.loadGuidesFailed'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +60,7 @@ const OperationGuidePage: React.FC = () => {
       const docs = await listHelpDocuments();
       setHelpDocuments(docs);
     } catch (error: any) {
-      messageApi.error(error.message || '加载帮助文档失败');
+      messageApi.error(error.message || t('pages.system.operationGuide.loadHelpFailed'));
     } finally {
       setLoading(false);
     }
@@ -105,11 +107,11 @@ const OperationGuidePage: React.FC = () => {
         steps: values.steps || [],
       };
       await createOrUpdateOperationGuide(guide);
-      messageApi.success('操作引导保存成功');
+      messageApi.success(t('pages.system.operationGuide.saveSuccess'));
       setGuideModalVisible(false);
       loadGuides();
     } catch (error: any) {
-      messageApi.error(error.message || '保存操作引导失败');
+      messageApi.error(error.message || t('pages.system.operationGuide.saveFailed'));
     }
   };
 

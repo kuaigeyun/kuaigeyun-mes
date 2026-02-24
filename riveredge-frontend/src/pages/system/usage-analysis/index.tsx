@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Table, Tag, Space, Button, Typography, Statistic, Progress, Alert, List } from 'antd';
 import { ReloadOutlined, FileTextOutlined, BulbOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -20,6 +21,7 @@ const { Title, Paragraph, Text } = Typography;
  * 使用情况分析和优化建议推送页面组件
  */
 const UsageAnalysisPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [functionUsage, setFunctionUsage] = useState<FunctionUsageAnalysis | null>(null);
@@ -38,7 +40,7 @@ const UsageAnalysisPage: React.FC = () => {
       const data = await analyzeFunctionUsage();
       setFunctionUsage(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载功能使用分析失败');
+      messageApi.error(error.message || t('pages.system.usageAnalysis.loadFunctionFailed'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ const UsageAnalysisPage: React.FC = () => {
       const data = await analyzeDataQuality();
       setDataQuality(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载数据质量分析失败');
+      messageApi.error(error.message || t('pages.system.usageAnalysis.loadDataQualityFailed'));
     } finally {
       setLoading(false);
     }
@@ -68,7 +70,7 @@ const UsageAnalysisPage: React.FC = () => {
       const data = await analyzePerformance();
       setPerformance(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载性能分析失败');
+      messageApi.error(error.message || t('pages.system.usageAnalysis.loadPerformanceFailed'));
     } finally {
       setLoading(false);
     }
@@ -82,9 +84,9 @@ const UsageAnalysisPage: React.FC = () => {
       setLoading(true);
       const data = await generateUsageReport();
       setUsageReport(data);
-      messageApi.success('报告生成成功');
+      messageApi.success(t('pages.system.usageAnalysis.reportSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '生成报告失败');
+      messageApi.error(error.message || t('pages.system.usageAnalysis.reportFailed'));
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ const UsageAnalysisPage: React.FC = () => {
       const data = await getSuggestions();
       setSuggestions(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载优化建议失败');
+      messageApi.error(error.message || t('pages.system.usageAnalysis.loadSuggestionsFailed'));
     } finally {
       setLoading(false);
     }

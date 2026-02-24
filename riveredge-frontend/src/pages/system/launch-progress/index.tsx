@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Progress, Statistic, Table, Tag, Space, Button, Typography, Alert, List, Divider } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
@@ -20,6 +21,7 @@ const { Title, Paragraph, Text } = Typography;
  * 上线进度跟踪和检查清单页面组件
  */
 const LaunchProgressPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [progressTracking, setProgressTracking] = useState<ProgressTracking | null>(null);
@@ -37,7 +39,7 @@ const LaunchProgressPage: React.FC = () => {
       const data = await getProgressTracking();
       setProgressTracking(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载进度跟踪失败');
+      messageApi.error(error.message || t('pages.system.launchProgress.loadTrackingFailed'));
     } finally {
       setLoading(false);
     }
@@ -52,7 +54,7 @@ const LaunchProgressPage: React.FC = () => {
       const data = await generateProgressReport();
       setProgressReport(data);
     } catch (error: any) {
-      messageApi.error(error.message || '生成进度报告失败');
+      messageApi.error(error.message || t('pages.system.launchProgress.generateReportFailed'));
     } finally {
       setLoading(false);
     }
@@ -67,7 +69,7 @@ const LaunchProgressPage: React.FC = () => {
       const data = await getChecklist();
       setChecklist(data);
     } catch (error: any) {
-      messageApi.error(error.message || '加载检查清单失败');
+      messageApi.error(error.message || t('pages.system.launchProgress.loadChecklistFailed'));
     } finally {
       setLoading(false);
     }
@@ -81,9 +83,9 @@ const LaunchProgressPage: React.FC = () => {
       setLoading(true);
       const data = await checkItems();
       setChecklist(data);
-      messageApi.success('检查完成');
+      messageApi.success(t('pages.system.launchProgress.checkSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '执行检查失败');
+      messageApi.error(error.message || t('pages.system.launchProgress.checkFailed'));
     } finally {
       setLoading(false);
     }
@@ -98,7 +100,7 @@ const LaunchProgressPage: React.FC = () => {
       const data = await generateCheckReport();
       setCheckReport(data);
     } catch (error: any) {
-      messageApi.error(error.message || '生成检查报告失败');
+      messageApi.error(error.message || t('pages.system.launchProgress.generateCheckReportFailed'));
     } finally {
       setLoading(false);
     }

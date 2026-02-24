@@ -513,14 +513,20 @@ class DataDictionaryService:
         """
         删除字典项（软删除）
         
+        系统字典（is_system=True）的字典项不允许删除，但允许新增项。
+        
         Args:
             tenant_id: 组织ID
             uuid: 字典项UUID
             
         Raises:
             NotFoundError: 当字典项不存在时抛出
+            ValidationError: 当字典项属于系统字典时抛出（系统字典项不允许删除）
         """
         item = await DataDictionaryService.get_item_by_uuid(tenant_id, uuid)
+        await item.fetch_related("dictionary")
+        if item.dictionary.is_system:
+            raise ValidationError("系统字典项不允许删除")
         
         # 软删除
         from datetime import datetime

@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
@@ -186,6 +187,7 @@ const SENSITIVE_KEYS = [
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -233,7 +235,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取详情失败');
+      messageApi.error(error.message || t('pages.system.applicationConnections.getDetailFailed'));
     }
   };
 
@@ -244,7 +246,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       const detail = await getApplicationConnectionByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取详情失败');
+      messageApi.error(error.message || t('pages.system.applicationConnections.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -252,7 +254,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
 
   const handleBatchStatus = async (enable: boolean) => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要操作的应用连接器');
+      messageApi.warning(t('pages.system.applicationConnections.selectToOperate'));
       return;
     }
     try {
@@ -261,17 +263,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
         await updateApplicationConnection(String(uuid), { is_active: enable });
         done++;
       }
-      messageApi.success(`已${enable ? '启用' : '禁用'} ${done} 个应用连接器`);
+      messageApi.success(t('pages.system.applicationConnections.batchStatusSuccess', {
+        action: enable ? t('pages.system.applicationConnections.actionEnable') : t('pages.system.applicationConnections.actionDisable'),
+        count: done,
+      }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '操作失败');
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
   const handleBatchTest = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要测试的应用连接器');
+      messageApi.warning(t('pages.system.applicationConnections.selectToTest'));
       return;
     }
     let ok = 0;
@@ -292,22 +297,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const handleDelete = async (record: ApplicationConnection) => {
     try {
       await deleteApplicationConnection(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的应用连接器');
+      messageApi.warning(t('pages.system.applicationConnections.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${selectedRowKeys.length} 个应用连接器吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.applicationConnections.confirmDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -322,14 +327,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.applicationConnections.batchDeletePartial', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个应用连接器`);
+            messageApi.success(t('pages.system.applicationConnections.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -343,15 +348,15 @@ const ApplicationConnectionsListPage: React.FC = () => {
       setTestingConnection(true);
       const result = await testApplicationConnectionConfig(type, restConfig);
       if (result.success) {
-        messageApi.success(result.message || '连接测试成功');
+        messageApi.success(result.message || t('pages.system.applicationConnections.testSuccess'));
       } else {
-        messageApi.error(result.message || result.error || '连接测试失败');
+        messageApi.error(result.message || result.error || t('pages.system.applicationConnections.testFailed'));
       }
     } catch (error: any) {
       if (error?.errorFields) {
-        messageApi.warning('请先填写完整的连接配置');
+        messageApi.warning(t('pages.system.applicationConnections.fillConfigFirst'));
       } else {
-        messageApi.error(error?.message || '连接测试失败');
+        messageApi.error(error?.message || t('pages.system.applicationConnections.testFailed'));
       }
     } finally {
       setTestingConnection(false);
@@ -362,13 +367,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
     try {
       const result = await testApplicationConnection(record.uuid);
       if (result.success) {
-        messageApi.success(result.message || '连接测试成功');
+        messageApi.success(result.message || t('pages.system.applicationConnections.testSuccess'));
       } else {
-        messageApi.error(result.message || result.error || '连接测试失败');
+        messageApi.error(result.message || result.error || t('pages.system.applicationConnections.testFailed'));
       }
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '连接测试失败');
+      messageApi.error(error.message || t('pages.system.applicationConnections.testFailed'));
     }
   };
 
@@ -384,7 +389,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           config,
           is_active,
         });
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createApplicationConnection({
           name,
@@ -394,13 +399,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
           config,
           is_active,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -841,7 +846,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               }
               return { data: result.items, success: true, total: result.total };
             } catch (error: any) {
-              messageApi.error(error?.message || '获取列表失败');
+              messageApi.error(error?.message || t('pages.system.applicationConnections.getListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -868,7 +873,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('请填写导入数据');
+              messageApi.warning(t('pages.system.applicationConnections.importDataRequired'));
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').replace(/^\*/, '').trim());
@@ -910,7 +915,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 done++;
               }
             }
-            messageApi.success(`成功导入 ${done} 个应用连接`);
+            messageApi.success(t('pages.system.applicationConnections.importSuccess', { count: done }));
             actionRef.current?.reload();
           }}
           importHeaders={['*名称', '*代码', '*类型', '描述', '启用状态', '连接配置(JSON)']}
@@ -927,7 +932,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               items = res.items;
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('common.exportNoData'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -937,7 +942,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             a.download = `application-connections-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success('导出成功');
+            messageApi.success(t('common.exportSuccess', { count: items.length }));
           }}
         />
       </ListPageTemplate>

@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Card, Form, Input, Select, InputNumber, Switch, Space, message, Modal } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ISchema } from '@formily/core';
@@ -91,6 +92,7 @@ interface FormSchemaEditorProps {
  * Formily Schema 编辑器组件
  */
 const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) => {
+  const { t } = useTranslation();
   const [fields, setFields] = useState<FormFieldConfig[]>([]);
   const [editingField, setEditingField] = useState<FormFieldConfig | null>(null);
   const [editingIndex, setEditingIndex] = useState<number>(-1);
@@ -221,7 +223,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         try {
           newField.options = JSON.parse(values.options);
         } catch {
-          message.error('选项格式错误，请输入有效的 JSON 数组');
+          message.error(t('app.master-data.formSchema.optionsFormatErrorMsg'));
           return;
         }
       }
@@ -239,7 +241,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         // 添加新字段
         // 检查代码是否已存在
         if (fields.some((f) => f.code === newField.code)) {
-          message.error('字段代码已存在');
+          message.error(t('app.master-data.formSchema.fieldCodeExists'));
           return;
         }
         newFields = [...fields, newField];
@@ -249,7 +251,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
       updateSchema(newFields);
       setEditingField(null);
       setEditingIndex(-1);
-      message.success(editingIndex >= 0 ? '字段已更新' : '字段已添加');
+      message.success(editingIndex >= 0 ? t('app.master-data.formSchema.fieldUpdated') : t('app.master-data.formSchema.fieldAdded'));
     });
   };
 
@@ -266,7 +268,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         'x-decorator': 'FormItem',
         'x-component': field.component || getDefaultComponent(field.type),
         'x-component-props': {
-          placeholder: field.placeholder || `请输入${field.label}`,
+          placeholder: field.placeholder || t('app.master-data.formSchema.enterPlaceholder', { label: field.label }),
           ...(field.componentProps || {}),
         },
       };
@@ -372,13 +374,13 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <strong>表单字段配置</strong>
+          <strong>{t('app.master-data.formSchema.fieldConfig')}</strong>
           <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>
-            （共 {fields.length} 个字段）
+            {t('app.master-data.formSchema.fieldCount', { count: fields.length })}
           </span>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAddField}>
-          添加字段
+          {t('app.master-data.formSchema.addField')}
         </Button>
       </div>
 
@@ -401,7 +403,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                       size="small"
                       onClick={() => handleEditField(index)}
                     >
-                      编辑
+                      {t('app.master-data.formSchema.edit')}
                     </Button>
                     <Button
                       type="link"
@@ -410,29 +412,29 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                       icon={<DeleteOutlined />}
                       onClick={() => handleDeleteField(index)}
                     >
-                      删除
+                      {t('app.master-data.formSchema.delete')}
                     </Button>
                   </Space>
                 </div>
               }
             >
               <div style={{ fontSize: 12, color: '#666' }}>
-                <div>类型: {field.type}</div>
-                {field.description && <div>描述: {field.description}</div>}
-                {field.component && <div>组件: {field.component}</div>}
+                <div>{t('app.master-data.formSchema.type')}: {field.type}</div>
+                {field.description && <div>{t('app.master-data.formSchema.description')}: {field.description}</div>}
+                {field.component && <div>{t('app.master-data.formSchema.component')}: {field.component}</div>}
               </div>
             </Card>
           ))}
         </div>
       ) : (
         <div style={{ padding: 24, textAlign: 'center', background: '#f5f5f5', borderRadius: 4, color: '#999' }}>
-          暂无表单字段，请添加字段
+          {t('app.master-data.formSchema.noFields')}
         </div>
       )}
 
       {/* 字段编辑 Modal */}
       <Modal
-        title={editingIndex >= 0 ? '编辑字段' : '添加字段'}
+        title={editingIndex >= 0 ? t('app.master-data.formSchema.editField') : t('app.master-data.formSchema.addFieldTitle')}
         open={editingField !== null}
         onCancel={() => {
           setEditingField(null);
@@ -444,59 +446,59 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         <Form form={fieldForm} layout="vertical">
           <Form.Item
             name="code"
-            label="字段代码"
+            label={t('app.master-data.formSchema.fieldCode')}
             rules={[
-              { required: true, message: '请输入字段代码' },
-              { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: '字段代码只能包含字母、数字和下划线，且不能以数字开头' },
+              { required: true, message: t('app.master-data.formSchema.fieldCodeRequired') },
+              { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: t('app.master-data.formSchema.fieldCodePattern') },
             ]}
           >
             <Input
-              placeholder="请输入字段代码（如：step_name）"
+              placeholder={t('app.master-data.formSchema.fieldCodePlaceholder')}
               disabled={editingIndex >= 0}
             />
           </Form.Item>
           <Form.Item
             name="label"
-            label="字段标签"
-            rules={[{ required: true, message: '请输入字段标签' }]}
+            label={t('app.master-data.formSchema.fieldLabel')}
+            rules={[{ required: true, message: t('app.master-data.formSchema.fieldLabelRequired') }]}
           >
-            <Input placeholder="请输入字段标签（如：步骤名称）" />
+            <Input placeholder={t('app.master-data.formSchema.fieldLabelPlaceholder')} />
           </Form.Item>
           <Form.Item
             name="type"
-            label="字段类型"
-            rules={[{ required: true, message: '请选择字段类型' }]}
+            label={t('app.master-data.formSchema.fieldType')}
+            rules={[{ required: true, message: t('app.master-data.formSchema.fieldTypeRequired') }]}
           >
             <Select>
-              <Select.Option value="string">文本 (string)</Select.Option>
-              <Select.Option value="number">数字 (number)</Select.Option>
-              <Select.Option value="boolean">布尔值 (boolean)</Select.Option>
-              <Select.Option value="date">日期 (date)</Select.Option>
-              <Select.Option value="select">选择 (select)</Select.Option>
+              <Select.Option value="string">{t('app.master-data.formSchema.typeString')}</Select.Option>
+              <Select.Option value="number">{t('app.master-data.formSchema.typeNumber')}</Select.Option>
+              <Select.Option value="boolean">{t('app.master-data.formSchema.typeBoolean')}</Select.Option>
+              <Select.Option value="date">{t('app.master-data.formSchema.typeDate')}</Select.Option>
+              <Select.Option value="select">{t('app.master-data.formSchema.typeSelect')}</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item
             name="component"
-            label="组件类型"
-            rules={[{ required: true, message: '请选择组件类型' }]}
+            label={t('app.master-data.formSchema.componentType')}
+            rules={[{ required: true, message: t('app.master-data.formSchema.componentTypeRequired') }]}
           >
             <Select>
-              <Select.Option value="Input">输入框 (Input)</Select.Option>
-              <Select.Option value="Input.TextArea">文本域 (TextArea)</Select.Option>
-              <Select.Option value="InputNumber">数字输入框 (InputNumber)</Select.Option>
-              <Select.Option value="DatePicker">日期选择器 (DatePicker)</Select.Option>
-              <Select.Option value="Select">下拉选择 (Select)</Select.Option>
-              <Select.Option value="Switch">开关 (Switch)</Select.Option>
+              <Select.Option value="Input">{t('app.master-data.formSchema.compInput')}</Select.Option>
+              <Select.Option value="Input.TextArea">{t('app.master-data.formSchema.compTextArea')}</Select.Option>
+              <Select.Option value="InputNumber">{t('app.master-data.formSchema.compInputNumber')}</Select.Option>
+              <Select.Option value="DatePicker">{t('app.master-data.formSchema.compDatePicker')}</Select.Option>
+              <Select.Option value="Select">{t('app.master-data.formSchema.compSelect')}</Select.Option>
+              <Select.Option value="Switch">{t('app.master-data.formSchema.compSwitch')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="required" label="是否必填" valuePropName="checked">
+          <Form.Item name="required" label={t('app.master-data.formSchema.required')} valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="placeholder" label="占位符">
-            <Input placeholder="请输入占位符" />
+          <Form.Item name="placeholder" label={t('app.master-data.formSchema.placeholder')}>
+            <Input placeholder={t('app.master-data.formSchema.placeholderInput')} />
           </Form.Item>
-          <Form.Item name="description" label="字段描述">
-            <TextArea rows={2} placeholder="请输入字段描述" />
+          <Form.Item name="description" label={t('app.master-data.formSchema.fieldDescription')}>
+            <TextArea rows={2} placeholder={t('app.master-data.formSchema.fieldDescriptionPlaceholder')} />
           </Form.Item>
           <Form.Item
             noStyle
@@ -508,32 +510,32 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                 return (
                   <Form.Item
                     name="options"
-                    label="选项（JSON 格式）"
+                    label={t('app.master-data.formSchema.optionsJson')}
                     rules={[
-                      { required: true, message: '请输入选项（JSON 格式）' },
+                      { required: true, message: t('app.master-data.formSchema.optionsRequired') },
                       {
                         validator: (_, value) => {
                           if (!value) return Promise.resolve();
                           try {
                             const parsed = JSON.parse(value);
                             if (!Array.isArray(parsed)) {
-                              return Promise.reject(new Error('选项必须是数组格式'));
+                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsMustBeArray')));
                             }
                             if (parsed.some((item) => !item.label || item.value === undefined)) {
-                              return Promise.reject(new Error('选项格式错误，每个选项必须包含 label 和 value'));
+                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsFormatError')));
                             }
                             return Promise.resolve();
                           } catch {
-                            return Promise.reject(new Error('JSON 格式错误'));
+                            return Promise.reject(new Error(t('app.master-data.formSchema.optionsJsonError')));
                           }
                         },
                       },
                     ]}
-                    tooltip='格式: [{"label": "选项1", "value": "value1"}, {"label": "选项2", "value": "value2"}]'
+                    tooltip={t('app.master-data.formSchema.optionsTooltip')}
                   >
                     <TextArea
                       rows={4}
-                      placeholder='[{"label": "选项1", "value": "value1"}, {"label": "选项2", "value": "value2"}]'
+                      placeholder={t('app.master-data.formSchema.optionsPlaceholder')}
                     />
                   </Form.Item>
                 );
@@ -543,27 +545,27 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                   <>
                     <Form.Item
                       name="min"
-                      label="最小值"
+                      label={t('app.master-data.formSchema.minValue')}
                     >
-                      <InputNumber placeholder="最小值（可选）" style={{ width: '100%' }} />
+                      <InputNumber placeholder={t('app.master-data.formSchema.minPlaceholder')} style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item
                       name="max"
-                      label="最大值"
+                      label={t('app.master-data.formSchema.maxValue')}
                     >
-                      <InputNumber placeholder="最大值（可选）" style={{ width: '100%' }} />
+                      <InputNumber placeholder={t('app.master-data.formSchema.maxPlaceholder')} style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item
                       name="unit"
-                      label="单位"
+                      label={t('app.master-data.formSchema.unit')}
                     >
-                      <Input placeholder="单位（如：N·m、℃、kg）" />
+                      <Input placeholder={t('app.master-data.formSchema.unitPlaceholder')} />
                     </Form.Item>
                     <Form.Item
                       name="precision"
-                      label="小数位数"
+                      label={t('app.master-data.formSchema.precision')}
                     >
-                      <InputNumber min={0} max={10} placeholder="小数位数（0-10）" style={{ width: '100%' }} />
+                      <InputNumber min={0} max={10} placeholder={t('app.master-data.formSchema.precisionPlaceholder')} style={{ width: '100%' }} />
                     </Form.Item>
                   </>
                 );

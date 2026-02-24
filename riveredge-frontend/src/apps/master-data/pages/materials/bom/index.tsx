@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
@@ -49,6 +50,7 @@ interface BOMGroupRow {
  * 物料清单BOM管理列表页面组件
  */
 const BOMPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -263,12 +265,12 @@ const BOMPage: React.FC = () => {
             });
           } else {
             console.warn(`编码规则 ${ruleCode} 不存在或未启用，跳过自动生成。响应:`, codeResponse);
-            messageApi.warning(`编码规则 ${ruleCode} 不存在或未启用，请检查编码规则配置`);
+            messageApi.warning(t('app.master-data.bom.codeRuleNotFound', { ruleCode }));
           }
         } catch (error: any) {
           // 处理其他错误（网络错误等）
           console.error('自动生成编码失败:', error?.message || error, error);
-          messageApi.error(`自动生成编码失败: ${error?.message || error}`);
+          messageApi.error(`${t('app.master-data.bom.autoCodeFailed')}: ${error?.message || error}`);
         }
       } else {
         console.warn('BOM编码自动生成未启用或规则代码不存在:', config);
@@ -286,7 +288,7 @@ const BOMPage: React.FC = () => {
     try {
       const list = await bomApi.getByMaterial(record.materialId, record.version, false);
       if (!list?.length) {
-        messageApi.error('未找到该主物料+版本的 BOM 数据');
+        messageApi.error(t('app.master-data.bom.bomNotFound'));
         return;
       }
       const first = list[0]!;
@@ -340,7 +342,7 @@ const BOMPage: React.FC = () => {
         }
       }, 150);
     } catch (error: any) {
-      messageApi.error(error?.message || '获取BOM失败');
+      messageApi.error(error?.message || t('app.master-data.bom.getFailed'));
     }
   };
   
@@ -350,10 +352,10 @@ const BOMPage: React.FC = () => {
   const handleCopy = async (record: BOM) => {
     try {
       const newBom = await bomApi.copy(record.uuid);
-      messageApi.success('BOM复制成功，已创建新版本');
+      messageApi.success(t('app.master-data.bom.copySuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '复制BOM失败');
+      messageApi.error(error.message || t('app.master-data.bom.copyFailed'));
     }
   };
   
@@ -363,33 +365,33 @@ const BOMPage: React.FC = () => {
   const handleUnapproveGroup = (record: BOMGroupRow) => {
     const uuids = groupKeyToUuidsRef.current.get(record.groupKey);
     if (!uuids?.length) {
-      messageApi.error('无法获取该 BOM 记录');
+      messageApi.error(t('app.master-data.bom.getRecordFailed'));
       return;
     }
     recursiveUnapproveRef.current = false;
     Modal.confirm({
-      title: '反审核确认',
+      title: t('app.master-data.bom.unapproveConfirmTitle'),
       content: (
         <div>
-          <p>确定要反审核 {record.bomCode} 版本 {record.version} 吗？</p>
-          <p style={{ color: '#ff4d4f' }}>反审核后状态将重置为「草稿」，可再次编辑。</p>
+          <p>{t('app.master-data.bom.unapproveConfirmContent', { bomCode: record.bomCode, version: record.version })}</p>
+          <p style={{ color: '#ff4d4f' }}>{t('app.master-data.bom.unapproveResetDraft')}</p>
           <div style={{ marginTop: 12 }}>
             <Checkbox onChange={(e) => { recursiveUnapproveRef.current = e.target.checked; }}>
-              同时反审核子BOM（递归）
+              {t('app.master-data.bom.recursiveUnapprove')}
             </Checkbox>
           </div>
         </div>
       ),
-      okText: '确定反审核',
+      okText: t('app.master-data.bom.okUnapprove'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
           await bomApi.batchApprove(uuids, true, '反审核', recursiveUnapproveRef.current, true);
-          messageApi.success('反审核成功');
+          messageApi.success(t('app.master-data.bom.unapproveSuccess'));
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '反审核失败');
+          messageApi.error(error.message || t('app.master-data.bom.unapproveFailed'));
         }
       },
     });
@@ -412,20 +414,20 @@ const BOMPage: React.FC = () => {
     if (!approvalGroupKey) return;
     const uuids = groupKeyToUuidsRef.current.get(approvalGroupKey);
     if (!uuids?.length) {
-      messageApi.error('无法获取该 BOM 记录');
+      messageApi.error(t('app.master-data.bom.getRecordFailed'));
       return;
     }
 
     try {
       setApprovalLoading(true);
       await bomApi.batchApprove(uuids, approved, approvalComment || undefined, approvalRecursive, false);
-      messageApi.success(approved ? 'BOM审核通过' : 'BOM审核已拒绝');
+      messageApi.success(approved ? t('app.master-data.bom.approvePass') : t('app.master-data.bom.approveReject'));
       setApprovalModalVisible(false);
       setApprovalComment('');
       setApprovalGroupKey(null);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '审核失败');
+      messageApi.error(error.message || t('app.master-data.bom.approveFailed'));
     } finally {
       setApprovalLoading(false);
     }
@@ -436,10 +438,10 @@ const BOMPage: React.FC = () => {
    */
   const getApprovalStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      draft: { color: 'default', text: '草稿', icon: <ClockCircleOutlined /> },
-      pending: { color: 'processing', text: '待审核', icon: <ClockCircleOutlined /> },
-      approved: { color: 'success', text: '已审核', icon: <CheckCircleOutlined /> },
-      rejected: { color: 'error', text: '已拒绝', icon: <CloseCircleOutlined /> },
+      draft: { color: 'default', text: t('app.master-data.bom.statusDraft'), icon: <ClockCircleOutlined /> },
+      pending: { color: 'processing', text: t('app.master-data.bom.statusPending'), icon: <ClockCircleOutlined /> },
+      approved: { color: 'success', text: t('app.master-data.bom.statusApproved'), icon: <CheckCircleOutlined /> },
+      rejected: { color: 'error', text: t('app.master-data.bom.statusRejected'), icon: <CloseCircleOutlined /> },
     };
     
     const statusInfo = statusMap[status] || statusMap.draft;
@@ -456,10 +458,10 @@ const BOMPage: React.FC = () => {
   const handleDelete = async (record: BOM) => {
     try {
       await bomApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -470,18 +472,18 @@ const BOMPage: React.FC = () => {
     const uuids = record.items.map((i) => i.uuid);
     if (!uuids.length) return;
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除该 BOM（共 ${uuids.length} 项子件）吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('app.master-data.bom.deleteConfirmTitle'),
+      content: t('app.master-data.bom.deleteConfirmContent', { count: uuids.length }),
+      okText: t('app.master-data.bom.ok'),
+      cancelText: t('app.master-data.bom.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
           for (const uuid of uuids) await bomApi.delete(uuid);
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '删除失败');
+          messageApi.error(error?.message || t('common.deleteFailed'));
         }
       },
     });
@@ -492,7 +494,7 @@ const BOMPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
@@ -508,15 +510,15 @@ const BOMPage: React.FC = () => {
     }
     const count = toDelete.length;
     if (count === 0) {
-      messageApi.warning('没有可删除的记录');
+      messageApi.warning(t('app.master-data.bom.noDeleteRecords'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${count} 条BOM记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('app.master-data.bom.batchDeleteConfirmTitle'),
+      content: t('app.master-data.bom.batchDeleteConfirmContent', { count }),
+      okText: t('app.master-data.bom.ok'),
+      cancelText: t('app.master-data.bom.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -529,15 +531,15 @@ const BOMPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('app.master-data.bom.deleteFailed'));
             }
           }
-          if (successCount > 0) messageApi.success(`成功删除 ${successCount} 条记录`);
-          if (failCount > 0) messageApi.error(`删除失败 ${failCount} 条${errors.length ? '：' + errors.join('; ') : ''}`);
+          if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+          if (failCount > 0) messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length ? '：' + errors.join('; ') : '' }));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -552,7 +554,7 @@ const BOMPage: React.FC = () => {
    */
   const handleBatchApprove = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要审核的记录');
+      messageApi.warning(t('app.master-data.bom.selectToApprove'));
       return;
     }
 
@@ -568,7 +570,7 @@ const BOMPage: React.FC = () => {
     }
     const count = toProcess.length;
     if (count === 0) {
-      messageApi.warning('没有可审核的记录');
+      messageApi.warning(t('app.master-data.bom.noApproveRecords'));
       return;
     }
 
@@ -576,28 +578,28 @@ const BOMPage: React.FC = () => {
     recursiveApprovalRef.current = false;
 
     Modal.confirm({
-      title: '批量审核',
+      title: t('app.master-data.bom.batchApproveTitle'),
       content: (
         <div>
-          <p>确定要批量通过选中的 {count} 条BOM记录吗？</p>
+          <p>{t('app.master-data.bom.batchApproveContent', { count })}</p>
           <div style={{ marginTop: 8 }}>
              <Checkbox onChange={(e) => recursiveApprovalRef.current = e.target.checked}>
-                同时审核子BOM (递归)
+                {t('app.master-data.bom.recursiveApprove')}
              </Checkbox>
           </div>
         </div>
       ),
-      okText: '确定通过',
-      cancelText: '取消',
+      okText: t('app.master-data.bom.okApprove'),
+      cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
           // 直接调用批量审核API
           await bomApi.batchApprove(toProcess, true, '批量审核通过', recursiveApprovalRef.current, false);
-          messageApi.success(`已成功审核 ${count} 条记录`);
+          messageApi.success(t('app.master-data.bom.approveSuccess', { count }));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量审核失败');
+          messageApi.error(error.message || t('app.master-data.bom.batchApproveFailed'));
         }
       },
     });
@@ -608,7 +610,7 @@ const BOMPage: React.FC = () => {
    */
   const handleBatchUnapprove = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要操作的记录');
+      messageApi.warning(t('app.master-data.bom.selectToOperate'));
       return;
     }
 
@@ -624,7 +626,7 @@ const BOMPage: React.FC = () => {
     }
     const count = toProcess.length;
     if (count === 0) {
-        messageApi.warning('没有可操作的记录');
+        messageApi.warning(t('app.master-data.bom.noOperateRecords'));
         return;
     }
 
@@ -632,29 +634,29 @@ const BOMPage: React.FC = () => {
     recursiveApprovalRef.current = false;
 
     Modal.confirm({
-      title: '批量反审核',
+      title: t('app.master-data.bom.batchUnapproveTitle'),
       content: (
           <div>
-            <p>确定要批量反审核选中的 {count} 条BOM记录吗？</p>
-            <p style={{ color: '#ff4d4f' }}>反审核后状态将重置为"草稿"。</p>
+            <p>{t('app.master-data.bom.batchUnapproveContent', { count })}</p>
+            <p style={{ color: '#ff4d4f' }}>{t('app.master-data.bom.unapproveResetDraftTip')}</p>
             <div style={{ marginTop: 8 }}>
                  <Checkbox onChange={(e) => recursiveApprovalRef.current = e.target.checked}>
-                    同时反审核子BOM (递归)
+                    {t('app.master-data.bom.recursiveUnapproveShort')}
                  </Checkbox>
             </div>
           </div>
       ),
-      okText: '确定反审核',
+      okText: t('app.master-data.bom.okUnapprove'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
           await bomApi.batchApprove(toProcess, true, '批量反审核', recursiveApprovalRef.current, true);
-          messageApi.success(`已成功反审核 ${count} 条记录`);
+          messageApi.success(t('app.master-data.bom.unapproveCountSuccess', { count }));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量反审核失败');
+          messageApi.error(error.message || t('app.master-data.bom.batchUnapproveFailed'));
         }
       },
     });
@@ -674,7 +676,7 @@ const BOMPage: React.FC = () => {
       const allBomItems = await bomApi.getByMaterial(record.materialId, record.version, false);
       
       if (!allBomItems || allBomItems.length === 0) {
-        messageApi.error('未找到BOM数据');
+        messageApi.error(t('app.master-data.bom.bomDataNotFound'));
         return;
       }
       
@@ -704,7 +706,7 @@ const BOMPage: React.FC = () => {
               const material = materials.find(m => m.id === item.componentId);
               materialName = material ? `${material.code} - ${material.name}` : `物料ID: ${item.componentId}`;
             } else {
-              materialName = '物料ID: 未知';
+              materialName = t('app.master-data.bom.materialIdUnknown');
             }
             
             // 构建节点标题
@@ -755,7 +757,7 @@ const BOMPage: React.FC = () => {
         setExpandedKeys([]);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '获取BOM详情失败');
+      messageApi.error(error.message || t('app.master-data.bom.getDetailFailed'));
     } finally {
       setDetailLoading(false);
       setHierarchyLoading(false);
@@ -783,11 +785,11 @@ const BOMPage: React.FC = () => {
     try {
       setFormLoading(true);
       if (!values.items || values.items.length === 0) {
-        messageApi.error('请至少添加一个子物料');
+        messageApi.error(t('app.master-data.bom.addAtLeastOneChild'));
         return;
       }
       if (!values.materialId) {
-        messageApi.error('请选择主物料');
+        messageApi.error(t('app.master-data.bom.selectMainMaterial'));
         return;
       }
 
@@ -795,8 +797,8 @@ const BOMPage: React.FC = () => {
         return {
           material_id: values.materialId,
           items: values.items.map((item: any) => {
-            if (!item.componentId) throw new Error('请选择子物料');
-            if (!item.quantity || item.quantity <= 0) throw new Error('用量必须大于0');
+            if (!item.componentId) throw new Error(t('app.master-data.bom.selectChildMaterial'));
+            if (!item.quantity || item.quantity <= 0) throw new Error(t('app.master-data.bom.quantityMustBePositive'));
             const unitValue = (item.unit && item.unit.trim()) ? item.unit.trim() : null;
             return {
               component_id: item.componentId,
@@ -828,19 +830,19 @@ const BOMPage: React.FC = () => {
         }
         const batchData = buildBatch();
         await bomApi.create(batchData as any);
-        messageApi.success(`已更新 BOM 结构，共 ${batchData.items.length} 项子件`);
+        messageApi.success(t('app.master-data.bom.structureUpdated', { count: batchData.items.length }));
         setEditContext(null);
       } else {
         const batchData = buildBatch();
         await bomApi.create(batchData as any);
-        messageApi.success(`成功创建 ${batchData.items.length} 个BOM项`);
+        messageApi.success(t('app.master-data.bom.itemsCreated', { count: batchData.items.length }));
       }
 
       setModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
       setFormLoading(false);
     }
@@ -936,7 +938,7 @@ const BOMPage: React.FC = () => {
 
       // 验证数据格式
       if (!data || data.length < 2) {
-        messageApi.error('请至少填写一行数据（表头除外）');
+        messageApi.error(t('app.master-data.bom.fillAtLeastOneRow'));
         return;
       }
 
@@ -956,7 +958,7 @@ const BOMPage: React.FC = () => {
 
       // 必填字段验证
       if (headerIndexes['父件编码'] === undefined || headerIndexes['子件编码'] === undefined || headerIndexes['子件数量'] === undefined) {
-        messageApi.error('表头必须包含：父件编码、子件编码、子件数量');
+        messageApi.error(t('app.master-data.bom.importHeadersRequired'));
         return;
       }
 
@@ -1036,13 +1038,13 @@ const BOMPage: React.FC = () => {
 
       // 如果有错误，显示错误信息
       if (errors.length > 0) {
-        messageApi.error(`数据验证失败：\n${errors.join('\n')}`);
+        messageApi.error(t('app.master-data.bom.importValidationFailed', { errors: errors.join('\n') }));
         return;
       }
 
       // 如果没有有效数据，提示
       if (importItems.length === 0) {
-        messageApi.error('没有有效的导入数据');
+        messageApi.error(t('app.master-data.bom.noValidImportData'));
         return;
       }
 
@@ -1053,10 +1055,10 @@ const BOMPage: React.FC = () => {
       };
 
       await bomApi.batchImport(batchImportData);
-      messageApi.success(`成功导入 ${importItems.length} 条BOM数据`);
+      messageApi.success(t('app.master-data.bom.importSuccess', { count: importItems.length }));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '批量导入失败');
+      messageApi.error(error.message || t('app.master-data.bom.batchImportFailed'));
     } finally {
       setBatchImportLoading(false);
     }
@@ -1083,7 +1085,7 @@ const BOMPage: React.FC = () => {
         });
       }
     } catch (error: any) {
-      messageApi.error(error.message || '打开版本创建失败');
+      messageApi.error(error.message || t('app.master-data.bom.openVersionCreateFailed'));
     }
   };
 
@@ -1092,21 +1094,21 @@ const BOMPage: React.FC = () => {
    */
   const handleSetAsDefault = async (record: BOM) => {
     if (record.isDefault) {
-      messageApi.info('当前已是默认版本');
+      messageApi.info(t('app.master-data.bom.alreadyDefaultVersion'));
       return;
     }
     Modal.confirm({
-      title: '设为默认版本',
-      content: `确定将 ${record.bomCode} (版本 ${record.version}) 设为该物料的默认 BOM 版本吗？需求计算在「不允许多版本」时将使用此版本。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('app.master-data.bom.setDefaultVersionTitle'),
+      content: t('app.master-data.bom.setDefaultVersionContent', { bomCode: record.bomCode, version: record.version }),
+      okText: t('app.master-data.bom.ok'),
+      cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
           await bomApi.update(record.uuid, { isDefault: true });
-          messageApi.success('已设为默认版本');
+          messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '操作失败');
+          messageApi.error(error.message || t('app.master-data.bom.operationFailed'));
         }
       },
     });
@@ -1117,17 +1119,17 @@ const BOMPage: React.FC = () => {
    */
   const handleRevise = async (record: BOM) => {
     Modal.confirm({
-      title: 'BOM 升版确认',
-      content: `确定要为 ${record.bomCode} (当前版本 ${record.version}) 创建一个新的修订版本吗？系统将自动复制整个 BOM 结构并生成新版本（Draft状态）。`,
-      okText: '确定升版',
-      cancelText: '取消',
+      title: t('app.master-data.bom.reviseConfirmTitle'),
+      content: t('app.master-data.bom.reviseConfirmContent', { bomCode: record.bomCode, version: record.version }),
+      okText: t('app.master-data.bom.okRevise'),
+      cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
           const newBom = await bomApi.revise(record.uuid);
-          messageApi.success(`升版成功！新版本: ${newBom.version}`);
+          messageApi.success(t('app.master-data.bom.upgradeSuccess', { version: newBom.version }));
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '升版失败');
+          messageApi.error(error.message || t('app.master-data.bom.upgradeFailed'));
         }
       }
     });
@@ -1139,19 +1141,19 @@ const BOMPage: React.FC = () => {
    */
   const handleVersionCreateSubmit = async (values: BOMVersionCreate) => {
     if (!currentMaterialId) {
-      messageApi.error('物料ID不存在');
+      messageApi.error(t('app.master-data.bom.materialIdNotExist'));
       return;
     }
 
     try {
       setVersionLoading(true);
       await bomApi.createVersion(currentMaterialId, values);
-      messageApi.success('版本创建成功');
+      messageApi.success(t('app.master-data.bom.versionCreateSuccess'));
       setVersionModalVisible(false);
       versionFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '版本创建失败');
+      messageApi.error(error.message || t('app.master-data.bom.versionCreateFailed'));
     } finally {
       setVersionLoading(false);
     }
@@ -1184,7 +1186,7 @@ const BOMPage: React.FC = () => {
       setVersionList(sortedVersions);
       setVersionHistoryModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取版本历史失败');
+      messageApi.error(error.message || t('app.master-data.bom.getVersionHistoryFailed'));
     }
   };
 
@@ -1193,7 +1195,7 @@ const BOMPage: React.FC = () => {
    */
   const handleCompareVersions = async (version1: string, version2: string) => {
     if (!currentMaterialId) {
-      messageApi.error('物料ID不存在');
+      messageApi.error(t('app.master-data.bom.materialIdNotExist'));
       return;
     }
 
@@ -1208,7 +1210,7 @@ const BOMPage: React.FC = () => {
       setSelectedVersions({ version1, version2 });
       setVersionCompareModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '版本对比失败');
+      messageApi.error(error.message || t('app.master-data.bom.versionCompareFailed'));
     } finally {
       setVersionLoading(false);
     }
@@ -1230,7 +1232,7 @@ const BOMPage: React.FC = () => {
       // 自动计算一次
       await handleQuantityCalculate(record.materialId, 1.0, record.version);
     } catch (error: any) {
-      messageApi.error(error.message || '打开用量计算失败');
+      messageApi.error(error.message || t('app.master-data.bom.openQuantityCalcFailed'));
     }
   };
 
@@ -1243,7 +1245,7 @@ const BOMPage: React.FC = () => {
       const result = await bomApi.calculateQuantity(materialId, parentQty, version);
       setQuantityResult(result);
     } catch (error: any) {
-      messageApi.error(error.message || '用量计算失败');
+      messageApi.error(error.message || t('app.master-data.bom.quantityCalcFailed'));
     } finally {
       setQuantityLoading(false);
     }
@@ -1254,7 +1256,7 @@ const BOMPage: React.FC = () => {
    */
   const handleQuantityCalculateSubmit = async (values: { parentQuantity: number; version?: string }) => {
     if (!currentMaterialId) {
-      messageApi.error('物料ID不存在');
+      messageApi.error(t('app.master-data.bom.materialIdNotExist'));
       return;
     }
     await handleQuantityCalculate(currentMaterialId, values.parentQuantity, values.version);
@@ -1278,7 +1280,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: '版本', 
+      title: t('app.master-data.bom.versionTitle'), 
       dataIndex: 'version', 
       width: 100, 
       hideInSearch: true, 
@@ -1288,7 +1290,7 @@ const BOMPage: React.FC = () => {
           return (
             <Space size={4}>
               <Tag>{r.version}</Tag>
-              {first?.isDefault && <Tag color="gold">默认</Tag>}
+              {first?.isDefault && <Tag color="gold">{t('app.master-data.bom.defaultTag')}</Tag>}
             </Space>
           );
         }
@@ -1296,11 +1298,11 @@ const BOMPage: React.FC = () => {
       }
     },
     {
-      title: '审核状态',
+      title: t('app.master-data.bom.approvalStatusTitle'),
       dataIndex: 'approvalStatus',
       width: 120,
       valueType: 'select',
-      valueEnum: { draft: { text: '草稿', status: 'Default' }, pending: { text: '待审核', status: 'Processing' }, approved: { text: '已审核', status: 'Success' }, rejected: { text: '已拒绝', status: 'Error' } },
+      valueEnum: { draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' }, pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' }, approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' }, rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' } },
       render: (_, r: any) => {
         if ('groupKey' in r) {
           return getApprovalStatusTag(r.approvalStatus);
@@ -1309,7 +1311,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: '物料', 
+      title: t('app.master-data.bom.materialTitle'), 
       dataIndex: 'materialId', 
       width: 200, 
       hideInSearch: true, 
@@ -1324,7 +1326,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: '用量', 
+      title: t('app.master-data.bom.quantityTitle'), 
       dataIndex: 'quantity', 
       width: 100, 
       hideInSearch: true,
@@ -1336,7 +1338,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: '单位', 
+      title: t('app.master-data.bom.unitTitle'), 
       dataIndex: 'unit', 
       width: 80, 
       hideInSearch: true,
@@ -1348,7 +1350,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: '损耗率', 
+      title: t('app.master-data.bom.wasteRateTitle'), 
       dataIndex: 'wasteRate', 
       width: 90, 
       hideInSearch: true,
@@ -1360,7 +1362,7 @@ const BOMPage: React.FC = () => {
       }
     },
     {
-      title: '操作',
+      title: t('app.master-data.bom.actionTitle'),
       valueType: 'option',
       width: 300,
       fixed: 'right',
@@ -1381,34 +1383,34 @@ const BOMPage: React.FC = () => {
         const moreItems: MenuProps['items'] = [
           {
             type: 'group',
-            label: '查看',
+            label: t('app.master-data.bom.view'),
             children: [
-              { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
-              { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: '用量计算', onClick: () => handleCalculateQuantity(r) },
+              { key: 'detail', icon: <DiffOutlined />, label: t('app.master-data.bom.detail'), onClick: () => handleOpenDetail(r) },
+              { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: t('app.master-data.bom.calculateQuantity'), onClick: () => handleCalculateQuantity(r) },
             ],
           },
           {
             type: 'group',
-            label: '版本管理',
+            label: t('app.master-data.bom.versionManage'),
             children: [
-              { key: 'setDefault', icon: <StarOutlined />, label: '设为默认', onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
-              { key: 'revise', icon: <BranchesOutlined />, label: '升版', onClick: () => handleRevise(r), disabled: !isApproved },
-              { key: 'newVersion', icon: <PlusOutlined />, label: '手工新建版本', onClick: () => handleCreateVersion(r) },
-              { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
+              { key: 'setDefault', icon: <StarOutlined />, label: t('app.master-data.bom.setDefault'), onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
+              { key: 'revise', icon: <BranchesOutlined />, label: t('app.master-data.bom.revise'), onClick: () => handleRevise(r), disabled: !isApproved },
+              { key: 'newVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.newVersion'), onClick: () => handleCreateVersion(r) },
+              { key: 'versionHistory', icon: <HistoryOutlined />, label: t('app.master-data.bom.versionHistory'), onClick: () => handleViewVersionHistory(r) },
             ],
           },
           {
             type: 'group',
-            label: '其他',
+            label: t('app.master-data.bom.other'),
             children: [
-              { key: 'copy', icon: <CopyOutlined />, label: '复制', onClick: () => handleCopy(r) },
+              { key: 'copy', icon: <CopyOutlined />, label: t('app.master-data.bom.copy'), onClick: () => handleCopy(r) },
             ],
           },
           { type: 'divider' },
           {
             key: 'delete',
             icon: <DeleteOutlined />,
-            label: '删除',
+            label: t('app.master-data.bom.delete'),
             danger: true,
             onClick: () => handleDeleteGroup(record),
             disabled: isApproved,
@@ -1422,12 +1424,12 @@ const BOMPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(r)}
               disabled={isApproved}
-              title={isApproved ? '已审核的BOM不可直接编辑，请先升版或反审核' : '编辑'}
+              title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('app.master-data.bom.editTitle')}
             >
-              编辑
+              {t('app.master-data.bom.editTitle')}
             </Button>
-            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner} title="图形化设计BOM结构">
-              设计
+            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner} title={t('app.master-data.bom.designerTitle')}>
+              {t('app.master-data.bom.design')}
             </Button>
             {r.approvalStatus !== 'approved' ? (
               <Button
@@ -1435,9 +1437,9 @@ const BOMPage: React.FC = () => {
                 size="small"
                 icon={<CheckCircleOutlined />}
                 onClick={() => handleOpenApproval(record)}
-                title="审核通过"
+                title={t('app.master-data.bom.approvePassTitle')}
               >
-                审核
+                {t('app.master-data.bom.approve')}
               </Button>
             ) : (
               <Button
@@ -1445,14 +1447,14 @@ const BOMPage: React.FC = () => {
                 size="small"
                 icon={<UndoOutlined />}
                 onClick={() => handleUnapproveGroup(record)}
-                title="反审核，重置为草稿"
+                title={t('app.master-data.bom.unapproveTitle')}
               >
-                反审核
+                {t('app.master-data.bom.unapprove')}
               </Button>
             )}
             <Dropdown menu={{ items: moreItems }} trigger={['click']}>
               <Button type="link" size="small" icon={<EllipsisOutlined />}>
-                更多
+                {t('app.master-data.bom.more')}
               </Button>
             </Dropdown>
           </Space>
@@ -1468,136 +1470,136 @@ const BOMPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<BOM>[] = [
     {
-      title: 'BOM编码',
+      title: t('app.master-data.bom.bomCode'),
       dataIndex: 'bomCode',
       render: (_, record) => record.bomCode || '-',
     },
     {
-      title: '版本',
+      title: t('app.master-data.bom.versionTitle'),
       dataIndex: 'version',
       render: (_, record) => (
         <Space size={4}>
           <Tag>{record.version}</Tag>
-          {record.isDefault && <Tag color="gold">默认</Tag>}
+          {record.isDefault && <Tag color="gold">{t('app.master-data.bom.defaultTag')}</Tag>}
         </Space>
       ),
     },
     {
-      title: '审核状态',
+      title: t('app.master-data.bom.approvalStatusTitle'),
       dataIndex: 'approvalStatus',
       render: (_, record) => getApprovalStatusTag(record.approvalStatus),
     },
     {
-      title: '主物料',
+      title: t('app.master-data.bom.mainMaterialTitle'),
       dataIndex: 'materialId',
       render: (_, record) => getMaterialName(record.materialId),
     },
     {
-      title: '子物料',
+      title: t('app.master-data.bom.childMaterialTitle'),
       dataIndex: 'componentId',
       render: (_, record) => getMaterialName(record.componentId),
     },
     {
-      title: '用量',
+      title: t('app.master-data.bom.quantityTitle'),
       dataIndex: 'quantity',
     },
     {
-      title: '单位',
+      title: t('app.master-data.bom.unitTitle'),
       dataIndex: 'unit',
       render: (_, record) => record.unit || '-',
     },
     {
-      title: '损耗率',
+      title: t('app.master-data.bom.wasteRateTitle'),
       dataIndex: 'wasteRate',
       render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
     },
     {
-      title: '是否必选',
+      title: t('app.master-data.bom.isRequiredTitle'),
       dataIndex: 'isRequired',
       render: (_, record) => (
         <Tag color={record.isRequired !== false ? 'success' : 'default'}>
-          {record.isRequired !== false ? '是' : '否'}
+          {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
         </Tag>
       ),
     },
     {
-      title: '层级',
+      title: t('app.master-data.bom.levelTitle'),
       dataIndex: 'level',
       render: (_, record) => record.level ?? 0,
     },
     {
-      title: '层级路径',
+      title: t('app.master-data.bom.levelPathTitle'),
       dataIndex: 'path',
       render: (_, record) => record.path || '-',
     },
     {
-      title: '生效日期',
+      title: t('app.master-data.bom.effectiveDateTitle'),
       dataIndex: 'effectiveDate',
       valueType: 'dateTime',
       render: (_, record) => record.effectiveDate || '-',
     },
     {
-      title: '失效日期',
+      title: t('app.master-data.bom.expiryDateTitle'),
       dataIndex: 'expiryDate',
       valueType: 'dateTime',
       render: (_, record) => record.expiryDate || '-',
     },
     {
-      title: '替代料',
+      title: t('app.master-data.bom.alternativeTitle'),
       dataIndex: 'isAlternative',
       render: (_, record) => (
         <Tag color={record.isAlternative ? 'orange' : 'default'}>
-          {record.isAlternative ? '是' : '否'}
+          {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
         </Tag>
       ),
     },
     {
-      title: '优先级',
+      title: t('app.master-data.bom.priorityTitle'),
       dataIndex: 'priority',
     },
     {
-      title: '描述',
+      title: t('app.master-data.bom.descTitle'),
       dataIndex: 'description',
       span: 2,
     },
     {
-      title: '备注',
+      title: t('app.master-data.bom.remarkTitle'),
       dataIndex: 'remark',
       span: 2,
     },
     {
-      title: '审核人',
+      title: t('app.master-data.bom.approverTitle'),
       dataIndex: 'approvedBy',
       render: (_, record) => record.approvedBy ? `用户ID: ${record.approvedBy}` : '-',
     },
     {
-      title: '审核时间',
+      title: t('app.master-data.bom.approvalTimeTitle'),
       dataIndex: 'approvedAt',
       valueType: 'dateTime',
       render: (_, record) => record.approvedAt || '-',
     },
     {
-      title: '审核意见',
+      title: t('app.master-data.bom.approvalCommentTitle'),
       dataIndex: 'approvalComment',
       span: 2,
       render: (_, record) => record.approvalComment || '-',
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.bom.enabledStatusTitle'),
       dataIndex: 'isActive',
       render: (_, record) => (
         <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+          {record.isActive ? t('app.master-data.bom.enabled') : t('app.master-data.bom.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.bom.createTimeTitle'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('app.master-data.bom.updateTimeTitle'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -1647,7 +1649,7 @@ const BOMPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);
-            messageApi.error(error?.message || '获取BOM列表失败');
+            messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
             return {
               data: [],
               success: false,
@@ -1729,7 +1731,7 @@ const BOMPage: React.FC = () => {
             items={[
               {
                 key: 'detail',
-                label: '基本信息',
+                label: t('app.master-data.bom.basicInfo'),
                 children: (
                   <div style={{ paddingTop: 16 }}>
                     {/* BOM基本信息 */}
@@ -1755,7 +1757,7 @@ const BOMPage: React.FC = () => {
                     {/* 子物料列表 */}
                     {bomItems.length > 0 && (
                       <div style={{ marginTop: 24 }}>
-                        <h4 style={{ marginBottom: 16, fontWeight: 500 }}>子物料列表（{bomItems.length}项）</h4>
+                        <h4 style={{ marginBottom: 16, fontWeight: 500 }}>{t('app.master-data.bom.childMaterialListWithCount', { count: bomItems.length })}</h4>
                         <Table<BOM>
                           dataSource={bomItems}
                           rowKey="uuid"
@@ -1763,24 +1765,24 @@ const BOMPage: React.FC = () => {
                           size="small"
                           columns={[
                             {
-                              title: '序号',
+                              title: t('app.master-data.bom.serialNo'),
                               key: 'index',
                               width: 60,
                               render: (_, __, index) => index + 1,
                             },
                             {
-                              title: '子物料',
+                              title: t('app.master-data.bom.childMaterialTitle'),
                               dataIndex: 'componentId',
                               render: (_, record) => getMaterialName(record.componentId),
                             },
                             {
-                              title: '用量',
+                              title: t('app.master-data.bom.quantityTitle'),
                               dataIndex: 'quantity',
                               width: 100,
                               align: 'right',
                             },
                             {
-                              title: '单位',
+                              title: t('app.master-data.bom.unitTitle'),
                               dataIndex: 'unit',
                               width: 80,
                               render: (_, record) => {
@@ -1790,30 +1792,30 @@ const BOMPage: React.FC = () => {
                               },
                             },
                             {
-                              title: '损耗率',
+                              title: t('app.master-data.bom.wasteRateTitle'),
                               dataIndex: 'wasteRate',
                               width: 100,
                               align: 'right',
                               render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
                             },
                             {
-                              title: '是否必选',
+                              title: t('app.master-data.bom.isRequiredTitle'),
                               dataIndex: 'isRequired',
                               width: 100,
                               render: (_, record) => (
                                 <Tag color={record.isRequired !== false ? 'success' : 'default'}>
-                                  {record.isRequired !== false ? '是' : '否'}
+                                  {record.isRequired !== false ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                                 </Tag>
                               ),
                             },
                             {
-                              title: '层级',
+                              title: t('app.master-data.bom.levelTitle'),
                               dataIndex: 'level',
                               width: 80,
                               render: (_, record) => record.level ?? 0,
                             },
                             {
-                              title: '描述',
+                              title: t('app.master-data.bom.descTitle'),
                               dataIndex: 'description',
                               ellipsis: true,
                               render: (_, record) => record.description || '-',
@@ -1827,13 +1829,13 @@ const BOMPage: React.FC = () => {
               },
               {
                 key: 'hierarchy',
-                label: '层级结构',
+                label: t('app.master-data.bom.hierarchyStructure'),
                 children: (
                   <div style={{ paddingTop: 16 }}>
                     <Spin spinning={hierarchyLoading}>
                       {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
                         <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                          暂无层级结构数据
+                          {t('app.master-data.bom.noHierarchyData')}
                         </div>
                       ) : (
                         <div>
@@ -1871,7 +1873,7 @@ const BOMPage: React.FC = () => {
 
       {/* 创建/编辑BOM Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑BOM' : '新建BOM（支持批量添加子物料）'}
+        title={isEdit ? t('app.master-data.bom.editBom') : t('app.master-data.bom.createBom')}
         open={modalVisible}
         onClose={handleCloseModal}
         onFinish={handleSubmit}
@@ -1923,7 +1925,7 @@ const BOMPage: React.FC = () => {
                 <CodeField
                   pageCode="master-data-engineering-bom"
                   name="bomCode"
-                  label="BOM编码"
+                  label={t('app.master-data.bom.bomCode')}
                   colProps={{ span: 12 }}
                   autoGenerateOnCreate={!isEdit}
                   showGenerateButton={false}
@@ -1937,15 +1939,15 @@ const BOMPage: React.FC = () => {
           </ProForm.Item>
           <SafeProFormSelect
             name="materialId"
-            label="主物料"
-            placeholder="请选择主物料"
+            label={t('app.master-data.bom.mainMaterialLabel')}
+            placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
             colProps={{ span: 12 }}
             options={materials.map(m => ({
               label: formatMaterialLabel(m),
               value: m.id,
             }))}
             rules={[
-              { required: true, message: '请选择主物料' },
+              { required: true, message: t('app.master-data.bom.mainMaterialRequired') },
             ]}
             fieldProps={{
               disabled: isEdit,
@@ -1963,12 +1965,12 @@ const BOMPage: React.FC = () => {
           />
           <ProFormText
             name="version"
-            label="版本号"
-            placeholder="请输入版本号"
+            label={t('app.master-data.bom.versionLabel')}
+            placeholder={t('app.master-data.bom.versionPlaceholder')}
             colProps={{ span: 6 }}
             rules={[
-              { required: true, message: '请输入版本号' },
-              { max: 50, message: '版本号不能超过50个字符' },
+              { required: true, message: t('app.master-data.bom.versionRequired') },
+              { max: 50, message: t('app.master-data.bom.versionMax') },
             ]}
             fieldProps={{
               disabled: isEdit,
@@ -1981,18 +1983,18 @@ const BOMPage: React.FC = () => {
           />
           <ProFormSelect
             name="approvalStatus"
-            label="审核状态"
+            label={t('app.master-data.bom.approvalStatusLabel')}
             colProps={{ span: 6 }}
             options={[
-              { label: '草稿', value: 'draft' },
-              { label: '待审核', value: 'pending' },
-              { label: '已审核', value: 'approved' },
-              { label: '已拒绝', value: 'rejected' },
+              { label: t('app.master-data.bom.statusDraft'), value: 'draft' },
+              { label: t('app.master-data.bom.statusPending'), value: 'pending' },
+              { label: t('app.master-data.bom.statusApproved'), value: 'approved' },
+              { label: t('app.master-data.bom.statusRejected'), value: 'rejected' },
             ]}
           />
           <ProFormDateTimePicker
             name="effectiveDate"
-            label="生效日期"
+            label={t('app.master-data.bom.effectiveDateLabel')}
             colProps={{ span: 6 }}
             fieldProps={{
               style: { width: '100%' },
@@ -2000,7 +2002,7 @@ const BOMPage: React.FC = () => {
           />
           <ProFormDateTimePicker
             name="expiryDate"
-            label="失效日期"
+            label={t('app.master-data.bom.expiryDateLabel')}
             colProps={{ span: 6 }}
             fieldProps={{
               style: { width: '100%' },
@@ -2008,9 +2010,9 @@ const BOMPage: React.FC = () => {
           />
           
           <ProForm.Item
-            label="子物料列表"
+            label={t('app.master-data.bom.childMaterialList')}
             rules={[
-              { required: true, message: '请至少添加一个子物料' },
+              { required: true, message: t('app.master-data.bom.childMaterialListRequired') },
             ]}
             style={{ width: '100%' }}
             className="bom-items-list-form-item"
@@ -2020,17 +2022,17 @@ const BOMPage: React.FC = () => {
                 {(fields, { add, remove }) => {
                   const tableColumns: ColumnsType<any> = [
                     {
-                      title: '子物料',
+                      title: t('app.master-data.bom.childMaterialTitleCol'),
                       dataIndex: 'componentId',
                       width: 210,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'componentId']}
-                          rules={[{ required: true, message: '请选择子物料' }]}
+                          rules={[{ required: true, message: t('app.master-data.bom.childMaterialRequired') }]}
                           style={{ margin: 0 }}
                         >
                           <Select
-                            placeholder="请选择子物料"
+                            placeholder={t('app.master-data.bom.childMaterialPlaceholder')}
                             showSearch
                             loading={materialsLoading}
                             size="small"
@@ -2048,20 +2050,20 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '用量',
+                      title: t('app.master-data.bom.quantityLabel'),
                       dataIndex: 'quantity',
                       width: 100,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'quantity']}
                           rules={[
-                            { required: true, message: '请输入用量' },
-                            { type: 'number', min: 0.0001, message: '用量必须大于0' },
+                            { required: true, message: t('app.master-data.bom.quantityRequiredMsg') },
+                            { type: 'number', min: 0.0001, message: t('app.master-data.bom.quantityMinMsg') },
                           ]}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
-                            placeholder="用量"
+                            placeholder={t('app.master-data.bom.quantityPlaceholderShort')}
                             precision={4}
                             size="small"
                             style={{ width: '100%' }}
@@ -2071,13 +2073,13 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '单位',
+                      title: t('app.master-data.bom.unitTitle'),
                       dataIndex: 'unit',
                       width: 80,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'unit']}
-                          rules={[{ max: 20, message: '单位不能超过20个字符' }]}
+                          rules={[{ max: 20, message: t('app.master-data.bom.unitMax') }]}
                           style={{ margin: 0 }}
                         >
                           <UnitDisplayCell unitValueToLabel={unitValueToLabel} />
@@ -2085,19 +2087,19 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '损耗率（%）',
+                      title: t('app.master-data.bom.wasteRateLabel'),
                       dataIndex: 'wasteRate',
                       width: 100,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'wasteRate']}
                           rules={[
-                            { type: 'number', min: 0, max: 100, message: '损耗率必须在0-100之间' },
+                            { type: 'number', min: 0, max: 100, message: t('app.master-data.bom.wasteRateRangeMsg') },
                           ]}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
-                            placeholder="损耗率"
+                            placeholder={t('app.master-data.bom.wasteRatePlaceholderShort')}
                             precision={2}
                             size="small"
                             style={{ width: '100%' }}
@@ -2108,7 +2110,7 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '是否必选',
+                      title: t('app.master-data.bom.isRequiredTitle'),
                       dataIndex: 'isRequired',
                       width: 80,
                       render: (_, record, index) => (
@@ -2122,7 +2124,7 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '替代料',
+                      title: t('app.master-data.bom.alternativeLabel'),
                       dataIndex: 'isAlternative',
                       width: 80,
                       render: (_, record, index) => (
@@ -2136,19 +2138,19 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '优先级',
+                      title: t('app.master-data.bom.priorityLabel'),
                       dataIndex: 'priority',
                       width: 80,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'priority']}
                           rules={[
-                            { type: 'number', min: 0, message: '优先级必须大于等于0' },
+                            { type: 'number', min: 0, message: t('app.master-data.bom.priorityMin') },
                           ]}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
-                            placeholder="优先级"
+                            placeholder={t('app.master-data.bom.priorityPlaceholder')}
                             precision={0}
                             size="small"
                             style={{ width: '100%' }}
@@ -2158,7 +2160,7 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '描述',
+                      title: t('app.master-data.bom.descLabel'),
                       dataIndex: 'description',
                       width: 150,
                       render: (_, record, index) => (
@@ -2167,7 +2169,7 @@ const BOMPage: React.FC = () => {
                           style={{ margin: 0 }}
                         >
                           <Input.TextArea
-                            placeholder="描述（可选）"
+                            placeholder={t('app.master-data.bom.descPlaceholder')}
                             rows={1}
                             size="small"
                             maxLength={500}
@@ -2177,7 +2179,7 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '操作',
+                      title: t('app.master-data.bom.actionLabel'),
                       width: 70,
                       fixed: 'right',
                       render: (_, record, index) => (
@@ -2188,7 +2190,7 @@ const BOMPage: React.FC = () => {
                           icon={<DeleteOutlined />}
                           onClick={() => remove(index)}
                         >
-                          删除
+                          {t('app.master-data.bom.delete')}
                         </Button>
                       ),
                     },
@@ -2242,7 +2244,7 @@ const BOMPage: React.FC = () => {
                               })}
                               block
                             >
-                              添加子物料
+                              {t('app.master-data.bom.addChildMaterial')}
                             </Button>
                           )}
                         />
@@ -2256,8 +2258,8 @@ const BOMPage: React.FC = () => {
           
           <ProFormTextArea
             name="description"
-            label="描述"
-            placeholder="请输入描述（可选）"
+            label={t('app.master-data.bom.descFormLabel')}
+            placeholder={t('app.master-data.bom.descFormPlaceholder')}
             colProps={{ span: 24 }}
             fieldProps={{
               rows: 3,
@@ -2268,13 +2270,13 @@ const BOMPage: React.FC = () => {
           
           <ProFormSwitch
             name="isActive"
-            label="是否启用"
+            label={t('app.master-data.bom.isEnabledLabel')}
           />
       </FormModalTemplate>
 
       {/* 审核Modal */}
       <Modal
-        title="审核BOM"
+        title={t('app.master-data.bom.approveBomTitle')}
         open={approvalModalVisible}
         onCancel={() => {
           setApprovalModalVisible(false);
@@ -2288,7 +2290,7 @@ const BOMPage: React.FC = () => {
             loading={approvalLoading}
             onClick={() => handleApprove(false)}
           >
-            拒绝
+            {t('app.master-data.bom.reject')}
           </Button>,
           <Button
             key="approve"
@@ -2296,17 +2298,17 @@ const BOMPage: React.FC = () => {
             loading={approvalLoading}
             onClick={() => handleApprove(true)}
           >
-            通过
+            {t('app.master-data.bom.pass')}
           </Button>,
         ]}
       >
         <div style={{ marginBottom: 16 }}>
-          <div style={{ marginBottom: 8 }}>审核意见（可选）：</div>
+          <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.approvalCommentOptional')}</div>
           <Input.TextArea
             rows={4}
             value={approvalComment}
             onChange={(e) => setApprovalComment(e.target.value)}
-            placeholder="请输入审核意见"
+            placeholder={t('app.master-data.bom.approvalCommentPlaceholder')}
             maxLength={500}
           />
           <div style={{ marginTop: 12 }}>
@@ -2314,7 +2316,7 @@ const BOMPage: React.FC = () => {
               checked={approvalRecursive}
               onChange={(e) => setApprovalRecursive(e.target.checked)}
             >
-              同时审核子BOM（递归）
+              {t('app.master-data.bom.recursiveApprove')}
             </Checkbox>
           </div>
         </div>
@@ -2323,7 +2325,7 @@ const BOMPage: React.FC = () => {
 
       {/* 创建新版本Modal */}
       <FormModalTemplate
-        title="创建BOM新版本"
+        title={t('app.master-data.bom.createVersionTitle')}
         open={versionModalVisible}
         onClose={() => {
           setVersionModalVisible(false);
@@ -2340,17 +2342,17 @@ const BOMPage: React.FC = () => {
       >
         <ProFormText
           name="version"
-          label="版本号"
-          placeholder="请输入版本号（如：v1.1）"
+          label={t('app.master-data.bom.versionLabel')}
+          placeholder={t('app.master-data.bom.versionPlaceholderNew')}
           rules={[
-            { required: true, message: '请输入版本号' },
-            { max: 50, message: '版本号不能超过50个字符' },
+            { required: true, message: t('app.master-data.bom.versionRequired') },
+            { max: 50, message: t('app.master-data.bom.versionMax') },
           ]}
         />
         <ProFormTextArea
           name="versionDescription"
-          label="版本说明"
-          placeholder="请输入版本说明（可选）"
+          label={t('app.master-data.bom.versionDescLabel')}
+          placeholder={t('app.master-data.bom.versionDescPlaceholder')}
           fieldProps={{
             rows: 3,
             maxLength: 500,
@@ -2358,29 +2360,29 @@ const BOMPage: React.FC = () => {
         />
         <ProFormDateTimePicker
           name="effectiveDate"
-          label="生效日期"
-          placeholder="请选择生效日期（可选）"
+          label={t('app.master-data.bom.effectiveDateLabel')}
+          placeholder={t('app.master-data.bom.effectiveDatePlaceholder')}
           fieldProps={{
             style: { width: '100%' },
           }}
         />
         <ProFormSelect
           name="applyStrategy"
-          label="版本应用策略"
+          label={t('app.master-data.bom.versionStrategyLabel')}
           options={[
-            { label: '仅新工单使用新版本（推荐）', value: 'new_only' },
-            { label: '所有工单使用新版本（谨慎使用）', value: 'all' },
+            { label: t('app.master-data.bom.versionStrategyNewOnly'), value: 'new_only' },
+            { label: t('app.master-data.bom.versionStrategyAll'), value: 'all' },
           ]}
           rules={[
-            { required: true, message: '请选择版本应用策略' },
+            { required: true, message: t('app.master-data.bom.versionStrategyRequired') },
           ]}
-          extra="建议选择'仅新工单使用新版本'，避免影响正在执行的工单"
+          extra={t('app.master-data.bom.versionStrategyExtra')}
         />
       </FormModalTemplate>
 
       {/* 版本历史Modal */}
       <Modal
-        title="BOM版本历史"
+        title={t('app.master-data.bom.versionHistoryTitle')}
         open={versionHistoryModalVisible}
         onCancel={() => {
           setVersionHistoryModalVisible(false);

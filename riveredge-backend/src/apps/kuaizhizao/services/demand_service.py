@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.demand import (
     DemandCreate, DemandUpdate, DemandResponse, DemandListResponse,
     DemandItemCreate, DemandItemUpdate, DemandItemResponse,
 )
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED_VALUES
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -534,7 +534,7 @@ class DemandService(AppBaseService[Demand]):
             if not demand:
                 raise NotFoundError("需求", str(demand_id))
 
-            if demand.status != DemandStatus.AUDITED:
+            if demand.status not in (DemandStatus.AUDITED,) + LEGACY_AUDITED_VALUES:
                 raise BusinessLogicError(f"只能撤回已审核状态的需求计算，当前状态: {demand.status}")
 
             if not demand.pushed_to_computation:
@@ -553,12 +553,6 @@ class DemandService(AppBaseService[Demand]):
                         break
 
             if computation:
-                demand_ids_in_comp = computation.demand_ids if computation.demand_ids else [computation.demand_id]
-                if len(demand_ids_in_comp) > 1:
-                    raise BusinessLogicError(
-                        "该需求参与合并计算，无法单独撤回。请在需求计算页面处理合并计算。"
-                    )
-
                 has_downstream = await DocumentRelation.filter(
                     tenant_id=tenant_id,
                     source_type="demand_computation",
@@ -571,32 +565,47 @@ class DemandService(AppBaseService[Demand]):
                         "需求计算已下推工单/采购单等，无法撤回。请先处理下游单据。"
                     )
 
+                demand_ids_in_comp = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+                if len(demand_ids_in_comp) > 1:
+                    # 合并计算：无下游时作废整个计算，清除所有参与需求的计算关联
+                    logger.info("合并计算 %s 无下游，作废整单计算（含 %s 个需求）", computation.id, len(demand_ids_in_comp))
+                else:
+                    # 单需求：仅删除本需求与计算的关联
+                    pass
+
                 await DemandComputationItem.filter(
                     tenant_id=tenant_id,
                     computation_id=computation.id
                 ).delete()
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation.id).delete()
-                await DocumentRelation.filter(
-                    tenant_id=tenant_id,
-                    source_type="demand",
-                    source_id=demand_id,
-                    target_type="demand_computation",
-                    target_id=computation.id
-                ).delete()
-                await DocumentRelation.filter(
-                    tenant_id=tenant_id,
-                    source_type="demand_computation",
-                    source_id=computation.id,
-                    target_type="demand",
-                    target_id=demand_id
-                ).delete()
-
-            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
-                pushed_to_computation=False,
-                computation_id=None,
-                computation_code=None,
-                updated_at=datetime.now()
-            )
+                for rel_demand_id in demand_ids_in_comp:
+                    await DocumentRelation.filter(
+                        tenant_id=tenant_id,
+                        source_type="demand",
+                        source_id=rel_demand_id,
+                        target_type="demand_computation",
+                        target_id=computation.id
+                    ).delete()
+                    await DocumentRelation.filter(
+                        tenant_id=tenant_id,
+                        source_type="demand_computation",
+                        source_id=computation.id,
+                        target_type="demand",
+                        target_id=rel_demand_id
+                    ).delete()
+                    await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
+                        pushed_to_computation=False,
+                        computation_id=None,
+                        computation_code=None,
+                        updated_at=datetime.now()
+                    )
+            else:
+                await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+                    pushed_to_computation=False,
+                    computation_id=None,
+                    computation_code=None,
+                    updated_at=datetime.now()
+                )
 
             logger.info(f"需求 {demand_id} 已撤回需求计算")
             return await self.get_demand_by_id(tenant_id, demand_id)
@@ -913,9 +922,13 @@ class DemandService(AppBaseService[Demand]):
                 logger.warning(f"删除需求失败：租户ID不匹配。请求租户ID: {tenant_id}, 需求ID: {demand_id}, 需求所属租户ID: {demand.tenant_id}")
                 raise NotFoundError("需求", str(demand_id))
             
-            # 只能删除草稿状态的需求
-            if demand.status != DemandStatus.DRAFT:
-                raise BusinessLogicError(f"只能删除草稿状态的需求，当前状态: {demand.status}")
+            # 只能删除草稿或待审核状态的需求
+            deletable = (
+                demand.status == DemandStatus.DRAFT
+                or demand.status in (DemandStatus.PENDING_REVIEW, "PENDING_REVIEW", "PENDING", "待审核", "已提交")
+            )
+            if not deletable:
+                raise BusinessLogicError(f"只能删除草稿或待审核状态的需求，当前状态: {demand.status}")
             
             # 删除需求明细
             await DemandItem.filter(tenant_id=tenant_id, demand_id=demand_id).delete()

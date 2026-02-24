@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Button, Space, Form, Select, InputNumber, Switch, Tag, theme } from 'antd';
 import { EditOutlined, LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons';
@@ -42,13 +43,13 @@ import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, Materi
 import { CanvasPageTemplate, CANVAS_GRID_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
 
-/** 物料来源类型显示标签（用于BOM节点配置中展示物料来源） */
-const SOURCE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  Make: { label: '自制件', color: 'blue' },
-  Buy: { label: '采购件', color: 'green' },
-  Phantom: { label: '虚拟件', color: 'default' },
-  Outsource: { label: '委外件', color: 'orange' },
-  Configure: { label: '配置件', color: 'purple' },
+/** 物料来源类型 key -> color 映射（label 由 i18n 提供） */
+const SOURCE_TYPE_COLORS: Record<string, string> = {
+  Make: 'blue',
+  Buy: 'green',
+  Phantom: 'default',
+  Outsource: 'orange',
+  Configure: 'purple',
 };
 
 /** 物料来源类型对应的节点背景色（用于画板节点颜色提示，偏深色便于区分） */
@@ -89,8 +90,19 @@ MemoizedMindMap.displayName = 'MemoizedMindMap';
  */
 const { useToken } = theme;
 
+/** 物料来源类型 key -> i18n key */
+const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
+  Make: 'app.master-data.bom.sourceMake',
+  Buy: 'app.master-data.bom.sourceBuy',
+  Phantom: 'app.master-data.bom.sourcePhantom',
+  Outsource: 'app.master-data.bom.sourceOutsource',
+  Configure: 'app.master-data.bom.sourceConfigure',
+};
+
 const BOMDesignerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const getSourceTypeLabel = (key: string) => (SOURCE_TYPE_I18N_KEYS[key] ? t(SOURCE_TYPE_I18N_KEYS[key]) : key);
   const { token } = useToken();
   const navigate = useNavigate();
   const location = useLocation();
@@ -315,7 +327,7 @@ const BOMDesignerPage: React.FC = () => {
       }
 
       if (!material) {
-        messageApi.error('找不到指定的物料');
+        messageApi.error(t('app.master-data.bom.materialNotFound'));
         navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
         return;
       }
@@ -361,7 +373,7 @@ const BOMDesignerPage: React.FC = () => {
       });
     } catch (error: any) {
       console.error('BOM设计器 - 加载失败:', error);
-      messageApi.error(error.message || '加载BOM数据失败');
+      messageApi.error(error.message || t('app.master-data.bom.loadBomFailed'));
       // 即使加载失败，也显示根节点
       if (rootMaterial) {
         const data: any = {
@@ -393,7 +405,7 @@ const BOMDesignerPage: React.FC = () => {
       }, 500);
       return () => clearTimeout(timer);
     } else {
-      messageApi.warning('缺少物料ID参数');
+      messageApi.warning(t('app.master-data.bom.missingMaterialId'));
       navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
     }
   }, [materialId, version, materials, convertToMindMapData]);
@@ -462,9 +474,10 @@ const BOMDesignerPage: React.FC = () => {
       setSelectedNodeId,
       mindMapInstanceRef,
       selectedIdInGraphRef,
-      nodeConfigForm
+      nodeConfigForm,
+      t('app.master-data.bom.materialNotSelected')
     );
-  }, [nodeConfigForm]);
+  }, [nodeConfigForm, t]);
 
   /**
    * 添加同级节点
@@ -477,9 +490,10 @@ const BOMDesignerPage: React.FC = () => {
       setSelectedNodeId,
       mindMapInstanceRef,
       selectedIdInGraphRef,
-      nodeConfigForm
+      nodeConfigForm,
+      t('app.master-data.bom.materialNotSelected')
     );
-  }, [nodeConfigForm]);
+  }, [nodeConfigForm, t]);
 
   /**
    * 删除节点
@@ -490,9 +504,10 @@ const BOMDesignerPage: React.FC = () => {
       mindMapDataRef,
       handleUpdateBOM,
       setSelectedNodeId as any,
-      messageApi
+      messageApi,
+      t
     );
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   /**
    * 选择节点
@@ -522,7 +537,7 @@ const BOMDesignerPage: React.FC = () => {
       const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
         return {
           ...node,
-          value: material ? `${material.code} - ${material.name}` : '未选择物料',
+          value: material ? `${material.code} - ${material.name}` : t('app.master-data.bom.materialNotSelected'),
           material,
           quantity: values.quantity,
           unit: values.unit,
@@ -534,7 +549,7 @@ const BOMDesignerPage: React.FC = () => {
 
       if (updated) {
         handleUpdateBOM(updated);
-        messageApi.success('配置已更新');
+        messageApi.success(t('app.master-data.bom.configUpdated'));
       }
     });
   };
@@ -574,7 +589,7 @@ const BOMDesignerPage: React.FC = () => {
   const handleSave = async () => {
     if (!materialId || !rootMaterial || !mindMapData) return;
     if (bomStatus === 'approved') {
-      messageApi.warning('已审核的BOM不可直接修改，请使用「另存为新版本」');
+      messageApi.warning(t('app.master-data.bom.approvedCannotEdit'));
       return;
     }
 
@@ -582,15 +597,15 @@ const BOMDesignerPage: React.FC = () => {
       setSaving(true);
       const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
       if (items.length === 0) {
-        messageApi.warning('请至少添加一个子物料');
+        messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
         return;
       }
       const targetVersion = resolvedVersion ?? '1.0';
       await bomApi.batchImport({ items, version: targetVersion });
-      messageApi.success('BOM设计已保存');
+      messageApi.success(t('app.master-data.bom.designSaved'));
       await loadBOMData();
     } catch (error: any) {
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('app.master-data.bom.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -605,7 +620,7 @@ const BOMDesignerPage: React.FC = () => {
 
     const items = convertMindMapToBOMItems(mindMapData as MindMapNode, rootMaterial);
     if (items.length === 0) {
-      messageApi.warning('请至少添加一个子物料');
+      messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
       return;
     }
 
@@ -613,7 +628,7 @@ const BOMDesignerPage: React.FC = () => {
       setSaving(true);
       const existingBoms = await bomApi.getByMaterial(materialIdNum, resolvedVersion ?? undefined);
       if (!existingBoms?.length) {
-        messageApi.error('无法获取当前版本BOM信息，无法升版');
+        messageApi.error(t('app.master-data.bom.cannotUpgrade'));
         return;
       }
       const firstBom = existingBoms[0];
@@ -632,10 +647,10 @@ const BOMDesignerPage: React.FC = () => {
       );
       setResolvedVersion(newVersion);
 
-      messageApi.success(`已另存为新版本：${newVersion}`);
+      messageApi.success(t('app.master-data.bom.saveAsNewVersion', { version: newVersion }));
       await loadBOMData();
     } catch (error: any) {
-      messageApi.error(error.message || '另存为新版本失败');
+      messageApi.error(error.message || t('app.master-data.bom.saveAsNewVersionFailed'));
     } finally {
       setSaving(false);
     }
@@ -671,7 +686,7 @@ const BOMDesignerPage: React.FC = () => {
         }
       }
       if (!materialUuid) {
-        messageApi.warning('无法获取物料信息');
+        messageApi.warning(t('app.master-data.bom.cannotGetMaterial'));
         return;
       }
       try {
@@ -680,7 +695,7 @@ const BOMDesignerPage: React.FC = () => {
         setMaterialToEdit(detail);
         setMaterialEditModalVisible(true);
       } catch (error: any) {
-        messageApi.error(error.message || '获取物料详情失败');
+        messageApi.error(error.message || t('app.master-data.bom.getMaterialDetailFailed'));
       } finally {
         setMaterialFormLoading(false);
       }
@@ -697,7 +712,7 @@ const BOMDesignerPage: React.FC = () => {
       try {
         setMaterialFormLoading(true);
         await materialApi.update(materialToEdit.uuid, values as MaterialUpdate);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
         setMaterialEditModalVisible(false);
         setMaterialToEdit(null);
         // 刷新物料列表和主物料，以便节点显示最新来源等信息
@@ -708,7 +723,7 @@ const BOMDesignerPage: React.FC = () => {
           if (updated) setRootMaterial(updated);
         }
       } catch (error: any) {
-        messageApi.error(error.message || '更新失败');
+        messageApi.error(error.message || t('common.updateFailed'));
         throw error;
       } finally {
         setMaterialFormLoading(false);
@@ -1044,7 +1059,7 @@ const BOMDesignerPage: React.FC = () => {
                         if (newTree) {
                           handleUpdateBOM(newTree);
                         } else {
-                           messageApi.warning('无法移动到该位置（可能是因为它是当前节点的子节点）');
+                           messageApi.warning(t('app.master-data.bom.cannotMoveToPosition'));
                         }
                       }
                    }
@@ -1211,7 +1226,7 @@ const BOMDesignerPage: React.FC = () => {
                 dropTargetId = null;
                 return;
               } else {
-                 messageApi.warning('无法移动到该位置（可能是因为它是当前节点的子节点）');
+                 messageApi.warning(t('app.master-data.bom.cannotMoveToPosition'));
               }
             }
           }
@@ -1266,9 +1281,9 @@ const BOMDesignerPage: React.FC = () => {
               icon={<SaveOutlined />}
               loading={saving}
               onClick={handleSaveAsNewVersion}
-              title="已审核BOM需另存为新版本"
+              title={t('app.master-data.bom.approvedBomSaveAsNewVersion')}
             >
-              另存为新版本
+              {t('app.master-data.bom.saveAsNewVersionBtn')}
             </Button>
           ) : (
             <Button
@@ -1276,14 +1291,14 @@ const BOMDesignerPage: React.FC = () => {
               icon={<SaveOutlined />}
               loading={saving}
               onClick={handleSave}
-              title="保存"
+              title={t('app.master-data.bom.save')}
             >
-              保存
+              {t('app.master-data.bom.save')}
             </Button>
           )}
 
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
-            返回
+            {t('app.master-data.bom.back')}
           </Button>
           <Button
             icon={<PlusOutlined />}
@@ -1295,7 +1310,7 @@ const BOMDesignerPage: React.FC = () => {
               }
             }}
           >
-            添加子物料
+            {t('app.master-data.bom.addChildMaterial')}
           </Button>
           {selectedNodeId && selectedNodeId !== 'root' && (
             <Button
@@ -1303,12 +1318,12 @@ const BOMDesignerPage: React.FC = () => {
               icon={<DeleteOutlined />}
               onClick={() => handleDeleteNodeCallback(selectedNodeId)}
             >
-              删除节点
+              {t('app.master-data.bom.deleteNode')}
             </Button>
           )}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-            <span style={{ marginRight: 8 }}>主物料：{rootMaterial.code} - {rootMaterial.name}</span>
-            {(resolvedVersion ?? version) && <span>版本：{resolvedVersion ?? version}</span>}
+            <span style={{ marginRight: 8 }}>{t('app.master-data.bom.mainMaterial')}{rootMaterial.code} - {rootMaterial.name}</span>
+            {(resolvedVersion ?? version) && <span>{t('app.master-data.bom.version')}{resolvedVersion ?? version}</span>}
           </div>
         </Space>
       }
@@ -1340,52 +1355,52 @@ const BOMDesignerPage: React.FC = () => {
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${token.colorBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>操作指南</span>
+                <span>{t('app.master-data.bom.operationGuide')}</span>
                 <Space>
-                  <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>快捷键</span>
+                  <span style={{ fontSize: 10, color: '#999', fontWeight: 400 }}>{t('app.master-data.bom.shortcuts')}</span>
                   <Button
                     type="text"
                     size="small"
                     icon={<LeftOutlined />}
                     onClick={() => setGuideExpanded(false)}
-                    title="收起操作指南"
+                    title={t('app.master-data.bom.collapseGuide')}
                   />
                 </Space>
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 8, columnGap: 16, alignItems: 'center', justifyItems: 'start' }}>
                  <span style={KBD_STYLE}>F2</span>
-                 <span>编辑节点物料</span>
+                 <span>{t('app.master-data.bom.editNodeMaterial')}</span>
 
                  <span style={KBD_STYLE}>Enter</span>
-                 <span>保存(编辑时) / 添加同级(画布时)</span>
+                 <span>{t('app.master-data.bom.saveOrAddSibling')}</span>
 
                  <span style={KBD_STYLE}>Tab</span>
-                 <span>添加子节点</span>
+                 <span>{t('app.master-data.bom.addChildNode')}</span>
 
                  <span style={KBD_STYLE}>Esc</span>
-                 <span>退出编辑 / 取消选中</span>
+                 <span>{t('app.master-data.bom.exitEditOrCancel')}</span>
 
                  <span>
                    <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>Z</span>
                  </span>
-                 <span>撤销操作</span>
+                 <span>{t('app.master-data.bom.undo')}</span>
 
                  <span style={{ display: 'flex', gap: 2 }}>
                    <span style={KBD_STYLE}>↑</span><span style={KBD_STYLE}>↓</span>
                    <span style={KBD_STYLE}>←</span><span style={KBD_STYLE}>→</span>
                  </span>
-                 <span>切换选中节点</span>
+                 <span>{t('app.master-data.bom.switchNode')}</span>
 
                  <span>
                    <span style={KBD_STYLE}>Ctrl</span>+<span style={KBD_STYLE}>E</span>
                  </span>
-                 <span>编辑物料</span>
+                 <span>{t('app.master-data.bom.editMaterialShortcut')}</span>
               </div>
 
               <div style={{ marginTop: 12, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}`, color: '#666', fontSize: 11 }}>
-                 <div>• 拖拽左侧 <DragOutlined /> 手柄可移动节点</div>
-                 <div>• 快捷键需在画布聚焦时生效</div>
+                 <div>• {t('app.master-data.bom.dragHandleLeft')} <DragOutlined /> {t('app.master-data.bom.dragHandleRight')}</div>
+                 <div>• {t('app.master-data.bom.shortcutsFocusHint')}</div>
               </div>
             </div>
           ) : (
@@ -1393,7 +1408,7 @@ const BOMDesignerPage: React.FC = () => {
               type="text"
               icon={<QuestionCircleOutlined style={{ fontSize: 18 }} />}
               onClick={() => setGuideExpanded(true)}
-              title="展开操作指南"
+              title={t('app.master-data.bom.expandGuide')}
               style={{
                 position: 'absolute',
                 left: 12,
@@ -1429,9 +1444,9 @@ const BOMDesignerPage: React.FC = () => {
               border: '1px solid rgba(0,0,0,0.05)',
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 12 }}>物料来源</div>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 12 }}>{t('app.master-data.bom.materialSource')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {Object.entries(SOURCE_TYPE_LABELS).map(([key, { label }]) => (
+              {Object.keys(SOURCE_TYPE_COLORS).map((key) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span
                     style={{
@@ -1442,7 +1457,7 @@ const BOMDesignerPage: React.FC = () => {
                       border: `1px solid ${SOURCE_TYPE_NODE_COLORS[key]?.border ?? '#d9d9d9'}`,
                     }}
                   />
-                  <span>{label}</span>
+                  <span>{getSourceTypeLabel(key)}</span>
                 </div>
               ))}
             </div>
@@ -1460,33 +1475,33 @@ const BOMDesignerPage: React.FC = () => {
               flexDirection: 'column',
               gap: 16,
             }}>
-              <p style={{ color: '#999' }}>暂无BOM数据，请添加子物料</p>
+              <p style={{ color: '#999' }}>{t('app.master-data.bom.noBomData')}</p>
               <Button
                 icon={<PlusOutlined />}
                 onClick={() => handleAddChildNodeCallback('root')}
               >
-                添加子物料
+                {t('app.master-data.bom.addChildMaterial')}
               </Button>
             </div>
           )}
         </div>
       }
       rightPanel={{
-        title: selectedNode ? (selectedNode.id === 'root' ? '主物料信息' : '物料节点配置') : '节点配置',
+        title: selectedNode ? (selectedNode.id === 'root' ? t('app.master-data.bom.mainMaterialInfo') : t('app.master-data.bom.materialNodeConfig')) : t('app.master-data.bom.nodeConfig'),
         children: selectedNode ? (
           selectedNode.id === 'root' ? (
             <div>
-              <p><strong>物料编码：</strong>{rootMaterial.code}</p>
-              <p><strong>物料名称：</strong>{rootMaterial.name}</p>
+              <p><strong>{t('app.master-data.bom.materialCode')}</strong>{rootMaterial.code}</p>
+              <p><strong>{t('app.master-data.bom.materialName')}</strong>{rootMaterial.name}</p>
               <p style={{ marginTop: 12 }}>
-                <strong>物料来源：</strong>{' '}
+                <strong>{t('app.master-data.bom.materialSource')}：</strong>{' '}
                 <Space>
                   {(rootMaterial.sourceType || (rootMaterial as any).source_type) ? (
-                    <Tag color={SOURCE_TYPE_LABELS[rootMaterial.sourceType || (rootMaterial as any).source_type]?.color ?? 'default'}>
-                      {SOURCE_TYPE_LABELS[rootMaterial.sourceType || (rootMaterial as any).source_type]?.label ?? (rootMaterial.sourceType || (rootMaterial as any).source_type)}
+                    <Tag color={SOURCE_TYPE_COLORS[rootMaterial.sourceType || (rootMaterial as any).source_type] ?? 'default'}>
+                      {getSourceTypeLabel(rootMaterial.sourceType || (rootMaterial as any).source_type)}
                     </Tag>
                   ) : (
-                    <span style={{ color: '#999' }}>未设置</span>
+                    <span style={{ color: '#999' }}>{t('app.master-data.bom.notSet')}</span>
                   )}
                   <Button
                     type="link"
@@ -1494,26 +1509,26 @@ const BOMDesignerPage: React.FC = () => {
                     icon={<EditOutlined />}
                     onClick={() => openMaterialEditModal()}
                   >
-                    编辑物料
+                    {t('app.master-data.bom.editMaterial')}
                   </Button>
                 </Space>
               </p>
               <p style={{ color: '#999', fontSize: 12, marginTop: 16 }}>
-                主物料信息不可修改，如需修改请返回物料管理页面
+                {t('app.master-data.bom.mainMaterialCannotEdit')}
               </p>
             </div>
           ) : (
             <Form form={nodeConfigForm} layout="vertical">
               <Form.Item
                 name="materialId"
-                label="选择物料"
-                rules={[{ required: true, message: '请选择物料' }]}
+                label={t('app.master-data.bom.selectMaterial')}
+                rules={[{ required: true, message: t('app.master-data.bom.selectMaterialRequired') }]}
               >
 
 
                 <Select
                   ref={materialSelectRef}
-                  placeholder="请选择物料"
+                  placeholder={t('app.master-data.bom.selectMaterialPlaceholder')}
                   showSearch
                   loading={materialsLoading}
                   filterOption={(input, option) => {
@@ -1544,14 +1559,14 @@ const BOMDesignerPage: React.FC = () => {
                 />
               </Form.Item>
               {selectedMaterial && (
-                <Form.Item label="物料来源">
+                <Form.Item label={t('app.master-data.bom.materialSource')}>
                   <Space>
                     {(selectedMaterial.sourceType || (selectedMaterial as any).source_type) ? (
-                      <Tag color={SOURCE_TYPE_LABELS[selectedMaterial.sourceType || (selectedMaterial as any).source_type]?.color ?? 'default'}>
-                        {SOURCE_TYPE_LABELS[selectedMaterial.sourceType || (selectedMaterial as any).source_type]?.label ?? (selectedMaterial.sourceType || (selectedMaterial as any).source_type)}
+                      <Tag color={SOURCE_TYPE_COLORS[selectedMaterial.sourceType || (selectedMaterial as any).source_type] ?? 'default'}>
+                        {getSourceTypeLabel(selectedMaterial.sourceType || (selectedMaterial as any).source_type)}
                       </Tag>
                     ) : (
-                      <span style={{ color: '#faad14' }}>未设置，请在物料管理中配置</span>
+                      <span style={{ color: '#faad14' }}>{t('app.master-data.bom.notSetConfigInMaterial')}</span>
                     )}
                     <Button
                       type="link"
@@ -1559,29 +1574,29 @@ const BOMDesignerPage: React.FC = () => {
                       icon={<EditOutlined />}
                       onClick={() => openMaterialEditModal(selectedMaterial)}
                     >
-                      编辑物料
+                      {t('app.master-data.bom.editMaterial')}
                     </Button>
                   </Space>
                 </Form.Item>
               )}
               <Form.Item
                 name="quantity"
-                label="数量"
+                label={t('app.master-data.bom.quantity')}
                 rules={[
-                  { required: true, message: '请输入数量' },
-                  { type: 'number', min: 0.0001, message: '数量必须大于0' },
+                  { required: true, message: t('app.master-data.bom.quantityRequired') },
+                  { type: 'number', min: 0.0001, message: t('app.master-data.bom.quantityMin') },
                 ]}
               >
                 <InputNumber
-                  placeholder="请输入数量"
+                  placeholder={t('app.master-data.bom.quantityPlaceholder')}
                   precision={4}
                   style={{ width: '100%' }}
                   min={0.0001}
                 />
               </Form.Item>
-              <Form.Item name="unit" label="单位" rules={[{ required: true, message: '请选择单位' }]}>
+              <Form.Item name="unit" label={t('app.master-data.bom.unit')} rules={[{ required: true, message: t('app.master-data.bom.unitRequired') }]}>
                 <Select
-                  placeholder={selectedMaterial ? '请选择单位' : '请先选择物料'}
+                  placeholder={selectedMaterial ? t('app.master-data.bom.unitPlaceholder') : t('app.master-data.bom.selectMaterialFirst')}
                   options={unitOptionsFromMaterial}
                   disabled={!selectedMaterial}
                   allowClear={false}
@@ -1589,19 +1604,19 @@ const BOMDesignerPage: React.FC = () => {
               </Form.Item>
               <Form.Item
                 name="wasteRate"
-                label="损耗率（%）"
-                rules={[{ type: 'number', min: 0, max: 100, message: '损耗率必须在0-100之间' }]}
+                label={t('app.master-data.bom.wasteRate')}
+                rules={[{ type: 'number', min: 0, max: 100, message: t('app.master-data.bom.wasteRateRange') }]}
               >
                 <InputNumber
-                  placeholder="请输入损耗率（如：5表示5%）"
+                  placeholder={t('app.master-data.bom.wasteRatePlaceholder')}
                   precision={2}
                   style={{ width: '100%' }}
                   min={0}
                   max={100}
                 />
               </Form.Item>
-              <Form.Item name="isRequired" label="是否必选" valuePropName="checked">
-                <Switch checkedChildren="是" unCheckedChildren="否" />
+              <Form.Item name="isRequired" label={t('app.master-data.bom.isRequired')} valuePropName="checked">
+                <Switch checkedChildren={t('app.master-data.bom.yes')} unCheckedChildren={t('app.master-data.bom.no')} />
               </Form.Item>
               
               {/* Visual Focus Hint */}
@@ -1614,12 +1629,12 @@ const BOMDesignerPage: React.FC = () => {
                 fontSize: 12,
                 color: '#2f54eb'
               }}>
-                提示：编辑完成后请点击保存按钮，或重新点击画布区域以恢复快捷键功能。
+                {t('app.master-data.bom.editCompleteHint')}
               </div>
 
               <Form.Item>
                 <Space>
-                  <Button type="primary" onClick={handleSaveNodeConfig}>保存</Button>
+                  <Button type="primary" onClick={handleSaveNodeConfig}>{t('app.master-data.bom.save')}</Button>
                   <Button onClick={() => { 
                     setSelectedNodeId(null); 
                     // Clear graph selection
@@ -1633,7 +1648,7 @@ const BOMDesignerPage: React.FC = () => {
                     }
                     nodeConfigForm.resetFields(); 
                   }}>
-                    取消选择 (Esc)
+                    {t('app.master-data.bom.deselectEsc')}
                   </Button>
                 </Space>
               </Form.Item>
@@ -1641,7 +1656,7 @@ const BOMDesignerPage: React.FC = () => {
           )
         ) : (
           <div style={{ textAlign: 'center', color: '#999', padding: '40px 0' }}>
-            <p>请点击节点查看和编辑配置</p>
+            <p>{t('app.master-data.bom.clickNodeToEdit')}</p>
           </div>
         ),
       }}

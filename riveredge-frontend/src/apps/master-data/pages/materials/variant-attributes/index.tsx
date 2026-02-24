@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Tag, Space, Button, Popconfirm, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
@@ -17,6 +18,7 @@ import type { VariantAttributeDefinition } from '../../../types/variant-attribut
 import { variantAttributeApi } from '../../../services/variant-attribute';
 
 const VariantAttributesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -167,10 +169,10 @@ const VariantAttributesPage: React.FC = () => {
             历史
           </Button>
           <Popconfirm
-            title="确定要删除这个属性定义吗？"
+            title={t('common.confirmDelete')}
             onConfirm={() => handleDelete(record.uuid)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -212,7 +214,7 @@ const VariantAttributesPage: React.FC = () => {
         enum_values: detail.enum_values ? (Array.isArray(detail.enum_values) ? detail.enum_values.join(',') : detail.enum_values) : '',
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取属性定义详情失败');
+      messageApi.error(error.message || t('app.master-data.variantAttributes.getDetailFailed'));
     }
   };
 
@@ -222,10 +224,10 @@ const VariantAttributesPage: React.FC = () => {
   const handleDelete = async (uuid: string) => {
     try {
       await variantAttributeApi.delete(uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -234,15 +236,15 @@ const VariantAttributesPage: React.FC = () => {
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要删除的记录');
+      messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('common.confirmBatchDelete'),
+      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -256,21 +258,21 @@ const VariantAttributesPage: React.FC = () => {
               successCount++;
             } catch (error: any) {
               failCount++;
-              errors.push(error.message || '删除失败');
+              errors.push(error.message || t('common.deleteFailed'));
             }
           }
 
           if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
           }
           if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
           }
 
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '批量删除失败');
+          messageApi.error(error.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -298,8 +300,8 @@ const VariantAttributesPage: React.FC = () => {
           enumValues = enumValues.split(',').map((v: string) => v.trim()).filter((v: string) => v);
         }
         if (!Array.isArray(enumValues) || enumValues.length === 0) {
-          messageApi.error('枚举类型必须提供至少一个枚举值');
-          throw new Error('枚举类型必须提供至少一个枚举值');
+          messageApi.error(t('app.master-data.variantAttributes.enumValuesRequired'));
+          throw new Error(t('app.master-data.variantAttributes.enumValuesRequired'));
         }
       } else {
         enumValues = undefined;
@@ -312,16 +314,16 @@ const VariantAttributesPage: React.FC = () => {
 
       if (isEdit && currentUuid) {
         await variantAttributeApi.update(currentUuid, submitData);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await variantAttributeApi.create(submitData);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
 
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
       throw error;
     } finally {
       setFormLoading(false);

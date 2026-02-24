@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Card, message, Radio, Select, Space, Table, Steps, Empty, Modal, Input, Form } from 'antd';
 import { ArrowLeftOutlined, ArrowRightOutlined, ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,7 @@ interface OperationItem {
 }
 
 const SOPCreatePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -76,11 +78,11 @@ const SOPCreatePage: React.FC = () => {
   /** Step 1: 加载工艺路线 */
   const handleLoadRoute = async () => {
     if (type === 'material' && selectedMaterialUuids.length === 0) {
-      messageApi.warning('请至少选择一个物料');
+      messageApi.warning(t('app.master-data.sop.selectMaterial'));
       return;
     }
     if (type === 'material_group' && selectedMaterialGroupUuids.length === 0) {
-      messageApi.warning('请至少选择一个物料组');
+      messageApi.warning(t('app.master-data.sop.selectMaterialGroup'));
       return;
     }
 
@@ -103,7 +105,7 @@ const SOPCreatePage: React.FC = () => {
         setCreateRouteModalVisible(true);
       }
     } catch (e: any) {
-      messageApi.error(e?.message || '加载工艺路线失败');
+      messageApi.error(e?.message || t('app.master-data.sop.loadRouteFailed'));
     } finally {
       setRouteLoading(false);
     }
@@ -151,11 +153,11 @@ const SOPCreatePage: React.FC = () => {
     const code = newRouteCode?.trim();
     const name = newRouteName?.trim();
     if (!code || !name) {
-      messageApi.warning('请输入工艺路线编码和名称');
+      messageApi.warning(t('app.master-data.sop.enterRouteCodeName'));
       return;
     }
     if (operations.length === 0) {
-      messageApi.warning('请至少添加一个工序');
+      messageApi.warning(t('app.master-data.sop.addAtLeastOneOp'));
       return;
     }
 
@@ -182,9 +184,9 @@ const SOPCreatePage: React.FC = () => {
       setNewRouteCode('');
       setNewRouteName('');
       setCurrentStep(1);
-      messageApi.success('工艺路线已创建并绑定');
+      messageApi.success(t('app.master-data.sop.routeCreatedBound'));
     } catch (e: any) {
-      messageApi.error(e?.message || '创建工艺路线失败');
+      messageApi.error(e?.message || t('app.master-data.sop.createRouteFailed'));
     } finally {
       setNewRouteSaving(false);
     }
@@ -194,7 +196,7 @@ const SOPCreatePage: React.FC = () => {
   const handleUpdateRoute = async () => {
     if (!route) return;
     if (operations.length === 0) {
-      messageApi.warning('请至少保留一个工序');
+      messageApi.warning(t('app.master-data.sop.keepAtLeastOneOp'));
       return;
     }
     setLoading(true);
@@ -206,9 +208,9 @@ const SOPCreatePage: React.FC = () => {
         },
       } as any);
       setRoute({ ...route, operation_sequence: { sequence: operations.map((o) => o.uuid), operations } } as any);
-      messageApi.success('工艺路线已保存');
+      messageApi.success(t('app.master-data.sop.routeSaved'));
     } catch (e: any) {
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('app.master-data.sop.saveFailed'));
     } finally {
       setLoading(false);
     }
@@ -222,7 +224,7 @@ const SOPCreatePage: React.FC = () => {
       .map((uuid) => allOperations.find((o) => o.uuid === uuid))
       .filter((o): o is Operation => !!o && !operations.some((x) => x.uuid === o.uuid));
     if (toAdd.length === 0) {
-      messageApi.warning('请选择未添加的工序');
+      messageApi.warning(t('app.master-data.sop.selectUnaddedOp'));
       return;
     }
     setOperations([
@@ -254,11 +256,11 @@ const SOPCreatePage: React.FC = () => {
   /** Step 3 确认：为工序创建 SOP */
   const handleBatchCreateSops = async () => {
     if (!route) {
-      messageApi.warning('请先选择或创建工艺路线');
+      messageApi.warning(t('app.master-data.sop.selectOrCreateRoute'));
       return;
     }
     if (operations.length === 0) {
-      messageApi.warning('请至少有一个工序');
+      messageApi.warning(t('app.master-data.sop.atLeastOneOp'));
       return;
     }
 
@@ -271,9 +273,9 @@ const SOPCreatePage: React.FC = () => {
       });
       setCreatedSops(sops);
       setCurrentStep(3);
-      messageApi.success(`已创建 ${sops.length} 个 SOP 草稿`);
+      messageApi.success(t('app.master-data.sop.sopsCreated', { count: sops.length }));
     } catch (e: any) {
-      messageApi.error(e?.message || '批量创建失败');
+      messageApi.error(e?.message || t('app.master-data.sop.batchCreateFailed'));
     } finally {
       setCreateLoading(false);
     }

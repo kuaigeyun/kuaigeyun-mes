@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, Tag, Button, Space, Typography, Modal, message, Spin, Descriptions, Empty, App, theme } from 'antd';
 import { FileTextOutlined, CheckCircleOutlined, EyeOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,7 @@ const { useToken } = theme;
  * 行业模板选择页面组件
  */
 const TemplateSelectPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
@@ -43,7 +45,7 @@ const TemplateSelectPage: React.FC = () => {
       setTemplates(response.items || []);
     } catch (error: any) {
       console.error('加载模板列表失败:', error);
-      messageApi.error('加载模板列表失败，请重试');
+      messageApi.error(t('pages.init.templateSelect.loadListFailed'));
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,7 @@ const TemplateSelectPage: React.FC = () => {
       setPreviewVisible(true);
     } catch (error: any) {
       console.error('加载模板详情失败:', error);
-      messageApi.error('加载模板详情失败');
+      messageApi.error(t('pages.init.templateSelect.loadDetailFailed'));
     }
   };
 
@@ -81,20 +83,20 @@ const TemplateSelectPage: React.FC = () => {
    */
   const handleConfirmApply = async () => {
     if (!selectedTemplate || !tenantId) {
-      messageApi.error('缺少必要参数');
+      messageApi.error(t('pages.init.templateSelect.missingParams'));
       return;
     }
 
     setApplying(true);
     try {
       await applyIndustryTemplate(selectedTemplate.id, tenantId);
-      messageApi.success('模板应用成功！');
+      messageApi.success(t('pages.init.templateSelect.applySuccess'));
       setApplyVisible(false);
       // 跳转到工作台
       navigate('/system/dashboard/workplace', { replace: true });
     } catch (error: any) {
       console.error('应用模板失败:', error);
-      messageApi.error(error.message || '应用模板失败，请重试');
+      messageApi.error(error.message || t('pages.init.templateSelect.applyFailed'));
     } finally {
       setApplying(false);
     }

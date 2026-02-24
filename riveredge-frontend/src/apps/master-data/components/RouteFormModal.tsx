@@ -153,7 +153,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           if (sequenceData.length > 0) {
             const ops: OperationItem[] = sequenceData.map((item: any) =>
               typeof item === 'string'
-                ? { uuid: item, code: item.substring(0, 8), name: '工序' }
+                ? { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence') }
                 : item?.uuid
                   ? { uuid: item.uuid, code: item.code || '', name: item.name || '', description: item.description }
                   : null

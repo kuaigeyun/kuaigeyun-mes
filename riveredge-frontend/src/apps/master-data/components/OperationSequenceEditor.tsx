@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography } from 'antd';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
@@ -27,6 +28,7 @@ export interface OperationSequenceEditorProps {
 }
 
 export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value = [], onChange }) => {
+  const { t } = useTranslation();
   const [operations, setOperations] = useState<OperationItem[]>(value);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,7 +52,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         const result = await operationApi.list({ is_active: true, limit: 1000 });
         setAllOperations(result);
       } catch (error: any) {
-        message.error(error.message || '加载工序列表失败');
+        message.error(error.message || t('app.master-data.operationSequence.loadListFailed'));
       } finally {
         setLoading(false);
       }
@@ -85,14 +87,14 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const handleAddOperation = () => {
     if (!selectedOperationUuids?.length) {
-      message.warning('请选择要添加的工序');
+      message.warning(t('app.master-data.operationSequence.selectToAdd'));
       return;
     }
     const newOperations = selectedOperationUuids
       .map((uuid) => allOperations.find((op) => op.uuid === uuid))
       .filter((op): op is Operation => !!op && !operations.some((e) => e.uuid === op.uuid));
     if (newOperations.length === 0) {
-      message.warning('所选工序均已添加或未找到');
+      message.warning(t('app.master-data.operationSequence.allAddedOrNotFound'));
       return;
     }
     const newItems: OperationItem[] = newOperations.map((op) => ({
@@ -108,7 +110,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     onChange?.(updated);
     setAddModalVisible(false);
     setSelectedOperationUuids([]);
-    message.success(`成功添加 ${newItems.length} 个工序`);
+    message.success(t('app.master-data.operationSequence.addSuccess', { count: newItems.length }));
   };
 
   const handleDeleteOperation = (uuid: string) => {
@@ -125,21 +127,21 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const handleReplaceOperation = () => {
     if (!replacingOperationUuid || !replacementOperationUuid) {
-      message.warning('请选择要替换的工序');
+      message.warning(t('app.master-data.operationSequence.selectToReplace'));
       return;
     }
     if (replacingOperationUuid === replacementOperationUuid) {
-      message.warning('不能替换为相同的工序');
+      message.warning(t('app.master-data.operationSequence.cannotReplaceSame'));
       return;
     }
     if (operations.some((op) => op.uuid === replacementOperationUuid && op.uuid !== replacingOperationUuid)) {
-      message.warning('该工序已在列表中');
+      message.warning(t('app.master-data.operationSequence.alreadyInList'));
       return;
     }
     const replacingIndex = operations.findIndex((op) => op.uuid === replacingOperationUuid);
     const replacement = allOperations.find((op) => op.uuid === replacementOperationUuid);
     if (replacingIndex === -1 || !replacement) {
-      message.error('未找到要替换的工序');
+      message.error(t('app.master-data.operationSequence.replaceNotFound'));
       return;
     }
     const newOperations = [...operations];
@@ -156,7 +158,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     setReplaceModalVisible(false);
     setReplacingOperationUuid(null);
     setReplacementOperationUuid(undefined);
-    message.success('工序替换成功');
+    message.success(t('app.master-data.operationSequence.replaceSuccess'));
   };
 
   const availableOperations = allOperations.filter((op) => !operations.some((a) => a.uuid === op.uuid));
@@ -167,12 +169,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const columns = [
     {
-      title: '序号',
+      title: t('app.master-data.operationSequence.index'),
       key: 'index',
       width: 100,
       render: (_: any, __: OperationItem, index: number) => (
         <Space>
-          <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title="拖拽排序">
+          <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
             <HolderOutlined style={{ fontSize: 16 }} />
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: 6, color: '#1890ff', fontWeight: 600, fontSize: 13 }}>
@@ -182,7 +184,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       ),
     },
     {
-      title: '工序代码/名称',
+      title: t('app.master-data.operationSequence.operationCodeName'),
       key: 'operation',
       render: (_: any, record: OperationItem) => (
         <div>
@@ -192,31 +194,31 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       ),
     },
     {
-      title: '报工类型',
+      title: t('app.master-data.operationSequence.reportingType'),
       key: 'reportingType',
       width: 120,
       render: (_: any, record: OperationItem) => (
         <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
-          {record.reportingType === 'quantity' ? '按数量报工' : record.reportingType === 'status' ? '按状态报工' : '-'}
+          {record.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : record.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
         </Tag>
       ),
     },
     {
-      title: '允许跳转',
+      title: t('app.master-data.operationSequence.allowJump'),
       key: 'allowJump',
       width: 100,
       render: (_: any, record: OperationItem) => (
-        <Tag color={record.allowJump ? 'success' : 'default'}>{record.allowJump ? '允许' : '不允许'}</Tag>
+        <Tag color={record.allowJump ? 'success' : 'default'}>{record.allowJump ? t('app.master-data.operationSequence.allowJumpYes') : t('app.master-data.operationSequence.allowJumpNo')}</Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('app.master-data.operationSequence.action'),
       key: 'action',
       width: 150,
       render: (_: any, record: OperationItem) => (
         <Space onClick={(e) => e.stopPropagation()}>
-          <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(record.uuid); }}>替换</Button>
-          <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(record.uuid); }}>删除</Button>
+          <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(record.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
+          <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(record.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
         </Space>
       ),
     },
@@ -310,7 +312,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                 <DraggableRow data-row-key={op.uuid}>
                                   <td>
                                     <Space>
-                                      <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title="拖拽排序">
+                                      <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
                                         <HolderOutlined style={{ fontSize: 16 }} />
                                       </span>
                                       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: 6, color: '#1890ff', fontWeight: 600, fontSize: 13 }}>
@@ -326,16 +328,16 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                   </td>
                                   <td>
                                     <Tag color={op.reportingType === 'quantity' ? 'blue' : 'green'}>
-                                      {op.reportingType === 'quantity' ? '按数量报工' : op.reportingType === 'status' ? '按状态报工' : '-'}
+                                      {op.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : op.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
                                     </Tag>
                                   </td>
                                   <td>
-                                    <Tag color={op.allowJump ? 'success' : 'default'}>{op.allowJump ? '允许' : '不允许'}</Tag>
+                                    <Tag color={op.allowJump ? 'success' : 'default'}>{op.allowJump ? t('app.master-data.operationSequence.allowJumpYes') : t('app.master-data.operationSequence.allowJumpNo')}</Tag>
                                   </td>
                                   <td onClick={(e) => e.stopPropagation()}>
                                     <Space>
-                                      <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>替换</Button>
-                                      <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>删除</Button>
+                                      <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
+                                      <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
                                     </Space>
                                   </td>
                                 </DraggableRow>
@@ -355,7 +357,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
-                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" /> }}
+                locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>
           </SortableContext>
@@ -367,7 +369,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             pagination={false}
             size="small"
             style={{ width: '100%' }}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" /> }}
+            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
           />
         )}
         <DragOverlay>
@@ -392,13 +394,13 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1890ff'; e.currentTarget.style.backgroundColor = 'transparent'; }}
       >
         <PlusOutlined style={{ marginRight: 8 }} />
-        <span>新增工序</span>
+        <span>{t('app.master-data.operationSequence.addOperation')}</span>
       </div>
 
-      <Modal title="选择工序" open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText="确定" cancelText="取消" okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
+      <Modal title={t('app.master-data.operationSequence.selectOperation')} open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText={t('common.confirm')} cancelText={t('common.cancel')} okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
         <Select
           mode="multiple"
-          placeholder="搜索并选择工序（可多选）..."
+          placeholder={t('app.master-data.operationSequence.selectOperationPlaceholder')}
           options={availableOperations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid, title: op.description || `${op.code} - ${op.name}` }))}
           value={selectedOperationUuids}
           onChange={setSelectedOperationUuids}
@@ -408,18 +410,18 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           allowClear
           maxTagCount="responsive"
           filterOption={(input: string, option: any) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={loading ? '加载中...' : '暂无可用工序'}
+          notFoundContent={loading ? t('app.master-data.operationSequence.loading') : t('app.master-data.operationSequence.noAvailableOperations')}
         />
         {availableOperations.length === 0 && !loading && (
           <div style={{ marginTop: 16 }}>
-            <Typography.Text type="danger" style={{ fontSize: 12 }}>没有可用的工序，请先在"工序管理"中创建工序</Typography.Text>
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.createOperationFirst')}</Typography.Text>
           </div>
         )}
       </Modal>
 
-      <Modal title="替换工序" open={replaceModalVisible} onOk={handleReplaceOperation} onCancel={() => { setReplaceModalVisible(false); setReplacingOperationUuid(null); setReplacementOperationUuid(undefined); }} okText="确定" cancelText="取消" okButtonProps={{ disabled: !replacementOperationUuid || loading }}>
+      <Modal title={t('app.master-data.operationSequence.replaceOperation')} open={replaceModalVisible} onOk={handleReplaceOperation} onCancel={() => { setReplaceModalVisible(false); setReplacingOperationUuid(null); setReplacementOperationUuid(undefined); }} okText={t('common.confirm')} cancelText={t('common.cancel')} okButtonProps={{ disabled: !replacementOperationUuid || loading }}>
         <div style={{ marginBottom: 16 }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>当前工序：</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.currentOperation')}</Typography.Text>
           <div style={{ marginTop: 4 }}>
             {replacingOperationUuid && (() => {
               const currentOp = operations.find((op) => op.uuid === replacingOperationUuid);
@@ -428,7 +430,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           </div>
         </div>
         <Select
-          placeholder="搜索并选择要替换的工序..."
+          placeholder={t('app.master-data.operationSequence.selectReplacePlaceholder')}
           options={getAvailableForReplace(replacingOperationUuid).map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid, title: op.description || `${op.code} - ${op.name}` }))}
           value={replacementOperationUuid}
           onChange={setReplacementOperationUuid}
@@ -437,11 +439,11 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           showSearch
           allowClear
           filterOption={(input: string, option: any) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={loading ? '加载中...' : '暂无可用工序'}
+          notFoundContent={loading ? t('app.master-data.operationSequence.loading') : t('app.master-data.operationSequence.noAvailableOperations')}
         />
         {getAvailableForReplace(replacingOperationUuid).length === 0 && !loading && (
           <div style={{ marginTop: 16 }}>
-            <Typography.Text type="danger" style={{ fontSize: 12 }}>没有可用的工序，请先在"工序管理"中创建工序</Typography.Text>
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.createOperationFirst')}</Typography.Text>
           </div>
         )}
       </Modal>

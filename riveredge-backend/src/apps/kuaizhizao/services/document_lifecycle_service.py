@@ -13,6 +13,9 @@ from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_AUDITED
 
 # ---------------------------------------------------------------------------
 # 销售订单生命周期节点（后端单独控制）
+# 各阶段含义：草稿→待审核→已审核→已生效→执行中→已交货→已完成
+# - 已生效：订单已确认/已下推，可开始执行，但尚未开始生产（无工单、交货0）
+# - 执行中：已开始执行（BOM/需求/工单/生产/交货进行中）
 # ---------------------------------------------------------------------------
 SALES_ORDER_MAIN_STAGES = [
     {"key": "draft", "label": "草稿"},
@@ -57,7 +60,7 @@ def _is_rejected(review_status: Optional[str]) -> bool:
 
 def _is_approved(review_status: Optional[str]) -> bool:
     r = _norm(review_status)
-    return r in ("APPROVED", "审核通过", "通过", "已通过")
+    return r in ("APPROVED", "审核通过", "通过", "已通过", "已审核")
 
 
 def _is_draft(status: Optional[str]) -> bool:
@@ -138,6 +141,7 @@ def get_sales_order_lifecycle(
             "status": "exception",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
             "sub_stages": None,
+            "next_step_suggestions": ["修改订单后重新提交审核"],
         }
     if _is_cancelled(status):
         return {
@@ -146,6 +150,7 @@ def get_sales_order_lifecycle(
             "status": "exception",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft", is_exception=True),
             "sub_stages": None,
+            "next_step_suggestions": [],
         }
 
     if _is_draft(status):
@@ -155,14 +160,17 @@ def get_sales_order_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "draft"),
             "sub_stages": None,
+            "next_step_suggestions": ["提交审核"],
         }
-    if _is_pending_review(status):
+    # 以 review_status 为准：若已审核通过则显示已审核，避免 status 未同步导致 lifecycle 显示待审核
+    if _is_pending_review(status) and not _is_approved(review_status):
         return {
             "current_stage_key": "pending_review",
             "current_stage_name": "待审核",
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "pending_review"),
             "sub_stages": None,
+            "next_step_suggestions": ["审核通过", "驳回"],
         }
 
     effective = _is_approved(review_status) and (
@@ -175,6 +183,7 @@ def get_sales_order_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
             "sub_stages": None,
+            "next_step_suggestions": ["下推需求计算"],
         }
 
     if effective and delivery >= 100 and invoice >= 100:
@@ -184,6 +193,7 @@ def get_sales_order_lifecycle(
             "status": "success",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "completed"),
             "sub_stages": None,
+            "next_step_suggestions": [],
         }
     if effective and delivery >= 100 and invoice < 100:
         return {
@@ -192,7 +202,22 @@ def get_sales_order_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "delivered"),
             "sub_stages": None,
+            "next_step_suggestions": ["下推销售发票"],
         }
+    # 已生效：订单已确认/已下推，但尚未开始执行（无工单、无交货进度）
+    if effective and delivery <= 0:
+        has_wo = False
+        if items:
+            has_wo = any(getattr(it, "work_order_id", None) for it in items)
+        if not pushed and not has_wo:
+            return {
+                "current_stage_key": "effective",
+                "current_stage_name": "已生效",
+                "status": "normal",
+                "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "effective"),
+                "sub_stages": None,
+                "next_step_suggestions": ["前往需求计算执行 MRP", "建立工单"],
+            }
     if effective and delivery < 100:
         has_wo = False
         if items:
@@ -215,20 +240,25 @@ def get_sales_order_lifecycle(
                 if ss["status"] == "pending":
                     ss["status"] = "active"
                     break
+        # 根据当前 active 子阶段给出建议
+        exec_suggestions = {
+            "bom_check": ["完成 BOM 检查"],
+            "demand_compute": ["执行需求计算（MRP）"],
+            "material_ready": ["确认物料齐套"],
+            "work_order_create": ["建立工单"],
+            "work_order_exec": ["执行工单生产"],
+            "product_inbound": ["成品入库"],
+            "sales_delivery": ["销售出库/交货"],
+        }
+        active_key = next((s["key"] for s in sub_stages if s["status"] == "active"), None)
+        suggestions = exec_suggestions.get(active_key, ["推进执行进度"])
         return {
             "current_stage_key": "executing",
             "current_stage_name": "执行中",
             "status": "normal",
             "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "executing"),
             "sub_stages": sub_stages,
-        }
-    if effective:
-        return {
-            "current_stage_key": "effective",
-            "current_stage_name": "已生效",
-            "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "effective"),
-            "sub_stages": None,
+            "next_step_suggestions": suggestions,
         }
 
     return {
@@ -237,6 +267,7 @@ def get_sales_order_lifecycle(
         "status": "normal",
         "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "audited"),
         "sub_stages": None,
+        "next_step_suggestions": ["下推需求计算"],
     }
 
 
@@ -263,6 +294,7 @@ def get_demand_lifecycle(
             "status": "exception",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "rejected", is_exception=True),
             "sub_stages": None,
+            "next_step_suggestions": ["修改后重新提交上游审核"],
         }
 
     # 需求由上游审核通过自动生成，无草稿阶段；若数据为草稿（极少手工创建），展示为待审核
@@ -273,6 +305,7 @@ def get_demand_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "pending_review"),
             "sub_stages": None,
+            "next_step_suggestions": ["等待上游审核"],
         }
 
     if _is_audited(status) and pushed:
@@ -282,6 +315,7 @@ def get_demand_lifecycle(
             "status": "success",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "pushed"),
             "sub_stages": None,
+            "next_step_suggestions": [],
         }
     if _is_audited(status):
         return {
@@ -290,6 +324,7 @@ def get_demand_lifecycle(
             "status": "normal",
             "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
             "sub_stages": None,
+            "next_step_suggestions": ["下推需求计算"],
         }
 
     return {
@@ -298,4 +333,5 @@ def get_demand_lifecycle(
         "status": "normal",
         "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
         "sub_stages": None,
+        "next_step_suggestions": ["下推需求计算"],
     }

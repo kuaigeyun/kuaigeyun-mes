@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { App, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider, InputNumber } from 'antd';
 import { CheckOutlined, PlayCircleOutlined, PauseOutlined, CloseOutlined } from '@ant-design/icons';
@@ -41,6 +42,7 @@ const SchemaField = createSchemaField({
  * eSOP 执行页面组件
  */
 const SOPExecutionPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -62,7 +64,7 @@ const SOPExecutionPage: React.FC = () => {
     if (executionUuid) {
       loadExecutionData();
     } else {
-      messageApi.warning('缺少执行实例UUID参数');
+      messageApi.warning(t('app.master-data.sop.missingExecutionUuid'));
       navigate('/apps/master-data/process/sop');
     }
   }, [executionUuid]);
@@ -104,7 +106,7 @@ const SOPExecutionPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '加载执行数据失败');
+      messageApi.error(error.message || t('app.master-data.sop.loadExecutionFailed'));
       navigate('/apps/master-data/process/sop');
     } finally {
       setLoading(false);
@@ -187,7 +189,7 @@ const SOPExecutionPage: React.FC = () => {
    */
   const handleCompleteNode = async () => {
     if (!execution || !execution.currentNodeId) {
-      messageApi.warning('当前没有可完成的节点');
+      messageApi.warning(t('app.master-data.sop.noCompletableNode'));
       return;
     }
     
@@ -205,14 +207,14 @@ const SOPExecutionPage: React.FC = () => {
       
       await sopExecutionApi.completeNode(execution.uuid, request);
       
-      messageApi.success('节点已完成，正在流转到下一个节点...');
+      messageApi.success(t('app.master-data.sop.nodeCompleted'));
       
       // 重新加载数据
       setTimeout(() => {
         loadExecutionData();
       }, 1000);
     } catch (error: any) {
-      messageApi.error(error.message || '完成节点失败');
+      messageApi.error(error.message || t('app.master-data.sop.completeNodeFailed'));
     } finally {
       setSubmitting(false);
     }

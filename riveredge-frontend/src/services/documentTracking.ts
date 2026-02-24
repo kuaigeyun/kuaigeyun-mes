@@ -4,6 +4,13 @@
 
 import { apiRequest } from './api';
 
+export interface DocumentTrackingFieldChange {
+  field: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
 export interface DocumentTrackingTimelineItem {
   type: string;
   at?: string;
@@ -13,8 +20,12 @@ export interface DocumentTrackingTimelineItem {
   from_state?: string;
   to_state?: string;
   reason?: string;
+  /** 是否自动审核（状态变更为审核通过时） */
+  is_auto_approve?: boolean;
   result?: string;
   comment?: string;
+  changed_fields?: string[];
+  field_changes?: DocumentTrackingFieldChange[];
   target_type?: string;
   target_id?: number;
   target_code?: string;

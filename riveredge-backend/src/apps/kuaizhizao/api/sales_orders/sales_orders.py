@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderItemCreate,
     SalesOrderItemUpdate,
     SalesOrderItemResponse,
+    SalesOrderRemindCreate,
 )
 
 # 初始化服务实例
@@ -59,6 +60,14 @@ async def create_sales_order(
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建销售订单失败")
 
 
+# 销售订单可排序字段白名单（防止注入）
+SALES_ORDER_SORTABLE_FIELDS = frozenset({
+    "order_code", "customer_name", "order_date", "delivery_date",
+    "total_quantity", "total_amount", "status", "review_status",
+    "created_at", "updated_at",
+})
+
+
 @router.get("", response_model=SalesOrderListResponse, summary="获取销售订单列表")
 async def list_sales_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -67,14 +76,22 @@ async def list_sales_orders(
     review_status: Optional[str] = Query(None, description="审核状态"),
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     获取销售订单列表
     
-    支持按状态、审核状态、日期范围筛选。
+    支持按状态、审核状态、日期范围筛选，支持多字段排序。
     """
+    # 校验 order_by 防止注入
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_ORDER_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     try:
         result = await sales_order_service.list_sales_orders(
             tenant_id=tenant_id,
@@ -84,6 +101,7 @@ async def list_sales_orders(
             review_status=review_status,
             start_date=start_date,
             end_date=end_date,
+            order_by=safe_order_by,
         )
         return result
     except Exception as e:
@@ -261,6 +279,25 @@ async def reject_sales_order(
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回销售订单失败")
 
 
+@router.get("/{sales_order_id}/push-to-computation/preview", response_model=Dict[str, Any], summary="下推需求计算预览")
+async def preview_push_sales_order_to_computation(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推需求计算预览：返回将执行的操作，不实际下推"""
+    try:
+        result = await sales_order_service.preview_push_sales_order_to_computation(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/{sales_order_id}/push-to-computation", response_model=Dict[str, Any], summary="下推销售订单到需求计算")
 async def push_sales_order_to_computation(
     sales_order_id: int = Path(..., description="销售订单ID"),
@@ -286,6 +323,129 @@ async def push_sales_order_to_computation(
     except Exception as e:
         logger.error(f"下推销售订单到需求计算失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售订单到需求计算失败")
+
+
+@router.get("/{sales_order_id}/push-to-production-plan/preview", response_model=Dict[str, Any], summary="直推生产计划预览")
+async def preview_push_sales_order_to_production_plan(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """直推生产计划预览：返回将生成的生产计划明细，不实际创建"""
+    try:
+        result = await sales_order_service.preview_push_sales_order_to_production_plan(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{sales_order_id}/push-to-production-plan", response_model=Dict[str, Any], summary="直推销售订单到生产计划")
+async def push_sales_order_to_production_plan(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    直推销售订单到生产计划（跳过需求计算）
+    
+    订单明细直接转为生产计划明细，不要求BOM，原材料由用户自行计算采购。
+    """
+    try:
+        result = await sales_order_service.push_sales_order_to_production_plan(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"直推生产计划失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="直推生产计划失败")
+
+
+@router.get("/{sales_order_id}/push-to-work-order/preview", response_model=Dict[str, Any], summary="直推工单预览")
+async def preview_push_sales_order_to_work_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """直推工单预览：返回将生成的工单列表，不实际创建"""
+    try:
+        result = await sales_order_service.preview_push_sales_order_to_work_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{sales_order_id}/push-to-work-order", response_model=Dict[str, Any], summary="直推销售订单到工单")
+async def push_sales_order_to_work_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    直推销售订单到工单（跳过需求计算）
+    
+    订单明细直接转为工单，不要求BOM，原材料由用户自行计算采购。
+    """
+    try:
+        result = await sales_order_service.push_sales_order_to_work_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"直推工单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="直推工单失败")
+
+
+@router.post("/{sales_order_id}/remind", response_model=Dict[str, Any], summary="发送销售订单提醒")
+async def create_sales_order_reminder(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    data: SalesOrderRemindCreate = ...,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    发送销售订单提醒
+    
+    选择提醒对象、提醒操作，填写备注后发送站内信给指定用户。
+    """
+    try:
+        result = await sales_order_service.create_sales_order_reminder(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            recipient_user_uuid=data.recipient_user_uuid,
+            action_type=data.action_type,
+            remarks=data.remarks,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"发送提醒失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发送提醒失败")
 
 
 @router.post("/{sales_order_id}/withdraw-from-computation", response_model=SalesOrderResponse, summary="撤回销售订单的需求计算")
@@ -338,6 +498,56 @@ async def confirm_sales_order(
     except Exception as e:
         logger.error(f"确认销售订单失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认销售订单失败")
+
+
+@router.post("/{sales_order_id}/push-to-shipment-notice", response_model=Dict[str, Any], summary="下推到发货通知单")
+async def push_sales_order_to_shipment_notice(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到发货通知单
+    """
+    try:
+        result = await sales_order_service.push_sales_order_to_shipment_notice(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"下推发货通知单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推发货通知单失败")
+
+
+@router.post("/{sales_order_id}/push-to-invoice", response_model=Dict[str, Any], summary="下推到销售发票")
+async def push_sales_order_to_invoice(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到销售发票（销项发票）
+    """
+    try:
+        result = await sales_order_service.push_sales_order_to_invoice(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"下推销售发票失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售发票失败")
 
 
 @router.post("/{sales_order_id}/push-to-delivery", summary="下推到销售出库")

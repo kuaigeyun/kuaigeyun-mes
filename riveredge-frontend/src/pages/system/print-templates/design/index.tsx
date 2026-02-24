@@ -6,6 +6,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Form, Input, InputNumber, Modal, Select, Space, Typography, Upload, theme } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, SaveOutlined, SettingOutlined, FilePdfOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import PdfmeDesigner, { PdfmeDesignerRef } from '../../../../components/pdfme-doc/designer';
@@ -59,6 +60,7 @@ function isTemplateEmpty(template: Template): boolean {
 const { useToken } = theme;
 
 const PrintTemplateDesignPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const { uuid } = useParams<{ uuid: string }>();
@@ -119,7 +121,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       // Title update is handled by CanvasPageTemplate via functionalTitle prop
     } catch (error) {
       console.error('[Print Template Design] 加载失败:', error);
-      messageApi.error('加载模板失败');
+      messageApi.error(t('pages.system.printTemplatesDesign.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -134,9 +136,9 @@ const PrintTemplateDesignPage: React.FC = () => {
         content,
         config: templateType ? { document_type: templateType } : undefined,
       });
-      messageApi.success('保存成功');
+      messageApi.success(t('pages.system.printTemplatesDesign.saveSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('pages.system.printTemplatesDesign.saveFailed'));
     }
   };
 
@@ -186,7 +188,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       const values = await pageSettingsForm.validateFields(fieldsToValidate);
       const currentTemplate = editorRef.current?.getTemplate() ?? initialTemplate;
       if (!currentTemplate) {
-        messageApi.error('模板尚未准备就绪');
+        messageApi.error(t('pages.system.printTemplatesDesign.notReady'));
         return;
       }
       let nextTemplate: Template;
@@ -222,7 +224,7 @@ const PrintTemplateDesignPage: React.FC = () => {
           staticSchema: staticSchema.length > 0 ? staticSchema : undefined,
         });
       } else if (values.basePdfSource === 'custom' && isBlankPdf(currentTemplate.basePdf)) {
-        messageApi.warning('请选择要上传的 PDF 文件');
+        messageApi.warning(t('pages.system.printTemplatesDesign.selectPdf'));
         return;
       } else {
         nextTemplate = currentTemplate;
@@ -232,7 +234,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       setInitialTemplate(nextTemplate);
       setPageSettingsOpen(false);
       setUploadedBasePdfFile(null);
-      messageApi.success('页面设置已应用');
+      messageApi.success(t('pages.system.printTemplatesDesign.pageSettingsApplied'));
     } catch (e) {
       // 表单校验失败
     }
@@ -243,7 +245,7 @@ const PrintTemplateDesignPage: React.FC = () => {
     const template = editorRef.current.getTemplate();
     const hasSchemas = template.schemas?.some((page) => page && page.length > 0);
     if (!hasSchemas) {
-      messageApi.warning('暂无内容可预览');
+      messageApi.warning(t('pages.system.printTemplatesDesign.noPreview'));
       return;
     }
     setPreviewTemplate(template);
@@ -307,11 +309,11 @@ const PrintTemplateDesignPage: React.FC = () => {
       nextTemplate.schemas[0].push(newSchema);
       editorRef.current.updateTemplate(nextTemplate);
       updateUsedKeys(nextTemplate);
-      messageApi.success(`已添加字段: ${item.label}`);
+      messageApi.success(t('pages.system.printTemplatesDesign.fieldAdded', { label: item.label }));
     } catch (e: any) {
-      messageApi.error('添加字段失败: ' + e.message);
+      messageApi.error(t('pages.system.printTemplatesDesign.addFieldFailed', { message: e.message }));
     }
-  }, [messageApi, updateUsedKeys]);
+  }, [t, messageApi, updateUsedKeys]);
 
   const filteredVariables = useMemo(() => 
     availableVariables.filter(v => 

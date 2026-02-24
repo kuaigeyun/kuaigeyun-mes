@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, message, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
@@ -29,6 +30,7 @@ import {
  * 模具管理列表页面组件
  */
 const MoldListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -86,7 +88,7 @@ const MoldListPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取模具详情失败');
+      messageApi.error(error.message || t('pages.system.molds.getDetailFailed'));
     }
   };
 
@@ -100,7 +102,7 @@ const MoldListPage: React.FC = () => {
       const detail = await getMoldByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取模具详情失败');
+      messageApi.error(error.message || t('pages.system.molds.getDetailFailed'));
     } finally {
       setDetailLoading(false);
     }
@@ -112,10 +114,10 @@ const MoldListPage: React.FC = () => {
   const handleDelete = async (record: Mold) => {
     try {
       await deleteMold(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -124,13 +126,13 @@ const MoldListPage: React.FC = () => {
    */
   const handleBatchDelete = (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请先选择要删除的模具');
+      messageApi.warning(t('pages.system.molds.selectToDelete'));
       return;
     }
     Modal.confirm({
-      title: `确定要删除选中的 ${keys.length} 个模具吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pages.system.molds.confirmDeleteContent', { count: keys.length }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -145,14 +147,14 @@ const MoldListPage: React.FC = () => {
             }
           }
           if (fail > 0) {
-            messageApi.warning(`删除完成：成功 ${done} 个，失败 ${fail} 个`);
+            messageApi.warning(t('pages.system.molds.batchDeletePartial', { done, fail }));
           } else {
-            messageApi.success(`已删除 ${done} 个模具`);
+            messageApi.success(t('pages.system.molds.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
+          messageApi.error(error?.message || t('common.batchDeleteFailed'));
         }
       },
     });
@@ -167,16 +169,16 @@ const MoldListPage: React.FC = () => {
       
       if (isEdit && currentMoldUuid) {
         await updateMold(currentMoldUuid, values as UpdateMoldData);
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await createMold(values as CreateMoldData);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error; // 重新抛出错误，让 FormModalTemplate 处理
     } finally {
       setFormLoading(false);
@@ -310,7 +312,7 @@ const MoldListPage: React.FC = () => {
             编辑
           </Button>
           <Popconfirm
-            title="确定要删除这个模具吗？"
+            title={t('pages.system.molds.confirmDeleteOne')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -370,7 +372,7 @@ const MoldListPage: React.FC = () => {
                 items = items.filter((d) => keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -380,9 +382,9 @@ const MoldListPage: React.FC = () => {
               a.download = `molds-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           pagination={{
