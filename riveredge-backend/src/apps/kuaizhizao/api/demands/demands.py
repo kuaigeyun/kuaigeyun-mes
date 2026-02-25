@@ -121,6 +121,7 @@ async def list_demands(
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     demand_type: Optional[str] = Query(None, description="需求类型（sales_forecast 或 sales_order）"),
     demand_status: Optional[str] = Query(None, description="需求状态", alias="status"),
+    pushed_to_computation: Optional[bool] = Query(None, description="是否已下推计算"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS 或 MTO）"),
     review_status: Optional[str] = Query(None, description="审核状态"),
     current_user: User = Depends(get_current_user),
@@ -137,6 +138,8 @@ async def list_demands(
             filters['demand_type'] = demand_type
         if demand_status:
             filters['status'] = demand_status
+        if pushed_to_computation is not None:
+            filters['pushed_to_computation'] = pushed_to_computation
         if business_mode:
             filters['business_mode'] = business_mode
         if review_status:
@@ -246,8 +249,9 @@ async def update_demand(
 ):
     """
     更新需求
-    
-    只能更新草稿状态的需求。
+
+    草稿状态：可修改全部字段。
+    非草稿状态（与上游同步）：仅支持修改优先级(priority)和备注(notes)，用于排产等场景。
     """
     try:
         result = await demand_service.update_demand(

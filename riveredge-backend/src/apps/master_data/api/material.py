@@ -412,6 +412,29 @@ async def revise_bom(
 
 
 
+@router.get("/bom/batch-check", summary="批量检查物料是否有BOM")
+async def batch_check_has_bom(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_ids: List[int] = Query(..., description="物料ID列表"),
+    only_active: bool = Query(True, description="是否只检查已审核的BOM"),
+) -> Dict[str, bool]:
+    """
+    批量检查物料是否有BOM配置（用于销售订单明细视图等批量检查场景）
+
+    - **material_ids**: 物料ID列表（必填）
+    - **only_active**: 是否只检查已审核的BOM（默认：true）
+
+    返回：{ "1": true, "2": false, "3": true }（物料ID -> 是否有BOM）
+    """
+    result = await MaterialService.batch_check_has_bom(
+        tenant_id=tenant_id,
+        material_ids=material_ids,
+        only_active=only_active
+    )
+    return {str(k): v for k, v in result.items()}
+
+
 @router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")
 async def get_bom_by_material(
     material_id: int,

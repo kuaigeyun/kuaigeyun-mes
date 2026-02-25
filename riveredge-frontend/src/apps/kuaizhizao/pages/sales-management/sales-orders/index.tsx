@@ -18,6 +18,10 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniImport } from '../../../../../components/uni-import';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
+import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
+import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
+import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
+import SalesOrderGanttChart from '../../../components/SalesOrderGanttChart';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
@@ -71,75 +75,24 @@ import { getUserList, type User } from '../../../../../services/user';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 
-/** 展开行：订单明细子表格 */
-const OrderItemsExpandedRow: React.FC<{ orderId: number }> = ({ orderId }) => {
-  const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<SalesOrderItem[]>([]);
-  useEffect(() => {
-    setLoading(true);
-    getSalesOrder(orderId, true)
-      .then((res) => {
-        setItems(res?.items || []);
-      })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
-  }, [orderId]);
-  if (loading) {
-    return (
-      <div style={{ padding: 24, textAlign: 'center' }}>
-        <Spin size="small" />
-      </div>
-    );
-  }
-  const itemColumns = [
-    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', key: 'material_spec', width: 100, ellipsis: true },
-    { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', key: 'material_unit', width: 60 },
-    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'required_quantity', key: 'required_quantity', width: 90, align: 'right' as const },
-    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', key: 'unit_price', width: 90, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
-    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', key: 'tax_rate', width: 70, align: 'right' as const, render: (val: number) => val ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', key: 'item_amount', width: 100, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
-    { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
-  ];
-  return (
-    <div
-      className="sales-order-items-subtable"
-      style={{
-        padding: '0',
-        overflow: 'hidden'
-      }}
-    >
-      <style>{`
-        .sales-order-items-subtable .ant-table-cell {
-          margin-inline: 0 !important;
-        }
-        .sales-order-items-subtable .ant-table-wrapper {
-          overflow-x: hidden !important;
-        }
-        .sales-order-items-subtable .ant-table-thead > tr > th {
-          background-color: var(--ant-color-fill-alter) !important;
-          font-weight: 600;
-        }
-        .sales-order-items-subtable .ant-table {
-          border-top: 1px solid var(--ant-color-border);
-        }
-        .sales-order-items-subtable .ant-table-tbody > tr > td {
-          border-bottom: 1px solid var(--ant-color-border);
-        }
-      `}</style>
-      <Table
-        size="small"
-        columns={itemColumns}
-        dataSource={items}
-        rowKey={(r) => r.id ?? r.material_id ?? String(Math.random())}
-        pagination={false}
-      />
-    </div>
-  );
+/** 销售明细行（订单 + 明细合并，用于平铺表格） */
+type SalesOrderItemRow = SalesOrderItem & {
+  _rowKey: string;
+  sales_order_id: number;
+  order_code?: string;
+  customer_name?: string;
+  order_date?: string;
+  order_delivery_date?: string;
+  total_quantity?: number;
+  total_amount?: number;
+  delivery_progress?: number;
+  status?: string;
+  review_status?: string;
+  pushed_to_computation?: boolean;
+  lifecycle?: Record<string, unknown>;
+  /** 生命周期阶段名，用于卡片分组 */
+  _lifecycleStage?: string;
 };
 
 const SalesOrdersPage: React.FC = () => {
@@ -148,9 +101,16 @@ const SalesOrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
+  /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
+  const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
+  const invalidateOrdersCache = () => { lastOrdersCacheRef.current = null; };
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
+  // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('detailTable');
+  const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
 
   /**
    * 加载业务配置，判断是否开启审核
@@ -440,16 +400,18 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.salesOrder.selectToDelete'));
       return;
     }
+    const orderIds = [...new Set(keys.map((k) => rowKeyToOrderIdRef.current.get(String(k))).filter((id): id is number => id != null))];
+    const count = orderIds.length;
 
     modalApi.confirm({
       title: t('app.kuaizhizao.salesOrder.confirmDelete'),
-      content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count: keys.length }),
+      content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count }),
       okText: t('app.kuaizhizao.salesOrder.okDelete'),
       okType: 'danger',
       cancelText: t('common.cancel'),
       onOk: async () => {
         try {
-          const ids = keys.map(k => Number(k));
+          const ids = orderIds;
           const res = await bulkDeleteSalesOrders(ids);
 
           if (res.failed_count === 0) {
@@ -462,6 +424,7 @@ const SalesOrdersPage: React.FC = () => {
               // 可以选择显示更详细的错误弹窗
             }
           }
+          invalidateOrdersCache();
           actionRef.current?.reload();
           // 清除选中项
           if (actionRef.current?.clearSelected) {
@@ -488,6 +451,7 @@ const SalesOrdersPage: React.FC = () => {
         try {
           await deleteSalesOrder(id);
           messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: 1 }));
+          invalidateOrdersCache();
           actionRef.current?.reload();
           if (currentSalesOrder?.id === id) {
             setDrawerVisible(false);
@@ -517,6 +481,7 @@ const SalesOrdersPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(t('app.kuaizhizao.salesOrder.syncSuccess', { count: successCount }));
+      invalidateOrdersCache();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
@@ -662,6 +627,7 @@ const SalesOrdersPage: React.FC = () => {
 
       setModalVisible(false);
       setPreviewCode(null);
+      invalidateOrdersCache();
       actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {
         refreshDrawerOrder(orderId);
@@ -755,7 +721,7 @@ const SalesOrdersPage: React.FC = () => {
     showPushPreviewModal(
       () => previewPushSalesOrderToComputation(id),
       () => pushSalesOrderToComputation(id),
-      () => { refreshDrawerOrder(id); actionRef.current?.reload(); },
+      () => refreshDrawerOrder(id),
       id,
     );
   };
@@ -799,7 +765,7 @@ const SalesOrdersPage: React.FC = () => {
     showPushPreviewModal(
       () => previewPushSalesOrderToProductionPlan(id),
       () => pushSalesOrderToProductionPlan(id),
-      () => { refreshDrawerOrder(id); actionRef.current?.reload(); },
+      () => refreshDrawerOrder(id),
       id,
     );
   };
@@ -809,7 +775,7 @@ const SalesOrdersPage: React.FC = () => {
     showPushPreviewModal(
       () => previewPushSalesOrderToWorkOrder(id),
       () => pushSalesOrderToWorkOrder(id),
-      () => { refreshDrawerOrder(id); actionRef.current?.reload(); },
+      () => refreshDrawerOrder(id),
       id,
     );
   };
@@ -873,6 +839,7 @@ const SalesOrdersPage: React.FC = () => {
         // 忽略
       }
     }
+    invalidateOrdersCache();
     actionRef.current?.reload();
   };
 
@@ -975,6 +942,7 @@ const SalesOrdersPage: React.FC = () => {
 
       if (failureCount === 0) {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
+        invalidateOrdersCache();
         actionRef.current?.reload();
       } else {
         messageApi.warning(
@@ -992,6 +960,7 @@ const SalesOrdersPage: React.FC = () => {
             width: 600,
           });
         }
+        invalidateOrdersCache();
         actionRef.current?.reload();
       }
     } catch (error: any) {
@@ -1041,41 +1010,12 @@ const SalesOrdersPage: React.FC = () => {
     messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
   };
 
-  // 表格列（仅订单行，明细在展开行中显示）。以 lifecycle 为唯一状态展示入口。可排序字段：order_code, customer_name, order_date, delivery_date, total_quantity, total_amount, created_at, updated_at
-  const columns: ProColumns<SalesOrder>[] = [
-    {
-      title: t('app.kuaizhizao.salesOrder.orderCode'),
-      dataIndex: 'order_code',
-      width: 150,
-      fixed: 'left' as const,
-      ellipsis: true,
-      sorter: true,
-      render: (_, record) => (
-        <Space size={4}>
-          <span>{record.order_code ?? '-'}</span>
-          <Tooltip title={t('field.invitationCode.copy')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<CopyOutlined style={{ fontSize: 12 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                const text = record.order_code ?? '';
-                if (text) {
-                  navigator.clipboard.writeText(text).then(
-                    () => messageApi.success(t('common.copySuccess')),
-                    () => messageApi.error(t('common.copyFailed'))
-                  );
-                }
-              }}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
+  // 订单视图列（一行一单，可展开明细）
+  const orderColumns: ProColumns<SalesOrder>[] = [
+    { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 150, fixed: 'left' as const, ellipsis: true, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true },
-    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, fieldProps: { style: { width: '100%' } } },
-    { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date', width: 120, sorter: true, fieldProps: { style: { width: '100%' } } },
+    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true },
+    { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date', width: 120, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource="sales_order" value={r.total_amount} /> },
     {
@@ -1085,19 +1025,13 @@ const SalesOrdersPage: React.FC = () => {
       render: (_: unknown, record: SalesOrder) => {
         const p = record.delivery_progress ?? 0;
         const percent = Math.min(100, Math.max(0, Number(p)));
-        return (
-          <Tooltip title={`${Math.round(percent)}%`}>
-            <Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} />
-          </Tooltip>
-        );
+        return <Tooltip title={`${Math.round(percent)}%`}><Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} /></Tooltip>;
       },
     },
-    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 160, sorter: true, hideInSearch: true },
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: 'lifecycle',
       width: 100,
-      fixed: 'right' as const,
       valueType: 'select',
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.salesOrder.lifecycleDraft') },
@@ -1113,7 +1047,6 @@ const SalesOrdersPage: React.FC = () => {
       render: (_: unknown, record: SalesOrder) => {
         const lifecycle = getSalesOrderLifecycle(record);
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        // 相邻节点使用差别较大的颜色，便于区分
         const colorMap: Record<string, string> = {
           草稿: 'default',
           待审核: 'warning',
@@ -1141,7 +1074,6 @@ const SalesOrdersPage: React.FC = () => {
           {(() => {
             const lifecycle = getSalesOrderLifecycle(record);
             const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
-            const isDraft = (lifecycle.stageName ?? record.status) === '草稿' || record.status === SalesOrderStatus.DRAFT;
             const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW';
             return (
               <>
@@ -1170,18 +1102,9 @@ const SalesOrdersPage: React.FC = () => {
             autoApproveWhenSubmit={!auditEnabled}
             theme="link"
             size="small"
-            actions={{
-               submit: async (id) => {
-                  // 后端在 audit_required=False 时 submit 内部已自动审核，无需再调用 approve，否则会重复记录状态变更
-                  return submitSalesOrder(id);
-               },
-               approve: approveSalesOrder,
-               revoke: unapproveSalesOrder,
-            }}
-            onSuccess={() => actionRef.current?.reload()}
-            confirmMessages={{
-               submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
-            }}
+            actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
+            onSuccess={() => { invalidateOrdersCache(); actionRef.current?.reload(); }}
+            confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
           {isApprovedRecord(record) && (
             <Dropdown
@@ -1196,9 +1119,7 @@ const SalesOrdersPage: React.FC = () => {
                 ],
               }}
             >
-                <Button type="link" size="small" icon={<ArrowDownOutlined />}>
-                {t('app.kuaizhizao.salesOrder.push')}
-              </Button>
+              <Button type="link" size="small" icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
             </Dropdown>
           )}
           {isApprovedRecord(record) && record.pushed_to_computation && (
@@ -1211,14 +1132,193 @@ const SalesOrdersPage: React.FC = () => {
     },
   ];
 
+  // 表格列：销售明细平铺视图（订单 + 明细）
+  const detailColumns: ProColumns<SalesOrderItemRow>[] = [
+    {
+      title: t('app.kuaizhizao.salesOrder.orderCode'),
+      dataIndex: 'order_code',
+      width: 140,
+      fixed: 'left' as const,
+      ellipsis: true,
+      render: (_, record) => (
+        <Space size={4}>
+          <span>{record.order_code ?? '-'}</span>
+          <Tooltip title={t('field.invitationCode.copy')}>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined style={{ fontSize: 12 }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                const text = record.order_code ?? '';
+                if (text) {
+                  navigator.clipboard.writeText(text).then(
+                    () => messageApi.success(t('common.copySuccess')),
+                    () => messageApi.error(t('common.copyFailed'))
+                  );
+                }
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 130, ellipsis: true, hideInSearch: false },
+    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 110, ellipsis: true },
+    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+    { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
+    { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
+    {
+      title: t('app.kuaizhizao.salesOrder.quantity'),
+      dataIndex: 'required_quantity',
+      width: 100,
+      align: 'right' as const,
+      render: (val: number, record: SalesOrderItemRow) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+          <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
+          {val ?? 0}
+        </span>
+      ),
+    },
+    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 70, align: 'right' as const, render: (val: number) => val ?? 0 },
+    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 110 },
+    { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 90, align: 'right' as const, render: (text: number) => text ?? 0 },
+    { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 90, align: 'right' as const, render: (text: number) => text ?? 0 },
+    {
+      title: t('app.kuaizhizao.salesOrder.bomCheck'),
+      key: 'bom_check',
+      width: 70,
+      render: (_: unknown, record: SalesOrderItemRow) => <MaterialBomIndicator materialId={record.material_id} />,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.lifecycle'),
+      dataIndex: 'lifecycle',
+      width: 90,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: {
+        草稿: { text: t('app.kuaizhizao.salesOrder.lifecycleDraft') },
+        待审核: { text: t('app.kuaizhizao.salesOrder.lifecyclePendingReview') },
+        已审核: { text: t('app.kuaizhizao.salesOrder.lifecycleAudited') },
+        已生效: { text: t('app.kuaizhizao.salesOrder.lifecycleEffective') },
+        执行中: { text: t('app.kuaizhizao.salesOrder.lifecycleInProgress') },
+        已交货: { text: t('app.kuaizhizao.salesOrder.lifecycleDelivered') },
+        已完成: { text: t('app.kuaizhizao.salesOrder.lifecycleCompleted') },
+        已驳回: { text: t('app.kuaizhizao.salesOrder.lifecycleRejected') },
+        已取消: { text: t('app.kuaizhizao.salesOrder.lifecycleCancelled') },
+      },
+      render: (_: unknown, record: SalesOrderItemRow) => {
+        const orderRecord = { id: record.sales_order_id, status: record.status, review_status: record.review_status } as SalesOrder;
+        const lifecycle = getSalesOrderLifecycle(orderRecord);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'warning',
+          已审核: 'green',
+          已生效: 'purple',
+          执行中: 'cyan',
+          已交货: 'orange',
+          已完成: 'gold',
+          已驳回: 'error',
+          已取消: 'default',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+      },
+    },
+    // 明细表格视图以每行订单明细为展示维度，纯查看用途，不提供操作按钮
+  ];
+
+  const columns = dataViewMode === 'detail' ? detailColumns : orderColumns;
+
+  const handleDeleteResolved = dataViewMode === 'order'
+    ? async (keys: React.Key[]) => {
+        const ids = keys.map((k) => Number(k)).filter((id) => !Number.isNaN(id));
+        if (ids.length === 0) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.selectToDelete'));
+          return;
+        }
+        modalApi.confirm({
+          title: t('app.kuaizhizao.salesOrder.confirmDelete'),
+          content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count: ids.length }),
+          okText: t('app.kuaizhizao.salesOrder.okDelete'),
+          okType: 'danger',
+          cancelText: t('common.cancel'),
+          onOk: async () => {
+            try {
+              const res = await bulkDeleteSalesOrders(ids);
+              if (res.failed_count === 0) {
+                messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
+              } else {
+                messageApi.warning(t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }));
+              }
+              invalidateOrdersCache();
+              actionRef.current?.reload();
+              if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
+            } catch (error: any) {
+              messageApi.error(error.message || t('app.kuaizhizao.salesOrder.deleteFailed'));
+            }
+          },
+        });
+      }
+    : handleDelete;
+
   return (
     <>
       <ListPageTemplate>
-        <UniTable<SalesOrder>
+        <SalesOrderIndicatorsProvider>
+        <UniTable
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
+          viewTypes={['table', 'detailTable', 'card', 'gantt', 'help']}
+          defaultViewType="detailTable"
+          onViewTypeChange={(v) => {
+            setViewTypeState(v as 'table' | 'detailTable' | 'card' | 'gantt' | 'help');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailColumns}
+          cardViewConfig={{
+            groupByField: '_lifecycleStage',
+            layout: 'waterfall',
+            renderCard: (item: SalesOrderItemRow) => (
+              <div
+                key={item._rowKey}
+                style={{
+                  padding: 12,
+                  border: '1px solid #f0f0f0',
+                  borderRadius: 6,
+                  background: '#fff',
+                }}
+              >
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                  {item.order_code} · {item.customer_name}
+                </div>
+                <div style={{ fontSize: 13, color: '#666' }}>
+                  {item.material_code} {item.material_name} × {item.required_quantity ?? 0} {item.material_unit}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, color: '#999' }}>
+                  {t('app.kuaizhizao.salesOrder.deliveryDate')}: {item.delivery_date ?? '-'}
+                </div>
+              </div>
+            ),
+          }}
+          ganttViewConfig={{
+            renderGantt: (data) => <SalesOrderGanttChart items={data as SalesOrderItemRow[]} />,
+          }}
+          helpViewConfig={{
+            content: (
+              <div style={{ lineHeight: 1.8 }}>
+                <p><strong>表格视图</strong>：按订单维度展示。</p>
+                <p><strong>明细表格</strong>：以每行订单明细为展示维度，纯查看用途，支持库存/BOM 检查。</p>
+                <p><strong>卡片视图</strong>：按生命周期分组，瀑布流展示。</p>
+                <p><strong>甘特图</strong>：按交货日期展示时间轴。</p>
+              </div>
+            ),
+          }}
           actionRef={actionRef}
           toolBarButtonSize="middle"
           columns={columns}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any) => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -1248,60 +1348,161 @@ const SalesOrdersPage: React.FC = () => {
                 apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
               }
             }
-            try {
-              const response = await listSalesOrders(apiParams);
-              if (Array.isArray(response)) {
-                return { data: response, success: true, total: response.length };
+            // 始终请求 include_items=true，切换视图时从缓存转换，避免重复请求
+            apiParams.include_items = true;
+            const paramsKey = JSON.stringify({ skip: apiParams.skip, limit: apiParams.limit, status: apiParams.status, customer_name: apiParams.customer_name, order_by: apiParams.order_by });
+
+            const toFlatRows = (orders: SalesOrder[]) => {
+              const map = new Map<string, number>();
+              const flatRows: SalesOrderItemRow[] = [];
+              for (const order of orders) {
+                const lifecycle = getSalesOrderLifecycle(order as SalesOrder);
+                const stageName = lifecycle.stageName ?? order.status ?? '草稿';
+                const items = order.items ?? [];
+                if (items.length === 0) {
+                  const rowKey = `order-${order.id}-empty`;
+                  map.set(rowKey, order.id);
+                  flatRows.push({
+                    _rowKey: rowKey,
+                    _lifecycleStage: stageName,
+                    sales_order_id: order.id,
+                    order_code: order.order_code,
+                    customer_name: order.customer_name,
+                    order_date: order.order_date,
+                    order_delivery_date: order.delivery_date,
+                    total_quantity: order.total_quantity,
+                    total_amount: order.total_amount,
+                    delivery_progress: order.delivery_progress,
+                    status: order.status,
+                    review_status: order.review_status,
+                    pushed_to_computation: order.pushed_to_computation,
+                    material_code: '-',
+                    material_name: '-',
+                    required_quantity: 0,
+                    delivery_date: order.delivery_date ?? '',
+                  } as SalesOrderItemRow);
+                } else {
+                  items.forEach((item: SalesOrderItem, idx: number) => {
+                    const rowKey = item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`;
+                    map.set(rowKey, order.id);
+                    flatRows.push({
+                      ...item,
+                      _rowKey: rowKey,
+                      _lifecycleStage: stageName,
+                      sales_order_id: order.id,
+                      order_code: order.order_code,
+                      customer_name: order.customer_name,
+                      order_date: order.order_date,
+                      order_delivery_date: order.delivery_date,
+                      total_quantity: order.total_quantity,
+                      total_amount: order.total_amount,
+                      delivery_progress: order.delivery_progress,
+                      status: order.status,
+                      review_status: order.review_status,
+                      pushed_to_computation: order.pushed_to_computation,
+                      material_code: item.material_code ?? '',
+                      material_name: item.material_name ?? '',
+                      material_spec: item.material_spec ?? '',
+                      material_unit: item.material_unit ?? '',
+                      required_quantity: item.required_quantity ?? 0,
+                      unit_price: item.unit_price,
+                      tax_rate: item.tax_rate,
+                      item_amount: item.item_amount,
+                      delivered_quantity: item.delivered_quantity,
+                      remaining_quantity: item.remaining_quantity,
+                      delivery_date: item.delivery_date ?? order.delivery_date ?? '',
+                    } as SalesOrderItemRow);
+                  });
+                }
               }
-              return {
-                data: (response as any).data || [],
-                success: (response as any).success !== false,
-                total: (response as any).total ?? 0,
-              };
+              rowKeyToOrderIdRef.current = map;
+              return flatRows;
+            };
+
+            try {
+              const cache = lastOrdersCacheRef.current;
+              let orders: SalesOrder[];
+              let total: number;
+
+              if (cache?.paramsKey === paramsKey && cache.orders) {
+                orders = cache.orders;
+                total = cache.total;
+              } else {
+                const response = await listSalesOrders(apiParams);
+                orders = Array.isArray(response) ? response : (response as any).data || [];
+                total = (response as any).total ?? orders.length;
+                lastOrdersCacheRef.current = { orders, total, paramsKey };
+              }
+
+              if (dataViewMode === 'order') {
+                return { data: orders, success: true, total };
+              }
+              return { data: toFlatRows(orders), success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
-          rowKey="id"
           showAdvancedSearch={true}
-          enableRowSelection={true}
-          expandable={{
-            expandedRowRender: (record) =>
-              record.id != null ? <OrderItemsExpandedRow orderId={record.id} /> : null,
-            rowExpandable: (record) => record.id != null,
-          }}
+          enableRowSelection={viewTypeState !== 'detailTable'}
           showCreateButton={true}
           createButtonText={t('app.kuaizhizao.salesOrder.create')}
           onCreate={handleCreate}
           showEditButton={false}
-          showDeleteButton={true}
+          showDeleteButton={viewTypeState !== 'detailTable'}
           deleteButtonText={t('app.kuaizhizao.salesOrder.batchDelete')}
-          onDelete={handleDelete}
+          onDelete={handleDeleteResolved}
           showImportButton={true}
           onImport={handleImport}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const res = await listSalesOrders({ skip: 0, limit: 10000 });
-              let items = (res as any).data || [];
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
-                items = items.filter((d: SalesOrder) => d.id != null && keys.includes(d.id));
+              const res = await listSalesOrders({ skip: 0, limit: 10000, include_items: true });
+              const orders = (res as any).data || [];
+              const flatRows: SalesOrderItemRow[] = [];
+              for (const order of orders) {
+                const items = order.items ?? [];
+                if (items.length === 0) {
+                  flatRows.push({
+                    _rowKey: `order-${order.id}-empty`,
+                    sales_order_id: order.id,
+                    order_code: order.order_code,
+                    customer_name: order.customer_name,
+                    material_code: '-',
+                    material_name: '-',
+                    required_quantity: 0,
+                    delivery_date: order.delivery_date ?? '',
+                  } as SalesOrderItemRow);
+                } else {
+                  items.forEach((item: SalesOrderItem, idx: number) => {
+                    flatRows.push({
+                      ...item,
+                      _rowKey: item.id ? `order-${order.id}-item-${item.id}` : `order-${order.id}-idx-${idx}`,
+                      sales_order_id: order.id,
+                      order_code: order.order_code,
+                      customer_name: order.customer_name,
+                    } as SalesOrderItemRow);
+                  });
+                }
               }
-              if (items.length === 0) {
+              let toExport = flatRows;
+              if (type === 'currentPage' && pageData?.length) {
+                toExport = pageData as SalesOrderItemRow[];
+              } else if (type === 'selected' && keys?.length) {
+                toExport = flatRows.filter((r) => keys.includes(r._rowKey));
+              }
+              if (toExport.length === 0) {
                 messageApi.warning(t('app.kuaizhizao.salesOrder.noDataToExport'));
                 return;
               }
-              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `sales-orders-${new Date().toISOString().slice(0, 10)}.json`;
+              a.download = `sales-order-items-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: items.length }));
+              messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.exportFailed'));
             }
@@ -1337,6 +1538,7 @@ const SalesOrdersPage: React.FC = () => {
             t('app.kuaizhizao.salesOrder.importExampleNotes'),
           ]}
         />
+        </SalesOrderIndicatorsProvider>
       </ListPageTemplate>
 
       {/* 新建/编辑 Modal */}
@@ -2047,7 +2249,7 @@ const SalesOrdersPage: React.FC = () => {
         extra={
           currentSalesOrder && (
             <Space size="small">
-              <Button size="small" icon={<BellOutlined />} onClick={handleOpenReminder}>
+              <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
                 {t('app.kuaizhizao.salesOrder.reminder')}
               </Button>
               {(() => {
@@ -2058,12 +2260,12 @@ const SalesOrdersPage: React.FC = () => {
                 return (
                   <>
                     {canEdit && (
-                      <Button size="small" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit([currentSalesOrder.id!]); }}>
+                      <Button icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit([currentSalesOrder.id!]); }}>
                         {t('app.kuaizhizao.salesOrder.editAction')}
                       </Button>
                     )}
                     {canDelete && (
-                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
+                      <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
                         {t('app.kuaizhizao.salesOrder.delete')}
                       </Button>
                     )}
@@ -2081,7 +2283,6 @@ const SalesOrdersPage: React.FC = () => {
                 rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
                 autoApproveWhenSubmit={!auditEnabled}
                 theme="default"
-                size="small"
                 actions={{
                   submit: async (id) => {
                     // 后端在 audit_required=False 时 submit 内部已自动审核，无需再调用 approve，否则会重复记录状态变更
@@ -2108,13 +2309,13 @@ const SalesOrdersPage: React.FC = () => {
                     ],
                   }}
                 >
-                  <Button size="small" icon={<ArrowDownOutlined />}>
+                  <Button icon={<ArrowDownOutlined />}>
                     {t('app.kuaizhizao.salesOrder.push')}
                   </Button>
                 </Dropdown>
               )}
               {isApprovedRecord(currentSalesOrder) && currentSalesOrder.pushed_to_computation && (
-              <Button size="small" icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(currentSalesOrder.id!)}>
+              <Button icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(currentSalesOrder.id!)}>
                 {t('app.kuaizhizao.salesOrder.withdrawComputation')}
               </Button>
               )}
@@ -2213,44 +2414,43 @@ const SalesOrdersPage: React.FC = () => {
                   render: (_, record) => <AmountDisplay resource="sales_order" value={record.total_amount ?? 0} />,
                 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.lifecycle'),
-                  key: 'lifecycle',
-                  span: 2,
-                  render: (_, record) => {
-                    const lifecycle = getSalesOrderLifecycle(record);
-                    const mainStages = lifecycle.mainStages ?? [];
-                    const subStages = lifecycle.subStages ?? [];
-                    return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {mainStages.length > 0 && (
-                          <div>
-                            <UniLifecycleStepper
-                              steps={mainStages}
-                              status={lifecycle.status}
-                              showLabels
-                              nextStepSuggestions={lifecycle.nextStepSuggestions}
-                            />
-                          </div>
-                        )}
-                        {subStages.length > 0 && (
-                          <div>
-                            <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                              执行中 · 全链路
-                            </div>
-                            <UniLifecycleStepper steps={subStages} showLabels />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  },
-                },
-                {
                   title: t('app.kuaizhizao.salesOrder.notes'),
                   dataIndex: 'notes',
                   span: 2,
                 },
               ]}
             />
+
+            {/* 生命周期状态（与需求管理统一布局） */}
+            {(() => {
+              const lifecycle = getSalesOrderLifecycle(currentSalesOrder);
+              const mainStages = lifecycle.mainStages ?? [];
+              const subStages = lifecycle.subStages ?? [];
+              if (mainStages.length === 0 && subStages.length === 0) return null;
+              return (
+                <div style={{ marginTop: 24, marginBottom: 24 }}>
+                  <h4 style={{ marginBottom: 12 }}>{t('app.kuaizhizao.salesOrder.lifecycle')}</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {mainStages.length > 0 && (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    )}
+                    {subStages.length > 0 && (
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                          执行中 · 全链路
+                        </div>
+                        <UniLifecycleStepper steps={subStages} showLabels />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* 订单明细 */}
             {currentSalesOrder.items && currentSalesOrder.items.length > 0 && (
@@ -2263,7 +2463,29 @@ const SalesOrdersPage: React.FC = () => {
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
                     { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
                     { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 80 },
-                    { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+                    {
+                      title: t('app.kuaizhizao.salesOrder.bomCheck'),
+                      key: 'bom_check',
+                      width: 80,
+                      render: (_: unknown, record: SalesOrderItem) => (
+                        <MaterialBomIndicator materialId={record.material_id} />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.salesOrder.quantity'),
+                      dataIndex: 'required_quantity',
+                      width: 100,
+                      align: 'right' as const,
+                      render: (val: number, record: SalesOrderItem) => (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                          <MaterialInventoryIndicator
+                            materialId={record.material_id}
+                            requiredQuantity={record.required_quantity}
+                          />
+                          {val ?? 0}
+                        </span>
+                      ),
+                    },
                     { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },
                     { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 80, align: 'right' as const, render: (val) => val ?? 0 },
                     { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (val) => <AmountDisplay resource="sales_order" value={val} /> },

@@ -9,6 +9,8 @@ export interface BackendLifecycleStage {
   key: string;
   label: string;
   status: 'done' | 'active' | 'pending';
+  /** 该节点进度 0～100，可选 */
+  percent?: number;
 }
 
 export interface BackendLifecycle {
@@ -44,9 +46,15 @@ export function parseBackendLifecycle(lifecycle: BackendLifecycle | null | undef
     key: s.key,
     label: s.label,
     status: s.status,
+    ...(s.percent != null && { percent: s.percent }),
   }));
   const subStages: SubStage[] | undefined = lifecycle.sub_stages?.length
-    ? lifecycle.sub_stages.map((s) => ({ key: s.key, label: s.label, status: s.status }))
+    ? lifecycle.sub_stages.map((s) => ({
+        key: s.key,
+        label: s.label,
+        status: s.status,
+        ...(s.percent != null && { percent: s.percent }),
+      }))
     : undefined;
   const percent = lifecycle.current_stage_key
     ? (STAGE_PERCENT[lifecycle.current_stage_key] ?? 30)

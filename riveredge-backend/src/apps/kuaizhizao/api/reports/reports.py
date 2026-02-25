@@ -8,7 +8,7 @@ Date: 2025-01-15
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from loguru import logger
 
@@ -74,10 +74,12 @@ async def get_inventory_report(
 
 @router.get("/inventory/batch-query", summary="批次库存查询")
 async def query_batch_inventory(
-    material_id: Optional[int] = Query(None, description="物料ID"),
+    material_id: Optional[int] = Query(None, description="物料ID（与 material_ids 二选一）"),
+    material_ids: Optional[List[int]] = Query(None, description="物料ID列表（批量查询，与 material_id 二选一）"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     batch_number: Optional[str] = Query(None, description="批号"),
     include_expired: bool = Query(False, description="是否包含过期批次"),
+    summary_only: bool = Query(False, description="是否仅返回物料汇总（material_totals），用于批量检查"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -85,17 +87,21 @@ async def query_batch_inventory(
     批次库存查询
     
     查询库存按批次分组的详细信息，支持多种筛选条件：
-    - **material_id**: 物料ID（可选）
+    - **material_id**: 物料ID（可选，与 material_ids 二选一）
+    - **material_ids**: 物料ID列表（可选，批量查询，summary_only 时返回 material_totals）
     - **warehouse_id**: 仓库ID（可选）
     - **batch_number**: 批号（可选）
     - **include_expired**: 是否包含过期批次（默认：否）
+    - **summary_only**: 是否仅返回物料汇总（默认：否）
     
-    返回每个批次的库存数量、生产日期、有效期等信息。
+    返回每个批次的库存数量、生产日期、有效期等信息；summary_only 时返回 { material_totals: { material_id: quantity } }。
     """
     return await report_service.query_batch_inventory(
         tenant_id=tenant_id,
         material_id=material_id,
+        material_ids=material_ids,
         warehouse_id=warehouse_id,
         batch_number=batch_number,
         include_expired=include_expired,
+        summary_only=summary_only,
     )

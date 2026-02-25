@@ -6,6 +6,7 @@
 
 from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from decimal import Decimal
+import asyncio
 import json
 
 from tortoise.models import Q
@@ -2006,6 +2007,39 @@ class MaterialService:
         bom_list = await query.order_by("priority", "id").all()
         
         return [BOMResponse.model_validate(b) for b in bom_list]
+
+    @staticmethod
+    async def batch_check_has_bom(
+        tenant_id: int,
+        material_ids: List[int],
+        only_active: bool = True
+    ) -> Dict[int, bool]:
+        """
+        批量检查物料是否有BOM配置（用于销售订单明细视图等批量检查场景）
+
+        复用 get_bom_by_material 的查询逻辑，确保与单次检查结果完全一致。
+
+        Args:
+            tenant_id: 租户ID
+            material_ids: 物料ID列表
+            only_active: 是否只检查已审核的BOM（默认：true）
+
+        Returns:
+            Dict[int, bool]: 物料ID -> 是否有BOM
+        """
+        if not material_ids:
+            return {}
+
+        async def check_one(mid: int) -> tuple[int, bool]:
+            bom_list = await MaterialService.get_bom_by_material(
+                tenant_id=tenant_id,
+                material_id=mid,
+                only_active=only_active
+            )
+            return (mid, len(bom_list) > 0)
+
+        results = await asyncio.gather(*[check_one(mid) for mid in material_ids])
+        return dict(results)
     
     @staticmethod
     async def get_bom_versions(

@@ -130,6 +130,7 @@ export interface DemandListParams {
   limit?: number;
   demand_type?: 'sales_forecast' | 'sales_order';
   status?: string;
+  pushed_to_computation?: boolean;
   business_mode?: 'MTS' | 'MTO';
   review_status?: string;
   start_date?: string;

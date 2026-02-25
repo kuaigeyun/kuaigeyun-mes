@@ -76,7 +76,9 @@ async def list_sales_orders(
     review_status: Optional[str] = Query(None, description="审核状态"),
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
+    customer_name: Optional[str] = Query(None, description="客户名称（模糊匹配）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
+    include_items: bool = Query(False, description="是否包含订单明细"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -101,7 +103,9 @@ async def list_sales_orders(
             review_status=review_status,
             start_date=start_date,
             end_date=end_date,
+            customer_name=customer_name,
             order_by=safe_order_by,
+            include_items=include_items,
         )
         return result
     except Exception as e:

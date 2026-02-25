@@ -59,30 +59,3 @@ export function sortTasksByWorkCenter(tasks: GanttTask[]): GanttTask[] {
     return wa.localeCompare(wb) || a.id - b.id;
   });
 }
-
-/**
- * 根据状态获取任务条颜色
- */
-export function getTaskColorByStatus(status?: string): string {
-  const map: Record<string, string> = {
-    draft: '#8c8c8c',
-    released: '#1677ff',
-    in_progress: '#fa8c16',
-    completed: '#52c41a',
-    cancelled: '#ff4d4f',
-  };
-  return map[status || ''] || '#1677ff';
-}
-
-/**
- * 根据优先级获取任务条颜色（当无状态时备用）
- */
-export function getTaskColorByPriority(priority?: string): string {
-  const map: Record<string, string> = {
-    urgent: '#ff4d4f',
-    high: '#fa8c16',
-    normal: '#1677ff',
-    low: '#8c8c8c',
-  };
-  return map[priority || ''] || '#1677ff';
-}

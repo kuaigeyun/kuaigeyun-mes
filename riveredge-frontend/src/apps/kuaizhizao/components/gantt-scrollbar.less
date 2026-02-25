@@ -1,0 +1,50 @@
+/**
+ * 甘特图滚动条：去掉轨道和按钮，只保留滑块
+ * 必须在 @svar-ui/react-gantt/all.css 之后导入以覆盖库样式
+ */
+.gantt-chart-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ant-colorFillSecondary) transparent;
+}
+
+/* 横向滚动条：.wx-chart 为时间轴区域，overflow-x: auto */
+.gantt-chart-wrapper .wx-chart::-webkit-scrollbar-track,
+.gantt-chart-wrapper .wx-chart::-webkit-scrollbar {
+  background: transparent !important;
+}
+.gantt-chart-wrapper .wx-chart::-webkit-scrollbar-button {
+  display: none !important;
+}
+
+/* 纵向滚动条：.wx-gantt 为主容器 */
+.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar-track,
+.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar {
+  background: transparent !important;
+}
+.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar-button {
+  display: none !important;
+}
+
+.gantt-chart-wrapper ::-webkit-scrollbar,
+.gantt-chart-wrapper *::-webkit-scrollbar {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.gantt-chart-wrapper ::-webkit-scrollbar-track,
+.gantt-chart-wrapper *::-webkit-scrollbar-track {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* 隐藏轨道两侧的箭头按钮 */
+.gantt-chart-wrapper ::-webkit-scrollbar-button,
+.gantt-chart-wrapper *::-webkit-scrollbar-button {
+  display: none !important;
+}
+
+/* 角落透明 */
+.gantt-chart-wrapper ::-webkit-scrollbar-corner,
+.gantt-chart-wrapper *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}

@@ -81,6 +81,7 @@ class SalesOrderService:
         delivery_progress: Optional[float] = None,
         invoice_progress: Optional[float] = None,
         material_code_fallback: Optional[Dict[int, str]] = None,
+        material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -142,6 +143,20 @@ class SalesOrderService:
             base["invoice_progress"] = round(invoice_progress, 1)
         base["lifecycle"] = lifecycle
         fallback = material_code_fallback or {}
+        mat_fallback = material_fallback or {}
+
+        def _material_val(it: SalesOrderItem, attr: str, mat_key: str, max_len: int = 50) -> str:
+            """明细有值则用明细，否则从物料表补全"""
+            val = getattr(it, attr, None)
+            if val is not None and str(val).strip():
+                return str(val)[:max_len]
+            mf = mat_fallback.get(it.material_id) if it.material_id else None
+            if mf and mat_key in mf and mf[mat_key]:
+                return str(mf[mat_key])[:max_len]
+            if attr == "material_code" and it.material_id and it.material_id in fallback:
+                return str(fallback[it.material_id])[:max_len]
+            return ""
+
         if items is not None:
             base["items"] = [
                 SalesOrderItemResponse(
@@ -150,14 +165,10 @@ class SalesOrderService:
                     tenant_id=it.tenant_id,
                     sales_order_id=it.sales_order_id,
                     material_id=it.material_id,
-                    material_code=(
-                        (it.material_code or fallback.get(it.material_id) or "")[:50]
-                        if it.material_id
-                        else (it.material_code or "")[:50]
-                    ),
-                    material_name=it.material_name,
-                    material_spec=it.material_spec,
-                    material_unit=it.material_unit,
+                    material_code=_material_val(it, "material_code", "code"),
+                    material_name=_material_val(it, "material_name", "name", 200),
+                    material_spec=_material_val(it, "material_spec", "spec", 200),
+                    material_unit=_material_val(it, "material_unit", "unit"),
                     required_quantity=it.order_quantity,
                     delivery_date=it.delivery_date,
                     unit_price=it.unit_price,
@@ -338,24 +349,46 @@ class SalesOrderService:
 
         items = None
         material_code_fallback: Dict[int, str] = {}
+        material_fallback: Dict[int, Dict[str, Any]] = {}
         if include_items:
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
-            ).order_by("id")
-            # 当明细中 material_code 为空时，从物料表补全（兼容历史数据）
-            need_fallback = [it for it in items if it.material_id and (not it.material_code or not str(it.material_code).strip())]
+            ).order_by("id").all()
+            # 当明细中物料信息为空时，从物料表补全（兼容历史数据）
+            need_fallback = [
+                it for it in items
+                if it.material_id
+                and (
+                    not (it.material_code and str(it.material_code).strip())
+                    or not (it.material_name and str(it.material_name).strip())
+                    or not (it.material_unit and str(it.material_unit).strip())
+                )
+            ]
             if need_fallback:
                 from apps.master_data.models.material import Material
                 material_ids = list({it.material_id for it in need_fallback})
-                materials = await Material.filter(id__in=material_ids).all()
+                materials = await Material.filter(id__in=material_ids, deleted_at__isnull=True).all()
                 for m in materials:
                     material_code_fallback[m.id] = (m.main_code or getattr(m, "code", None) or "")[:50]
+                    material_fallback[m.id] = {
+                        "code": (m.main_code or getattr(m, "code", None) or "")[:50],
+                        "name": (m.name or "")[:200],
+                        "spec": (getattr(m, "specification", None) or "")[:200],
+                        "unit": (m.base_unit or "")[:20],
+                    }
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
         duration_info = None
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
-        return self._order_to_response(order, items=items, demand=demand, duration_info=duration_info, material_code_fallback=material_code_fallback)
+        return self._order_to_response(
+            order,
+            items=items,
+            demand=demand,
+            duration_info=duration_info,
+            material_code_fallback=material_code_fallback,
+            material_fallback=material_fallback,
+        )
 
     async def list_sales_orders(
         self,
@@ -366,7 +399,9 @@ class SalesOrderService:
         review_status: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        customer_name: Optional[str] = None,
         order_by: Optional[str] = None,
+        include_items: bool = False,
     ) -> SalesOrderListResponse:
         """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
         query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -378,53 +413,153 @@ class SalesOrderService:
             query = query.filter(order_date__gte=start_date)
         if end_date:
             query = query.filter(order_date__lte=end_date)
+        if customer_name and str(customer_name).strip():
+            query = query.filter(customer_name__icontains=customer_name.strip())
         total = await query.count()
         order_clause = order_by if order_by else "-created_at"
         orders = await query.offset(skip).limit(limit).order_by(order_clause)
 
+        if not orders:
+            return SalesOrderListResponse(data=[], total=total, success=True)
+
+        order_ids = [o.id for o in orders]
+
+        # 1. 批量状态同步（不同步时自动修复）
+        need_audit_sync = []
+        need_review_sync = []
+        for order in orders:
+            if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
+                need_audit_sync.append(order.id)
+            elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
+                need_review_sync.append(order.id)
+        if need_audit_sync:
+            await SalesOrder.filter(tenant_id=tenant_id, id__in=need_audit_sync).update(status=DemandStatus.AUDITED)
+        if need_review_sync:
+            await SalesOrder.filter(tenant_id=tenant_id, id__in=need_review_sync).update(review_status=ReviewStatus.APPROVED)
+        if need_audit_sync or need_review_sync:
+            refetched = await SalesOrder.filter(tenant_id=tenant_id, id__in=order_ids).order_by(order_clause)
+            refetched_by_id = {o.id: o for o in refetched}
+            orders = [refetched_by_id[oid] for oid in order_ids]
+
+        # 2. 批量查询 Demand
+        demands = await Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).all()
+        demand_by_order: Dict[int, Demand] = {d.source_id: d for d in demands}
+
+        # 3. 批量查询 SalesOrderItem
+        items_by_order: Dict[int, List[SalesOrderItem]] = {}
+        if include_items:
+            all_items = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=order_ids,
+            ).order_by("sales_order_id", "id").all()
+            for it in all_items:
+                items_by_order.setdefault(it.sales_order_id, []).append(it)
+        else:
+            # 仅需 delivery_progress：批量查询 order_quantity, delivered_quantity
+            items_agg_rows = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=order_ids,
+            ).values_list("sales_order_id", "order_quantity", "delivered_quantity")
+            for oid, qty, delivered in items_agg_rows:
+                items_by_order.setdefault(oid, []).append(
+                    type("_AggItem", (), {"order_quantity": qty, "delivered_quantity": delivered})()
+                )
+
+        # 4. 批量 Material 补全（仅 include_items 时）
+        material_code_fallback_all: Dict[int, Dict[int, str]] = {}
+        material_fallback_all: Dict[int, Dict[int, Dict[str, Any]]] = {}
+        if include_items:
+            need_fallback_ids: set = set()
+            for oid, items in items_by_order.items():
+                for it in items:
+                    if it.material_id and (
+                        not (getattr(it, "material_code", None) and str(it.material_code).strip())
+                        or not (getattr(it, "material_name", None) and str(it.material_name).strip())
+                        or not (getattr(it, "material_spec", None) and str(it.material_spec).strip())
+                        or not (getattr(it, "material_unit", None) and str(it.material_unit).strip())
+                    ):
+                        need_fallback_ids.add(it.material_id)
+            if need_fallback_ids:
+                from apps.master_data.models.material import Material
+                materials = await Material.filter(
+                    id__in=list(need_fallback_ids), deleted_at__isnull=True
+                ).all()
+                material_by_id: Dict[int, Any] = {m.id: m for m in materials}
+                for oid, items in items_by_order.items():
+                    fallback: Dict[int, str] = {}
+                    mat_fallback: Dict[int, Dict[str, Any]] = {}
+                    for it in items:
+                        if not it.material_id or it.material_id not in material_by_id:
+                            continue
+                        if (
+                            not (getattr(it, "material_code", None) and str(it.material_code).strip())
+                            or not (getattr(it, "material_name", None) and str(it.material_name).strip())
+                            or not (getattr(it, "material_spec", None) and str(it.material_spec).strip())
+                            or not (getattr(it, "material_unit", None) and str(it.material_unit).strip())
+                        ):
+                            m = material_by_id[it.material_id]
+                            fallback[m.id] = (m.main_code or getattr(m, "code", None) or "")[:50]
+                            mat_fallback[m.id] = {
+                                "code": (m.main_code or getattr(m, "code", None) or "")[:50],
+                                "name": (m.name or "")[:200],
+                                "spec": (getattr(m, "specification", None) or "")[:200],
+                                "unit": (m.base_unit or "")[:20],
+                            }
+                    if fallback:
+                        material_code_fallback_all[oid] = fallback
+                        material_fallback_all[oid] = mat_fallback
+
+        # 5. 批量计算开票进度
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).values_list("id", "sales_order_id")
+        delivery_ids = [d[0] for d in deliveries]
+        order_to_deliveries: Dict[int, List[int]] = {}
+        for did, oid in deliveries:
+            order_to_deliveries.setdefault(oid, []).append(did)
+
+        invoiced_by_order: Dict[int, Decimal] = {}
+        if delivery_ids:
+            receivables = await Receivable.filter(
+                tenant_id=tenant_id,
+                source_type="销售出库",
+                source_id__in=delivery_ids,
+                invoice_issued=True,
+                deleted_at__isnull=True,
+            ).values_list("source_id", "total_amount")
+            delivery_to_invoiced: Dict[int, Decimal] = {}
+            for did, amt in receivables:
+                delivery_to_invoiced[did] = delivery_to_invoiced.get(did, Decimal("0")) + Decimal(str(amt or 0))
+            for oid, dids in order_to_deliveries.items():
+                invoiced_by_order[oid] = sum(delivery_to_invoiced.get(did, Decimal("0")) for did in dids)
+
+        # 6. 组装响应
         sales_orders = []
         for order in orders:
-            # 不同步时自动修复
-            if self._is_review_approved(order.review_status) and not self._is_audited(order.status):
-                await SalesOrder.filter(tenant_id=tenant_id, id=order.id).update(status=DemandStatus.AUDITED)
-                order = await SalesOrder.get(tenant_id=tenant_id, id=order.id)
-            elif self._is_audited(order.status) and not self._is_review_approved(order.review_status):
-                await SalesOrder.filter(tenant_id=tenant_id, id=order.id).update(review_status=ReviewStatus.APPROVED)
-                order = await SalesOrder.get(tenant_id=tenant_id, id=order.id)
-            demand = await self._get_linked_demand(tenant_id, order.id)
+            items = items_by_order.get(order.id) or []
+            items_for_response = items if include_items else None
 
-            # 交货进度：订单明细已交货数量 / 订单总数量
             delivery_progress: Optional[float] = None
-            items_agg = await SalesOrderItem.filter(
-                tenant_id=tenant_id, sales_order_id=order.id
-            ).values_list("order_quantity", "delivered_quantity")
-            if items_agg:
-                total_qty = sum(Decimal(str(r[0] or 0)) for r in items_agg)
-                total_delivered = sum(Decimal(str(r[1] or 0)) for r in items_agg)
+            if items:
+                total_qty = sum(Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items)
+                total_delivered = sum(Decimal(str(getattr(it, "delivered_quantity", 0) or 0)) for it in items)
                 if total_qty and total_qty > 0:
                     delivery_progress = float(min(100, (total_delivered / total_qty) * 100))
 
-            # 开票进度：该订单关联出库单产生的已开票应收金额 / 订单总金额
             invoice_progress_val: Optional[float] = None
             order_amount = Decimal(str(order.total_amount or 0))
             if order_amount and order_amount > 0:
-                delivery_ids = await SalesDelivery.filter(
-                    tenant_id=tenant_id, sales_order_id=order.id, deleted_at__isnull=True
-                ).values_list("id", flat=True)
-                if delivery_ids:
-                    receivables = await Receivable.filter(
-                        tenant_id=tenant_id,
-                        source_type="销售出库",
-                        source_id__in=list(delivery_ids),
-                        invoice_issued=True,
-                        deleted_at__isnull=True,
-                    ).all()
-                    invoiced_sum = sum(Decimal(str(r.total_amount or 0)) for r in receivables)
-                    try:
-                        invoice_progress_val = float(min(100, (invoiced_sum / order_amount) * 100))
-                    except Exception:
-                        invoice_progress_val = 0.0
-                else:
+                invoiced = invoiced_by_order.get(order.id, Decimal("0"))
+                try:
+                    invoice_progress_val = float(min(100, (invoiced / order_amount) * 100))
+                except Exception:
                     invoice_progress_val = 0.0
             else:
                 invoice_progress_val = 0.0
@@ -432,9 +567,12 @@ class SalesOrderService:
             sales_orders.append(
                 self._order_to_response(
                     order,
-                    demand=demand,
+                    items=items_for_response,
+                    demand=demand_by_order.get(order.id),
                     delivery_progress=delivery_progress,
                     invoice_progress=invoice_progress_val,
+                    material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
+                    material_fallback=material_fallback_all.get(order.id) if include_items else None,
                 )
             )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)

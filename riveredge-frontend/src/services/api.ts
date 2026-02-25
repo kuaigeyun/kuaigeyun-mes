@@ -111,12 +111,16 @@ export async function apiRequest<T = any>(
   // 相对路径会被 Vite 的 proxy 配置自动代理到后端服务器
   let requestUrl = `${API_BASE_URL}${url}`;
   
-  // 处理查询参数
+  // 处理查询参数（数组会序列化为重复的 key，如 material_ids=1&material_ids=2）
   if (options?.params) {
     const searchParams = new URLSearchParams();
     Object.entries(options.params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        searchParams.append(key, String(value));
+        if (Array.isArray(value)) {
+          value.forEach((v) => searchParams.append(key, String(v)));
+        } else {
+          searchParams.append(key, String(value));
+        }
       }
     });
     const queryString = searchParams.toString();

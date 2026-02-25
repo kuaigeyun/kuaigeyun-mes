@@ -213,6 +213,10 @@ class DemandListResponse(BaseSchema):
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算）")
+    # 来源：上游单据类型与编码（销售订单/销售预测审核通过后下推生成需求时填充）
+    source_type: Optional[str] = Field(None, description="来源类型（sales_order/sales_forecast）")
+    source_id: Optional[int] = Field(None, description="来源ID")
+    source_code: Optional[str] = Field(None, description="来源编码")
 
     class Config:
         from_attributes = True

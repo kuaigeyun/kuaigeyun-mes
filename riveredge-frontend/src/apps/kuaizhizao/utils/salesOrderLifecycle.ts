@@ -120,10 +120,16 @@ function buildExecutionSubStages(record: SalesOrder): SubStage[] {
     },
   ];
 
-  // 销售出库：有交货进度但未满 100% 时该步为 active
+  // 销售出库：有交货进度但未满 100% 时该步为 active，并传入进度百分比
   if (delivery > 0 && delivery < 100) {
     const idx = stages.findIndex((s) => s.key === 'sales_delivery');
-    if (idx >= 0) stages[idx].status = 'active';
+    if (idx >= 0) {
+      stages[idx].status = 'active';
+      stages[idx].percent = Math.round(delivery);
+    }
+  } else if (delivery >= 100) {
+    const idx = stages.findIndex((s) => s.key === 'sales_delivery');
+    if (idx >= 0) stages[idx].percent = 100;
   }
 
   // 第一个 pending 标为 active（若尚未有 active）
