@@ -6,13 +6,16 @@
  * - 库存不足：红色小点
  * - 悬停显示库存数量
  *
+ * 在 SalesOrderIndicatorsProvider 内时使用批量拉取，否则单物料请求。
+ *
  * @author Luigi Lu
  * @date 2026-02-24
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'antd';
 import { apiRequest } from '../../../services/api';
+import { useSalesOrderIndicators } from './SalesOrderIndicatorsProvider';
 
 interface MaterialInventoryIndicatorProps {
   materialId?: number | null;
@@ -20,7 +23,7 @@ interface MaterialInventoryIndicatorProps {
   style?: React.CSSProperties;
 }
 
-/** 获取物料可用库存总量（汇总批次库存） */
+/** 获取物料可用库存总量（汇总批次库存）- 单物料请求，用于非 Provider 场景 */
 async function fetchMaterialInventory(materialId: number): Promise<number> {
   try {
     const res = await apiRequest<{ items?: { quantity: number }[] }>(
@@ -42,29 +45,40 @@ export const MaterialInventoryIndicator: React.FC<MaterialInventoryIndicatorProp
   requiredQuantity = 0,
   style,
 }) => {
+  const indicatorsCtx = useSalesOrderIndicators();
   const [inventory, setInventory] = useState<number | null>(null);
 
+  // 在 Provider 内：注册并优先使用批量数据
+  useEffect(() => {
+    if (!materialId || !indicatorsCtx) return;
+    indicatorsCtx.registerMaterialId(materialId);
+  }, [materialId, indicatorsCtx]);
+
+  // 不在 Provider 内：单物料请求
   useEffect(() => {
     if (!materialId) {
       setInventory(null);
       return;
     }
+    if (indicatorsCtx) return;
     let cancelled = false;
     setInventory(null);
     fetchMaterialInventory(materialId).then((qty) => {
       if (!cancelled) setInventory(qty);
     });
     return () => { cancelled = true; };
-  }, [materialId]);
+  }, [materialId, indicatorsCtx]);
 
   if (!materialId) return null;
 
+  const fromBatch = indicatorsCtx?.inventoryMap[materialId];
+  const inv = indicatorsCtx ? (fromBatch ?? 0) : (inventory ?? 0);
+  const isLoading = indicatorsCtx ? fromBatch === undefined : inventory === null;
   const req = Number(requiredQuantity) || 0;
-  const inv = inventory ?? 0;
-  const sufficient = inventory !== null && inv >= req;
+  const sufficient = !isLoading && inv >= req;
 
-  const dotColor = inventory === null ? '#d9d9d9' : sufficient ? '#52c41a' : '#ff4d4f';
-  const tipText = inventory === null ? '加载中...' : `库存：${inv}`;
+  const dotColor = isLoading ? '#d9d9d9' : sufficient ? '#52c41a' : '#ff4d4f';
+  const tipText = isLoading ? '加载中...' : `库存：${inv}`;
 
   return (
     <Tooltip title={tipText}>

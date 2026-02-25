@@ -231,6 +231,8 @@ class DemandService(AppBaseService[Demand]):
             query = query.filter(business_mode=filters['business_mode'])
         if filters.get('review_status'):
             query = query.filter(review_status=filters['review_status'])
+        if filters.get('pushed_to_computation') is not None:
+            query = query.filter(pushed_to_computation=filters['pushed_to_computation'])
         if filters.get('start_date'):
             query = query.filter(start_date__gte=filters['start_date'])
         if filters.get('end_date'):
@@ -308,16 +310,26 @@ class DemandService(AppBaseService[Demand]):
             if not demand:
                 raise NotFoundError("需求", str(demand_id))
             
-            # 只能更新草稿状态的需求
-            if demand.status != DemandStatus.DRAFT:
-                raise BusinessLogicError(f"只能更新草稿状态的需求，当前状态: {demand.status}")
-            
             # 准备更新数据
             update_data = demand_data.model_dump(exclude_unset=True, exclude={'updated_by'})
             update_data['updated_by'] = updated_by
+
+            # 判断是否草稿（兼容 DRAFT / 草稿）
+            is_draft = (demand.status or "").strip() in (DemandStatus.DRAFT, "DRAFT", "草稿")
+
+            # 非草稿状态：仅允许更新优先级、备注（与上游同步无关，用于排产等）
+            if not is_draft:
+                allowed_keys = {'priority', 'notes'}
+                update_data = {k: v for k, v in update_data.items() if k in allowed_keys}
+                if not update_data:
+                    raise BusinessLogicError(
+                        f"需求状态与上游同步，仅支持修改优先级和备注。当前状态: {demand.status}"
+                    )
+                update_data['updated_by'] = updated_by
             
             # 更新需求
-            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(**update_data)
+            if update_data:
+                await Demand.filter(tenant_id=tenant_id, id=demand_id).update(**update_data)
             
             # 返回更新后的需求
             return await self.get_demand_by_id(tenant_id, demand_id)

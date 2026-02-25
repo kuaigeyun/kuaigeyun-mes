@@ -6,7 +6,22 @@
 
 import React from 'react';
 import { Tooltip } from 'antd';
-import { BulbOutlined } from '@ant-design/icons';
+import {
+  BulbOutlined,
+  ApartmentOutlined,
+  CalculatorOutlined,
+  InboxOutlined,
+  FileAddOutlined,
+  PlayCircleOutlined,
+  SendOutlined,
+  FileTextOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
+  CheckCircleOutlined,
+  ThunderboltOutlined,
+  CarOutlined,
+  FileOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { SubStage } from './types';
 
@@ -26,9 +41,33 @@ export interface UniLifecycleStepperProps {
 }
 
 const NODE_SIZE = 40;
-const LINE_WIDTH = 8;
+const LINE_MIN_WIDTH = 8;
 const LINE_HEIGHT = 2;
 const INNER_FONT_SIZE = 9;
+
+/** 按阶段 key 映射默认图标 */
+const STAGE_KEY_ICONS: Record<string, React.ReactNode> = {
+  bom_check: <ApartmentOutlined />,
+  demand_compute: <CalculatorOutlined />,
+  material_ready: <InboxOutlined />,
+  work_order_create: <FileAddOutlined />,
+  work_order_exec: <PlayCircleOutlined />,
+  product_inbound: <InboxOutlined />,
+  sales_delivery: <SendOutlined />,
+  draft: <FileTextOutlined />,
+  pending_review: <ClockCircleOutlined />,
+  rejected: <CloseCircleOutlined />,
+  audited: <CheckCircleOutlined />,
+  effective: <ThunderboltOutlined />,
+  executing: <PlayCircleOutlined />,
+  delivered: <CarOutlined />,
+  completed: <CheckCircleOutlined />,
+  pushed: <CheckCircleOutlined />,
+};
+
+function getIconForStage(step: SubStage): React.ReactNode {
+  return step.icon ?? STAGE_KEY_ICONS[step.key] ?? <FileOutlined />;
+}
 
 function NodeCircle({
   status,
@@ -37,6 +76,8 @@ function NodeCircle({
   label,
   showLabelBelow,
   innerFontSize,
+  icon,
+  percent,
 }: {
   status: SubStage['status'];
   isException?: boolean;
@@ -44,21 +85,27 @@ function NodeCircle({
   label: string;
   showLabelBelow: boolean;
   innerFontSize: number;
+  icon: React.ReactNode;
+  percent?: number;
 }) {
+  // 最佳实践：已完成=绿，当前进行中=蓝，异常=红，待进行=灰
   const color =
     status === 'done'
-      ? 'var(--ant-color-success)'
+      ? 'var(--ant-color-success)' // 已完成：绿色
       : status === 'active'
         ? isException
-          ? 'var(--ant-color-error)'
-          : 'var(--ant-color-primary)'
-        : 'var(--ant-color-border)';
+          ? 'var(--ant-color-error)' // 异常/驳回：红色
+          : 'var(--ant-color-info, #1677ff)' // 当前进行中：蓝色
+        : 'var(--ant-color-border)'; // 待进行：灰色
   const textColor =
     status === 'pending' ? 'var(--ant-color-text-tertiary)' : 'var(--ant-color-text)';
+  const showPercent = percent != null && percent >= 0 && (status === 'active' || status === 'done');
+  const iconSize = showPercent ? size * 0.32 : size * 0.45;
   const node = (
     <span
       style={{
         display: 'inline-flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         width: size,
@@ -68,33 +115,47 @@ function NodeCircle({
         border: `2px solid ${color}`,
         flexShrink: 0,
         boxSizing: 'border-box',
+        gap: showPercent ? 1 : 0,
       }}
     >
-      <span
-        style={{
-          fontSize: innerFontSize,
-          lineHeight: 1.1,
-          color: textColor,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '85%',
-          textAlign: 'center',
-        }}
-      >
-        {label}
-      </span>
-    </span>
-  );
-  const content = (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      {node}
-      {showLabelBelow && (
-        <span style={{ fontSize: 12, color: textColor }}>{label}</span>
+      <span style={{ fontSize: iconSize, lineHeight: 1, color: textColor }}>{icon}</span>
+      {showPercent && (
+        <span
+          style={{
+            fontSize: innerFontSize,
+            lineHeight: 1.1,
+            color: textColor,
+            fontWeight: 500,
+          }}
+        >
+          {Math.round(percent)}%
+        </span>
       )}
     </span>
   );
-  return <Tooltip title={label}>{content}</Tooltip>;
+  const content = (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%', minWidth: 0, overflow: 'hidden' }}>
+      {node}
+      {showLabelBelow && (
+        <span
+          style={{
+            fontSize: 12,
+            color: textColor,
+            textAlign: 'center',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          {label}
+        </span>
+      )}
+    </span>
+  );
+  const tooltipTitle = percent != null ? `${label} ${Math.round(percent)}%` : label;
+  return <Tooltip title={tooltipTitle}>{content}</Tooltip>;
 }
 
 export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
@@ -111,29 +172,35 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="uni-lifecycle-stepper" style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 0 }}>
+      <div className="uni-lifecycle-stepper" style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'nowrap', gap: 0, width: '100%' }}>
         {steps.map((step, idx) => (
           <React.Fragment key={step.key}>
             {idx > 0 && (
               <span
                 style={{
+                  flex: 1,
+                  minWidth: LINE_MIN_WIDTH,
                   alignSelf: 'center',
-                  width: LINE_WIDTH,
-                  minWidth: LINE_WIDTH,
                   height: LINE_HEIGHT,
                   backgroundColor: 'var(--ant-color-border)',
                   marginBottom: showLabels ? 20 : 0,
                 }}
               />
             )}
-            <NodeCircle
-              status={step.status}
-              isException={isException && step.status === 'active'}
-              size={nodeSize}
-              label={step.label}
-              showLabelBelow={showLabels}
-              innerFontSize={innerFontSize}
-            />
+            <span style={{ flex: 1, minWidth: nodeSize, display: 'flex', justifyContent: 'center' }}>
+              <span style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                <NodeCircle
+                  status={step.status}
+                  isException={isException && step.status === 'active'}
+                  size={nodeSize}
+                  label={step.label}
+                  showLabelBelow={showLabels}
+                  innerFontSize={innerFontSize}
+                  icon={getIconForStage(step)}
+                  percent={step.percent}
+                />
+              </span>
+            </span>
           </React.Fragment>
         ))}
       </div>

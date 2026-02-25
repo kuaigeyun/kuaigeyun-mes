@@ -3,6 +3,8 @@
  * 各业务 getXxxLifecycle(record) 返回此结构，供 UniLifecycle 展示。
  */
 
+import type { ReactNode } from 'react';
+
 /** 子阶段状态：已完成 / 进行中 / 待进行 */
 export type SubStageStatus = 'done' | 'active' | 'pending';
 
@@ -11,6 +13,10 @@ export interface SubStage {
   key: string;
   label: string;
   status: SubStageStatus;
+  /** 圆环内展示的图标，可选；未传时按 key 映射默认图标 */
+  icon?: ReactNode;
+  /** 该节点进度 0～100，可选；有值时在圆环内显示百分比 */
+  percent?: number;
 }
 
 /** 生命周期结果，与业务解耦 */

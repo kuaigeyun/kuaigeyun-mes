@@ -109,7 +109,9 @@ export interface SalesOrderListParams {
   review_status?: string;
   start_date?: string;
   end_date?: string;
+  customer_name?: string;
   order_by?: string;
+  include_items?: boolean;
 }
 
 /**

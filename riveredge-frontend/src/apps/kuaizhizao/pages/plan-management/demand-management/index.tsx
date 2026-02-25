@@ -11,8 +11,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert } from 'antd';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -42,6 +42,24 @@ import type { DocumentRelationData } from '../../../../../components/document-re
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
+import dayjs from 'dayjs';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+
+/** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
+function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
+  if (!value) return '-';
+  const dict = map[code];
+  if (!dict) return value;
+  const label = dict[value] ?? Object.entries(dict).find(([k]) => k.toUpperCase() === value.toUpperCase())?.[1];
+  return label ?? value;
+}
+
+/** 格式化时间为 YYYY-MM-DD HH:mm:ss */
+function formatDateTime(t: string | undefined): string {
+  if (!t) return '-';
+  const d = dayjs(t);
+  return d.isValid() ? d.format('YYYY-MM-DD HH:mm:ss') : t;
+}
 
 /** 统一状态判断（兼容枚举与中文） */
 function isDemandDraft(d: Demand): boolean {
@@ -84,6 +102,7 @@ const DemandManagementPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [isEditingDraft, setIsEditingDraft] = useState(false); // 当前编辑的需求是否为草稿（草稿可改更多字段）
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -94,6 +113,8 @@ const DemandManagementPage: React.FC = () => {
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [detailTabKey, setDetailTabKey] = useState<string>('detail');
+  /** 数据字典 value->label 映射（用于详情抽屉显示标签） */
+  const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
 
   // 需求类型选择（销售预测/销售订单），支持从 URL 参数读取
   const urlDemandType = searchParams.get('demand_type') as 'sales_forecast' | 'sales_order' | null;
@@ -108,6 +129,27 @@ const DemandManagementPage: React.FC = () => {
       setDemandType(urlDemandType);
     }
   }, [urlDemandType]);
+
+  /** 页面加载时预加载数据字典（发货方式、付款条件、物料单位），用于详情抽屉显示标签值 */
+  useEffect(() => {
+    const loadDicts = async () => {
+      const result: Record<string, Record<string, string>> = {};
+      const codes = ['SHIPPING_METHOD', 'PAYMENT_TERMS', 'MATERIAL_UNIT'];
+      for (const code of codes) {
+        try {
+          const dict = await getDataDictionaryByCode(code);
+          const items = await getDictionaryItemList(dict.uuid, true);
+          const map: Record<string, string> = {};
+          items.forEach((it) => { map[it.value] = it.label; });
+          result[code] = map;
+        } catch {
+          result[code] = {};
+        }
+      }
+      setDictLabelMap(result);
+    };
+    loadDicts();
+  }, []);
 
   /**
    * 需求由销售订单/销售预测审核通过后自动产生，不再支持手动新建
@@ -126,6 +168,7 @@ const DemandManagementPage: React.FC = () => {
         const data = await getDemand(id);
         formRef.current?.setFieldsValue(data);
         setDemandType(data.demand_type || 'sales_forecast');
+        setIsEditingDraft(isDemandDraft(data));
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
       }
@@ -263,6 +306,18 @@ const DemandManagementPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      width: 150,
+      ellipsis: true,
+    },
+    {
+      title: '总数量',
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+    },
+    {
       title: '业务模式',
       dataIndex: 'business_mode',
       width: 100,
@@ -335,42 +390,29 @@ const DemandManagementPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '总数量',
-      dataIndex: 'total_quantity',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      align: 'right',
-    },
-    {
-      title: '总金额',
-      dataIndex: 'total_amount',
-      width: 120,
-      align: 'right',
-      render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 320,
-      fixed: 'right',
+      fixed: 'right' as const,
+      valueType: 'select',
+      valueEnum: {
+        草稿: { text: '草稿' },
+        待审核: { text: '待审核' },
+        已驳回: { text: '已驳回' },
+        已审核: { text: '已审核' },
+        已下推计算: { text: '已下推计算' },
+      },
       render: (_: unknown, record: Demand) => {
         const lifecycle = getDemandLifecycle(record);
-        const mainStages = lifecycle.mainStages ?? [];
-        if (mainStages.length === 0) return statusDisplayText(record.status);
-        return (
-          <UniLifecycleStepper
-            steps={mainStages}
-            status={lifecycle.status}
-            nodeSize={36}
-            showLabels={false}
-            innerFontSize={9}
-          />
-        );
+        const stageName = lifecycle.stageName && lifecycle.stageName !== '-' ? lifecycle.stageName : statusDisplayText(record.status);
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'warning',
+          已驳回: 'error',
+          已审核: 'green',
+          已下推计算: 'blue',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -388,11 +430,9 @@ const DemandManagementPage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>
-          {isDemandDraft(record) && (
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
-              编辑
-            </Button>
-          )}
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
+            {isDemandDraft(record) ? '编辑' : '修改'}
+          </Button>
           <UniWorkflowActions
             record={record}
             entityName="需求"
@@ -451,7 +491,20 @@ const DemandManagementPage: React.FC = () => {
             } else if (urlDemandType) {
               apiParams.demand_type = urlDemandType;
             }
-            if (searchFormValues?.status) {
+            // 生命周期搜索映射到 status（与销售订单一致）
+            if (searchFormValues?.lifecycle) {
+              const lifecycleToStatus: Record<string, string> = {
+                草稿: 'DRAFT',
+                待审核: 'PENDING_REVIEW',
+                已驳回: 'REJECTED',
+                已审核: 'AUDITED',
+                已下推计算: 'AUDITED',
+              };
+              apiParams.status = lifecycleToStatus[searchFormValues.lifecycle] ?? searchFormValues.lifecycle;
+              if (searchFormValues.lifecycle === '已下推计算') {
+                apiParams.pushed_to_computation = true;
+              }
+            } else if (searchFormValues?.status) {
               apiParams.status = searchFormValues.status;
             }
             if (searchFormValues?.business_mode) {
@@ -489,10 +542,8 @@ const DemandManagementPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           showCreateButton={false}
-          showEditButton={true}
-          onEdit={handleEdit}
-          showDeleteButton={true}
-          onDelete={handleDelete}
+          showEditButton={false}
+          showDeleteButton={false}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -536,12 +587,12 @@ const DemandManagementPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 编辑需求 Modal（需求由销售订单/销售预测审核通过后自动产生，仅支持编辑如优先级） */}
+      {/* 编辑需求 Modal：非草稿仅可改优先级和备注；草稿可改更多字段 */}
       <Modal
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
-        title="编辑需求"
-        width={900}
+        title={isEditingDraft ? '编辑需求' : '修改需求'}
+        width={isEditingDraft ? 560 : 480}
         footer={null}
         destroyOnClose
       >
@@ -562,118 +613,129 @@ const DemandManagementPage: React.FC = () => {
             ),
           }}
         >
-          <ProFormSelect
-            name="priority"
-            label="优先级"
-            options={[
-              { label: '高 (1)', value: 1 },
-              { label: '中 (5)', value: 5 },
-              { label: '低 (10)', value: 10 },
-            ]}
-            fieldProps={{ style: { width: 120 } }}
-          />
-          <ProFormSelect
-            name="demand_type"
-            label="需求类型"
-            options={[
-              { label: '销售预测', value: 'sales_forecast' },
-              { label: '销售订单', value: 'sales_order' },
-            ]}
-            rules={[{ required: true, message: '请选择需求类型' }]}
-            fieldProps={{
-              onChange: (value: 'sales_forecast' | 'sales_order') => setDemandType(value),
-            }}
-            disabled={isEdit}
-          />
-          <ProFormText
-            name="demand_name"
-            label="需求名称"
-            placeholder="请输入需求名称"
-            rules={[{ required: true, message: '请输入需求名称' }]}
-          />
-          <ProFormDatePicker
-            name="start_date"
-            label="开始日期"
-            rules={[{ required: true, message: '请选择开始日期' }]}
-            width="100%"
-          />
-          <ProFormDatePicker
-            name="end_date"
-            label="结束日期"
-            width="100%"
-          />
-          {/* 销售预测专用字段 */}
-          {demandType === 'sales_forecast' && (
-            <>
-              <ProFormText
-                name="forecast_period"
-                label="预测周期"
-                placeholder="例如：2026-01"
-                rules={[{ required: true, message: '请输入预测周期' }]}
-              />
-            </>
+          {/* 非草稿：仅可修改优先级和备注（与上游同步） */}
+          {!isEditingDraft && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <ProFormSelect
+                  name="priority"
+                  label="优先级"
+                  options={[
+                    { label: '高 (1)', value: 1 },
+                    { label: '中 (5)', value: 5 },
+                    { label: '低 (10)', value: 10 },
+                  ]}
+                  fieldProps={{ style: { width: 200 } }}
+                />
+              </Col>
+              <Col span={24}>
+                <ProFormTextArea
+                  name="notes"
+                  label="备注"
+                  fieldProps={{ rows: 3 }}
+                />
+              </Col>
+            </Row>
           )}
-          {/* 销售订单专用字段 */}
-          {demandType === 'sales_order' && (
-            <>
-              <ProFormDigit
-                name="customer_id"
-                label="客户ID"
-                rules={[{ required: true, message: '请输入客户ID' }]}
-              />
-              <ProFormText
-                name="customer_name"
-                label="客户名称"
-                rules={[{ required: true, message: '请输入客户名称' }]}
-              />
-              <ProFormText
-                name="customer_contact"
-                label="客户联系人"
-              />
-              <ProFormText
-                name="customer_phone"
-                label="客户电话"
-              />
-              <ProFormDatePicker
-                name="order_date"
-                label="订单日期"
-                rules={[{ required: true, message: '请选择订单日期' }]}
-                width="100%"
-              />
-              <ProFormDatePicker
-                name="delivery_date"
-                label="交货日期"
-                rules={[{ required: true, message: '请选择交货日期' }]}
-                width="100%"
-              />
-              <ProFormDigit
-                name="salesman_id"
-                label="销售员ID"
-              />
-              <ProFormText
-                name="salesman_name"
-                label="销售员姓名"
-              />
-              <ProFormTextArea
-                name="shipping_address"
-                label="收货地址"
-                fieldProps={{ rows: 2 }}
-              />
-              <ProFormText
-                name="shipping_method"
-                label="发货方式"
-              />
-              <ProFormText
-                name="payment_terms"
-                label="付款条件"
-              />
-            </>
+          {/* 草稿：可编辑必要字段 */}
+          {isEditingDraft && (
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormSelect
+                  name="priority"
+                  label="优先级"
+                  options={[
+                    { label: '高 (1)', value: 1 },
+                    { label: '中 (5)', value: 5 },
+                    { label: '低 (10)', value: 10 },
+                  ]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormSelect
+                  name="demand_type"
+                  label="需求类型"
+                  options={[
+                    { label: '销售预测', value: 'sales_forecast' },
+                    { label: '销售订单', value: 'sales_order' },
+                  ]}
+                  rules={[{ required: true, message: '请选择需求类型' }]}
+                  fieldProps={{
+                    onChange: (value: 'sales_forecast' | 'sales_order') => setDemandType(value),
+                    style: { width: '100%' },
+                  }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormText
+                  name="demand_name"
+                  label="需求名称"
+                  placeholder="请输入需求名称"
+                  rules={[{ required: true, message: '请输入需求名称' }]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="start_date"
+                  label="开始日期"
+                  rules={[{ required: true, message: '请选择开始日期' }]}
+                  width="100%"
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="end_date"
+                  label="结束日期"
+                  width="100%"
+                />
+              </Col>
+              {demandType === 'sales_forecast' && (
+                <Col span={12}>
+                  <ProFormText
+                    name="forecast_period"
+                    label="预测周期"
+                    placeholder="例如：2026-01"
+                    rules={[{ required: true, message: '请输入预测周期' }]}
+                  />
+                </Col>
+              )}
+              {demandType === 'sales_order' && (
+                <>
+                  <Col span={12}>
+                    <ProFormText
+                      name="customer_name"
+                      label="客户名称"
+                      rules={[{ required: true, message: '请输入客户名称' }]}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormDatePicker
+                      name="order_date"
+                      label="订单日期"
+                      rules={[{ required: true, message: '请选择订单日期' }]}
+                      width="100%"
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormDatePicker
+                      name="delivery_date"
+                      label="交货日期"
+                      rules={[{ required: true, message: '请选择交货日期' }]}
+                      width="100%"
+                    />
+                  </Col>
+                </>
+              )}
+              <Col span={24}>
+                <ProFormTextArea
+                  name="notes"
+                  label="备注"
+                  fieldProps={{ rows: 3 }}
+                />
+              </Col>
+            </Row>
           )}
-          <ProFormTextArea
-            name="notes"
-            label="备注"
-            fieldProps={{ rows: 3 }}
-          />
         </ProForm>
       </Modal>
 
@@ -682,7 +744,8 @@ const DemandManagementPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         title={`需求详情 - ${currentDemand?.demand_code || ''}`}
-        size="large"
+        width="50%"
+        styles={{ body: { paddingTop: 8 } }}
         extra={
           currentDemand && (
             <Space>
@@ -736,7 +799,7 @@ const DemandManagementPage: React.FC = () => {
         }
       >
         {currentDemand && (
-          <div style={{ padding: '16px 0' }}>
+          <div style={{ padding: '0 0 16px 0' }}>
             <Tabs
               activeKey={detailTabKey}
               onChange={(key) => {
@@ -789,34 +852,6 @@ const DemandManagementPage: React.FC = () => {
                           style={{ marginBottom: 16 }}
                         />
                       )}
-                      <div style={{ marginBottom: 24 }}>
-                        <h4 style={{ marginBottom: 12 }}>状态</h4>
-                        {(() => {
-                          const lifecycle = getDemandLifecycle(currentDemand);
-                          const mainStages = lifecycle.mainStages ?? [];
-                          const subStages = lifecycle.subStages ?? [];
-                          return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                              {mainStages.length > 0 && (
-                                <UniLifecycleStepper
-                                  steps={mainStages}
-                                  status={lifecycle.status}
-                                  showLabels
-                                  nextStepSuggestions={lifecycle.nextStepSuggestions}
-                                />
-                              )}
-                              {subStages.length > 0 && (
-                                <div>
-                                  <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                                    执行中 · 全链路
-                                  </div>
-                                  <UniLifecycleStepper steps={subStages} showLabels />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
                       <ProDescriptions
                         column={2}
                         title="基本信息"
@@ -852,15 +887,16 @@ const DemandManagementPage: React.FC = () => {
                             <ProDescriptions.Item label="客户电话" dataIndex="customer_phone" />
                             <ProDescriptions.Item label="销售员" dataIndex="salesman_name" />
                             <ProDescriptions.Item label="收货地址" dataIndex="shipping_address" span={2} />
-                            <ProDescriptions.Item label="发货方式" dataIndex="shipping_method" />
-                            <ProDescriptions.Item label="付款条件" dataIndex="payment_terms" />
+                            <ProDescriptions.Item label="发货方式">
+                              {getDictLabel(dictLabelMap, 'SHIPPING_METHOD', currentDemand.shipping_method)}
+                            </ProDescriptions.Item>
+                            <ProDescriptions.Item label="付款条件">
+                              {getDictLabel(dictLabelMap, 'PAYMENT_TERMS', currentDemand.payment_terms)}
+                            </ProDescriptions.Item>
                           </>
                         )}
                         <ProDescriptions.Item label="总数量" dataIndex="total_quantity" />
-                        <ProDescriptions.Item label="总金额" dataIndex="total_amount">
-                          {currentDemand.total_amount ? `¥${Number(currentDemand.total_amount).toLocaleString()}` : '-'}
-                        </ProDescriptions.Item>
-                        <ProDescriptions.Item label="状态" dataIndex="status">
+                        <ProDescriptions.Item label="状态">
                           <Tag
                             color={
                               statusDisplayText(currentDemand.status) === '已审核' ? 'success' :
@@ -871,7 +907,7 @@ const DemandManagementPage: React.FC = () => {
                             {statusDisplayText(currentDemand.status)}
                           </Tag>
                         </ProDescriptions.Item>
-                        <ProDescriptions.Item label="审核状态" dataIndex="review_status">
+                        <ProDescriptions.Item label="审核状态">
                           <Tag
                             color={
                               reviewStatusDisplayText(currentDemand.review_status) === '审核通过' ? 'success' :
@@ -897,6 +933,35 @@ const DemandManagementPage: React.FC = () => {
                           <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
                         )}
                       </ProDescriptions>
+
+                      <div style={{ marginTop: 24, marginBottom: 24 }}>
+                        <h4 style={{ marginBottom: 12 }}>生命周期状态</h4>
+                        {(() => {
+                          const lifecycle = getDemandLifecycle(currentDemand);
+                          const mainStages = lifecycle.mainStages ?? [];
+                          const subStages = lifecycle.subStages ?? [];
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                              {mainStages.length > 0 && (
+                                <UniLifecycleStepper
+                                  steps={mainStages}
+                                  status={lifecycle.status}
+                                  showLabels
+                                  nextStepSuggestions={lifecycle.nextStepSuggestions}
+                                />
+                              )}
+                              {subStages.length > 0 && (
+                                <div>
+                                  <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                                    执行中 · 全链路
+                                  </div>
+                                  <UniLifecycleStepper steps={subStages} showLabels />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
 
                       {(currentDemand as any).duration_info && (
                         <div style={{ marginTop: 24 }}>
@@ -950,7 +1015,12 @@ const DemandManagementPage: React.FC = () => {
                               { title: '物料编码', dataIndex: 'material_code', width: 120 },
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               { title: '物料规格', dataIndex: 'material_spec', width: 120 },
-                              { title: '单位', dataIndex: 'material_unit', width: 80 },
+                              {
+                                title: '单位',
+                                dataIndex: 'material_unit',
+                                width: 80,
+                                render: (v: string) => getDictLabel(dictLabelMap, 'MATERIAL_UNIT', v) || v || '-',
+                              },
                               { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
                               ...(currentDemand.demand_type === 'sales_forecast' ? [
                                 { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
@@ -960,8 +1030,6 @@ const DemandManagementPage: React.FC = () => {
                                 { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
                                 { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
                               ]),
-                              { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
-                              { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
                             ]}
                             dataSource={currentDemand.items}
                             pagination={false}
@@ -1001,13 +1069,27 @@ const DemandManagementPage: React.FC = () => {
                       dataSource={recalcHistory}
                       rowKey="id"
                       columns={[
-                        { title: '重算时间', dataIndex: 'recalc_at', width: 180, render: (t) => t || '-' },
-                        { title: '触发类型', dataIndex: 'trigger_type', width: 100 },
-                        { title: '来源类型', dataIndex: 'source_type', width: 100 },
-                        { title: '来源ID', dataIndex: 'source_id', width: 90 },
-                        { title: '触发原因', dataIndex: 'trigger_reason', ellipsis: true },
-                        { title: '结果', dataIndex: 'result', width: 80 },
-                        { title: '备注', dataIndex: 'message', ellipsis: true },
+                        { title: '操作时间', dataIndex: 'recalc_at', width: 180, render: (t) => formatDateTime(t) },
+                        {
+                          title: '触发方式',
+                          dataIndex: 'trigger_type',
+                          width: 100,
+                          render: (v) => (v === 'upstream_change' ? '上游变更' : v === 'manual' ? '手动触发' : v || '-'),
+                        },
+                        {
+                          title: '数据来源',
+                          dataIndex: 'source_type',
+                          width: 100,
+                          render: (v) => (v === 'sales_order' ? '销售订单' : v === 'sales_forecast' ? '销售预测' : v || '-'),
+                        },
+                        { title: '变更说明', dataIndex: 'trigger_reason', ellipsis: true, render: (v) => v || '-' },
+                        {
+                          title: '执行结果',
+                          dataIndex: 'result',
+                          width: 90,
+                          render: (v) => (v === 'success' ? '成功' : v === 'failed' ? '失败' : v || '-'),
+                        },
+                        { title: '说明', dataIndex: 'message', ellipsis: true, render: (v) => v || '-' },
                       ]}
                       pagination={false}
                     />
@@ -1015,7 +1097,7 @@ const DemandManagementPage: React.FC = () => {
                 },
                 {
                   key: 'snapshots',
-                  label: '快照',
+                  label: '变更记录',
                   children: (
                     <Table<DemandSnapshotItem>
                       size="small"
@@ -1027,7 +1109,7 @@ const DemandManagementPage: React.FC = () => {
                           <div style={{ padding: 8 }}>
                             {record.demand_snapshot && (
                               <div style={{ marginBottom: 12 }}>
-                                <strong>需求快照：</strong>
+                                <strong>变更前需求数据：</strong>
                                 <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
                                   {JSON.stringify(record.demand_snapshot, null, 2)}
                                 </pre>
@@ -1035,22 +1117,37 @@ const DemandManagementPage: React.FC = () => {
                             )}
                             {record.demand_items_snapshot && record.demand_items_snapshot.length > 0 && (
                               <>
-                                <strong>需求明细快照：</strong>
+                                <strong>变更前明细数据：</strong>
                                 <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
                                   {JSON.stringify(record.demand_items_snapshot, null, 2)}
                                 </pre>
                               </>
                             )}
                             {!record.demand_snapshot && (!record.demand_items_snapshot || record.demand_items_snapshot.length === 0) && (
-                              <span style={{ color: '#999' }}>无快照内容</span>
+                              <span style={{ color: '#999' }}>暂无详细数据</span>
                             )}
                           </div>
                         ),
                       }}
                       columns={[
-                        { title: '快照时间', dataIndex: 'snapshot_at', width: 180, render: (t) => t || '-' },
-                        { title: '类型', dataIndex: 'snapshot_type', width: 100 },
-                        { title: '触发原因', dataIndex: 'trigger_reason', ellipsis: true },
+                        { title: '记录时间', dataIndex: 'snapshot_at', width: 180, render: (t) => formatDateTime(t) },
+                        {
+                          title: '变更类型',
+                          dataIndex: 'snapshot_type',
+                          width: 100,
+                          render: (v) => (v === 'before_recalc' ? '重算前' : v || '-'),
+                        },
+                        {
+                          title: '变更说明',
+                          dataIndex: 'trigger_reason',
+                          ellipsis: true,
+                          render: (v) => {
+                            if (!v) return '-';
+                            if (v.includes('sales_order')) return '销售订单变更';
+                            if (v.includes('sales_forecast')) return '销售预测变更';
+                            return v;
+                          },
+                        },
                       ]}
                       pagination={false}
                     />

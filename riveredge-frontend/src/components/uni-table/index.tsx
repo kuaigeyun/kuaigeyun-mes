@@ -29,6 +29,8 @@ import {
   TabletOutlined,
   QuestionCircleOutlined,
   SyncOutlined,
+  UnorderedListOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons'
 import { QuerySearchButton } from '../uni-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
@@ -389,18 +391,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   showQuickJumper?: boolean
   /**
    * 视图类型配置
-   * 支持：'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
+   * 支持：'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
    * 默认：['table', 'help'] - 表格视图 + 帮助视图
    */
-  viewTypes?: Array<'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'>
+  viewTypes?: Array<'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'>
   /**
    * 默认视图类型（默认：'table'）
    */
-  defaultViewType?: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
+  defaultViewType?: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
   /**
    * 视图切换回调
    */
-  onViewTypeChange?: (viewType: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch') => void
+  onViewTypeChange?: (viewType: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt') => void
   /**
    * 帮助视图配置（仅当 viewTypes 包含 'help' 时生效）
    */
@@ -409,6 +411,17 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     content?: ReactNode
     /** 帮助标题（默认：使用帮助） */
     title?: string
+  }
+  /**
+   * 明细表格视图列（仅当 viewTypes 包含 'detailTable' 时生效，用于明细平铺表格）
+   */
+  detailTableColumns?: ProColumns<T>[]
+  /**
+   * 甘特图视图配置（仅当 viewTypes 包含 'gantt' 时生效）
+   */
+  ganttViewConfig?: {
+    /** 自定义甘特图渲染 */
+    renderGantt?: (data: T[]) => ReactNode
   }
   /**
    * 卡片视图配置（仅当 viewTypes 包含 'card' 时生效）
@@ -426,6 +439,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     columns?:
       | number
       | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number; xxl?: number }
+    /**
+     * 分组字段（如按生命周期分组），分组后每组内使用瀑布流布局
+     */
+    groupByField?: string
+    /**
+     * 布局：grid 网格 | waterfall 瀑布流
+     */
+    layout?: 'grid' | 'waterfall'
   }
   /**
    * 看板视图配置（仅当 viewTypes 包含 'kanban' 时生效）
@@ -547,6 +568,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   viewTypes = ['table', 'help'],
   defaultViewType = 'table',
   onViewTypeChange,
+  detailTableColumns,
+  ganttViewConfig,
   helpViewConfig,
   cardViewConfig,
   kanbanViewConfig,
@@ -577,7 +600,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<
-    'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch'
+    'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
   >(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
@@ -648,9 +671,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
   const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')
 
+  // 明细表格视图使用 detailTableColumns，否则使用 columns
+  const effectiveColumns = React.useMemo(() => {
+    if (currentViewType === 'detailTable' && detailTableColumns && detailTableColumns.length > 0) {
+      return detailTableColumns
+    }
+    return columns
+  }, [currentViewType, columns, detailTableColumns])
+
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
   const processedColumns = React.useMemo(() => {
-    return columns.map((col: any) => {
+    return effectiveColumns.map((col: any) => {
       if ((col.valueType === 'date' || col.valueType === 'dateTime') && !col.render && !col.valueFormatter) {
         const dataIndex = col.dataIndex
         return {
@@ -669,12 +700,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       return col
     })
-  }, [columns, dateFormatKey])
+  }, [effectiveColumns, dateFormatKey])
 
   // 检测是否有操作列（用于决定scroll配置）
   // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
   const hasActionColumn = React.useMemo(() => {
-    return columns.some(col => {
+    return effectiveColumns.some(col => {
       const dataIndex = col.dataIndex
       const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
       const key = col.key || fieldName
@@ -689,7 +720,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         (!dataIndex && col.render && typeof col.render === 'function')
       )
     })
-  }, [columns])
+  }, [effectiveColumns])
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -713,7 +744,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    * 如果 tableData 为空且 actionRef 可用，主动触发数据加载
    */
   useEffect(() => {
-    if (currentViewType !== 'table' && tableData.length === 0 && actionRef?.current) {
+    if (currentViewType !== 'table' && currentViewType !== 'detailTable' && tableData.length === 0 && actionRef?.current) {
       // 延迟执行，确保组件完全初始化
       setTimeout(() => {
         actionRef.current?.reload()
@@ -876,7 +907,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 处理视图类型切换
    */
-  const handleViewTypeChange = (viewType: 'table' | 'help' | 'card' | 'kanban' | 'stats' | 'touch') => {
+  const handleViewTypeChange = (viewType: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt') => {
     setCurrentViewType(viewType)
     if (onViewTypeChange) {
       onViewTypeChange(viewType)
@@ -893,8 +924,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
     const viewTypeOptions = [
       { value: 'table', label: t('components.uniTable.viewTable'), icon: TableOutlined },
+      { value: 'detailTable', label: t('components.uniTable.viewDetailTable'), icon: UnorderedListOutlined },
       { value: 'card', label: t('components.uniTable.viewCard'), icon: AppstoreOutlined },
       { value: 'kanban', label: t('components.uniTable.viewKanban'), icon: BarsOutlined },
+      { value: 'gantt', label: t('components.uniTable.viewGantt'), icon: ProjectOutlined },
       { value: 'stats', label: t('components.uniTable.viewStats'), icon: BarChartOutlined },
       { value: 'touch', label: t('components.uniTable.viewTouch'), icon: TabletOutlined },
       { value: 'help', label: t('components.uniTable.viewHelp'), icon: QuestionCircleOutlined },
@@ -1325,19 +1358,29 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           opacity: 0.5 !important;
         }
         /* 统一按钮阴影：高级搜索按钮、重置按钮、钉住的条件、视图按钮 */
-        /* 高级搜索和重置按钮（QuerySearchButton 组件内的按钮） */
+        /* 高级搜索和重置按钮（QuerySearchButton 组件内的按钮）- 统一高度 32px */
         .pro-table-button-container .ant-btn[type="text"]:not(.ant-btn-dangerous):not(.ant-radio-button-wrapper) {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
+          height: 32px !important;
         }
-        /* 钉住的条件容器（包含多个按钮的 div） */
-        .pro-table-button-container > div > div[style*="borderRadius"] {
+        /* 钉住的条件容器 - 与模糊搜索相同的阴影效果 */
+        .pro-table-button-container .uni-query-pinned-conditions {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+          border-color: ${token.colorBorderSecondary} !important;
         }
-        /* 视图切换按钮组 */
+        html[data-theme="dark"] body .pro-table-button-container .uni-query-pinned-conditions {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
+        }
+        /* 视图切换按钮组 - 统一高度 32px */
         .pro-table-button-container .ant-radio-group {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
+          height: 32px !important;
+        }
+        .pro-table-button-container .ant-radio-group .ant-radio-button-wrapper {
+          height: 32px !important;
+          line-height: 30px !important;
         }
         /* 确保滚动条在隐藏时不占位 */
         .uni-table-container, .uni-table-root {
@@ -1427,7 +1470,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
               style={{
-                display: currentViewType === 'table' ? 'block' : 'none',
+                display: currentViewType === 'table' || currentViewType === 'detailTable' ? 'block' : 'none',
                 width: '100%',
               }}
             >
@@ -1543,20 +1586,75 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             </div>
           </ConfigProvider>
 
+          {/* 甘特图视图 */}
+          {currentViewType === 'gantt' && viewTypes.includes('gantt') && (
+            <div style={{ padding: 0, minHeight: '400px' }}>
+              {ganttViewConfig?.renderGantt ? (
+                ganttViewConfig.renderGantt(tableData)
+              ) : (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    color: '#999',
+                    background: '#fafafa',
+                    borderRadius: '4px',
+                    border: '1px dashed #d9d9d9',
+                  }}
+                >
+                  <ProjectOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>{t('components.uniTable.ganttViewHint')}</div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 卡片视图 */}
           {currentViewType === 'card' && viewTypes.includes('card') && (
             <div style={{ padding: '0 0 16px 0', minHeight: '400px' }}>
               {cardViewConfig?.renderCard ? (
                 tableData.length > 0 ? (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                      gap: '16px',
-                    }}
-                  >
-                    {tableData.map((item, index) => cardViewConfig.renderCard!(item, index))}
-                  </div>
+                  (() => {
+                    const layout = cardViewConfig.layout ?? 'grid'
+                    const groupByField = cardViewConfig.groupByField
+                    if (groupByField) {
+                      const groups = new Map<string, T[]>()
+                      tableData.forEach(item => {
+                        const key = String((item as any)[groupByField] ?? '-')
+                        if (!groups.has(key)) groups.set(key, [])
+                        groups.get(key)!.push(item)
+                      })
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                          {Array.from(groups.entries()).map(([groupKey, items]) => (
+                            <div key={groupKey}>
+                              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#666' }}>{groupKey}</div>
+                              <div
+                                style={layout === 'waterfall' ? { columns: '300px auto', columnGap: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
+                              >
+                                {items.map((item, index) => (
+                                  <div key={index} style={layout === 'waterfall' ? { breakInside: 'avoid' as const, marginBottom: 16 } : {}}>
+                                    {cardViewConfig!.renderCard!(item, index)}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    return (
+                      <div
+                        style={layout === 'waterfall' ? { columns: '300px auto', columnGap: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}
+                      >
+                        {tableData.map((item, index) => (
+                          <div key={index} style={layout === 'waterfall' ? { breakInside: 'avoid' as const, marginBottom: 16 } : {}}>
+                            {cardViewConfig!.renderCard!(item, index)}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()
                 ) : (
                   <Empty
                     description={t('components.uniTable.emptyCard')}

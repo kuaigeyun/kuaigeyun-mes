@@ -2770,7 +2770,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           style={{
             backgroundColor: token.colorFillTertiary,
             color: token.colorPrimary,
-            height: '31px',
+            height: '32px',
             boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
             borderRadius: token.borderRadius,
           }}
@@ -2793,7 +2793,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           style={{
             backgroundColor: token.colorFillTertiary,
             color: token.colorTextSecondary,
-            height: '31px',
+            height: '32px',
             boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
             borderRadius: token.borderRadius,
           }}
@@ -2808,19 +2808,21 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         >
           {t('components.uniQuery.reset')}
         </Button>
-        {/* 显示钉住的搜索条件 - 使用 TAB 样式，与前面按钮大小一致 */}
+        {/* 显示钉住的搜索条件 - 使用 TAB 样式，与模糊搜索相同的阴影效果 */}
         {pinnedSearches.length > 0 && (
           <div 
+            className="uni-query-pinned-conditions"
             style={{ 
               display: 'flex', 
               alignItems: 'center', 
               gap: 0, 
               marginLeft: 8,
               borderRadius: token.borderRadius,
-              border: `1px solid ${token.colorBorder}`,
+              border: `1px solid ${token.colorBorderSecondary}`,
               overflow: 'hidden',
               backgroundColor: token.colorBgContainer,
               height: '32px', // 与高级搜索按钮高度一致
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
             }}
           >
             {/* 显示前 N 个钉住的条件 - 使用 Button TAB 样式 */}

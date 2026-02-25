@@ -4,16 +4,12 @@
  * 基于 @svar-ui/react-gantt 实现工单级时间轴展示、拖拽调整、日/周/月视图。
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
+import '../gantt-scrollbar.less';
 import type { WorkOrderForGantt } from './types';
-import {
-  workOrderToGanttTask,
-  sortTasksByWorkCenter,
-  getTaskColorByStatus,
-  getTaskColorByPriority,
-} from './utils';
+import { workOrderToGanttTask, sortTasksByWorkCenter } from './utils';
 import type { ViewMode } from './types';
 import dayjs from 'dayjs';
 
@@ -88,15 +84,6 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     };
   }, [tasks]);
 
-  const highlightTime = useCallback((date: Date, unit: 'day' | 'hour') => {
-    const d = dayjs(date);
-    const today = dayjs().format('YYYY-MM-DD');
-    const dateStr = d.format('YYYY-MM-DD');
-    if (dateStr === today) return 'gantt-today';
-    if (unit === 'day' && (d.day() === 0 || d.day() === 6)) return 'wx-weekend';
-    return '';
-  }, []);
-
   const handleUpdateTask = useCallback(
     (ev: { id: number | string; task: { start?: Date; end?: Date; duration?: number } }) => {
       const id = typeof ev.id === 'string' ? parseInt(ev.id, 10) : ev.id;
@@ -128,66 +115,21 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     [onBatchUpdate]
   );
 
-  const taskTemplate = useCallback(
-    ({ data }: { data: { id: number; status?: string; priority?: string } }) => {
-      const color = getTaskColorByStatus(data.status) || getTaskColorByPriority(data.priority);
-      return (
-        <div
-          style={{
-            backgroundColor: color,
-            height: '100%',
-            borderRadius: 4,
-          }}
-        />
-      );
-    },
-    []
-  );
-
   if (loading) {
-    return (
-      <div
-        style={{
-          height: 400,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#fafafa',
-          borderRadius: 8,
-        }}
-      >
-        <span style={{ color: '#999' }}>加载中...</span>
-      </div>
-    );
+    return <div>加载中...</div>;
   }
 
   if (tasks.length === 0) {
     return (
-      <div
-        style={{
-          height: 400,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#fafafa',
-          borderRadius: 8,
-          color: '#999',
-        }}
-      >
-        <div style={{ marginBottom: 8 }}>暂无待排产工单</div>
-        <div style={{ fontSize: 12 }}>请先在需求计算或生产计划中生成工单</div>
+      <div>
+        <div>暂无待排产工单</div>
+        <div>请先在需求计算或生产计划中生成工单</div>
       </div>
     );
   }
 
   return (
-    <div className="gantt-scheduling-chart">
-      <style>{`
-        .gantt-scheduling-chart .gantt-today {
-          background-color: rgba(22, 119, 255, 0.08) !important;
-        }
-      `}</style>
+    <div className="gantt-chart-wrapper">
       <Willow>
         <Gantt
           tasks={tasks}
@@ -195,8 +137,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           scales={scales}
           start={start}
           end={end}
-          highlightTime={highlightTime}
-          taskTemplate={taskTemplate}
+          zoom
           onUpdateTask={handleUpdateTask}
           readonly={!onBatchUpdate}
           columns={[

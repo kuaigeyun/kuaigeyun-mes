@@ -663,3 +663,11 @@ code {
 :where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-switcher:before {
   top: 4px !important;
 }
+
+/* 强制所有滚动条轨道透明（覆盖浏览器默认，用于甘特图等） */
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+*::-webkit-scrollbar {
+  background: transparent !important;
+}

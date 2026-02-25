@@ -677,22 +677,26 @@ class ReportService:
         self,
         tenant_id: int,
         material_id: Optional[int] = None,
+        material_ids: Optional[List[int]] = None,
         warehouse_id: Optional[int] = None,
         batch_number: Optional[str] = None,
         include_expired: bool = False,
+        summary_only: bool = False,
     ) -> Dict[str, Any]:
         """
         批次库存查询
         
         Args:
             tenant_id: 租户ID
-            material_id: 物料ID（可选）
+            material_id: 物料ID（可选，与 material_ids 二选一）
+            material_ids: 物料ID列表（可选，批量查询时使用）
             warehouse_id: 仓库ID（可选）
             batch_number: 批号（可选）
             include_expired: 是否包含过期批次（默认：否）
+            summary_only: 是否仅返回物料汇总（material_totals），用于批量检查场景
             
         Returns:
-            Dict[str, Any]: 批次库存列表
+            Dict[str, Any]: 批次库存列表，或 summary_only 时为 { material_totals: { material_id: quantity } }
         """
         from apps.master_data.models.material_batch import MaterialBatch
         from apps.master_data.models.material import Material
@@ -705,7 +709,9 @@ class ReportService:
         # 排除已软删除的记录
         query = query.filter(deleted_at__isnull=True)
         
-        if material_id:
+        if material_ids:
+            query = query.filter(material_id__in=material_ids)
+        elif material_id:
             query = query.filter(material_id=material_id)
         
         if batch_number:
@@ -721,6 +727,18 @@ class ReportService:
         
         # 获取批次列表
         batches = await query.prefetch_related('material').all()
+        
+        # summary_only：仅返回物料汇总，用于批量检查（销售订单明细视图等）
+        if summary_only and (material_ids or material_id):
+            material_totals: Dict[str, float] = {}
+            ids_to_check = material_ids if material_ids else [material_id]
+            for mid in ids_to_check:
+                material_totals[str(mid)] = 0.0
+            for batch in batches:
+                mid = batch.material_id
+                if batch.quantity and batch.quantity > 0:
+                    material_totals[str(mid)] = material_totals.get(str(mid), 0) + float(batch.quantity)
+            return {"material_totals": material_totals}
         
         # 构建返回数据
         items = []
