@@ -30,7 +30,7 @@ class ReportService(AppBaseService[Report]):
     async def list_user_reports(
         self, tenant_id: int, user_id: int, skip: int = 0, limit: int = 100
     ) -> Dict[str, Any]:
-        """获取当前用户的自定义报表列表"""
+        """获取当前用户的自制报表列表"""
         qs = self.model.filter(
             tenant_id=tenant_id,
             category=ReportCategory.CUSTOM,
@@ -58,7 +58,7 @@ class ReportService(AppBaseService[Report]):
         # report_config 是嵌套 Pydantic 对象，需转为 dict
         if payload.get("report_config"):
             payload["report_config"] = payload["report_config"]
-        # 自定义报表自动设置 owner
+        # 自制报表自动设置 owner
         if payload.get("category") == ReportCategory.CUSTOM:
             payload["owner_id"] = created_by
         return await self.create_with_user(tenant_id, created_by, **payload)

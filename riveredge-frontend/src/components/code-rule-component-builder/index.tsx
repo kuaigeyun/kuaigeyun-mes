@@ -359,8 +359,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
         <div style={{ 
           marginTop: '16px', 
           marginBottom: '16px',
-          display: 'flex', 
-          justifyContent: 'center',
+          width: '100%',
           padding: '12px 0',
           borderTop: `1px dashed ${token.colorBorderSecondary}`,
           borderBottom: `1px dashed ${token.colorBorderSecondary}`,
@@ -447,13 +446,15 @@ interface AddComponentButtonProps {
 const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes, onAdd }) => {
   const { token } = theme.useToken();
 
+  const addButtonProps = {
+    type: 'dashed' as const,
+    icon: <PlusOutlined />,
+    block: true,
+  };
+
   if (availableTypes.length === 0) {
     return (
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        disabled
-      >
+      <Button {...addButtonProps} disabled>
         添加
       </Button>
     );
@@ -476,11 +477,11 @@ const AddComponentButton: React.FC<AddComponentButtonProps> = ({ availableTypes,
   });
 
   return (
-    <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-      <Button type="primary" icon={<PlusOutlined />}>
-        添加
-      </Button>
-    </Dropdown>
+    <div style={{ width: '100%', display: 'block' }}>
+      <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+        <Button {...addButtonProps} style={{ width: '100%' }}>添加</Button>
+      </Dropdown>
+    </div>
   );
 };
 

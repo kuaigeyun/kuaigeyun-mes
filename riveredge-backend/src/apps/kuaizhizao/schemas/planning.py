@@ -78,6 +78,8 @@ class ProductionPlanBase(BaseSchema):
     plan_end_date: date = Field(..., description="计划结束日期")
     status: str = Field("草稿", max_length=20, description="计划状态")
     execution_status: str = Field("未执行", max_length=20, description="执行状态")
+    plan_status: Optional[str] = Field("draft", max_length=20, description="计划流程状态（draft/submitted/approved/locked/executing）")
+    needs_recompute: bool = Field(False, description="上游变更后待重算标记")
     total_work_orders: int = Field(0, description="总工单数")
     total_purchase_orders: int = Field(0, description="总采购订单数")
     total_cost: float = Field(0, ge=0, description="总成本")
@@ -264,6 +266,11 @@ class SchedulingConstraints(BaseSchema):
     capacity_weight: float = Field(0.2, ge=0, le=1, description="产能权重（0-1）")
     setup_time_weight: float = Field(0.2, ge=0, le=1, description="换线时间权重（0-1）")
     optimize_objective: str = Field("min_makespan", description="优化目标（min_makespan/min_total_time/min_setup_time）")
+    # 4M 人机料法可配置开关
+    consider_human: bool = Field(True, description="是否考虑人员约束")
+    consider_equipment: bool = Field(True, description="是否考虑设备约束")
+    consider_material: bool = Field(True, description="是否考虑物料齐套")
+    consider_mold_tool: bool = Field(True, description="是否考虑模具/工装占用")
 
 
 class IntelligentSchedulingRequest(BaseSchema):

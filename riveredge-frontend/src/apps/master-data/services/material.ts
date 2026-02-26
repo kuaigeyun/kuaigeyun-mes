@@ -544,11 +544,19 @@ export const materialBatchApi = {
 
   /**
    * 生成批号
+   * @param materialUuid 物料UUID
+   * @param options 可选：rule(向后兼容)、rule_id、rule_uuid、supplier_code
    */
-  generate: async (materialUuid: string, rule?: string): Promise<{ batch_no: string }> => {
-    return api.post('/apps/master-data/materials/batches/generate', null, {
-      params: { material_uuid: materialUuid, rule },
-    });
+  generate: async (
+    materialUuid: string,
+    options?: { rule?: string; ruleId?: number; ruleUuid?: string; supplierCode?: string }
+  ): Promise<{ batch_no: string }> => {
+    const params: Record<string, string | number | undefined> = { material_uuid: materialUuid };
+    if (options?.rule) params.rule = options.rule;
+    if (options?.ruleId != null) params.rule_id = options.ruleId;
+    if (options?.ruleUuid) params.rule_uuid = options.ruleUuid;
+    if (options?.supplierCode) params.supplier_code = options.supplierCode;
+    return api.post('/apps/master-data/materials/batches/generate', null, { params });
   },
 
   /**
@@ -613,11 +621,20 @@ export const materialSerialApi = {
 
   /**
    * 生成序列号（批量）
+   * @param materialUuid 物料UUID
+   * @param count 生成数量
+   * @param options 可选：rule(向后兼容)、rule_id、rule_uuid
    */
-  generate: async (materialUuid: string, count: number = 1, rule?: string): Promise<{ serial_nos: string[]; count: number }> => {
-    return api.post('/apps/master-data/materials/serials/generate', null, {
-      params: { material_uuid: materialUuid, count, rule },
-    });
+  generate: async (
+    materialUuid: string,
+    count: number = 1,
+    options?: { rule?: string; ruleId?: number; ruleUuid?: string }
+  ): Promise<{ serial_nos: string[]; count: number }> => {
+    const params: Record<string, string | number | undefined> = { material_uuid: materialUuid, count };
+    if (options?.rule) params.rule = options.rule;
+    if (options?.ruleId != null) params.rule_id = options.ruleId;
+    if (options?.ruleUuid) params.rule_uuid = options.ruleUuid;
+    return api.post('/apps/master-data/materials/serials/generate', null, { params });
   },
 
   /**

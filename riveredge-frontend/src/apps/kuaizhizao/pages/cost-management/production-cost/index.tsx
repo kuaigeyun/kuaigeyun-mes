@@ -12,7 +12,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormDatePicker,
 import { App, Button, Card, Tag, Space, message, Modal, Divider } from 'antd';
 import { CalculatorOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { productionCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -182,7 +182,7 @@ const ProductionCostPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCalculate}
         loading={loading}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormSelect
           name="material_id"

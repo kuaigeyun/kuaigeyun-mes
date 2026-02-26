@@ -1,26 +1,24 @@
 /**
  * 数据字典选择组件
  *
- * 支持从数据字典中选择值，如果字典中不存在，允许快速创建新项
+ * 基于 UniDropdown 实现，支持从数据字典中选择值，支持快速创建新项。
  *
  * Author: Luigi Lu
  * Date: 2025-12-26
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Select, Modal, Input, message, App, theme } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
-import { ProFormSelect } from '@ant-design/pro-components';
+import { Modal, Input, message, App } from 'antd';
+import { ProForm } from '@ant-design/pro-components';
+import { UniDropdown } from '../uni-dropdown';
 import {
   getDataDictionaryByCode,
   getDictionaryItemList,
   createDictionaryItem,
-  DictionaryItem,
 } from '../../services/dataDictionary';
 
 const { TextArea } = Input;
-const { useToken } = theme;
 
 /**
  * 数据字典选择组件属性
@@ -51,7 +49,7 @@ export interface DictionarySelectProps {
 }
 
 /**
- * 数据字典选择组件
+ * 数据字典选择组件（基于 UniDropdown）
  */
 export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   dictionaryCode,
@@ -68,10 +66,8 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = useToken();
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [createLabel, setCreateLabel] = useState('');
   const [createValue, setCreateValue] = useState('');
@@ -85,12 +81,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const loadDictionaryItems = async () => {
     try {
       setLoading(true);
-      // 获取字典信息
       const dictionary = await getDataDictionaryByCode(dictionaryCode);
       setDictionaryUuid(dictionary.uuid);
-      // 获取字典项列表（只获取启用的）
       const items = await getDictionaryItemList(dictionary.uuid, true);
-      // 转换为选项格式，按排序顺序排列
       const optionsList = items
         .sort((a, b) => a.sort_order - b.sort_order)
         .map(item => ({
@@ -106,48 +99,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     }
   };
 
-  /**
-   * 初始化加载字典项
-   */
   useEffect(() => {
     loadDictionaryItems();
   }, [dictionaryCode]);
-
-  /**
-   * 处理搜索
-   */
-  const handleSearch = (value: string) => {
-    setSearchValue(value);
-  };
-
-  /**
-   * 过滤选项（用于搜索）
-   */
-  const filteredOptions = useMemo(() => {
-    if (!searchValue) {
-      return options;
-    }
-    return options.filter(option =>
-      option.label.toLowerCase().includes(searchValue.toLowerCase()) ||
-      option.value.toLowerCase().includes(searchValue.toLowerCase())
-    );
-  }, [options, searchValue]);
-
-  /**
-   * 检查是否需要显示创建选项
-   */
-  const showCreateOption = useMemo(() => {
-    if (!searchValue || !dictionaryUuid) {
-      return false;
-    }
-    // 如果搜索值不在现有选项中，显示创建选项
-    const exists = options.some(
-      option =>
-        option.label.toLowerCase() === searchValue.toLowerCase() ||
-        option.value.toLowerCase() === searchValue.toLowerCase()
-    );
-    return !exists && searchValue.trim().length > 0;
-  }, [searchValue, options, dictionaryUuid]);
 
   /**
    * 处理创建新项
@@ -158,7 +112,6 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       return;
     }
 
-    // 检查值是否已存在
     const exists = options.some(option => option.value === createValue.trim());
     if (exists) {
       messageApi.warning(t('components.dictionarySelect.valueExists'));
@@ -167,13 +120,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
     try {
       setCreating(true);
-      // 创建字典项
       const newItem = await createDictionaryItem(dictionaryUuid, {
         label: createLabel.trim(),
         value: createValue.trim(),
         description: createDescription.trim() || undefined,
         is_active: true,
-        sort_order: options.length, // 添加到末尾
+        sort_order: options.length,
       });
 
       messageApi.success(t('common.createSuccess'));
@@ -181,15 +133,10 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       setCreateLabel('');
       setCreateValue('');
       setCreateDescription('');
-      setSearchValue('');
 
-      // 重新加载字典项列表
       await loadDictionaryItems();
 
-      // 自动选择新创建的项
       const newValue = newItem.value;
-      
-      // 通过formRef更新表单值
       if (formRef?.current) {
         formRef.current.setFieldsValue({ [name]: newValue });
       }
@@ -203,43 +150,6 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     }
   };
 
-  /**
-   * 处理下拉菜单渲染（使用 popupRender，dropdownRender 已废弃）
-   */
-  const popupRender = (menu: React.ReactElement) => {
-    return (
-      <>
-        {menu}
-        {showCreateOption && (
-          <div
-            style={{
-              padding: '8px',
-              borderTop: `1px solid ${token.colorBorder}`,
-              cursor: 'pointer',
-            }}
-            onClick={() => {
-              setCreateLabel(searchValue);
-              setCreateValue(searchValue);
-              setCreateModalVisible(true);
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#f5f5f5';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <PlusOutlined style={{ marginRight: 8 }} />
-            创建新项：{searchValue}
-          </div>
-        )}
-      </>
-    );
-  };
-
-  /**
-   * 合并验证规则
-   */
   const mergedRules = useMemo(() => {
     const baseRules = rules || [];
     if (required) {
@@ -248,27 +158,39 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     return baseRules;
   }, [required, label, rules]);
 
+  const effectiveColProps = colProps ?? { span: 12 };
+
   return (
     <>
-      <ProFormSelect
+      <ProForm.Item
         name={name}
         label={label}
         rules={mergedRules}
         initialValue={initialValue}
-        options={filteredOptions}
-        placeholder={placeholder || `请选择${label}`}
-        fieldProps={{
-          loading: loading || externalLoading,
-          disabled,
-          showSearch: true,
-          allowClear: true,
-          filterOption: false, // 禁用默认过滤，使用自定义过滤
-          onSearch: handleSearch,
-          popupRender,
-        }}
-      />
+        colProps={effectiveColProps}
+        className="dictionary-select-form-item"
+      >
+        <div className="dictionary-select-wrapper">
+          <UniDropdown
+            placeholder={placeholder || `请选择${label}`}
+            showSearch
+            allowClear
+            loading={loading || externalLoading}
+            disabled={disabled}
+            options={options}
+            quickCreate={{
+              label: '创建新项',
+              onClick: () => {
+                setCreateLabel('');
+                setCreateValue('');
+                setCreateDescription('');
+                setCreateModalVisible(true);
+              },
+            }}
+          />
+        </div>
+      </ProForm.Item>
 
-      {/* 创建新项弹窗 */}
       <Modal
         title={`创建新的${label}项`}
         open={createModalVisible}

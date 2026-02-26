@@ -24,6 +24,10 @@ export interface BackendLifecycle {
 
 const STAGE_PERCENT: Record<string, number> = {
   draft: 0,
+  released: 25,
+  in_progress: 50,
+  completed: 100,
+  cancelled: 0,
   pending_review: 15,
   rejected: 15,
   audited: 50,
@@ -31,7 +35,6 @@ const STAGE_PERCENT: Record<string, number> = {
   effective: 50,
   executing: 50,
   delivered: 75,
-  completed: 100,
 };
 
 /**

@@ -57,6 +57,10 @@ export interface CodeRulePageConfig {
    * 关联的编码规则代码（可选）
    */
   ruleCode?: string;
+  /**
+   * 是否跳过日期组件（设备/模具/工装：EQ+4位、MOLD+4位、TOOL+4位）
+   */
+  skipDate?: boolean;
 }
 
 /**
@@ -105,6 +109,19 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: false,
+  },
+  {
+    pageCode: 'master-data-factory-work-center',
+    pageName: '工作中心',
+    pagePath: '/apps/master-data/factory/work-centers',
+    codeField: 'code',
+    codeFieldLabel: '工作中心编码',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: true,
+    ruleCode: 'WORK_CENTER_CODE',
+    allowManualEdit: true,
+    skipDate: true,
   },
   // 主数据管理 - 仓库管理
   {
@@ -287,15 +304,15 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     ruleCode: 'supplier',
     allowManualEdit: true,
   },
-  // 主数据管理 - 绩效管理
+  // 快格轻制造 - 绩效管理（技能）
   {
     pageCode: 'master-data-performance-skill',
     pageName: '技能管理',
-    pagePath: '/apps/master-data/performance/skills',
+    pagePath: '/apps/kuaizhizao/performance/skills',
     codeField: 'code',
     codeFieldLabel: '技能编码',
-    module: '主数据管理',
-    moduleIcon: 'database',
+    module: '快格轻制造',
+    moduleIcon: 'production',
     autoGenerate: false,
   },
   
@@ -509,7 +526,18 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     autoGenerate: false,
     ruleCode: 'FINISHED_GOODS_INSPECTION_CODE',
   },
-  
+  {
+    pageCode: 'kuaizhizao-quality-inspection-plan',
+    pageName: '质检方案',
+    pagePath: '/apps/kuaizhizao/quality-management/inspection-plans',
+    codeField: 'plan_code',
+    codeFieldLabel: '质检方案编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: false,
+    ruleCode: 'INSPECTION_PLAN_CODE',
+  },
+
   // 快格轻制造 - 计划管理
   {
     pageCode: 'kuaizhizao-plan-production-plan',
@@ -549,6 +577,48 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     ruleCode: 'SALES_RETURN_CODE',
   },
   
+  // 快格轻制造 - 设备管理（EQ+4位流水）
+  {
+    pageCode: 'kuaizhizao-equipment-management-equipment',
+    pageName: '设备管理',
+    pagePath: '/apps/kuaizhizao/equipment-management/equipment',
+    codeField: 'code',
+    codeFieldLabel: '设备编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: true,
+    ruleCode: 'EQUIPMENT_CODE',
+    allowManualEdit: true,
+    skipDate: true,
+  },
+  // 快格轻制造 - 模具管理（MOLD+4位流水）
+  {
+    pageCode: 'kuaizhizao-equipment-management-mold',
+    pageName: '模具管理',
+    pagePath: '/apps/kuaizhizao/equipment-management/molds',
+    codeField: 'code',
+    codeFieldLabel: '模具编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: true,
+    ruleCode: 'MOLD_CODE',
+    allowManualEdit: true,
+    skipDate: true,
+  },
+  // 快格轻制造 - 工装台账（TOOL+4位流水）
+  {
+    pageCode: 'kuaizhizao-equipment-management-tool',
+    pageName: '工装台账',
+    pagePath: '/apps/kuaizhizao/equipment-management/tool-ledger',
+    codeField: 'code',
+    codeFieldLabel: '工装编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: true,
+    ruleCode: 'TOOL_CODE',
+    allowManualEdit: true,
+    skipDate: true,
+  },
   // 快格轻制造 - 生产执行（补充）
   {
     pageCode: 'kuaizhizao-production-outsource-work-order',
@@ -572,6 +642,7 @@ export const PAGE_CODE_TO_FIXED_TEXT_PRESET: Record<string, string> = {
   'master-data-factory-workshop': 'CJ',        // 车间
   'master-data-factory-production-line': 'CX', // 产线
   'master-data-factory-workstation': 'GW',     // 工位
+  'master-data-factory-work-center': 'GZZX',   // 工作中心
   'master-data-warehouse-warehouse': 'CK',     // 仓库
   'master-data-warehouse-storage-area': 'KQ',  // 库区
   'master-data-warehouse-storage-location': 'KW', // 库位
@@ -584,6 +655,9 @@ export const PAGE_CODE_TO_FIXED_TEXT_PRESET: Record<string, string> = {
   'master-data-supply-chain-customer': 'KH',   // 客户
   'master-data-supply-chain-supplier': 'GYS',  // 供应商
   'master-data-performance-skill': 'JN',       // 技能
+  'kuaizhizao-equipment-management-equipment': 'EQ',   // 设备
+  'kuaizhizao-equipment-management-mold': 'MOLD',     // 模具
+  'kuaizhizao-equipment-management-tool': 'TOOL',    // 工装
 };
 
 /**

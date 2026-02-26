@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Input, Space, Select, Empty, Spin, message, Drawer, Descriptions, Tag, Button, theme } from 'antd';
+import { Input, Space, Select, Empty, Spin, message, Descriptions, Tag, Button, theme } from 'antd';
 import { useRequest } from 'ahooks';
 import { api } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
 import { FlowGraph } from '@ant-design/graphs';
+import { DetailDrawerTemplate, ListPageTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 const { useToken } = theme;
 
@@ -105,7 +106,7 @@ const TraceabilityPage: React.FC = () => {
     };
 
     return (
-        /* 单层 padding：margin -16 抵消 UniTabs 内容区自带 padding，仅保留内部 16px */
+        <ListPageTemplate>
         <div style={{ margin: -16, padding: 16 }}>
             <Space style={{ marginBottom: 16 }}>
                     <Input.Search
@@ -136,14 +137,13 @@ const TraceabilityPage: React.FC = () => {
                     )}
                 </div>
 
-            <Drawer
+            <DetailDrawerTemplate
                 title={t('pages.traceability.details', { defaultValue: '详情信息' })}
-                placement="right"
-                onClose={() => setDetailVisible(false)}
                 open={detailVisible}
-                width={400}
-            >
-                {selectedNode && (
+                onClose={() => { setDetailVisible(false); setSelectedNode(null); }}
+                width={DRAWER_CONFIG.SMALL_WIDTH}
+                columns={[]}
+                customContent={selectedNode ? (
                     <Descriptions column={1} bordered size="small">
                         <Descriptions.Item label={t('pages.traceability.nodeType', { defaultValue: '类型' })}>
                             <Tag color={selectedNode.type === 'work_order' ? 'blue' : 'green'}>
@@ -169,14 +169,16 @@ const TraceabilityPage: React.FC = () => {
                             </Descriptions.Item>
                         )}
                     </Descriptions>
-                )}
+                ) : null}
+            >
                 {selectedNode?.type === 'work_order' && selectedNode.data?.work_order_id && (
                     <div style={{ marginTop: 24 }}>
                         <Button type="primary" block>{t('pages.traceability.viewWorkOrder', { defaultValue: '查看工单详情' })}</Button>
                     </div>
                 )}
-            </Drawer>
+            </DetailDrawerTemplate>
         </div>
+        </ListPageTemplate>
     );
 };
 

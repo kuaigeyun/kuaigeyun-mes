@@ -37,6 +37,7 @@ import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import SmartSuggestionFloatPanel from '../../../components/smart-suggestion-float-panel';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../services/file';
+import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 
 const { Panel } = Collapse;
 
@@ -762,6 +763,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,
         batch_managed: restValues.batchManaged,
+        default_batch_rule_id: restValues.defaultBatchRuleId || null,
+        serial_managed: restValues.serialManaged,
+        default_serial_rule_id: restValues.defaultSerialRuleId || null,
         variant_managed: restValues.variantManaged,
         variant_attributes: restValues.variantAttributes,
         description: restValues.description,
@@ -1516,6 +1520,25 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   isEdit,
 }) => {
   const { t } = useTranslation();
+  const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
+
+  useEffect(() => {
+    const loadRules = async () => {
+      try {
+        const [batchRes, serialRes] = await Promise.all([
+          batchRuleApi.list({ pageSize: 200, isActive: true }),
+          serialRuleApi.list({ pageSize: 200, isActive: true }),
+        ]);
+        setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+        setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+      } catch {
+        // ignore
+      }
+    };
+    loadRules();
+  }, []);
+
   if (part === 1) {
     return (
       <Row gutter={16}>
@@ -1608,6 +1631,9 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         <ProFormSwitch name="batchManaged" label={t('app.master-data.materialForm.batchManaged')} />
       </Col>
       <Col span={6}>
+        <ProFormSwitch name="serialManaged" label={t('app.master-data.materialForm.serialManaged')} />
+      </Col>
+      <Col span={6}>
         <ProFormSwitch
           name="variantManaged"
           label={t('app.master-data.materialForm.variantManaged')}
@@ -1617,6 +1643,36 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       <Col span={6}>
         <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
       </Col>
+      <ProFormDependency name={['batchManaged']}>
+        {({ batchManaged }) =>
+          batchManaged ? (
+            <Col span={12}>
+              <ProFormSelect
+                name="defaultBatchRuleId"
+                label={t('app.master-data.materialForm.defaultBatchRule')}
+                placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
+                options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                allowClear
+              />
+            </Col>
+          ) : null
+        }
+      </ProFormDependency>
+      <ProFormDependency name={['serialManaged']}>
+        {({ serialManaged }) =>
+          serialManaged ? (
+            <Col span={12}>
+              <ProFormSelect
+                name="defaultSerialRuleId"
+                label={t('app.master-data.materialForm.defaultSerialRule')}
+                placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
+                options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                allowClear
+              />
+            </Col>
+          ) : null
+        }
+      </ProFormDependency>
       <Col span={24}>
         <ProFormUploadButton
           name="images"

@@ -1,3 +1,9 @@
+/**
+ * 应收单列表页
+ *
+ * 路由复用：/finance-management/receivables、/finance-management/receipts 均使用本组件，
+ * 展示应收账款列表。回款菜单作为应收管理的快捷入口。
+ */
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Space } from 'antd';

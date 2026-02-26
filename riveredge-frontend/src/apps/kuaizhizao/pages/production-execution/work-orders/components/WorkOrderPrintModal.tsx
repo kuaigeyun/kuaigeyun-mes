@@ -15,6 +15,7 @@ import { generate } from '@pdfme/generator';
 import { PDFME_PLUGINS } from '../../../../../../components/pdfme-doc/plugins';
 import { getPdfmeChineseFont } from '../../../../../../components/pdfme-doc/fonts';
 import { workOrderApi } from '../../../../services/production';
+import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
 interface WorkOrderPrintModalProps {
   visible: boolean;
@@ -269,7 +270,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       }
       open={visible}
       onCancel={onCancel}
-      width={1000}
+      width={MODAL_CONFIG.LARGE_WIDTH}
       wrapClassName="work-order-print-modal-wrap"
       styles={{
         body: {

@@ -11,7 +11,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic, Alert } from 'antd';
 import { CalculatorOutlined, BarChartOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -260,7 +260,7 @@ const CostComparisonPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCompare}
         loading={loading}
-        width={700}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProFormSelect
           name="material_id"

@@ -11,7 +11,7 @@ from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
 from apps.kuaizhizao.schemas.equipment import (
@@ -19,6 +19,8 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentUpdate,
     EquipmentResponse,
     EquipmentListResponse,
+    EquipmentCalibrationCreate,
+    EquipmentCalibrationResponse,
 )
 from apps.kuaizhizao.schemas.equipment_oee import (
     EquipmentOEResponse,
@@ -283,6 +285,13 @@ async def get_equipment_trace(
             deleted_at__isnull=True
         ).order_by("-repair_date").limit(50)
         
+        # 获取校验记录历史
+        equipment_calibrations = await EquipmentCalibration.filter(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            deleted_at__isnull=True
+        ).order_by("-calibration_date").limit(50)
+        
         return {
             "equipment": {
                 "uuid": equipment.uuid,
@@ -345,12 +354,45 @@ async def get_equipment_trace(
                 }
                 for repair in equipment_repairs
             ],
+            "equipment_calibrations": [
+                {
+                    "uuid": calib.uuid,
+                    "calibration_date": calib.calibration_date.isoformat(),
+                    "result": calib.result,
+                    "certificate_no": calib.certificate_no,
+                    "expiry_date": calib.expiry_date.isoformat() if calib.expiry_date else None,
+                    "remark": calib.remark,
+                    "created_at": calib.created_at.isoformat(),
+                }
+                for calib in equipment_calibrations
+            ],
         }
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.post("/{uuid}/calibrations", response_model=EquipmentCalibrationResponse, status_code=status.HTTP_201_CREATED)
+async def create_equipment_calibration(
+    uuid: str,
+    data: EquipmentCalibrationCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建设备校验记录
+    """
+    try:
+        calib = await EquipmentService.create_equipment_calibration(
+            tenant_id=tenant_id,
+            equipment_uuid=uuid,
+            data=data
+        )
+        return EquipmentCalibrationResponse.model_validate(calib)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 # ========== 设备OEE统计相关端点 ==========

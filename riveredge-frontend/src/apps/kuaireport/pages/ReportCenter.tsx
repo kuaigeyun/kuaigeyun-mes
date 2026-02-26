@@ -57,7 +57,7 @@ const ReportGrid: React.FC<ReportGridProps> = ({
     if (reports.length === 0) {
         return (
             <Empty
-                description={activeTab === 'my' ? '还没有自定义报表，点击右上角新建' : '暂无系统报表'}
+                description={activeTab === 'my' ? '还没有自制报表，点击右上角新建' : '暂无系统报表'}
                 style={{ marginTop: 60 }}
             />
         );

@@ -19,9 +19,8 @@ export async function applyFavicon(faviconValue: string | undefined): Promise<vo
 
   if (isUUID(value)) {
     try {
-      const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
       const res = await fetch(
-        `${baseUrl}/api/v1/core/files/${value}/preview/public?category=platform-favicon`
+        `/api/v1/core/files/${value}/preview/public?category=platform-favicon`
       );
       if (!res.ok) return;
       const { preview_url } = await res.json();

@@ -1135,6 +1135,12 @@ const MaterialsManagementPage: React.FC = () => {
                 baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
                 batchManaged:
                   currentMaterial.batchManaged ?? (currentMaterial as any).batch_managed,
+                defaultBatchRuleId:
+                  (currentMaterial as any).defaultBatchRuleId ?? (currentMaterial as any).default_batch_rule_id,
+                serialManaged:
+                  (currentMaterial as any).serialManaged ?? (currentMaterial as any).serial_managed ?? false,
+                defaultSerialRuleId:
+                  (currentMaterial as any).defaultSerialRuleId ?? (currentMaterial as any).default_serial_rule_id,
                 variantManaged:
                   currentMaterial.variantManaged ?? (currentMaterial as any).variant_managed,
                 variantAttributes:
@@ -1148,6 +1154,7 @@ const MaterialsManagementPage: React.FC = () => {
                 groupId: selectedGroupId || undefined,
                 isActive: true,
                 batchManaged: false,
+                serialManaged: false,
                 variantManaged: false,
                 materialType: undefined,
                 baseUnit: 'PC', // 默认值：件

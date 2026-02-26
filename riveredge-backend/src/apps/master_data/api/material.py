@@ -238,6 +238,29 @@ async def list_bom(
     return result if result is not None else []
 
 
+@router.get("/bom/batch-check", summary="批量检查物料是否有BOM")
+async def batch_check_has_bom(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_ids: List[int] = Query(..., description="物料ID列表"),
+    only_active: bool = Query(True, description="是否只检查已审核的BOM"),
+) -> Dict[str, bool]:
+    """
+    批量检查物料是否有BOM配置（用于销售订单明细视图等批量检查场景）
+
+    - **material_ids**: 物料ID列表（必填）
+    - **only_active**: 是否只检查已审核的BOM（默认：true）
+
+    返回：{ "1": true, "2": false, "3": true }（物料ID -> 是否有BOM）
+    """
+    result = await MaterialService.batch_check_has_bom(
+        tenant_id=tenant_id,
+        material_ids=material_ids,
+        only_active=only_active
+    )
+    return {str(k): v for k, v in result.items()}
+
+
 @router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="获取BOM详情")
 async def get_bom(
     bom_uuid: str,
@@ -409,30 +432,6 @@ async def revise_bom(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-
-@router.get("/bom/batch-check", summary="批量检查物料是否有BOM")
-async def batch_check_has_bom(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    material_ids: List[int] = Query(..., description="物料ID列表"),
-    only_active: bool = Query(True, description="是否只检查已审核的BOM"),
-) -> Dict[str, bool]:
-    """
-    批量检查物料是否有BOM配置（用于销售订单明细视图等批量检查场景）
-
-    - **material_ids**: 物料ID列表（必填）
-    - **only_active**: 是否只检查已审核的BOM（默认：true）
-
-    返回：{ "1": true, "2": false, "3": true }（物料ID -> 是否有BOM）
-    """
-    result = await MaterialService.batch_check_has_bom(
-        tenant_id=tenant_id,
-        material_ids=material_ids,
-        only_active=only_active
-    )
-    return {str(k): v for k, v in result.items()}
 
 
 @router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")
@@ -940,19 +939,23 @@ async def delete_material_batch(
 @router.post("/batches/generate", summary="生成批号")
 async def generate_batch_no(
     material_uuid: str = Query(..., description="物料UUID"),
-    rule: Optional[str] = Query(None, description="批号生成规则（可选）"),
+    rule: Optional[str] = Query(None, description="批号生成规则字符串（可选，向后兼容）"),
+    rule_id: Optional[int] = Query(None, description="批号规则ID（可选，优先于物料默认规则）"),
+    rule_uuid: Optional[str] = Query(None, description="批号规则UUID（可选）"),
+    supplier_code: Optional[str] = Query(None, description="供应商编码（可选，用于规则变量）"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None
 ):
     """
     生成批号
-    
-    支持多种批号生成规则：
-    - {YYYYMMDD}-{序号}：20260115-001
-    - {物料编码}-{YYYYMMDD}-{序号}：MAT-RAW-0001-20260115-001
+
+    优先使用：rule_id/rule_uuid > 物料默认批号规则 > rule 字符串 > 系统默认
     """
     try:
-        batch_no = await MaterialBatchService.generate_batch_no(tenant_id, material_uuid, rule)
+        batch_no = await MaterialBatchService.generate_batch_no(
+            tenant_id, material_uuid, rule=rule,
+            rule_id=rule_id, rule_uuid=rule_uuid, supplier_code=supplier_code
+        )
         return {"batch_no": batch_no}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -1089,19 +1092,22 @@ async def delete_material_serial(
 async def generate_serial_nos(
     material_uuid: str = Query(..., description="物料UUID"),
     count: int = Query(1, ge=1, le=1000, description="生成数量"),
-    rule: Optional[str] = Query(None, description="序列号生成规则（可选）"),
+    rule: Optional[str] = Query(None, description="序列号生成规则字符串（可选，向后兼容）"),
+    rule_id: Optional[int] = Query(None, description="序列号规则ID（可选，优先于物料默认规则）"),
+    rule_uuid: Optional[str] = Query(None, description="序列号规则UUID（可选）"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
     tenant_id: Annotated[int, Depends(get_current_tenant)] = None
 ):
     """
     生成序列号（批量生成）
-    
-    支持多种序列号生成规则：
-    - {物料编码}-{YYYYMMDD}-{6位序号}：MAT-FIN-0001-20260115-000001
-    - {物料编码}-{YYYY}-{6位序号}：MAT-FIN-0001-2026-000001
+
+    优先使用：rule_id/rule_uuid > 物料默认序列号规则 > rule 字符串 > 系统默认
     """
     try:
-        serial_nos = await MaterialSerialService.generate_serial_no(tenant_id, material_uuid, count, rule)
+        serial_nos = await MaterialSerialService.generate_serial_no(
+            tenant_id, material_uuid, count, rule=rule,
+            rule_id=rule_id, rule_uuid=rule_uuid
+        )
         return {"serial_nos": serial_nos, "count": len(serial_nos)}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

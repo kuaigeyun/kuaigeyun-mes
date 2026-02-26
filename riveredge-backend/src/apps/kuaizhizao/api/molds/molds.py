@@ -20,8 +20,11 @@ from apps.kuaizhizao.schemas.mold import (
     MoldUsageUpdate,
     MoldUsageResponse,
     MoldUsageListResponse,
+    MoldCalibrationCreate,
+    MoldCalibrationResponse,
+    MoldCalibrationListResponse,
 )
-from apps.kuaizhizao.services.mold_service import MoldService, MoldUsageService
+from apps.kuaizhizao.services.mold_service import MoldService, MoldUsageService, MoldCalibrationService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -91,6 +94,67 @@ async def list_molds(
         skip=skip,
         limit=limit
     )
+
+
+# ========== 模具校验记录相关端点 ==========
+
+
+@router.get("/calibrations", response_model=MoldCalibrationListResponse)
+async def list_mold_calibrations(
+    mold_uuid: str = Query(..., description="模具UUID"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取模具校验记录列表
+    """
+    try:
+        items, total = await MoldCalibrationService.list_calibrations(
+            tenant_id=tenant_id,
+            mold_uuid=mold_uuid,
+            skip=skip,
+            limit=limit,
+        )
+        return MoldCalibrationListResponse(
+            items=[MoldCalibrationResponse.model_validate(c) for c in items],
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.post("/calibrations", response_model=MoldCalibrationResponse, status_code=status.HTTP_201_CREATED)
+async def create_mold_calibration(
+    data: MoldCalibrationCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建模具校验记录
+    """
+    try:
+        calib = await MoldCalibrationService.create_calibration(
+            tenant_id=tenant_id,
+            data=data,
+        )
+        return MoldCalibrationResponse.model_validate(calib)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
 
 @router.get("/{uuid}", response_model=MoldResponse)

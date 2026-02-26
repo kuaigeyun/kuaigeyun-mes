@@ -718,6 +718,13 @@ class SalesOrderService:
 
         # 只要有关联需求，订单任意保存都同步需求内容，使需求管理动态随上游变化（策略 A）
         demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, updated_by)
+        # 计划锁定策略：上游变更时，对 draft/submitted 计划标记待重算
+        try:
+            from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+            doc_svc = DocumentRelationService()
+            await doc_svc.apply_upstream_change_impact(tenant_id, "sales_order", sales_order_id)
+        except Exception as e:
+            logger.warning("apply_upstream_change_impact failed: %s", e)
         out = result.model_dump()
         out["demand_synced"] = demand_synced
         return SalesOrderResponse(**out)

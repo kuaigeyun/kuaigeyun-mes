@@ -106,6 +106,18 @@ class WorkOrderBatchUpdateDatesRequest(BaseModel):
     updates: list[WorkOrderBatchUpdateDatesItem] = Field(..., description="更新项列表")
 
 
+class WorkOrderOperationBatchUpdateDatesItem(BaseModel):
+    """批量更新工序计划日期项"""
+    operation_id: int = Field(..., description="工序ID（WorkOrderOperation.id）")
+    planned_start_date: datetime = Field(..., description="计划开始时间")
+    planned_end_date: datetime = Field(..., description="计划结束时间")
+
+
+class WorkOrderOperationBatchUpdateDatesRequest(BaseModel):
+    """批量更新工序计划日期请求（工序级派工）"""
+    updates: list[WorkOrderOperationBatchUpdateDatesItem] = Field(..., description="更新项列表")
+
+
 class WorkOrderUpdate(BaseModel):
     """
     工单更新Schema
@@ -144,6 +156,19 @@ class WorkOrderResponse(WorkOrderBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+
+
+class WorkOrderOperationMinimalForGantt(BaseModel):
+    """工序简要（用于甘特图展示设备/模具/工装，支持工序级派工）"""
+    id: Optional[int] = None
+    operation_name: Optional[str] = None
+    sequence: Optional[int] = None
+    planned_start_date: Optional[datetime] = None
+    planned_end_date: Optional[datetime] = None
+    assigned_equipment_name: Optional[str] = None
+    assigned_mold_name: Optional[str] = None
+    assigned_tool_name: Optional[str] = None
 
 
 class WorkOrderListResponse(BaseModel):
@@ -170,6 +195,7 @@ class WorkOrderListResponse(BaseModel):
     work_center_name: Optional[str] = Field(None, description="工作中心名称")
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     created_at: datetime = Field(..., description="创建时间")
+    operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
 
 
 class MaterialShortageItem(BaseModel):
@@ -233,6 +259,10 @@ class WorkOrderOperationBase(BaseModel):
     assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
     assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")
     assigned_equipment_name: Optional[str] = Field(None, description="分配的设备姓名")
+    assigned_mold_id: Optional[int] = Field(None, description="分配的模具ID")
+    assigned_mold_name: Optional[str] = Field(None, description="分配的模具名称")
+    assigned_tool_id: Optional[int] = Field(None, description="分配的工装ID")
+    assigned_tool_name: Optional[str] = Field(None, description="分配的工装名称")
     assigned_at: Optional[datetime] = Field(None, description="分配时间")
     
     remarks: Optional[str] = Field(None, description="备注")
@@ -244,6 +274,10 @@ class WorkOrderOperationDispatch(BaseModel):
     assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
     assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")
     assigned_equipment_name: Optional[str] = Field(None, description="分配的设备姓名")
+    assigned_mold_id: Optional[int] = Field(None, description="分配的模具ID")
+    assigned_mold_name: Optional[str] = Field(None, description="分配的模具名称")
+    assigned_tool_id: Optional[int] = Field(None, description="分配的工装ID")
+    assigned_tool_name: Optional[str] = Field(None, description="分配的工装名称")
     remarks: Optional[str] = Field(None, description="派工备注")
 
 

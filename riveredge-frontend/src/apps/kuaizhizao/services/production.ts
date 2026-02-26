@@ -8,7 +8,7 @@ import { apiRequest } from '../../../services/api';
 export { workOrderApi, reworkOrderApi } from './work-order';
 export { reportingApi, materialBindingApi } from './reporting';
 export { warehouseApi } from './warehouse-execution';
-export { qualityApi } from './quality-execution';
+export { qualityApi, inspectionPlanApi } from './quality-execution';
 export { planningApi } from './planning';
 
 // 委外工单相关接口
@@ -352,6 +352,28 @@ export const stocktakingApi = {
   },
 };
 
+// 排程配置相关接口
+export const schedulingConfigApi = {
+  list: async (params?: { skip?: number; limit?: number; is_active?: boolean }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling-configs', { method: 'GET', params });
+  },
+  getDefault: async () => {
+    return apiRequest('/apps/kuaizhizao/scheduling-configs/default', { method: 'GET' });
+  },
+  get: async (id: number) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling-configs/${id}`, { method: 'GET' });
+  },
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/scheduling-configs', { method: 'POST', data });
+  },
+  update: async (id: number, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling-configs/${id}`, { method: 'PUT', data });
+  },
+  delete: async (id: number) => {
+    return apiRequest(`/apps/kuaizhizao/scheduling-configs/${id}`, { method: 'DELETE' });
+  },
+};
+
 // 高级排产相关接口
 export const advancedSchedulingApi = {
   // 智能排产
@@ -363,6 +385,10 @@ export const advancedSchedulingApi = {
       capacity_weight?: number;
       setup_time_weight?: number;
       optimize_objective?: 'min_makespan' | 'min_total_time' | 'min_setup_time';
+      consider_human?: boolean;
+      consider_equipment?: boolean;
+      consider_material?: boolean;
+      consider_mold_tool?: boolean;
     };
   }) => {
     return apiRequest('/apps/kuaizhizao/scheduling/intelligent', { method: 'POST', data });

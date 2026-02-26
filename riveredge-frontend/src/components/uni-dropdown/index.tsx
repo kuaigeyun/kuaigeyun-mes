@@ -28,6 +28,7 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
   onChange,
   filterOption,
   optionFilterProp,
+  style,
   ...selectProps
 }) => {
   const { token } = theme.useToken();
@@ -141,6 +142,7 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
     <>
       <Select
         {...selectProps}
+        style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', ...style }}
         filterOption={effectiveFilterOption}
         optionFilterProp={effectiveOptionFilterProp}
         onChange={onChange}

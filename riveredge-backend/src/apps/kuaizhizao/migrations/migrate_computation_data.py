@@ -93,10 +93,10 @@ class ComputationDataMigration:
             # 注意：这里需要从旧的MRP结果表读取数据
             # 由于旧模型可能已经废弃，我们需要直接查询数据库表
             from tortoise import Tortoise
-            from tortoise.connection import connections
             
-            # 获取数据库连接
-            conn = connections.get("default")
+            conn = Tortoise.get_connection("default")
+            if not hasattr(conn, "execute_query_dict"):
+                raise RuntimeError("数据库连接不支持 execute_query_dict，请使用 asyncpg 驱动")
             
             # 查询旧的MRP结果数据（按forecast_id分组）
             query = """
@@ -106,14 +106,14 @@ class ComputationDataMigration:
                     MIN(computation_time) as min_time,
                     MAX(computation_time) as max_time
                 FROM apps_kuaizhizao_mrp_results
-                WHERE tenant_id = $1 AND deleted_at IS NULL
+                WHERE tenant_id = $1
                 GROUP BY forecast_id
             """
             
-            rows = await conn.execute_query(query, [tenant_id])
+            rows = await conn.execute_query_dict(query, [tenant_id])
             
             for row in rows:
-                forecast_id = row[0]
+                forecast_id = row["forecast_id"]
                 
                 try:
                     # 查找对应的需求（通过forecast_id）
@@ -240,9 +240,9 @@ class ComputationDataMigration:
             computation: 计算对象
             forecast_id: 销售预测ID
         """
-        from tortoise.connection import connections
+        from tortoise import Tortoise
         
-        conn = connections.get("default")
+        conn = Tortoise.get_connection("default")
         
         # 查询MRP结果明细
         query = """
@@ -264,16 +264,16 @@ class ComputationDataMigration:
                 planned_order_schedule,
                 notes
             FROM apps_kuaizhizao_mrp_results
-            WHERE tenant_id = $1 AND forecast_id = $2 AND deleted_at IS NULL
+            WHERE tenant_id = $1 AND forecast_id = $2
         """
         
-        rows = await conn.execute_query(query, [tenant_id, forecast_id])
+        rows = await conn.execute_query_dict(query, [tenant_id, forecast_id])
         
         # 获取物料信息（需要从物料表查询）
         from apps.master_data.models.material import Material
         
         for row in rows:
-            material_id = row[0]
+            material_id = row["material_id"]
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
             
             if not material:
@@ -289,22 +289,22 @@ class ComputationDataMigration:
                 material_name=material.name,
                 material_spec=material.spec,
                 material_unit=material.unit,
-                required_quantity=Decimal(str(row[6])),  # total_gross_requirement
-                available_inventory=Decimal(str(row[3])),  # current_inventory
-                net_requirement=Decimal(str(row[7])),  # total_net_requirement
-                gross_requirement=Decimal(str(row[6])),  # total_gross_requirement
-                safety_stock=Decimal(str(row[4])),  # safety_stock
-                reorder_point=Decimal(str(row[5])),  # reorder_point
-                planned_receipt=Decimal(str(row[8])),  # total_planned_receipt
-                planned_release=Decimal(str(row[9])),  # total_planned_release
-                suggested_work_order_quantity=Decimal(str(row[10])) if row[10] else None,  # suggested_work_orders
-                suggested_purchase_order_quantity=Decimal(str(row[11])) if row[11] else None,  # suggested_purchase_orders
+                required_quantity=Decimal(str(row["total_gross_requirement"])),
+                available_inventory=Decimal(str(row["current_inventory"])),
+                net_requirement=Decimal(str(row["total_net_requirement"])),
+                gross_requirement=Decimal(str(row["total_gross_requirement"])),
+                safety_stock=Decimal(str(row["safety_stock"])),
+                reorder_point=Decimal(str(row["reorder_point"])),
+                planned_receipt=Decimal(str(row["total_planned_receipt"])),
+                planned_release=Decimal(str(row["total_planned_release"])),
+                suggested_work_order_quantity=Decimal(str(row["suggested_work_orders"])) if row.get("suggested_work_orders") else None,
+                suggested_purchase_order_quantity=Decimal(str(row["suggested_purchase_orders"])) if row.get("suggested_purchase_orders") else None,
                 detail_results={
-                    "demand_schedule": row[12] if row[12] else {},
-                    "inventory_schedule": row[13] if row[13] else {},
-                    "planned_order_schedule": row[14] if row[14] else {},
+                    "demand_schedule": row.get("demand_schedule") or {},
+                    "inventory_schedule": row.get("inventory_schedule") or {},
+                    "planned_order_schedule": row.get("planned_order_schedule") or {},
                 },
-                notes=row[15] if row[15] else None,
+                notes=row.get("notes"),
             )
     
     async def migrate_lrp_results(self, tenant_id: int, dry_run: bool = False) -> Dict[str, Any]:
@@ -327,9 +327,11 @@ class ComputationDataMigration:
         }
         
         try:
-            from tortoise.connection import connections
+            from tortoise import Tortoise
             
-            conn = connections.get("default")
+            conn = Tortoise.get_connection("default")
+            if not hasattr(conn, "execute_query_dict"):
+                raise RuntimeError("数据库连接不支持 execute_query_dict，请使用 asyncpg 驱动")
             
             # 查询旧的LRP结果数据（按sales_order_id分组）
             query = """
@@ -339,14 +341,14 @@ class ComputationDataMigration:
                     MIN(computation_time) as min_time,
                     MAX(computation_time) as max_time
                 FROM apps_kuaizhizao_lrp_results
-                WHERE tenant_id = $1 AND deleted_at IS NULL
+                WHERE tenant_id = $1
                 GROUP BY sales_order_id
             """
             
-            rows = await conn.execute_query(query, [tenant_id])
+            rows = await conn.execute_query_dict(query, [tenant_id])
             
             for row in rows:
-                sales_order_id = row[0]
+                sales_order_id = row["sales_order_id"]
                 
                 try:
                     # 查找对应的需求（通过sales_order_id）
@@ -472,10 +474,10 @@ class ComputationDataMigration:
             computation: 计算对象
             sales_order_id: 销售订单ID
         """
-        from tortoise.connection import connections
+        from tortoise import Tortoise
         from apps.master_data.models.material import Material
         
-        conn = connections.get("default")
+        conn = Tortoise.get_connection("default")
         
         # 查询LRP结果明细
         query = """
@@ -499,13 +501,13 @@ class ComputationDataMigration:
                 procurement_schedule,
                 notes
             FROM apps_kuaizhizao_lrp_results
-            WHERE tenant_id = $1 AND sales_order_id = $2 AND deleted_at IS NULL
+            WHERE tenant_id = $1 AND sales_order_id = $2
         """
         
-        rows = await conn.execute_query(query, [tenant_id, sales_order_id])
+        rows = await conn.execute_query_dict(query, [tenant_id, sales_order_id])
         
         for row in rows:
-            material_id = row[0]
+            material_id = row["material_id"]
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
             
             if not material:
@@ -521,22 +523,22 @@ class ComputationDataMigration:
                 material_name=material.name,
                 material_spec=material.spec,
                 material_unit=material.unit,
-                required_quantity=Decimal(str(row[3])),  # required_quantity
-                available_inventory=Decimal(str(row[4])),  # available_inventory
-                net_requirement=Decimal(str(row[5])),  # net_requirement
-                delivery_date=row[1] if row[1] else None,  # delivery_date
-                planned_production=Decimal(str(row[6])) if row[6] else None,  # planned_production
-                planned_procurement=Decimal(str(row[7])) if row[7] else None,  # planned_procurement
-                production_start_date=row[8] if row[8] else None,  # production_start_date
-                production_completion_date=row[9] if row[9] else None,  # production_completion_date
-                procurement_start_date=row[10] if row[10] else None,  # procurement_start_date
-                procurement_completion_date=row[11] if row[11] else None,  # procurement_completion_date
-                bom_id=row[12] if row[12] else None,  # bom_id
-                bom_version=row[13] if row[13] else None,  # bom_version
+                required_quantity=Decimal(str(row["required_quantity"])),
+                available_inventory=Decimal(str(row["available_inventory"])),
+                net_requirement=Decimal(str(row["net_requirement"])),
+                delivery_date=row.get("delivery_date"),
+                planned_production=Decimal(str(row["planned_production"])) if row.get("planned_production") else None,
+                planned_procurement=Decimal(str(row["planned_procurement"])) if row.get("planned_procurement") else None,
+                production_start_date=row.get("production_start_date"),
+                production_completion_date=row.get("production_completion_date"),
+                procurement_start_date=row.get("procurement_start_date"),
+                procurement_completion_date=row.get("procurement_completion_date"),
+                bom_id=row.get("bom_id"),
+                bom_version=row.get("bom_version"),
                 detail_results={
-                    "material_breakdown": row[14] if row[14] else {},
-                    "capacity_requirements": row[15] if row[15] else {},
-                    "procurement_schedule": row[16] if row[16] else {},
+                    "material_breakdown": row.get("material_breakdown") or {},
+                    "capacity_requirements": row.get("capacity_requirements") or {},
+                    "procurement_schedule": row.get("procurement_schedule") or {},
                 },
-                notes=row[17] if row[17] else None,
+                notes=row.get("notes"),
             )

@@ -1,9 +1,7 @@
 /**
  * 单据关联API服务
  *
- * 统一提供单据关联关系的API调用。根据单据类型路由到对应后端：
- * - 规划类（demand、sales_forecast、sales_order）→ /document-relations/（新实现）
- * - 执行类（work_order、purchase_order 等）→ /documents/.../relations（旧实现，业务逻辑推导）
+ * 统一使用 /document-relations/ API，后端已合并表驱动与业务推导逻辑。
  *
  * @author Luigi Lu
  * @date 2025-01-14
@@ -11,9 +9,6 @@
 
 import { apiRequest } from '../../../services/api';
 import type { DocumentRelationData, RelatedDocument } from '../../../components/document-relation-display';
-
-/** 使用 document-relations 新 API 的单据类型（基于 DocumentRelation 表） */
-const DOCUMENT_RELATIONS_API_TYPES = new Set(['demand', 'sales_forecast', 'sales_order']);
 
 /**
  * 获取单据关联关系（统一入口）
@@ -26,47 +21,20 @@ export async function getDocumentRelations(
   documentType: string,
   documentId: number
 ): Promise<DocumentRelationData> {
-  if (DOCUMENT_RELATIONS_API_TYPES.has(documentType)) {
-    return getDocumentRelationsFromNewApi(documentType, documentId);
-  }
-  return getDocumentRelationsFromLegacyApi(documentType, documentId);
-}
-
-/**
- * 从 /document-relations/ 新 API 获取（规划类单据）
- */
-async function getDocumentRelationsFromNewApi(
-  documentType: string,
-  documentId: number
-): Promise<DocumentRelationData> {
   const response = await apiRequest<{
-    upstream: Array<{
-      id: number;
+    upstream?: Array<{
       source_type: string;
       source_id: number;
       source_code?: string;
       source_name?: string;
-      target_type: string;
-      target_id: number;
-      target_code?: string;
-      target_name?: string;
-      relation_type: string;
-      relation_mode: string;
       relation_desc?: string;
       created_at?: string;
     }>;
-    downstream: Array<{
-      id: number;
-      source_type: string;
-      source_id: number;
-      source_code?: string;
-      source_name?: string;
+    downstream?: Array<{
       target_type: string;
       target_id: number;
       target_code?: string;
       target_name?: string;
-      relation_type: string;
-      relation_mode: string;
       relation_desc?: string;
       created_at?: string;
     }>;
@@ -75,25 +43,6 @@ async function getDocumentRelationsFromNewApi(
     method: 'GET',
   });
   return transformNewApiResponse(response);
-}
-
-/**
- * 从 /documents/.../relations 旧 API 获取（执行类单据，业务逻辑推导）
- */
-async function getDocumentRelationsFromLegacyApi(
-  documentType: string,
-  documentId: number
-): Promise<DocumentRelationData> {
-  const result = await apiRequest<DocumentRelationData>({
-    url: `/apps/kuaizhizao/documents/${documentType}/${documentId}/relations`,
-    method: 'GET',
-  });
-  return {
-    upstream_documents: result.upstream_documents ?? [],
-    downstream_documents: result.downstream_documents ?? [],
-    upstream_count: result.upstream_count ?? (result.upstream_documents?.length ?? 0),
-    downstream_count: result.downstream_count ?? (result.downstream_documents?.length ?? 0),
-  };
 }
 
 function transformNewApiResponse(response: {
@@ -193,4 +142,48 @@ export async function traceDocumentChain(
   });
 
   return response;
+}
+
+/** 变更影响项 */
+export interface ChangeImpactItem {
+  id: number;
+  code?: string;
+  name?: string;
+  status?: string;
+}
+
+/** 变更影响响应（排程管理增强） */
+export interface ChangeImpactResponse {
+  upstream_change: {
+    type: string;
+    id: number;
+    code?: string;
+    name?: string;
+    changed_at?: string;
+  };
+  affected_demands: ChangeImpactItem[];
+  affected_computations: ChangeImpactItem[];
+  affected_plans: ChangeImpactItem[];
+  affected_work_orders: ChangeImpactItem[];
+  recommended_actions: string[];
+}
+
+/**
+ * 获取销售订单变更影响
+ */
+export async function getSalesOrderChangeImpact(salesOrderId: number): Promise<ChangeImpactResponse> {
+  return apiRequest<ChangeImpactResponse>({
+    url: `/apps/kuaizhizao/sales-orders/${salesOrderId}/change-impact`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 获取需求变更影响
+ */
+export async function getDemandChangeImpact(demandId: number): Promise<ChangeImpactResponse> {
+  return apiRequest<ChangeImpactResponse>({
+    url: `/apps/kuaizhizao/demands/${demandId}/change-impact`,
+    method: 'GET',
+  });
 }

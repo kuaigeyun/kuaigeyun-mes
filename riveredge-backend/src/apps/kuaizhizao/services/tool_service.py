@@ -35,7 +35,7 @@ class ToolService:
                 try:
                     data.code = await CodeGenerationService.generate_code(
                         tenant_id=tenant_id,
-                        rule_code="tool_code",
+                        rule_code="TOOL_CODE",
                         context=None
                     )
                 except Exception:
@@ -89,6 +89,19 @@ class ToolUsageService:
     """
     工装领用归还服务
     """
+
+    @staticmethod
+    async def list_usages(
+        tenant_id: int,
+        tool_uuid: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolUsage], int]:
+        tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+        query = ToolUsage.filter(tenant_id=tenant_id, tool_id=tool.id, deleted_at__isnull=True)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-checkout_date")
+        return items, total
     
     @staticmethod
     async def checkout_tool(tenant_id: int, data: ToolUsageCreate) -> ToolUsage:
@@ -102,6 +115,7 @@ class ToolUsageService:
         usage = ToolUsage(
             tenant_id=tenant_id,
             tool_id=tool.id,
+            tool_uuid=tool.uuid,
             **data.model_dump(exclude={'tool_uuid'})
         )
         await usage.save()
@@ -134,6 +148,32 @@ class ToolMaintenanceService:
     """
 
     @staticmethod
+    async def list_maintenances(
+        tenant_id: int,
+        tool_uuid: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolMaintenance], int]:
+        tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+        query = ToolMaintenance.filter(tenant_id=tenant_id, tool_id=tool.id, deleted_at__isnull=True)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-maintenance_date")
+        return items, total
+
+    @staticmethod
+    async def list_calibrations(
+        tenant_id: int,
+        tool_uuid: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolCalibration], int]:
+        tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+        query = ToolCalibration.filter(tenant_id=tenant_id, tool_id=tool.id, deleted_at__isnull=True)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        return items, total
+
+    @staticmethod
     async def record_maintenance(tenant_id: int, data: ToolMaintenanceCreate) -> ToolMaintenance:
         tool = await Tool.filter(tenant_id=tenant_id, uuid=data.tool_uuid).first()
         if not tool: raise ValidationError("工装不存在")
@@ -141,6 +181,7 @@ class ToolMaintenanceService:
         maint = ToolMaintenance(
             tenant_id=tenant_id,
             tool_id=tool.id,
+            tool_uuid=tool.uuid,
             **data.model_dump(exclude={'tool_uuid'})
         )
         await maint.save()
@@ -161,6 +202,7 @@ class ToolMaintenanceService:
         calib = ToolCalibration(
             tenant_id=tenant_id,
             tool_id=tool.id,
+            tool_uuid=tool.uuid,
             **data.model_dump(exclude={'tool_uuid'})
         )
         await calib.save()

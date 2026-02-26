@@ -10,6 +10,7 @@ import PlantsPage from './pages/factory/plants';
 import WorkshopsPage from './pages/factory/workshops';
 import ProductionLinesPage from './pages/factory/production-lines';
 import WorkstationsPage from './pages/factory/workstations';
+import WorkCentersPage from './pages/factory/work-centers';
 
 // 仓库管理页面
 import WarehousesPage from './pages/warehouse/warehouses';
@@ -21,8 +22,8 @@ import MaterialsManagementPage from './pages/materials/management';
 import BOMPage from './pages/materials/bom';
 import BOMDesignerPage from './pages/materials/bom/designer';
 import VariantAttributesPage from './pages/materials/variant-attributes';
-import MaterialBatchesPage from './pages/materials/batches';
-import MaterialSerialsPage from './pages/materials/serials';
+import BatchRulesPage from './pages/materials/batch-rules';
+import SerialRulesPage from './pages/materials/serial-rules';
 
 // 工艺管理页面
 import DefectTypesPage from './pages/process/defect-types';
@@ -37,10 +38,6 @@ import SOPExecutionPage from './pages/process/sop/execution';
 import CustomersPage from './pages/supply-chain/customers';
 import SuppliersPage from './pages/supply-chain/suppliers';
 
-// 绩效管理页面
-import HolidaysPage from './pages/performance/holidays';
-import SkillsPage from './pages/performance/skills';
-
 const MasterDataApp: React.FC = () => {
   return (
     <Routes>
@@ -49,6 +46,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="factory/workshops" element={<WorkshopsPage />} />
       <Route path="factory/production-lines" element={<ProductionLinesPage />} />
       <Route path="factory/workstations" element={<WorkstationsPage />} />
+      <Route path="factory/work-centers" element={<WorkCentersPage />} />
 
       {/* 仓库管理路由 */}
       <Route path="warehouse/warehouses" element={<WarehousesPage />} />
@@ -58,8 +56,8 @@ const MasterDataApp: React.FC = () => {
       {/* 物料管理路由 */}
       <Route path="materials" element={<MaterialsManagementPage />} />
       <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
-      <Route path="materials/batches" element={<MaterialBatchesPage />} />
-      <Route path="materials/serials" element={<MaterialSerialsPage />} />
+      <Route path="materials/batch-rules" element={<BatchRulesPage />} />
+      <Route path="materials/serial-rules" element={<SerialRulesPage />} />
 
       {/* 工艺管理路由 */}
       <Route path="process/defect-types" element={<DefectTypesPage />} />
@@ -75,10 +73,6 @@ const MasterDataApp: React.FC = () => {
       {/* 供应链路由 */}
       <Route path="supply-chain/customers" element={<CustomersPage />} />
       <Route path="supply-chain/suppliers" element={<SuppliersPage />} />
-
-      {/* 绩效管理路由 */}
-      <Route path="performance/holidays" element={<HolidaysPage />} />
-      <Route path="performance/skills" element={<SkillsPage />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={

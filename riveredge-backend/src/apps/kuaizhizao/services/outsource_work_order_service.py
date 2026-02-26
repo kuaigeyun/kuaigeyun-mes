@@ -65,7 +65,8 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         self,
         tenant_id: int,
         work_order_data: OutsourceWorkOrderCreate,
-        created_by: int
+        created_by: int,
+        allow_draft: bool = False
     ) -> OutsourceWorkOrderResponse:
         """
         创建委外工单
@@ -141,22 +142,20 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                     f"当前类型：{source_type}，无法创建委外工单"
                 )
 
-            # 验证物料来源配置完整性
-            validation_passed, validation_errors = await validate_material_source_config(
-                tenant_id=tenant_id,
-                material_id=product_id,
-                source_type=SOURCE_TYPE_OUTSOURCE
-            )
-            
-            if not validation_passed:
-                error_msg = f"委外件物料来源验证失败，无法创建委外工单：\n" + "\n".join(validation_errors)
-                logger.warning(f"委外工单创建失败 - {error_msg}")
-                raise ValidationError(error_msg)
-
-            # 获取物料来源配置
+            # 验证物料来源配置完整性（allow_draft 时跳过，生成草稿由下游补全）
             source_config = await get_material_source_config(tenant_id, product_id)
-            if not source_config:
-                raise ValidationError(f"物料 {material.code} 的委外配置不存在")
+            if not allow_draft:
+                validation_passed, validation_errors = await validate_material_source_config(
+                    tenant_id=tenant_id,
+                    material_id=product_id,
+                    source_type=SOURCE_TYPE_OUTSOURCE
+                )
+                if not validation_passed:
+                    error_msg = f"委外件物料来源验证失败，无法创建委外工单：\n" + "\n".join(validation_errors)
+                    logger.warning(f"委外工单创建失败 - {error_msg}")
+                    raise ValidationError(error_msg)
+                if not source_config:
+                    raise ValidationError(f"物料 {material.code} 的委外配置不存在")
 
             # 从配置中获取委外供应商和委外工序（如果创建数据中没有提供）
             supplier_id = work_order_data.supplier_id
@@ -165,8 +164,8 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             outsource_operation = work_order_data.outsource_operation
             unit_price = work_order_data.unit_price
 
-            # 如果创建数据中没有提供供应商信息，从配置中获取
-            if not supplier_id:
+            # 如果创建数据中没有提供供应商信息，从配置中获取（allow_draft 时 source_config 可能为空）
+            if not supplier_id and source_config:
                 supplier_id = source_config.get("outsource_supplier_id")
                 if supplier_id:
                     supplier = await Supplier.filter(
@@ -179,16 +178,16 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                         supplier_name = supplier.name
 
             # 如果创建数据中没有提供委外工序，从配置中获取
-            if not outsource_operation:
+            if not outsource_operation and source_config:
                 outsource_operation = source_config.get("outsource_operation")
 
             # 如果创建数据中没有提供单价，从配置中获取
-            if not unit_price:
+            if not unit_price and source_config:
                 outsource_price = source_config.get("outsource_price")
                 if outsource_price:
                     unit_price = Decimal(str(outsource_price))
 
-            # 验证供应商信息
+            # 验证供应商信息（allow_draft 时由调用方保证已传入占位供应商）
             if not supplier_id:
                 raise ValidationError("委外供应商ID不能为空，请在物料配置中设置或创建时提供")
             
@@ -206,8 +205,8 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             if not supplier_name:
                 supplier_name = supplier.name
 
-            # 验证委外工序
-            if not outsource_operation:
+            # 验证委外工序（allow_draft 时允许为空，由下游补全）
+            if not allow_draft and not outsource_operation:
                 raise ValidationError("委外工序不能为空，请在物料配置中设置或创建时提供")
 
             # 计算总金额

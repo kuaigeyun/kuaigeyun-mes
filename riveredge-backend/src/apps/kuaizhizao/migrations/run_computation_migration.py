@@ -3,6 +3,10 @@
 
 用于执行MRP/LRP数据到统一需求计算结果表的迁移。
 
+使用方法（在 riveredge-backend 目录下，保证 .env 已配置）:
+    cd riveredge-backend && PYTHONPATH=src uv run python -m apps.kuaizhizao.migrations.run_computation_migration --tenant-id 1 --dry-run
+    cd riveredge-backend && PYTHONPATH=src uv run python -m apps.kuaizhizao.migrations.run_computation_migration --tenant-id 1
+
 Author: Luigi Lu
 Date: 2025-01-14
 """
@@ -12,12 +16,21 @@ import sys
 import json
 from pathlib import Path
 
-# 添加项目根目录到路径
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
+# 加载 .env
+_backend_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+_env_file = _backend_root / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file)
+
+# 确保 src 在 path 中
+src_root = _backend_root / "src"
+if str(src_root) not in sys.path:
+    sys.path.insert(0, str(src_root))
 
 from tortoise import Tortoise
 from loguru import logger
-
+from infra.infrastructure.database.database import TORTOISE_ORM
 from apps.kuaizhizao.migrations.migrate_computation_data import ComputationDataMigration
 
 
@@ -33,10 +46,7 @@ async def main():
     args = parser.parse_args()
     
     # 初始化数据库连接
-    await Tortoise.init(
-        db_url="postgres://postgres:postgres@localhost:5432/riveredge",
-        modules={"models": ["apps.kuaizhizao.models", "apps.master_data.models", "core.models", "infra.models"]}
-    )
+    await Tortoise.init(config=TORTOISE_ORM)
     
     try:
         # 执行迁移

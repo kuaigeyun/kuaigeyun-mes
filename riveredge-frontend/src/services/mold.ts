@@ -11,6 +11,7 @@ import { apiRequest } from './api';
  * 模具信息接口
  */
 export interface Mold {
+  id?: number;
   uuid: string;
   code: string;
   name: string;

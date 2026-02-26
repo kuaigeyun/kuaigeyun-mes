@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Co
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined, BulbOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costCalculationApi } from '../../../services/cost';
 import dayjs from 'dayjs';
 
@@ -473,7 +473,7 @@ const CostCalculationPage: React.FC = () => {
         open={workOrderModalVisible}
         onCancel={() => setWorkOrderModalVisible(false)}
         footer={null}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProForm
           formRef={workOrderFormRef}
@@ -515,7 +515,7 @@ const CostCalculationPage: React.FC = () => {
         open={productModalVisible}
         onCancel={() => setProductModalVisible(false)}
         footer={null}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProForm
           formRef={productFormRef}
@@ -580,7 +580,7 @@ const CostCalculationPage: React.FC = () => {
           setCompareData(null);
         }}
         footer={null}
-        width={800}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={compareFormRef}
@@ -676,7 +676,7 @@ const CostCalculationPage: React.FC = () => {
           setOptimizationData(null);
         }}
         footer={null}
-        width={1000}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <ProForm
           formRef={analyzeFormRef}

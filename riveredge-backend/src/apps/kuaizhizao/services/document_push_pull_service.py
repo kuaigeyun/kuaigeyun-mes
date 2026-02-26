@@ -284,6 +284,10 @@ class DocumentPushPullService:
         if computation.computation_status != "完成":
             raise BusinessLogicError("只能下推已完成的需求计算")
         
+        # 获取已下推且仍存在的工单物料，避免重复下推
+        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
+        already_pushed_wo_material_ids = exclusions["wo_material_ids"]
+        
         # 获取计算明细
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
         computation_items = await DemandComputationItem.filter(
@@ -294,25 +298,38 @@ class DocumentPushPullService:
         if not computation_items:
             raise BusinessLogicError("需求计算没有明细，无法下推")
         
-        # 创建工单列表
+        # 按物料聚合（同一物料多行合并，避免重复生成工单），排除已下推的物料
+        prod_items = [
+            i for i in computation_items
+            if (i.planned_production or i.suggested_work_order_quantity or 0) > 0
+            and i.material_id not in already_pushed_wo_material_ids
+        ]
+        agg_by_material: Dict[int, List] = {}
+        for i in prod_items:
+            mid = i.material_id
+            if mid not in agg_by_material:
+                agg_by_material[mid] = []
+            agg_by_material[mid].append(i)
+        
         work_orders = []
         relations = []
         
-        for item in computation_items:
-            # 只处理需要生产的物料（planned_production > 0）
-            if (item.planned_production or 0) <= 0:
-                continue
+        for material_id, group in agg_by_material.items():
+            first = group[0]
+            total_qty = sum(float(i.suggested_work_order_quantity or i.planned_production or 0) for i in group)
+            start_dates = [i.production_start_date for i in group if i.production_start_date]
+            end_dates = [i.production_completion_date for i in group if i.production_completion_date]
             
             # 创建工单
             work_order_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",  # 使用编码规则生成工单编码
-                product_id=item.material_id,
-                product_code=item.material_code,
-                product_name=item.material_name,
-                quantity=item.suggested_work_order_quantity or item.planned_production,
+                product_id=first.material_id,
+                product_code=first.material_code,
+                product_name=first.material_name,
+                quantity=total_qty,
                 production_mode=computation.business_mode,
-                planned_start_date=item.production_start_date,
-                planned_end_date=item.production_completion_date,
+                planned_start_date=min(start_dates) if start_dates else None,
+                planned_end_date=max(end_dates) if end_dates else None,
                 status="draft",
                 priority="normal",
                 remarks=f"由需求计算{computation.computation_code}下推生成",
@@ -393,6 +410,11 @@ class DocumentPushPullService:
         if computation.computation_status != "完成":
             raise BusinessLogicError("只能下推已完成的需求计算")
         
+        # 若已下推生产计划且仍存在，则不再重复下推
+        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
+        if exclusions["has_production_plan"]:
+            raise BusinessLogicError("该需求计算已下推生产计划且仍存在，请勿重复下推")
+        
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
             computation_id=computation_id
@@ -450,15 +472,13 @@ class DocumentPushPullService:
             v = src.get("production_lead_time") or src.get("purchase_lead_time") or src.get("outsource_lead_time")
             return int(v) if v is not None else 0
         
-        plan_items_created = 0
+        # 按物料聚合明细，避免同一物料重复生成计划行（进而导致转工单时重复）
+        agg: Dict[str, Dict] = {}  # (material_id, source_type) -> aggregated
         for item in items:
-            # 跳过虚拟件（对齐转工单）
             if item.material_source_type in ("Phantom",):
                 continue
             is_production = item.material_source_type in ("Make", "Outsource", "Configure")
             is_purchase = item.material_source_type == "Buy"
-            # 计划数量：对齐转工单，生产用 suggested_work_order/planned_production，采购用 suggested_purchase/planned_procurement
-            # 无来源类型时按建议数量推断
             if is_production:
                 qty = float(item.suggested_work_order_quantity or item.planned_production or item.required_quantity or item.net_requirement or 0)
             elif is_purchase:
@@ -470,12 +490,29 @@ class DocumentPushPullService:
                 is_production = wo_q > 0
             if qty <= 0:
                 continue
+            key = (item.material_id, item.material_source_type or "")
+            if key not in agg:
+                agg[key] = {
+                    "item": item,
+                    "qty": 0,
+                    "wo_qty": 0,
+                    "po_qty": 0,
+                    "is_production": is_production,
+                }
+            agg[key]["qty"] += qty
+            agg[key]["wo_qty"] += float(item.suggested_work_order_quantity or 0)
+            agg[key]["po_qty"] += float(item.suggested_purchase_order_quantity or 0)
+
+        plan_items_created = 0
+        for (_mid, _st), v in agg.items():
+            item = v["item"]
+            qty = v["qty"]
+            wo_qty = v["wo_qty"]
+            po_qty = v["po_qty"]
+            is_production = v["is_production"]
             suggested_action = "生产" if is_production else "采购"
-            # 计划日期：datetime 转 date
             raw_date = item.delivery_date or item.production_completion_date or item.procurement_completion_date or plan_start
             planned_date = _to_date(raw_date) if raw_date else plan_start
-            wo_qty = float(item.suggested_work_order_quantity or 0)
-            po_qty = float(item.suggested_purchase_order_quantity or 0)
             await ProductionPlanItem.create(
                 tenant_id=tenant_id,
                 plan_id=plan.id,
@@ -548,6 +585,11 @@ class DocumentPushPullService:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
         if computation.computation_status != "完成":
             raise BusinessLogicError("只能下推已完成的需求计算")
+        
+        # 若已下推采购申请且仍存在，则不再重复下推
+        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
+        if exclusions["has_purchase_requisition"]:
+            raise BusinessLogicError("该需求计算已下推采购申请且仍存在，请勿重复下推")
 
         items = await DemandComputationItem.filter(
             tenant_id=tenant_id,
@@ -765,11 +807,17 @@ class DocumentPushPullService:
         if not supplier_id:
             raise BusinessLogicError("下推采购单必须提供供应商ID")
         
+        # 获取已下推且仍存在的采购单物料，避免重复下推
+        exclusions = await self.computation_service._get_already_pushed_exclusions(tenant_id, computation_id)
+        already_pushed_po_material_ids = exclusions["po_material_ids"]
+        
         # 按物料分组创建采购单（每个物料一个采购单，或者可以合并为单个采购单）
         # 这里采用每个物料一个采购单的方式，便于后续管理
         for item in computation_items:
-            # 只处理需要采购的物料（planned_procurement > 0）
+            # 只处理需要采购的物料（planned_procurement > 0），排除已下推的物料
             if (item.planned_procurement or 0) <= 0:
+                continue
+            if item.material_id in already_pushed_po_material_ids:
                 continue
             
             # 创建采购单明细

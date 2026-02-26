@@ -1,3 +1,9 @@
+/**
+ * 应付单列表页
+ *
+ * 路由复用：/finance-management/payables、/finance-management/payments 均使用本组件，
+ * 展示应付账款列表。付款菜单作为应付管理的快捷入口。
+ */
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Space } from 'antd';

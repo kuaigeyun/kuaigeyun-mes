@@ -89,6 +89,9 @@ export interface Material {
   baseUnit: string;
   units?: MaterialUnits;
   batchManaged: boolean;
+  defaultBatchRuleId?: number;
+  serialManaged?: boolean;
+  defaultSerialRuleId?: number;
   variantManaged: boolean;
   variantAttributes?: Record<string, any>;
   description?: string;
@@ -191,6 +194,9 @@ export interface MaterialCreate {
   baseUnit: string;
   units?: MaterialUnits;
   batchManaged?: boolean;
+  defaultBatchRuleId?: number;
+  serialManaged?: boolean;
+  defaultSerialRuleId?: number;
   variantManaged?: boolean;
   variantAttributes?: Record<string, any>;
   description?: string;
@@ -217,6 +223,9 @@ export interface MaterialUpdate {
   baseUnit?: string;
   units?: MaterialUnits;
   batchManaged?: boolean;
+  defaultBatchRuleId?: number;
+  serialManaged?: boolean;
+  defaultSerialRuleId?: number;
   variantManaged?: boolean;
   variantAttributes?: Record<string, any>;
   description?: string;

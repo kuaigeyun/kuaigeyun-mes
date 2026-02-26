@@ -22,6 +22,7 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import { materialBindingApi } from '../../../../services/production';
+import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
 const { Text } = Typography;
 
@@ -147,7 +148,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={1000}
+      width={MODAL_CONFIG.LARGE_WIDTH}
       centered
       rootClassName="kiosk-modal-terminal-bg"
       styles={{

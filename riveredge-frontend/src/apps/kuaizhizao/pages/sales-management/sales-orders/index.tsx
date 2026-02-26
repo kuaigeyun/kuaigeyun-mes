@@ -12,7 +12,7 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select } from 'antd';
-import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -58,7 +58,7 @@ import {
 /** 已审核状态值集合（与后端 document_lifecycle _is_approved 一致，用于按钮显示） */
 const APPROVED_STATUS_VALUES = ['已审核', SalesOrderStatus.AUDITED, ReviewStatus.APPROVED, '审核通过', '通过', '已通过'] as const;
 const isApprovedRecord = (r: SalesOrder) => APPROVED_STATUS_VALUES.some((v) => r.status === v || r.review_status === v);
-import { getDocumentRelations } from '../../../services/document-relation';
+import { getDocumentRelations, getSalesOrderChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -75,6 +75,7 @@ import { getUserList, type User } from '../../../../../services/user';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
 type SalesOrderItemRow = SalesOrderItem & {
@@ -99,18 +100,24 @@ const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
   const invalidateOrdersCache = () => { lastOrdersCacheRef.current = null; };
+  /** 刷新左侧菜单销售订单数量徽章 */
+  const invalidateMenuBadge = () => { queryClient.invalidateQueries({ queryKey: ['menuBadgeCounts'] }); };
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
   // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
-  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('detailTable');
+  const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'card' | 'gantt' | 'help'>('table');
   const dataViewMode = viewTypeState === 'table' ? 'order' : 'detail';
+  /** 视图模式 ref：切换时同步更新，确保 reload 时 request 使用正确模式（避免 setState 异步导致返回订单级数据） */
+  const dataViewModeRef = useRef(dataViewMode);
+  dataViewModeRef.current = dataViewMode;
 
   /**
    * 加载业务配置，判断是否开启审核
@@ -143,6 +150,9 @@ const SalesOrdersPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
+  const [changeImpactVisible, setChangeImpactVisible] = useState(false);
+  const [changeImpactData, setChangeImpactData] = useState<ChangeImpactResponse | null>(null);
+  const [changeImpactLoading, setChangeImpactLoading] = useState(false);
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
   // 提醒弹窗状态
@@ -425,6 +435,7 @@ const SalesOrdersPage: React.FC = () => {
             }
           }
           invalidateOrdersCache();
+          invalidateMenuBadge();
           actionRef.current?.reload();
           // 清除选中项
           if (actionRef.current?.clearSelected) {
@@ -452,6 +463,7 @@ const SalesOrdersPage: React.FC = () => {
           await deleteSalesOrder(id);
           messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: 1 }));
           invalidateOrdersCache();
+          invalidateMenuBadge();
           actionRef.current?.reload();
           if (currentSalesOrder?.id === id) {
             setDrawerVisible(false);
@@ -482,6 +494,7 @@ const SalesOrdersPage: React.FC = () => {
       }
       messageApi.success(t('app.kuaizhizao.salesOrder.syncSuccess', { count: successCount }));
       invalidateOrdersCache();
+      invalidateMenuBadge();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
@@ -628,6 +641,7 @@ const SalesOrdersPage: React.FC = () => {
       setModalVisible(false);
       setPreviewCode(null);
       invalidateOrdersCache();
+      invalidateMenuBadge();
       actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {
         refreshDrawerOrder(orderId);
@@ -784,6 +798,22 @@ const SalesOrdersPage: React.FC = () => {
   const handleOpenReminder = () => {
     reminderForm.resetFields();
     setReminderModalOpen(true);
+  };
+
+  /** 打开变更影响（排程管理增强） */
+  const handleOpenChangeImpact = async () => {
+    if (!currentSalesOrder?.id) return;
+    setChangeImpactVisible(true);
+    setChangeImpactLoading(true);
+    setChangeImpactData(null);
+    try {
+      const data = await getSalesOrderChangeImpact(currentSalesOrder.id);
+      setChangeImpactData(data);
+    } catch (e) {
+      messageApi.error(t('common.loadFailed') ?? '加载失败');
+    } finally {
+      setChangeImpactLoading(false);
+    }
   };
 
   /** 提交提醒 */
@@ -943,6 +973,7 @@ const SalesOrdersPage: React.FC = () => {
       if (failureCount === 0) {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
         invalidateOrdersCache();
+        invalidateMenuBadge();
         actionRef.current?.reload();
       } else {
         messageApi.warning(
@@ -961,6 +992,7 @@ const SalesOrdersPage: React.FC = () => {
           });
         }
         invalidateOrdersCache();
+        invalidateMenuBadge();
         actionRef.current?.reload();
       }
     } catch (error: any) {
@@ -1103,7 +1135,7 @@ const SalesOrdersPage: React.FC = () => {
             theme="link"
             size="small"
             actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
-            onSuccess={() => { invalidateOrdersCache(); actionRef.current?.reload(); }}
+            onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); actionRef.current?.reload(); }}
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
           {isApprovedRecord(record) && (
@@ -1254,6 +1286,7 @@ const SalesOrdersPage: React.FC = () => {
                 messageApi.warning(t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }));
               }
               invalidateOrdersCache();
+              invalidateMenuBadge();
               actionRef.current?.reload();
               if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
             } catch (error: any) {
@@ -1271,8 +1304,10 @@ const SalesOrdersPage: React.FC = () => {
         <UniTable
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
           viewTypes={['table', 'detailTable', 'card', 'gantt', 'help']}
-          defaultViewType="detailTable"
+          defaultViewType="table"
           onViewTypeChange={(v) => {
+            const nextMode = v === 'table' ? 'order' : 'detail';
+            dataViewModeRef.current = nextMode;
             setViewTypeState(v as 'table' | 'detailTable' | 'card' | 'gantt' | 'help');
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
@@ -1434,7 +1469,8 @@ const SalesOrdersPage: React.FC = () => {
                 lastOrdersCacheRef.current = { orders, total, paramsKey };
               }
 
-              if (dataViewMode === 'order') {
+              const mode = dataViewModeRef.current;
+              if (mode === 'order') {
                 return { data: orders, success: true, total };
               }
               return { data: toFlatRows(orders), success: true, total };
@@ -2243,12 +2279,15 @@ const SalesOrdersPage: React.FC = () => {
             )}
           </Space>
         }
-        width="50%"
+        size="large"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         extra={
           currentSalesOrder && (
             <Space size="small">
+              <Button icon={<ApartmentOutlined />} onClick={handleOpenChangeImpact}>
+                变更影响
+              </Button>
               <Button icon={<BellOutlined />} onClick={handleOpenReminder}>
                 {t('app.kuaizhizao.salesOrder.reminder')}
               </Button>
@@ -2291,7 +2330,7 @@ const SalesOrdersPage: React.FC = () => {
                   approve: approveSalesOrder,
                   revoke: unapproveSalesOrder,
                 }}
-                onSuccess={() => refreshDrawerOrder(currentSalesOrder?.id)}
+                onSuccess={() => { invalidateMenuBadge(); refreshDrawerOrder(currentSalesOrder?.id); }}
                 confirmMessages={{
                   submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                 }}
@@ -2539,7 +2578,7 @@ const SalesOrdersPage: React.FC = () => {
         okText={t('app.kuaizhizao.salesOrder.reminderSend')}
         cancelText={t('common.cancel')}
         confirmLoading={reminderSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <AntForm form={reminderForm} layout="vertical" style={{ marginTop: 16 }}>
           <AntForm.Item
@@ -2578,6 +2617,70 @@ const SalesOrdersPage: React.FC = () => {
             <Input.TextArea rows={3} placeholder={t('app.kuaizhizao.salesOrder.remarksPlaceholder')} maxLength={500} showCount />
           </AntForm.Item>
         </AntForm>
+      </Modal>
+
+      {/* 变更影响弹窗（排程管理增强） */}
+      <Modal
+        title="变更影响"
+        open={changeImpactVisible}
+        onCancel={() => { setChangeImpactVisible(false); setChangeImpactData(null); }}
+        footer={null}
+        width={560}
+      >
+        {changeImpactLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spin tip="加载中..." />
+          </div>
+        ) : changeImpactData ? (
+          <div>
+            <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+              上游变更：{changeImpactData.upstream_change.code ?? changeImpactData.upstream_change.name ?? '-'}
+              {changeImpactData.upstream_change.changed_at && `（${dayjs(changeImpactData.upstream_change.changed_at).format('YYYY-MM-DD HH:mm')}）`}
+            </p>
+            {(changeImpactData.affected_demands?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求</div>
+                <Table size="small" dataSource={changeImpactData.affected_demands} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.affected_computations?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求计算</div>
+                <Table size="small" dataSource={changeImpactData.affected_computations} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.affected_plans?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的生产计划</div>
+                <Table size="small" dataSource={changeImpactData.affected_plans} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.affected_work_orders?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的工单</div>
+                <Table size="small" dataSource={changeImpactData.affected_work_orders} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.recommended_actions?.length ?? 0) > 0 && (
+              <div>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>建议操作</div>
+                <Space wrap>
+                  {changeImpactData.recommended_actions.map((a, i) => (
+                    <Tag key={i} color="blue">{a}</Tag>
+                  ))}
+                </Space>
+              </div>
+            )}
+            {!changeImpactData.affected_demands?.length && !changeImpactData.affected_computations?.length &&
+             !changeImpactData.affected_plans?.length && !changeImpactData.affected_work_orders?.length && (
+              <p style={{ color: 'var(--ant-color-text-secondary)' }}>暂无下游受影响单据</p>
+            )}
+          </div>
+        ) : null}
       </Modal>
 
       {/* 下推预览弹窗 */}

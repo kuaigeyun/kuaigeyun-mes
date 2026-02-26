@@ -498,6 +498,7 @@ const ProcessInspectionPage: React.FC = () => {
           name="qualified_quantity"
           label="合格数量"
           placeholder="请输入合格数量"
+          colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入合格数量' },
             { type: 'number', min: 0, message: '合格数量不能小于0' },
@@ -518,6 +519,7 @@ const ProcessInspectionPage: React.FC = () => {
           name="unqualified_quantity"
           label="不合格数量"
           placeholder="请输入不合格数量"
+          colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入不合格数量' },
             { type: 'number', min: 0, message: '不合格数量不能小于0' },
@@ -539,6 +541,7 @@ const ProcessInspectionPage: React.FC = () => {
           label="检验备注"
           placeholder="请输入检验详情、发现的问题或处理意见"
           fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
@@ -816,7 +819,7 @@ const ProcessInspectionPage: React.FC = () => {
         open={scanModalVisible}
         onCancel={() => setScanModalVisible(false)}
         footer={null}
-        width={400}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <div style={{ textAlign: 'center', padding: '24px' }}>
           <div style={{

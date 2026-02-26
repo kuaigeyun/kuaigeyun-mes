@@ -130,11 +130,45 @@ export async function getDemandComputation(id: number, includeItems: boolean = t
 }
 
 /**
- * 执行需求计算
+ * 执行计算预览（不持久化，用于二次确认）
  */
-export async function executeDemandComputation(id: number): Promise<DemandComputation> {
+export async function previewExecuteDemandComputation(
+  id: number,
+  computationParams?: Record<string, any>
+): Promise<{
+  computation_code: string
+  computation_type: string
+  item_count: number
+  items: Array<{
+    material_code: string
+    material_name: string
+    material_unit: string
+    required_quantity: number
+    available_inventory: number
+    net_requirement: number
+    suggested_work_order_quantity: number
+    suggested_purchase_order_quantity: number
+    material_source_type?: string
+  }>
+}> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/execute/preview`, {
+    method: 'POST',
+    data: computationParams ? { computation_params: computationParams } : undefined,
+  })
+}
+
+/**
+ * 执行需求计算
+ * @param id 计算ID
+ * @param computationParams 可选临时覆盖参数，仅本次执行生效
+ */
+export async function executeDemandComputation(
+  id: number,
+  computationParams?: Record<string, any>
+): Promise<DemandComputation> {
   return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}/execute`, {
     method: 'POST',
+    data: computationParams ? { computation_params: computationParams } : undefined,
   });
 }
 
@@ -154,6 +188,16 @@ export async function updateDemandComputation(id: number, data: Partial<DemandCo
   return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}`, {
     method: 'PUT',
     data,
+  });
+}
+
+/**
+ * 删除需求计算
+ * 仅当需求计算尚未下推工单/采购单等下游单据时允许删除
+ */
+export async function deleteDemandComputation(id: number): Promise<{ success: boolean; message: string }> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}`, {
+    method: 'DELETE',
   });
 }
 
@@ -212,16 +256,81 @@ export async function pushToPurchaseRequisition(id: number): Promise<{ success: 
 
 /**
  * 一键生成工单和采购单
- * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购
+ * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单
+ * @param options.allowDraft 验证失败时是否仍生成草稿单（由下游用户补全）
  */
 export async function generateOrdersFromComputation(
   id: number,
-  generateMode: 'all' | 'work_order_only' | 'purchase_only' = 'all'
+  generateMode: 'all' | 'work_order_only' | 'purchase_only' | 'outsource_only' = 'all',
+  options?: { allowDraft?: boolean }
 ): Promise<GenerateOrdersResponse> {
   return apiRequest<GenerateOrdersResponse>(`/apps/kuaizhizao/demand-computations/${id}/generate-orders`, {
     method: 'POST',
-    params: { generate_mode: generateMode },
+    params: {
+      generate_mode: generateMode,
+      allow_draft: options?.allowDraft ?? false,
+    },
   });
+}
+
+/** 下推能力与配置 */
+export interface PushOptions {
+  computation_id: number
+  has_production_items: boolean
+  has_outsource_items: boolean
+  has_purchase_items: boolean
+  make_count: number
+  outsource_count: number
+  purchase_items_with_supplier: number
+  purchase_items_without_supplier: number
+  can_direct_work_order: boolean
+  default_production: 'plan' | 'work_order'
+  default_purchase: 'requisition' | 'purchase_order'
+  production_choices: ('plan' | 'work_order')[]
+  purchase_choices: ('requisition' | 'purchase_order')[]
+}
+
+export async function getPushOptions(id: number): Promise<PushOptions> {
+  return apiRequest<PushOptions>(`/apps/kuaizhizao/demand-computations/${id}/push-options`, {
+    method: 'GET',
+  })
+}
+
+/** 下推预览 */
+export interface PushPreview {
+  computation_id: number
+  production_plan_count: number
+  work_order_count: number
+  outsource_work_order_count: number
+  purchase_requisition_count: number
+  purchase_order_count: number
+  validation_failures: Array<{ material_code: string; material_name: string; errors: string[] }>
+  can_direct_work_order: boolean
+  make_count: number
+  outsource_count: number
+  purchase_items_with_supplier: number
+  purchase_items_without_supplier: number
+}
+
+export async function getPushPreview(
+  id: number,
+  params?: { production?: string; purchase?: string; outsource_only?: boolean }
+): Promise<PushPreview> {
+  return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {
+    method: 'GET',
+    params,
+  })
+}
+
+/** 一键下推 */
+export async function pushAll(
+  id: number,
+  body: { production?: string; purchase?: string; include_outsource?: boolean }
+): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {
+    method: 'POST',
+    data: body,
+  })
 }
 
 /**
@@ -416,5 +525,32 @@ export async function listComputationSnapshots(
   return apiRequest<ComputationSnapshotItem[]>(
     `/apps/kuaizhizao/demand-computations/${computationId}/snapshots`,
     { method: 'GET', params }
+  );
+}
+
+/** 下推记录项 */
+export interface PushRecordItem {
+  target_type: string;
+  target_id: number;
+  target_code?: string;
+  target_name?: string;
+  relation_desc?: string;
+  created_at?: string;
+  target_exists: boolean;
+}
+
+/** 下推记录响应 */
+export interface PushRecordsResponse {
+  records: PushRecordItem[];
+}
+
+/**
+ * 获取需求计算下推记录
+ * 返回从该需求计算下推出去的单据列表，已删除的单据 target_exists 为 false
+ */
+export async function getPushRecords(computationId: number): Promise<PushRecordsResponse> {
+  return apiRequest<PushRecordsResponse>(
+    `/apps/kuaizhizao/demand-computations/${computationId}/push-records`,
+    { method: 'GET' }
   );
 }

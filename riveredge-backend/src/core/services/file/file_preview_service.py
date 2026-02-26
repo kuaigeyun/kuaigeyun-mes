@@ -344,15 +344,14 @@ class FilePreviewService:
         
         # 方式2：文件在私有存储，通过代理URL访问
         # 生成文件下载代理URL（包含权限验证）
-        # 从配置获取 BASE_URL（自动从 HOST 和 PORT 生成）
+        # for_client=True 且 BASE_URL 留空时使用相对路径，便于局域网/反向代理部署
+        # for_client=False（kkFileView 内部抓取）需绝对 URL，BASE_URL 空时用 localhost 回退
         base_url = settings.BASE_URL
+        if not base_url:
+            host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
+            base_url = f"http://{host}:{settings.PORT}"
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
-        proxy_url = (
-            f"{base_url}/api/v1/core/files/{file_uuid}/download"
-            f"?token={token}"
-        )
-        
-        return proxy_url
+        return f"{base_url}/api/v1/core/files/{file_uuid}/download?token={token}"
     
     @staticmethod
     async def generate_simple_preview_url(
@@ -371,15 +370,11 @@ class FilePreviewService:
         Returns:
             str: 预览URL
         """
-        # 从配置获取 BASE_URL（自动从 HOST 和 PORT 生成）
+        # BASE_URL 留空时使用相对路径，便于局域网/反向代理部署（客户端 img src 以当前页 origin 加载）
         base_url = settings.BASE_URL
-        # 生成文件访问URL（包含权限验证token）
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
-        preview_url = (
-            f"{base_url}/api/v1/core/files/{file_uuid}/download"
-            f"?token={token}"
-        )
-        return preview_url
+        path = f"/api/v1/core/files/{file_uuid}/download?token={token}"
+        return f"{base_url}{path}" if base_url else path
     
     @staticmethod
     async def generate_kkfileview_preview_url(

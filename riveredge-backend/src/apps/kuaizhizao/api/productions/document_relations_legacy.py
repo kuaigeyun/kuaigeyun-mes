@@ -14,12 +14,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 
-from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.kuaizhizao.schemas.document_relation import (
     GetDocumentRelationsResponse,
     DocumentTraceResponse,
+    DocumentRef,
 )
 from apps.kuaizhizao.schemas.document_node_timing import DocumentTimingSummaryResponse
 
@@ -31,7 +32,7 @@ document_timing_service = DocumentTimingService()
 # ============ 单据关联管理 API ============
 
 
-@router.get("/documents/{document_type}/{document_id}/relations", response_model=GetDocumentRelationsResponse, summary="获取单据关联关系")
+@router.get("/documents/{document_type}/{document_id}/relations", response_model=GetDocumentRelationsResponse, summary="获取单据关联关系（Legacy，已转发至统一服务）")
 async def get_document_relations(
     document_type: str = Path(..., description="单据类型（如：work_order, sales_forecast等）"),
     document_id: int = Path(..., description="单据ID"),
@@ -41,65 +42,65 @@ async def get_document_relations(
     """
     获取单据的关联关系（上游和下游单据）
 
-    支持的单据类型：
-    - **sales_forecast**: 销售预测
-    - **sales_order**: 销售订单
-    - **mrp_result**: MRP运算结果
-    - **lrp_result**: LRP运算结果
-    - **work_order**: 工单
-    - **production_picking**: 生产领料单
-    - **reporting_record**: 报工记录
-    - **finished_goods_receipt**: 成品入库单
-    - **sales_delivery**: 销售出库单
-    - **purchase_order**: 采购订单
-    - **purchase_receipt**: 采购入库单
-    - **payable**: 应付单
-    - **receivable**: 应收单
-
-    - **document_type**: 单据类型
-    - **document_id**: 单据ID
-
-    返回：
-    - upstream_documents: 上游单据列表（来源单据）
-    - downstream_documents: 下游单据列表（生成单据）
+    已转发至 DocumentRelationNewService，合并表驱动与业务推导逻辑。
+    保留此端点以兼容旧调用方，建议迁移至 /document-relations/{type}/{id}。
     """
-    result = await DocumentRelationService().get_document_relations(
+    result = await DocumentRelationNewService().get_relations(
         tenant_id=tenant_id,
         document_type=document_type,
-        document_id=document_id
+        document_id=document_id,
     )
-    return GetDocumentRelationsResponse(**result)
+    upstream_refs = [
+        DocumentRef(
+            document_type=r.source_type,
+            document_id=r.source_id,
+            document_code=r.source_code,
+            document_name=r.source_name,
+        )
+        for r in result.upstream
+    ]
+    downstream_refs = [
+        DocumentRef(
+            document_type=r.target_type,
+            document_id=r.target_id,
+            document_code=r.target_code,
+            document_name=r.target_name,
+        )
+        for r in result.downstream
+    ]
+    return GetDocumentRelationsResponse(
+        document_type=document_type,
+        document_id=document_id,
+        upstream_documents=upstream_refs,
+        downstream_documents=downstream_refs,
+        upstream_count=len(upstream_refs),
+        downstream_count=len(downstream_refs),
+    )
 
 
-@router.get("/documents/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="追溯单据关联链")
+@router.get("/documents/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="追溯单据关联链（Legacy，已转发至统一服务）")
 async def trace_document_chain(
     document_type: str = Path(..., description="单据类型"),
     document_id: int = Path(..., description="单据ID"),
     direction: str = Query("both", description="追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）"),
+    max_depth: int = Query(10, ge=1, le=20, description="最大追溯深度"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> DocumentTraceResponse:
     """
     追溯单据关联链（完整追溯）
 
-    支持所有单据类型的完整关联链追溯，包括多层级关联关系。
-
-    - **document_type**: 单据类型（支持所有单据类型，参见关联关系API）
-    - **document_id**: 单据ID
-    - **direction**: 追溯方向
-      - **upstream**: 向上追溯（查找来源单据）
-      - **downstream**: 向下追溯（查找生成单据）
-      - **both**: 双向追溯（默认）
-
-    返回完整的关联链，支持多层级追溯，自动避免循环引用。
+    已转发至 DocumentRelationNewService，合并表驱动与业务推导逻辑。
+    保留此端点以兼容旧调用方，建议迁移至 /document-relations/{type}/{id}/trace。
     """
-    result = await DocumentRelationService().trace_document_chain(
+    result = await DocumentRelationNewService().trace_document_chain(
         tenant_id=tenant_id,
         document_type=document_type,
         document_id=document_id,
-        direction=direction
+        direction=direction,
+        max_depth=max_depth,
     )
-    return DocumentTraceResponse(**result)
+    return result
 
 
 # ============ 单据打印 API ============

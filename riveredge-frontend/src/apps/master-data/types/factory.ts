@@ -150,3 +150,42 @@ export interface WorkstationListParams {
   isActive?: boolean;
 }
 
+export interface WorkCenter {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  workstationIds?: number[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface WorkCenterCreate {
+  code: string;
+  name: string;
+  description?: string;
+  isActive?: boolean;
+  workstationIds?: number[];
+}
+
+export interface WorkCenterUpdate {
+  code?: string;
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  workstationIds?: number[];
+}
+
+export interface WorkCenterListParams {
+  skip?: number;
+  limit?: number;
+  isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
+}
+

@@ -10,13 +10,27 @@
 import { getFilePreview } from '../services/file';
 
 const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
+
+/** 将 127.0.0.1/localhost 绝对 URL 转为相对路径，便于局域网访问 */
+function toRelativeIfLocalhost(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  try {
+    const u = new URL(url, 'http://dummy');
+    if (u.hostname === '127.0.0.1' || u.hostname === 'localhost') {
+      return u.pathname + u.search;
+    }
+  } catch {
+    /* ignore */
+  }
+  return url;
+}
 const AVATAR_CACHE_TTL_MS = 30 * 60 * 1000; // 30 分钟
 
 function getAvatarCacheKey(avatarUuid: string): string {
   return `${AVATAR_CACHE_PREFIX}${avatarUuid}`;
 }
 
-/** 从缓存读取头像 URL（含 TTL 校验） */
+/** 从缓存读取头像 URL（含 TTL 校验），自动将 localhost 绝对 URL 转为相对路径 */
 export function getCachedAvatarUrl(avatarUuid: string | undefined): string | undefined {
   if (!avatarUuid || typeof window === 'undefined') return undefined;
   try {
@@ -25,7 +39,7 @@ export function getCachedAvatarUrl(avatarUuid: string | undefined): string | und
     const { url, ts } = JSON.parse(raw);
     if (!url || typeof ts !== 'number') return undefined;
     if (Date.now() - ts > AVATAR_CACHE_TTL_MS) return undefined;
-    return url;
+    return toRelativeIfLocalhost(url);
   } catch {
     return undefined;
   }
@@ -67,8 +81,9 @@ export async function getAvatarUrl(avatarUuid: string | undefined): Promise<stri
         const previewInfo = await getFilePreview(avatarUuid);
         const previewUrl = previewInfo.preview_url;
         if (previewUrl) {
-          setCachedAvatarUrl(avatarUuid, previewUrl);
-          return previewUrl;
+          const normalized = toRelativeIfLocalhost(previewUrl);
+          setCachedAvatarUrl(avatarUuid, normalized);
+          return normalized;
         }
         return undefined;
       } catch (error) {

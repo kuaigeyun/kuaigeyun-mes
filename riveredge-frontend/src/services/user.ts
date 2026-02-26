@@ -225,7 +225,7 @@ export async function importUsers(data: any[][]): Promise<{
  */
 export async function exportUsers(params?: UserListParams): Promise<Blob> {
   const response = await fetch(
-    `${import.meta.env.VITE_API_TARGET || `http://${import.meta.env.VITE_BACKEND_HOST || '127.0.0.1'}:${import.meta.env.VITE_BACKEND_PORT || '8200'}`}/api/v1/core/users/export?${new URLSearchParams(
+    `/api/v1/core/users/export?${new URLSearchParams(
       Object.entries(params || {}).reduce((acc, [key, value]) => {
         if (value !== undefined && value !== null) {
           acc[key] = String(value);

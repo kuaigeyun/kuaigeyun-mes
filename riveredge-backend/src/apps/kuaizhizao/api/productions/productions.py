@@ -28,6 +28,8 @@ from apps.kuaizhizao.services.supplier_collaboration_service import SupplierColl
 from apps.kuaizhizao.services.customer_collaboration_service import CustomerCollaborationService
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_transfer_service import InventoryTransferService
+from apps.kuaizhizao.services.assembly_order_service import AssemblyOrderService
+from apps.kuaizhizao.services.disassembly_order_service import DisassemblyOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.report_service import ReportService
@@ -41,6 +43,8 @@ outsource_material_receipt_service = OutsourceMaterialReceiptService()
 defect_record_service = DefectRecordService()
 stocktaking_service = StocktakingService()
 inventory_transfer_service = InventoryTransferService()
+assembly_order_service = AssemblyOrderService()
+disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
 report_service = ReportService()
@@ -51,6 +55,7 @@ from apps.kuaizhizao.services.quality_service import (
     FinishedGoodsInspectionService,
 )
 from apps.kuaizhizao.services.quality_standard_service import QualityStandardService
+from apps.kuaizhizao.services.inspection_plan_service import InspectionPlanService
 from apps.kuaizhizao.services.finance_service import (
     PayableService,
     PurchaseInvoiceService,
@@ -147,6 +152,26 @@ from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferItemUpdate,
     InventoryTransferItemResponse,
 )
+from apps.kuaizhizao.schemas.assembly_order import (
+    AssemblyOrderCreate,
+    AssemblyOrderUpdate,
+    AssemblyOrderResponse,
+    AssemblyOrderListResponse,
+    AssemblyOrderWithItemsResponse,
+    AssemblyOrderItemCreateInput,
+    AssemblyOrderItemUpdate,
+    AssemblyOrderItemResponse,
+)
+from apps.kuaizhizao.schemas.disassembly_order import (
+    DisassemblyOrderCreate,
+    DisassemblyOrderUpdate,
+    DisassemblyOrderResponse,
+    DisassemblyOrderListResponse,
+    DisassemblyOrderWithItemsResponse,
+    DisassemblyOrderItemCreateInput,
+    DisassemblyOrderItemUpdate,
+    DisassemblyOrderItemResponse,
+)
 # 仓库相关 schema 已迁移至 warehouse_execution.py
 from apps.kuaizhizao.schemas.document_node_timing import (
     DocumentNodeTimingResponse,
@@ -181,6 +206,12 @@ from apps.kuaizhizao.schemas.quality import (
     QualityStandardUpdate,
     QualityStandardResponse,
     QualityStandardListResponse,
+)
+from apps.kuaizhizao.schemas.inspection_plan import (
+    InspectionPlanCreate,
+    InspectionPlanUpdate,
+    InspectionPlanResponse,
+    InspectionPlanListResponse,
 )
 from apps.kuaizhizao.schemas.finance import (
     # 应付单
@@ -453,6 +484,134 @@ async def get_standards_by_material(
     except Exception as e:
         logger.error(f"根据物料ID获取质检标准失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取标准失败: {str(e)}")
+
+
+# ============ 质检方案管理 API ============
+
+@router.post("/inspection-plans", response_model=InspectionPlanResponse, summary="创建质检方案")
+async def create_inspection_plan(
+    plan: InspectionPlanCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InspectionPlanResponse:
+    """创建质检方案（含检验步骤）"""
+    try:
+        return await InspectionPlanService().create_inspection_plan(
+            tenant_id=tenant_id,
+            plan_data=plan,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/inspection-plans", response_model=List[InspectionPlanListResponse], summary="获取质检方案列表")
+async def list_inspection_plans(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    plan_type: Optional[str] = Query(None, description="方案类型（incoming/process/finished）"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    plan_code: Optional[str] = Query(None, description="方案编码（模糊搜索）"),
+    plan_name: Optional[str] = Query(None, description="方案名称（模糊搜索）"),
+    include_steps: bool = Query(False, description="是否包含检验步骤"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[InspectionPlanListResponse]:
+    """获取质检方案列表"""
+    try:
+        return await InspectionPlanService().list_inspection_plans(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            plan_type=plan_type,
+            material_id=material_id,
+            is_active=is_active,
+            plan_code=plan_code,
+            plan_name=plan_name,
+            include_steps=include_steps,
+        )
+    except Exception as e:
+        logger.error(f"获取质检方案列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取列表失败: {str(e)}")
+
+
+@router.get("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="获取质检方案详情")
+async def get_inspection_plan(
+    plan_id: int = Path(..., description="质检方案ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InspectionPlanResponse:
+    """根据ID获取质检方案详情（含检验步骤）"""
+    try:
+        return await InspectionPlanService().get_inspection_plan_by_id(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/inspection-plans/{plan_id}", response_model=InspectionPlanResponse, summary="更新质检方案")
+async def update_inspection_plan(
+    plan_id: int = Path(..., description="质检方案ID"),
+    plan: InspectionPlanUpdate = Body(..., description="质检方案更新数据"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InspectionPlanResponse:
+    """更新质检方案（含步骤替换）"""
+    try:
+        return await InspectionPlanService().update_inspection_plan(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            plan_data=plan,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/inspection-plans/{plan_id}", summary="删除质检方案")
+async def delete_inspection_plan(
+    plan_id: int = Path(..., description="质检方案ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """删除质检方案（软删除）"""
+    try:
+        await InspectionPlanService().delete_inspection_plan(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+        )
+        return JSONResponse(
+            content={"message": "质检方案删除成功"},
+            status_code=http_status.HTTP_200_OK,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/inspection-plans/by-material/{material_id}", response_model=List[InspectionPlanListResponse], summary="根据物料ID获取质检方案")
+async def get_inspection_plans_by_material(
+    material_id: int = Path(..., description="物料ID"),
+    plan_type: Optional[str] = Query(None, description="方案类型（incoming/process/finished）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[InspectionPlanListResponse]:
+    """根据物料ID获取适用的质检方案"""
+    try:
+        return await InspectionPlanService().get_plans_by_material(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            plan_type=plan_type,
+        )
+    except Exception as e:
+        logger.error(f"根据物料ID获取质检方案失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取方案失败: {str(e)}")
 
 
 @router.get("/quality/statistics", summary="质量统计分析")
@@ -2809,6 +2968,288 @@ async def execute_inventory_transfer(
         return await inventory_transfer_service.execute_inventory_transfer(
             tenant_id=tenant_id,
             transfer_id=transfer_id,
+            executed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ 组装单 API ============
+
+@router.post("/assembly-orders", response_model=AssemblyOrderResponse, summary="创建组装单")
+async def create_assembly_order(
+    data: AssemblyOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderResponse:
+    """创建组装单"""
+    try:
+        return await assembly_order_service.create_assembly_order(
+            tenant_id=tenant_id,
+            order_data=data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/assembly-orders", response_model=AssemblyOrderListResponse, summary="获取组装单列表")
+async def list_assembly_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="组装单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderListResponse:
+    """获取组装单列表"""
+    return await assembly_order_service.list_assembly_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        warehouse_id=warehouse_id,
+        status=status,
+    )
+
+
+@router.get("/assembly-orders/{order_id}", response_model=AssemblyOrderWithItemsResponse, summary="获取组装单详情")
+async def get_assembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderWithItemsResponse:
+    """获取组装单详情（含明细）"""
+    try:
+        return await assembly_order_service.get_assembly_order_by_id(
+            tenant_id=tenant_id,
+            order_id=order_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/assembly-orders/{order_id}", response_model=AssemblyOrderResponse, summary="更新组装单")
+async def update_assembly_order(
+    order_id: int,
+    data: AssemblyOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderResponse:
+    """更新组装单"""
+    try:
+        return await assembly_order_service.update_assembly_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_data=data,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/assembly-orders/{order_id}/items", response_model=AssemblyOrderItemResponse, summary="添加组装明细")
+async def create_assembly_order_item(
+    order_id: int,
+    item: AssemblyOrderItemCreateInput,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderItemResponse:
+    """添加组装明细"""
+    try:
+        return await assembly_order_service.create_assembly_order_item(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            item_data=item,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/assembly-orders/{order_id}/items/{item_id}", response_model=AssemblyOrderItemResponse, summary="更新组装明细")
+async def update_assembly_order_item(
+    order_id: int,
+    item_id: int,
+    item: AssemblyOrderItemUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderItemResponse:
+    """更新组装明细"""
+    try:
+        return await assembly_order_service.update_assembly_order_item(
+            tenant_id=tenant_id,
+            item_id=item_id,
+            item_data=item,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="执行组装")
+async def execute_assembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderResponse:
+    """执行组装（更新明细状态，TODO: 调用库存服务）"""
+    try:
+        return await assembly_order_service.execute_assembly_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            executed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ 拆卸单 API ============
+
+@router.post("/disassembly-orders", response_model=DisassemblyOrderResponse, summary="创建拆卸单")
+async def create_disassembly_order(
+    data: DisassemblyOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderResponse:
+    """创建拆卸单"""
+    try:
+        return await disassembly_order_service.create_disassembly_order(
+            tenant_id=tenant_id,
+            order_data=data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/disassembly-orders", response_model=DisassemblyOrderListResponse, summary="获取拆卸单列表")
+async def list_disassembly_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="拆卸单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderListResponse:
+    """获取拆卸单列表"""
+    return await disassembly_order_service.list_disassembly_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        warehouse_id=warehouse_id,
+        status=status,
+    )
+
+
+@router.get("/disassembly-orders/{order_id}", response_model=DisassemblyOrderWithItemsResponse, summary="获取拆卸单详情")
+async def get_disassembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderWithItemsResponse:
+    """获取拆卸单详情（含明细）"""
+    try:
+        return await disassembly_order_service.get_disassembly_order_by_id(
+            tenant_id=tenant_id,
+            order_id=order_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/disassembly-orders/{order_id}", response_model=DisassemblyOrderResponse, summary="更新拆卸单")
+async def update_disassembly_order(
+    order_id: int,
+    data: DisassemblyOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderResponse:
+    """更新拆卸单"""
+    try:
+        return await disassembly_order_service.update_disassembly_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_data=data,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/disassembly-orders/{order_id}/items", response_model=DisassemblyOrderItemResponse, summary="添加拆卸明细")
+async def create_disassembly_order_item(
+    order_id: int,
+    item: DisassemblyOrderItemCreateInput,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderItemResponse:
+    """添加拆卸明细"""
+    try:
+        return await disassembly_order_service.create_disassembly_order_item(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            item_data=item,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/disassembly-orders/{order_id}/items/{item_id}", response_model=DisassemblyOrderItemResponse, summary="更新拆卸明细")
+async def update_disassembly_order_item(
+    order_id: int,
+    item_id: int,
+    item: DisassemblyOrderItemUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderItemResponse:
+    """更新拆卸明细"""
+    try:
+        return await disassembly_order_service.update_disassembly_order_item(
+            tenant_id=tenant_id,
+            item_id=item_id,
+            item_data=item,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/disassembly-orders/{order_id}/execute", response_model=DisassemblyOrderResponse, summary="执行拆卸")
+async def execute_disassembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DisassemblyOrderResponse:
+    """执行拆卸（更新明细状态，TODO: 调用库存服务）"""
+    try:
+        return await disassembly_order_service.execute_disassembly_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
             executed_by=current_user.id
         )
     except NotFoundError as e:

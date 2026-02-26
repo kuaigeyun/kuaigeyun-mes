@@ -28,9 +28,9 @@ async def list_system_reports(
     )
 
 
-# ── 用户自定义报表 ───────────────────────────────────────────────
+# ── 用户自制报表 ───────────────────────────────────────────────
 
-@router.get("/my", response_model=ReportListResponse, summary="获取我的自定义报表")
+@router.get("/my", response_model=ReportListResponse, summary="获取我的自制报表")
 async def list_my_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),

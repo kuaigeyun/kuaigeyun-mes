@@ -42,8 +42,8 @@ class DocumentRelationBase(BaseModel):
     @field_validator("relation_mode")
     def validate_relation_mode(cls, v):
         """验证关联方式"""
-        if v not in ["push", "pull", "manual"]:
-            raise ValueError("关联方式必须是push、pull或manual")
+        if v not in ["push", "pull", "manual", "derived"]:
+            raise ValueError("关联方式必须是push、pull、manual或derived")
         return v
 
 
@@ -107,3 +107,23 @@ class DocumentTraceResponse(BaseModel):
     document_name: Optional[str] = Field(None, description="根单据名称")
     upstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="上游追溯链")
     downstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="下游追溯链")
+
+
+# === 变更影响（排程管理增强） ===
+
+class ChangeImpactItem(BaseModel):
+    """变更影响项"""
+    id: int = Field(..., description="单据ID")
+    code: Optional[str] = Field(None, description="单据编码")
+    name: Optional[str] = Field(None, description="单据名称")
+    status: Optional[str] = Field(None, description="状态")
+
+
+class ChangeImpactResponse(BaseModel):
+    """上游变更影响响应Schema"""
+    upstream_change: dict = Field(..., description="上游变更单据信息")
+    affected_demands: List[ChangeImpactItem] = Field(default_factory=list, description="受影响的需求")
+    affected_computations: List[ChangeImpactItem] = Field(default_factory=list, description="受影响的需求计算")
+    affected_plans: List[ChangeImpactItem] = Field(default_factory=list, description="受影响的生产计划")
+    affected_work_orders: List[ChangeImpactItem] = Field(default_factory=list, description="受影响的工单")
+    recommended_actions: List[str] = Field(default_factory=list, description="建议操作")

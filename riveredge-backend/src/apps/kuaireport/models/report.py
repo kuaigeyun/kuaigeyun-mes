@@ -7,7 +7,7 @@ class Report(BaseModel):
     """
     报表模型
 
-    支持系统预置报表和用户自定义报表两种模式。
+    支持系统预置报表和用户自制报表两种模式。
     """
     tenant_id = fields.IntField(description="租户ID")
     code = fields.CharField(max_length=50, description="报表编码")
@@ -20,7 +20,7 @@ class Report(BaseModel):
     )
     # 是否为系统预置报表（系统报表不允许普通用户修改/删除）
     is_system = fields.BooleanField(default=False, description="是否系统报表")
-    # 自定义报表所有者（系统报表为 null）
+    # 自制报表所有者（系统报表为 null）
     owner_id = fields.IntField(null=True, description="所有者用户ID")
 
     # 自研报表配置（图表类型、数据集引用、字段映射、过滤器等）

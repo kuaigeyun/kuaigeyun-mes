@@ -199,6 +199,8 @@ export const ManufacturingIcons = {
   hardDrive: getLucideIcon('HardDrive'), // 数据备份/存储
   network: getLucideIcon('Network'), // API/网络接口
   fileText: getLucideIcon('FileText'), // 模板/文件
+  fileSpreadsheet: getLucideIcon('FileSpreadsheet'), // 报表中心 - 表格图标
+  fileBarChart: getLucideIcon('FileBarChart'), // 自制报表 - 报表/图表图标（与仪表盘、大屏中心区分）
   logIn: getLucideIcon('LogIn'), // 登录日志
   userCog: getLucideIcon('UserCog'), // 用户管理/角色管理
   

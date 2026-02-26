@@ -39,6 +39,18 @@ SALES_ORDER_EXEC_SUB_STAGES = [
 
 
 # ---------------------------------------------------------------------------
+# 工单生命周期节点（草稿→已下达→执行中→已完成，已取消为异常分支）
+# ---------------------------------------------------------------------------
+WORK_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "released", "label": "已下达"},
+    {"key": "in_progress", "label": "执行中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+# ---------------------------------------------------------------------------
 # 需求生命周期节点（按业务含义独立：需求由上游审核通过自动生成，无草稿；审核 + 是否下推计算）
 # ---------------------------------------------------------------------------
 DEMAND_MAIN_STAGES = [
@@ -334,4 +346,80 @@ def get_demand_lifecycle(
         "main_stages": _build_main_stages(DEMAND_MAIN_STAGES, "audited"),
         "sub_stages": None,
         "next_step_suggestions": ["下推需求计算"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 工单生命周期计算
+# ---------------------------------------------------------------------------
+def get_work_order_lifecycle(work_order: Any) -> Dict[str, Any]:
+    """
+    根据工单数据计算生命周期，返回供前端 UniLifecycleStepper 展示的结构。
+    work_order: ORM 或具 status 的对象。
+    """
+    status = _norm(getattr(work_order, "status", None) or "")
+
+    # 已取消：异常分支
+    if status in ("cancelled", "已取消"):
+        return {
+            "current_stage_key": "cancelled",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "cancelled", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+
+    # 草稿
+    if status in ("draft", "草稿"):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
+            "status": "normal",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "draft"),
+            "sub_stages": None,
+            "next_step_suggestions": ["下达工单"],
+        }
+
+    # 已下达
+    if status in ("released", "已下达"):
+        return {
+            "current_stage_key": "released",
+            "current_stage_name": "已下达",
+            "status": "normal",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "released"),
+            "sub_stages": None,
+            "next_step_suggestions": ["开始执行", "状态流转"],
+        }
+
+    # 执行中
+    if status in ("in_progress", "执行中"):
+        return {
+            "current_stage_key": "in_progress",
+            "current_stage_name": "执行中",
+            "status": "active",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "in_progress"),
+            "sub_stages": None,
+            "next_step_suggestions": ["报工", "指定结束", "状态流转"],
+        }
+
+    # 已完成
+    if status in ("completed", "已完成"):
+        return {
+            "current_stage_key": "completed",
+            "current_stage_name": "已完成",
+            "status": "success",
+            "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "completed"),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+
+    # 未知状态兜底
+    return {
+        "current_stage_key": "draft",
+        "current_stage_name": status or "草稿",
+        "status": "normal",
+        "main_stages": _build_main_stages(WORK_ORDER_MAIN_STAGES, "draft"),
+        "sub_stages": None,
+        "next_step_suggestions": ["状态流转"],
     }

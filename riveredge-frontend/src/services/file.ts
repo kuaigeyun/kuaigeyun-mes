@@ -254,6 +254,7 @@ export async function getFilePreview(fileUuid: string): Promise<FilePreviewRespo
  * @returns 文件下载URL
  */
 export function getFileDownloadUrl(fileUuid: string): string {
+  // 使用相对路径，便于局域网访问（避免 VITE_API_BASE_URL 硬编码 127.0.0.1）
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
   return `${baseUrl}/api/v1/core/files/${fileUuid}/download`;
 }

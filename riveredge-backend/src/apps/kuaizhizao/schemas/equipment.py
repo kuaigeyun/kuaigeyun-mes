@@ -153,3 +153,29 @@ class EquipmentListResponse(BaseModel):
     skip: int = Field(..., description="跳过数量")
     limit: int = Field(..., description="限制数量")
 
+
+class EquipmentCalibrationCreate(BaseModel):
+    """设备校验记录创建 Schema"""
+    calibration_date: date = Field(..., description="校验日期")
+    result: str = Field(..., max_length=50, description="校验结果（合格、不合格、限制使用）")
+    certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
+    expiry_date: Optional[date] = Field(None, description="有效期至")
+    attachment_uuid: Optional[str] = Field(None, max_length=36, description="报告附件ID")
+    remark: Optional[str] = Field(None, description="备注")
+
+
+class EquipmentCalibrationResponse(BaseModel):
+    """设备校验记录响应 Schema"""
+    model_config = ConfigDict(from_attributes=True)
+    uuid: str
+    id: int
+    equipment_id: int
+    equipment_uuid: str
+    calibration_date: date
+    result: str
+    certificate_no: Optional[str] = None
+    expiry_date: Optional[date] = None
+    attachment_uuid: Optional[str] = None
+    remark: Optional[str] = None
+    created_at: datetime
+

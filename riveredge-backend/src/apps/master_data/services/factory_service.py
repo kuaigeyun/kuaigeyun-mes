@@ -8,12 +8,13 @@ from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
-from apps.master_data.models.factory import Plant, Workshop, ProductionLine, Workstation
+from apps.master_data.models.factory import Plant, Workshop, ProductionLine, Workstation, WorkCenter
 from apps.master_data.schemas.factory_schemas import (
     PlantCreate, PlantUpdate, PlantResponse,
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
-    WorkstationCreate, WorkstationUpdate, WorkstationResponse
+    WorkstationCreate, WorkstationUpdate, WorkstationResponse,
+    WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -1602,7 +1603,274 @@ class FactoryService:
             "success_records": success_records,
             "failed_records": failed_records
         }
-    
+
+    # ==================== 工作中心相关方法 ====================
+
+    @staticmethod
+    async def create_work_center(
+        tenant_id: int,
+        data: WorkCenterCreate
+    ) -> WorkCenterResponse:
+        """创建工作中心"""
+        existing_active = await WorkCenter.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=True
+        ).first()
+
+        if existing_active:
+            raise ValidationError(f"工作中心编码 {data.code} 已存在")
+
+        existing_deleted = await WorkCenter.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+
+        if existing_deleted:
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            work_center = existing_deleted
+            workstation_ids = getattr(data, 'workstation_ids', None) or []
+            if workstation_ids:
+                await Workstation.filter(
+                    id__in=workstation_ids, tenant_id=tenant_id, deleted_at__isnull=True
+                ).update(work_center_id=work_center.id, work_center_name=work_center.name)
+            resp = WorkCenterResponse.model_validate(work_center)
+            ws_ids = list(await Workstation.filter(
+                work_center_id=work_center.id, deleted_at__isnull=True
+            ).values_list('id', flat=True))
+            return resp.model_copy(update={'workstation_ids': ws_ids})
+
+        create_data = (data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+        workstation_ids = create_data.pop('workstation_ids', None) or []
+
+        try:
+            work_center = await WorkCenter.create(
+                tenant_id=tenant_id,
+                **create_data
+            )
+        except IntegrityError as e:
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                existing_deleted_retry = await WorkCenter.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                if existing_deleted_retry:
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    work_center = existing_deleted_retry
+                    if workstation_ids:
+                        await Workstation.filter(
+                            id__in=workstation_ids, tenant_id=tenant_id, deleted_at__isnull=True
+                        ).update(work_center_id=work_center.id, work_center_name=work_center.name)
+                    resp = WorkCenterResponse.model_validate(work_center)
+                    ws_ids = list(await Workstation.filter(
+                        work_center_id=work_center.id, deleted_at__isnull=True
+                    ).values_list('id', flat=True))
+                    return resp.model_copy(update={'workstation_ids': ws_ids})
+                raise ValidationError(f"工作中心编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
+
+        if workstation_ids:
+            await Workstation.filter(
+                id__in=workstation_ids, tenant_id=tenant_id, deleted_at__isnull=True
+            ).update(work_center_id=work_center.id, work_center_name=work_center.name)
+        resp = WorkCenterResponse.model_validate(work_center)
+        ws_ids = list(await Workstation.filter(
+            work_center_id=work_center.id, deleted_at__isnull=True
+        ).values_list('id', flat=True))
+        return resp.model_copy(update={'workstation_ids': ws_ids})
+
+    @staticmethod
+    async def get_work_center_by_uuid(
+        tenant_id: int,
+        work_center_uuid: str
+    ) -> WorkCenterResponse:
+        """根据UUID获取工作中心"""
+        work_center = await WorkCenter.filter(
+            tenant_id=tenant_id,
+            uuid=work_center_uuid,
+            deleted_at__isnull=True
+        ).first()
+
+        if not work_center:
+            raise NotFoundError(f"工作中心 {work_center_uuid} 不存在")
+
+        resp = WorkCenterResponse.model_validate(work_center)
+        ws_ids = list(await Workstation.filter(
+            work_center_id=work_center.id, deleted_at__isnull=True
+        ).values_list('id', flat=True))
+        return resp.model_copy(update={'workstation_ids': ws_ids})
+
+    @staticmethod
+    async def list_work_centers(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
+    ) -> List[WorkCenterResponse]:
+        """获取工作中心列表"""
+        query = WorkCenter.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+
+        if keyword:
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        if code:
+            query = query.filter(code__icontains=code)
+
+        if name:
+            query = query.filter(name__icontains=name)
+
+        work_centers = await query.offset(skip).limit(limit).order_by("code").all()
+        return [WorkCenterResponse.model_validate(wc) for wc in work_centers]
+
+    @staticmethod
+    async def update_work_center(
+        tenant_id: int,
+        work_center_uuid: str,
+        data: WorkCenterUpdate
+    ) -> WorkCenterResponse:
+        """更新工作中心"""
+        work_center = await WorkCenter.filter(
+            tenant_id=tenant_id,
+            uuid=work_center_uuid,
+            deleted_at__isnull=True
+        ).first()
+
+        if not work_center:
+            raise NotFoundError(f"工作中心 {work_center_uuid} 不存在")
+
+        if data.code and data.code != work_center.code:
+            existing = await WorkCenter.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=True
+            ).first()
+            if existing:
+                raise ValidationError(f"工作中心编码 {data.code} 已存在")
+
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        workstation_ids = update_data.pop('workstation_ids', None)
+
+        for key, value in update_data.items():
+            setattr(work_center, key, value)
+
+        try:
+            await work_center.save()
+        except IntegrityError as e:
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工作中心编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
+
+        if workstation_ids is not None:
+            await Workstation.filter(work_center_id=work_center.id).update(
+                work_center_id=None, work_center_name=None
+            )
+            if workstation_ids:
+                await Workstation.filter(
+                    id__in=workstation_ids, tenant_id=tenant_id, deleted_at__isnull=True
+                ).update(work_center_id=work_center.id, work_center_name=work_center.name)
+
+        resp = WorkCenterResponse.model_validate(work_center)
+        ws_ids = list(await Workstation.filter(
+            work_center_id=work_center.id, deleted_at__isnull=True
+        ).values_list('id', flat=True))
+        return resp.model_copy(update={'workstation_ids': ws_ids})
+
+    @staticmethod
+    async def delete_work_center(
+        tenant_id: int,
+        work_center_uuid: str
+    ) -> None:
+        """删除工作中心（软删除）"""
+        work_center = await WorkCenter.filter(
+            tenant_id=tenant_id,
+            uuid=work_center_uuid,
+            deleted_at__isnull=True
+        ).first()
+
+        if not work_center:
+            raise NotFoundError(f"工作中心 {work_center_uuid} 不存在")
+
+        await Workstation.filter(work_center_id=work_center.id).update(
+            work_center_id=None, work_center_name=None
+        )
+        from tortoise import timezone
+        work_center.deleted_at = timezone.now()
+        await work_center.save()
+
+    @staticmethod
+    async def batch_delete_work_centers(
+        tenant_id: int,
+        work_center_uuids: List[str]
+    ) -> dict:
+        """批量删除工作中心（软删除）"""
+        from tortoise import timezone
+        from loguru import logger
+
+        success_records = []
+        failed_records = []
+
+        for work_center_uuid in work_center_uuids:
+            try:
+                work_center = await WorkCenter.filter(
+                    tenant_id=tenant_id,
+                    uuid=work_center_uuid,
+                    deleted_at__isnull=True
+                ).first()
+
+                if not work_center:
+                    failed_records.append({
+                        "uuid": work_center_uuid,
+                        "reason": f"工作中心 {work_center_uuid} 不存在"
+                    })
+                    continue
+
+                await Workstation.filter(work_center_id=work_center.id).update(
+                    work_center_id=None, work_center_name=None
+                )
+                work_center.deleted_at = timezone.now()
+                await work_center.save()
+
+                success_records.append({
+                    "uuid": work_center_uuid,
+                    "code": work_center.code,
+                    "name": work_center.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除工作中心失败 (uuid: {work_center_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": work_center_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
+
     # ==================== 级联查询相关方法 ====================
     
     @staticmethod

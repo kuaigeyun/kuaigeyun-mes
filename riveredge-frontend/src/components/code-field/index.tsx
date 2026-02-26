@@ -87,8 +87,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
         'master-data-material': 'material',
         'master-data-process-route': 'process_route',
         'master-data-engineering-bom': 'bom',
+        'master-data-factory-work-center': 'work_center',
         'kuaizhizao-sales-order': 'sales_order',
         'kuaizhizao-production-work-order': 'work_order',
+        'kuaizhizao-equipment-management-equipment': 'equipment',
+        'kuaizhizao-equipment-management-mold': 'mold',
+        'kuaizhizao-equipment-management-tool': 'tool',
       };
       const entityType = entityTypeMap[pageCode];
       
@@ -126,8 +130,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
       'master-data-material': 'material',
       'master-data-process-route': 'process_route',
       'master-data-engineering-bom': 'bom',
+      'master-data-factory-work-center': 'work_center',
       'kuaizhizao-sales-order': 'sales_order',
       'kuaizhizao-production-work-order': 'work_order',
+      'kuaizhizao-equipment-management-equipment': 'equipment',
+      'kuaizhizao-equipment-management-mold': 'mold',
+      'kuaizhizao-equipment-management-tool': 'tool',
     };
     const entityType = entityTypeMap[pageCode];
     

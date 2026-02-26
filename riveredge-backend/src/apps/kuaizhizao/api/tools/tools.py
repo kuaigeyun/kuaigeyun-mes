@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from apps.kuaizhizao.schemas.tool import (
     ToolCreate, ToolUpdate, ToolResponse, ToolListResponse,
-    ToolUsageCreate, ToolUsageResponse,
-    ToolMaintenanceCreate, ToolMaintenanceResponse,
-    ToolCalibrationCreate, ToolCalibrationResponse
+    ToolUsageCreate, ToolUsageResponse, ToolUsageListResponse,
+    ToolMaintenanceCreate, ToolMaintenanceResponse, ToolMaintenanceListResponse,
+    ToolCalibrationCreate, ToolCalibrationResponse, ToolCalibrationListResponse
 )
 from apps.kuaizhizao.services.tool_service import ToolService, ToolUsageService, ToolMaintenanceService
 from core.api.deps.deps import get_current_tenant
@@ -51,6 +51,63 @@ async def list_tools(
 ):
     items, total = await ToolService.list_tools(tenant_id, skip, limit, type, status, search)
     return ToolListResponse(items=[ToolResponse.model_validate(i) for i in items], total=total)
+
+
+@router.get("/{uuid}/usages", response_model=ToolUsageListResponse)
+async def list_tool_usages(
+    uuid: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        items, total = await ToolUsageService.list_usages(tenant_id, uuid, skip, limit)
+        return ToolUsageListResponse(
+            items=[ToolUsageResponse.model_validate(i) for i in items],
+            total=total,
+            skip=skip,
+            limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{uuid}/maintenances", response_model=ToolMaintenanceListResponse)
+async def list_tool_maintenances(
+    uuid: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        items, total = await ToolMaintenanceService.list_maintenances(tenant_id, uuid, skip, limit)
+        return ToolMaintenanceListResponse(
+            items=[ToolMaintenanceResponse.model_validate(i) for i in items],
+            total=total,
+            skip=skip,
+            limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{uuid}/calibrations", response_model=ToolCalibrationListResponse)
+async def list_tool_calibrations(
+    uuid: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        items, total = await ToolMaintenanceService.list_calibrations(tenant_id, uuid, skip, limit)
+        return ToolCalibrationListResponse(
+            items=[ToolCalibrationResponse.model_validate(i) for i in items],
+            total=total,
+            skip=skip,
+            limit=limit
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{uuid}", response_model=ToolResponse)

@@ -32,10 +32,14 @@ async def _get_bom_for_material(
     material_bom_versions: Optional[Dict[int, str]],
 ) -> Optional[BOM]:
     """根据版本参数获取物料的 BOM（支持指定版本或默认版本）"""
-    version = (material_bom_versions or {}).get(material_id) if material_bom_versions else None
+    versions = material_bom_versions or {}
+    version = versions.get(material_id) or versions.get(str(material_id))  # 兼容 JSON 字符串 key
     if not version:
         version = bom_version
-    use_default = use_default_bom and not version
+    # 当使用 material_bom_versions 模式时，未指定版本的物料（如下层 BOM）使用默认版本，确保能正确展开
+    use_default = (use_default_bom and not version) or (
+        bool(material_bom_versions) and not version
+    )
 
     query = BOM.filter(
         tenant_id=tenant_id,
@@ -161,10 +165,8 @@ async def validate_material_source_config(
                 errors.append(f"自制件建议配置工艺路线，物料: {material.main_code} ({material.name})")
             
     elif source_type == SOURCE_TYPE_BUY:
-        # 采购件建议配置默认供应商和采购价格（警告，不阻止）
-        default_supplier_id = source_config.get("default_supplier_id")
-        if not default_supplier_id:
-            errors.append(f"采购件建议配置默认供应商，物料: {material.main_code} ({material.name})")
+        # 采购件未配置默认供应商时仅作建议，不判定为验证失败（可通过「下推到采购申请」处理）
+        pass
             
     elif source_type == SOURCE_TYPE_PHANTOM:
         # 虚拟件必须有完整的BOM结构（下层物料必须可展开）
@@ -265,7 +267,7 @@ async def expand_bom_with_source_control(
         return []
     
     source_type = material.source_type
-    
+
     # 如果是虚拟件，自动跳过，直接展开下层物料
     if source_type == SOURCE_TYPE_PHANTOM:
         logger.debug(f"跳过虚拟件，直接展开下层物料，物料ID: {material_id}, 物料编码: {material.main_code}")
@@ -275,17 +277,25 @@ async def expand_bom_with_source_control(
             tenant_id, material_id, only_approved,
             bom_version, use_default_bom, material_bom_versions
         )
-        if not target_bom or not target_bom.bom_code:
+        if not target_bom:
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
             return []
         
-        # 获取该bom_code下的所有BOM明细（限定同一主物料）
-        bom_items_query = BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            bom_code=target_bom.bom_code,
-            deleted_at__isnull=True
-        )
+        # 获取该 BOM 下的所有明细：优先用 bom_code；bom_code 为空时用 material_id+version
+        if target_bom.bom_code:
+            bom_items_query = BOM.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                bom_code=target_bom.bom_code,
+                deleted_at__isnull=True
+            )
+        else:
+            bom_items_query = BOM.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                version=target_bom.version,
+                deleted_at__isnull=True
+            )
         if only_approved:
             bom_items_query = bom_items_query.filter(approval_status="approved")
         bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
@@ -344,20 +354,28 @@ async def expand_bom_with_source_control(
         tenant_id, material_id, only_approved,
         bom_version, use_default_bom, material_bom_versions
     )
-    if not target_bom or not target_bom.bom_code:
+    if not target_bom:
         return []
     
-    # 获取该bom_code下的所有BOM明细（限定同一主物料）
-    bom_items_query = BOM.filter(
-        tenant_id=tenant_id,
-        material_id=material_id,
-        bom_code=target_bom.bom_code,
-        deleted_at__isnull=True
-    )
+    # 获取该 BOM 下的所有明细：优先用 bom_code；bom_code 为空时用 material_id+version（兼容历史数据）
+    if target_bom.bom_code:
+        bom_items_query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            bom_code=target_bom.bom_code,
+            deleted_at__isnull=True
+        )
+    else:
+        bom_items_query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=target_bom.version,
+            deleted_at__isnull=True
+        )
     if only_approved:
         bom_items_query = bom_items_query.filter(approval_status="approved")
     bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
-    
+
     requirements = []
     for bom_item in bom_items:
         # 跳过替代料
@@ -413,7 +431,7 @@ async def expand_bom_with_source_control(
             if only_approved:
                 child_bom_query = child_bom_query.filter(approval_status="approved")
             child_bom_count = await child_bom_query.count()
-            
+
             if child_bom_count > 0:
                 child_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
@@ -427,7 +445,7 @@ async def expand_bom_with_source_control(
                     material_bom_versions=material_bom_versions,
                 )
                 requirements.extend(child_requirements)
-    
+
     return requirements
 
 

@@ -9,9 +9,7 @@
 
     <meta name="theme-color" content="#141414" />
 
-    <!-- 性能优化：预连接API服务器和字体CDN -->
-    <link rel="preconnect" href="http://127.0.0.1:8200" />
-    <link rel="dns-prefetch" href="http://127.0.0.1:8200" />
+    <!-- 性能优化：预连接字体CDN（API 使用相对路径 /api/v1，无需预连接固定地址，避免局域网访问时 127.0.0.1 指向错误） -->
     <link rel="preconnect" href="https://cdn.svar.dev" crossorigin />
     <link rel="dns-prefetch" href="https://cdn.svar.dev" />
 

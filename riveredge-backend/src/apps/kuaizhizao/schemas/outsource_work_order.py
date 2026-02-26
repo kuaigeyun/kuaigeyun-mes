@@ -21,7 +21,7 @@ class OutsourceWorkOrderBase(BaseModel):
 
     包含所有委外工单的基本字段。
     """
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     code: Optional[str] = Field(None, description="委外工单编码（可选，创建时自动生成）")
     name: Optional[str] = Field(None, description="委外工单名称（可选）")

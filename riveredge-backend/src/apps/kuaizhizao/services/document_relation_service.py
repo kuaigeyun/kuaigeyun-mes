@@ -27,6 +27,7 @@ from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.demand_computation import DemandComputation
+from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.payable import Payable
 from apps.kuaizhizao.models.receivable import Receivable
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
@@ -1114,6 +1115,270 @@ class DocumentRelationService:
             })
 
         return downstream
+
+    async def get_change_impact_sales_order(
+        self,
+        tenant_id: int,
+        order_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取销售订单变更对下游的影响范围（排程管理增强）
+        用于上游单据变更时，展示受影响的需求、需求计算、生产计划、工单及建议操作。
+
+        .. deprecated:: 请使用 DocumentRelationNewService.get_change_impact_sales_order，
+           与 trace 使用相同数据源（get_relations），保证变更影响与追溯链一致。
+        """
+        order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=order_id, deleted_at__isnull=True)
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {order_id}")
+
+        upstream_change = {
+            "type": "sales_order",
+            "id": order.id,
+            "code": getattr(order, "order_code", None),
+            "name": getattr(order, "order_name", None),
+            "changed_at": order.updated_at.isoformat() if order.updated_at else None,
+        }
+
+        affected_demands = []
+        affected_computations = []
+        affected_plans = []
+        affected_work_orders = []
+        computation_ids = set()
+
+        # 需求（source_type=sales_order, source_id=order_id）
+        demands = await Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=order_id,
+            deleted_at__isnull=True,
+        ).all()
+        for d in demands:
+            affected_demands.append({
+                "id": d.id,
+                "code": getattr(d, "demand_code", None),
+                "name": getattr(d, "demand_name", None),
+                "status": getattr(d, "status", None),
+            })
+            if getattr(d, "computation_id", None):
+                computation_ids.add(d.computation_id)
+
+        # 需求计算
+        for cid in computation_ids:
+            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=cid)
+            if comp:
+                affected_computations.append({
+                    "id": comp.id,
+                    "code": getattr(comp, "computation_code", None),
+                    "name": None,
+                    "status": getattr(comp, "computation_status", None),
+                })
+
+        # 生产计划（source_type 可能为 DemandComputation 或 demand_computation）
+        for cid in computation_ids:
+            plans = await ProductionPlan.filter(
+                tenant_id=tenant_id,
+                source_id=cid,
+                deleted_at__isnull=True,
+            ).all()
+            for p in plans:
+                if getattr(p, "source_type", "") in ("DemandComputation", "demand_computation", "Demand"):
+                    affected_plans.append({
+                        "id": p.id,
+                        "code": getattr(p, "plan_code", None),
+                        "name": getattr(p, "plan_name", None),
+                        "status": getattr(p, "plan_status", None) or getattr(p, "status", None),
+                    })
+
+        # 工单（sales_order_id 或 source_id 为 computation_id）
+        wos = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
+        ).all()
+        for wo in wos:
+            affected_work_orders.append({
+                "id": wo.id,
+                "code": getattr(wo, "code", None),
+                "name": getattr(wo, "name", None),
+                "status": getattr(wo, "status", None),
+            })
+        wo_ids = {wo.id for wo in wos}
+        for cid in computation_ids:
+            more_wos = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                source_id=cid,
+                deleted_at__isnull=True,
+            ).all()
+            for wo in more_wos:
+                if wo.id not in wo_ids:
+                    wo_ids.add(wo.id)
+                    affected_work_orders.append({
+                        "id": wo.id,
+                        "code": getattr(wo, "code", None),
+                        "name": getattr(wo, "name", None),
+                        "status": getattr(wo, "status", None),
+                    })
+
+        recommended_actions = []
+        if affected_computations:
+            recommended_actions.append("重算需求计算")
+        if affected_plans or affected_work_orders:
+            recommended_actions.append("重新排程")
+
+        return {
+            "upstream_change": upstream_change,
+            "affected_demands": affected_demands,
+            "affected_computations": affected_computations,
+            "affected_plans": affected_plans,
+            "affected_work_orders": affected_work_orders,
+            "recommended_actions": recommended_actions,
+        }
+
+    async def get_change_impact_demand(
+        self,
+        tenant_id: int,
+        demand_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取需求变更对下游的影响范围（排程管理增强）
+
+        .. deprecated:: 请使用 DocumentRelationNewService.get_change_impact_demand，
+           与 trace 使用相同数据源（get_relations），保证变更影响与追溯链一致。
+        """
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError(f"需求不存在: {demand_id}")
+
+        upstream_change = {
+            "type": "demand",
+            "id": demand.id,
+            "code": getattr(demand, "demand_code", None),
+            "name": getattr(demand, "demand_name", None),
+            "changed_at": demand.updated_at.isoformat() if demand.updated_at else None,
+        }
+
+        affected_demands = [{
+            "id": demand.id,
+            "code": getattr(demand, "demand_code", None),
+            "name": getattr(demand, "demand_name", None),
+            "status": getattr(demand, "status", None),
+        }]
+        affected_computations = []
+        affected_plans = []
+        affected_work_orders = []
+        computation_ids = set()
+
+        if getattr(demand, "computation_id", None):
+            computation_ids.add(demand.computation_id)
+
+        for cid in computation_ids:
+            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=cid)
+            if comp:
+                affected_computations.append({
+                    "id": comp.id,
+                    "code": getattr(comp, "computation_code", None),
+                    "name": None,
+                    "status": getattr(comp, "computation_status", None),
+                })
+
+        for cid in computation_ids:
+            plans = await ProductionPlan.filter(
+                tenant_id=tenant_id,
+                source_id=cid,
+                deleted_at__isnull=True,
+            ).all()
+            for p in plans:
+                if getattr(p, "source_type", "") in ("DemandComputation", "demand_computation", "Demand"):
+                    affected_plans.append({
+                        "id": p.id,
+                        "code": getattr(p, "plan_code", None),
+                        "name": getattr(p, "plan_name", None),
+                        "status": getattr(p, "plan_status", None) or getattr(p, "status", None),
+                    })
+
+        for cid in computation_ids:
+            wos = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                source_id=cid,
+                deleted_at__isnull=True,
+            ).all()
+            for wo in wos:
+                affected_work_orders.append({
+                    "id": wo.id,
+                    "code": getattr(wo, "code", None),
+                    "name": getattr(wo, "name", None),
+                    "status": getattr(wo, "status", None),
+                })
+        if getattr(demand, "source_type", None) == "sales_order" and getattr(demand, "source_id", None):
+            so_wos = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                sales_order_id=demand.source_id,
+                deleted_at__isnull=True,
+            ).all()
+            wo_ids = {w["id"] for w in affected_work_orders}
+            for wo in so_wos:
+                if wo.id not in wo_ids:
+                    affected_work_orders.append({
+                        "id": wo.id,
+                        "code": getattr(wo, "code", None),
+                        "name": getattr(wo, "name", None),
+                        "status": getattr(wo, "status", None),
+                    })
+
+        recommended_actions = []
+        if affected_computations:
+            recommended_actions.append("重算需求计算")
+        if affected_plans or affected_work_orders:
+            recommended_actions.append("重新排程")
+
+        return {
+            "upstream_change": upstream_change,
+            "affected_demands": affected_demands,
+            "affected_computations": affected_computations,
+            "affected_plans": affected_plans,
+            "affected_work_orders": affected_work_orders,
+            "recommended_actions": recommended_actions,
+        }
+
+    async def apply_upstream_change_impact(
+        self,
+        tenant_id: int,
+        upstream_type: str,
+        upstream_id: int,
+        auto_mark_pending_recompute: bool = True,
+    ) -> int:
+        """
+        上游变更后应用计划锁定策略（排程管理增强）
+        - 计划 locked/executing：不自动标记，仅通过 change-impact API 提示
+        - 计划 draft/submitted：可配置为自动标记 needs_recompute
+        返回被标记为待重算的计划数量。
+        """
+        if upstream_type == "sales_order":
+            impact = await self.get_change_impact_sales_order(tenant_id, upstream_id)
+        elif upstream_type == "demand":
+            impact = await self.get_change_impact_demand(tenant_id, upstream_id)
+        else:
+            return 0
+
+        marked = 0
+        if not auto_mark_pending_recompute:
+            return 0
+
+        for p in impact.get("affected_plans", []):
+            plan_id = p.get("id")
+            if not plan_id:
+                continue
+            plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
+            if not plan:
+                continue
+            status = getattr(plan, "plan_status", None) or ""
+            if status in ("draft", "submitted"):
+                await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(needs_recompute=True)
+                marked += 1
+            # locked/executing: 不自动标记
+
+        return marked
 
     async def _get_quotation_downstream(
         self,

@@ -374,7 +374,7 @@ const CostRulePage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onFinish={handleSave}
         formRef={formRef}
-        width={800}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProFormText
           name="code"

@@ -10,9 +10,9 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } from 'antd';
-import { EyeOutlined, CompareArrowsOutlined, DownloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, DiffOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { 
   listComputationHistory, 
   getDemandComputation,
@@ -295,7 +295,7 @@ const ComputationHistoryPage: React.FC = () => {
           toolBarActions={[
             <Button
               key="compare"
-              icon={<CompareArrowsOutlined />}
+              icon={<DiffOutlined />}
               onClick={() => handleCompare(selectedRowKeys)}
               disabled={selectedRowKeys.length !== 2}
             >
@@ -318,7 +318,7 @@ const ComputationHistoryPage: React.FC = () => {
         open={compareModalVisible}
         onCancel={() => setCompareModalVisible(false)}
         title="计算结果对比"
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         footer={null}
       >
         {compareResult && (

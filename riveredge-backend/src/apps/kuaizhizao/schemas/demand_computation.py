@@ -99,6 +99,14 @@ class DemandComputationCreate(DemandComputationBase):
     items: Optional[List[DemandComputationItemBase]] = Field(default_factory=list, description="计算结果明细列表")
 
 
+class ExecuteComputationRequest(BaseModel):
+    """执行需求计算请求Schema（可选临时覆盖参数）"""
+    computation_params: Optional[Dict[str, Any]] = Field(
+        None,
+        description="临时覆盖的计算参数，仅本次执行生效，不持久化"
+    )
+
+
 class DemandComputationUpdate(BaseModel):
     """更新需求计算Schema"""
     computation_status: Optional[str] = Field(None, max_length=20, description="计算状态")

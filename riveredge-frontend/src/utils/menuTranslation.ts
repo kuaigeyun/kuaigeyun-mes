@@ -164,6 +164,16 @@ export function translateAppMenuItemName(
       }
     }
 
+    // 绩效管理：path 为 performance/xxx，i18n key 为 app.xxx.menu.performance-management.xxx
+    // 路径推导会得到 app.xxx.menu.performance.xxx（不存在），需额外尝试 performance-management
+    if (relativePath.startsWith('performance/')) {
+      const perfKey = `app.${appCode}.menu.performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
+      translated = t(perfKey, { defaultValue: '' });
+      if (translated && translated !== perfKey && translated.trim() !== '') {
+        return translated;
+      }
+    }
+
     const lastSegment = relativePath.split('/').pop() || '';
     if (lastSegment) {
       const segmentKey = `path.${lastSegment}`;
@@ -209,6 +219,12 @@ export function translatePathTitle(path: string, t: any): string {
       const reportKey = `app.${appCode}.menu.reports.${relativePath.split('reports/').pop()?.replace(/\//g, '.') || ''}`;
       translated = t(reportKey, { defaultValue: '' });
       if (translated && translated !== reportKey) return translated;
+    }
+    // 绩效管理路径 performance/xxx 使用 app.xxx.menu.performance-management.xxx
+    if (relativePath.startsWith('performance/')) {
+      const perfKey = `app.${appCode}.menu.performance-management.${relativePath.replace('performance/', '').replace(/\//g, '.')}`;
+      translated = t(perfKey, { defaultValue: '' });
+      if (translated && translated !== perfKey) return translated;
     }
   }
 

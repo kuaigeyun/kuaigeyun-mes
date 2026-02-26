@@ -140,10 +140,9 @@ export default function LoginPage() {
       // 如果是UUID格式，使用公开的文件预览接口
       if (isUUID(logoValue)) {
         try {
-          // 使用公开的文件预览接口（不需要认证）
-          const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
+          // 使用公开的文件预览接口（相对路径，便于局域网访问，避免 127.0.0.1 硬编码）
           const response = await fetch(
-            `${baseUrl}/api/v1/core/files/${logoValue}/preview/public?category=platform-logo`
+            `/api/v1/core/files/${logoValue}/preview/public?category=platform-logo`
           );
           
           if (response.ok) {

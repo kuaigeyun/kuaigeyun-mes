@@ -14,6 +14,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { reportingApi, workOrderApi, materialBindingApi } from '../../../services/production';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
+import { getUserInfo } from '../../../../../utils/auth';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -90,6 +91,15 @@ const ReportingPage: React.FC = () => {
   const [reportOperations, setReportOperations] = useState<any[]>([]);
   const [reportWorkOrderId, setReportWorkOrderId] = useState<number | null>(null);
   const [reportOperationId, setReportOperationId] = useState<number | null>(null);
+
+  /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
+  const getWorkerInfo = (operation?: any) => {
+    const user = getUserInfo();
+    if (operation?.assigned_worker_id) {
+      return { worker_id: operation.assigned_worker_id, worker_name: operation.assigned_worker_name || user?.full_name || user?.username || '操作员' };
+    }
+    return { worker_id: user?.id ?? 0, worker_name: user?.full_name || user?.username || '当前用户' };
+  };
 
   /**
    * 处理扫码报工
@@ -629,6 +639,7 @@ const ReportingPage: React.FC = () => {
     try {
       // 如果是扫码报工模式
       if (scanModalVisible && currentWorkOrder && currentOperation) {
+        const { worker_id, worker_name } = getWorkerInfo(currentOperation);
         const reportingData = {
           work_order_id: currentWorkOrder.id,
           work_order_code: currentWorkOrder.code,
@@ -636,8 +647,8 @@ const ReportingPage: React.FC = () => {
           operation_id: currentOperation.operation_id,
           operation_code: currentOperation.operation_code,
           operation_name: currentOperation.operation_name,
-          worker_id: 1, // TODO: 从用户信息获取
-          worker_name: '当前用户', // TODO: 从用户信息获取
+          worker_id,
+          worker_name,
           reported_quantity: values.reported_quantity || (values.completed_status === 'completed' ? 1 : 0),
           qualified_quantity: values.qualified_quantity || 0,
           unqualified_quantity: values.unqualified_quantity || 0,
@@ -665,6 +676,7 @@ const ReportingPage: React.FC = () => {
         messageApi.error('工单或工序信息不存在');
         throw new Error('工单或工序未选择');
       }
+      const { worker_id, worker_name } = getWorkerInfo(operation);
       const reportingData: any = {
         work_order_id: workOrder.id,
         work_order_code: workOrder.code,
@@ -672,8 +684,8 @@ const ReportingPage: React.FC = () => {
         operation_id: operation.operation_id,
         operation_code: operation.operation_code,
         operation_name: operation.operation_name,
-        worker_id: 1,
-        worker_name: '当前用户',
+        worker_id,
+        worker_name,
         status: 'pending',
         reported_at: new Date().toISOString(),
         remarks: values.remarks,
@@ -1192,7 +1204,7 @@ const ReportingPage: React.FC = () => {
           setJumpRuleError('');
         }}
         footer={null}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <Spin spinning={loadingOperations}>
           <div style={{ padding: '20px 0' }}>
@@ -1418,6 +1430,7 @@ const ReportingPage: React.FC = () => {
                         });
                       }
 
+                      const { worker_id, worker_name } = getWorkerInfo(currentOperation);
                       const reportingData = {
                         work_order_id: currentWorkOrder.id,
                         work_order_code: currentWorkOrder.code,
@@ -1425,8 +1438,8 @@ const ReportingPage: React.FC = () => {
                         operation_id: currentOperation.operation_id,
                         operation_code: currentOperation.operation_code,
                         operation_name: currentOperation.operation_name,
-                        worker_id: 1, // TODO: 从用户信息获取
-                        worker_name: '当前用户', // TODO: 从用户信息获取
+                        worker_id,
+                        worker_name,
                         reported_quantity: currentOperation.reporting_type === 'status' 
                           ? (values.completed_status === 'completed' ? 1 : 0)
                           : values.reported_quantity,
@@ -2069,7 +2082,7 @@ const ReportingPage: React.FC = () => {
           subOperationFormRef.current?.resetFields();
         }}
         footer={null}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         {currentSubOperation && (
           <SubOperationReportingForm
@@ -2258,6 +2271,7 @@ const SubOperationReportingForm: React.FC<{
             });
           }
 
+          const { worker_id, worker_name } = getWorkerInfo(subOperation);
           const reportingData = {
             work_order_id: workOrder.id,
             work_order_code: workOrder.code,
@@ -2265,8 +2279,8 @@ const SubOperationReportingForm: React.FC<{
             operation_id: subOperation.operation_id,
             operation_code: subOperation.operation_code,
             operation_name: subOperation.operation_name,
-            worker_id: 1, // TODO: 从用户信息获取
-            worker_name: '当前用户', // TODO: 从用户信息获取
+            worker_id,
+            worker_name,
             reported_quantity: subOperation.reporting_type === 'status' 
               ? (values.completed_status === 'completed' ? 1 : 0)
               : values.reported_quantity,

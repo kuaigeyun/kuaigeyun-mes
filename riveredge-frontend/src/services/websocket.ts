@@ -325,10 +325,14 @@ export class WebSocketClient {
  * @returns WebSocket客户端实例
  */
 export function createWebSocketClient(channels: string[] = []): WebSocketClient {
-  const wsUrl = process.env.VITE_WS_URL || 
-    (process.env.VITE_API_TARGET 
-      ? process.env.VITE_API_TARGET.replace('http://', 'ws://').replace('https://', 'wss://')
-      : 'ws://127.0.0.1:8200') + '/api/v1/core/ws/connect';
+  // 优先使用相对路径（当前页 origin），便于局域网访问，避免 127.0.0.1 硬编码
+  const apiTarget = import.meta.env.VITE_API_TARGET;
+  const wsUrl = import.meta.env.VITE_WS_URL || 
+    (apiTarget 
+      ? apiTarget.replace('http://', 'ws://').replace('https://', 'wss://') + '/api/v1/core/ws/connect'
+      : (typeof window !== 'undefined'
+          ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/core/ws/connect`
+          : 'ws://127.0.0.1:8200/api/v1/core/ws/connect'));
   
   return new WebSocketClient(wsUrl, channels);
 }
