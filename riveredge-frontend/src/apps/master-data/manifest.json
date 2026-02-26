@@ -39,6 +39,12 @@
                         "path": "/apps/master-data/factory/workstations",
                         "permission": "master-data:factory:workstation:view",
                         "sort_order": 3
+                    },
+                    {
+                        "title": "app.master-data.menu.factory.work-centers",
+                        "path": "/apps/master-data/factory/work-centers",
+                        "permission": "master-data:factory:work-center:view",
+                        "sort_order": 4
                     }
                 ]
             },
@@ -83,16 +89,16 @@
                         "sort_order": 2
                     },
                     {
-                        "title": "app.master-data.menu.materials.batches",
-                        "path": "/apps/master-data/materials/batches",
+                        "title": "app.master-data.menu.materials.batch-rules",
+                        "path": "/apps/master-data/materials/batch-rules",
                         "permission": "master-data:material:batch:view",
                         "sort_order": 3
                     },
                     {
-                        "title": "app.master-data.menu.materials.serials",
-                        "path": "/apps/master-data/materials/serials",
+                        "title": "app.master-data.menu.materials.serial-rules",
+                        "path": "/apps/master-data/materials/serial-rules",
                         "permission": "master-data:material:serial:view",
-                        "sort_order": 5
+                        "sort_order": 4
                     }
                 ]
             },
@@ -149,24 +155,6 @@
                         "sort_order": 2
                     }
                 ]
-            },
-            {
-                "title": "app.master-data.menu.performance",
-                "icon": "analytics",
-                "sort_order": 6,
-                "children": [{
-                        "title": "app.master-data.menu.performance.holidays",
-                        "path": "/apps/master-data/performance/holidays",
-                        "permission": "master-data:performance:holiday:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "app.master-data.menu.performance.skills",
-                        "path": "/apps/master-data/performance/skills",
-                        "permission": "master-data:performance:skill:view",
-                        "sort_order": 2
-                    }
-                ]
             }
         ]
     },
@@ -187,6 +175,10 @@
         "master-data:factory:workstation:create",
         "master-data:factory:workstation:update",
         "master-data:factory:workstation:delete",
+        "master-data:factory:work-center:view",
+        "master-data:factory:work-center:create",
+        "master-data:factory:work-center:update",
+        "master-data:factory:work-center:delete",
         "master-data:warehouse:warehouse:view",
         "master-data:warehouse:warehouse:create",
         "master-data:warehouse:warehouse:update",
@@ -291,6 +283,18 @@
             "module": "主数据管理",
             "module_icon": "database",
             "auto_generate": false
+        },
+        {
+            "page_code": "master-data-factory-work-center",
+            "page_name": "工作中心",
+            "page_path": "/apps/master-data/factory/work-centers",
+            "code_field": "code",
+            "code_field_label": "工作中心编码",
+            "module": "主数据管理",
+            "module_icon": "database",
+            "auto_generate": true,
+            "rule_code": "WORK_CENTER_CODE",
+            "skip_date": true
         },
         {
             "page_code": "master-data-warehouse-warehouse",
@@ -423,16 +427,6 @@
             "auto_generate": true,
             "rule_code": "supplier",
             "allow_manual_edit": true
-        },
-        {
-            "page_code": "master-data-performance-skill",
-            "page_name": "技能管理",
-            "page_path": "/apps/master-data/performance/skills",
-            "code_field": "code",
-            "code_field_label": "技能编码",
-            "module": "主数据管理",
-            "module_icon": "database",
-            "auto_generate": false
         }
     ],
     "custom_field_pages": [{
@@ -573,20 +567,20 @@
         {
             "page_code": "master-data-holiday",
             "page_name": "节假日管理",
-            "page_path": "/apps/master-data/performance/holidays",
+            "page_path": "/apps/kuaizhizao/performance/holidays",
             "table_name": "master_data_holidays",
             "table_name_label": "节假日表",
-            "module": "主数据管理",
-            "module_icon": "database"
+            "module": "快格轻制造",
+            "module_icon": "production"
         },
         {
             "page_code": "master-data-skill",
             "page_name": "技能管理",
-            "page_path": "/apps/master-data/performance/skills",
+            "page_path": "/apps/kuaizhizao/performance/skills",
             "table_name": "master_data_skills",
             "table_name_label": "技能表",
-            "module": "主数据管理",
-            "module_icon": "database"
+            "module": "快格轻制造",
+            "module_icon": "production"
         }
     ]
 }

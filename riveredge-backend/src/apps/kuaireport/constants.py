@@ -8,7 +8,7 @@ class ReportStatus(str, Enum):
 
 class ReportCategory(str, Enum):
     SYSTEM = "system"   # 系统预置报表（管理员维护）
-    CUSTOM = "custom"   # 用户自定义报表
+    CUSTOM = "custom"   # 用户自制报表
 
 
 class ChartType(str, Enum):

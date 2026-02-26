@@ -15,6 +15,14 @@ from .process_route_change import ProcessRouteChange
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
+from .employee_performance import (
+    EmployeePerformanceConfig,
+    PieceRate,
+    HourlyRate,
+    KPIDefinition,
+    EmployeeKPIScore,
+    PerformanceSummary,
+)
 from .product import Product
 
 __all__ = [
@@ -40,5 +48,11 @@ __all__ = [
     "Supplier",
     "Holiday",
     "Skill",
+    "EmployeePerformanceConfig",
+    "PieceRate",
+    "HourlyRate",
+    "KPIDefinition",
+    "EmployeeKPIScore",
+    "PerformanceSummary",
     "Product",
 ]

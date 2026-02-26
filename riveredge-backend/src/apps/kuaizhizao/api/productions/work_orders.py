@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderBatchUpdateDatesRequest,
+    WorkOrderOperationBatchUpdateDatesRequest,
     WorkOrderResponse,
     MaterialShortageResponse,
     WorkOrderFreezeRequest,
@@ -89,6 +90,7 @@ async def list_work_orders(
     workshop_id: Optional[int] = Query(None, description="车间ID"),
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
     assigned_worker_id: Optional[int] = Query(None, description="分配员工ID（只看当前用户时传入）"),
+    include_operations: bool = Query(False, description="是否包含工序（用于甘特图展示设备/模具/工装）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -112,6 +114,7 @@ async def list_work_orders(
             workshop_id=workshop_id,
             work_center_id=work_center_id,
             assigned_worker_id=assigned_worker_id,
+            include_operations=include_operations,
         )
         # 返回分页格式，包含总数
         total = await service.get_work_order_count(
@@ -300,6 +303,25 @@ async def batch_update_work_order_dates(
     - **updates**: 更新项列表，每项包含 work_order_id、planned_start_date、planned_end_date
     """
     await WorkOrderService().batch_update_dates(
+        tenant_id=tenant_id,
+        updates=request.updates,
+        updated_by=current_user.id,
+    )
+    return {"success": True, "message": "更新成功"}
+
+
+@router.put("/work-orders/batch-update-operation-dates", summary="批量更新工序计划日期")
+async def batch_update_work_order_operation_dates(
+    request: WorkOrderOperationBatchUpdateDatesRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量更新工序计划日期（工序级派工，甘特图拖拽工序后持久化）
+
+    - **updates**: 更新项列表，每项包含 operation_id、planned_start_date、planned_end_date
+    """
+    await WorkOrderService().batch_update_operation_dates(
         tenant_id=tenant_id,
         updates=request.updates,
         updated_by=current_user.id,

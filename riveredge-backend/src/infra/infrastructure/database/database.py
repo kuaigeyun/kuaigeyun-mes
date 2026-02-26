@@ -126,6 +126,10 @@ TORTOISE_ORM = {
                 "core.models.system_parameter",
                 "core.models.code_rule",
                 "core.models.code_sequence",
+                "core.models.batch_rule",
+                "core.models.batch_rule_sequence",
+                "core.models.serial_rule",
+                "core.models.serial_rule_sequence",
                 "core.models.material_code_rule",  # 物料编码规则模型
                 "core.models.material_variant_attribute",  # 物料变体属性定义模型
                 "core.models.custom_field",
@@ -168,6 +172,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
+                "apps.master_data.models.employee_performance",  # 员工绩效模型（配置、计件单价、工时单价、KPI、汇总）
                 "apps.master_data.models.product",  # 产品模型
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型

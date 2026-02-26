@@ -8,6 +8,7 @@ Date: 2025-01-01
 """
 
 import uuid
+import math
 from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
@@ -259,6 +260,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     f"错误: {backflush_err}"
                 )
 
+            # 报工生效时自动累计模具使用次数（工序分配了模具且已审核）
+            if approved_at is not None:
+                await self._create_mold_usage_from_reporting(
+                    tenant_id=tenant_id,
+                    work_order_operation=work_order_operation,
+                    work_order=work_order,
+                    qualified_quantity=float(reporting_data.qualified_quantity),
+                    reporting_record_id=reporting_record.id,
+                    operator_name=reporting_data.worker_name,
+                )
+
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
             return ReportingRecordResponse.model_validate(reporting_record)
@@ -418,6 +430,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if record.status == 'approved':
                 await self._update_work_order_progress(tenant_id, record.work_order_id)
 
+            # 审核通过时自动累计模具使用次数
+            if record.status == 'approved':
+                work_order_op = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id,
+                    work_order_id=record.work_order_id,
+                    operation_id=record.operation_id,
+                    deleted_at__isnull=True,
+                )
+                work_order = await WorkOrder.get_or_none(id=record.work_order_id, tenant_id=tenant_id)
+                if work_order_op and work_order:
+                    await self._create_mold_usage_from_reporting(
+                        tenant_id=tenant_id,
+                        work_order_operation=work_order_op,
+                        work_order=work_order,
+                        qualified_quantity=float(record.qualified_quantity),
+                        reporting_record_id=record.id,
+                        operator_name=record.worker_name,
+                    )
+
             return ReportingRecordResponse.model_validate(record)
 
     async def delete_reporting_record(
@@ -570,6 +601,60 @@ class ReportingService(AppBaseService[ReportingRecord]):
             'operation_stats': operation_stats_list,
             'worker_stats': worker_stats_list,
         }
+
+    async def _create_mold_usage_from_reporting(
+        self,
+        tenant_id: int,
+        work_order_operation: WorkOrderOperation,
+        work_order: WorkOrder,
+        qualified_quantity: float,
+        reporting_record_id: int,
+        operator_name: Optional[str] = None,
+    ) -> None:
+        """
+        报工生效时自动创建模具使用记录并累计使用次数。
+
+        当工序分配了模具且合格数量>0时，根据模具腔数换算使用次数，创建 MoldUsage 并累加 mold.total_usage_count。
+        使用 reporting_record_id 实现幂等，避免重复累计。
+        """
+        if not work_order_operation.assigned_mold_id or qualified_quantity <= 0:
+            return
+        try:
+            from apps.kuaizhizao.models.mold import Mold
+            from apps.kuaizhizao.services.mold_service import MoldUsageService
+            from apps.kuaizhizao.schemas.mold import MoldUsageCreate
+
+            mold = await Mold.filter(
+                id=work_order_operation.assigned_mold_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not mold:
+                return
+
+            cavity_count = mold.cavity_count
+            if cavity_count and cavity_count > 0:
+                usage_count = max(1, math.ceil(qualified_quantity / cavity_count))
+            else:
+                usage_count = max(1, int(qualified_quantity))
+
+            data = MoldUsageCreate(
+                mold_uuid=mold.uuid,
+                source_type="work_order",
+                source_id=work_order.id,
+                source_no=work_order.code,
+                reporting_record_id=reporting_record_id,
+                usage_date=datetime.now(),
+                usage_count=usage_count,
+                operator_name=operator_name,
+                status="已归还",
+            )
+            await MoldUsageService.create_mold_usage(
+                tenant_id=tenant_id,
+                data=data,
+            )
+        except Exception as e:
+            logger.warning(f"报工自动累计模具使用次数失败: {e}")
 
     async def _update_work_order_progress(
         self,

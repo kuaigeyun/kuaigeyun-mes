@@ -18,6 +18,7 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons';
 import { qualityApi } from '../../../../services/production';
+import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
 export interface ProcessInspectionModalProps {
   visible: boolean;
@@ -78,7 +79,7 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={700}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
       centered
       rootClassName="kiosk-modal-terminal-bg"
       styles={{

@@ -3,10 +3,10 @@
 
 用于执行需求数据迁移的命令行工具。
 
-使用方法:
-    python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --dry-run
-    python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --validate
-    python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --rollback
+使用方法（在 riveredge-backend 目录下，保证 .env 已配置）:
+    cd riveredge-backend && PYTHONPATH=src uv run python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --dry-run
+    cd riveredge-backend && PYTHONPATH=src uv run python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --validate
+    cd riveredge-backend && PYTHONPATH=src uv run python -m apps.kuaizhizao.migrations.run_migration --tenant-id 1 --rollback
 
 Author: Luigi Lu
 Date: 2025-01-14
@@ -15,8 +15,24 @@ Date: 2025-01-14
 import asyncio
 import argparse
 import json
+import sys
+from pathlib import Path
 from loguru import logger
 
+# 加载 .env
+_backend_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+_env_file = _backend_root / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file)
+
+# 确保 src 在 path 中
+src_root = _backend_root / "src"
+if str(src_root) not in sys.path:
+    sys.path.insert(0, str(src_root))
+
+from tortoise import Tortoise
+from infra.infrastructure.database.database import TORTOISE_ORM
 from apps.kuaizhizao.migrations.migrate_demand_data import DemandDataMigration
 
 
@@ -32,9 +48,9 @@ async def main():
     
     args = parser.parse_args()
     
-    migration = DemandDataMigration()
-    
+    await Tortoise.init(config=TORTOISE_ORM)
     try:
+        migration = DemandDataMigration()
         if args.validate:
             # 验证迁移数据
             logger.info("执行数据验证...")
@@ -94,6 +110,8 @@ async def main():
         logger.error(f"执行失败: {e}")
         print(f"\n执行失败: {e}")
         raise
+    finally:
+        await Tortoise.close_connections()
 
 
 if __name__ == "__main__":

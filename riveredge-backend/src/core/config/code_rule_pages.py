@@ -13,6 +13,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-factory-workshop": "CJ",        # 车间
     "master-data-factory-production-line": "CX", # 产线
     "master-data-factory-workstation": "GW",     # 工位
+    "master-data-factory-work-center": "GZZX",   # 工作中心
     "master-data-warehouse-warehouse": "CK",     # 仓库
     "master-data-warehouse-storage-area": "KQ",  # 库区
     "master-data-warehouse-storage-location": "KW",  # 库位
@@ -43,7 +44,13 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-quality-incoming-inspection": "LLJY",   # 来料检验
     "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
+    "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
     "kuaizhizao-plan-production-plan": "SCJH",  # 生产计划
+    "kuaizhizao-equipment-management-equipment": "EQ",   # 设备
+    "kuaizhizao-equipment-management-mold": "MOLD",      # 模具
+    "kuaizhizao-equipment-management-tool": "TOOL",     # 工装
+    "kuaizhizao-warehouse-assembly-order": "ZZD",        # 组装单
+    "kuaizhizao-warehouse-disassembly-order": "CXD",    # 拆卸单
 }
 
 # 页面配置数据结构
@@ -91,6 +98,20 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module": "主数据管理",
         "module_icon": "database",
         "auto_generate": False,
+    },
+    # 主数据管理 - 工作中心（GZZX+4位流水）
+    {
+        "page_code": "master-data-factory-work-center",
+        "page_name": "工作中心",
+        "page_path": "/apps/master-data/factory/work-centers",
+        "code_field": "code",
+        "code_field_label": "工作中心编码",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": True,
+        "rule_code": "WORK_CENTER_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 工作中心：GZZX+4位流水，不含日期
     },
     # 主数据管理 - 仓库管理
     {
@@ -517,6 +538,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-warehouse-assembly-order",
+        "page_name": "组装单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
+        "code_field": "code",
+        "code_field_label": "组装单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "ASSEMBLY_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-disassembly-order",
+        "page_name": "拆卸单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
+        "code_field": "code",
+        "code_field_label": "拆卸单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DISASSEMBLY_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-warehouse-finished-goods-inbound",
         "page_name": "成品入库",
         "page_path": "/apps/kuaizhizao/warehouse-management/product-inbound",
@@ -552,6 +597,32 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "auto_generate": True,
         "rule_code": "PROCESS_INSPECTION_CODE",
         "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-inspection-plan",
+        "page_name": "质检方案",
+        "page_path": "/apps/kuaizhizao/quality-management/inspection-plans",
+        "code_field": "plan_code",
+        "code_field_label": "质检方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "INSPECTION_PLAN_CODE",
+        "allow_manual_edit": True,
+        "available_fields": [
+            {
+                "field_name": "plan_type",
+                "field_label": "方案类型",
+                "field_type": "string",
+                "description": "方案类型（incoming/process/finished）"
+            },
+            {
+                "field_name": "material_code",
+                "field_label": "物料编码",
+                "field_type": "string",
+                "description": "适用物料编码"
+            }
+        ]
     },
     {
         "page_code": "kuaizhizao-quality-finished-goods-inspection",
@@ -604,6 +675,48 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "SALES_RETURN_CODE",
         "allow_manual_edit": True,
     },
+    # 快格轻制造 - 设备管理（EQ+4位流水）
+    {
+        "page_code": "kuaizhizao-equipment-management-equipment",
+        "page_name": "设备管理",
+        "page_path": "/apps/kuaizhizao/equipment-management/equipment",
+        "code_field": "code",
+        "code_field_label": "设备编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 设备：EQ+4位流水，不含日期
+    },
+    # 快格轻制造 - 模具管理（MOLD+4位流水）
+    {
+        "page_code": "kuaizhizao-equipment-management-mold",
+        "page_name": "模具管理",
+        "page_path": "/apps/kuaizhizao/equipment-management/molds",
+        "code_field": "code",
+        "code_field_label": "模具编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MOLD_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 模具：MOLD+4位流水，不含日期
+    },
+    # 快格轻制造 - 工装台账（TOOL+4位流水）
+    {
+        "page_code": "kuaizhizao-equipment-management-tool",
+        "page_name": "工装台账",
+        "page_path": "/apps/kuaizhizao/equipment-management/tool-ledger",
+        "code_field": "code",
+        "code_field_label": "工装编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "TOOL_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 工装：TOOL+4位流水，不含日期
+    },
     # 快格轻制造 - 生产执行（补充）
     {
         "page_code": "kuaizhizao-production-outsource-work-order",
@@ -651,5 +764,10 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-warehouse-warehouse": ("apps.master_data.models.warehouse", "Warehouse", "code"),
     "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
     "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
+    "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment", "code"),
+    "MOLD_CODE": ("apps.kuaizhizao.models.mold", "Mold", "code"),
+    "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool", "code"),
+    "WORK_CENTER_CODE": ("apps.master_data.models.factory", "WorkCenter", "code"),
+    "master-data-factory-work-center": ("apps.master_data.models.factory", "WorkCenter", "code"),
 }
 

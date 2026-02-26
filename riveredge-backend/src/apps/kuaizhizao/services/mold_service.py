@@ -12,12 +12,13 @@ from datetime import datetime
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
-from apps.kuaizhizao.models.mold import Mold, MoldUsage
+from apps.kuaizhizao.models.mold import Mold, MoldUsage, MoldCalibration
 from apps.kuaizhizao.schemas.mold import (
     MoldCreate,
     MoldUpdate,
     MoldUsageCreate,
     MoldUsageUpdate,
+    MoldCalibrationCreate,
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -56,7 +57,7 @@ class MoldService:
                 try:
                     data.code = await CodeGenerationService.generate_code(
                         tenant_id=tenant_id,
-                        rule_code="mold_code",
+                        rule_code="MOLD_CODE",
                         context=None
                     )
                 except ValidationError:
@@ -253,6 +254,17 @@ class MoldUsageService:
             
             if not mold:
                 raise ValidationError(f"模具不存在: {data.mold_uuid}")
+
+            # 幂等：若传入 reporting_record_id 且已存在相同记录，则跳过创建
+            reporting_record_id = getattr(data, "reporting_record_id", None)
+            if reporting_record_id is not None:
+                existing = await MoldUsage.filter(
+                    tenant_id=tenant_id,
+                    reporting_record_id=reporting_record_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing:
+                    return existing
             
             # 如果没有提供使用记录编号，自动生成
             if not data.usage_no:
@@ -267,13 +279,14 @@ class MoldUsageService:
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     data.usage_no = f"MU{timestamp}"
             
+            dump_data = data.model_dump(exclude_none=True, exclude={'mold_uuid'})
             usage = MoldUsage(
                 tenant_id=tenant_id,
                 mold_id=mold.id,
                 mold_uuid=mold.uuid,
                 mold_name=mold.name,
                 mold_code=mold.code,
-                **data.model_dump(exclude_none=True, exclude={'mold_uuid'})
+                **dump_data,
             )
             await usage.save()
             
@@ -426,4 +439,82 @@ class MoldUsageService:
         # 软删除
         usage.deleted_at = datetime.now()
         await usage.save()
+
+
+class MoldCalibrationService:
+    """
+    模具校验记录服务类
+
+    提供模具校验记录的 list、create 操作。
+    """
+
+    @staticmethod
+    async def list_calibrations(
+        tenant_id: int,
+        mold_uuid: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[MoldCalibration], int]:
+        """
+        获取模具校验记录列表
+
+        Args:
+            tenant_id: 组织ID
+            mold_uuid: 模具UUID
+            skip: 跳过数量
+            limit: 限制数量
+
+        Returns:
+            tuple[list[MoldCalibration], int]: 校验记录列表和总数量
+        """
+        mold = await MoldService.get_mold_by_uuid(tenant_id, mold_uuid)
+        query = MoldCalibration.filter(
+            tenant_id=tenant_id,
+            mold_id=mold.id,
+            deleted_at__isnull=True,
+        )
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        return list(items), total
+
+    @staticmethod
+    async def create_calibration(
+        tenant_id: int,
+        data: MoldCalibrationCreate,
+    ) -> MoldCalibration:
+        """
+        创建模具校验记录
+
+        Args:
+            tenant_id: 组织ID
+            data: 校验记录创建数据
+
+        Returns:
+            MoldCalibration: 创建的校验记录对象
+
+        Raises:
+            ValidationError: 当模具不存在时抛出
+        """
+        mold = await MoldService.get_mold_by_uuid(tenant_id, data.mold_uuid)
+        calib = MoldCalibration(
+            tenant_id=tenant_id,
+            mold_id=mold.id,
+            mold_uuid=mold.uuid,
+            calibration_date=data.calibration_date,
+            result=data.result,
+            certificate_no=data.certificate_no,
+            expiry_date=data.expiry_date,
+            remark=data.remark,
+        )
+        await calib.save()
+
+        # 更新模具上次/下次校验日期
+        mold.last_calibration_date = data.calibration_date
+        if data.expiry_date:
+            mold.next_calibration_date = data.expiry_date
+        elif mold.calibration_period:
+            from datetime import timedelta
+            mold.next_calibration_date = data.calibration_date + timedelta(days=mold.calibration_period)
+        await mold.save()
+        return calib
 

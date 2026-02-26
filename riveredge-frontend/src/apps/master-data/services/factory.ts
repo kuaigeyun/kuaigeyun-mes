@@ -22,6 +22,10 @@ import type {
   WorkstationCreate,
   WorkstationUpdate,
   WorkstationListParams,
+  WorkCenter,
+  WorkCenterCreate,
+  WorkCenterUpdate,
+  WorkCenterListParams,
 } from '../types/factory';
 
 /**
@@ -254,6 +258,47 @@ export const workstationApi = {
     };
   }> => {
     return apiRequest('/apps/master-data/factory/workstations/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
+};
+
+/**
+ * 工作中心 API 服务
+ */
+export const workCenterApi = {
+  create: async (data: WorkCenterCreate): Promise<WorkCenter> => {
+    return api.post('/apps/master-data/factory/work-centers', data);
+  },
+
+  list: async (params?: WorkCenterListParams): Promise<WorkCenter[]> => {
+    return api.get('/apps/master-data/factory/work-centers', { params });
+  },
+
+  get: async (uuid: string): Promise<WorkCenter> => {
+    return api.get(`/apps/master-data/factory/work-centers/${uuid}`);
+  },
+
+  update: async (uuid: string, data: WorkCenterUpdate): Promise<WorkCenter> => {
+    return api.put(`/apps/master-data/factory/work-centers/${uuid}`, data);
+  },
+
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/factory/work-centers/${uuid}`);
+  },
+
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/work-centers/batch-delete', {
       method: 'DELETE',
       data: { uuids },
     });

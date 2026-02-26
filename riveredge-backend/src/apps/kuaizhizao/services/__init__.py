@@ -33,6 +33,7 @@ from .quality_service import (
     FinishedGoodsInspectionService,
 )
 from .quality_standard_service import QualityStandardService
+from .inspection_plan_service import InspectionPlanService
 
 # 财务协同模块
 from .finance_service import (
@@ -86,6 +87,7 @@ __all__ = [
     'ProcessInspectionService',
     'FinishedGoodsInspectionService',
     'QualityStandardService',
+    'InspectionPlanService',
 
     # 财务协同模块
     'PayableService',

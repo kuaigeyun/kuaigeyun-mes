@@ -242,21 +242,20 @@ class InfraSettings(BaseSettings):
     # 文件管理配置（第三阶段）
     FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
     MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
-    # 基础URL配置（自动从服务器配置生成）
+    # 基础URL配置：显式设置 BASE_URL 时使用该值；不设置则使用相对路径，便于局域网/反向代理部署
+    base_url_override: str = Field(default="", alias="BASE_URL", description="文件/图片链接基础URL，不设置则使用相对路径")
+    KKFILEVIEW_URL: str = Field(default="http://localhost:8400", description="kkFileView 服务地址")
+
     @property
     def BASE_URL(self) -> str:
         """
-        获取基础URL（用于生成文件下载链接）
-        
-        自动从服务器配置生成
-        注意：如果 HOST 是 0.0.0.0，则使用 localhost，因为浏览器无法访问 0.0.0.0
+        获取基础URL（用于生成文件下载/预览链接）
+        若设置了 BASE_URL 环境变量则使用该值；否则返回空字符串（使用相对路径）。
+        相对路径便于局域网访问：浏览器以当前页面的 origin 加载，无需硬编码 127.0.0.1。
         """
-        # 如果 HOST 是 0.0.0.0，使用 localhost（浏览器可访问）
-        host = self.HOST
-        if host == "0.0.0.0":
-            host = "localhost"
-        return f"http://{host}:{self.PORT}"
-    KKFILEVIEW_URL: str = Field(default="http://localhost:8400", description="kkFileView 服务地址")
+        if self.base_url_override and self.base_url_override.strip():
+            return self.base_url_override.strip().rstrip("/")
+        return ""
     
     @property
     def SECRET_KEY(self) -> str:

@@ -16,8 +16,10 @@ from apps.master_data.schemas.factory_schemas import (
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
+    WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse,
     WorkshopTreeResponse, BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest,
-    BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest
+    BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest,
+    BatchDeleteWorkCentersRequest
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -580,6 +582,146 @@ async def delete_workstation(
     try:
         await FactoryService.delete_workstation(tenant_id, workstation_uuid)
         return {"message": "工位删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 工作中心相关接口 ====================
+
+@router.post("/work-centers", response_model=WorkCenterResponse, response_model_by_alias=True, summary="创建工作中心")
+async def create_work_center(
+    data: WorkCenterCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建工作中心
+
+    - **code**: 工作中心编码（必填，组织内唯一）
+    - **name**: 工作中心名称（必填）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（默认：true）
+    """
+    try:
+        return await FactoryService.create_work_center(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/work-centers", response_model=List[WorkCenterResponse], response_model_by_alias=True, summary="获取工作中心列表")
+async def list_work_centers(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（工作中心编码或名称）"),
+    code: Optional[str] = Query(None, description="工作中心编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="工作中心名称（模糊匹配）")
+):
+    """
+    获取工作中心列表
+
+    - **skip**: 跳过数量（默认：0）
+    - **limit**: 限制数量（默认：100，最大：1000）
+    - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（工作中心编码或名称）
+    - **code**: 工作中心编码（精确匹配）
+    - **name**: 工作中心名称（模糊匹配）
+    """
+    try:
+        return await FactoryService.list_work_centers(tenant_id, skip, limit, is_active, keyword, code, name)
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"获取工作中心列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取工作中心列表失败: {str(e)}"
+        )
+
+
+@router.get("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="获取工作中心详情")
+async def get_work_center(
+    work_center_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取工作中心详情
+
+    - **work_center_uuid**: 工作中心UUID
+    """
+    try:
+        return await FactoryService.get_work_center_by_uuid(tenant_id, work_center_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/work-centers/{work_center_uuid}", response_model=WorkCenterResponse, response_model_by_alias=True, summary="更新工作中心")
+async def update_work_center(
+    work_center_uuid: str,
+    data: WorkCenterUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新工作中心
+
+    - **work_center_uuid**: 工作中心UUID
+    - **code**: 工作中心编码（可选）
+    - **name**: 工作中心名称（可选）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（可选）
+    """
+    try:
+        return await FactoryService.update_work_center(tenant_id, work_center_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/work-centers/batch-delete", summary="批量删除工作中心")
+async def batch_delete_work_centers(
+    request: BatchDeleteWorkCentersRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除工作中心（软删除）
+
+    - **uuids**: 要删除的工作中心UUID列表（最多100条）
+    """
+    try:
+        result = await FactoryService.batch_delete_work_centers(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个工作中心，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除工作中心失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除工作中心失败: {str(e)}"
+        )
+
+
+@router.delete("/work-centers/{work_center_uuid}", summary="删除工作中心")
+async def delete_work_center(
+    work_center_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除工作中心（软删除）
+
+    - **work_center_uuid**: 工作中心UUID
+    """
+    try:
+        await FactoryService.delete_work_center(tenant_id, work_center_uuid)
+        return {"message": "工作中心删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

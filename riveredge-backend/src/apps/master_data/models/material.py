@@ -148,7 +148,22 @@ class Material(BaseModel):
     
     # 批号管理
     batch_managed = fields.BooleanField(default=False, description="是否启用批号管理")
-    
+    default_batch_rule = fields.ForeignKeyField(
+        "models.BatchRule",
+        related_name="materials_as_default_batch",
+        null=True,
+        description="默认批号规则（可选）"
+    )
+
+    # 序列号管理
+    serial_managed = fields.BooleanField(default=False, description="是否启用序列号管理")
+    default_serial_rule = fields.ForeignKeyField(
+        "models.SerialRule",
+        related_name="materials_as_default_serial",
+        null=True,
+        description="默认序列号规则（可选）"
+    )
+
     # 变体管理
     variant_managed = fields.BooleanField(default=False, description="是否启用变体管理")
     variant_attributes = fields.JSONField(null=True, description="变体属性（JSON格式，如颜色、尺寸等）")

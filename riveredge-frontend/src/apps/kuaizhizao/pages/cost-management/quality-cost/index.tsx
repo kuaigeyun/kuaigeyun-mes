@@ -11,7 +11,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -197,7 +197,7 @@ const QualityCostPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCalculate}
         loading={loading}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormDatePicker
           name="start_date"

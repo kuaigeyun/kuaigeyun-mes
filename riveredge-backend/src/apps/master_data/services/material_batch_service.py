@@ -259,64 +259,78 @@ class MaterialBatchService:
     async def generate_batch_no(
         tenant_id: int,
         material_uuid: str,
-        rule: Optional[str] = None
+        rule: Optional[str] = None,
+        rule_id: Optional[int] = None,
+        rule_uuid: Optional[str] = None,
+        supplier_code: Optional[str] = None,
     ) -> str:
         """
         生成批号
-        
-        支持多种批号生成规则：
-        - {YYYYMMDD}-{序号}：20260115-001
-        - {物料编码}-{YYYYMMDD}-{序号}：MAT-RAW-0001-20260115-001
-        - {供应商编码}-{YYYYMMDD}-{序号}：SUP-001-20260115-001
-        
+
+        优先使用规则：rule_id/rule_uuid > 物料默认批号规则 > 传入的 rule 字符串 > 系统默认
+
         Args:
             tenant_id: 租户ID
             material_uuid: 物料UUID
-            rule: 批号生成规则（可选，默认使用日期+序号格式）
-            
+            rule: 批号生成规则字符串（可选，向后兼容）
+            rule_id: 批号规则ID（可选）
+            rule_uuid: 批号规则UUID（可选）
+            supplier_code: 供应商编码（可选，用于规则变量）
+
         Returns:
             str: 生成的批号
-            
-        Raises:
-            NotFoundError: 当物料不存在时抛出
         """
-        # 验证物料是否存在
+        from core.services.business.batch_rule_service import BatchRuleService
+
         material = await Material.filter(
             tenant_id=tenant_id,
             uuid=material_uuid,
             deleted_at__isnull=True
-        ).first()
-        
+        ).prefetch_related("default_batch_rule").first()
+
         if not material:
             raise NotFoundError("物料", material_uuid)
-        
-        # 如果没有指定规则，使用默认规则：{YYYYMMDD}-{序号}
+
+        material_code = material.main_code or material.code or ""
+        context = {
+            "material_code": material_code,
+            "group_code": getattr(material.group, "code", "") if material.group_id else "",
+            "supplier_code": supplier_code or "",
+        }
+
+        batch_rule = None
+        if rule_id:
+            batch_rule = await BatchRuleService.get_rule_by_id(tenant_id, rule_id)
+        elif rule_uuid:
+            batch_rule = await BatchRuleService.get_rule_by_uuid(tenant_id, rule_uuid)
+        elif getattr(material, "default_batch_rule_id", None) and material.default_batch_rule:
+            batch_rule = material.default_batch_rule
+
+        if batch_rule:
+            return await BatchRuleService.generate_by_rule(
+                tenant_id=tenant_id,
+                rule=batch_rule,
+                context=context,
+                scope_key=str(material.id),
+            )
+
+        # 向后兼容：使用字符串规则
         if not rule:
             rule = "{YYYYMMDD}-{序号}"
-        
-        # 获取当前日期
         today = datetime.now().strftime("%Y%m%d")
-        
-        # 查找今天已生成的批号数量（用于序号）
         today_batches = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material.id,
             batch_no__startswith=today,
             deleted_at__isnull=True
         ).count()
-        
-        # 生成序号（3位数字，从001开始）
         sequence = today_batches + 1
         sequence_str = f"{sequence:03d}"
-        
-        # 根据规则生成批号
         batch_no = rule.replace("{YYYYMMDD}", today)
-        batch_no = batch_no.replace("{物料编码}", material.main_code or material.code or "")
+        batch_no = batch_no.replace("{物料编码}", material_code)
         batch_no = batch_no.replace("{序号}", sequence_str)
-        
-        # 如果规则中包含供应商编码，需要从物料配置中获取（这里简化处理）
-        # TODO: 后续可以从物料的供应商配置中获取
-        
+        if supplier_code:
+            batch_no = batch_no.replace("{供应商编码}", supplier_code)
         return batch_no
     
     @staticmethod

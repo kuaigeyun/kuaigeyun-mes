@@ -68,12 +68,12 @@ class AdvancedSchedulingService(BaseService):
                 tenant_id=tenant_id,
                 id__in=work_order_ids,
                 status__in=status_filter
-            ).prefetch_related('operations').all()
+            ).all()
         else:
             work_orders = await WorkOrder.filter(
                 tenant_id=tenant_id,
                 status__in=status_filter
-            ).prefetch_related('operations').all()
+            ).all()
         
         if not work_orders:
             return {
@@ -83,13 +83,17 @@ class AdvancedSchedulingService(BaseService):
                 "statistics": {}
             }
         
-        # 默认约束条件
+        # 默认约束条件（含 4M 人机料法开关）
         default_constraints = {
             "priority_weight": 0.3,
             "due_date_weight": 0.3,
             "capacity_weight": 0.2,
             "setup_time_weight": 0.2,
-            "optimize_objective": "min_makespan"
+            "optimize_objective": "min_makespan",
+            "consider_human": True,
+            "consider_equipment": True,
+            "consider_material": True,
+            "consider_mold_tool": True,
         }
         
         if constraints:
@@ -101,6 +105,11 @@ class AdvancedSchedulingService(BaseService):
             work_orders,
             default_constraints
         )
+        
+        # 根据 4M 开关决定是否检测模具/工装占用冲突
+        if default_constraints.get("consider_mold_tool", True):
+            mold_tool_conflicts = await self._check_mold_tool_conflicts(tenant_id)
+            result["conflicts"] = result.get("conflicts", []) + mold_tool_conflicts
         
         # 若需应用结果，将排产日期写入工单
         if apply_results and result.get("scheduled_orders") and updated_by:
@@ -198,6 +207,68 @@ class AdvancedSchedulingService(BaseService):
             }
         }
     
+    async def _check_mold_tool_conflicts(self, tenant_id: int) -> List[Dict[str, Any]]:
+        """
+        检测模具/工装占用冲突
+        
+        同一模具/工装在同一时间段只能被一个工单工序使用。
+        """
+        conflicts = []
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).filter(
+            planned_start_date__isnull=False,
+            planned_end_date__isnull=False
+        ).all()
+        
+        # 按模具分组
+        mold_slots: Dict[int, List[Tuple[datetime, datetime, int, str, str]]] = {}
+        tool_slots: Dict[int, List[Tuple[datetime, datetime, int, str, str]]] = {}
+        
+        for op in ops:
+            wo_code = op.work_order_code or str(op.work_order_id)
+            op_name = op.operation_name or f"工序{op.sequence}"
+            start_dt = op.planned_start_date
+            end_dt = op.planned_end_date
+            if not start_dt or not end_dt:
+                continue
+            
+            if op.assigned_mold_id:
+                mold_slots.setdefault(op.assigned_mold_id, []).append(
+                    (start_dt, end_dt, op.work_order_id, wo_code, op_name)
+                )
+            if op.assigned_tool_id:
+                tool_slots.setdefault(op.assigned_tool_id, []).append(
+                    (start_dt, end_dt, op.work_order_id, wo_code, op_name)
+                )
+        
+        def _find_overlaps(
+            slots_dict: Dict[int, List[Tuple[datetime, datetime, int, str, str]]],
+            resource_type: str
+        ) -> None:
+            for resource_id, slots in slots_dict.items():
+                for i, (s1, e1, wo1, code1, name1) in enumerate(slots):
+                    for j, (s2, e2, wo2, code2, name2) in enumerate(slots):
+                        if i >= j:
+                            continue
+                        if s1 < e2 and s2 < e1:
+                            conflicts.append({
+                                "type": resource_type,
+                                "resource_id": resource_id,
+                                "work_order_id": wo1,
+                                "work_order_code": code1,
+                                "operation_name": name1,
+                                "conflict_with_work_order_id": wo2,
+                                "conflict_with_work_order_code": code2,
+                                "conflict_with_operation_name": name2,
+                                "message": f"{resource_type} ID={resource_id} 与工单 {code2} 工序 {name2} 时间重叠"
+                            })
+        
+        _find_overlaps(mold_slots, "mold")
+        _find_overlaps(tool_slots, "tool")
+        return conflicts
+
     def _get_priority_score(self, work_order: WorkOrder, constraints: Dict[str, Any]) -> float:
         """计算工单优先级得分"""
         score = 0.0
@@ -240,25 +311,42 @@ class AdvancedSchedulingService(BaseService):
         """
         应用排产结果
         
-        将排产建议的具体日期更新到工单模型中。
+        将排产建议的具体日期更新到工单模型中，并推算工序级计划时间。
         """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
         async with in_transaction():
             for res in results:
                 wo_id = res.get("work_order_id")
                 scheduled_date = res.get("scheduled_date")
-                
+
                 if not wo_id or not scheduled_date:
                     continue
-                    
+
                 wo = await WorkOrder.get_or_none(id=wo_id, tenant_id=tenant_id)
                 if wo:
-                    # 将建议日期转化为 datetime (设为当天 08:00)
                     dt_start = datetime.combine(scheduled_date, datetime.min.time().replace(hour=8))
                     wo.planned_start_date = dt_start
-                    # 简单预估结束日期 (若无逻辑则顺延到 17:00)
-                    wo.planned_end_date = datetime.combine(scheduled_date, datetime.min.time().replace(hour=17))
                     wo.updated_by = updated_by
                     await wo.save()
+
+                    operations = await WorkOrderOperation.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=wo_id,
+                        deleted_at__isnull=True,
+                    ).order_by("sequence").all()
+                    if operations:
+                        wo_service = WorkOrderService()
+                        await wo_service.compute_and_apply_operation_planned_times(
+                            tenant_id=tenant_id,
+                            work_order=wo,
+                            operations=operations,
+                            updated_by=updated_by,
+                        )
+                    else:
+                        await WorkOrder.filter(tenant_id=tenant_id, id=wo_id).update(
+                            planned_end_date=datetime.combine(scheduled_date, datetime.min.time().replace(hour=17)),
+                        )
             return True
 
     async def optimize_schedule(

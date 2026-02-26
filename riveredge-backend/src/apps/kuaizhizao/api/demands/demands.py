@@ -18,6 +18,8 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.demand_service import DemandService
+from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
 from apps.kuaizhizao.schemas.demand import (
     DemandCreate,
     DemandUpdate,
@@ -31,6 +33,7 @@ from typing import List
 
 # 初始化服务实例
 demand_service = DemandService()
+document_relation_service = DocumentRelationNewService()
 
 # 创建路由
 router = APIRouter(prefix="/demands", tags=["Kuaige Zhizao - Demand Management"])
@@ -206,6 +209,28 @@ async def get_demand(
     except Exception as e:
         logger.error(f"获取需求详情失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求详情失败")
+
+
+@router.get("/{demand_id}/change-impact", response_model=ChangeImpactResponse, summary="获取需求变更影响")
+async def get_demand_change_impact(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求变更对下游的影响范围（排程管理增强）
+    返回受影响的需求计算、生产计划、工单及建议操作。
+    """
+    try:
+        return await document_relation_service.get_change_impact_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取需求变更影响失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取变更影响失败")
 
 
 @router.get("/{demand_id}/recalc-history", summary="获取需求重算历史")
@@ -481,7 +506,7 @@ async def withdraw_demand_from_computation(
     撤回需求计算
 
     将已下推到需求计算的需求撤回，清除计算记录及关联。
-    仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+    若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
     """
     try:
         result = await demand_service.withdraw_from_computation(

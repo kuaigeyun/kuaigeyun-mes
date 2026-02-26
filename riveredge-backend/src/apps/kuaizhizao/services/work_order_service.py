@@ -8,7 +8,7 @@ Date: 2025-01-01
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
 
@@ -372,11 +372,61 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
         return work_order_operations
 
+    async def compute_and_apply_operation_planned_times(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        operations: List[WorkOrderOperation],
+        updated_by: Optional[int] = None,
+    ) -> None:
+        """
+        根据工单计划开始时间和工序工时，推算并更新各工序的计划时间（供排程服务复用）
+
+        Args:
+            tenant_id: 组织ID
+            work_order: 工单（需有 planned_start_date）
+            operations: 工序列表（需按 sequence 排序）
+            updated_by: 更新人ID（可选）
+        """
+        if not operations:
+            return
+        planned_start = work_order.planned_start_date or datetime.now()
+        current_time = planned_start
+        quantity = float(work_order.planned_quantity or work_order.quantity or 1)
+
+        for op in sorted(operations, key=lambda x: x.sequence):
+            setup_hours = float(op.setup_time) if op.setup_time else 0
+            standard_hours_per_unit = float(op.standard_time) if op.standard_time else 0
+            total_hours = setup_hours + (standard_hours_per_unit * quantity)
+            if total_hours <= 0:
+                total_hours = 1.0
+
+            planned_start_date = current_time
+            planned_end_date = current_time + timedelta(hours=total_hours)
+
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                id=op.id,
+            ).update(
+                planned_start_date=planned_start_date,
+                planned_end_date=planned_end_date,
+            )
+            current_time = planned_end_date
+
+        last_op = operations[-1] if operations else None
+        if last_op:
+            wo_planned_end = current_time
+            await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(
+                planned_end_date=wo_planned_end,
+                updated_by=updated_by,
+            )
+
     async def create_work_order(
         self,
         tenant_id: int,
         work_order_data: WorkOrderCreate,
-        created_by: int
+        created_by: int,
+        allow_draft: bool = False
     ) -> WorkOrderResponse:
         """
         创建工单
@@ -485,19 +535,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     source_type=source_type
                 )
                 
-                # 3. 根据物料来源类型验证是否可以创建工单
-                if source_type == SOURCE_TYPE_MAKE:
-                    # 自制件：必须有BOM和工艺路线
-                    if not validation_passed:
-                        error_msg = f"自制件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
-                        logger.warning(f"工单创建失败 - {error_msg}")
-                        raise ValidationError(error_msg)
-                elif source_type == SOURCE_TYPE_OUTSOURCE:
-                    # 委外件：必须有委外供应商和委外工序（验证失败时不允许创建工单）
-                    if not validation_passed:
-                        error_msg = f"委外件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
-                        logger.warning(f"工单创建失败 - {error_msg}")
-                        raise ValidationError(error_msg)
+                # 3. 根据物料来源类型验证是否可以创建工单（allow_draft 时跳过验证，生成草稿由下游补全）
+                if not allow_draft:
+                    if source_type == SOURCE_TYPE_MAKE:
+                        # 自制件：必须有BOM和工艺路线
+                        if not validation_passed:
+                            error_msg = f"自制件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
+                            logger.warning(f"工单创建失败 - {error_msg}")
+                            raise ValidationError(error_msg)
+                    elif source_type == SOURCE_TYPE_OUTSOURCE:
+                        # 委外件：必须有委外供应商和委外工序（验证失败时不允许创建工单）
+                        if not validation_passed:
+                            error_msg = f"委外件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
+                            logger.warning(f"工单创建失败 - {error_msg}")
+                            raise ValidationError(error_msg)
                 elif source_type == SOURCE_TYPE_BUY:
                     # 采购件：不生成生产工单（应该生成采购订单）
                     error_msg = f"采购件不应创建生产工单，物料: {product_code} ({product_name})，请使用采购订单功能"
@@ -692,7 +743,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             NotFoundError: 工单不存在
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
-        return WorkOrderResponse.model_validate(work_order)
+        response = WorkOrderResponse.model_validate(work_order)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_work_order_lifecycle
+        response.lifecycle = get_work_order_lifecycle(work_order)
+        return response
 
     async def list_work_orders(
         self,
@@ -707,6 +761,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         workshop_id: Optional[int] = None,
         work_center_id: Optional[int] = None,
         assigned_worker_id: Optional[int] = None,
+        include_operations: bool = False,
     ) -> List[WorkOrderListResponse]:
         """
         获取工单列表
@@ -778,7 +833,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo.created_by_name = user_info.get("name", "未知用户")
                     work_orders_to_update.append(wo)
                 
-                result.append(WorkOrderListResponse.model_validate(wo))
+                item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
+                if include_operations:
+                    ops = await self.get_work_order_operations(tenant_id, wo.id)
+                    item_dict["operations"] = [
+                        {
+                            "id": op.id,
+                            "operation_name": op.operation_name,
+                            "sequence": op.sequence,
+                            "planned_start_date": op.planned_start_date,
+                            "planned_end_date": op.planned_end_date,
+                            "assigned_equipment_name": op.assigned_equipment_name,
+                            "assigned_mold_name": op.assigned_mold_name,
+                            "assigned_tool_name": op.assigned_tool_name,
+                        }
+                        for op in ops
+                    ]
+                result.append(WorkOrderListResponse.model_validate(item_dict))
             except Exception as e:
                 logger.error(f"序列化工单 {wo.id} 失败: {str(e)}")
                 logger.error(f"工单数据: id={wo.id}, code={wo.code}, created_by_name={wo.created_by_name}")
@@ -922,6 +993,57 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo.planned_end_date = end
                     wo.updated_by = updated_by
                     await wo.save()
+
+    async def batch_update_operation_dates(
+        self,
+        tenant_id: int,
+        updates: list,
+        updated_by: int,
+    ) -> None:
+        """
+        批量更新工序计划日期（工序级派工，甘特图拖拽工序后持久化）
+
+        Args:
+            tenant_id: 组织ID
+            updates: 更新项列表，每项包含 operation_id、planned_start_date、planned_end_date
+            updated_by: 更新人ID
+        """
+        if not updates:
+            return
+        async with in_transaction():
+            for item in updates[:50]:
+                op_id = item.operation_id if hasattr(item, 'operation_id') else item.get('operation_id')
+                start = item.planned_start_date if hasattr(item, 'planned_start_date') else item.get('planned_start_date')
+                end = item.planned_end_date if hasattr(item, 'planned_end_date') else item.get('planned_end_date')
+                if not op_id or not start or not end:
+                    continue
+                op = await WorkOrderOperation.get_or_none(tenant_id=tenant_id, id=op_id)
+                if op:
+                    await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
+                        planned_start_date=start,
+                        planned_end_date=end,
+                    )
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
+                    if wo:
+                        ops = await WorkOrderOperation.filter(
+                            tenant_id=tenant_id,
+                            work_order_id=op.work_order_id,
+                            deleted_at__isnull=True,
+                        ).order_by("sequence").all()
+                        wo_start = min(
+                            (o.planned_start_date for o in ops if o.planned_start_date),
+                            default=wo.planned_start_date,
+                        )
+                        wo_end = max(
+                            (o.planned_end_date for o in ops if o.planned_end_date),
+                            default=wo.planned_end_date,
+                        )
+                        if wo_start and wo_end:
+                            await WorkOrder.filter(tenant_id=tenant_id, id=op.work_order_id).update(
+                                planned_start_date=wo_start,
+                                planned_end_date=wo_end,
+                                updated_by=updated_by,
+                            )
 
     async def delete_work_order(
         self,
@@ -1686,6 +1808,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_worker_name = dispatch_data.assigned_worker_name
             work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
             work_order_operation.assigned_equipment_name = dispatch_data.assigned_equipment_name
+            work_order_operation.assigned_mold_id = dispatch_data.assigned_mold_id
+            work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
+            work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id
+            work_order_operation.assigned_tool_name = dispatch_data.assigned_tool_name
             work_order_operation.assigned_at = datetime.now()
             work_order_operation.assigned_by = dispatched_by
             work_order_operation.assigned_by_name = user_info["name"]

@@ -20,6 +20,7 @@ import {
   QrcodeOutlined
 } from '@ant-design/icons';
 import { getPrintTemplateList, type PrintTemplate } from '../../../../../../services/printTemplate';
+import { MODAL_CONFIG } from '../../../../../../components/layout-templates';
 
 const { Title } = Typography;
 
@@ -101,7 +102,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={600}
+      width={MODAL_CONFIG.SMALL_WIDTH}
       centered
       rootClassName="kiosk-modal-terminal-bg"
       styles={{

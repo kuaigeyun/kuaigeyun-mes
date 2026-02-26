@@ -12,7 +12,7 @@ import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDig
 import { App, Button, Tag, Space, Modal, Collapse, Row, Col, InputNumber, Input, Switch } from 'antd';
 import { EyeOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { 
   listComputationConfigs, 
   getComputationConfig, 
@@ -272,7 +272,7 @@ const ComputationConfigPage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={() => formRef.current?.submit()}
         title={isEdit ? '编辑参数配置' : '新建参数配置'}
-        width={800}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         destroyOnHidden
       >
         <ProForm
@@ -427,6 +427,10 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
     include_in_transit: false,
     include_reserved: false,
     include_reorder_point: false,
+    consider_capacity: true,
+    consider_material_readiness: true,
+    consider_equipment_availability: false,
+    consider_mold_tool_availability: false,
   });
 
   React.useEffect(() => {
@@ -442,7 +446,7 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
   };
 
   return (
-    <Collapse defaultActiveKey={['basic', 'inventory', 'planning']}>
+    <Collapse defaultActiveKey={['basic', 'inventory', 'lot', '4m']}>
       <Panel header="基本参数" key="basic">
         <Row gutter={16}>
           <Col span={12}>
@@ -571,6 +575,52 @@ const ComputationParamsForm: React.FC<{ value?: Record<string, any>; onChange?: 
                 onChange={(val) => handleChange('lot_size', val)}
                 min={1}
                 style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+        </Row>
+      </Panel>
+
+      <Panel header="4M 人机料法（LRP 计算约束）" key="4m">
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
+          勾选表示需求计算时考虑该约束，取消勾选则忽略（适合中小企业按实情选择）
+        </div>
+        <Row gutter={16}>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>机：考虑产能约束</label>
+              <Switch
+                checked={params.consider_capacity !== false}
+                onChange={(checked) => handleChange('consider_capacity', checked)}
+              />
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>料：考虑物料齐套日期</label>
+              <Switch
+                checked={params.consider_material_readiness === true}
+                onChange={(checked) => handleChange('consider_material_readiness', checked)}
+              />
+            </div>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>机：考虑设备可用性</label>
+              <Switch
+                checked={params.consider_equipment_availability === true}
+                onChange={(checked) => handleChange('consider_equipment_availability', checked)}
+              />
+            </div>
+          </Col>
+          <Col span={12}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>法：考虑模具/工装占用</label>
+              <Switch
+                checked={params.consider_mold_tool_availability === true}
+                onChange={(checked) => handleChange('consider_mold_tool_availability', checked)}
               />
             </div>
           </Col>

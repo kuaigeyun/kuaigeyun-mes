@@ -2,13 +2,16 @@
  * 工装台账页面
  *
  * 提供工装的 CRUD 功能，包括列表展示、创建、编辑等操作。
+ * 详情抽屉包含领用记录、维保记录、校验记录 Tab。
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
+import { App, Button, Tag, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
@@ -36,6 +39,35 @@ interface Tool {
   updated_at?: string;
 }
 
+interface ToolUsage {
+  uuid?: string;
+  usage_no?: string;
+  operator_name?: string;
+  source_type?: string;
+  source_no?: string;
+  checkout_date?: string;
+  checkin_date?: string;
+  status?: string;
+}
+
+interface ToolMaintenance {
+  uuid?: string;
+  maintenance_type?: string;
+  maintenance_date?: string;
+  executor?: string;
+  content?: string;
+  result?: string;
+}
+
+interface ToolCalibration {
+  uuid?: string;
+  calibration_date?: string;
+  calibration_org?: string;
+  certificate_no?: string;
+  result?: string;
+  expiry_date?: string;
+}
+
 const ToolLedgerPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -47,6 +79,54 @@ const ToolLedgerPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [toolDetail, setToolDetail] = useState<Tool | null>(null);
+
+  const [usages, setUsages] = useState<ToolUsage[]>([]);
+  const [maintenances, setMaintenances] = useState<ToolMaintenance[]>([]);
+  const [calibrations, setCalibrations] = useState<ToolCalibration[]>([]);
+  const [usagesLoading, setUsagesLoading] = useState(false);
+  const [maintLoading, setMaintLoading] = useState(false);
+  const [calibLoading, setCalibLoading] = useState(false);
+
+  const [usageModalVisible, setUsageModalVisible] = useState(false);
+  const [maintModalVisible, setMaintModalVisible] = useState(false);
+  const [calibModalVisible, setCalibModalVisible] = useState(false);
+  const [usageForm] = Form.useForm();
+  const [maintForm] = Form.useForm();
+  const [calibForm] = Form.useForm();
+
+  const loadUsages = async (toolUuid: string) => {
+    setUsagesLoading(true);
+    try {
+      const res = await toolApi.listUsages(toolUuid, { limit: 100 });
+      setUsages(res.items || []);
+    } catch {
+      setUsages([]);
+    } finally {
+      setUsagesLoading(false);
+    }
+  };
+  const loadMaintenances = async (toolUuid: string) => {
+    setMaintLoading(true);
+    try {
+      const res = await toolApi.listMaintenances(toolUuid, { limit: 100 });
+      setMaintenances(res.items || []);
+    } catch {
+      setMaintenances([]);
+    } finally {
+      setMaintLoading(false);
+    }
+  };
+  const loadCalibrations = async (toolUuid: string) => {
+    setCalibLoading(true);
+    try {
+      const res = await toolApi.listCalibrations(toolUuid, { limit: 100 });
+      setCalibrations(res.items || []);
+    } catch {
+      setCalibrations([]);
+    } finally {
+      setCalibLoading(false);
+    }
+  };
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -97,8 +177,100 @@ const ToolLedgerPage: React.FC = () => {
       const detail = await toolApi.get(record.uuid);
       setToolDetail(detail);
       setDrawerVisible(true);
+      loadUsages(record.uuid);
+      loadMaintenances(record.uuid);
+      loadCalibrations(record.uuid);
     } catch (error) {
       messageApi.error('获取工装详情失败');
+    }
+  };
+
+  const handleCheckout = () => {
+    if (!toolDetail?.uuid) return;
+    usageForm.resetFields();
+    usageForm.setFieldsValue({ tool_uuid: toolDetail.uuid });
+    setUsageModalVisible(true);
+  };
+  const handleSubmitCheckout = async () => {
+    try {
+      const values = await usageForm.validateFields();
+      await toolApi.checkout(values);
+      messageApi.success('领用成功');
+      setUsageModalVisible(false);
+      if (toolDetail?.uuid) {
+        loadUsages(toolDetail.uuid);
+        const detail = await toolApi.get(toolDetail.uuid);
+        setToolDetail(detail);
+      }
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      messageApi.error(e?.message || '领用失败');
+    }
+  };
+
+  const handleCheckin = async (usageUuid: string) => {
+    try {
+      await toolApi.checkin(usageUuid);
+      messageApi.success('归还成功');
+      if (toolDetail?.uuid) {
+        loadUsages(toolDetail.uuid);
+        const detail = await toolApi.get(toolDetail.uuid);
+        setToolDetail(detail);
+      }
+    } catch (e: any) {
+      messageApi.error(e?.message || '归还失败');
+    }
+  };
+
+  const handleRecordMaintenance = () => {
+    if (!toolDetail?.uuid) return;
+    maintForm.resetFields();
+    maintForm.setFieldsValue({ tool_uuid: toolDetail.uuid, maintenance_date: dayjs() });
+    setMaintModalVisible(true);
+  };
+  const handleSubmitMaintenance = async () => {
+    try {
+      const values = await maintForm.validateFields();
+      const data = {
+        ...values,
+        maintenance_date: values.maintenance_date?.format?.('YYYY-MM-DD') || values.maintenance_date,
+        cost: values.cost ?? 0,
+      };
+      await toolApi.recordMaintenance(data);
+      messageApi.success('维保记录已保存');
+      setMaintModalVisible(false);
+      if (toolDetail?.uuid) loadMaintenances(toolDetail.uuid);
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      messageApi.error(e?.message || '保存失败');
+    }
+  };
+
+  const handleRecordCalibration = () => {
+    if (!toolDetail?.uuid) return;
+    calibForm.resetFields();
+    calibForm.setFieldsValue({ tool_uuid: toolDetail.uuid, calibration_date: dayjs() });
+    setCalibModalVisible(true);
+  };
+  const handleSubmitCalibration = async () => {
+    try {
+      const values = await calibForm.validateFields();
+      const data = {
+        ...values,
+        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
+        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
+      };
+      await toolApi.recordCalibration(data);
+      messageApi.success('校验记录已保存');
+      setCalibModalVisible(false);
+      if (toolDetail?.uuid) {
+        loadCalibrations(toolDetail.uuid);
+        const detail = await toolApi.get(toolDetail.uuid);
+        setToolDetail(detail);
+      }
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      messageApi.error(e?.message || '保存失败');
     }
   };
 
@@ -234,52 +406,311 @@ const ToolLedgerPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormText name="code" label="工装编码" placeholder="留空自动生成" />
-        <ProFormText name="name" label="工装名称" placeholder="请输入工装名称" rules={[{ required: true, message: '请输入工装名称' }]} />
-        <ProFormSelect
-          name="type"
-          label="工装类型"
-          placeholder="请选择工装类型"
-          options={[
-            { label: '夹具', value: '夹具' },
-            { label: '治具', value: '治具' },
-            { label: '检具', value: '检具' },
-            { label: '刀具', value: '刀具' },
-            { label: '其他', value: '其他' },
-          ]}
-        />
-        <ProFormText name="spec" label="规格型号" placeholder="请输入规格型号" />
-        <ProFormText name="manufacturer" label="制造商" placeholder="请输入制造商" />
-        <ProFormText name="supplier" label="供应商" placeholder="请输入供应商" />
-        <ProFormDatePicker name="purchase_date" label="采购日期" />
-        <ProFormDatePicker name="warranty_expiry" label="保修到期日" />
-        <ProFormSelect
-          name="status"
-          label="工装状态"
-          placeholder="请选择状态"
-          options={[
-            { label: '正常', value: '正常' },
-            { label: '领用中', value: '领用中' },
-            { label: '维修中', value: '维修中' },
-            { label: '校验中', value: '校验中' },
-            { label: '停用', value: '停用' },
-            { label: '报废', value: '报废' },
-          ]}
-        />
-        <ProFormDigit name="maintenance_period" label="保养周期（天）" placeholder="请输入保养周期" />
-        <ProFormDigit name="calibration_period" label="校验周期（天）" placeholder="请输入校验周期" />
-        <ProFormTextArea name="description" label="备注" placeholder="请输入备注" fieldProps={{ rows: 2 }} />
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-equipment-management-tool"
+              name="code"
+              label="工装编码"
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="name"
+              label="工装名称"
+              placeholder="请输入工装名称"
+              rules={[{ required: true, message: '请输入工装名称' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <DictionarySelect
+              dictionaryCode="TOOL_TYPE"
+              name="type"
+              label="工装类型"
+              placeholder="请选择工装类型"
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="spec" label="规格型号" placeholder="请输入规格型号" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="manufacturer" label="制造商" placeholder="请输入制造商" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="supplier" label="供应商" placeholder="请输入供应商" />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="purchase_date"
+              label="采购日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="warranty_expiry"
+              label="保修到期日"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <DictionarySelect
+              dictionaryCode="TOOL_STATUS"
+              name="status"
+              label="工装状态"
+              placeholder="请选择状态"
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit name="maintenance_period" label="保养周期（天）" placeholder="请输入保养周期" />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit name="calibration_period" label="校验周期（天）" placeholder="请输入校验周期" />
+          </Col>
+          <Col span={24}>
+            <ProFormTextArea name="description" label="备注" placeholder="请输入备注" fieldProps={{ rows: 2 }} />
+          </Col>
+          <Col span={24}>
+            <ProFormSwitch name="is_active" label="是否启用" />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
         open={drawerVisible}
-        onClose={() => { setDrawerVisible(false); setToolDetail(null); }}
+        onClose={() => {
+          setDrawerVisible(false);
+          setToolDetail(null);
+          setUsages([]);
+          setMaintenances([]);
+          setCalibrations([]);
+        }}
         title={`工装详情 - ${toolDetail?.code || ''}`}
         columns={detailColumns}
         dataSource={toolDetail}
-        width={DRAWER_CONFIG.DEFAULT_WIDTH}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        customContent={
+          toolDetail && (
+            <Tabs
+              defaultActiveKey="basic"
+              items={[
+                {
+                  key: 'basic',
+                  label: '基本信息',
+                  children: (
+                    <Descriptions column={2} size="small">
+                      {detailColumns.map((col) => {
+                        const val = (toolDetail as any)[col.dataIndex as string];
+                        let content: React.ReactNode = val;
+                        if (col.valueType === 'dateTime' && val) content = dayjs(val).format('YYYY-MM-DD HH:mm:ss');
+                        else if (col.valueType === 'date' && val) content = dayjs(val).format('YYYY-MM-DD');
+                        else if (col.render) content = col.render(val, toolDetail, 0, {}, col);
+                        return (
+                          <Descriptions.Item key={String(col.dataIndex)} label={col.title}>
+                            {content ?? '-'}
+                          </Descriptions.Item>
+                        );
+                      })}
+                    </Descriptions>
+                  ),
+                },
+                {
+                  key: 'usages',
+                  label: '领用记录',
+                  children: (
+                    <>
+                      <div style={{ marginBottom: 12 }}>
+                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCheckout}>
+                          新建领用
+                        </Button>
+                      </div>
+                      <Table<ToolUsage>
+                        size="small"
+                        loading={usagesLoading}
+                        dataSource={usages}
+                        rowKey="uuid"
+                        pagination={false}
+                        columns={[
+                          { title: '领用单号', dataIndex: 'usage_no', width: 140 },
+                          { title: '来源类型', dataIndex: 'source_type', width: 100 },
+                          { title: '来源单号', dataIndex: 'source_no', width: 120 },
+                          { title: '操作人', dataIndex: 'operator_name', width: 90 },
+                          {
+                            title: '领用时间',
+                            dataIndex: 'checkout_date',
+                            width: 160,
+                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
+                          },
+                          {
+                            title: '归还时间',
+                            dataIndex: 'checkin_date',
+                            width: 160,
+                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
+                          },
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
+                            width: 80,
+                            render: (s) => <Tag>{s || '-'}</Tag>,
+                          },
+                          {
+                            title: '操作',
+                            width: 80,
+                            render: (_, record) =>
+                              record.status === '使用中' ? (
+                                <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
+                                  归还
+                                </Button>
+                              ) : null,
+                          },
+                        ]}
+                      />
+                    </>
+                  ),
+                },
+                {
+                  key: 'maintenances',
+                  label: '维保记录',
+                  children: (
+                    <>
+                      <div style={{ marginBottom: 12 }}>
+                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordMaintenance}>
+                          新建维保记录
+                        </Button>
+                      </div>
+                      <Table<ToolMaintenance>
+                        size="small"
+                        loading={maintLoading}
+                        dataSource={maintenances}
+                        rowKey="uuid"
+                        pagination={false}
+                        columns={[
+                          { title: '维保类型', dataIndex: 'maintenance_type', width: 100 },
+                          {
+                            title: '维保日期',
+                            dataIndex: 'maintenance_date',
+                            width: 110,
+                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+                          },
+                          { title: '执行人', dataIndex: 'executor', width: 90 },
+                          { title: '内容', dataIndex: 'content', ellipsis: true },
+                          { title: '结果', dataIndex: 'result', width: 80 },
+                        ]}
+                      />
+                    </>
+                  ),
+                },
+                {
+                  key: 'calibrations',
+                  label: '校验记录',
+                  children: (
+                    <>
+                      <div style={{ marginBottom: 12 }}>
+                        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
+                          新建校验记录
+                        </Button>
+                      </div>
+                      <Table<ToolCalibration>
+                        size="small"
+                        loading={calibLoading}
+                        dataSource={calibrations}
+                        rowKey="uuid"
+                        pagination={false}
+                        columns={[
+                          {
+                            title: '校验日期',
+                            dataIndex: 'calibration_date',
+                            width: 110,
+                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+                          },
+                          { title: '校验机构', dataIndex: 'calibration_org', width: 120 },
+                          { title: '证书编号', dataIndex: 'certificate_no', width: 120 },
+                          { title: '结果', dataIndex: 'result', width: 80 },
+                          {
+                            title: '有效期至',
+                            dataIndex: 'expiry_date',
+                            width: 110,
+                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+                          },
+                        ]}
+                      />
+                    </>
+                  ),
+                },
+              ]}
+            />
+          )
+        }
       />
+
+      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} onCancel={() => setUsageModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+        <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
+          <Form.Item name="operator_name" label="领用人"><Input placeholder="请输入领用人" /></Form.Item>
+          <Form.Item name="department_name" label="领用部门"><Input placeholder="请输入领用部门" /></Form.Item>
+          <Form.Item name="source_type" label="来源类型">
+            <Select placeholder="请选择" allowClear options={[
+              { label: '工单', value: 'work_order' },
+              { label: '生产订单', value: 'production_order' },
+              { label: '其他', value: 'other' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="source_no" label="来源单号"><Input placeholder="请输入来源单号" /></Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} onCancel={() => setMaintModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+        <Form form={maintForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
+          <Form.Item name="maintenance_type" label="维保类型" rules={[{ required: true }]}>
+            <Select options={[
+              { label: '日常保养', value: '日常保养' },
+              { label: '定期保养', value: '定期保养' },
+              { label: '故障维修', value: '故障维修' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="maintenance_date" label="维保日期" rules={[{ required: true }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="executor" label="执行人"><Input placeholder="请输入执行人" /></Form.Item>
+          <Form.Item name="content" label="维保内容"><Input.TextArea rows={2} placeholder="请输入维保内容" /></Form.Item>
+          <Form.Item name="result" label="维保结果">
+            <Select options={[{ label: '完成', value: '完成' }, { label: '未完成', value: '未完成' }]} />
+          </Form.Item>
+          <Form.Item name="cost" label="费用" initialValue={0}><InputNumber min={0} step={0.01} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+        <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
+          <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="calibration_org" label="校验机构"><Input placeholder="请输入校验机构" /></Form.Item>
+          <Form.Item name="certificate_no" label="证书编号"><Input placeholder="请输入证书编号" /></Form.Item>
+          <Form.Item name="result" label="校验结果" rules={[{ required: true }]}>
+            <Select options={[
+              { label: '合格', value: '合格' },
+              { label: '不合格', value: '不合格' },
+              { label: '准用', value: '准用' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="expiry_date" label="有效期至">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 };

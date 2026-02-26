@@ -156,3 +156,24 @@ class ToolCalibrationResponse(ToolCalibrationBase):
 class ToolListResponse(BaseModel):
     items: List[ToolResponse]
     total: int
+
+
+class ToolUsageListResponse(BaseModel):
+    items: List[ToolUsageResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
+class ToolMaintenanceListResponse(BaseModel):
+    items: List[ToolMaintenanceResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
+class ToolCalibrationListResponse(BaseModel):
+    items: List[ToolCalibrationResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100

@@ -8,7 +8,7 @@ Date: 2025-01-14
 """
 
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
+from fastapi import APIRouter, Depends, Query, Path, Body, HTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -22,6 +22,7 @@ from apps.kuaizhizao.schemas.demand_computation import (
     DemandComputationCreate,
     DemandComputationUpdate,
     DemandComputationResponse,
+    ExecuteComputationRequest,
 )
 
 router = APIRouter(prefix="/demand-computations", tags=["统一需求计算管理"])
@@ -119,9 +120,38 @@ async def get_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求计算详情失败")
 
 
+@router.post("/{computation_id}/execute/preview", summary="执行计算预览")
+async def preview_execute_computation(
+    computation_id: int = Path(..., description="计算ID"),
+    body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    预览执行计算结果，不持久化。
+    用于二次确认前展示预计生成的计算明细。
+    """
+    try:
+        computation_params_override = body.computation_params if body else None
+        return await computation_service.preview_execute_computation(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            computation_params_override=computation_params_override
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"执行计算预览失败: {e}")
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
+
+
 @router.post("/{computation_id}/execute", response_model=DemandComputationResponse, summary="执行需求计算")
 async def execute_computation(
     computation_id: int = Path(..., description="计算ID"),
+    body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -129,11 +159,14 @@ async def execute_computation(
     执行需求计算
     
     执行MRP或LRP计算逻辑，生成计算结果。
+    可选传入 computation_params 临时覆盖参数，仅本次执行生效。
     """
     try:
+        computation_params_override = body.computation_params if body else None
         return await computation_service.execute_computation(
             tenant_id=tenant_id,
-            computation_id=computation_id
+            computation_id=computation_id,
+            computation_params_override=computation_params_override
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -204,6 +237,55 @@ async def get_computation_snapshots(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.get("/{computation_id}/push-records", summary="获取需求计算下推记录")
+async def get_push_records(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求计算的下推记录。
+    返回从该需求计算下推出去的单据列表，包含目标单据是否仍存在的标识（已删除的单据 target_exists=False）。
+    """
+    try:
+        return await computation_service.get_push_records(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception("获取下推记录失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取下推记录失败")
+
+
+@router.delete("/{computation_id}", summary="删除需求计算")
+async def delete_computation(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除需求计算
+
+    仅当需求计算尚未下推工单/采购单/生产计划/采购申请等下游单据时允许删除。
+    删除后会同步清除关联需求的计算状态，需求可重新下推计算。
+    """
+    try:
+        await computation_service.delete_computation(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        )
+        return {"success": True, "message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"删除需求计算失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求计算失败")
+
+
 @router.put("/{computation_id}", response_model=DemandComputationResponse, summary="更新需求计算")
 async def update_computation(
     computation_id: int = Path(..., description="计算ID"),
@@ -235,7 +317,8 @@ async def update_computation(
 @router.post("/{computation_id}/generate-orders", summary="一键生成工单和采购单")
 async def generate_orders(
     computation_id: int = Path(..., description="计算ID"),
-    generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购"),
+    generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单"),
+    allow_draft: bool = Query(False, description="验证失败时是否仍生成草稿单，由下游用户补全"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -243,6 +326,7 @@ async def generate_orders(
     从需求计算结果一键生成工单和采购单
     
     generate_mode: all=全部，work_order_only=仅工单，purchase_only=仅采购
+    allow_draft: 验证失败时是否仍生成草稿单
     """
     # #region agent log
     try:
@@ -256,7 +340,8 @@ async def generate_orders(
             tenant_id=tenant_id,
             computation_id=computation_id,
             created_by=current_user.id,
-            generate_mode=generate_mode
+            generate_mode=generate_mode,
+            allow_draft=allow_draft,
         )
         return result
     except NotFoundError as e:
@@ -276,6 +361,86 @@ async def generate_orders(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成工单和采购单失败: {str(e)}",
         )
+
+
+@router.get("/{computation_id}/push-options", summary="获取下推能力与配置")
+async def get_push_options(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求计算的下推能力与一键下推默认配置，供前端弹窗预填"""
+    try:
+        return await computation_service.get_push_options(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("获取下推能力失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/{computation_id}/push-preview", summary="下推预览")
+async def get_push_preview(
+    computation_id: int = Path(..., description="计算ID"),
+    production: Optional[str] = Query(None, description="生产路径：plan|work_order"),
+    purchase: Optional[str] = Query(None, description="采购路径：requisition|purchase_order"),
+    outsource_only: bool = Query(False, description="仅委外工单预览"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取下推预览（不实际执行），用于下推前展示将生成的单据数量"""
+    try:
+        push_config = {}
+        if production:
+            push_config["production"] = production
+        if purchase:
+            push_config["purchase"] = purchase
+        if outsource_only:
+            push_config["outsource_only"] = True
+        return await computation_service.get_push_preview(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            push_config=push_config if push_config else None,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("获取下推预览失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/{computation_id}/push-all", summary="一键下推")
+async def push_all(
+    computation_id: int = Path(..., description="计算ID"),
+    body: Optional[Dict[str, Any]] = Body(default=None, description="配置：production, purchase, include_outsource"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """一键下推：按配置执行生产计划/工单、采购申请/采购单、委外工单"""
+    try:
+        b = body or {}
+        return await computation_service.push_all(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            created_by=current_user.id,
+            production=b.get("production"),
+            purchase=b.get("purchase"),
+            include_outsource=b.get("include_outsource", True),
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("一键下推失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/{computation_id}/push-to-purchase-requisition", summary="下推到采购申请")

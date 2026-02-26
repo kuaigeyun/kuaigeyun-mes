@@ -257,69 +257,82 @@ class MaterialSerialService:
         tenant_id: int,
         material_uuid: str,
         count: int = 1,
-        rule: Optional[str] = None
+        rule: Optional[str] = None,
+        rule_id: Optional[int] = None,
+        rule_uuid: Optional[str] = None,
     ) -> List[str]:
         """
         生成序列号（批量生成）
-        
-        支持多种序列号生成规则：
-        - {物料编码}-{YYYYMMDD}-{6位序号}：MAT-FIN-0001-20260115-000001
-        - {物料编码}-{YYYY}-{6位序号}：MAT-FIN-0001-2026-000001
-        
+
+        优先使用规则：rule_id/rule_uuid > 物料默认序列号规则 > 传入的 rule 字符串 > 系统默认
+
         Args:
             tenant_id: 租户ID
             material_uuid: 物料UUID
             count: 生成数量（默认：1）
-            rule: 序列号生成规则（可选，默认使用物料编码+日期+序号格式）
-            
+            rule: 序列号生成规则字符串（可选，向后兼容）
+            rule_id: 序列号规则ID（可选）
+            rule_uuid: 序列号规则UUID（可选）
+
         Returns:
             List[str]: 生成的序列号列表
-            
-        Raises:
-            NotFoundError: 当物料不存在时抛出
         """
-        # 验证物料是否存在
+        from core.services.business.serial_rule_service import SerialRuleService
+
         material = await Material.filter(
             tenant_id=tenant_id,
             uuid=material_uuid,
             deleted_at__isnull=True
-        ).first()
-        
+        ).prefetch_related("default_serial_rule").first()
+
         if not material:
             raise NotFoundError("物料", material_uuid)
-        
-        # 如果没有指定规则，使用默认规则：{物料编码}-{YYYYMMDD}-{6位序号}
+
+        material_code = material.main_code or material.code or ""
+        context = {
+            "material_code": material_code,
+            "group_code": getattr(material.group, "code", "") if material.group_id else "",
+        }
+
+        serial_rule = None
+        if rule_id:
+            serial_rule = await SerialRuleService.get_rule_by_id(tenant_id, rule_id)
+        elif rule_uuid:
+            serial_rule = await SerialRuleService.get_rule_by_uuid(tenant_id, rule_uuid)
+        elif getattr(material, "default_serial_rule_id", None) and material.default_serial_rule:
+            serial_rule = material.default_serial_rule
+
+        if serial_rule:
+            return await SerialRuleService.generate_by_rule(
+                tenant_id=tenant_id,
+                rule=serial_rule,
+                context=context,
+                scope_key=str(material.id),
+                count=count,
+            )
+
+        # 向后兼容：使用字符串规则
         if not rule:
             rule = "{物料编码}-{YYYYMMDD}-{6位序号}"
-        
-        # 获取当前日期
         today = datetime.now().strftime("%Y%m%d")
         year = datetime.now().strftime("%Y")
-        
-        # 查找今天已生成的序列号数量（用于序号）
         today_serials = await MaterialSerial.filter(
             tenant_id=tenant_id,
             material_id=material.id,
             serial_no__contains=today,
             deleted_at__isnull=True
         ).count()
-        
-        # 生成序列号列表
+
         serial_nos = []
-        material_code = material.main_code or material.code or ""
-        
         for i in range(count):
             sequence = today_serials + i + 1
             sequence_str = f"{sequence:06d}"
-            
-            # 根据规则生成序列号
             serial_no = rule.replace("{物料编码}", material_code)
             serial_no = serial_no.replace("{YYYYMMDD}", today)
             serial_no = serial_no.replace("{YYYY}", year)
             serial_no = serial_no.replace("{6位序号}", sequence_str)
-            
             serial_nos.append(serial_no)
-        
+
         return serial_nos
     
     @staticmethod

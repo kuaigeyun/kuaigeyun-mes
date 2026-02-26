@@ -179,4 +179,75 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "账期60天", "value": "CREDIT_60", "description": "账期60天", "sort_order": 7},
         ],
     },
+    # 设备/模具/工装 - 类型与状态
+    {
+        "code": "EQUIPMENT_TYPE",
+        "name": "设备类型",
+        "description": "设备管理中的设备类型",
+        "items": [
+            {"label": "加工设备", "value": "加工设备", "description": "加工设备", "sort_order": 1},
+            {"label": "检测设备", "value": "检测设备", "description": "检测设备", "sort_order": 2},
+            {"label": "包装设备", "value": "包装设备", "description": "包装设备", "sort_order": 3},
+            {"label": "其他", "value": "其他", "description": "其他类型", "sort_order": 4},
+        ],
+    },
+    {
+        "code": "MOLD_TYPE",
+        "name": "模具类型",
+        "description": "模具管理中的模具类型",
+        "items": [
+            {"label": "注塑模具", "value": "注塑模具", "description": "注塑模具", "sort_order": 1},
+            {"label": "压铸模具", "value": "压铸模具", "description": "压铸模具", "sort_order": 2},
+            {"label": "冲压模具", "value": "冲压模具", "description": "冲压模具", "sort_order": 3},
+            {"label": "其他", "value": "其他", "description": "其他类型", "sort_order": 4},
+        ],
+    },
+    {
+        "code": "TOOL_TYPE",
+        "name": "工装类型",
+        "description": "工装台账中的工装类型",
+        "items": [
+            {"label": "夹具", "value": "夹具", "description": "夹具", "sort_order": 1},
+            {"label": "治具", "value": "治具", "description": "治具", "sort_order": 2},
+            {"label": "检具", "value": "检具", "description": "检具", "sort_order": 3},
+            {"label": "刀具", "value": "刀具", "description": "刀具", "sort_order": 4},
+            {"label": "其他", "value": "其他", "description": "其他类型", "sort_order": 5},
+        ],
+    },
+    {
+        "code": "EQUIPMENT_STATUS",
+        "name": "设备状态",
+        "description": "设备管理中的设备状态",
+        "items": [
+            {"label": "正常", "value": "正常", "description": "正常", "sort_order": 1},
+            {"label": "维修中", "value": "维修中", "description": "维修中", "sort_order": 2},
+            {"label": "停用", "value": "停用", "description": "停用", "sort_order": 3},
+            {"label": "报废", "value": "报废", "description": "报废", "sort_order": 4},
+        ],
+    },
+    {
+        "code": "MOLD_STATUS",
+        "name": "模具状态",
+        "description": "模具管理中的模具状态",
+        "items": [
+            {"label": "正常", "value": "正常", "description": "正常", "sort_order": 1},
+            {"label": "使用中", "value": "使用中", "description": "使用中", "sort_order": 2},
+            {"label": "维护中", "value": "维护中", "description": "维护中", "sort_order": 3},
+            {"label": "停用", "value": "停用", "description": "停用", "sort_order": 4},
+            {"label": "报废", "value": "报废", "description": "报废", "sort_order": 5},
+        ],
+    },
+    {
+        "code": "TOOL_STATUS",
+        "name": "工装状态",
+        "description": "工装台账中的工装状态",
+        "items": [
+            {"label": "正常", "value": "正常", "description": "正常", "sort_order": 1},
+            {"label": "领用中", "value": "领用中", "description": "领用中", "sort_order": 2},
+            {"label": "维修中", "value": "维修中", "description": "维修中", "sort_order": 3},
+            {"label": "校验中", "value": "校验中", "description": "校验中", "sort_order": 4},
+            {"label": "停用", "value": "停用", "description": "停用", "sort_order": 5},
+            {"label": "报废", "value": "报废", "description": "报废", "sort_order": 6},
+        ],
+    },
 ]

@@ -26,64 +26,97 @@ import {
   Modal,
   Drawer,
   Table,
-  Dropdown,
   Collapse,
   Switch,
   Input,
+  Select,
   Tabs,
+  Radio,
 } from 'antd'
 import {
   PlayCircleOutlined,
   EyeOutlined,
   ReloadOutlined,
-  FileAddOutlined,
-  DownOutlined,
-  ProjectOutlined,
-  ShoppingCartOutlined,
+  ArrowDownOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { ListPageTemplate } from '../../../../../components/layout-templates'
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates'
 import {
   listDemandComputations,
   getDemandComputation,
   createDemandComputation,
+  previewExecuteDemandComputation,
   executeDemandComputation,
   recomputeDemandComputation,
+  deleteDemandComputation,
   generateOrdersFromComputation,
-  pushToProductionPlan,
-  pushToPurchaseRequisition,
+  getPushOptions,
+  getPushPreview,
+  pushAll,
   validateMaterialSources,
   getMaterialSources,
+  type PushOptions,
+  type PushPreview,
   listComputationRecalcHistory,
   listComputationSnapshots,
+  getPushRecords,
   DemandComputation,
   DemandComputationItem,
   ComputationRecalcHistoryItem,
   ComputationSnapshotItem,
+  type PushRecordItem,
 } from '../../../services/demand-computation'
-import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
+import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
-import { planningApi } from '../../../services/production'
+import { bomApi } from '../../../../master-data/services/material'
 
 const { Panel } = Collapse
 
-/** 库存参数开关表单（新建计算时使用） */
+/** 物料 BOM 版本选项 */
+interface BomVersionOption {
+  version: string
+  isDefault: boolean
+}
+
+/** 物料信息（用于按物料指定 BOM 版本） */
+interface MaterialInfo {
+  material_id: number
+  material_code: string
+  material_name: string
+  bomVersions?: BomVersionOption[]
+}
+
+/** 库存参数开关表单（新建计算/执行计算时使用） */
 const InventoryParamsForm: React.FC<{
   value?: Record<string, any>
   onChange?: (v: Record<string, any>) => void
   bomMultiVersionAllowed?: boolean
-}> = ({ value, onChange, bomMultiVersionAllowed = false }) => {
+  materials?: MaterialInfo[]
+}> = ({ value, onChange, bomMultiVersionAllowed = false, materials = [] }) => {
   const params = value || {
     include_safety_stock: true,
     include_in_transit: false,
     include_reserved: false,
     include_reorder_point: false,
     bom_version: undefined,
+    material_bom_versions: {} as Record<number, string>,
   }
   const handleChange = (key: string, val: any) => {
     onChange?.({ ...params, [key]: val })
   }
+  const handleMaterialVersionChange = (materialId: number, version: string) => {
+    const next = { ...(params.material_bom_versions || {}) }
+    if (version) {
+      next[materialId] = version
+    } else {
+      delete next[materialId]
+    }
+    handleChange('material_bom_versions', next)
+  }
+  const materialBomVersions = params.material_bom_versions || {}
+
   return (
     <Collapse ghost>
       <Panel header="库存计算选项" key="inventory">
@@ -118,12 +151,12 @@ const InventoryParamsForm: React.FC<{
               onChange={c => handleChange('include_reorder_point', c)}
             />
           </dd>
-          {bomMultiVersionAllowed && (
+          {bomMultiVersionAllowed && materials.length === 0 && (
             <>
               <dt style={{ margin: 0 }}>BOM 版本</dt>
               <dd style={{ margin: 0 }}>
                 <Input
-                  placeholder="留空使用默认版本，如 1.0、1.1"
+                  placeholder="留空使用各物料默认版本，如 1.0、1.1"
                   value={params.bom_version ?? ''}
                   onChange={e => handleChange('bom_version', e.target.value || undefined)}
                   allowClear
@@ -132,6 +165,58 @@ const InventoryParamsForm: React.FC<{
             </>
           )}
         </dl>
+        {bomMultiVersionAllowed && materials.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Collapse ghost defaultActiveKey={['materialBom']}>
+              <Panel header="按物料指定 BOM 版本（留空自动使用该物料 BOM 默认版本）" key="materialBom">
+                <Table
+                  size="small"
+                  dataSource={materials}
+                  rowKey="material_id"
+                  pagination={false}
+                  columns={[
+                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                    {
+                      title: 'BOM 版本',
+                      dataIndex: 'material_id',
+                      render: (materialId: number, record: MaterialInfo) => {
+                        const versions = record.bomVersions || []
+                        const currentVal = materialBomVersions[materialId] ?? ''
+                        if (versions.length > 1) {
+                          return (
+                            <Select
+                              placeholder="选择版本"
+                              value={currentVal || undefined}
+                              onChange={v => handleMaterialVersionChange(materialId, v || '')}
+                              allowClear
+                              style={{ width: 140 }}
+                              options={versions.map(v => ({
+                                value: v.version,
+                                label: v.isDefault ? `${v.version}（默认）` : v.version,
+                              }))}
+                            />
+                          )
+                        }
+                        return (
+                          <Input
+                            placeholder="如 1.0、1.1"
+                            value={currentVal}
+                            onChange={e =>
+                              handleMaterialVersionChange(materialId, e.target.value?.trim() || '')
+                            }
+                            allowClear
+                            style={{ width: 120 }}
+                          />
+                        )
+                      },
+                    },
+                  ]}
+                />
+              </Panel>
+            </Collapse>
+          </div>
+        )}
       </Panel>
     </Collapse>
   )
@@ -146,13 +231,40 @@ const DemandComputationPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false)
   const [selectedDemandIds, setSelectedDemandIds] = useState<number[]>([])
 
+  // 执行计算 Modal 相关状态
+  const [executeModalVisible, setExecuteModalVisible] = useState(false)
+  const [executeRecord, setExecuteRecord] = useState<DemandComputation | null>(null)
+  const [executeParams, setExecuteParams] = useState<Record<string, any>>({})
+  const [executeLoading, setExecuteLoading] = useState(false)
+
+  // 计算结果预览 Modal（二次确认）
+  const [previewModalVisible, setPreviewModalVisible] = useState(false)
+  const [previewData, setPreviewData] = useState<{
+    computation_code: string
+    computation_type: string
+    item_count: number
+    items: Array<{
+      material_code: string
+      material_name: string
+      material_unit: string
+      required_quantity: number
+      available_inventory: number
+      net_requirement: number
+      suggested_work_order_quantity: number
+      suggested_purchase_order_quantity: number
+      material_source_type?: string
+    }>
+  } | null>(null)
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null)
   const [computationRecalcHistory, setComputationRecalcHistory] = useState<ComputationRecalcHistoryItem[]>([])
   const [computationSnapshots, setComputationSnapshots] = useState<ComputationSnapshotItem[]>([])
+  const [pushRecords, setPushRecords] = useState<PushRecordItem[]>([])
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false)
   const [snapshotsLoading, setSnapshotsLoading] = useState(false)
+  const [pushRecordsLoading, setPushRecordsLoading] = useState(false)
   const [detailTabKey, setDetailTabKey] = useState<string>('detail')
 
   // 物料来源信息状态
@@ -162,16 +274,113 @@ const DemandComputationPage: React.FC = () => {
   const [demandList, setDemandList] = useState<Demand[]>([])
   // BOM 允许多版本共存（用于决定是否显示版本选择）
   const [bomMultiVersionAllowed, setBomMultiVersionAllowed] = useState(true)
+  // 新建计算：选中需求对应的物料列表（用于按物料指定 BOM 版本）
+  const [createModalMaterials, setCreateModalMaterials] = useState<MaterialInfo[]>([])
+  // 执行计算：当前计算对应的物料列表
+  const [executeModalMaterials, setExecuteModalMaterials] = useState<MaterialInfo[]>([])
 
-  // 计划管理配置（用于展示当前模式：直连工单 vs 经生产计划）
-  const [planningConfig, setPlanningConfig] = useState<{
-    can_direct_generate_work_order?: boolean
-    planning_mode?: 'direct' | 'via_plan'
-    production_plan_enabled?: boolean
-  } | null>(null)
+  // 下推面板（配置+预览+确认一体）
+  const [pushPanelRecord, setPushPanelRecord] = useState<DemandComputation | null>(null)
+  const [pushOptions, setPushOptions] = useState<PushOptions | null>(null)
+  const [pushPreviewData, setPushPreviewData] = useState<PushPreview | null>(null)
+  const [pushConfig, setPushConfig] = useState<{
+    production?: 'plan' | 'work_order'
+    purchase?: 'requisition' | 'purchase_order'
+  }>({})
+  const [pushPanelLoading, setPushPanelLoading] = useState(false)
+  const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
+
+  /** 下推面板：打开时加载 options，初始化 config */
   React.useEffect(() => {
-    planningApi.productionPlan.getPlanningConfig().then(setPlanningConfig).catch(() => setPlanningConfig(null))
-  }, [])
+    if (!pushPanelRecord) return
+    const load = async () => {
+      setPushPanelLoading(true)
+      try {
+        const opts = await getPushOptions(pushPanelRecord.id!)
+        setPushOptions(opts)
+        setPushConfig({
+          production: opts.production_choices.length > 0 ? opts.default_production : undefined,
+          purchase: opts.purchase_choices.length > 0 ? opts.default_purchase : undefined,
+        })
+      } catch (e) {
+        messageApi.error('加载下推配置失败')
+      } finally {
+        setPushPanelLoading(false)
+      }
+    }
+    load()
+  }, [pushPanelRecord?.id])
+
+  /** 下推面板：配置变化时刷新预览 */
+  React.useEffect(() => {
+    if (!pushPanelRecord || pushPanelLoading) return
+    const params: any = {}
+    if (pushConfig.production) params.production = pushConfig.production
+    if (pushConfig.purchase) params.purchase = pushConfig.purchase
+    getPushPreview(pushPanelRecord.id!, Object.keys(params).length ? params : undefined)
+      .then(setPushPreviewData)
+      .catch(() => {})
+  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase])
+
+  /** 新建计算：选中需求变化时，获取需求明细并提取物料列表（去重），并获取各物料 BOM 版本 */
+  React.useEffect(() => {
+    if (!selectedDemandIds?.length) {
+      setCreateModalMaterials([])
+      return
+    }
+    const load = async () => {
+      const demands = await Promise.all(selectedDemandIds.map(id => getDemand(id, true)))
+      const seen = new Set<number>()
+      const materials: MaterialInfo[] = []
+      for (const d of demands) {
+        for (const item of d.items || []) {
+          if (item.material_id && !seen.has(item.material_id)) {
+            seen.add(item.material_id)
+            materials.push({
+              material_id: item.material_id,
+              material_code: item.material_code || '',
+              material_name: item.material_name || '',
+            })
+          }
+        }
+      }
+      // 获取各物料的 BOM 版本列表
+      const withVersions = await Promise.all(
+        materials.map(async m => {
+          try {
+            const boms = await bomApi.getByMaterial(m.material_id, undefined, true)
+            const versionMap = new Map<string, boolean>()
+            for (const b of boms) {
+              if (b.version) versionMap.set(b.version, b.isDefault || versionMap.get(b.version))
+            }
+            const bomVersions: BomVersionOption[] = Array.from(versionMap.entries()).map(
+              ([version, isDefault]) => ({ version, isDefault: !!isDefault })
+            )
+            return { ...m, bomVersions }
+          } catch {
+            return { ...m, bomVersions: [] }
+          }
+        })
+      )
+      setCreateModalMaterials(withVersions)
+    }
+    load().catch(() => setCreateModalMaterials([]))
+  }, [selectedDemandIds])
+
+  /** 新建计算：物料 BOM 版本加载完成后，预填各物料默认 BOM 版本 */
+  React.useEffect(() => {
+    if (!createModalMaterials.length || !modalVisible) return
+    const defaults: Record<number, string> = {}
+    for (const m of createModalMaterials) {
+      const def = m.bomVersions?.find(v => v.isDefault)?.version ?? m.bomVersions?.[0]?.version
+      if (def) defaults[m.material_id] = def
+    }
+    if (Object.keys(defaults).length === 0) return
+    const current = formRef.current?.getFieldValue('computation_params') || {}
+    formRef.current?.setFieldsValue({
+      computation_params: { ...current, material_bom_versions: { ...defaults, ...(current.material_bom_versions || {}) } },
+    })
+  }, [createModalMaterials, modalVisible])
 
   /**
    * 处理新建计算
@@ -235,22 +444,142 @@ const DemandComputationPage: React.FC = () => {
   }
 
   /**
-   * 处理执行计算
+   * 处理执行计算：打开计算参数 Modal
    */
   const handleExecute = async (record: DemandComputation) => {
-    modalApi.confirm({
-      title: '执行需求计算',
-      content: `确认要执行计算 ${record.computation_code} 吗？`,
-      onOk: async () => {
-        try {
-          await executeDemandComputation(record.id!)
-          messageApi.success('计算执行成功')
-          actionRef.current?.reload()
-        } catch (error: any) {
-          messageApi.error('计算执行失败')
+    setExecuteRecord(record)
+    const defaults = {
+      include_safety_stock: true,
+      include_in_transit: false,
+      include_reserved: false,
+      include_reorder_point: false,
+      bom_version: undefined,
+      material_bom_versions: {} as Record<number, string>,
+    }
+    setExecuteParams({ ...defaults, ...(record.computation_params || {}) })
+    setExecuteModalVisible(true)
+
+    // 获取需求明细中的物料列表（用于按物料指定 BOM 版本）
+    const demandIds = record.demand_ids?.length
+      ? record.demand_ids
+      : record.demand_id
+        ? [record.demand_id]
+        : []
+    if (demandIds.length > 0) {
+      try {
+        const demands = await Promise.all(demandIds.map((id: number) => getDemand(id, true)))
+        const seen = new Set<number>()
+        const materials: MaterialInfo[] = []
+        for (const d of demands) {
+          for (const item of d.items || []) {
+            if (item.material_id && !seen.has(item.material_id)) {
+              seen.add(item.material_id)
+              materials.push({
+                material_id: item.material_id,
+                material_code: item.material_code || '',
+                material_name: item.material_name || '',
+              })
+            }
+          }
         }
-      },
-    })
+        // 获取各物料的 BOM 版本列表
+        const withVersions = await Promise.all(
+          materials.map(async m => {
+            try {
+              const boms = await bomApi.getByMaterial(m.material_id, undefined, true)
+              const versionMap = new Map<string, boolean>()
+              for (const b of boms) {
+                if (b.version) versionMap.set(b.version, b.isDefault || versionMap.get(b.version))
+              }
+              const bomVersions: BomVersionOption[] = Array.from(versionMap.entries()).map(
+                ([version, isDefault]) => ({ version, isDefault: !!isDefault })
+              )
+              return { ...m, bomVersions }
+            } catch {
+              return { ...m, bomVersions: [] }
+            }
+          })
+        )
+        setExecuteModalMaterials(withVersions)
+        // 预填各物料默认 BOM 版本（已有值则保留）
+        const existing = record.computation_params?.material_bom_versions || {}
+        const defaults: Record<number, string> = {}
+        for (const m of withVersions) {
+          if (existing[m.material_id] != null && String(existing[m.material_id]).trim() !== '') continue
+          const def = m.bomVersions?.find(v => v.isDefault)?.version ?? m.bomVersions?.[0]?.version
+          if (def) defaults[m.material_id] = def
+        }
+        if (Object.keys(defaults).length > 0) {
+          setExecuteParams(prev => ({
+            ...prev,
+            material_bom_versions: { ...prev.material_bom_versions, ...defaults },
+          }))
+        }
+      } catch {
+        setExecuteModalMaterials([])
+      }
+    } else {
+      setExecuteModalMaterials([])
+    }
+  }
+
+  /** 过滤并准备执行参数（过滤 material_bom_versions 空值） */
+  const getFilteredExecuteParams = () => {
+    const materialBomVersions = executeParams.material_bom_versions || {}
+    const filtered = Object.fromEntries(
+      Object.entries(materialBomVersions).filter(([, v]) => v != null && String(v).trim() !== '')
+    )
+    const params = { ...executeParams }
+    if (Object.keys(filtered).length > 0) {
+      params.material_bom_versions = filtered
+    } else {
+      delete params.material_bom_versions
+    }
+    // 有按物料指定时，不传 bom_version，留空物料自动使用该物料 BOM 默认版本
+    if (executeModalMaterials.length > 0) {
+      delete params.bom_version
+    }
+    return params
+  }
+
+  /**
+   * 第一步：从参数 Modal 点击执行计算 -> 调用预览 API，展示预览 Modal
+   */
+  const handleExecuteSubmit = async () => {
+    if (!executeRecord?.id) return
+    setExecuteLoading(true)
+    try {
+      const params = getFilteredExecuteParams()
+      const preview = await previewExecuteDemandComputation(executeRecord.id, params)
+      setPreviewData(preview)
+      setPreviewModalVisible(true)
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || '计算预览失败')
+    } finally {
+      setExecuteLoading(false)
+    }
+  }
+
+  /**
+   * 第二步：从预览 Modal 点击确认执行 -> 真正执行计算
+   */
+  const handleConfirmExecute = async () => {
+    if (!executeRecord?.id) return
+    setExecuteLoading(true)
+    try {
+      const params = getFilteredExecuteParams()
+      await executeDemandComputation(executeRecord.id, params)
+      messageApi.success('计算执行成功')
+      setPreviewModalVisible(false)
+      setPreviewData(null)
+      setExecuteModalVisible(false)
+      setExecuteRecord(null)
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || '计算执行失败')
+    } finally {
+      setExecuteLoading(false)
+    }
   }
 
   /**
@@ -272,39 +601,59 @@ const DemandComputationPage: React.FC = () => {
     })
   }
 
-  const handlePushToPurchaseRequisition = async (record: DemandComputation) => {
+  /**
+   * 处理删除需求计算
+   */
+  const handleDelete = async (record: DemandComputation) => {
     modalApi.confirm({
-      title: '转采购申请',
-      content: `确定要将计算 ${record.computation_code} 下推到采购申请吗？仅采购件会生成采购申请。`,
+      title: '删除需求计算',
+      content: `确定要删除计算 ${record.computation_code} 吗？仅当尚未下推工单/采购单等下游单据时可删除，删除后关联需求可重新下推计算。`,
+      okText: '删除',
+      okType: 'danger',
       onOk: async () => {
         try {
-          const result = await pushToPurchaseRequisition(record.id!)
-          messageApi.success(result.message || '下推成功')
+          await deleteDemandComputation(record.id!)
+          messageApi.success('删除成功')
           actionRef.current?.reload()
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || '下推失败')
+          messageApi.error(error?.response?.data?.detail || '删除失败')
         }
       },
     })
   }
 
-  /**
-   * 处理转生产计划
-   */
-  const handlePushToProductionPlan = async (record: DemandComputation) => {
-    modalApi.confirm({
-      title: '转生产计划',
-      content: `确定要将计算 ${record.computation_code} 下推到生产计划吗？`,
-      onOk: async () => {
-        try {
-          const result = await pushToProductionPlan(record.id!)
-          messageApi.success(result.message || '下推成功')
-          actionRef.current?.reload()
-        } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || '下推失败')
-        }
-      },
-    })
+  /** 打开下推面板 */
+  const handleOpenPushPanel = (record: DemandComputation) => {
+    setPushPanelRecord(record)
+    setPushPreviewData(null)
+  }
+
+  /** 下推面板确认执行 */
+  const handlePushPanelConfirm = async () => {
+    if (!pushPanelRecord) return
+    const record = pushPanelRecord
+    setPushPanelSubmitting(true)
+    try {
+      const hasProduction = pushConfig.production
+      const hasPurchase = pushConfig.purchase
+      if (hasProduction || hasPurchase) {
+        await pushAll(record.id!, {
+          production: pushConfig.production,
+          purchase: pushConfig.purchase,
+          include_outsource: true,
+        })
+        messageApi.success('下推完成')
+      } else {
+        messageApi.warning('请至少选择一项下推内容')
+        return
+      }
+      setPushPanelRecord(null)
+      actionRef.current?.reload()
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || '下推失败')
+    } finally {
+      setPushPanelSubmitting(false)
+    }
   }
 
   /**
@@ -320,18 +669,20 @@ const DemandComputationPage: React.FC = () => {
       const validation = await validateMaterialSources(record.id!)
 
       if (!validation.all_passed) {
-        // 有验证失败，显示详细错误信息
+        // 有验证失败，允许用户选择继续生成草稿单（由下游补全）
         const errorMessages = validation.validation_results
           .filter((r: any) => !r.validation_passed)
           .map((r: any) => `物料 ${r.material_code} (${r.material_name}): ${r.errors.join(', ')}`)
           .join('\n')
 
-        modalApi.warning({
+        modalApi.confirm({
           title: '物料来源验证失败',
           width: 600,
+          okText: '继续生成草稿单',
+          cancelText: '取消',
           content: (
             <div>
-              <p>以下物料的来源配置验证失败，无法生成工单和采购单：</p>
+              <p>以下物料的来源配置验证失败，将生成草稿单，请下游用户补全后提交。是否继续？</p>
               <pre
                 style={{
                   background: '#f5f5f5',
@@ -350,6 +701,30 @@ const DemandComputationPage: React.FC = () => {
               </p>
             </div>
           ),
+          onOk: async () => {
+            try {
+              const result = await generateOrdersFromComputation(record.id!, generateMode, {
+                allowDraft: true,
+              })
+              const parts = []
+              if (result.work_order_count > 0)
+                parts.push(`生产工单 ${result.work_order_count} 个（工单管理）`)
+              if ((result.outsource_work_order_count ?? 0) > 0)
+                parts.push(`委外工单 ${result.outsource_work_order_count} 个（委外管理）`)
+              if (result.purchase_order_count > 0)
+                parts.push(`采购单 ${result.purchase_order_count} 个`)
+              if (parts.length > 0) {
+                messageApi.success(`草稿单生成成功！${parts.join('，')}，请下游用户补全后提交。`)
+              } else {
+                messageApi.warning(
+                  '未生成任何工单或采购单。请检查计算结果中的建议数量是否大于0，以及物料来源类型是否正确配置。'
+                )
+              }
+              actionRef.current?.reload()
+            } catch (error: any) {
+              messageApi.error(error?.response?.data?.detail || '生成草稿单失败')
+            }
+          },
         })
         return
       }
@@ -532,7 +907,7 @@ const DemandComputationPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -544,6 +919,15 @@ const DemandComputationPage: React.FC = () => {
           >
             详情
           </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record)}
+          >
+            删除
+          </Button>
           {record.computation_status === '进行中' && (
             <Button
               type="link"
@@ -551,7 +935,7 @@ const DemandComputationPage: React.FC = () => {
               icon={<PlayCircleOutlined />}
               onClick={() => handleExecute(record)}
             >
-              执行
+              执行计算
             </Button>
           )}
           {(record.computation_status === '完成' || record.computation_status === '失败') && (
@@ -565,51 +949,19 @@ const DemandComputationPage: React.FC = () => {
             </Button>
           )}
           {record.computation_status === '完成' && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<ProjectOutlined />}
-                onClick={() => handlePushToProductionPlan(record)}
-              >
-                转生产计划
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<ShoppingCartOutlined />}
-                onClick={() => handlePushToPurchaseRequisition(record)}
-              >
-                转采购申请
-              </Button>
-              <Dropdown
-                menu={{
-                  items: [
-                    ...(canDirectWO
-                      ? [
-                          { key: 'all', label: '全部（工单+采购单）', onClick: () => handleGenerateOrders(record, 'all') },
-                          { key: 'work_order_only', label: '仅工单', onClick: () => handleGenerateOrders(record, 'work_order_only') },
-                        ]
-                      : []),
-                    { key: 'purchase_only', label: '仅采购单', onClick: () => handleGenerateOrders(record, 'purchase_only') },
-                  ],
-                }}
-              >
-                <Button type="link" size="small" icon={<FileAddOutlined />}>
-                  {canDirectWO ? '生成工单/采购单' : '生成采购单'} <DownOutlined />
-                </Button>
-              </Dropdown>
-            </>
+            <Button
+              type="link"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              onClick={() => handleOpenPushPanel(record)}
+            >
+              下推
+            </Button>
           )}
         </Space>
       ),
     },
   ]
-
-  /**
-   * 渲染页面
-   */
-  const canDirectWO = planningConfig?.can_direct_generate_work_order !== false
 
   return (
     <ListPageTemplate>
@@ -687,7 +1039,7 @@ const DemandComputationPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         title="新建需求计算"
-        width={800}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         onOk={async () => {
           try {
             const values = await formRef.current?.validateFields()
@@ -701,10 +1053,27 @@ const DemandComputationPage: React.FC = () => {
             const hasMTO = selectedDemands.some(d => d.business_mode === 'MTO')
             const computationType = hasMTO ? 'LRP' : 'MRP'
 
+            // 过滤 material_bom_versions 中的空值
+            const params = values.computation_params || {}
+            const materialBomVersions = params.material_bom_versions || {}
+            const filteredMaterialBomVersions = Object.fromEntries(
+              Object.entries(materialBomVersions).filter(([, v]) => v != null && String(v).trim() !== '')
+            )
+            const computationParams = { ...params }
+            if (Object.keys(filteredMaterialBomVersions).length > 0) {
+              computationParams.material_bom_versions = filteredMaterialBomVersions
+            } else {
+              delete computationParams.material_bom_versions
+            }
+            // 有按物料指定时，不传 bom_version，留空物料自动使用该物料 BOM 默认版本
+            if (createModalMaterials.length > 0) {
+              delete computationParams.bom_version
+            }
+
             // 多需求时使用 demand_ids，单需求时使用 demand_id（向后兼容）
             const createData: any = {
               computation_type: computationType,
-              computation_params: values.computation_params || {},
+              computation_params: computationParams,
               notes: values.notes,
             }
 
@@ -748,12 +1117,244 @@ const DemandComputationPage: React.FC = () => {
               include_in_transit: false,
               include_reserved: false,
               include_reorder_point: false,
+              material_bom_versions: {},
             }}
           >
-            <InventoryParamsForm bomMultiVersionAllowed={bomMultiVersionAllowed} />
+            <InventoryParamsForm
+              bomMultiVersionAllowed={bomMultiVersionAllowed}
+              materials={createModalMaterials}
+            />
           </ProForm.Item>
           <ProFormTextArea name="notes" label="备注" placeholder="请输入备注" />
         </ProForm>
+      </Modal>
+
+      {/* 单一下推面板 Modal */}
+      <Modal
+        open={!!pushPanelRecord}
+        title={`下推单据 - ${pushPanelRecord?.computation_code || ''}`}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        okText="确认下推"
+        confirmLoading={pushPanelSubmitting}
+        onOk={handlePushPanelConfirm}
+        onCancel={() => {
+          setPushPanelRecord(null)
+          setPushOptions(null)
+          setPushPreviewData(null)
+          setPushConfig({})
+        }}
+      >
+        {pushPanelLoading ? (
+          <div style={{ padding: 24, textAlign: 'center' }}>加载中...</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {pushOptions && (
+              <>
+                {pushOptions.production_choices.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>生产路径</div>
+                    <Radio.Group
+                      value={pushConfig.production}
+                      onChange={e => setPushConfig(c => ({ ...c, production: e.target.value }))}
+                    >
+                      <Radio value="plan">转生产计划</Radio>
+                      <Radio value="work_order">仅工单</Radio>
+                    </Radio.Group>
+                  </div>
+                )}
+                {pushOptions.purchase_choices.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>采购路径</div>
+                    <Radio.Group
+                      value={pushConfig.purchase}
+                      onChange={e => setPushConfig(c => ({ ...c, purchase: e.target.value }))}
+                    >
+                      <Radio value="requisition">转采购申请</Radio>
+                      <Radio value="purchase_order">仅采购单</Radio>
+                    </Radio.Group>
+                  </div>
+                )}
+                <p style={{ fontSize: 12, color: '#666' }}>
+                  委外工单将一并下推，验证失败的将生成草稿单由下游补全。
+                </p>
+              </>
+            )}
+            {pushPreviewData && (
+              <div>
+                <p style={{ marginBottom: 12 }}>将生成以下单据：</p>
+                <ul style={{ marginBottom: 12, paddingLeft: 20 }}>
+                  {pushPreviewData.production_plan_count > 0 && (
+                    <li>生产计划 {pushPreviewData.production_plan_count} 个</li>
+                  )}
+                  {pushPreviewData.work_order_count > 0 && (
+                    <li>生产工单 {pushPreviewData.work_order_count} 个</li>
+                  )}
+                  {pushPreviewData.outsource_work_order_count > 0 && (
+                    <li>
+                      委外工单 {pushPreviewData.outsource_work_order_count} 个
+                      {pushPreviewData.validation_failures?.length ? '（含草稿，请下游补全）' : ''}
+                    </li>
+                  )}
+                  {pushPreviewData.purchase_requisition_count > 0 && (
+                    <li>采购申请 {pushPreviewData.purchase_requisition_count} 个</li>
+                  )}
+                  {pushPreviewData.purchase_order_count > 0 && (
+                    <li>采购单 {pushPreviewData.purchase_order_count} 个</li>
+                  )}
+                </ul>
+                {pushPreviewData.validation_failures && pushPreviewData.validation_failures.length > 0 && (
+                  <div style={{ marginTop: 12, padding: 12, background: '#fff7e6', borderRadius: 4 }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>验证失败的物料（将生成草稿单）：</div>
+                    <ul style={{ margin: 0, paddingLeft: 20 }}>
+                      {pushPreviewData.validation_failures.map((v, i) => (
+                        <li key={i}>
+                          {v.material_code} ({v.material_name}): {v.errors.join(', ')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* 执行计算 - 计算参数 Modal */}
+      <Modal
+        open={executeModalVisible}
+        onCancel={() => {
+          setExecuteModalVisible(false)
+          setExecuteRecord(null)
+        }}
+        title="计算参数 - 执行计算"
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        okText="执行计算"
+        confirmLoading={executeLoading}
+        onOk={handleExecuteSubmit}
+      >
+        {executeRecord && (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <h4 style={{ marginBottom: 8 }}>只读信息</h4>
+              <ProDescriptions<DemandComputation>
+                column={2}
+                size="small"
+                dataSource={executeRecord}
+                columns={[
+                  { title: '计算编码', dataIndex: 'computation_code' },
+                  { title: '需求编码', dataIndex: 'demand_code' },
+                  {
+                    title: '计算模式',
+                    dataIndex: 'computation_type',
+                    render: (t: string) => (t === 'MRP' ? '按预测' : '按订单'),
+                  },
+                  {
+                    title: '业务模式',
+                    dataIndex: 'business_mode',
+                    render: (t: string) => (t === 'MTS' ? '按库存生产' : '按订单生产'),
+                  },
+                ]}
+              />
+            </div>
+            <div>
+              <h4 style={{ marginBottom: 8 }}>可临时修改的参数</h4>
+              <InventoryParamsForm
+                value={executeParams}
+                onChange={setExecuteParams}
+                bomMultiVersionAllowed={bomMultiVersionAllowed}
+                materials={executeModalMaterials}
+              />
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* 计算结果预览 Modal - 二次确认 */}
+      <Modal
+        open={previewModalVisible}
+        onCancel={() => {
+          setPreviewModalVisible(false)
+          setPreviewData(null)
+        }}
+        title="计算结果预览 - 请确认"
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        okText="确认执行"
+        cancelText="取消"
+        confirmLoading={executeLoading}
+        onOk={handleConfirmExecute}
+      >
+        {previewData && (
+          <>
+            <p style={{ marginBottom: 12 }}>
+              预计将生成 <strong>{previewData.item_count}</strong> 条计算结果，请确认后执行。
+            </p>
+            <Table
+              size="small"
+              dataSource={previewData.items}
+              rowKey={(r, i) => `${r.material_code}-${i}`}
+              pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '单位', dataIndex: 'material_unit', width: 60 },
+                {
+                  title: '需求数量',
+                  dataIndex: 'required_quantity',
+                  width: 90,
+                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                },
+                {
+                  title: '可用库存',
+                  dataIndex: 'available_inventory',
+                  width: 90,
+                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                },
+                {
+                  title: '净需求',
+                  dataIndex: 'net_requirement',
+                  width: 90,
+                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                },
+                {
+                  title: '建议工单',
+                  dataIndex: 'suggested_work_order_quantity',
+                  width: 90,
+                  render: (v: number, r: { material_source_type?: string }) =>
+                    r.material_source_type === 'Outsource' ? '-' : (v ? Number(v).toLocaleString() : '-'),
+                },
+                {
+                  title: '建议委外',
+                  dataIndex: 'suggested_work_order_quantity',
+                  width: 90,
+                  render: (v: number, r: { material_source_type?: string }) =>
+                    r.material_source_type === 'Outsource' ? (v ? Number(v).toLocaleString() : '-') : '-',
+                },
+                {
+                  title: '建议采购',
+                  dataIndex: 'suggested_purchase_order_quantity',
+                  width: 90,
+                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                },
+                {
+                  title: '来源',
+                  dataIndex: 'material_source_type',
+                  width: 80,
+                  render: (t: string) => {
+                    const map: Record<string, string> = {
+                      Make: '自制',
+                      Buy: '采购',
+                      Phantom: '虚拟',
+                      Outsource: '委外',
+                      Configure: '配置',
+                    }
+                    return map[t] || t || '-'
+                  },
+                },
+              ]}
+            />
+          </>
+        )}
       </Modal>
 
       {/* 详情Drawer - 使用 styles.wrapper 设置宽度，因 antd 6 的 size 可能被全局样式覆盖 */}
@@ -782,6 +1383,13 @@ const DemandComputationPage: React.FC = () => {
                   .then(setComputationSnapshots)
                   .catch(() => messageApi.error('获取快照列表失败'))
                   .finally(() => setSnapshotsLoading(false))
+              }
+              if (key === 'push-records' && currentComputation.id) {
+                setPushRecordsLoading(true)
+                getPushRecords(currentComputation.id)
+                  .then((res) => setPushRecords(res.records || []))
+                  .catch(() => messageApi.error('获取下推记录失败'))
+                  .finally(() => setPushRecordsLoading(false))
               }
             }}
             items={[
@@ -881,9 +1489,14 @@ const DemandComputationPage: React.FC = () => {
                               width: 100,
                               render: (passed: boolean, record: DemandComputationItem) => {
                                 if (record.material_source_type) {
+                                  // 优先使用实时验证结果（打开详情时调用 validateMaterialSources）
+                                  const realTime = validationResults?.validation_results?.find(
+                                    (r: any) => r.material_id === record.material_id
+                                  )
+                                  const isPassed = realTime != null ? realTime.validation_passed : passed
                                   return (
-                                    <Tag color={passed ? 'success' : 'error'}>
-                                      {passed ? '通过' : '失败'}
+                                    <Tag color={isPassed ? 'success' : 'error'}>
+                                      {isPassed ? '通过' : '失败'}
                                     </Tag>
                                   )
                                 }
@@ -897,6 +1510,15 @@ const DemandComputationPage: React.FC = () => {
                               title: '建议工单数量',
                               dataIndex: 'suggested_work_order_quantity',
                               width: 120,
+                              render: (v: number, r: DemandComputationItem) =>
+                                r.material_source_type === 'Outsource' ? '-' : (v ?? '-'),
+                            },
+                            {
+                              title: '建议委外数量',
+                              dataIndex: 'suggested_work_order_quantity',
+                              width: 120,
+                              render: (v: number, r: DemandComputationItem) =>
+                                r.material_source_type === 'Outsource' ? (v ?? '-') : '-',
                             },
                             {
                               title: '建议采购数量',
@@ -910,6 +1532,55 @@ const DemandComputationPage: React.FC = () => {
                       </>
                     )}
                   </>
+                ),
+              },
+              {
+                key: 'push-records',
+                label: '下推记录',
+                children: (
+                  <Table<PushRecordItem>
+                    size="small"
+                    loading={pushRecordsLoading}
+                    dataSource={pushRecords}
+                    rowKey={(r) => `${r.target_type}-${r.target_id}`}
+                    columns={[
+                      {
+                        title: '单据类型',
+                        dataIndex: 'target_type',
+                        width: 120,
+                        render: (t: string) => {
+                          const map: Record<string, string> = {
+                            work_order: '工单',
+                            outsource_work_order: '委外工单',
+                            purchase_order: '采购单',
+                            production_plan: '生产计划',
+                            purchase_requisition: '采购申请',
+                          }
+                          return map[t] || t || '-'
+                        },
+                      },
+                      { title: '单据编码', dataIndex: 'target_code', width: 140 },
+                      { title: '单据名称', dataIndex: 'target_name', ellipsis: true },
+                      {
+                        title: '下推时间',
+                        dataIndex: 'created_at',
+                        width: 180,
+                        render: (t: string) => (t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '-'),
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'target_exists',
+                        width: 90,
+                        render: (exists: boolean) =>
+                          exists ? (
+                            <Tag color="success">正常</Tag>
+                          ) : (
+                            <Tag color="default">已删除</Tag>
+                          ),
+                      },
+                    ]}
+                    pagination={false}
+                  />
                 ),
               },
               {

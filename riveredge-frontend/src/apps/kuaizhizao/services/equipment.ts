@@ -41,6 +41,11 @@ export const equipmentApi = {
     return apiRequest(`/apps/kuaizhizao/equipment/${uuid}/trace`, { method: 'GET' });
   },
 
+  // 创建设备校验记录
+  createCalibration: async (equipmentUuid: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/equipment/${equipmentUuid}/calibrations`, { method: 'POST', data });
+  },
+
   // 生成设备二维码
   generateQRCode: async (equipmentUuid: string, equipmentCode: string, equipmentName: string): Promise<any> => {
     const { qrcodeApi } = await import('../../../services/qrcode');
@@ -154,6 +159,19 @@ export const moldApi = {
   listUsages: async (params?: any) => {
     return apiRequest('/apps/kuaizhizao/molds/usages', { method: 'GET', params });
   },
+
+  // 获取模具校验记录列表
+  listCalibrations: async (moldUuid: string, params?: { skip?: number; limit?: number }) => {
+    return apiRequest('/apps/kuaizhizao/molds/calibrations', {
+      method: 'GET',
+      params: { mold_uuid: moldUuid, ...params },
+    });
+  },
+
+  // 创建模具校验记录
+  createCalibration: async (data: { mold_uuid: string; calibration_date: string; result: string; certificate_no?: string; expiry_date?: string; remark?: string }) => {
+    return apiRequest('/apps/kuaizhizao/molds/calibrations', { method: 'POST', data });
+  },
 };
 
 // 工装相关接口
@@ -169,6 +187,30 @@ export const toolApi = {
   },
   get: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'GET' });
+  },
+  listUsages: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/usages`, { method: 'GET', params });
+  },
+  listMaintenances: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/maintenances`, { method: 'GET', params });
+  },
+  listCalibrations: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/calibrations`, { method: 'GET', params });
+  },
+  checkout: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/tools/checkout', { method: 'POST', data });
+  },
+  checkin: async (usageUuid: string, remark?: string) => {
+    return apiRequest(`/apps/kuaizhizao/tools/checkin/${usageUuid}`, {
+      method: 'POST',
+      params: remark ? { remark } : undefined,
+    });
+  },
+  recordMaintenance: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/tools/maintenances', { method: 'POST', data });
+  },
+  recordCalibration: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/tools/calibrations', { method: 'POST', data });
   },
 };
 

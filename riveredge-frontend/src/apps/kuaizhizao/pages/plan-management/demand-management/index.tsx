@@ -12,11 +12,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col, Spin } from 'antd';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
   listDemands,
   getDemand,
@@ -36,7 +36,7 @@ import {
   DemandSnapshotItem,
 } from '../../../services/demand';
 import { createDemandComputation } from '../../../services/demand-computation';
-import { getDocumentRelations } from '../../../services/document-relation';
+import { getDocumentRelations, getDemandChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -113,6 +113,9 @@ const DemandManagementPage: React.FC = () => {
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [detailTabKey, setDetailTabKey] = useState<string>('detail');
+  const [changeImpactVisible, setChangeImpactVisible] = useState(false);
+  const [changeImpactData, setChangeImpactData] = useState<ChangeImpactResponse | null>(null);
+  const [changeImpactLoading, setChangeImpactLoading] = useState(false);
   /** 数据字典 value->label 映射（用于详情抽屉显示标签） */
   const [dictLabelMap, setDictLabelMap] = useState<Record<string, Record<string, string>>>({});
 
@@ -277,6 +280,22 @@ const DemandManagementPage: React.FC = () => {
         }
       },
     });
+  };
+
+  /** 打开变更影响（排程管理增强） */
+  const handleOpenChangeImpact = async () => {
+    if (!currentDemand?.id) return;
+    setChangeImpactVisible(true);
+    setChangeImpactLoading(true);
+    setChangeImpactData(null);
+    try {
+      const data = await getDemandChangeImpact(currentDemand.id);
+      setChangeImpactData(data);
+    } catch (e) {
+      messageApi.error('加载失败');
+    } finally {
+      setChangeImpactLoading(false);
+    }
   };
 
   /**
@@ -592,7 +611,7 @@ const DemandManagementPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         title={isEditingDraft ? '编辑需求' : '修改需求'}
-        width={isEditingDraft ? 560 : 480}
+        width={MODAL_CONFIG.SMALL_WIDTH}
         footer={null}
         destroyOnClose
       >
@@ -749,6 +768,9 @@ const DemandManagementPage: React.FC = () => {
         extra={
           currentDemand && (
             <Space>
+              <Button icon={<ApartmentOutlined />} onClick={handleOpenChangeImpact}>
+                变更影响
+              </Button>
               <UniWorkflowActions
                 record={currentDemand}
                 entityName="需求"
@@ -1158,6 +1180,63 @@ const DemandManagementPage: React.FC = () => {
           </div>
         )}
       </Drawer>
+
+      {/* 变更影响弹窗（排程管理增强） */}
+      <Modal
+        title="变更影响"
+        open={changeImpactVisible}
+        onCancel={() => { setChangeImpactVisible(false); setChangeImpactData(null); }}
+        footer={null}
+        width={560}
+      >
+        {changeImpactLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spin tip="加载中..." />
+          </div>
+        ) : changeImpactData ? (
+          <div>
+            <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+              上游变更：{changeImpactData.upstream_change.code ?? changeImpactData.upstream_change.name ?? '-'}
+              {changeImpactData.upstream_change.changed_at && `（${dayjs(changeImpactData.upstream_change.changed_at).format('YYYY-MM-DD HH:mm')}）`}
+            </p>
+            {(changeImpactData.affected_computations?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的需求计算</div>
+                <Table size="small" dataSource={changeImpactData.affected_computations} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.affected_plans?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的生产计划</div>
+                <Table size="small" dataSource={changeImpactData.affected_plans} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.affected_work_orders?.length ?? 0) > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>受影响的工单</div>
+                <Table size="small" dataSource={changeImpactData.affected_work_orders} rowKey="id" pagination={false}
+                  columns={[{ title: '编码', dataIndex: 'code', key: 'code' }, { title: '名称', dataIndex: 'name', key: 'name' }, { title: '状态', dataIndex: 'status', key: 'status' }]} />
+              </div>
+            )}
+            {(changeImpactData.recommended_actions?.length ?? 0) > 0 && (
+              <div>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>建议操作</div>
+                <Space wrap>
+                  {changeImpactData.recommended_actions.map((a, i) => (
+                    <Tag key={i} color="blue">{a}</Tag>
+                  ))}
+                </Space>
+              </div>
+            )}
+            {!changeImpactData.affected_demands?.length && !changeImpactData.affected_computations?.length &&
+             !changeImpactData.affected_plans?.length && !changeImpactData.affected_work_orders?.length && (
+              <p style={{ color: 'var(--ant-color-text-secondary)' }}>暂无下游受影响单据</p>
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 };

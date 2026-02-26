@@ -50,6 +50,15 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
         "module": "主数据管理",
         "module_icon": "database",
     },
+    {
+        "page_code": "master-data-factory-work-center",
+        "page_name": "工作中心",
+        "page_path": "/apps/master-data/factory/work-centers",
+        "table_name": "master_data_factory_work_centers",
+        "table_name_label": "工作中心表",
+        "module": "主数据管理",
+        "module_icon": "database",
+    },
     # 仓库管理
     {
         "page_code": "master-data-warehouse-warehouse",

@@ -363,6 +363,42 @@ class CodeGenerationService:
             ).first()
             return existing is not None
 
+        if entity_type == 'equipment':
+            from apps.kuaizhizao.models.equipment import Equipment
+            existing = await Equipment.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+
+        if entity_type == 'mold':
+            from apps.kuaizhizao.models.mold import Mold
+            existing = await Mold.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+
+        if entity_type == 'tool':
+            from apps.kuaizhizao.models.tool import Tool
+            existing = await Tool.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+
+        if entity_type == 'work_center':
+            from apps.master_data.models.factory import WorkCenter
+            existing = await WorkCenter.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+
         # 其他实体类型的检查可以在这里扩展
         return False
     

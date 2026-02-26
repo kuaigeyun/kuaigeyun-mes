@@ -88,6 +88,10 @@ class DynamicDatabaseConfigService:
             "core.models.system_parameter",
             "core.models.code_rule",
             "core.models.code_sequence",
+            "core.models.batch_rule",
+            "core.models.batch_rule_sequence",
+            "core.models.serial_rule",
+            "core.models.serial_rule_sequence",
             "core.models.material_code_rule",  # 物料编码规则模型
             "core.models.material_variant_attribute",  # 物料变体属性定义模型
             "core.models.custom_field",
@@ -203,6 +207,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
                 f"apps.{module_code}.models.performance",
+                f"apps.{module_code}.models.employee_performance",
                 f"apps.{module_code}.models.product",
                 f"apps.{module_code}.models.work_order",
                 f"apps.{module_code}.models.work_order_operation",
@@ -262,6 +267,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.demand_computation_snapshot",
                 f"apps.{module_code}.models.demand_computation_recalc_history",
                 f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
+                f"apps.{module_code}.models.scheduling_config",  # 排程配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
                 # BOM管理模块
@@ -287,6 +293,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.cost_rule",  # 成本规则
                 # 质量管理模块（补充）
                 f"apps.{module_code}.models.quality_standard",  # 质量标准
+                f"apps.{module_code}.models.inspection_plan",  # 质检方案
                 # 仓储管理模块（补充）
                 f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
                 f"apps.{module_code}.models.inventory_alert",  # 库存预警
@@ -390,6 +397,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
                 f"apps.{module_code}.models.performance",
+                f"apps.{module_code}.models.employee_performance",
                 f"apps.{module_code}.models.product",
                 f"apps.{module_code}.models.work_order",
                 f"apps.{module_code}.models.work_order_operation",
@@ -449,6 +457,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.demand_computation_snapshot",
                 f"apps.{module_code}.models.demand_computation_recalc_history",
                 f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
+                f"apps.{module_code}.models.scheduling_config",  # 排程配置
                 f"apps.{module_code}.models.document_relation",  # 单据关联关系
                 f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
                 # BOM管理模块
@@ -474,6 +483,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.cost_rule",  # 成本规则
                 # 质量管理模块（补充）
                 f"apps.{module_code}.models.quality_standard",  # 质量标准
+                f"apps.{module_code}.models.inspection_plan",  # 质检方案
                 # 仓储管理模块（补充）
                 f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
                 f"apps.{module_code}.models.inventory_alert",  # 库存预警

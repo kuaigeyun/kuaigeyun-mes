@@ -2,20 +2,23 @@
  * 其他入库单管理页面
  *
  * 提供其他入库单的创建、查看、确认和管理功能（盘盈/样品/报废/其他）
+ * 支持批号规则选择与自动生成批号
  *
  * @author RiverEdge Team
  * @date 2026-02-19
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
+import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
+import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
 
 const REASON_TYPES = [
   { value: '盘盈', label: '盘盈' },
@@ -60,6 +63,25 @@ interface OtherInboundItem {
   notes?: string;
 }
 
+/** 表单行项（含批号/序列号规则相关） */
+interface FormItemRow {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  material_unit: string;
+  material_uuid?: string;
+  inbound_quantity: number;
+  unit_price: number;
+  batch_number?: string;
+  batch_managed?: boolean;
+  batch_rule_id?: number; // 可选覆盖，不填则用物料默认
+  default_batch_rule_id?: number;
+  serial_managed?: boolean;
+  serial_rule_id?: number; // 可选覆盖
+  default_serial_rule_id?: number;
+  serial_numbers?: string[];
+}
+
 const OtherInboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -71,17 +93,25 @@ const OtherInboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; inbound_quantity: number; unit_price: number }>>([]);
+  const [formItems, setFormItems] = useState<FormItemRow[]>([]);
+  const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
+  const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const load = async () => {
       try {
-        const [wh] = await Promise.all([
+        const [wh, batchRes, serialRes] = await Promise.all([
           masterDataWarehouseApi.list({ limit: 1000, isActive: true }),
+          batchRuleApi.list({ pageSize: 200, isActive: true }),
+          serialRuleApi.list({ pageSize: 200, isActive: true }),
         ]);
         setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
+        setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+        setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
       } catch (e) {
-        console.error('加载仓库/物料失败', e);
+        console.error('加载仓库/规则失败', e);
       }
     };
     load();
@@ -201,6 +231,7 @@ const OtherInboundPage: React.FC = () => {
           material_unit: it.material_unit,
           inbound_quantity: it.inbound_quantity,
           unit_price: it.unit_price || 0,
+          batch_number: it.batch_number || undefined,
         })),
       });
       messageApi.success('创建成功');
@@ -213,20 +244,100 @@ const OtherInboundPage: React.FC = () => {
   };
 
   const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', inbound_quantity: 1, unit_price: 0 }]);
+    setFormItems((prev) => [
+      ...prev,
+      {
+        material_id: 0,
+        material_code: '',
+        material_name: '',
+        material_unit: '',
+        inbound_quantity: 1,
+        unit_price: 0,
+      },
+    ]);
   };
 
-  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
+  const onMaterialSelect = async (idx: number, _val: number | undefined, material: any | undefined) => {
     if (!material) return;
+    const uuid = material.uuid || material.UUID;
+    let batchManaged = material.batchManaged ?? material.batch_managed ?? false;
+    let serialManaged = material.serialManaged ?? material.serial_managed ?? false;
+    let defaultBatchRuleId = material.defaultBatchRuleId ?? material.default_batch_rule_id;
+    let defaultSerialRuleId = material.defaultSerialRuleId ?? material.default_serial_rule_id;
+    if (uuid) {
+      try {
+        const full = await materialApi.get(uuid);
+        batchManaged = full.batchManaged ?? false;
+        serialManaged = full.serialManaged ?? false;
+        defaultBatchRuleId = full.defaultBatchRuleId;
+        defaultSerialRuleId = full.defaultSerialRuleId;
+      } catch {
+        // 使用列表返回的字段
+      }
+    }
     const updated = [...formItems];
     updated[idx] = {
       ...updated[idx],
       material_id: material.id,
-      material_code: material.mainCode || material.code || '',
+      material_code: material.mainCode || material.code || material.main_code || '',
       material_name: material.name || '',
-      material_unit: material.baseUnit || '',
+      material_unit: material.baseUnit || material.base_unit || '',
+      material_uuid: uuid,
+      batch_managed: batchManaged,
+      serial_managed: serialManaged,
+      default_batch_rule_id: defaultBatchRuleId,
+      default_serial_rule_id: defaultSerialRuleId,
     };
     setFormItems(updated);
+  };
+
+  const handleGenerateBatch = async (idx: number) => {
+    const row = formItems[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    setGeneratingBatchIdx(idx);
+    try {
+      const res = await materialBatchApi.generate(row.material_uuid, {
+        ruleId: row.batch_rule_id ?? row.default_batch_rule_id,
+      });
+      const updated = [...formItems];
+      updated[idx] = { ...updated[idx], batch_number: res.batch_no };
+      setFormItems(updated);
+      messageApi.success('批号生成成功');
+    } catch (e: any) {
+      messageApi.error(e?.message || '批号生成失败');
+    } finally {
+      setGeneratingBatchIdx(null);
+    }
+  };
+
+  const handleGenerateSerials = async (idx: number) => {
+    const row = formItems[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    const count = Math.max(1, Math.floor(Number(row.inbound_quantity) || 1));
+    if (count > 100) {
+      messageApi.warning('单次最多生成100个序列号');
+      return;
+    }
+    setGeneratingSerialIdx(idx);
+    try {
+      const res = await materialSerialApi.generate(row.material_uuid, count, {
+        ruleId: row.serial_rule_id ?? row.default_serial_rule_id,
+      });
+      const updated = [...formItems];
+      updated[idx] = { ...updated[idx], serial_numbers: res.serial_nos };
+      setFormItems(updated);
+      messageApi.success(`已生成 ${res.count} 个序列号`);
+    } catch (e: any) {
+      messageApi.error(e?.message || '序列号生成失败');
+    } finally {
+      setGeneratingSerialIdx(null);
+    }
   };
 
   const detailColumns: ProDescriptionsItemProps<OtherInboundDetail>[] = [
@@ -338,22 +449,87 @@ const OtherInboundPage: React.FC = () => {
           <Space direction="vertical" style={{ width: '100%' }}>
             <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
             {formItems.map((it, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 250px' }}>
-                  <UniMaterialSelect
-                    name={['items', idx, 'material_id']}
-                    label=""
-                    placeholder="请输入或选择物料"
-                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
-                  />
+              <div key={idx} style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fafafa' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div style={{ flex: '1 1 250px' }}>
+                    <UniMaterialSelect
+                      name={['items', idx, 'material_id']}
+                      label=""
+                      placeholder="请输入或选择物料"
+                      onChange={(v, option) => onMaterialSelect(idx, v, option)}
+                    />
+                  </div>
+                  <InputNumber placeholder="数量" min={0.01} value={it.inbound_quantity} onChange={(v) => {
+                    const u = [...formItems]; u[idx] = { ...u[idx], inbound_quantity: v ?? 0 }; setFormItems(u);
+                  }} />
+                  <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
+                    const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
+                  }} />
+                  <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
                 </div>
-                <InputNumber placeholder="数量" min={0.01} value={it.inbound_quantity} onChange={(v) => {
-                  const u = [...formItems]; u[idx] = { ...u[idx], inbound_quantity: v ?? 0 }; setFormItems(u);
-                }} />
-                <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                  const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-                }} />
-                <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
+                {(it.batch_managed || it.serial_managed) && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                    {it.batch_managed && (
+                      <>
+                        <Select
+                          placeholder="批号规则（可选）"
+                          allowClear
+                          style={{ width: 160 }}
+                          value={it.batch_rule_id ?? it.default_batch_rule_id ?? undefined}
+                          onChange={(v) => {
+                            const u = [...formItems]; u[idx] = { ...u[idx], batch_rule_id: v ?? undefined }; setFormItems(u);
+                          }}
+                          options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                        />
+                        <Input
+                          placeholder="批号（可手动输入或生成）"
+                          value={it.batch_number ?? ''}
+                          onChange={(e) => {
+                            const u = [...formItems]; u[idx] = { ...u[idx], batch_number: e.target.value }; setFormItems(u);
+                          }}
+                          style={{ width: 160 }}
+                        />
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<ThunderboltOutlined />}
+                          loading={generatingBatchIdx === idx}
+                          onClick={() => handleGenerateBatch(idx)}
+                        >
+                          生成批号
+                        </Button>
+                      </>
+                    )}
+                    {it.serial_managed && (
+                      <>
+                        <Select
+                          placeholder="序列号规则（可选）"
+                          allowClear
+                          style={{ width: 160 }}
+                          value={it.serial_rule_id ?? it.default_serial_rule_id ?? undefined}
+                          onChange={(v) => {
+                            const u = [...formItems]; u[idx] = { ...u[idx], serial_rule_id: v ?? undefined }; setFormItems(u);
+                          }}
+                          options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                        />
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<ThunderboltOutlined />}
+                          loading={generatingSerialIdx === idx}
+                          onClick={() => handleGenerateSerials(idx)}
+                        >
+                          生成序列号
+                        </Button>
+                        {it.serial_numbers && it.serial_numbers.length > 0 && (
+                          <span style={{ color: '#52c41a', fontSize: 12 }}>
+                            已生成 {it.serial_numbers.length} 个
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </Space>

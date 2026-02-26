@@ -81,3 +81,14 @@ export const qualityApi = {
     getReport: async (params?: any) => apiRequest('/apps/kuaizhizao/reports/quality', { method: 'GET', params }),
   },
 };
+
+/** 质检方案 API */
+export const inspectionPlanApi = {
+  list: async (params?: any) => apiRequest('/apps/kuaizhizao/inspection-plans', { method: 'GET', params }),
+  create: async (data: any) => apiRequest('/apps/kuaizhizao/inspection-plans', { method: 'POST', data }),
+  update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/inspection-plans/${id}`, { method: 'PUT', data }),
+  delete: async (id: string) => apiRequest(`/apps/kuaizhizao/inspection-plans/${id}`, { method: 'DELETE' }),
+  get: async (id: string) => apiRequest(`/apps/kuaizhizao/inspection-plans/${id}`, { method: 'GET' }),
+  getByMaterial: async (materialId: string, params?: any) =>
+    apiRequest(`/apps/kuaizhizao/inspection-plans/by-material/${materialId}`, { method: 'GET', params }),
+};

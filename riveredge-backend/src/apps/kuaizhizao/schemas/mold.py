@@ -35,6 +35,8 @@ class MoldBase(BaseModel):
     technical_parameters: Optional[Dict[str, Any]] = Field(None, description="技术参数（JSON格式）")
     status: str = Field(default="正常", max_length=50, description="模具状态（正常、维修中、停用、报废）")
     is_active: bool = Field(default=True, description="是否启用")
+    cavity_count: Optional[int] = Field(None, ge=1, description="腔数/模数，一次成型产出件数")
+    design_lifetime: Optional[int] = Field(None, ge=1, description="设计寿命（使用次数），用于寿命预警")
     description: Optional[str] = Field(None, description="描述")
     
     @field_validator("status")
@@ -76,6 +78,8 @@ class MoldUpdate(BaseModel):
     technical_parameters: Optional[Dict[str, Any]] = Field(None, description="技术参数（JSON格式）")
     status: Optional[str] = Field(None, max_length=50, description="模具状态")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    cavity_count: Optional[int] = Field(None, ge=1, description="腔数/模数")
+    design_lifetime: Optional[int] = Field(None, ge=1, description="设计寿命（使用次数）")
     description: Optional[str] = Field(None, description="描述")
 
 
@@ -90,7 +94,14 @@ class MoldResponse(MoldBase):
     uuid: str = Field(..., description="模具UUID（对外暴露，业务标识）")
     id: int = Field(..., description="模具ID（内部使用）")
     tenant_id: int = Field(..., description="组织ID")
-    total_usage_count: int = Field(..., description="累计使用次数")
+    total_usage_count: int = Field(default=0, description="累计使用次数")
+    cavity_count: Optional[int] = Field(None, description="腔数/模数")
+    design_lifetime: Optional[int] = Field(None, description="设计寿命（使用次数）")
+    maintenance_interval: Optional[int] = Field(None, description="保养间隔（使用次数）")
+    needs_calibration: bool = Field(default=False, description="是否需要校验")
+    calibration_period: Optional[int] = Field(None, description="校验周期（天）")
+    last_calibration_date: Optional[date] = Field(None, description="上次校验日期")
+    next_calibration_date: Optional[date] = Field(None, description="下次校验日期")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间（软删除）")
@@ -107,6 +118,7 @@ class MoldUsageBase(BaseModel):
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型（生产订单、工单）")
     source_id: Optional[int] = Field(None, description="来源ID")
     source_no: Optional[str] = Field(None, max_length=100, description="来源编号")
+    reporting_record_id: Optional[int] = Field(None, description="报工记录ID，用于关联报工避免重复累计")
     usage_date: datetime = Field(..., description="使用日期")
     usage_count: int = Field(default=1, ge=1, description="使用次数")
     operator_id: Optional[int] = Field(None, description="操作人员ID（用户ID）")
@@ -190,6 +202,50 @@ class MoldUsageListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
     items: list[MoldUsageResponse] = Field(..., description="模具使用记录列表")
+    total: int = Field(..., description="总数量")
+    skip: int = Field(..., description="跳过数量")
+    limit: int = Field(..., description="限制数量")
+
+
+# ========== 模具校验记录 Schema ==========
+
+
+class MoldCalibrationCreate(BaseModel):
+    """
+    模具校验记录创建 Schema
+    """
+    mold_uuid: str = Field(..., description="模具UUID")
+    calibration_date: date = Field(..., description="校验日期")
+    result: str = Field(..., max_length=50, description="校验结果（合格、不合格、准用）")
+    certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
+    expiry_date: Optional[date] = Field(None, description="有效期至")
+    remark: Optional[str] = Field(None, description="备注")
+
+
+class MoldCalibrationResponse(BaseModel):
+    """
+    模具校验记录响应 Schema
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: str = Field(..., description="校验记录UUID")
+    id: int = Field(..., description="校验记录ID")
+    mold_uuid: str = Field(..., description="模具UUID")
+    calibration_date: date = Field(..., description="校验日期")
+    result: str = Field(..., description="校验结果")
+    certificate_no: Optional[str] = Field(None, description="证书编号")
+    expiry_date: Optional[date] = Field(None, description="有效期至")
+    remark: Optional[str] = Field(None, description="备注")
+    created_at: datetime = Field(..., description="创建时间")
+
+
+class MoldCalibrationListResponse(BaseModel):
+    """
+    模具校验记录列表响应 Schema
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[MoldCalibrationResponse] = Field(..., description="校验记录列表")
     total: int = Field(..., description="总数量")
     skip: int = Field(..., description="跳过数量")
     limit: int = Field(..., description="限制数量")

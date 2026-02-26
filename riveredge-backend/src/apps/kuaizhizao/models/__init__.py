@@ -18,6 +18,8 @@ from .defect_record import DefectRecord
 from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
 from .inventory_transfer import InventoryTransfer, InventoryTransferItem
+from .assembly_order import AssemblyOrder, AssemblyOrderItem
+from .disassembly_order import DisassemblyOrder, DisassemblyOrderItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
 from .packing_binding import PackingBinding
 from .customer_material_registration import CustomerMaterialRegistration, BarcodeMappingRule
@@ -63,6 +65,7 @@ from .incoming_inspection import IncomingInspection
 from .process_inspection import ProcessInspection
 from .finished_goods_inspection import FinishedGoodsInspection
 from .quality_standard import QualityStandard
+from .inspection_plan import InspectionPlan, InspectionPlanStep
 
 # 财务协同模块
 from .payable import Payable
@@ -118,6 +121,7 @@ from .state_transition import StateTransitionRule, StateTransitionLog
 # 单据关联逻辑
 from .document_relation import DocumentRelation
 from .computation_config import ComputationConfig
+from .scheduling_config import SchedulingConfig
 
 __all__ = [
     # 生产执行模块
@@ -188,6 +192,8 @@ __all__ = [
     'ProcessInspection',
     'FinishedGoodsInspection',
     'QualityStandard',
+    'InspectionPlan',
+    'InspectionPlanStep',
 
     # 财务协同模块
     'Payable',
@@ -255,4 +261,5 @@ __all__ = [
     # 单据关联
     'DocumentRelation',
     'ComputationConfig',
+    'SchedulingConfig',
 ]

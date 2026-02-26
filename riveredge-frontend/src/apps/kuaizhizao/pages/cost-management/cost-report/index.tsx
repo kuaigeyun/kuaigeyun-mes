@@ -11,7 +11,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProFormSelect, ProFormDatePicker, ProFormRadio, PageContainer, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic, Tabs } from 'antd';
 import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
-import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
@@ -335,7 +335,7 @@ const CostReportPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleGenerateReport}
         loading={loading}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormDatePicker
           name="start_date"

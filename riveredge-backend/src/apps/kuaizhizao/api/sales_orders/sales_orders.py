@@ -17,6 +17,8 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
 from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate,
     SalesOrderUpdate,
@@ -30,6 +32,7 @@ from apps.kuaizhizao.schemas.sales_order import (
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
+document_relation_service = DocumentRelationNewService()
 
 # 创建路由
 router = APIRouter(prefix="/sales-orders", tags=["Kuaige Zhizao - Sales Order Management"])
@@ -140,6 +143,28 @@ async def get_sales_order(
     except Exception as e:
         logger.error(f"获取销售订单详情失败: {e}")
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单详情失败")
+
+
+@router.get("/{sales_order_id}/change-impact", response_model=ChangeImpactResponse, summary="获取销售订单变更影响")
+async def get_sales_order_change_impact(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取销售订单变更对下游的影响范围（排程管理增强）
+    返回受影响的需求、需求计算、生产计划、工单及建议操作。
+    """
+    try:
+        return await document_relation_service.get_change_impact_sales_order(
+            tenant_id=tenant_id,
+            order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取销售订单变更影响失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取变更影响失败")
 
 
 @router.put("/{sales_order_id}", response_model=SalesOrderResponse, summary="更新销售订单")
@@ -462,7 +487,7 @@ async def withdraw_sales_order_from_computation(
     撤回销售订单的需求计算
 
     将已下推到需求计算的销售订单撤回，清除计算记录及关联。
-    仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+    若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
     """
     try:
         result = await sales_order_service.withdraw_sales_order_from_computation(

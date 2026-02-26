@@ -1,3 +1,11 @@
+/**
+ * 发票列表页
+ *
+ * 路由与筛选对应关系：
+ * - /finance-management/invoices         -> 全部发票
+ * - /finance-management/sales-invoices   -> 销项发票(销售)
+ * - /finance-management/purchase-invoices -> 进项发票(采购)
+ */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Popconfirm, Space } from 'antd';

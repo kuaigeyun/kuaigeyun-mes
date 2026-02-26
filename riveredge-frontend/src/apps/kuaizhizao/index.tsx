@@ -8,6 +8,8 @@ import { Routes, Route } from 'react-router-dom';
 // 计划管理页面（MRP/LRP 已合并为统一需求计算 demand-computation）
 import DemandManagementPage from './pages/plan-management/demand-management';
 import DemandComputationPage from './pages/plan-management/demand-computation';
+import ComputationConfigPage from './pages/plan-management/computation-config';
+import ComputationHistoryPage from './pages/plan-management/computation-history';
 import ProductionPlansPage from './pages/plan-management/production-plans';
 import SchedulingPage from './pages/plan-management/scheduling';
 
@@ -37,7 +39,7 @@ import ReceiptNoticesPage from './pages/purchase-management/receipt-notices';
 import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import QuotationsPage from './pages/sales-management/quotations';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
-import DeliveryNoticesPage from './pages/sales-management/delivery-notices';
+import DeliveryNotesPage from './pages/warehouse-management/delivery-notes';
 import ShipmentNoticesPage from './pages/sales-management/shipment-notices';
 import SampleTrialsPage from './pages/sales-management/sample-trials';
 
@@ -46,6 +48,7 @@ import IncomingInspectionPage from './pages/quality-management/incoming-inspecti
 import ProcessInspectionPage from './pages/quality-management/process-inspection';
 import FinishedGoodsInspectionPage from './pages/quality-management/finished-goods-inspection';
 import TraceabilityPage from './pages/quality-management/traceability';
+import InspectionPlansPage from './pages/quality-management/inspection-plans';
 
 // 成本管理页面
 import CostRulesPage from './pages/cost-management/cost-rules';
@@ -83,8 +86,8 @@ import InitialDataImportPage from './pages/warehouse-management/initial-data';
 import OutboundPage from './pages/warehouse-management/outbound';
 import CustomerMaterialRegistrationPage from './pages/warehouse-management/customer-material-registration';
 import BarcodeMappingRulesPage from './pages/warehouse-management/barcode-mapping-rules';
-import DocumentTimingPage from './pages/warehouse-management/document-timing';
-import DocumentEfficiencyPage from './pages/warehouse-management/document-efficiency';
+import DocumentTimingPage from './pages/analysis-center/document-timing';
+import DocumentEfficiencyPage from './pages/analysis-center/document-efficiency';
 import MaterialShortageExceptionsPage from './pages/production-execution/material-shortage-exceptions';
 import DeliveryDelayExceptionsPage from './pages/production-execution/delivery-delay-exceptions';
 import QualityExceptionsPage from './pages/production-execution/quality-exceptions';
@@ -96,7 +99,18 @@ import LineSideWarehousePage from './pages/warehouse-management/line-side-wareho
 import BackflushRecordsPage from './pages/warehouse-management/backflush-records';
 import StocktakingPage from './pages/warehouse-management/stocktaking';
 import InventoryTransferPage from './pages/warehouse-management/inventory-transfer';
+import AssemblyOrdersPage from './pages/warehouse-management/assembly-orders';
+import DisassemblyOrdersPage from './pages/warehouse-management/disassembly-orders';
 import PlaceholderPage from './components/PlaceholderPage';
+
+// 绩效管理页面
+import HolidaysPage from './pages/performance/holidays';
+import SkillsPage from './pages/performance/skills';
+import EmployeeConfigsPage from './pages/performance/employee-configs';
+import PieceRatesPage from './pages/performance/piece-rates';
+import HourlyRatesPage from './pages/performance/hourly-rates';
+import KpiDefinitionsPage from './pages/performance/kpi-definitions';
+import SummariesPage from './pages/performance/summaries';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -104,6 +118,8 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
       <Route path="plan-management/demand-computation" element={<DemandComputationPage />} />
+      <Route path="plan-management/computation-config" element={<ComputationConfigPage />} />
+      <Route path="plan-management/computation-history" element={<ComputationHistoryPage />} />
       <Route path="plan-management/production-plans" element={<ProductionPlansPage />} />
       <Route path="plan-management/scheduling" element={<SchedulingPage />} />
 
@@ -145,6 +161,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/process-inspection" element={<ProcessInspectionPage />} />
       <Route path="quality-management/finished-goods-inspection" element={<FinishedGoodsInspectionPage />} />
       <Route path="quality-management/traceability" element={<TraceabilityPage />} />
+      <Route path="quality-management/inspection-plans" element={<InspectionPlansPage />} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
@@ -177,6 +194,15 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="finance-management/receivables/:id" element={<ReceivableDetailPage />} />
       <Route path="finance-management/receipts" element={<ReceivableListPage />} />
 
+      {/* 绩效管理路由 */}
+      <Route path="performance/holidays" element={<HolidaysPage />} />
+      <Route path="performance/skills" element={<SkillsPage />} />
+      <Route path="performance/employee-configs" element={<EmployeeConfigsPage />} />
+      <Route path="performance/piece-rates" element={<PieceRatesPage />} />
+      <Route path="performance/hourly-rates" element={<HourlyRatesPage />} />
+      <Route path="performance/kpi-definitions" element={<KpiDefinitionsPage />} />
+      <Route path="performance/summaries" element={<SummariesPage />} />
+
       {/* 分析中心路由 */}
       <Route path="analysis-center/document-timing" element={<DocumentTimingPage />} />
       <Route path="analysis-center/document-efficiency" element={<DocumentEfficiencyPage />} />
@@ -195,9 +221,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
       <Route path="warehouse-management/stocktaking" element={<StocktakingPage />} />
       <Route path="warehouse-management/inventory-transfer" element={<InventoryTransferPage />} />
-      <Route path="warehouse-management/delivery-notes" element={<DeliveryNoticesPage />} />
-      <Route path="warehouse-management/assembly-orders" element={<PlaceholderPage title="组装单" />} />
-      <Route path="warehouse-management/disassembly-orders" element={<PlaceholderPage title="拆卸单" />} />
+      <Route path="warehouse-management/delivery-notes" element={<DeliveryNotesPage />} />
+      <Route path="warehouse-management/assembly-orders" element={<AssemblyOrdersPage />} />
+      <Route path="warehouse-management/disassembly-orders" element={<DisassemblyOrdersPage />} />
       <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
       <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />
       <Route path="warehouse-management/backflush-records" element={<BackflushRecordsPage />} />

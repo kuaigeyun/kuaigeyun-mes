@@ -11,8 +11,8 @@ from typing import List, Optional
 from datetime import datetime
 from tortoise.exceptions import IntegrityError
 
-from apps.kuaizhizao.models.equipment import Equipment
-from apps.kuaizhizao.schemas.equipment import EquipmentCreate, EquipmentUpdate
+from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
+from apps.kuaizhizao.schemas.equipment import EquipmentCreate, EquipmentUpdate, EquipmentCalibrationCreate
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -50,7 +50,7 @@ class EquipmentService:
                 try:
                     data.code = await CodeGenerationService.generate_code(
                         tenant_id=tenant_id,
-                        rule_code="equipment_code",
+                        rule_code="EQUIPMENT_CODE",
                         context=None
                     )
                 except ValidationError:
@@ -239,4 +239,26 @@ class EquipmentService:
         # 软删除
         equipment.deleted_at = datetime.now()
         await equipment.save()
+
+    @staticmethod
+    async def create_equipment_calibration(
+        tenant_id: int,
+        equipment_uuid: str,
+        data: EquipmentCalibrationCreate
+    ) -> EquipmentCalibration:
+        """创建设备校验记录"""
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
+        calib = EquipmentCalibration(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            equipment_uuid=equipment.uuid,
+            calibration_date=data.calibration_date,
+            result=data.result,
+            certificate_no=data.certificate_no,
+            expiry_date=data.expiry_date,
+            attachment_uuid=data.attachment_uuid,
+            remark=data.remark,
+        )
+        await calib.save()
+        return calib
 

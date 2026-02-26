@@ -91,10 +91,18 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/quality-management/incoming-inspection': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/process-inspection': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'quality_inspection',
+  '/apps/kuaizhizao/quality-management/inspection-plans': 'quality_inspection',
   '/apps/kuaizhizao/plan-management/production-plans': 'production_plan',
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
 };
+
+/** 根据菜单 path 获取徽章 key（兼容尾部斜杠、查询参数等格式差异） */
+function getMenuBadgeKey(path: string | undefined): string | undefined {
+  if (!path || typeof path !== 'string') return undefined;
+  const normalized = path.replace(/\/$/, '').split('?')[0];
+  return MENU_BADGE_PATH_KEY[path] ?? MENU_BADGE_PATH_KEY[normalized];
+}
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -358,10 +366,12 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
+      '/apps/kuaizhizao/analysis-center': ManufacturingIcons.chartBar, // 分析中心 - 柱状图
+      '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
       '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
-      '/apps/kuaireport': ManufacturingIcons.chartBar, // 报表与看板 - 柱状图
-      '/apps/kuaireport/reports': ManufacturingIcons.chartBar, // 报表中心
+      '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标（与仪表盘、大屏中心区分）
+      '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
     };
 
@@ -404,10 +414,14 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     // 基础数据管理相关
     '仓库数据': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标
     'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
-    'Report Center': ManufacturingIcons.chartBar, // 报表中心
+    'Report Center': ManufacturingIcons.fileBarChart, // 报表中心
     'Dashboard Center': ManufacturingIcons.layoutDashboard, // 大屏中心
-    '报表中心': ManufacturingIcons.chartBar,
+    '报表中心': ManufacturingIcons.fileBarChart,
     '大屏中心': ManufacturingIcons.layoutDashboard,
+    // 自制报表（与仪表盘 Gauge 区分，避免重复）
+    '自制报表': ManufacturingIcons.fileBarChart,
+    'Reports & Dashboards': ManufacturingIcons.fileBarChart,
+    'app.kuaireport.name': ManufacturingIcons.fileBarChart,
     // ... 其他常见的英文名称可以在这里添加
   };
 
@@ -732,13 +746,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 将 MenuTree 转换为 MenuDataItem
    * 支持应用菜单的国际化翻译
    */
-  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false): MenuDataItem => {
-    // 处理图标：左侧菜单全部使用 Lucide 图标
+  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false, depth: number = 0): MenuDataItem => {
+    // 处理图标：仅一级菜单显示图标，二级及以下不设置（避免重复、简化界面）
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
 
-    // 优先使用 menu.icon 字段（如果存在）
-    if (menu.icon) {
+    // 仅一级菜单（depth === 0）设置图标
+    if (depth === 0 && menu.icon) {
       // 首先尝试从预定义的 ManufacturingIcons 中获取
       const iconKey = menu.icon as keyof typeof ManufacturingIcons;
       const IconComponent = ManufacturingIcons[iconKey];
@@ -785,8 +799,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 快格轻制造应用图标映射
           'planning': ManufacturingIcons.calendar, // 计划管理使用日历图标
           'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
-          'bar-chart': ManufacturingIcons.chartBar, // 报表与看板 - 柱状图
+          'bar-chart': ManufacturingIcons.chartBar, // 分析中心 - 柱状图
           'chartBar': ManufacturingIcons.chartBar,
+          'analytics': ManufacturingIcons.chartBar, // 兼容旧数据
+          'trophy': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标
+          'fileSpreadsheet': ManufacturingIcons.fileSpreadsheet, // 报表中心 - 表格图标
+          'fileBarChart': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标
           'layoutDashboard': ManufacturingIcons.layoutDashboard, // 大屏中心
         };
         const IconComponent = lucideIconMap[menu.icon];
@@ -818,18 +836,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
     }
 
-    // 如果 menu.icon 不存在或未匹配到图标，再尝试根据菜单名称和路径获取图标
-    if (!iconElement) {
+    // 一级菜单：若 icon 未匹配，再尝试根据名称和路径获取
+    if (depth === 0 && !iconElement) {
       if (menu.name) {
         iconElement = getMenuIcon(menu.name, menu.path);
       } else if (menu.path) {
         iconElement = getMenuIcon('', menu.path);
       }
-    }
-
-    // 如果还是没有图标，使用默认的 Lucide 图标
-    if (!iconElement) {
-      iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
+      if (!iconElement) {
+        iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
+      }
     }
 
     // 处理菜单名称翻译
@@ -850,7 +866,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要
       // 如果菜单有子项，确保子项也有 key（应用菜单的子项也是应用菜单）
       children: menu.children && menu.children.length > 0
-        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu))
+        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu, depth + 1))
         : undefined,
     };
     if (menu.permission_code) {
@@ -890,7 +906,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     queryKey: ['menuBadgeCounts'],
     queryFn: getMenuBadgeCounts,
     enabled: !!currentUser?.id,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   // 用户登录后清除菜单缓存并触发菜单查询
@@ -2478,6 +2495,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 14px;
           padding: 0 2px;
         }
+        .menu-item-badge-count {
+          flex-shrink: 0;
+          margin-right: 4px;
+        }
+        /* 菜单项含数字徽标时：增加右侧留白，避免徽标右边被遮挡 */
+        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) {
+          padding-right: 22px !important;
+          overflow: visible !important;
+        }
+        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content {
+          overflow: visible !important;
+        }
         /* 使用 ProLayout 原生收起按钮，保持原生行为 */
         /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */
         /* 隐藏 ant-pro-layout-container 里的 footer */
@@ -4030,20 +4059,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
 
-            // 左侧菜单小徽标：报表类显示「报表」、大屏类显示「大屏」、业务单据显示未完成数量
+            // 左侧菜单小徽标：仅业务单据显示未完成数量（报表中心、大屏中心不再显示徽章）
             const path = item.path as string;
-            const isReport = path.startsWith('/apps/kuaireport/reports');
-            const isDashboard = path.startsWith('/apps/kuaireport/dashboards');
-            const badgeKey = MENU_BADGE_PATH_KEY[path];
+            const badgeKey = getMenuBadgeKey(path);
             const businessCount = badgeKey ? (menuBadgeCounts[badgeKey] ?? 0) : 0;
-            const badgeEl =
-              isReport ? (
-                <span className="menu-item-badge menu-item-badge-report">{t('ui.menu.badgeReport')}</span>
-              ) : isDashboard ? (
-                <span className="menu-item-badge menu-item-badge-dashboard">{t('ui.menu.badgeDashboard')}</span>
-              ) : businessCount > 0 ? (
-                <Badge count={businessCount} size="small" className="menu-item-badge-count" />
-              ) : null;
+            const badgeEl = businessCount > 0 ? (
+              <Badge count={businessCount} size="small" className="menu-item-badge-count" />
+            ) : null;
 
             return (
               <div

@@ -9,25 +9,58 @@
 
 import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Modal } from 'antd';
-import { ScheduleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Card, Modal, Drawer, Switch } from 'antd';
+import { ScheduleOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { workOrderApi, advancedSchedulingApi } from '../../../services/production';
-import GanttSchedulingChart, { type ViewMode, type WorkOrderForGantt } from '../../../components/GanttSchedulingChart';
+import { workOrderApi, advancedSchedulingApi, schedulingConfigApi } from '../../../services/production';
+import GanttSchedulingChart, {
+  type ViewMode,
+  type WorkOrderForGantt,
+  type GanttTaskLevel,
+} from '../../../components/GanttSchedulingChart';
+
+/** 默认排程约束（含 4M 人机料法开关） */
+const DEFAULT_SCHEDULING_CONSTRAINTS = {
+  priority_weight: 0.3,
+  due_date_weight: 0.3,
+  capacity_weight: 0.2,
+  setup_time_weight: 0.2,
+  optimize_objective: 'min_makespan' as const,
+  consider_human: true,
+  consider_equipment: true,
+  consider_material: true,
+  consider_mold_tool: true,
+};
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('week');
+  const [ganttTaskLevel, setGanttTaskLevel] = useState<GanttTaskLevel>('work_order');
+  const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
+  const [schedulingConstraints, setSchedulingConstraints] = useState(DEFAULT_SCHEDULING_CONSTRAINTS);
 
   const { data: ganttWorkOrders = [] as WorkOrderForGantt[], loading: ganttLoading, run: refreshGantt } = useRequest(
     async () => {
-      const res = await workOrderApi.list({ skip: 0, limit: 500 });
+      const res = await workOrderApi.list({ skip: 0, limit: 500, include_operations: true });
       const list = Array.isArray(res) ? res : (res?.data ?? []);
       return list as WorkOrderForGantt[];
+    },
+    { refreshDeps: [] }
+  );
+
+  // 加载默认排程配置（若有）
+  useRequest(
+    async () => {
+      const res = await schedulingConfigApi.getDefault();
+      const config = res?.data;
+      if (config?.constraints) {
+        setSchedulingConstraints((prev) => ({ ...prev, ...config.constraints }));
+      }
+      return config;
     },
     { refreshDeps: [] }
   );
@@ -43,13 +76,7 @@ const SchedulingPage: React.FC = () => {
     try {
       const result = await advancedSchedulingApi.intelligentScheduling({
         work_order_ids: selectedIds,
-        constraints: {
-          priority_weight: 0.3,
-          due_date_weight: 0.3,
-          capacity_weight: 0.2,
-          setup_time_weight: 0.2,
-          optimize_objective: 'min_makespan',
-        },
+        constraints: schedulingConstraints,
       });
 
       if (result.statistics.scheduled_count > 0) {
@@ -98,6 +125,22 @@ const SchedulingPage: React.FC = () => {
         refreshGantt();
       } catch (e: any) {
         messageApi.error(e?.message || '排程更新失败');
+        throw e;
+      }
+    },
+    [messageApi, refreshGantt]
+  );
+
+  const handleGanttBatchUpdateOperations = useCallback(
+    async (updates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>) => {
+      if (updates.length === 0) return;
+      try {
+        await workOrderApi.batchUpdateOperationDates(updates);
+        messageApi.success('工序排程已更新');
+        actionRef.current?.reload();
+        refreshGantt();
+      } catch (e: any) {
+        messageApi.error(e?.message || '工序排程更新失败');
         throw e;
       }
     },
@@ -213,6 +256,13 @@ const SchedulingPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="config"
+            icon={<SettingOutlined />}
+            onClick={() => setConfigDrawerOpen(true)}
+          >
+            排程配置
+          </Button>,
+          <Button
             key="auto-schedule"
             type="primary"
             icon={<ScheduleOutlined />}
@@ -232,7 +282,24 @@ const SchedulingPage: React.FC = () => {
         }
         extra={
           <Space>
-            <span>视图：</span>
+            <span>粒度：</span>
+            <Space.Compact>
+              <Button
+                type={ganttTaskLevel === 'work_order' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => setGanttTaskLevel('work_order')}
+              >
+                工单
+              </Button>
+              <Button
+                type={ganttTaskLevel === 'operation' ? 'primary' : 'default'}
+                size="small"
+                onClick={() => setGanttTaskLevel('operation')}
+              >
+                工序
+              </Button>
+            </Space.Compact>
+            <span style={{ marginLeft: 8 }}>视图：</span>
             <Space.Compact>
               <Button
                 type={ganttViewMode === 'day' ? 'primary' : 'default'}
@@ -263,11 +330,69 @@ const SchedulingPage: React.FC = () => {
           workOrders={ganttWorkOrders}
           loading={ganttLoading}
           viewMode={ganttViewMode}
+          taskLevel={ganttTaskLevel}
           onViewModeChange={setGanttViewMode}
           onBatchUpdate={handleGanttBatchUpdate}
+          onBatchUpdateOperations={handleGanttBatchUpdateOperations}
           onRefresh={refreshGantt}
         />
       </Card>
+
+      {/* 排程配置 Drawer - 4M 人机料法可配置 */}
+      <Drawer
+        title="排程配置"
+        placement="right"
+        width={360}
+        open={configDrawerOpen}
+        onClose={() => setConfigDrawerOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS)}>
+              恢复默认
+            </Button>
+            <Button type="primary" onClick={() => setConfigDrawerOpen(false)}>
+              确定
+            </Button>
+          </Space>
+        }
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>人机料法约束（4M）</div>
+          <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 12 }}>
+            勾选表示排程时考虑该约束，取消勾选则忽略（适合资源有限的中小企业按实情选择）
+          </div>
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>人：考虑人员约束</span>
+              <Switch
+                checked={schedulingConstraints.consider_human}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_human: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>机：考虑设备约束</span>
+              <Switch
+                checked={schedulingConstraints.consider_equipment}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_equipment: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>料：考虑物料齐套</span>
+              <Switch
+                checked={schedulingConstraints.consider_material}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_material: v }))}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>法：考虑模具/工装占用</span>
+              <Switch
+                checked={schedulingConstraints.consider_mold_tool}
+                onChange={(v) => setSchedulingConstraints((c) => ({ ...c, consider_mold_tool: v }))}
+              />
+            </div>
+          </Space>
+        </div>
+      </Drawer>
     </ListPageTemplate>
   );
 };

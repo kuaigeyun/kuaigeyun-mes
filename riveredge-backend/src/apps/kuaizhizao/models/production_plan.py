@@ -36,6 +36,10 @@ class ProductionPlan(BaseModel):
     # 状态
     status = fields.CharField(max_length=20, default="草稿", description="计划状态")
     execution_status = fields.CharField(max_length=20, default="未执行", description="执行状态")
+    # 计划先行流程状态：draft=草稿, submitted=已提交, approved=已审核, locked=已锁定, executing=执行中
+    plan_status = fields.CharField(max_length=20, default="draft", null=True, description="计划流程状态")
+    # 上游变更后待重算标记（计划锁定策略：draft/submitted 时上游变更可自动标记）
+    needs_recompute = fields.BooleanField(default=False, description="待重算标记")
 
     # 统计信息
     total_work_orders = fields.IntField(default=0, description="总工单数")

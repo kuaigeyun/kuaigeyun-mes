@@ -9,8 +9,8 @@ import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import '../gantt-scrollbar.less';
 import type { WorkOrderForGantt } from './types';
-import { workOrderToGanttTask, sortTasksByWorkCenter } from './utils';
-import type { ViewMode } from './types';
+import { workOrdersToGanttTasks } from './utils';
+import type { ViewMode, GanttTaskLevel } from './types';
 import dayjs from 'dayjs';
 
 const SCALES_DAY = [
@@ -36,12 +36,20 @@ export interface GanttDateUpdate {
   planned_end_date: string;
 }
 
+export interface GanttOperationDateUpdate {
+  operation_id: number;
+  planned_start_date: string;
+  planned_end_date: string;
+}
+
 export interface GanttSchedulingChartProps {
   workOrders: WorkOrderForGantt[];
   loading?: boolean;
   viewMode?: ViewMode;
+  taskLevel?: GanttTaskLevel;
   onViewModeChange?: (mode: ViewMode) => void;
   onBatchUpdate?: (updates: GanttDateUpdate[]) => void | Promise<void>;
+  onBatchUpdateOperations?: (updates: GanttOperationDateUpdate[]) => void | Promise<void>;
   onRefresh?: () => void;
 }
 
@@ -49,17 +57,18 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   workOrders,
   loading = false,
   viewMode = 'week',
+  taskLevel = 'work_order',
   onViewModeChange,
   onBatchUpdate,
+  onBatchUpdateOperations,
   onRefresh,
 }) => {
-  const pendingUpdatesRef = useRef<Map<number, { start: Date; end: Date }>>(new Map());
+  const pendingUpdatesRef = useRef<Map<number | string, { start: Date; end: Date }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tasks = useMemo(() => {
-    const list = workOrders.map(workOrderToGanttTask);
-    return sortTasksByWorkCenter(list);
-  }, [workOrders]);
+    return workOrdersToGanttTasks(workOrders, taskLevel);
+  }, [workOrders, taskLevel]);
 
   const scales = useMemo(() => {
     if (viewMode === 'day') return SCALES_DAY;
@@ -86,9 +95,9 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
 
   const handleUpdateTask = useCallback(
     (ev: { id: number | string; task: { start?: Date; end?: Date; duration?: number } }) => {
-      const id = typeof ev.id === 'string' ? parseInt(ev.id, 10) : ev.id;
+      const id = ev.id;
       const { start: newStart, end: newEnd } = ev.task;
-      if (!newStart || !newEnd || isNaN(id)) return;
+      if (!newStart || !newEnd) return;
 
       pendingUpdatesRef.current.set(id, { start: newStart, end: newEnd });
 
@@ -97,22 +106,34 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         debounceRef.current = null;
         const toApply = new Map(pendingUpdatesRef.current);
         pendingUpdatesRef.current.clear();
-        if (toApply.size > 0 && onBatchUpdate) {
-          try {
-            const updates: GanttDateUpdate[] = Array.from(toApply.entries()).map(([wid, { start, end }]) => ({
-              work_order_id: wid,
+        if (toApply.size === 0) return;
+
+        const opUpdates: GanttOperationDateUpdate[] = [];
+        const woUpdates: GanttDateUpdate[] = [];
+        for (const [k, { start, end }] of toApply.entries()) {
+          if (typeof k === 'string' && String(k).startsWith('op-')) {
+            opUpdates.push({
+              operation_id: parseInt(String(k).replace('op-', ''), 10),
               planned_start_date: dayjs(start).toISOString(),
               planned_end_date: dayjs(end).toISOString(),
-            }));
-            await onBatchUpdate(updates);
-          } catch {
-            // 回滚：将失败的更新重新加入待处理，由父组件刷新后恢复
-            toApply.forEach((v, k) => pendingUpdatesRef.current.set(k, v));
+            });
+          } else {
+            woUpdates.push({
+              work_order_id: typeof k === 'number' ? k : parseInt(String(k), 10),
+              planned_start_date: dayjs(start).toISOString(),
+              planned_end_date: dayjs(end).toISOString(),
+            });
           }
+        }
+        try {
+          if (opUpdates.length > 0 && onBatchUpdateOperations) await onBatchUpdateOperations(opUpdates);
+          if (woUpdates.length > 0 && onBatchUpdate) await onBatchUpdate(woUpdates);
+        } catch {
+          toApply.forEach((v, k) => pendingUpdatesRef.current.set(k, v));
         }
       }, 400);
     },
-    [onBatchUpdate]
+    [onBatchUpdate, onBatchUpdateOperations]
   );
 
   if (loading) {
@@ -139,7 +160,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           end={end}
           zoom
           onUpdateTask={handleUpdateTask}
-          readonly={!onBatchUpdate}
+          readonly={!onBatchUpdate && !onBatchUpdateOperations}
           columns={[
             { id: 'text', header: '工单', width: 200 },
             { id: 'work_center_name', header: '工作中心', width: 120 },
@@ -154,4 +175,4 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
 };
 
 export default GanttSchedulingChart;
-export type { WorkOrderForGantt, GanttTask, ViewMode } from './types';
+export type { WorkOrderForGantt, GanttTask, ViewMode, GanttTaskLevel } from './types';

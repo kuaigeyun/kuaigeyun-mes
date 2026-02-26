@@ -89,6 +89,10 @@ class Mold(BaseModel):
     total_usage_count = fields.IntField(default=0, description="累计使用次数")
     is_active = fields.BooleanField(default=True, description="是否启用")
     
+    # 腔数与寿命（用于产量换算与寿命预警）
+    cavity_count = fields.IntField(null=True, description="腔数/模数，一次成型产出件数，用于产量→使用次数换算")
+    design_lifetime = fields.IntField(null=True, description="设计寿命（使用次数），用于寿命预警")
+
     # 维保及校验扩展
     maintenance_interval = fields.IntField(null=True, description="保养间隔（使用次数）")
     needs_calibration = fields.BooleanField(default=False, description="是否需要校验")
@@ -152,6 +156,7 @@ class MoldUsage(BaseModel):
             ("source_type",),
             ("usage_date",),
             ("status",),
+            ("reporting_record_id",),
         ]
         unique_together = [("tenant_id", "usage_no")]
     
@@ -171,6 +176,7 @@ class MoldUsage(BaseModel):
     source_type = fields.CharField(max_length=50, null=True, description="来源类型（生产订单、工单）")
     source_id = fields.IntField(null=True, description="来源ID")
     source_no = fields.CharField(max_length=100, null=True, description="来源编号")
+    reporting_record_id = fields.IntField(null=True, description="报工记录ID，用于关联报工避免重复累计")
     
     # 使用信息
     usage_date = fields.DatetimeField(description="使用日期")

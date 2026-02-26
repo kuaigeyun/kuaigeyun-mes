@@ -9,10 +9,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Card } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormJsonSchema, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Card, Form, Input, DatePicker, Select, Row, Col } from 'antd';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentApi } from '../../../services/equipment';
 import { workshopApi } from '../../../../master-data/services/factory';
@@ -66,6 +68,10 @@ const EquipmentPage: React.FC = () => {
   const [traceVisible, setTraceVisible] = useState(false);
   const [traceData, setTraceData] = useState<any>(null);
 
+  // 校验记录 Modal
+  const [calibModalVisible, setCalibModalVisible] = useState(false);
+  const [calibForm] = Form.useForm();
+
   /**
    * 处理新建设备
    */
@@ -91,6 +97,7 @@ const EquipmentPage: React.FC = () => {
       setModalVisible(true);
       setTimeout(() => {
         formRef.current?.setFieldsValue({
+          code: detail.code,
           name: detail.name,
           type: detail.type,
           category: detail.category,
@@ -164,6 +171,35 @@ const EquipmentPage: React.FC = () => {
       setTraceVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取设备追溯失败');
+    }
+  };
+
+  const handleCreateCalibration = () => {
+    calibForm.resetFields();
+    calibForm.setFieldsValue({ calibration_date: dayjs(), result: '合格' });
+    setCalibModalVisible(true);
+  };
+
+  const handleSubmitCalibration = async () => {
+    try {
+      const values = await calibForm.validateFields();
+      const equipmentUuid = traceData?.equipment?.uuid;
+      if (!equipmentUuid) return;
+      const data = {
+        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
+        result: values.result,
+        certificate_no: values.certificate_no,
+        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
+        remark: values.remark,
+      };
+      await equipmentApi.createCalibration(equipmentUuid, data);
+      messageApi.success('校验记录已保存');
+      setCalibModalVisible(false);
+      const refreshed = await equipmentApi.getTrace(equipmentUuid);
+      setTraceData(refreshed);
+    } catch (e: any) {
+      if (e?.errorFields) return;
+      messageApi.error(e?.message || '保存失败');
     }
   };
 
@@ -483,125 +519,136 @@ const EquipmentPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormText
-          name="name"
-          label="设备名称"
-          placeholder="请输入设备名称"
-          rules={[{ required: true, message: '请输入设备名称' }]}
-        />
-        <ProFormSelect
-          name="type"
-          label="设备类型"
-          placeholder="请选择设备类型"
-          options={[
-            { label: '加工设备', value: '加工设备' },
-            { label: '检测设备', value: '检测设备' },
-            { label: '包装设备', value: '包装设备' },
-            { label: '其他', value: '其他' },
-          ]}
-        />
-        <ProFormText
-          name="category"
-          label="设备分类"
-          placeholder="请输入设备分类（如：CNC、注塑机、冲压机等）"
-        />
-        <ProFormText
-          name="brand"
-          label="品牌"
-          placeholder="请输入品牌"
-        />
-        <ProFormText
-          name="model"
-          label="型号"
-          placeholder="请输入型号"
-        />
-        <ProFormText
-          name="serial_number"
-          label="序列号"
-          placeholder="请输入序列号"
-        />
-        <ProFormText
-          name="manufacturer"
-          label="制造商"
-          placeholder="请输入制造商"
-        />
-        <ProFormText
-          name="supplier"
-          label="供应商"
-          placeholder="请输入供应商"
-        />
-        <ProFormDatePicker
-          name="purchase_date"
-          label="采购日期"
-          placeholder="请选择采购日期"
-        />
-        <ProFormDatePicker
-          name="installation_date"
-          label="安装日期"
-          placeholder="请选择安装日期"
-        />
-        <ProFormDigit
-          name="warranty_period"
-          label="保修期（月）"
-          placeholder="请输入保修期（月）"
-          min={0}
-        />
-        <ProFormSelect
-          name="workstation_id"
-          label="关联工位"
-          placeholder="请选择工位（可选）"
-          request={async () => {
-            try {
-              const workshops = await workshopApi.list({ limit: 1000 });
-              // TODO: 需要从workshop中获取工位列表，这里先返回空数组
-              return [];
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
-        <ProFormSelect
-          name="work_center_id"
-          label="关联工作中心"
-          placeholder="请选择工作中心（可选）"
-          request={async () => {
-            try {
-              // TODO: 需要从工作中心API获取列表
-              return [];
-            } catch (error) {
-              return [];
-            }
-          }}
-        />
-        <ProFormSelect
-          name="status"
-          label="设备状态"
-          placeholder="请选择设备状态"
-          options={[
-            { label: '正常', value: '正常' },
-            { label: '维修中', value: '维修中' },
-            { label: '停用', value: '停用' },
-            { label: '报废', value: '报废' },
-          ]}
-          rules={[{ required: true, message: '请选择设备状态' }]}
-        />
-        <ProFormSelect
-          name="is_active"
-          label="是否启用"
-          placeholder="请选择是否启用"
-          options={[
-            { label: '启用', value: true },
-            { label: '停用', value: false },
-          ]}
-          rules={[{ required: true, message: '请选择是否启用' }]}
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入描述（可选）"
-          fieldProps={{ rows: 3 }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-equipment-management-equipment"
+              name="code"
+              label="设备编码"
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="name"
+              label="设备名称"
+              placeholder="请输入设备名称"
+              rules={[{ required: true, message: '请输入设备名称' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <DictionarySelect
+              dictionaryCode="EQUIPMENT_TYPE"
+              name="type"
+              label="设备类型"
+              placeholder="请选择设备类型"
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="category"
+              label="设备分类"
+              placeholder="请输入设备分类（如：CNC、注塑机、冲压机等）"
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="brand" label="品牌" placeholder="请输入品牌" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="model" label="型号" placeholder="请输入型号" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="serial_number" label="序列号" placeholder="请输入序列号" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="manufacturer" label="制造商" placeholder="请输入制造商" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="supplier" label="供应商" placeholder="请输入供应商" />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="purchase_date"
+              label="采购日期"
+              placeholder="请选择采购日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="installation_date"
+              label="安装日期"
+              placeholder="请选择安装日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="warranty_period"
+              label="保修期（月）"
+              placeholder="请输入保修期（月）"
+              min={0}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="workstation_id"
+              label="关联工位"
+              placeholder="请选择工位（可选）"
+              request={async () => {
+                try {
+                  const workshops = await workshopApi.list({ limit: 1000 });
+                  return [];
+                } catch (error) {
+                  return [];
+                }
+              }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="work_center_id"
+              label="关联工作中心"
+              placeholder="请选择工作中心（可选）"
+              request={async () => {
+                try {
+                  return [];
+                } catch (error) {
+                  return [];
+                }
+              }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <DictionarySelect
+              dictionaryCode="EQUIPMENT_STATUS"
+              name="status"
+              label="设备状态"
+              placeholder="请选择设备状态"
+              required={true}
+              rules={[{ required: true, message: '请选择设备状态' }]}
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={24}>
+            <ProFormTextArea
+              name="description"
+              label="描述"
+              placeholder="请输入描述（可选）"
+              fieldProps={{ rows: 3 }}
+            />
+          </Col>
+          <Col span={24}>
+            <ProFormSwitch name="is_active" label="是否启用" />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 设备详情 Drawer */}
@@ -625,7 +672,7 @@ const EquipmentPage: React.FC = () => {
           setTraceVisible(false);
           setTraceData(null);
         }}
-        width={1200}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         footer={[
           <Button key="close" onClick={() => {
             setTraceVisible(false);
@@ -726,9 +773,60 @@ const EquipmentPage: React.FC = () => {
                   />
                 ),
               },
+              {
+                key: 'equipment_calibrations',
+                label: `校验记录 (${traceData.equipment_calibrations?.length || 0})`,
+                children: (
+                  <>
+                    <div style={{ marginBottom: 12 }}>
+                      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCreateCalibration}>
+                        新建校验记录
+                      </Button>
+                    </div>
+                    <Table
+                      dataSource={traceData.equipment_calibrations || []}
+                      columns={[
+                        { title: '校验日期', dataIndex: 'calibration_date', width: 120 },
+                        { title: '结果', dataIndex: 'result', width: 100, render: (r) => <Tag>{r}</Tag> },
+                        { title: '证书编号', dataIndex: 'certificate_no', width: 140 },
+                        { title: '有效期', dataIndex: 'expiry_date', width: 120 },
+                        { title: '备注', dataIndex: 'remark', ellipsis: true },
+                        { title: '创建时间', dataIndex: 'created_at', width: 160 },
+                      ]}
+                      rowKey="uuid"
+                      pagination={false}
+                      size="small"
+                    />
+                  </>
+                ),
+              },
             ]}
           />
         )}
+      </Modal>
+
+      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+        <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="result" label="校验结果" rules={[{ required: true }]}>
+            <Select options={[
+              { label: '合格', value: '合格' },
+              { label: '不合格', value: '不合格' },
+              { label: '限制使用', value: '限制使用' },
+            ]} />
+          </Form.Item>
+          <Form.Item name="certificate_no" label="证书编号">
+            <Input placeholder="请输入证书编号" />
+          </Form.Item>
+          <Form.Item name="expiry_date" label="有效期至">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="请输入备注" />
+          </Form.Item>
+        </Form>
       </Modal>
     </>
   );

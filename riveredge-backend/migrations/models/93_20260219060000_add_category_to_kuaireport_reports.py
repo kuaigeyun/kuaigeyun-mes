@@ -1,7 +1,7 @@
 """
 为 apps_kuaireport_reports 表添加 category 字段
 
-报表中心模型新增 category 字段（system/custom），用于区分系统预置报表和用户自定义报表。
+报表中心模型新增 category 字段（system/custom），用于区分系统预置报表和用户自制报表。
 """
 from tortoise import BaseDBAsyncClient
 

@@ -20,6 +20,8 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'demand-computation': { module: 'demand' },
   'production-plans': { node: 'production_plan', module: 'demand' },
   'scheduling': { module: 'production' },
+  'computation-config': { module: 'demand' },
+  'computation-history': { module: 'demand' },
   // 销售管理
   'quotations': { node: 'quotation', module: 'sales' },
   'sample-trials': { node: 'sample_trial', module: 'sales' },
@@ -44,6 +46,7 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'exception-statistics': { module: 'production' },
   // 质量管理
   'incoming-inspection': { node: 'quality_inspection', module: 'quality' },
+  'inspection-plans': { module: 'quality' },
   'process-inspection': { node: 'quality_inspection', module: 'quality' },
   'finished-goods-inspection': { node: 'quality_inspection', module: 'quality' },
   'traceability': { node: 'quality_inspection', module: 'quality' },
@@ -159,6 +162,7 @@ const GROUP_TITLE_TO_MODULE: Record<string, string> = {
   'app.kuaizhizao.menu.analysis-center.efficiency-analysis': 'analysis',
   'app.kuaizhizao.menu.cost-management': 'finance',
   'app.kuaizhizao.menu.finance-management': 'finance',
+  'app.kuaizhizao.menu.performance-management': 'performance',
   'app.kuaizhizao.menu.equipment-management': 'equipment',
 };
 

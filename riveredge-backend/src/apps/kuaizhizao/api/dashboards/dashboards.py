@@ -811,10 +811,92 @@ async def get_menu_badge_counts(
     except Exception as e:
         logger.warning(f"menu-badge-counts exception: {e}")
         counts["exception"] = 0
-    # 其他业务单据暂无统计，前端用 0 不显示或后续扩展
-    for key in ("purchase_order", "sales_order", "inbound", "quality_inspection", "production_plan", "equipment", "mold"):
-        if key not in counts:
-            counts[key] = 0
+    try:
+        # 销售订单：待审核
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        counts["sales_order"] = await SalesOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            review_status__in=["PENDING", "待审核"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts sales_order: {e}")
+        counts["sales_order"] = 0
+    try:
+        # 采购订单：待审核
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        counts["purchase_order"] = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            review_status__in=["PENDING", "待审核"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts purchase_order: {e}")
+        counts["purchase_order"] = 0
+    try:
+        # 采购入库：待入库
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        counts["inbound"] = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="待入库",
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts inbound: {e}")
+        counts["inbound"] = 0
+    try:
+        # 质检：待检验（来料+过程+成品）
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+        c1 = await IncomingInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True,
+            status="待检验",
+        ).count()
+        c2 = await ProcessInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True,
+            status="待检验",
+        ).count()
+        c3 = await FinishedGoodsInspection.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True,
+            status="待检验",
+        ).count()
+        counts["quality_inspection"] = c1 + c2 + c3
+    except Exception as e:
+        logger.warning(f"menu-badge-counts quality_inspection: {e}")
+        counts["quality_inspection"] = 0
+    try:
+        # 生产计划：未执行
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        counts["production_plan"] = await ProductionPlan.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            execution_status="未执行",
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts production_plan: {e}")
+        counts["production_plan"] = 0
+    try:
+        # 设备：维修中、校验中
+        from apps.kuaizhizao.models.equipment import Equipment
+        counts["equipment"] = await Equipment.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=["维修中", "校验中"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts equipment: {e}")
+        counts["equipment"] = 0
+    try:
+        # 模具：维修中、校验中
+        from apps.kuaizhizao.models.mold import Mold
+        counts["mold"] = await Mold.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=["维修中", "校验中"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"menu-badge-counts mold: {e}")
+        counts["mold"] = 0
     return counts
 
 

@@ -13,6 +13,22 @@
   padding: 0 4px !important;
 }
 
+/* UniDropdown / 数据字典选择：二分之一宽度并补偿边距（表单网格布局） */
+.dictionary-select-wrapper {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  .ant-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    .ant-select-selector {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+  }
+}
+
 /* 全局滚动条样式优化，支持暗黑模式自动适配 */
 ::-webkit-scrollbar {
   width: 10px;

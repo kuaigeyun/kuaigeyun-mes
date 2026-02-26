@@ -331,6 +331,14 @@ class DemandService(AppBaseService[Demand]):
             if update_data:
                 await Demand.filter(tenant_id=tenant_id, id=demand_id).update(**update_data)
             
+            # 计划锁定策略：上游变更时，对 draft/submitted 计划标记待重算
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+                doc_svc = DocumentRelationService()
+                await doc_svc.apply_upstream_change_impact(tenant_id, "demand", demand_id)
+            except Exception as e:
+                logger.warning("apply_upstream_change_impact failed: %s", e)
+            
             # 返回更新后的需求
             return await self.get_demand_by_id(tenant_id, demand_id)
 
@@ -514,6 +522,111 @@ class DemandService(AppBaseService[Demand]):
             
             return await self.get_demand_by_id(tenant_id, demand_id)
 
+    async def _is_downstream_executed(
+        self,
+        tenant_id: int,
+        target_type: str,
+        target_id: int
+    ) -> bool:
+        """判断下游单据是否已执行（已执行则不允许撤回）"""
+        if target_type == "work_order":
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            from apps.kuaizhizao.models.reporting_record import ReportingRecord
+            wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
+            if not wo:
+                return False
+            has_report = await ReportingRecord.filter(
+                tenant_id=tenant_id, work_order_id=target_id, deleted_at__isnull=True
+            ).exists()
+            if has_report:
+                return True
+            if wo.status == "in_progress":
+                return True
+            if wo.status == "completed" and not getattr(wo, "manually_completed", False):
+                return True  # 正常完成视为已执行
+            return False  # draft/released 或 指定结束且无报工 = 未执行
+        if target_type == "purchase_order":
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            return await PurchaseReceipt.filter(
+                tenant_id=tenant_id, purchase_order_id=target_id, deleted_at__isnull=True
+            ).exists()
+        if target_type == "production_plan":
+            from apps.kuaizhizao.models.production_plan import ProductionPlan
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+            plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
+            if not plan:
+                return False
+            if (getattr(plan, "execution_status", None) or "未执行") != "未执行":
+                return True
+            has_wo = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="production_plan",
+                source_id=target_id,
+                target_type="work_order"
+            ).exists()
+            return has_wo
+        if target_type == "purchase_requisition":
+            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+            from apps.kuaizhizao.models.purchase_requisition_item import PurchaseRequisitionItem
+            req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
+            if not req:
+                return False
+            if req.status in ("部分转单", "全部转单"):
+                return True
+            has_converted = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id,
+                requisition_id=target_id,
+                purchase_order_id__not_isnull=True
+            ).exists()
+            return has_converted
+        return False
+
+    async def _cascade_delete_unexecuted_downstream(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> None:
+        """级联删除/撤销需求计算下未执行的下游单据"""
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            target_type__in=("work_order", "purchase_order", "purchase_requisition", "production_plan")
+        ).all()
+
+        for rel in rels:
+            tt, tid = rel.target_type, rel.target_id
+            if tt == "work_order":
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                update_data = {"deleted_at": datetime.now(), "updated_at": datetime.now()}
+                if wo and wo.status in ("released", "completed"):
+                    update_data["status"] = "draft"
+                    update_data["manually_completed"] = False
+                await WorkOrder.filter(tenant_id=tenant_id, id=tid).update(**update_data)
+            elif tt == "purchase_order":
+                await PurchaseOrder.filter(tenant_id=tenant_id, id=tid).delete()
+            elif tt == "production_plan":
+                await ProductionPlan.filter(tenant_id=tenant_id, id=tid).update(
+                    deleted_at=datetime.now(), updated_at=datetime.now()
+                )
+            elif tt == "purchase_requisition":
+                await PurchaseRequisition.filter(tenant_id=tenant_id, id=tid).update(
+                    deleted_at=datetime.now(), updated_at=datetime.now()
+                )
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand_computation",
+                source_id=computation_id,
+                target_type=tt,
+                target_id=tid
+            ).delete()
+
     async def withdraw_from_computation(
         self,
         tenant_id: int,
@@ -522,7 +635,8 @@ class DemandService(AppBaseService[Demand]):
         """
         撤回需求计算
 
-        将已下推到需求计算的需求撤回，清除计算记录及关联。仅当需求计算尚未下推工单/采购单等下游单据时允许撤回。
+        将已下推到需求计算的需求撤回，清除计算记录及关联。
+        若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
 
         Args:
             tenant_id: 租户ID
@@ -533,7 +647,7 @@ class DemandService(AppBaseService[Demand]):
 
         Raises:
             NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许撤回或已有下游单据
+            BusinessLogicError: 需求状态不允许撤回或已有已执行的下游单据
         """
         from apps.kuaizhizao.models.demand_computation import DemandComputation
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -565,17 +679,21 @@ class DemandService(AppBaseService[Demand]):
                         break
 
             if computation:
-                has_downstream = await DocumentRelation.filter(
+                downstream_rels = await DocumentRelation.filter(
                     tenant_id=tenant_id,
                     source_type="demand_computation",
                     source_id=computation.id,
                     target_type__in=DOWNSTREAM_TYPES
-                ).exists()
+                ).all()
 
-                if has_downstream:
-                    raise BusinessLogicError(
-                        "需求计算已下推工单/采购单等，无法撤回。请先处理下游单据。"
-                    )
+                for rel in downstream_rels:
+                    if await self._is_downstream_executed(tenant_id, rel.target_type, rel.target_id):
+                        raise BusinessLogicError(
+                            "需求计算已下推的工单/采购单等下游单据已执行，无法撤回。请先处理已执行的下游单据。"
+                        )
+
+                if downstream_rels:
+                    await self._cascade_delete_unexecuted_downstream(tenant_id, computation.id)
 
                 demand_ids_in_comp = computation.demand_ids if computation.demand_ids else [computation.demand_id]
                 if len(demand_ids_in_comp) > 1:
@@ -1504,13 +1622,17 @@ class DemandService(AppBaseService[Demand]):
             else:
                 computation_type = "MRP"
                 
-            # 设置默认计算参数
+            # 设置默认计算参数（含 4M 人机料法开关）
             default_params = {
                 "include_safety_stock": True,
                 "include_in_transit": True,
                 "include_reserved": True,
                 "include_reorder_point": False,
-                "bom_expand_level": 10
+                "bom_expand_level": 10,
+                "consider_capacity": True,
+                "consider_material_readiness": True,
+                "consider_equipment_availability": False,
+                "consider_mold_tool_availability": False,
             }
             
             # 创建需求计算任务

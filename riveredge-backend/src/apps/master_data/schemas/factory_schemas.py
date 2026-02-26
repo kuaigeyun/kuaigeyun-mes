@@ -315,6 +315,84 @@ class WorkstationResponse(WorkstationBase):
     )
 
 
+# ==================== 工作中心 Schema ====================
+
+class WorkCenterBase(BaseModel):
+    """工作中心基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="工作中心编码")
+    name: str = Field(..., max_length=200, description="工作中心名称")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("工作中心编码不能为空")
+        return v.strip().upper()
+
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("工作中心名称不能为空")
+        return v.strip()
+
+
+class WorkCenterCreate(WorkCenterBase):
+    """创建工作中心 Schema"""
+
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="所属工位ID列表")
+
+
+class WorkCenterUpdate(BaseModel):
+    """更新工作中心 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
+    name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="所属工位ID列表")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工作中心编码不能为空")
+        return v.strip().upper() if v else None
+
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工作中心名称不能为空")
+        return v.strip() if v else None
+
+
+class WorkCenterResponse(WorkCenterBase):
+    """工作中心响应 Schema"""
+
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    workstation_ids: List[int] = Field(default_factory=list, alias="workstationIds", description="所属工位ID列表")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
 # ==================== 级联查询响应 Schema ====================
 
 class WorkstationTreeResponse(WorkstationResponse):
@@ -366,3 +444,8 @@ class BatchDeleteProductionLinesRequest(BaseModel):
 class BatchDeleteWorkstationsRequest(BaseModel):
     """批量删除工位请求"""
     uuids: List[str] = Field(..., description="要删除的工位UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteWorkCentersRequest(BaseModel):
+    """批量删除工作中心请求"""
+    uuids: List[str] = Field(..., description="要删除的工作中心UUID列表", min_items=1, max_items=100)

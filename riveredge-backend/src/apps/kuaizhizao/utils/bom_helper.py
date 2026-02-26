@@ -48,6 +48,18 @@ async def get_bom_by_material_id(
     if version:
         query = query.filter(version=version)
         bom = await query.first()
+        # 指定版本查不到时回退到默认版本，避免因版本格式/审核状态差异导致无法展开下层 BOM
+        if not bom and use_default is False:
+            fallback = BOM.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                deleted_at__isnull=True,
+            )
+            if only_approved:
+                fallback = fallback.filter(approval_status="approved")
+            bom = await fallback.filter(is_default=True).first()
+            if not bom:
+                bom = await fallback.order_by("-created_at").first()
     elif use_default:
         query = query.filter(is_default=True)
         bom = await query.first()
@@ -95,16 +107,24 @@ async def get_bom_items_by_material_id(
         version=version,
         use_default=use_default
     )
-    if not bom or not bom.bom_code:
+    if not bom:
         return []
     
-    # 获取该bom_code下的所有BOM明细（限定同一主物料，确保子物料完整）
-    items_query = BOM.filter(
-        tenant_id=tenant_id,
-        material_id=material_id,
-        bom_code=bom.bom_code,
-        deleted_at__isnull=True
-    )
+    # 获取该 BOM 下的所有明细：优先用 bom_code 关联；bom_code 为空时用 material_id+version 关联（兼容历史数据）
+    if bom.bom_code:
+        items_query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            bom_code=bom.bom_code,
+            deleted_at__isnull=True
+        )
+    else:
+        items_query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=bom.version,
+            deleted_at__isnull=True
+        )
     if only_approved:
         items_query = items_query.filter(approval_status="approved")
     items = await items_query.prefetch_related("component").order_by("priority", "id").all()

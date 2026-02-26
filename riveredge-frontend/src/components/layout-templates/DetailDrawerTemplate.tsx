@@ -117,8 +117,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
               content = enumItem?.text || enumItem || value;
             }
 
-            // 处理 render
-            if (col.render) {
+            // 处理 render（dataSource 为 null 时不调用，避免 render 内访问 entity 属性报错）
+            if (col.render && dataSource != null) {
               // ProDescriptions render signature: (dom, entity, index, action, schema)
               // 这里简化处理，传入 content 作为 dom，dataSource 作为 entity
               // 注意：ProDescriptions 的 render 第一个参数 is dom (即已经格式化过的值)，第二个 is entity

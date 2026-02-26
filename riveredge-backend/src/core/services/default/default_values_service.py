@@ -302,6 +302,7 @@ class DefaultValuesService:
         "master-data-factory-workshop": "WS",
         "master-data-factory-production-line": "PL",
         "master-data-factory-workstation": "WST",
+        "master-data-factory-work-center": "GZZX",
         # 主数据管理 - 仓库管理
         "master-data-warehouse-warehouse": "WH",
         "master-data-warehouse-storage-area": "SA",
@@ -344,6 +345,12 @@ class DefaultValuesService:
         "kuaizhizao-quality-finished-goods-inspection": "FGI",  # Finished Goods Inspection (成品检验)
         # 快格轻制造 - 计划管理
         "kuaizhizao-plan-production-plan": "PP",
+        # 快格轻制造 - 设备管理（EQ+4位流水、MOLD+4位流水、TOOL+4位流水）
+        "kuaizhizao-equipment-management-equipment": "EQ",
+        "kuaizhizao-equipment-management-mold": "MOLD",
+        "kuaizhizao-equipment-management-tool": "TOOL",
+        "kuaizhizao-warehouse-assembly-order": "ZZD",   # 组装单
+        "kuaizhizao-warehouse-disassembly-order": "CXD",  # 拆卸单
     }
     
     @staticmethod
@@ -361,13 +368,14 @@ class DefaultValuesService:
         return page_code.startswith("kuaizhizao-")
     
     @staticmethod
-    def _build_rule_components(page_code: str, abbreviation: str) -> List[Dict[str, Any]]:
+    def _build_rule_components(page_code: str, abbreviation: str, page_config: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         构建规则组件列表
         
         Args:
             page_code: 页面代码
             abbreviation: 功能缩写
+            page_config: 页面配置（可选，用于 skip_date 等）
             
         Returns:
             List[Dict[str, Any]]: 规则组件列表
@@ -383,8 +391,10 @@ class DefaultValuesService:
         })
         order += 1
         
-        # 2. 如果是业务单据，添加日期组件
-        if DefaultValuesService._is_business_document(page_code):
+        # 2. 如果是业务单据且未配置 skip_date，添加日期组件
+        # 设备/模具/工装使用 skip_date=True，格式为：EQ+4位、MOLD+4位、TOOL+4位
+        use_date = DefaultValuesService._is_business_document(page_code) and not (page_config or {}).get("skip_date", False)
+        if use_date:
             components.append({
                 "type": "date",
                 "order": order,
@@ -394,12 +404,13 @@ class DefaultValuesService:
             order += 1
         
         # 3. 自动计数组件（必选）
+        reset_cycle = "daily" if use_date else "never"
         components.append({
             "type": "auto_counter",
             "order": order,
             "digits": 4,
             "fixed_width": True,
-            "reset_cycle": "daily" if DefaultValuesService._is_business_document(page_code) else "never",
+            "reset_cycle": reset_cycle,
             "initial_value": 1,
         })
         
@@ -456,10 +467,11 @@ class DefaultValuesService:
                 abbreviation = "".join([p[0].upper() for p in parts[-2:]])[:4]
             
             # 构建规则组件
-            rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation)
+            rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation, page_config)
             
-            # 判断是否为业务单据
-            is_business = DefaultValuesService._is_business_document(page_code)
+            # 判断是否为业务单据（设备/模具/工装配置 skip_date 时按基础数据处理）
+            skip_date = page_config.get("skip_date", False)
+            is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
             
             # 构建规则名称和描述
             rule_name = f"{page_name}编码规则"
@@ -513,8 +525,9 @@ class DefaultValuesService:
         abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(
             page_code
         ) or "".join([p[0].upper() for p in page_code.split("-")[-2:]])[:4]
-        rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation)
-        is_business = DefaultValuesService._is_business_document(page_code)
+        rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation, page_config)
+        skip_date = page_config.get("skip_date", False)
+        is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
         rule_name = f"{page_name}编码规则"
         description = (
             f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"

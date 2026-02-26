@@ -252,3 +252,54 @@ class Workstation(BaseModel):
         """字符串表示"""
         return f"{self.code} - {self.name}"
 
+
+class WorkCenter(BaseModel):
+    """
+    工作中心模型
+
+    计划/产能单位，顶层实体，与厂区、车间、产线、工位同级。
+    用于排产、产能计算、生产终端筛选工单等。
+
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 工作中心编码（组织内唯一）
+        name: 工作中心名称
+        description: 描述
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_work_centers"
+        table_description = "基础数据管理 - 工作中心"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+        ]
+
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+
+    # 基本信息
+    code = fields.CharField(max_length=50, description="工作中心编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="工作中心名称")
+    description = fields.TextField(null=True, description="描述")
+
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name}"
+

@@ -731,6 +731,7 @@ const ApplicationListPage: React.FC = () => {
           const form = document.getElementById('edit-app-form') as HTMLFormElement;
           const formData = new FormData(form);
           const name = formData.get('name') as string;
+          const description = (formData.get('description') as string) || '';
           const sortOrder = parseInt(formData.get('sort_order') as string, 10);
 
           if (editingApp) {
@@ -738,6 +739,7 @@ const ApplicationListPage: React.FC = () => {
             const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
             handleUpdateAppConfig(editingApp, {
               name,
+              description: description.trim() || undefined,
               sort_order: sortOrder,
               is_custom_name: isCustomName,
               is_custom_sort: isCustomSort
@@ -796,13 +798,14 @@ const ApplicationListPage: React.FC = () => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
             const name = formData.get('name') as string;
+            const description = (formData.get('description') as string) || '';
             const sortOrder = parseInt(formData.get('sort_order') as string, 10);
             if (editingApp) {
-              // 如果名称或排序变了，设为自定义标志
               const isCustomName = name !== editingApp.name || editingApp.is_custom_name;
               const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
               handleUpdateAppConfig(editingApp, {
                 name,
+                description: description.trim() || undefined,
                 sort_order: sortOrder,
                 is_custom_name: isCustomName,
                 is_custom_sort: isCustomSort
@@ -821,6 +824,22 @@ const ApplicationListPage: React.FC = () => {
                 padding: '8px',
                 borderRadius: '4px',
                 border: '1px solid #d9d9d9'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.descriptionLabel')}:</label>
+            <textarea
+              name="description"
+              defaultValue={editingApp?.description ?? ''}
+              placeholder={t('pages.system.applications.descriptionPlaceholder')}
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #d9d9d9',
+                resize: 'vertical'
               }}
             />
           </div>

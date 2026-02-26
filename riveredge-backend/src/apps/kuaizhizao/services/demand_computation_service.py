@@ -45,6 +45,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 
 
+class _PreviewResultCarrier(Exception):
+    """用于预览时携带结果并触发事务回滚（不持久化）"""
+    def __init__(self, preview_data: Dict[str, Any]):
+        self.preview_data = preview_data
+
+
 async def _fetch_config_via_raw_conn(
     conn: Any,
     tenant_id: int,
@@ -449,7 +455,8 @@ class DemandComputationService:
     async def execute_computation(
         self,
         tenant_id: int,
-        computation_id: int
+        computation_id: int,
+        computation_params_override: Optional[Dict[str, Any]] = None,
     ) -> DemandComputationResponse:
         """
         执行需求计算
@@ -457,6 +464,7 @@ class DemandComputationService:
         Args:
             tenant_id: 租户ID
             computation_id: 计算ID
+            computation_params_override: 临时覆盖的计算参数，仅本次执行生效，不持久化
             
         Returns:
             DemandComputationResponse: 计算响应
@@ -470,6 +478,11 @@ class DemandComputationService:
             raise BusinessLogicError(
                 f"只能执行进行中或失败状态的计算，当前状态: {computation.computation_status}"
             )
+
+        # 合并临时覆盖参数到 computation_params（仅本次执行生效，不持久化）
+        if computation_params_override:
+            base_params = computation.computation_params or {}
+            computation.computation_params = {**base_params, **computation_params_override}
 
         try:
             async with in_transaction():
@@ -524,7 +537,81 @@ class DemandComputationService:
             except Exception as update_err:
                 logger.warning(f"更新失败状态时出错: {update_err}")
             raise
-    
+
+    async def preview_execute_computation(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        computation_params_override: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        预览执行结果：运行计算逻辑但不持久化，返回计算结果预览供二次确认。
+        通过事务回滚实现，不写入数据库。
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status not in ("进行中", "失败"):
+            raise BusinessLogicError(
+                f"只能预览进行中或失败状态的计算，当前状态: {computation.computation_status}"
+            )
+
+        if computation_params_override:
+            base_params = computation.computation_params or {}
+            computation.computation_params = {**base_params, **computation_params_override}
+
+        try:
+            async with in_transaction():
+                if computation.computation_status == "失败":
+                    await DemandComputationItem.filter(
+                        tenant_id=tenant_id,
+                        computation_id=computation_id
+                    ).delete()
+
+                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                    computation_status="计算中",
+                    computation_start_time=datetime.now()
+                )
+
+                if computation.computation_type == "MRP":
+                    await self._execute_mrp_computation(tenant_id, computation)
+                elif computation.computation_type == "LRP":
+                    await self._execute_lrp_computation(tenant_id, computation)
+                else:
+                    raise ValidationError(f"不支持的计算类型: {computation.computation_type}")
+
+                items = await DemandComputationItem.filter(
+                    tenant_id=tenant_id,
+                    computation_id=computation_id
+                ).all()
+
+                preview_items = []
+                for item in items:
+                    preview_items.append({
+                        "material_code": item.material_code,
+                        "material_name": item.material_name,
+                        "material_unit": item.material_unit or "",
+                        "required_quantity": float(item.required_quantity or 0),
+                        "available_inventory": float(item.available_inventory or 0),
+                        "net_requirement": float(item.net_requirement or 0),
+                        "suggested_work_order_quantity": float(item.suggested_work_order_quantity or 0),
+                        "suggested_purchase_order_quantity": float(item.suggested_purchase_order_quantity or 0),
+                        "material_source_type": item.material_source_type,
+                    })
+
+                preview_data = {
+                    "computation_code": computation.computation_code,
+                    "computation_type": computation.computation_type,
+                    "item_count": len(preview_items),
+                    "items": preview_items,
+                }
+                raise _PreviewResultCarrier(preview_data)
+
+        except _PreviewResultCarrier as e:
+            return e.preview_data
+        except Exception:
+            raise
+
     async def recompute_computation(
         self,
         tenant_id: int,
@@ -816,7 +903,7 @@ class DemandComputationService:
             bom_version = None
             material_bom_versions = None
             use_default_bom = True
-        
+
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
         
@@ -922,16 +1009,25 @@ class DemandComputationService:
                     }
                 all_material_requirements[material_id]["required_quantity"] += required_quantity
                 
-                # 如果有BOM，展开BOM
+                # 如果有BOM，展开BOM（顶层物料优先从 material_bom_versions 取版本）
                 from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+                top_version = bom_version
+                top_use_default = use_default_bom
+                if material_bom_versions:
+                    v = material_bom_versions.get(material_id) or material_bom_versions.get(str(material_id))
+                    if v:
+                        top_version = v
+                        top_use_default = False
+                    elif not bom_version:
+                        top_use_default = True
                 bom_items = await get_bom_items_by_material_id(
                     tenant_id=tenant_id,
                     material_id=material_id,
                     only_approved=True,
-                    version=bom_version,
-                    use_default=use_default_bom,
+                    version=top_version,
+                    use_default=top_use_default,
                 )
-                
+
                 if bom_items:
                     # 展开BOM（使用物料来源控制逻辑）
                     expanded_requirements = await expand_bom_with_source_control(
@@ -943,7 +1039,7 @@ class DemandComputationService:
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
                     )
-                    
+
                     # 合并到总需求中
                     for req in expanded_requirements:
                         req_material_id = req["material_id"]
@@ -1020,9 +1116,9 @@ class DemandComputationService:
                 if net_requirement > 0:
                     suggested_purchase_order_quantity = Decimal(str(net_requirement))
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：建议生成委外工单（TODO: 后续实现委外工单）
-                if net_requirement > 0 and validation_passed:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))  # 暂时使用工单表示
+                # 委外件：建议生成委外工单（有净需求即显示建议数量，与采购件一致；验证失败时生成工单会拦截）
+                if net_requirement > 0:
+                    suggested_work_order_quantity = Decimal(str(net_requirement))
             # Phantom和Configure已经在BOM展开时处理，不需要单独生成工单或采购单
             
             # 创建计算结果明细（包含需求明细追溯）
@@ -1088,8 +1184,16 @@ class DemandComputationService:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
             return
         
-        # 2. 计算参数（含 BOM 版本）
+        # 2. 计算参数（含 BOM 版本、4M 人机料法开关）
         computation_params = computation.computation_params or {}
+        consider_capacity = computation_params.get("consider_capacity", True)
+        consider_material_readiness = computation_params.get("consider_material_readiness", True)
+        consider_equipment_availability = computation_params.get("consider_equipment_availability", False)
+        consider_mold_tool_availability = computation_params.get("consider_mold_tool_availability", False)
+        logger.debug(
+            f"LRP 4M 约束: capacity={consider_capacity}, material={consider_material_readiness}, "
+            f"equipment={consider_equipment_availability}, mold_tool={consider_mold_tool_availability}"
+        )
         biz_config = BusinessConfigService()
         bom_multi_allowed = await biz_config.get_bom_multi_version_allowed(tenant_id)
         if bom_multi_allowed:
@@ -1100,7 +1204,7 @@ class DemandComputationService:
             bom_version = None
             material_bom_versions = None
             use_default_bom = True
-        
+
         # 3. 存储所有物料需求（用于汇总）
         all_material_requirements = {}  # material_id -> requirement info
         
@@ -1201,16 +1305,25 @@ class DemandComputationService:
                     }
                 all_material_requirements[material_id]["required_quantity"] += required_quantity
                 
-                # 如果有BOM，展开BOM
+                # 如果有BOM，展开BOM（顶层物料优先从 material_bom_versions 取版本）
                 from apps.kuaizhizao.utils.bom_helper import get_bom_items_by_material_id
+                top_version = bom_version
+                top_use_default = use_default_bom
+                if material_bom_versions:
+                    v = material_bom_versions.get(material_id) or material_bom_versions.get(str(material_id))
+                    if v:
+                        top_version = v
+                        top_use_default = False
+                    elif not bom_version:
+                        top_use_default = True
                 bom_items = await get_bom_items_by_material_id(
                     tenant_id=tenant_id,
                     material_id=material_id,
                     only_approved=True,
-                    version=bom_version,
-                    use_default=use_default_bom,
+                    version=top_version,
+                    use_default=top_use_default,
                 )
-                
+
                 if bom_items:
                     expanded_requirements = await expand_bom_with_source_control(
                         tenant_id=tenant_id,
@@ -1221,7 +1334,7 @@ class DemandComputationService:
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
                     )
-                    
+
                     for req in expanded_requirements:
                         req_material_id = req["material_id"]
                         if req_material_id not in all_material_requirements:
@@ -1316,9 +1429,9 @@ class DemandComputationService:
                         procurement_completion_date = delivery_date
                         procurement_start_date = delivery_date - timedelta(days=purchase_lead_time)
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外计划（TODO: 后续实现委外工单）
-                if net_requirement > 0 and validation_passed:
-                    suggested_work_order_quantity = Decimal(str(net_requirement))  # 暂时使用工单表示
+                # 委外件：生成委外计划（有净需求即显示建议数量；验证失败时生成工单会拦截）
+                if net_requirement > 0:
+                    suggested_work_order_quantity = Decimal(str(net_requirement))
                     planned_production = Decimal(str(net_requirement))
                     
                     # 计算委外时间
@@ -1400,13 +1513,102 @@ class DemandComputationService:
                 await DemandComputation.get(tenant_id=tenant_id, id=computation_id),
                 items
             )
-    
+
+    async def delete_computation(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> None:
+        """
+        删除需求计算
+
+        若下游单据（工单/采购单/生产计划/采购申请）未执行，允许删除并级联删除；已执行则不允许删除。
+        删除时会同步清除关联的需求计算明细、快照、重算历史及单据关联关系，并更新需求的 pushed_to_computation 状态。
+
+        Args:
+            tenant_id: 租户ID
+            computation_id: 计算ID
+
+        Raises:
+            NotFoundError: 需求计算不存在
+            BusinessLogicError: 已有已执行的下游单据，无法删除
+        """
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.services.demand_service import DemandService
+
+        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition", "production_plan")
+
+        async with in_transaction():
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+            if not computation:
+                raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+            demand_svc = DemandService()
+            downstream_rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand_computation",
+                source_id=computation_id,
+                target_type__in=DOWNSTREAM_TYPES
+            ).all()
+
+            for rel in downstream_rels:
+                if await demand_svc._is_downstream_executed(tenant_id, rel.target_type, rel.target_id):
+                    raise BusinessLogicError(
+                        "需求计算已下推的工单/采购单等下游单据已执行，无法删除。请先处理已执行的下游单据。"
+                    )
+
+            if downstream_rels:
+                await demand_svc._cascade_delete_unexecuted_downstream(tenant_id, computation_id)
+
+            demand_ids_in_comp = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+
+            # 删除明细、快照、重算历史
+            await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).delete()
+            await DemandComputationSnapshot.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).delete()
+            await DemandComputationRecalcHistory.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).delete()
+
+            # 删除单据关联（双向）
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="demand_computation",
+                source_id=computation_id
+            ).delete()
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type="demand_computation",
+                target_id=computation_id
+            ).delete()
+
+            # 更新关联需求的 pushed_to_computation 状态
+            for rel_demand_id in demand_ids_in_comp:
+                await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
+                    pushed_to_computation=False,
+                    computation_id=None,
+                    computation_code=None,
+                    updated_at=datetime.now()
+                )
+
+            # 删除需求计算主记录
+            await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).delete()
+
+            logger.info(f"需求计算 {computation.computation_code} (id={computation_id}) 已删除")
+
     async def generate_work_orders_and_purchase_orders(
         self,
         tenant_id: int,
         computation_id: int,
         created_by: int,
-        generate_mode: str = "all"
+        generate_mode: str = "all",
+        allow_draft: bool = False
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -1416,6 +1618,7 @@ class DemandComputationService:
             computation_id: 计算ID
             created_by: 创建人ID
             generate_mode: 生成粒度，all=全部，work_order_only=仅工单，purchase_only=仅采购
+            allow_draft: 验证失败时是否仍生成草稿单，由下游用户补全
             
         Returns:
             Dict: 包含生成的工单和采购单信息
@@ -1430,7 +1633,7 @@ class DemandComputationService:
         if computation.computation_status != "完成":
             raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
         
-        # 按配置校验：若必须经生产计划，则不允许直连生成工单
+        # 按配置校验：若必须经生产计划，则不允许直连生成工单（委外工单单独下推不受此限制）
         needs_work_order = generate_mode in ("all", "work_order_only")
         if needs_work_order:
             from infra.services.business_config_service import BusinessConfigService
@@ -1449,6 +1652,11 @@ class DemandComputationService:
         
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
+
+        # 获取已下推且仍存在的单据，用于排除重复下推
+        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+        already_pushed_wo_material_ids = exclusions["wo_material_ids"] | exclusions["outsource_material_ids"]
+        already_pushed_po_material_ids = exclusions["po_material_ids"]
         
         # #region agent log
         try:
@@ -1461,8 +1669,9 @@ class DemandComputationService:
             pass
         # #endregion
         
-        # 【第一阶段：预验证】先验证所有物料，如有错误立即失败（避免部分工单已创建但最后抛异常）
+        # 【第一阶段：预验证】先验证所有物料，如有错误且未允许草稿则立即失败
         validation_errors = []
+        failed_validation_material_ids = set()  # 验证失败的物料ID，allow_draft 时用于创建草稿
         
         for item in items:
             source_type = item.material_source_type
@@ -1481,9 +1690,10 @@ class DemandComputationService:
                 
                 if not validation_passed:
                     validation_errors.extend([f"物料 {item.material_code} ({item.material_name}): {err}" for err in errors])
+                    failed_validation_material_ids.add(item.material_id)
         
-        # 如果有验证错误，立即抛出异常（此时还未创建任何工单）
-        if validation_errors:
+        # 如果有验证错误且未允许草稿，立即抛出异常（此时还未创建任何工单）
+        if validation_errors and not allow_draft:
             error_msg = "物料来源验证失败，无法生成工单和采购单：\n" + "\n".join(validation_errors)
             logger.error(f"预验证失败: {error_msg}")
             raise BusinessLogicError(error_msg)
@@ -1496,6 +1706,29 @@ class DemandComputationService:
         # 按供应商分组采购件（物料来源控制增强）
         purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
         
+        # 按物料聚合生产类明细（同一物料多行合并为一行，避免重复生成工单）
+        def _build_aggregated_item(group: List[DemandComputationItem]):
+            first = group[0]
+            if len(group) == 1:
+                return first
+            total_qty = sum(float(g.suggested_work_order_quantity or 0) for g in group)
+            start_dates = [g.production_start_date for g in group if g.production_start_date]
+            end_dates = [g.production_completion_date for g in group if g.production_completion_date]
+            return type("_AggregatedItem", (), {
+                "material_id": first.material_id,
+                "material_code": first.material_code,
+                "material_name": first.material_name,
+                "material_spec": first.material_spec,
+                "material_unit": first.material_unit,
+                "material_source_type": first.material_source_type,
+                "material_source_config": first.material_source_config,
+                "suggested_work_order_quantity": Decimal(str(total_qty)),
+                "production_start_date": min(start_dates) if start_dates else None,
+                "production_completion_date": max(end_dates) if end_dates else None,
+            })()
+
+        created_wo_material_ids: set = set(already_pushed_wo_material_ids)  # 已创建/已下推工单的物料ID，避免重复
+
         for item in items:
             source_type = item.material_source_type
             
@@ -1523,10 +1756,14 @@ class DemandComputationService:
                     pass
                 # #endregion
                 continue
+            if generate_mode == "outsource_only" and source_type != SOURCE_TYPE_OUTSOURCE:
+                continue
 
             # 根据物料来源类型生成相应的单据
             if source_type == SOURCE_TYPE_MAKE:
-                # 自制件：生成生产工单
+                # 自制件：生成生产工单（按物料聚合，避免重复）
+                if item.material_id in created_wo_material_ids:
+                    continue
                 sq = getattr(item, "suggested_work_order_quantity", None)
                 if not (sq and sq > 0):
                     # #region agent log
@@ -1537,55 +1774,71 @@ class DemandComputationService:
                         pass
                     # #endregion
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_MAKE and (float(i.suggested_work_order_quantity or 0) > 0)]
+                    agg_item = _build_aggregated_item(same_material)
+                    allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
                     work_order = await self._create_work_order_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=item,
-                        created_by=created_by
+                        item=agg_item,
+                        created_by=created_by,
+                        allow_draft=allow_draft_for_item,
                     )
                     work_orders.append(work_order)
+                    created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_BUY:
-                # 采购件：按供应商分组（物料来源控制增强）
+                # 采购件：仅当配置了默认供应商时直接生成采购单；未配置的需通过「下推到采购申请」
+                # 排除已下推且仍存在的采购单中的物料，避免重复
+                if item.material_id in already_pushed_po_material_ids:
+                    continue
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    # 获取供应商ID
                     supplier_id = None
                     if item.material_source_config:
                         source_config = item.material_source_config.get("source_config", {})
                         supplier_id = source_config.get("default_supplier_id")
-                    
-                    # 如果没有供应商ID，使用默认值1（后续需要手动指定）
-                    if not supplier_id:
-                        supplier_id = 1
-                    
-                    # 按供应商分组
-                    if supplier_id not in purchase_items_by_supplier:
-                        purchase_items_by_supplier[supplier_id] = []
-                    purchase_items_by_supplier[supplier_id].append(item)
+                    if supplier_id:
+                        if supplier_id not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[supplier_id] = []
+                        purchase_items_by_supplier[supplier_id].append(item)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外工单（OutsourceWorkOrder，在委外管理页展示）
+                # 委外件：生成委外工单（按物料聚合，避免重复）
+                if item.material_id in created_wo_material_ids:
+                    continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_OUTSOURCE and (float(i.suggested_work_order_quantity or 0) > 0)]
+                    agg_item = _build_aggregated_item(same_material)
+                    allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
                     work_order = await self._create_outsource_work_order_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=item,
-                        created_by=created_by
+                        item=agg_item,
+                        created_by=created_by,
+                        allow_draft=allow_draft_for_item,
                     )
                     outsource_work_orders.append(work_order)
+                    created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体生成生产工单（TODO: 后续支持变体选择）
+                # 配置件：按变体生成生产工单（按物料聚合，避免重复）
+                if item.material_id in created_wo_material_ids:
+                    continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    same_material = [i for i in items if i.material_id == item.material_id and i.material_source_type == SOURCE_TYPE_CONFIGURE and (float(i.suggested_work_order_quantity or 0) > 0)]
+                    agg_item = _build_aggregated_item(same_material)
+                    allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
                     work_order = await self._create_work_order_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        item=item,
-                        created_by=created_by
+                        item=agg_item,
+                        created_by=created_by,
+                        allow_draft=allow_draft_for_item,
                     )
                     work_orders.append(work_order)
+                    created_wo_material_ids.add(item.material_id)
             
-            # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容）
+            # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容，按物料聚合）
             elif not source_type:
                 # #region agent log
                 try:
@@ -1594,28 +1847,32 @@ class DemandComputationService:
                 except Exception:
                     pass
                 # #endregion
-                # 如果有建议工单数量，生成工单
+                # 如果有建议工单数量，生成工单（按物料聚合）
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                    work_order = await self._create_work_order_from_item(
-                        tenant_id=tenant_id,
-                        computation=computation,
-                        item=item,
-                        created_by=created_by
-                    )
-                    work_orders.append(work_order)
+                    if item.material_id not in created_wo_material_ids:
+                        same_material = [i for i in items if not i.material_source_type and i.material_id == item.material_id and (float(i.suggested_work_order_quantity or 0) > 0)]
+                        agg_item = _build_aggregated_item(same_material) if len(same_material) > 1 else item
+                        allow_draft_for_item = allow_draft and item.material_id in failed_validation_material_ids
+                        work_order = await self._create_work_order_from_item(
+                            tenant_id=tenant_id,
+                            computation=computation,
+                            item=agg_item,
+                            created_by=created_by,
+                            allow_draft=allow_draft_for_item,
+                        )
+                        work_orders.append(work_order)
+                        created_wo_material_ids.add(item.material_id)
                 
-                # 如果有建议采购订单数量，按供应商分组（物料来源控制增强）
-                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                    # 获取供应商ID（从物料主数据获取）
-                    supplier_id = 1  # 默认值，需要手动指定
+                # 如果有建议采购订单数量，仅当配置了默认供应商时生成采购单
+                if item.material_id not in already_pushed_po_material_ids and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    supplier_id = None
                     if item.material_source_config:
                         source_config = item.material_source_config.get("source_config", {})
-                        supplier_id = source_config.get("default_supplier_id", 1)
-                    
-                    # 按供应商分组
-                    if supplier_id not in purchase_items_by_supplier:
-                        purchase_items_by_supplier[supplier_id] = []
-                    purchase_items_by_supplier[supplier_id].append(item)
+                        supplier_id = source_config.get("default_supplier_id")
+                    if supplier_id:
+                        if supplier_id not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[supplier_id] = []
+                        purchase_items_by_supplier[supplier_id].append(item)
             
             else:
                 # #region agent log
@@ -1707,14 +1964,412 @@ class DemandComputationService:
             "outsource_work_order_count": len(outsource_work_orders),  # 委外工单数量（委外管理页）
             "purchase_order_count": len(purchase_orders),
         }
-    
+
+    async def get_push_records(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取需求计算的下推记录，包含目标单据是否仍存在的标识。
+        用于详情抽屉展示下推记录，已删除的单据会标识为 target_exists=False。
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+        ).order_by("created_at").all()
+
+        records = []
+        for rel in rels:
+            target_exists = False
+            tt, tid = rel.target_type, rel.target_id
+            if tt == "work_order":
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                target_exists = wo is not None
+            elif tt == "outsource_work_order":
+                owo = await OutsourceWorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                target_exists = owo is not None
+            elif tt == "purchase_order":
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid)
+                target_exists = po is not None
+            elif tt == "production_plan":
+                plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                target_exists = plan is not None
+            elif tt == "purchase_requisition":
+                req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                target_exists = req is not None
+            else:
+                target_exists = True  # 未知类型默认视为存在
+
+            records.append({
+                "target_type": tt,
+                "target_id": tid,
+                "target_code": rel.target_code,
+                "target_name": rel.target_name,
+                "relation_desc": rel.relation_desc,
+                "created_at": rel.created_at.isoformat() if rel.created_at else None,
+                "target_exists": target_exists,
+            })
+
+        return {"records": records}
+
+    async def _get_already_pushed_exclusions(
+        self, tenant_id: int, computation_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取需求计算已下推且仍存在的单据对应的物料ID等排除信息。
+        用于重新下推时避免重复生成。
+        返回: {
+            wo_material_ids: set,  # 已有工单的物料ID
+            outsource_material_ids: set,  # 已有委外工单的物料ID
+            po_material_ids: set,  # 已有采购单包含的物料ID
+            has_production_plan: bool,
+            has_purchase_requisition: bool,
+        }
+        """
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+        ).all()
+
+        wo_material_ids = set()
+        outsource_material_ids = set()
+        po_material_ids = set()
+        has_production_plan = False
+        has_purchase_requisition = False
+
+        for rel in rels:
+            tt, tid = rel.target_type, rel.target_id
+            if tt == "work_order":
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                if wo:
+                    wo_material_ids.add(wo.product_id)
+            elif tt == "outsource_work_order":
+                owo = await OutsourceWorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                if owo:
+                    outsource_material_ids.add(owo.product_id)
+            elif tt == "purchase_order":
+                po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=tid)
+                if po:
+                    items = await PurchaseOrderItem.filter(order_id=tid).all()
+                    for poi in items:
+                        po_material_ids.add(poi.material_id)
+            elif tt == "production_plan":
+                plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                if plan:
+                    has_production_plan = True
+            elif tt == "purchase_requisition":
+                req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
+                if req:
+                    has_purchase_requisition = True
+
+        return {
+            "wo_material_ids": wo_material_ids,
+            "outsource_material_ids": outsource_material_ids,
+            "po_material_ids": po_material_ids,
+            "has_production_plan": has_production_plan,
+            "has_purchase_requisition": has_purchase_requisition,
+        }
+
+    async def get_push_options(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取需求计算的下推能力与一键下推默认配置，供前端弹窗预填。
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能对已完成的计算进行下推")
+
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+
+        make_count = 0
+        outsource_count = 0
+        purchase_items_with_supplier = 0
+        purchase_items_without_supplier = 0
+
+        for item in items:
+            st = item.material_source_type
+            if st == SOURCE_TYPE_PHANTOM:
+                continue
+            if st == SOURCE_TYPE_MAKE or st == SOURCE_TYPE_CONFIGURE:
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    make_count += 1
+            elif st == SOURCE_TYPE_OUTSOURCE:
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    outsource_count += 1
+            elif st == SOURCE_TYPE_BUY:
+                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    supplier_id = None
+                    if item.material_source_config:
+                        sc = item.material_source_config.get("source_config", {})
+                        supplier_id = sc.get("default_supplier_id")
+                    if supplier_id:
+                        purchase_items_with_supplier += 1
+                    else:
+                        purchase_items_without_supplier += 1
+
+        has_production_items = make_count > 0
+        has_outsource_items = outsource_count > 0
+        has_purchase_items = purchase_items_with_supplier > 0 or purchase_items_without_supplier > 0
+
+        biz_config = BusinessConfigService()
+        can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
+
+        default_production = "work_order" if can_direct_wo else "plan"
+        default_purchase = "requisition" if purchase_items_without_supplier > 0 else "purchase_order"
+
+        production_choices = []
+        if has_production_items or has_outsource_items:
+            production_choices = ["plan", "work_order"]
+
+        purchase_choices = []
+        if has_purchase_items:
+            purchase_choices = ["requisition", "purchase_order"]
+
+        return {
+            "computation_id": computation_id,
+            "has_production_items": has_production_items,
+            "has_outsource_items": has_outsource_items,
+            "has_purchase_items": has_purchase_items,
+            "make_count": make_count,
+            "outsource_count": outsource_count,
+            "purchase_items_with_supplier": purchase_items_with_supplier,
+            "purchase_items_without_supplier": purchase_items_without_supplier,
+            "can_direct_work_order": can_direct_wo,
+            "default_production": default_production,
+            "default_purchase": default_purchase,
+            "production_choices": production_choices,
+            "purchase_choices": purchase_choices,
+        }
+
+    async def get_push_preview(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        push_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        获取下推预览（不实际执行），用于下推前展示将生成的单据数量。
+        push_config: { "production": "plan"|"work_order", "purchase": "requisition"|"purchase_order" }
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能对已完成的计算进行下推")
+
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+
+        production = (push_config or {}).get("production")
+        purchase = (push_config or {}).get("purchase")
+        outsource_only = (push_config or {}).get("outsource_only") is True
+
+        production_plan_count = 0
+        work_order_count = 0
+        outsource_work_order_count = 0
+        purchase_requisition_count = 0
+        purchase_order_count = 0
+        validation_failures = []
+
+        make_count = 0
+        outsource_count = 0
+        purchase_items_with_supplier = 0
+        purchase_items_without_supplier = 0
+
+        for item in items:
+            st = item.material_source_type
+            if st == SOURCE_TYPE_PHANTOM:
+                continue
+            if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    make_count += 1
+            elif st == SOURCE_TYPE_OUTSOURCE:
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    outsource_count += 1
+                    validation_passed, errors = await validate_material_source_config(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        source_type=SOURCE_TYPE_OUTSOURCE
+                    )
+                    if not validation_passed:
+                        validation_failures.append({
+                            "material_code": item.material_code,
+                            "material_name": item.material_name,
+                            "errors": errors,
+                        })
+            elif st == SOURCE_TYPE_BUY:
+                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    sc = (item.material_source_config or {}).get("source_config", {})
+                    if sc.get("default_supplier_id"):
+                        purchase_items_with_supplier += 1
+                    else:
+                        purchase_items_without_supplier += 1
+
+        if outsource_only:
+            outsource_work_order_count = outsource_count
+        elif production == "plan" and (make_count > 0 or outsource_count > 0):
+            production_plan_count = 1
+        elif production == "work_order":
+            work_order_count = make_count
+            outsource_work_order_count = outsource_count
+
+        if purchase == "requisition" and (purchase_items_with_supplier > 0 or purchase_items_without_supplier > 0):
+            purchase_requisition_count = 1
+        elif purchase == "purchase_order" and purchase_items_with_supplier > 0:
+            supplier_ids = set()
+            for item in items:
+                if item.material_source_type == SOURCE_TYPE_BUY and item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    sc = (item.material_source_config or {}).get("source_config", {})
+                    sid = sc.get("default_supplier_id")
+                    if sid:
+                        supplier_ids.add(sid)
+            purchase_order_count = len(supplier_ids)
+
+        biz_config = BusinessConfigService()
+        can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
+
+        return {
+            "computation_id": computation_id,
+            "production_plan_count": production_plan_count,
+            "work_order_count": work_order_count,
+            "outsource_work_order_count": outsource_work_order_count,
+            "purchase_requisition_count": purchase_requisition_count,
+            "purchase_order_count": purchase_order_count,
+            "validation_failures": validation_failures,
+            "can_direct_work_order": can_direct_wo,
+            "make_count": make_count,
+            "outsource_count": outsource_count,
+            "purchase_items_with_supplier": purchase_items_with_supplier,
+            "purchase_items_without_supplier": purchase_items_without_supplier,
+        }
+
+    async def push_all(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        created_by: int,
+        production: Optional[str] = None,
+        purchase: Optional[str] = None,
+        include_outsource: bool = True
+    ) -> Dict[str, Any]:
+        """
+        一键下推：按配置执行生产计划/工单、采购申请/采购单、委外工单。
+        production: "plan"|"work_order"|null
+        purchase: "requisition"|"purchase_order"|null
+        include_outsource: 委外工单是否包含（生产计划已含委外明细，工单模式会生成委外工单）
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能对已完成的计算进行下推")
+
+        results = {
+            "production_plan": None,
+            "work_orders": [],
+            "outsource_work_orders": [],
+            "purchase_requisition": None,
+            "purchase_orders": [],
+        }
+
+        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        push_service = DocumentPushPullService()
+        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+
+        if production == "plan":
+            if not exclusions["has_production_plan"]:
+                r = await push_service.push_document(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    target_type="production_plan",
+                    push_params=None,
+                    created_by=created_by,
+                )
+                results["production_plan"] = r.get("target_document")
+
+        elif production == "work_order":
+            r = await self.generate_work_orders_and_purchase_orders(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                created_by=created_by,
+                generate_mode="work_order_only",
+                allow_draft=True,
+            )
+            results["work_orders"] = r.get("work_orders", [])
+            results["outsource_work_orders"] = r.get("outsource_work_orders", [])
+
+        if purchase == "requisition":
+            if not exclusions["has_purchase_requisition"]:
+                try:
+                    r = await push_service.push_document(
+                        tenant_id=tenant_id,
+                        source_type="demand_computation",
+                        source_id=computation_id,
+                        target_type="purchase_requisition",
+                        push_params=None,
+                        created_by=created_by,
+                    )
+                    results["purchase_requisition"] = r.get("target_document")
+                except BusinessLogicError as e:
+                    if "无采购件" not in str(e):
+                        raise
+
+        elif purchase == "purchase_order":
+            r = await self.generate_work_orders_and_purchase_orders(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                created_by=created_by,
+                generate_mode="purchase_only",
+                allow_draft=False,
+            )
+            results["purchase_orders"] = r.get("purchase_orders", [])
+
+        return {
+            "success": True,
+            "message": "一键下推完成",
+            "results": results,
+        }
+
     async def _create_work_order_from_item(
         self,
         tenant_id: int,
         computation: DemandComputation,
         item: DemandComputationItem,
         created_by: int,
-        is_outsource: bool = False
+        is_outsource: bool = False,
+        allow_draft: bool = False
     ) -> Dict[str, Any]:
         """
         从计算结果明细创建工单
@@ -1772,7 +2427,8 @@ class DemandComputationService:
             work_order = await work_order_service.create_work_order(
                 tenant_id=tenant_id,
                 work_order_data=work_order_data,
-                created_by=created_by
+                created_by=created_by,
+                allow_draft=allow_draft,
             )
             # #region agent log
             try:
@@ -1792,12 +2448,31 @@ class DemandComputationService:
             logger.error(f"创建工单失败: {e}")
             raise BusinessLogicError(f"创建工单失败: {str(e)}")
     
+    async def _get_or_create_placeholder_supplier(self, tenant_id: int):
+        """获取或创建占位供应商「待指定」，用于 allow_draft 时委外工单无供应商的场景"""
+        from apps.master_data.models.supplier import Supplier
+        code = "TBD"
+        supplier = await Supplier.filter(
+            tenant_id=tenant_id,
+            code=code,
+            deleted_at__isnull=True
+        ).first()
+        if supplier:
+            return supplier
+        supplier = await Supplier.create(
+            tenant_id=tenant_id,
+            code=code,
+            name="待指定",
+        )
+        return supplier
+
     async def _create_outsource_work_order_from_item(
         self,
         tenant_id: int,
         computation: DemandComputation,
         item: DemandComputationItem,
-        created_by: int
+        created_by: int,
+        allow_draft: bool = False
     ) -> Dict[str, Any]:
         """
         从计算结果明细创建委外工单（OutsourceWorkOrder）
@@ -1824,18 +2499,26 @@ class DemandComputationService:
             outsource_supplier_id = mc.get("outsource_supplier_id") or source_config.get("outsource_supplier_id")
             outsource_operation = mc.get("outsource_operation") or source_config.get("outsource_operation", "")
             
+            # allow_draft 时允许无供应商，使用占位供应商
             if not outsource_supplier_id:
-                raise BusinessLogicError(
-                    f"委外件 {item.material_code} ({item.material_name}) 未配置委外供应商，"
-                    "请在物料主数据中配置 source_config.outsource_supplier_id"
-                )
+                if not allow_draft:
+                    raise BusinessLogicError(
+                        f"委外件 {item.material_code} ({item.material_name}) 未配置委外供应商，"
+                        "请在物料主数据中配置 source_config.outsource_supplier_id"
+                    )
+                # 获取或创建占位供应商「待指定」
+                supplier = await self._get_or_create_placeholder_supplier(tenant_id)
+                outsource_supplier_id = supplier.id
             
             # 查询供应商信息
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=outsource_supplier_id)
             if not supplier:
-                raise BusinessLogicError(
-                    f"委外供应商 ID {outsource_supplier_id} 不存在，物料: {item.material_code}"
-                )
+                if allow_draft:
+                    supplier = await self._get_or_create_placeholder_supplier(tenant_id)
+                else:
+                    raise BusinessLogicError(
+                        f"委外供应商 ID {outsource_supplier_id} 不存在，物料: {item.material_code}"
+                    )
             
             supplier_code = getattr(supplier, "code", None) or str(outsource_supplier_id)
             supplier_name = getattr(supplier, "name", None) or source_config.get("outsource_supplier_name", "待指定")
@@ -1877,7 +2560,8 @@ class DemandComputationService:
             wo = await outsource_service.create_outsource_work_order(
                 tenant_id=tenant_id,
                 work_order_data=work_order_data,
-                created_by=created_by
+                created_by=created_by,
+                allow_draft=allow_draft,
             )
             
             return {

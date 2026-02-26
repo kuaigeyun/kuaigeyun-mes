@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'an
 import { PlusOutlined, EyeOutlined, EditOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 import { useRequest } from 'ahooks';
 
@@ -396,6 +396,7 @@ const ProductionPlansPage: React.FC = () => {
         title="创建生产计划"
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
+        width={MODAL_CONFIG.LARGE_WIDTH}
         onFinish={async (values) => {
           try {
             const [start, end] = values.dateRange || [];
