@@ -115,8 +115,14 @@ import CodeField from '../../../../../components/code-field'
 import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestion-float-panel'
 import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
+import { getMoldList } from '../../../../../services/mold'
+import { toolApi } from '../../../services/equipment'
 import WorkOrderPrintModal from './components/WorkOrderPrintModal'
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
+import DocumentRelationDisplay from '../../../../../components/document-relation-display'
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
+import type { DocumentRelationData } from '../../../../../components/document-relation-display'
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 
 interface WorkOrder {
@@ -375,6 +381,24 @@ const WorkOrdersPage: React.FC = () => {
           console.error('获取设备列表失败:', error)
           setEquipmentList([])
         }
+
+        // 加载模具列表
+        try {
+          const molds = await getMoldList({ is_active: true, limit: 100 })
+          setMoldList(molds.items || [])
+        } catch (error) {
+          console.error('获取模具列表失败:', error)
+          setMoldList([])
+        }
+
+        // 加载工装列表
+        try {
+          const tools = await toolApi.list({ limit: 100 })
+          setToolList(tools.items || [])
+        } catch (error) {
+          console.error('获取工装列表失败:', error)
+          setToolList([])
+        }
       } catch (error) {
         console.error('获取数据失败:', error)
         setProductList([])
@@ -406,7 +430,7 @@ const WorkOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null)
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null)
   const [workOrderOperations, setWorkOrderOperations] = useState<any[]>([])
   const [operationsModalVisible, setOperationsModalVisible] = useState(false)
   const [currentOperation, setCurrentOperation] = useState<any>(null)
@@ -468,6 +492,8 @@ const WorkOrdersPage: React.FC = () => {
   )
   const [workerList, setWorkerList] = useState<any[]>([])
   const [equipmentList, setEquipmentList] = useState<any[]>([])
+  const [moldList, setMoldList] = useState<any[]>([])
+  const [toolList, setToolList] = useState<any[]>([])
   const dispatchFormRef = useRef<any>(null)
 
   // 打印相关状态
@@ -658,6 +684,8 @@ const WorkOrdersPage: React.FC = () => {
         dispatchFormRef.current.setFieldsValue({
           assigned_worker_id: operation.assigned_worker_id,
           assigned_equipment_id: operation.assigned_equipment_id,
+          assigned_mold_id: operation.assigned_mold_id,
+          assigned_tool_id: operation.assigned_tool_id,
           remarks: operation.remarks,
         })
       }
@@ -673,12 +701,18 @@ const WorkOrdersPage: React.FC = () => {
 
       const worker = workerList.find(w => w.id === values.assigned_worker_id)
       const equipment = equipmentList.find(e => e.id === values.assigned_equipment_id)
+      const mold = moldList.find(m => m.id === values.assigned_mold_id)
+      const tool = toolList.find(t => t.id === values.assigned_tool_id)
 
       const dispatchData = {
         assigned_worker_id: values.assigned_worker_id,
         assigned_worker_name: worker?.full_name || worker?.username || '-',
         assigned_equipment_id: values.assigned_equipment_id,
         assigned_equipment_name: equipment?.name || '-',
+        assigned_mold_id: values.assigned_mold_id,
+        assigned_mold_name: mold?.name || '-',
+        assigned_tool_id: values.assigned_tool_id,
+        assigned_tool_name: tool?.name || '-',
         remarks: values.remarks,
       }
 
@@ -1272,18 +1306,15 @@ const WorkOrdersPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       render: (_, record) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          草稿: { text: '草稿', color: 'default' },
-          已下达: { text: '已下达', color: 'processing' },
-          生产中: { text: '生产中', color: 'processing' },
-          已完成: { text: '已完成', color: 'success' },
-          已取消: { text: '已取消', color: 'error' },
+        const lifecycle = getWorkOrderLifecycle(record)
+        const colorMap: Record<string, string> = {
+          success: 'success',
+          exception: 'error',
+          active: 'processing',
+          normal: 'default',
         }
-        const config = statusMap[record.status || ''] || {
-          text: record.status || '-',
-          color: 'default',
-        }
-        return <Tag color={config.color}>{config.text}</Tag>
+        const color = colorMap[lifecycle.status || 'normal'] || 'default'
+        return <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
       },
     },
     {
@@ -2036,16 +2067,14 @@ const WorkOrdersPage: React.FC = () => {
    * 触屏视图卡片渲染函数
    */
   const renderTouchCard = (workOrder: WorkOrder, index: number) => {
-    const statusColor =
-      workOrder.status === '草稿'
-        ? 'default'
-        : workOrder.status === '已下达'
-          ? 'processing'
-          : workOrder.status === '生产中'
-            ? 'processing'
-            : workOrder.status === '已完成'
-              ? 'success'
-              : 'error'
+    const lifecycle = getWorkOrderLifecycle(workOrder)
+    const colorMap: Record<string, string> = {
+      success: 'success',
+      exception: 'error',
+      active: 'processing',
+      normal: 'default',
+    }
+    const statusColor = colorMap[lifecycle.status || 'normal'] || 'default'
 
     return (
       <Card
@@ -2072,7 +2101,7 @@ const WorkOrdersPage: React.FC = () => {
               color={statusColor}
               style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, padding: '8px 16px' }}
             >
-              {workOrder.status}
+              {lifecycle.stageName || '-'}
             </Tag>
           </div>
 
@@ -2220,26 +2249,22 @@ const WorkOrdersPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       width: 120,
-      render: (text, record) => (
-        <Space>
-          <Tag
-            color={
-              text === '草稿'
-                ? 'default'
-                : text === '已下达'
-                  ? 'processing'
-                  : text === '生产中'
-                    ? 'processing'
-                    : text === '已完成'
-                      ? 'success'
-                      : 'error'
-            }
-          >
-            {text}
-          </Tag>
-          {record.is_frozen && <Tag color="warning">已冻结</Tag>}
-        </Space>
-      ),
+      render: (_, record) => {
+        const lifecycle = getWorkOrderLifecycle(record)
+        const colorMap: Record<string, string> = {
+          success: 'success',
+          exception: 'error',
+          active: 'processing',
+          normal: 'default',
+        }
+        const color = colorMap[lifecycle.status || 'normal'] || 'default'
+        return (
+          <Space>
+            <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
+            {record.is_frozen && <Tag color="warning">已冻结</Tag>}
+          </Space>
+        )
+      },
     },
     {
       title: '优先级',
@@ -2629,7 +2654,6 @@ const WorkOrdersPage: React.FC = () => {
                       validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
                       canCreateWorkOrder,
                     })
-                    // 自动加载物料绑定的工艺路线及工序
                     loadProcessRouteForMaterial(selectedMaterial.uuid)
                   } catch (error) {
                     console.error('获取物料详情失败:', error)
@@ -2717,7 +2741,6 @@ const WorkOrdersPage: React.FC = () => {
           rules={[{ required: true, message: '请输入计划数量' }]}
           colProps={{ span: 6 }}
         />
-
         <ProFormSelect
           name="priority"
           label="优先级"
@@ -2754,6 +2777,7 @@ const WorkOrdersPage: React.FC = () => {
             value: route.id,
           }))}
           disabled={isEdit}
+          colProps={{ span: 24 }}
           fieldProps={{
             showSearch: true,
             filterOption: (input: string, option: any) =>
@@ -2761,14 +2785,11 @@ const WorkOrdersPage: React.FC = () => {
             onChange: async (value: number | undefined) => {
               if (value) {
                 try {
-                  // 从工艺路线列表中找到路线（获取 uuid）
                   const route = processRouteList.find(r => r.id === value)
                   if (!route || !route.uuid) {
                     messageApi.warning('未找到工艺路线信息')
                     return
                   }
-
-                  // 调用详情 API 获取完整的工艺路线信息（包含工序序列）
                   const routeDetail = await processRouteApi.get(route.uuid)
                   const operations = parseOperationSequence(
                     routeDetail?.operation_sequence,
@@ -2793,22 +2814,17 @@ const WorkOrdersPage: React.FC = () => {
                   console.error('获取工艺路线工序失败:', error)
                   messageApi.error(error.message || '获取工艺路线工序失败')
                   setSelectedOperations([])
-                  formRef.current?.setFieldsValue({
-                    operations: undefined,
-                  })
+                  formRef.current?.setFieldsValue({ operations: undefined })
                 }
               } else {
                 setSelectedOperations([])
-                formRef.current?.setFieldsValue({
-                  operations: undefined,
-                })
+                formRef.current?.setFieldsValue({ operations: undefined })
               }
             },
           }}
-          colProps={{ span: 12 }}
         />
         <Form.Item name="operations" hidden />
-        <Form.Item label="工艺路线工序清单" colon style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+        <Form.Item label="工艺路线工序清单" colon style={{ gridColumn: '1 / -1', marginBottom: 24, paddingLeft: 8 }}>
           <CreateWorkOrderOperationsList
             selectedOperations={selectedOperations}
             setSelectedOperations={setSelectedOperations}
@@ -2872,7 +2888,7 @@ const WorkOrdersPage: React.FC = () => {
           setProductSourceModalType(null)
         }}
         footer={null}
-        width={900}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <Table
           loading={productSourceDocLoading}
@@ -3004,47 +3020,16 @@ const WorkOrdersPage: React.FC = () => {
               style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}
             >
               <Space wrap>
-                {/* 状态显示和流转 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16 }}>
-                  <span style={{ fontWeight: 500 }}>状态：</span>
-                  <Tag
-                    color={
-                      workOrderDetail?.status === 'draft'
-                        ? 'default'
-                        : workOrderDetail?.status === 'released'
-                          ? 'processing'
-                          : workOrderDetail?.status === 'in_progress'
-                            ? 'processing'
-                            : workOrderDetail?.status === 'completed'
-                              ? 'success'
-                              : workOrderDetail?.status === 'cancelled'
-                                ? 'error'
-                                : 'default'
-                    }
+                {availableTransitions.length > 0 && (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={handleStateTransition}
+                    disabled={!workOrderDetail}
                   >
-                    {workOrderDetail?.status === 'draft'
-                      ? '草稿'
-                      : workOrderDetail?.status === 'released'
-                        ? '已下达'
-                        : workOrderDetail?.status === 'in_progress'
-                          ? '执行中'
-                          : workOrderDetail?.status === 'completed'
-                            ? '已完成'
-                            : workOrderDetail?.status === 'cancelled'
-                              ? '已取消'
-                              : workOrderDetail?.status}
-                  </Tag>
-                  {availableTransitions.length > 0 && (
-                    <Button
-                      type="link"
-                      size="small"
-                      onClick={handleStateTransition}
-                      disabled={!workOrderDetail}
-                    >
-                      状态流转
-                    </Button>
-                  )}
-                </div>
+                    状态流转
+                  </Button>
+                )}
                 <Divider orientation="vertical" />
                 <Button
                   type="primary"
@@ -3106,6 +3091,35 @@ const WorkOrdersPage: React.FC = () => {
                 </Select>
               </Space>
             </div>
+
+            {/* 生命周期（UniLifecycleStepper） */}
+            {workOrderDetail && (() => {
+              const lifecycle = getWorkOrderLifecycle(workOrderDetail)
+              const mainStages = lifecycle.mainStages ?? []
+              if (mainStages.length === 0) return null
+              return (
+                <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
+                  <h4 style={{ marginBottom: 12 }}>生命周期</h4>
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    status={lifecycle.status}
+                    showLabels
+                    nextStepSuggestions={lifecycle.nextStepSuggestions}
+                  />
+                </div>
+              )
+            })()}
+
+            {/* 单据关联（DocumentRelationDisplay） */}
+            {documentRelations && (
+              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
+                <DocumentRelationDisplay
+                  relations={documentRelations}
+                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                />
+              </div>
+            )}
+
             {workOrderDetail?.id && (
               <div style={{ padding: '16px 0' }}>
                 <DocumentTrackingPanel
@@ -3115,69 +3129,6 @@ const WorkOrdersPage: React.FC = () => {
                 />
               </div>
             )}
-            {documentRelations ? (
-              <div style={{ padding: '16px 0' }}>
-                <Card title="单据关联">
-                  {documentRelations.upstream_count > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        上游单据 ({documentRelations.upstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>,
-                          },
-                        ]}
-                        dataSource={documentRelations.upstream_documents}
-                        pagination={false}
-                        rowKey={record => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.downstream_count > 0 && (
-                    <div>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        下游单据 ({documentRelations.downstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>,
-                          },
-                        ]}
-                        dataSource={documentRelations.downstream_documents}
-                        pagination={false}
-                        rowKey={record => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.upstream_count === 0 &&
-                    documentRelations.downstream_count === 0 && (
-                      <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
-                        暂无关联单据
-                      </div>
-                    )}
-                </Card>
-              </div>
-            ) : null}
-
             {/* 工单工序管理 */}
             <div style={{ padding: '16px 0' }}>
               <Card
@@ -3556,6 +3507,36 @@ const WorkOrdersPage: React.FC = () => {
               }}
             />
 
+            <ProFormSelect
+              name="assigned_mold_id"
+              label="分配模具"
+              placeholder="请选择模具（可选）"
+              options={moldList.map(item => ({
+                label: `${item.code || ''} - ${item.name}`,
+                value: item.id,
+              }))}
+              fieldProps={{
+                showSearch: true,
+                filterOption: (input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+            />
+
+            <ProFormSelect
+              name="assigned_tool_id"
+              label="分配工装"
+              placeholder="请选择工装（可选）"
+              options={toolList.map(item => ({
+                label: `${item.code || ''} - ${item.name}`,
+                value: item.id,
+              }))}
+              fieldProps={{
+                showSearch: true,
+                filterOption: (input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+            />
+
             <ProFormTextArea
               name="remarks"
               label="派工备注"
@@ -3578,7 +3559,7 @@ const WorkOrdersPage: React.FC = () => {
           setSplitType('count')
         }}
         onOk={handleSubmitSplit}
-        width={600}
+        width={MODAL_CONFIG.SMALL_WIDTH}
         okText="确认拆分"
         cancelText="取消"
       >
@@ -3902,7 +3883,7 @@ const WorkOrdersPage: React.FC = () => {
           setBatchReleaseModalVisible(false)
           setBatchReleaseCheckResults([])
         }}
-        width={800}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         footer={[
           <Button
             key="cancel"
@@ -4273,18 +4254,15 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
 
   if (selectedOperations.length === 0) {
     return (
-      <div>
+      <div style={{ width: '100%' }}>
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 16,
+            marginBottom: 8,
           }}
         >
-          <Space>
-            <Tag color="default">已配置 0 个工序</Tag>
-          </Space>
           <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
             支持拖拽排序，点击删除移除工序
           </Typography.Text>
@@ -4301,55 +4279,40 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         >
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="请先选择工艺路线，将自动加载工序清单"
+            description={addableOptions.length > 0 ? '暂无工序，点击下方按钮添加' : '请先选择工艺路线，将自动加载工序清单'}
           />
+          {!disabled && addableOptions.length > 0 && (
+            <Button
+              type="primary"
+              ghost
+              icon={<PlusOutlined />}
+              onClick={() => setAddOpModalVisible(true)}
+              style={{ marginTop: 12 }}
+            >
+              新增工序
+            </Button>
+          )}
         </div>
         {!disabled && addableOptions.length > 0 && (
-          <>
-            <div
-              onClick={() => setAddOpModalVisible(true)}
-              style={{
-                marginTop: 16,
-                padding: '12px',
-                border: '1px dashed #1890ff',
-                borderRadius: '4px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                color: '#1890ff',
+          <Modal
+            title="选择工序"
+            open={addOpModalVisible}
+            onCancel={() => setAddOpModalVisible(false)}
+            footer={null}
+            destroyOnHidden
+          >
+            <Select
+              style={{ width: '100%' }}
+              placeholder="选择要添加的工序"
+              showSearch
+              filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
+              options={addableOptions}
+              onSelect={(id: number) => {
+                handleAddSelect(id)
+                setAddOpModalVisible(false)
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = '#40a9ff'
-                e.currentTarget.style.backgroundColor = '#f0f9ff'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = '#1890ff'
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <PlusOutlined style={{ marginRight: 8 }} />
-              <span>新增工序</span>
-            </div>
-            <Modal
-              title="选择工序"
-              open={addOpModalVisible}
-              onCancel={() => setAddOpModalVisible(false)}
-              footer={null}
-              destroyOnHidden
-            >
-              <Select
-                style={{ width: '100%' }}
-                placeholder="选择要添加的工序"
-                showSearch
-                filterOption={(i, o) => (o?.label ?? '').toLowerCase().includes(i.toLowerCase())}
-                options={addableOptions}
-                onSelect={(id: number) => {
-                  handleAddSelect(id)
-                  setAddOpModalVisible(false)
-                }}
-              />
-            </Modal>
-          </>
+            />
+          </Modal>
         )}
       </div>
     )
@@ -4364,23 +4327,23 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
   ]
 
   return (
-    <div>
+    <div style={{ width: '100%' }}>
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 16,
+          marginBottom: 8,
         }}
       >
-        <Space>
-          <Tag color={selectedOperations.length > 0 ? 'processing' : 'default'}>
-            已配置 {selectedOperations.length} 个工序
-          </Tag>
-        </Space>
         <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
           支持拖拽排序，点击删除移除工序
         </Typography.Text>
+        {!disabled && addableOptions.length > 0 && (
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddOpModalVisible(true)} size="small">
+            新增工序
+          </Button>
+        )}
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
@@ -4416,32 +4379,6 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
           />
         </SortableContext>
       </DndContext>
-      {!disabled && addableOptions.length > 0 && (
-        <div
-          onClick={() => setAddOpModalVisible(true)}
-          style={{
-            marginTop: 16,
-            padding: '12px',
-            border: '1px dashed #1890ff',
-            borderRadius: '4px',
-            textAlign: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            color: '#1890ff',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = '#40a9ff'
-            e.currentTarget.style.backgroundColor = '#f0f9ff'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = '#1890ff'
-            e.currentTarget.style.backgroundColor = 'transparent'
-          }}
-        >
-          <PlusOutlined style={{ marginRight: 8 }} />
-          <span>新增工序</span>
-        </div>
-      )}
       {!disabled && addableOptions.length > 0 && (
         <Modal
           title="选择工序"

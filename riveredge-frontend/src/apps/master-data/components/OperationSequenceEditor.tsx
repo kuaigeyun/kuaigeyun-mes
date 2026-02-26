@@ -275,7 +275,15 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const activeOperation = activeId ? operations.find((op) => op.uuid === activeId) : null;
 
   return (
-    <>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ color: '#666', fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
+        {operations.length > 0 && (
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
+            {t('app.master-data.operationSequence.addOperation')}
+          </Button>
+        )}
+      </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         {operations.length > 0 ? (
           <SortableContext items={operations.map((op) => op.uuid)} strategy={verticalListSortingStrategy}>
@@ -362,15 +370,21 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             </div>
           </SortableContext>
         ) : (
-          <Table
-            columns={columns}
-            dataSource={operations}
-            rowKey="uuid"
-            pagination={false}
-            size="small"
-            style={{ width: '100%' }}
-            locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
-          />
+          <div
+            style={{
+              padding: 24,
+              background: '#fafafa',
+              borderRadius: 4,
+              border: '1px dashed #d9d9d9',
+              textAlign: 'center',
+              color: '#999',
+            }}
+          >
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
+            <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
+              {t('app.master-data.operationSequence.addOperation')}
+            </Button>
+          </div>
         )}
         <DragOverlay>
           {activeOperation ? (
@@ -386,16 +400,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      <div
-        onClick={() => setAddModalVisible(true)}
-        style={{ marginTop: 16, padding: 12, border: '1px dashed #1890ff', borderRadius: 4, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', color: '#1890ff' }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#40a9ff'; e.currentTarget.style.backgroundColor = '#f0f9ff'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1890ff'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-      >
-        <PlusOutlined style={{ marginRight: 8 }} />
-        <span>{t('app.master-data.operationSequence.addOperation')}</span>
-      </div>
 
       <Modal title={t('app.master-data.operationSequence.selectOperation')} open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText={t('common.confirm')} cancelText={t('common.cancel')} okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
         <Select
@@ -447,6 +451,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           </div>
         )}
       </Modal>
-    </>
+    </div>
   );
 };
