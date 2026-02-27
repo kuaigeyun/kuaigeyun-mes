@@ -112,3 +112,96 @@ export async function getQuickStartTutorial(): Promise<any> {
   const response = await apiRequest('/api/v1/core/onboarding/quick-start', { method: 'GET' });
   return response.data || response;
 }
+
+/**
+ * 系统上线向导响应
+ */
+export interface SystemGoLiveGuideResponse {
+  init_completed: boolean;
+  message?: string;
+  guide?: {
+    name: string;
+    checklist: Array<{
+      id: string;
+      name: string;
+      items: Array<{
+        id: string;
+        name: string;
+        required: boolean;
+        description: string;
+        jump_path?: string;
+        check_key?: string;
+        completed?: boolean;
+      }>;
+    }>;
+  };
+  checklist?: any[];
+}
+
+/**
+ * 获取系统上线向导（从0到可开单的步骤式引导）
+ * 
+ * @returns 系统上线向导信息
+ */
+export async function getSystemGoLiveGuide(): Promise<SystemGoLiveGuideResponse> {
+  const response = await apiRequest<{ success: boolean; data: SystemGoLiveGuideResponse }>(
+    '/core/onboarding/system-guide',
+    { method: 'GET' }
+  );
+  return response.data || response;
+}
+
+/** 上线助手检查项 */
+export interface GoLiveAssistantItem {
+  id: string;
+  name: string;
+  required: boolean;
+  description: string;
+  jump_path?: string;
+  check_key?: string;
+  completed?: boolean;
+}
+
+/** 上线助手阶段 */
+export interface GoLiveAssistantPhase {
+  id: string;
+  name: string;
+  order: number;
+  items: GoLiveAssistantItem[];
+}
+
+/** 上线助手响应 */
+export interface GoLiveAssistantResponse {
+  phases: GoLiveAssistantPhase[];
+  all_completed: boolean;
+  message?: string;
+}
+
+/**
+ * 获取上线助手四阶段及每项完成状态
+ */
+export async function getGoLiveAssistant(): Promise<GoLiveAssistantResponse> {
+  const response = await apiRequest<{ success: boolean; data: GoLiveAssistantResponse }>(
+    '/core/onboarding/go-live-assistant',
+    { method: 'GET' }
+  );
+  return response.data || response;
+}
+
+/**
+ * 标记业务蓝图已确认
+ */
+export async function markBlueprintConfirmed(): Promise<void> {
+  await apiRequest('/core/onboarding/go-live-assistant/blueprint-confirmed', {
+    method: 'PUT',
+  });
+}
+
+/**
+ * 标记期初数据已核对
+ */
+export async function markInitialDataVerified(): Promise<void> {
+  await apiRequest('/core/onboarding/go-live-assistant/initial-data-verified', {
+    method: 'PUT',
+  });
+}

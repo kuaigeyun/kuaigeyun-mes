@@ -21,15 +21,23 @@ async def get_settings(
     获取站点设置
     
     获取当前组织的站点设置，如果不存在则自动创建。
+    新租户未设置 site_name、site_logo 时，自动回退到平台级设置。
     
     Args:
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
-        SiteSettingResponse: 站点设置对象
+        SiteSettingResponse: 站点设置对象（含平台回退后的设置）
     """
-    settings = await SiteSettingService.get_settings(tenant_id)
-    return SiteSettingResponse.model_validate(settings)
+    site_settings = await SiteSettingService.get_settings(tenant_id)
+    merged_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+    return SiteSettingResponse(
+        uuid=site_settings.uuid,
+        tenant_id=site_settings.tenant_id,
+        settings=merged_settings,
+        created_at=site_settings.created_at,
+        updated_at=site_settings.updated_at,
+    )
 
 
 @router.put("", response_model=SiteSettingResponse)

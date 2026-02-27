@@ -1,14 +1,21 @@
 /**
  * 编码规则功能页面工具函数
- * 
+ *
  * 提供获取功能页面配置的工具函数，支持从 localStorage 读取配置。
+ * 按租户隔离，编码规则为租户级数据。
  */
 
+import { getTenantId } from '../utils/auth';
 import { CodeRulePageConfig, getCodeRulePageConfig } from '../config/codeRulePages';
+
+function getCodeRulePageConfigsKey(): string {
+  const tenantId = getTenantId();
+  return tenantId != null ? `codeRulePageConfigs_t${tenantId}` : 'codeRulePageConfigs';
+}
 
 /**
  * 获取功能页面配置（包含 localStorage 中的配置）
- * 
+ *
  * @param pageCode - 页面代码
  * @returns 功能页面配置或 undefined
  */
@@ -19,9 +26,9 @@ export function getPageConfig(pageCode: string): CodeRulePageConfig | undefined 
     return undefined;
   }
 
-  // 从 localStorage 读取保存的配置
+  // 从 localStorage 读取保存的配置（按租户隔离）
   try {
-    const savedConfigs = localStorage.getItem('codeRulePageConfigs');
+    const savedConfigs = localStorage.getItem(getCodeRulePageConfigsKey());
     if (savedConfigs) {
       const parsed = JSON.parse(savedConfigs) as CodeRulePageConfig[];
       const savedConfig = parsed.find(p => p.pageCode === pageCode);
@@ -41,6 +48,9 @@ export function getPageConfig(pageCode: string): CodeRulePageConfig | undefined 
 
   return defaultConfig;
 }
+
+/** 供外部获取存储 key（如 code-rules 页面保存时使用） */
+export { getCodeRulePageConfigsKey };
 
 /**
  * 检查功能页面是否启用自动编码

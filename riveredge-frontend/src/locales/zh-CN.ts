@@ -1055,6 +1055,19 @@ export default {
   'common.exportFailed': '导出失败',
   'common.copySuccess': '已复制到剪贴板',
   'common.copyFailed': '复制失败',
+  'common.refresh': '刷新',
+  'common.close': '关闭',
+
+  // 上线助手
+  'goLiveAssistant.title': '上线助手',
+  'goLiveAssistant.jump': '跳转',
+  'goLiveAssistant.optional': '可选',
+  'goLiveAssistant.confirmBlueprint': '确认蓝图已配置',
+  'goLiveAssistant.confirmInitialData': '确认核对完成',
+  'goLiveAssistant.blueprintConfirmed': '已标记蓝图已确认',
+  'goLiveAssistant.initialDataVerified': '已标记期初数据已核对',
+  'goLiveAssistant.allCompleted': '恭喜！所有上线准备项已完成',
+  'goLiveAssistant.allCompletedDesc': '您可以开始正式使用系统了。',
 
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',

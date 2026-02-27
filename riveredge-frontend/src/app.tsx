@@ -16,7 +16,7 @@ import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, isTokenExpired } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired } from './utils/auth';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import i18n, { loadUserLanguage } from './config/i18n';
@@ -197,14 +197,14 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   // 引入 useConfigStore
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const getConfig = useConfigStore((s) => s.getConfig);
-  const configInitialized = useConfigStore((s) => s.initialized);
+  const tenantId = getTenantId();
 
-  // 初始化系统配置
+  // 初始化系统配置（用户登录后拉取；租户切换时重新拉取，确保新租户显示平台级 LOGO/站点名）
   useEffect(() => {
-    if (currentUser && !configInitialized) {
+    if (currentUser && tenantId && !isPublicPath) {
       fetchConfigs();
     }
-  }, [currentUser, configInitialized, fetchConfigs]);
+  }, [currentUser, tenantId, isPublicPath, fetchConfigs]);
 
   // 监听用户活动（仅用户操作时更新，API 请求由 api.ts 在成功响应时更新）
   useEffect(() => {

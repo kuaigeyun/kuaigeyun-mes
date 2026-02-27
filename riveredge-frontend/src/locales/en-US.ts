@@ -1048,6 +1048,19 @@ export default {
   'common.exportFailed': 'Export failed',
   'common.copySuccess': 'Copied to clipboard',
   'common.copyFailed': 'Copy failed',
+  'common.refresh': 'Refresh',
+  'common.close': 'Close',
+
+  // Go Live Assistant
+  'goLiveAssistant.title': 'Go Live Assistant',
+  'goLiveAssistant.jump': 'Go',
+  'goLiveAssistant.optional': 'Optional',
+  'goLiveAssistant.confirmBlueprint': 'Confirm blueprint configured',
+  'goLiveAssistant.confirmInitialData': 'Confirm verification completed',
+  'goLiveAssistant.blueprintConfirmed': 'Blueprint marked as confirmed',
+  'goLiveAssistant.initialDataVerified': 'Initial data marked as verified',
+  'goLiveAssistant.allCompleted': 'Congratulations! All go-live items are completed',
+  'goLiveAssistant.allCompletedDesc': 'You can start using the system.',
 
   // UniTable component
   'components.uniTable.fuzzySearch': 'Fuzzy search',

@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { App, message } from 'antd';
 import { ProForm, ProFormText, ProFormSelect, ProFormGroup } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +16,9 @@ import { WizardTemplate } from '../layout-templates/WizardTemplate';
 import { getInitSteps, completeStep, completeInitWizard, type InitWizardData, type Step1OrganizationInfo, type Step2DefaultSettings, type Step2_5CodeRules, type Step3AdminInfo, type Step4Template } from '../../services/init-wizard';
 import { getTenantId } from '../../utils/auth';
 import { getIndustryTemplateList, type IndustryTemplate } from '../../services/industryTemplate';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
+import { getLanguageList } from '../../services/language';
+import { useConfigStore } from '../../stores/configStore';
 import { ApartmentOutlined, SettingOutlined, UserOutlined, FileTextOutlined, CheckCircleOutlined, KeyOutlined } from '@ant-design/icons';
 import AISuggestions from '../ai-suggestions';
 
@@ -36,33 +40,78 @@ export interface InitWizardProps {
 const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel }) => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [initData, setInitData] = useState<InitWizardData>({});
   const [stepConfigs, setStepConfigs] = useState<any[]>([]);
+  const [progress, setProgress] = useState(0);
   const [templates, setTemplates] = useState<IndustryTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<{ label: string; value: string }[]>([]);
+  const [timezoneOptions, setTimezoneOptions] = useState<{ label: string; value: string }[]>([]);
+  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string }[]>([]);
 
   // 获取当前组织ID
   const currentTenantId = tenantId || getTenantId();
 
-  // 加载初始化步骤配置
+  // 加载初始化步骤配置与字典数据
   useEffect(() => {
     if (currentTenantId) {
       loadInitSteps();
       loadTemplates();
+      loadStep2Options();
       // 从sessionStorage恢复进度
       const savedData = sessionStorage.getItem(`init_wizard_data_${currentTenantId}`);
       if (savedData) {
         try {
-          setInitData(JSON.parse(savedData));
+          const parsed = JSON.parse(savedData);
+          // 兼容旧格式：currency -> default_currency, language -> default_language
+          if (parsed.step2_default_settings) {
+            const s2 = parsed.step2_default_settings;
+            if (s2.currency !== undefined && s2.default_currency === undefined) {
+              s2.default_currency = s2.currency;
+            }
+            if (s2.language !== undefined && s2.default_language === undefined) {
+              s2.default_language = s2.language;
+            }
+            if (!s2.date_format) s2.date_format = 'YYYY-MM-DD';
+          }
+          setInitData(parsed);
         } catch (e) {
           console.error('恢复初始化数据失败:', e);
         }
       }
     }
   }, [currentTenantId]);
+
+  /**
+   * 加载步骤2选项（货币、时区、语言，与站点设置一致）
+   */
+  const loadStep2Options = async () => {
+    try {
+      const [langRes, currencyDict, timezoneDict] = await Promise.all([
+        getLanguageList({ is_active: true }).catch(() => ({ items: [] })),
+        getDataDictionaryByCode('CURRENCY').catch(() => null),
+        getDataDictionaryByCode('TIMEZONE').catch(() => null),
+      ]);
+      if (langRes?.items) {
+        setLanguageOptions(langRes.items.map((l: any) => ({ label: l.native_name || l.name, value: l.code })));
+      }
+      if (currencyDict?.uuid) {
+        const items = await getDictionaryItemList(currencyDict.uuid, true);
+        setCurrencyOptions(items.map((i: any) => ({ label: i.label, value: i.value })));
+      }
+      if (timezoneDict?.uuid) {
+        const items = await getDictionaryItemList(timezoneDict.uuid, true);
+        setTimezoneOptions(items.map((i: any) => ({ label: i.label, value: i.value })));
+      }
+    } catch (e) {
+      console.warn('加载步骤2选项失败', e);
+    }
+  };
 
   /**
    * 加载行业模板列表
@@ -89,7 +138,8 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
     try {
       const response = await getInitSteps(currentTenantId);
       setStepConfigs(response.steps);
-      
+      setProgress(response.progress ?? 0);
+
       // 如果有当前步骤，设置当前步骤
       if (response.current_step) {
         const stepIndex = response.steps.findIndex(s => s.step_id === response.current_step);
@@ -137,6 +187,8 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       setLoading(true);
       await completeStep(stepId, data);
       saveStepData(stepId, data);
+      const res = await getInitSteps(currentTenantId);
+      setProgress(res.progress ?? 0);
       messageApi.success('步骤完成');
     } catch (error: any) {
       console.error('完成步骤失败:', error);
@@ -157,10 +209,15 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       setLoading(true);
       await completeInitWizard(currentTenantId, initData);
       messageApi.success('初始化完成');
-      
+
+      // 清除 initSteps 缓存，使工作台等页面的初始化提示条立即消失
+      queryClient.invalidateQueries({ queryKey: ['initSteps', currentTenantId] });
+      // 刷新站点配置，使默认货币、日期格式等立即生效
+      await fetchConfigs();
+
       // 清除sessionStorage
       sessionStorage.removeItem(`init_wizard_data_${currentTenantId}`);
-      
+
       // 调用完成回调
       if (onComplete) {
         onComplete();
@@ -230,14 +287,45 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
     );
   };
 
+  /** 步骤2 默认选项（字典为空时使用，与站点设置一致） */
+  const defaultCurrencyOptions = [
+    { label: '人民币 (CNY)', value: 'CNY' },
+    { label: '美元 (USD)', value: 'USD' },
+    { label: '欧元 (EUR)', value: 'EUR' },
+    { label: '日元 (JPY)', value: 'JPY' },
+    { label: '英镑 (GBP)', value: 'GBP' },
+  ];
+  const defaultTimezoneOptions = [
+    { label: '东八区 (UTC+8)', value: 'Asia/Shanghai' },
+    { label: '东京 (UTC+9)', value: 'Asia/Tokyo' },
+    { label: '首尔 (UTC+9)', value: 'Asia/Seoul' },
+    { label: '纽约 (UTC-5)', value: 'America/New_York' },
+    { label: '伦敦 (UTC+0)', value: 'Europe/London' },
+    { label: '巴黎 (UTC+1)', value: 'Europe/Paris' },
+  ];
+  const defaultLanguageOptions = [
+    { label: '简体中文 (zh-CN)', value: 'zh-CN' },
+    { label: '繁体中文 (zh-TW)', value: 'zh-TW' },
+    { label: 'English (en-US)', value: 'en-US' },
+    { label: '日本語 (ja-JP)', value: 'ja-JP' },
+    { label: '한국어 (ko-KR)', value: 'ko-KR' },
+  ];
+  const dateFormatOptions = [
+    { label: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
+    { label: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
+    { label: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
+    { label: 'YYYY年MM月DD日', value: 'YYYY年MM月DD日' },
+  ];
+
   /**
-   * 步骤2：默认设置
+   * 步骤2：默认设置（与站点设置格式一致）
    */
   const renderStep2 = () => {
     const stepData = initData.step2_default_settings || {
       timezone: 'Asia/Shanghai',
-      currency: 'CNY',
-      language: 'zh-CN',
+      default_currency: 'CNY',
+      default_language: 'zh-CN',
+      date_format: 'YYYY-MM-DD',
     };
 
     return (
@@ -255,38 +343,25 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
               name="timezone"
               label="时区"
               rules={[{ required: true, message: '请选择时区' }]}
-              options={[
-                { label: '东八区 (UTC+8)', value: 'Asia/Shanghai' },
-                { label: '东京 (UTC+9)', value: 'Asia/Tokyo' },
-                { label: '首尔 (UTC+9)', value: 'Asia/Seoul' },
-                { label: '纽约 (UTC-5)', value: 'America/New_York' },
-                { label: '伦敦 (UTC+0)', value: 'Europe/London' },
-                { label: '巴黎 (UTC+1)', value: 'Europe/Paris' },
-              ]}
+              options={timezoneOptions.length > 0 ? timezoneOptions : defaultTimezoneOptions}
             />
             <ProFormSelect
-              name="currency"
-              label="货币"
-              rules={[{ required: true, message: '请选择货币' }]}
-              options={[
-                { label: '人民币 (CNY)', value: 'CNY' },
-                { label: '美元 (USD)', value: 'USD' },
-                { label: '欧元 (EUR)', value: 'EUR' },
-                { label: '日元 (JPY)', value: 'JPY' },
-                { label: '英镑 (GBP)', value: 'GBP' },
-              ]}
+              name="default_currency"
+              label="默认货币"
+              rules={[{ required: true, message: '请选择默认货币' }]}
+              options={currencyOptions.length > 0 ? currencyOptions : defaultCurrencyOptions}
             />
             <ProFormSelect
-              name="language"
-              label="语言"
-              rules={[{ required: true, message: '请选择语言' }]}
-              options={[
-                { label: '简体中文 (zh-CN)', value: 'zh-CN' },
-                { label: '繁体中文 (zh-TW)', value: 'zh-TW' },
-                { label: 'English (en-US)', value: 'en-US' },
-                { label: '日本語 (ja-JP)', value: 'ja-JP' },
-                { label: '한국어 (ko-KR)', value: 'ko-KR' },
-              ]}
+              name="default_language"
+              label="默认语言"
+              rules={[{ required: true, message: '请选择默认语言' }]}
+              options={languageOptions.length > 0 ? languageOptions : defaultLanguageOptions}
+            />
+            <ProFormSelect
+              name="date_format"
+              label="日期格式"
+              rules={[{ required: true, message: '请选择日期格式' }]}
+              options={dateFormatOptions}
             />
           </ProFormGroup>
         </ProForm>
@@ -433,8 +508,9 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
             <div style={{ marginBottom: 16 }}>
               <strong>默认设置：</strong>
               <div>时区：{initData.step2_default_settings.timezone}</div>
-              <div>货币：{initData.step2_default_settings.currency}</div>
-              <div>语言：{initData.step2_default_settings.language}</div>
+              <div>默认货币：{initData.step2_default_settings.default_currency}</div>
+              <div>默认语言：{initData.step2_default_settings.default_language}</div>
+              <div>日期格式：{initData.step2_default_settings.date_format}</div>
             </div>
           )}
           {initData.step3_admin_info && (
@@ -502,11 +578,18 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
 
   return (
     <>
+      {progress > 0 && progress < 100 && (
+        <div style={{ marginBottom: 16, padding: '8px 16px', background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
+          <span style={{ marginRight: 8 }}>完成进度：</span>
+          <span style={{ fontWeight: 500 }}>{Math.round(progress)}%</span>
+        </div>
+      )}
       <WizardTemplate
         steps={steps}
         current={currentStep}
         onStepChange={setCurrentStep}
         onFinish={handleFinish}
+        onSkip={onCancel}
         finishDisabled={loading}
       />
       {/* AI智能建议 - 侧边栏显示，不打断操作流程 */}

@@ -1,12 +1,16 @@
 /**
  * 保存搜索条件排序持久化
  *
- * 统一管理 saved_search_order_personal_*、saved_search_order_shared_* 的读写，
- * 避免多处直接操作 localStorage。
+ * 统一管理 saved_search_order_* 的读写，按租户隔离。
+ * 保存搜索为租户级数据，切换租户时使用各自排序。
  */
 
+import { getTenantId } from '../utils/auth';
+
 function getKey(pagePath: string, type: 'personal' | 'shared'): string {
-  return `saved_search_order_${type}_${pagePath}`;
+  const tenantId = getTenantId();
+  const tenantPart = tenantId != null ? `t${tenantId}_` : '';
+  return `saved_search_order_${tenantPart}${type}_${pagePath}`;
 }
 
 export function getSavedSearchOrder(pagePath: string, type: 'personal' | 'shared'): number[] {

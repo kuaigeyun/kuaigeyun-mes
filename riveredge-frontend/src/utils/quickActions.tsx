@@ -9,6 +9,7 @@
 
 import { message } from 'antd';
 import { navigateTo } from './navigation';
+import { getTenantId } from './auth';
 
 /**
  * 快捷操作类型
@@ -177,11 +178,15 @@ export class SmartFormFill {
 }
 
 /**
- * 操作历史记录工具
+ * 操作历史记录工具（按租户隔离）
  */
 export class OperationHistory {
-  private static storageKey = 'riveredge_operation_history';
   private static maxHistorySize = 50;
+
+  private static getStorageKey(): string {
+    const tenantId = getTenantId();
+    return tenantId != null ? `riveredge_operation_history_t${tenantId}` : 'riveredge_operation_history';
+  }
 
   /**
    * 记录操作
@@ -204,7 +209,7 @@ export class OperationHistory {
         history.splice(this.maxHistorySize);
       }
 
-      localStorage.setItem(this.storageKey, JSON.stringify(history));
+      localStorage.setItem(this.getStorageKey(), JSON.stringify(history));
     } catch (error) {
       console.error('记录操作历史失败:', error);
     }
@@ -221,7 +226,7 @@ export class OperationHistory {
     timestamp: number;
   }> {
     try {
-      const stored = localStorage.getItem(this.storageKey);
+      const stored = localStorage.getItem(this.getStorageKey());
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('获取操作历史失败:', error);
@@ -254,12 +259,13 @@ export class OperationHistory {
    */
   static clear(module?: string): void {
     try {
+      const key = this.getStorageKey();
       if (module) {
         const history = this.getHistory();
         const filtered = history.filter(item => item.module !== module);
-        localStorage.setItem(this.storageKey, JSON.stringify(filtered));
+        localStorage.setItem(key, JSON.stringify(filtered));
       } else {
-        localStorage.removeItem(this.storageKey);
+        localStorage.removeItem(key);
       }
     } catch (error) {
       console.error('清除操作历史失败:', error);
