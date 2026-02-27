@@ -812,22 +812,25 @@ async def get_menu_badge_counts(
         logger.warning(f"menu-badge-counts exception: {e}")
         counts["exception"] = 0
     try:
-        # 销售订单：待审核
+        # 销售订单：活动状态（排除草稿、已完成、已取消、已驳回）
         from apps.kuaizhizao.models.sales_order import SalesOrder
         counts["sales_order"] = await SalesOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
-            review_status__in=["PENDING", "待审核"],
+        ).exclude(
+            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
         ).count()
     except Exception as e:
         logger.warning(f"menu-badge-counts sales_order: {e}")
         counts["sales_order"] = 0
     try:
-        # 采购订单：待审核
+        # 采购订单：待审核（兼容 PENDING、PENDING_REVIEW、待审核 等存量数据）
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
         counts["purchase_order"] = await PurchaseOrder.filter(
             tenant_id=tenant_id,
-            review_status__in=["PENDING", "待审核"],
+            review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
         ).count()
     except Exception as e:
         logger.warning(f"menu-badge-counts purchase_order: {e}")
