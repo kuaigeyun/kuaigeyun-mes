@@ -108,6 +108,7 @@ class PurchaseRequisitionResponse(PurchaseRequisitionBase):
     created_at: datetime
     updated_at: datetime
     items: List[PurchaseRequisitionItemResponse] = Field(default_factory=list)
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
 
 class PurchaseRequisitionListResponse(PurchaseRequisitionResponse):

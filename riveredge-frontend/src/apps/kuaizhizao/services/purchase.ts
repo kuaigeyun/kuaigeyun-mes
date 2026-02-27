@@ -85,6 +85,22 @@ export interface PurchaseOrderListResponse {
   success: boolean;
 }
 
+/** 采购订单统计（用于指标卡片） */
+export interface PurchaseOrderStatistics {
+  active_count: number;
+  pending_review_count: number;
+  in_progress_count: number;
+  overdue_count: number;
+  total_amount: number;
+}
+
+/** 获取采购订单统计 */
+export async function getPurchaseOrderStatistics(): Promise<PurchaseOrderStatistics> {
+  return apiRequest<PurchaseOrderStatistics>('/apps/kuaizhizao/purchase-orders/statistics', {
+    method: 'GET',
+  });
+}
+
 /**
  * 获取采购订单列表
  */

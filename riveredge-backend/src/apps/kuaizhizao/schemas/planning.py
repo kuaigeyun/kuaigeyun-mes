@@ -107,6 +107,7 @@ class ProductionPlanResponse(ProductionPlanBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
     class Config:
         from_attributes = True

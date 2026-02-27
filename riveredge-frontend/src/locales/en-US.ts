@@ -1666,6 +1666,8 @@ export default {
   'app.kuaizhizao.salesOrder.exportSuccess': 'Exported {{count}} records',
   'app.kuaizhizao.salesOrder.importExampleCustomer': 'Customer A',
   'app.kuaizhizao.salesOrder.importExampleNotes': 'Batch import example',
+  'app.kuaizhizao.salesOrder.statActive': 'Active Orders',
+  'app.kuaizhizao.salesOrder.statOverdue': 'Overdue',
   'app.kuaizhizao.menu.warehouse-management.outbound': 'Outbound',
   'app.kuaizhizao.menu.warehouse-management.initial-data': 'Initial Data Import',
   'app.kuaizhizao.menu.warehouse-management.customer-material-registration': 'Customer Material Registration',

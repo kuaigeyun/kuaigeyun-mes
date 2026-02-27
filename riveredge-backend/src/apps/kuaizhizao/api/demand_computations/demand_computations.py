@@ -56,6 +56,50 @@ async def create_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求计算失败")
 
 
+@router.get("/statistics", summary="获取需求计算统计（用于指标卡片）")
+async def get_demand_computation_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    返回需求计算各维度数量，用于列表页指标卡片。
+    """
+    base = DemandComputation.filter(tenant_id=tenant_id)
+    try:
+        total_count = await base.count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics total_count: {e}")
+        total_count = 0
+    try:
+        mrp_count = await base.filter(computation_type="MRP").count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics mrp_count: {e}")
+        mrp_count = 0
+    try:
+        lrp_count = await base.filter(computation_type="LRP").count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics lrp_count: {e}")
+        lrp_count = 0
+    try:
+        pending_count = await base.filter(computation_status__in=["进行中", "pending", "running"]).count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics pending_count: {e}")
+        pending_count = 0
+    try:
+        completed_count = await base.filter(computation_status__in=["完成", "completed", "success"]).count()
+    except Exception as e:
+        logger.warning(f"demand-computation-statistics completed_count: {e}")
+        completed_count = 0
+
+    return {
+        "total_count": total_count,
+        "mrp_count": mrp_count,
+        "lrp_count": lrp_count,
+        "pending_count": pending_count,
+        "completed_count": completed_count,
+    }
+
+
 @router.get("", summary="获取需求计算列表")
 async def list_computations(
     demand_id: Optional[int] = Query(None, description="需求ID"),

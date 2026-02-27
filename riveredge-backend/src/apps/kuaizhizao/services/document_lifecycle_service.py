@@ -423,3 +423,273 @@ def get_work_order_lifecycle(work_order: Any) -> Dict[str, Any]:
         "sub_stages": None,
         "next_step_suggestions": ["状态流转"],
     }
+
+
+# ---------------------------------------------------------------------------
+# 采购订单生命周期节点（与销售订单类似：草稿→待审核→已审核→下推入库→已完成）
+# ---------------------------------------------------------------------------
+PURCHASE_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "audited", "label": "已审核"},
+    {"key": "pushed", "label": "已下推入库"},
+    {"key": "completed", "label": "已完成"},
+]
+
+
+def get_purchase_order_lifecycle(order: Any) -> Dict[str, Any]:
+    """采购订单生命周期计算（与销售订单类似，审核流程）"""
+    status = _norm(getattr(order, "status", None))
+    review_status = _norm(getattr(order, "review_status", None))
+
+    if _is_rejected(review_status):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "已驳回",
+            "status": "exception",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "pending_review", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": ["修改后重新提交审核"],
+        }
+    if _is_cancelled(status):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "draft", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    if _is_draft(status):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "draft"),
+            "sub_stages": None,
+            "next_step_suggestions": ["提交审核"],
+        }
+    if _is_pending_review(status) and not _is_approved(review_status):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "待审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "pending_review"),
+            "sub_stages": None,
+            "next_step_suggestions": ["审核通过", "驳回"],
+        }
+    if _is_audited(status) or _is_approved(review_status):
+        # 简化：已审核即显示已审核，下推入库/完成由前端或后续扩展
+        return {
+            "current_stage_key": "audited",
+            "current_stage_name": "已审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
+            "sub_stages": None,
+            "next_step_suggestions": ["下推收货通知", "下推采购入库"],
+        }
+    return {
+        "current_stage_key": "draft",
+        "current_stage_name": status or "草稿",
+        "status": "normal",
+        "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "draft"),
+        "sub_stages": None,
+        "next_step_suggestions": ["提交审核"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 销售预测生命周期节点（与需求类似：草稿→待审核→已审核→已下推）
+# ---------------------------------------------------------------------------
+SALES_FORECAST_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "audited", "label": "已审核"},
+    {"key": "pushed", "label": "已下推"},
+]
+
+
+def get_sales_forecast_lifecycle(forecast: Any) -> Dict[str, Any]:
+    """销售预测生命周期计算"""
+    status = _norm(getattr(forecast, "status", None))
+    review_status = _norm(getattr(forecast, "review_status", None))
+    pushed = bool(getattr(forecast, "pushed_to_demand", False) or getattr(forecast, "demand_synced", False))
+
+    if _is_rejected(review_status):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "已驳回",
+            "status": "exception",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": ["修改后重新提交审核"],
+        }
+    if _is_draft(status):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "draft"),
+            "sub_stages": None,
+            "next_step_suggestions": ["提交审核"],
+        }
+    if _is_pending_review(status) and not _is_approved(review_status):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "待审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pending_review"),
+            "sub_stages": None,
+            "next_step_suggestions": ["审核通过", "驳回"],
+        }
+    if pushed:
+        return {
+            "current_stage_key": "pushed",
+            "current_stage_name": "已下推",
+            "status": "success",
+            "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "pushed"),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    return {
+        "current_stage_key": "audited",
+        "current_stage_name": "已审核",
+        "status": "normal",
+        "main_stages": _build_main_stages(SALES_FORECAST_MAIN_STAGES, "audited"),
+        "sub_stages": None,
+        "next_step_suggestions": ["下推需求"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 生产计划生命周期节点（草稿→已审核→已执行）
+# ---------------------------------------------------------------------------
+PRODUCTION_PLAN_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "audited", "label": "已审核"},
+    {"key": "executed", "label": "已执行"},
+]
+
+
+def get_production_plan_lifecycle(plan: Any) -> Dict[str, Any]:
+    """生产计划生命周期计算"""
+    status = _norm(getattr(plan, "status", None))
+    execution_status = _norm(getattr(plan, "execution_status", None))
+
+    if status in ("已取消", "cancelled") or execution_status in ("已取消", "cancelled"):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "draft", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    if status in ("草稿", "draft"):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "草稿",
+            "status": "normal",
+            "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "draft"),
+            "sub_stages": None,
+            "next_step_suggestions": ["提交审核"],
+        }
+    if execution_status in ("已执行", "executed"):
+        return {
+            "current_stage_key": "executed",
+            "current_stage_name": "已执行",
+            "status": "success",
+            "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "executed"),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    return {
+        "current_stage_key": "audited",
+        "current_stage_name": "已审核",
+        "status": "normal",
+        "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "audited"),
+        "sub_stages": None,
+        "next_step_suggestions": ["执行计划"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 返工单生命周期（与工单相同：草稿→已下达→执行中→已完成→已取消）
+# ---------------------------------------------------------------------------
+def get_rework_order_lifecycle(rework_order: Any) -> Dict[str, Any]:
+    """返工单生命周期计算（复用工单阶段）"""
+    return get_work_order_lifecycle(rework_order)
+
+
+# ---------------------------------------------------------------------------
+# 采购申请生命周期（草稿→待审核→已通过/已驳回→部分转单→全部转单）
+# ---------------------------------------------------------------------------
+PURCHASE_REQUISITION_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "approved", "label": "已通过"},
+    {"key": "partial", "label": "部分转单"},
+    {"key": "full", "label": "全部转单"},
+]
+
+
+def get_purchase_requisition_lifecycle(requisition: Any) -> Dict[str, Any]:
+    """采购申请生命周期计算"""
+    status = _norm(getattr(requisition, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "待审核": "pending_review", "pending_review": "pending_review",
+        "已驳回": "pending_review", "rejected": "pending_review",
+        "已通过": "approved", "approved": "approved",
+        "部分转单": "partial", "partial": "partial",
+        "全部转单": "full", "full": "full",
+    }
+    key = status_map.get(status, "draft")
+    stage_name = {"draft": "草稿", "pending_review": "待审核", "approved": "已通过",
+                  "partial": "部分转单", "full": "全部转单"}.get(key, status or "草稿")
+    if status in ("已驳回", "rejected"):
+        stage_name = "已驳回"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if stage_name == "已驳回" else "success" if key == "full" else "normal",
+        "main_stages": _build_main_stages(PURCHASE_REQUISITION_MAIN_STAGES, key, is_exception=(stage_name == "已驳回")),
+        "sub_stages": None,
+        "next_step_suggestions": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 报价单生命周期（草稿→已发送→已接受/已拒绝→已转订单）
+# ---------------------------------------------------------------------------
+QUOTATION_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "sent", "label": "已发送"},
+    {"key": "accepted", "label": "已接受"},
+    {"key": "converted", "label": "已转订单"},
+]
+
+
+def get_quotation_lifecycle(quotation: Any) -> Dict[str, Any]:
+    """报价单生命周期计算"""
+    status = _norm(getattr(quotation, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "已发送": "sent", "sent": "sent",
+        "已接受": "accepted", "accepted": "accepted",
+        "已拒绝": "sent", "rejected": "sent",
+        "已转订单": "converted", "converted": "converted",
+    }
+    key = status_map.get(status, "draft")
+    stage_name = {"draft": "草稿", "sent": "已发送", "accepted": "已接受",
+                  "converted": "已转订单"}.get(key, status or "草稿")
+    if status in ("已拒绝", "rejected"):
+        stage_name = "已拒绝"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if stage_name == "已拒绝" else "success" if key == "converted" else "normal",
+        "main_stages": _build_main_stages(QUOTATION_MAIN_STAGES, key, is_exception=(stage_name == "已拒绝")),
+        "sub_stages": None,
+        "next_step_suggestions": [],
+    }

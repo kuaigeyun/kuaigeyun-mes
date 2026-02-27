@@ -1672,6 +1672,8 @@ export default {
   'app.kuaizhizao.salesOrder.exportSuccess': '已导出 {{count}} 条记录',
   'app.kuaizhizao.salesOrder.importExampleCustomer': '客户A',
   'app.kuaizhizao.salesOrder.importExampleNotes': '批量导入示例',
+  'app.kuaizhizao.salesOrder.statActive': '活动订单',
+  'app.kuaizhizao.salesOrder.statOverdue': '逾期未交',
   'app.kuaizhizao.menu.warehouse-management.outbound': '出库管理',
   'app.kuaizhizao.menu.warehouse-management.initial-data': '期初数据导入',
   'app.kuaizhizao.menu.warehouse-management.customer-material-registration': '客户来料登记',

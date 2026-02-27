@@ -107,7 +107,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
       onCancel={onClose}
       footer={null}
       width={800}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Radio.Group

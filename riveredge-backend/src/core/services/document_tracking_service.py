@@ -17,12 +17,22 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.work_order import WorkOrder
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.demand_computation import DemandComputation
+    from apps.kuaizhizao.models.sales_forecast import SalesForecast
+    from apps.kuaizhizao.models.production_plan import ProductionPlan
+    from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+    from apps.kuaizhizao.models.quotation import Quotation
+    from apps.kuaizhizao.models.rework_order import ReworkOrder
     return {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
         "work_order": (WorkOrder, "code"),
         "purchase_order": (PurchaseOrder, "order_code"),
         "demand_computation": (DemandComputation, "computation_code"),
+        "sales_forecast": (SalesForecast, "forecast_code"),
+        "production_plan": (ProductionPlan, "plan_code"),
+        "purchase_requisition": (PurchaseRequisition, "requisition_code"),
+        "quotation": (Quotation, "quotation_code"),
+        "rework_order": (ReworkOrder, "code"),
     }
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry

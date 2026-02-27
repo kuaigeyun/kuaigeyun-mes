@@ -146,7 +146,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         response = PurchaseOrderResponse.model_construct(**order_data)
         # 手动设置items
         response.items = [PurchaseOrderItemResponse.model_validate(item) for item in items]
-        
+        # 生命周期
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
+        response.lifecycle = get_purchase_order_lifecycle(order)
         return response
 
     async def list_purchase_orders(
@@ -209,6 +211,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             resp = PurchaseOrderListResponse.model_construct(**order_data)
             resp.items = []
             resp.items_count = items_count
+            from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
+            resp.lifecycle = get_purchase_order_lifecycle(order)
             result.append(resp)
 
         # 返回前端期望的格式 { data, total, success }

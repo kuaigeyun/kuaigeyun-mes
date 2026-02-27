@@ -114,6 +114,7 @@ class ReworkOrderResponse(ReworkOrderBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
 
 class ReworkOrderListResponse(BaseModel):
@@ -143,6 +144,7 @@ class ReworkOrderListResponse(BaseModel):
     cost: Decimal
     created_at: datetime
     updated_at: datetime
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
 
 class ReworkOrderFromWorkOrderRequest(BaseModel):

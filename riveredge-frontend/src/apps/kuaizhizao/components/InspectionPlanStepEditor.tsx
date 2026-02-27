@@ -209,7 +209,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
           addForm.resetFields();
           setAddModalVisible(false);
         }}
-        destroyOnClosed
+        destroyOnHidden
         width={500}
       >
         <Form form={addForm} layout="vertical" initialValues={{ sampling_type: 'full' }}>

@@ -110,6 +110,18 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     pathname.startsWith('/qrcode/');
   const isInfraLoginPage = pathname === '/infra/login';
 
+  // ⚠️ 修复：公开页面若存在过期 token，立即清除，避免触发需认证的请求导致短暂错误提示（如 "Token缺失"）
+  // 使用 useLayoutEffect 在首屏绘制前同步执行，减少闪烁
+  React.useLayoutEffect(() => {
+    if (isPublicPath) {
+      const token = getToken();
+      if (token && isTokenExpired(token)) {
+        clearAuth();
+        setCurrentUser(undefined);
+      }
+    }
+  }, [isPublicPath, setCurrentUser]);
+
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
   const shouldFetchUser = React.useMemo(() => {

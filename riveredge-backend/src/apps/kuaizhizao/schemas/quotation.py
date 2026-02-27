@@ -151,6 +151,7 @@ class QuotationResponse(QuotationBase):
     created_at: datetime
     updated_at: datetime
     items: Optional[List[QuotationItemResponse]] = Field(None, description="报价明细")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
     class Config:
         from_attributes = True

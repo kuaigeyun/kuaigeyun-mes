@@ -25,6 +25,60 @@ report_service = ReportService()
 router = APIRouter(prefix="/reports", tags=["报表"])
 
 
+@router.get("/inventory/statistics", summary="获取库存统计（用于指标卡片）")
+async def get_inventory_statistics(
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    返回库存各维度统计，用于报表页指标卡片。
+    数据来源：MaterialBatch（批次库存）、InventoryAlert（库存预警）。
+    """
+    from apps.master_data.models.material_batch import MaterialBatch
+    from apps.kuaizhizao.models.inventory_alert import InventoryAlert
+    from tortoise.functions import Sum
+
+    try:
+        batch_query = MaterialBatch.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, quantity__gt=0, status="in_stock"
+        )
+        material_ids = await batch_query.values_list("material_id", flat=True)
+        total_materials = len(set(material_ids)) if material_ids else 0
+
+        agg = await batch_query.aggregate(total_qty=Sum("quantity"))
+        total_quantity = float(agg.get("total_qty") or 0)
+    except Exception as e:
+        logger.warning(f"inventory-statistics batch: {e}")
+        total_materials = 0
+        total_quantity = 0.0
+
+    try:
+        alert_base = InventoryAlert.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending")
+        if warehouse_id:
+            alert_base = alert_base.filter(warehouse_id=warehouse_id)
+
+        low_stock_alerts = alert_base.filter(alert_type="low_stock")
+        out_of_stock_count = await low_stock_alerts.filter(current_quantity=0).count()
+        low_stock_count = await low_stock_alerts.filter(current_quantity__gt=0).count()
+        high_stock_count = await alert_base.filter(alert_type="high_stock").count()
+    except Exception as e:
+        logger.warning(f"inventory-statistics alert: {e}")
+        low_stock_count = 0
+        out_of_stock_count = 0
+        high_stock_count = 0
+
+    return {
+        "total_items": total_materials,
+        "total_quantity": round(total_quantity, 2),
+        "total_value": 0.0,
+        "low_stock_items": low_stock_count,
+        "out_of_stock_items": out_of_stock_count,
+        "high_stock_items": high_stock_count,
+        "normal_stock_items": max(0, total_materials - low_stock_count - out_of_stock_count - high_stock_count),
+    }
+
+
 @router.get("/inventory", summary="获取库存报表")
 async def get_inventory_report(
     report_type: str = Query("summary", description="报表类型（summary/turnover/abc/slow_moving）"),

@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, Query, Path
 from fastapi.responses import JSONResponse
@@ -90,6 +90,81 @@ async def list_purchase_orders(
     )
 
     return await PurchaseService().list_purchase_orders(tenant_id, params)
+
+
+@router.get("/purchase-orders/statistics", summary="获取采购订单统计（用于指标卡片）")
+async def get_purchase_order_statistics(
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    返回采购订单各维度数量，用于列表页指标卡片。
+    指标：活动订单、待审核、执行中、逾期未到、总金额。
+    """
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+    from tortoise.functions import Sum
+
+    today = date.today()
+    base = PurchaseOrder.filter(tenant_id=tenant_id)
+    audited = ("AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过")
+    pending_review = ("PENDING", "PENDING_REVIEW", "待审核", "pending_review")
+
+    try:
+        active_count = await base.exclude(
+            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"purchase-order-statistics active_count: {e}")
+        active_count = 0
+
+    try:
+        pending_review_count = await base.filter(
+            review_status__in=list(pending_review),
+        ).count()
+    except Exception as e:
+        logger.warning(f"purchase-order-statistics pending_review_count: {e}")
+        pending_review_count = 0
+
+    try:
+        in_progress_count = await base.filter(
+            status__in=list(audited),
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"purchase-order-statistics in_progress_count: {e}")
+        in_progress_count = 0
+
+    try:
+        overdue_count = await base.filter(
+            delivery_date__lt=today,
+            status__in=list(audited),
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"purchase-order-statistics overdue_count: {e}")
+        overdue_count = 0
+
+    try:
+        agg = await base.exclude(
+            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).aggregate(total=Sum("total_amount"))
+        total_amount = float(agg.get("total") or 0)
+    except Exception as e:
+        logger.warning(f"purchase-order-statistics total_amount: {e}")
+        total_amount = 0
+
+    return {
+        "active_count": active_count,
+        "pending_review_count": pending_review_count,
+        "in_progress_count": in_progress_count,
+        "overdue_count": overdue_count,
+        "total_amount": round(total_amount, 2),
+    }
 
 
 @router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")

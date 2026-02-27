@@ -146,6 +146,22 @@ export interface DemandListResponse {
   success: boolean;
 }
 
+/** 需求统计（用于指标卡片） */
+export interface DemandStatistics {
+  active_count: number;
+  pending_review_count: number;
+  audited_count: number;
+  pushed_count: number;
+  total_amount: number;
+}
+
+/** 获取需求统计 */
+export async function getDemandStatistics(): Promise<DemandStatistics> {
+  return apiRequest<DemandStatistics>('/apps/kuaizhizao/demands/statistics', {
+    method: 'GET',
+  });
+}
+
 /**
  * 获取需求列表
  */

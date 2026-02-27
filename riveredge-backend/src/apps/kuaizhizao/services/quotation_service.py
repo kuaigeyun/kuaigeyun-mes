@@ -253,7 +253,10 @@ class QuotationService:
             items = await QuotationItem.filter(
                 tenant_id=tenant_id, quotation_id=quotation_id
             ).order_by("id")
-        return self._quotation_to_response(quotation, items=items)
+        resp = self._quotation_to_response(quotation, items=items)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
+        resp.lifecycle = get_quotation_lifecycle(quotation)
+        return resp
 
     async def list_quotations(
         self,
@@ -274,11 +277,12 @@ class QuotationService:
             query = query.filter(quotation_date__lte=end_date)
         total = await query.count()
         quotations = await query.offset(skip).limit(limit).order_by("-created_at")
-
-        data = [
-            self._quotation_to_response(q)
-            for q in quotations
-        ]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_quotation_lifecycle
+        data = []
+        for q in quotations:
+            r = self._quotation_to_response(q)
+            r.lifecycle = get_quotation_lifecycle(q)
+            data.append(r)
         return QuotationListResponse(data=data, total=total, success=True)
 
     async def update_quotation(

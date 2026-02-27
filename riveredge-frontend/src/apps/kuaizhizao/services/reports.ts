@@ -218,6 +218,25 @@ export interface TrendChartData {
   qualityTrend: ChartDataPoint[];
 }
 
+/** 库存统计（用于指标卡片） */
+export interface InventoryStatistics {
+  total_items: number;
+  total_quantity: number;
+  total_value: number;
+  low_stock_items: number;
+  out_of_stock_items: number;
+  high_stock_items: number;
+  normal_stock_items: number;
+}
+
+/** 获取库存统计 */
+export async function getInventoryStatistics(warehouseId?: number): Promise<InventoryStatistics> {
+  return apiRequest<InventoryStatistics>('/apps/kuaizhizao/reports/inventory/statistics', {
+    method: 'GET',
+    params: warehouseId ? { warehouse_id: warehouseId } : {},
+  });
+}
+
 // 库存报表API
 export async function getInventoryReport(params: ReportParams & { report_type?: string } = {}): Promise<InventoryReportResponse> {
   return apiRequest<InventoryReportResponse>('/apps/kuaizhizao/reports/inventory', {
