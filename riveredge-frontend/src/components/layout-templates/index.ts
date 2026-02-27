@@ -36,6 +36,10 @@ export type { FormModalTemplateProps } from './FormModalTemplate'
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
 export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
+export { DetailDrawerSection } from './DetailDrawerSection'
+export type { DetailDrawerSectionProps } from './DetailDrawerSection'
+export { DetailDrawerActions } from './DetailDrawerActions'
+export type { DetailDrawerActionsProps, DetailDrawerActionItem } from './DetailDrawerActions'
 
 // 两栏布局模板
 export { TwoColumnLayout } from './TwoColumnLayout'

@@ -9,13 +9,14 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table, Dropdown } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
+import { getSalesDeliveryLifecycle } from '../../../utils/salesDeliveryLifecycle';
 import { getDocumentRelations } from '../../../services/document-relation';
 import { downloadFile } from '../../../services/common';
 
@@ -115,31 +116,21 @@ const SalesDeliveriesPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '出库状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const statusMap = {
-          '待出库': { text: '待出库', color: 'default' },
-          '已出库': { text: '已出库', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
+      render: (_, record) => {
+        const lifecycle = getSalesDeliveryLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待出库';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'processing',
+          审核驳回: 'error',
+          待出库: 'processing',
+          已出库: 'success',
+          已取消: 'error',
         };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待出库'];
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      render: (status: any) => {
-        const statusMap = {
-          '待审核': { text: '待审核', color: 'default' },
-          '审核通过': { text: '审核通过', color: 'success' },
-          '审核驳回': { text: '审核驳回', color: 'error' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待审核'];
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -169,18 +160,11 @@ const SalesDeliveriesPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 150,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
           {record.status === '待出库' && (
             <>
               <Button
@@ -206,14 +190,12 @@ const SalesDeliveriesPage: React.FC = () => {
               </Button>
             </>
           )}
-          <Button
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => handlePrint(record)}
+          <Dropdown
+            menu={{ items: [{ key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) }] }}
+            trigger={['click']}
           >
-            打印
-          </Button>
+            <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+          </Dropdown>
         </Space>
       ),
     },
@@ -562,7 +544,7 @@ const SalesDeliveriesPage: React.FC = () => {
           setDeliveryDetail(null);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={deliveryDetail || undefined}
         customContent={

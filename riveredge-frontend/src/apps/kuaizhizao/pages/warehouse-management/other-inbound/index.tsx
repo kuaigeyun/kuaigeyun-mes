@@ -16,6 +16,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
+import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
@@ -127,17 +128,14 @@ const OtherInboundPage: React.FC = () => {
       render: (v) => <Tag>{v || '-'}</Tag>,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待入库': { text: '待入库', color: 'default' },
-          '已入库': { text: '已入库', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const c = map[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+      render: (_, record) => {
+        const lifecycle = getOtherInboundLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待入库';
+        const colorMap: Record<string, string> = { 待入库: 'default', 已入库: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     { title: '入库人', dataIndex: 'receiver_name', width: 100 },
@@ -400,7 +398,7 @@ const OtherInboundPage: React.FC = () => {
         title={`其他入库单详情${inboundDetail?.inbound_code ? ` - ${inboundDetail.inbound_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setInboundDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={inboundDetail || {}}
       >

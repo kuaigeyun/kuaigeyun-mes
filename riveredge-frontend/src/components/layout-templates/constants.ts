@@ -31,6 +31,8 @@ export const DRAWER_CONFIG = {
   LARGE_WIDTH: 1000,
   /** 小宽度（用于简单详情） */
   SMALL_WIDTH: 500,
+  /** 50% 宽度（统一详情抽屉） */
+  HALF_WIDTH: '50%',
 } as const;
 
 /**

@@ -6,7 +6,8 @@
  */
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Space } from 'antd';
+import { Button, Space } from 'antd';
+import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { payableService } from '../../../services/finance/payable';
 import { Payable } from '../../../types/finance/payable';
 import { useTranslation } from 'react-i18next';
@@ -90,11 +91,11 @@ const PayableList: React.FC = () => {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 150,
+            width: 200,
             render: (_, record) => (
                 <Space>
-                    <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}`)}>详情</a>
-                    {record.remaining_amount > 0 && <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}/payment`)}>付款</a>}
+                    <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}`)}>详情</Button>
+                    {record.remaining_amount > 0 && <Button type="link" size="small" icon={<DollarOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}/payment`)}>付款</Button>}
                 </Space>
             ),
         },

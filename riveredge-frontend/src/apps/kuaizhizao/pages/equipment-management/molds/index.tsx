@@ -770,7 +770,7 @@ const MoldsPage: React.FC = () => {
           setUsages([]);
           setCalibrations([]);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={moldDetail}
         columns={detailColumns}
         customContent={
@@ -932,7 +932,7 @@ const MoldsPage: React.FC = () => {
         open={calibModalVisible}
         onOk={handleSubmitCalibration}
         onCancel={() => setCalibModalVisible(false)}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
@@ -969,7 +969,7 @@ const MoldsPage: React.FC = () => {
         open={usageModalVisible}
         onOk={handleSubmitUsage}
         onCancel={() => setUsageModalVisible(false)}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>

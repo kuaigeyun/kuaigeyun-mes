@@ -38,6 +38,9 @@ import type { Material } from '../../../../master-data/types/material';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
 /** 销售预测状态 */
 const SalesForecastStatus = {
@@ -365,30 +368,34 @@ const SalesForecastsPage: React.FC = () => {
     { title: '开始日期', dataIndex: 'start_date', valueType: 'date', width: 110 },
     { title: '结束日期', dataIndex: 'end_date', valueType: 'date', width: 110 },
     {
-      title: '状态',
-      dataIndex: 'status',
-      width: 90,
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      width: 100,
+      valueType: 'select',
       valueEnum: {
-        [SalesForecastStatus.DRAFT]: { text: '草稿', status: 'Default' },
-        [SalesForecastStatus.PENDING_REVIEW]: { text: '待审核', status: 'Processing' },
-        [SalesForecastStatus.AUDITED]: { text: '已审核', status: 'Success' },
-        [SalesForecastStatus.REJECTED]: { text: '已驳回', status: 'Error' },
+        草稿: { text: '草稿' },
+        待审核: { text: '待审核' },
+        已审核: { text: '已审核' },
+        已下推: { text: '已下推' },
+        已驳回: { text: '已驳回' },
       },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 90,
-      valueEnum: {
-        [ReviewStatus.PENDING]: { text: '待审核', status: 'Default' },
-        [ReviewStatus.APPROVED]: { text: '通过', status: 'Success' },
-        [ReviewStatus.REJECTED]: { text: '驳回', status: 'Error' },
+      render: (_: unknown, record: SalesForecast) => {
+        const lifecycle = getSalesForecastLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'warning',
+          已审核: 'green',
+          已下推: 'blue',
+          已驳回: 'error',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 260,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space wrap>
@@ -445,7 +452,8 @@ const SalesForecastsPage: React.FC = () => {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
             };
-            if (searchFormValues?.status) apiParams.status = searchFormValues.status;
+            if (searchFormValues?.lifecycle) apiParams.status = searchFormValues.lifecycle;
+            else if (searchFormValues?.status) apiParams.status = searchFormValues.status;
             if (searchFormValues?.forecast_period) apiParams.forecast_period = searchFormValues.forecast_period;
             if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
             try {
@@ -690,7 +698,8 @@ const SalesForecastsPage: React.FC = () => {
         title="销售预测详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        styles={{ wrapper: { width: 640 } }}
+        width="50%"
+        styles={{ wrapper: { width: '50%' } }}
       >
         {currentForecast && (
           <>
@@ -709,11 +718,46 @@ const SalesForecastsPage: React.FC = () => {
                 { title: '备注', dataIndex: 'notes' },
               ]}
             />
+            {(() => {
+              const lifecycle = getSalesForecastLifecycle(currentForecast);
+              const mainStages = lifecycle.mainStages ?? [];
+              const subStages = lifecycle.subStages ?? [];
+              if (mainStages.length === 0 && subStages.length === 0) return null;
+              return (
+                <div style={{ marginTop: 24, marginBottom: 24 }}>
+                  <h4 style={{ marginBottom: 12 }}>生命周期状态</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {mainStages.length > 0 && (
+                      <UniLifecycleStepper
+                        steps={mainStages}
+                        status={lifecycle.status}
+                        showLabels
+                        nextStepSuggestions={lifecycle.nextStepSuggestions}
+                      />
+                    )}
+                    {subStages.length > 0 && (
+                      <div>
+                        <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                          执行中 · 全链路
+                        </div>
+                        <UniLifecycleStepper steps={subStages} showLabels />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {currentForecast.id != null && (
               <>
                 <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 600 }}>预测明细</div>
                 <ForecastItemsExpandedRow forecastId={currentForecast.id} />
               </>
+            )}
+            {currentForecast.id != null && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ marginBottom: 8, fontWeight: 600 }}>操作历史</div>
+                <DocumentTrackingPanel documentType="sales_forecast" documentId={currentForecast.id} />
+              </div>
             )}
             {documentRelations && (
               <div style={{ marginTop: 24 }}>

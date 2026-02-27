@@ -7,14 +7,15 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Space, Tag } from 'antd';
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
-import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData, getInventoryReport, exportReport } from '../../../services/reports';
+import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData, getInventoryReport, getInventoryStatistics, exportReport } from '../../../services/reports';
 import dayjs, { Dayjs } from 'dayjs';
 
 // 库存报表接口定义
@@ -63,15 +64,19 @@ const InventoryReportPage: React.FC = () => {
   const [analysisData, setAnalysisData] = useState<InventoryAnalysisData | null>(null);
   const [costAnalysisData, setCostAnalysisData] = useState<InventoryCostAnalysisData | null>(null);
 
-  // 统计数据状态
-  const [stats, setStats] = useState({
-    totalItems: 245,
-    totalValue: 1256800,
-    lowStockItems: 12,
-    outOfStockItems: 3,
-    highStockItems: 8,
-    normalStockItems: 222,
+  const { data: statistics } = useQuery({
+    queryKey: ['inventoryStatistics', warehouseId],
+    queryFn: () => getInventoryStatistics(warehouseId),
   });
+
+  const stats = {
+    totalItems: statistics?.total_items ?? 0,
+    totalValue: statistics?.total_value ?? 0,
+    lowStockItems: statistics?.low_stock_items ?? 0,
+    outOfStockItems: statistics?.out_of_stock_items ?? 0,
+    highStockItems: statistics?.high_stock_items ?? 0,
+    normalStockItems: statistics?.normal_stock_items ?? 0,
+  };
 
   // 图表数据状态
   const [turnoverData, setTurnoverData] = useState<InventoryTurnoverData[]>([
@@ -83,13 +88,24 @@ const InventoryReportPage: React.FC = () => {
     { month: '06月', inbound: 1500, outbound: 1450, turnoverRate: 5.8 },
   ]);
 
-  // 库存分布数据
-  const [stockDistribution, setStockDistribution] = useState([
-    { type: '正常库存', value: 222, percentage: 90.6 },
-    { type: '库存不足', value: 12, percentage: 4.9 },
-    { type: '库存过高', value: 8, percentage: 3.3 },
-    { type: '缺货', value: 3, percentage: 1.2 },
-  ]);
+  // 库存分布数据（由统计接口派生）
+  const stockDistribution = useMemo(() => {
+    const total = stats.normalStockItems + stats.lowStockItems + stats.highStockItems + stats.outOfStockItems;
+    if (total === 0) {
+      return [
+        { type: '正常库存', value: 0, percentage: 0 },
+        { type: '库存不足', value: 0, percentage: 0 },
+        { type: '库存过高', value: 0, percentage: 0 },
+        { type: '缺货', value: 0, percentage: 0 },
+      ];
+    }
+    return [
+      { type: '正常库存', value: stats.normalStockItems, percentage: Math.round((stats.normalStockItems / total) * 1000) / 10 },
+      { type: '库存不足', value: stats.lowStockItems, percentage: Math.round((stats.lowStockItems / total) * 1000) / 10 },
+      { type: '库存过高', value: stats.highStockItems, percentage: Math.round((stats.highStockItems / total) * 1000) / 10 },
+      { type: '缺货', value: stats.outOfStockItems, percentage: Math.round((stats.outOfStockItems / total) * 1000) / 10 },
+    ];
+  }, [stats.normalStockItems, stats.lowStockItems, stats.highStockItems, stats.outOfStockItems]);
 
   // 表格列定义
   const columns: ProColumns<InventoryReportItem>[] = [
@@ -379,18 +395,6 @@ const InventoryReportPage: React.FC = () => {
                 },
                 ...params,
               });
-
-              // 更新统计数据
-              if (response.summary) {
-                setStats({
-                  totalItems: response.summary.totalItems || 0,
-                  totalValue: response.summary.totalValue || 0,
-                  lowStockItems: response.summary.lowStockItems || 0,
-                  outOfStockItems: response.summary.outOfStockItems || 0,
-                  highStockItems: response.summary.highStockItems || 0,
-                  normalStockItems: response.summary.normalStockItems || 0,
-                });
-              }
 
               // 转换数据格式
               const data = (response.data || []).map((item, index) => ({

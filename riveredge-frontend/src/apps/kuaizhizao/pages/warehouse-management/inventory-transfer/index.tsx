@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
+import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -262,13 +263,24 @@ const InventoryTransferPage: React.FC = () => {
     },
     {
       title: '状态',
-      dataIndex: 'status',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         draft: { text: '草稿', status: 'default' },
         in_progress: { text: '调拨中', status: 'processing' },
         completed: { text: '已完成', status: 'success' },
         cancelled: { text: '已取消', status: 'error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getInventoryTransferLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          调拨中: 'processing',
+          已完成: 'success',
+          已取消: 'error',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -292,7 +304,7 @@ const InventoryTransferPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 300,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -358,7 +370,7 @@ const InventoryTransferPage: React.FC = () => {
               code: params.code,
               from_warehouse_id: params.from_warehouse_id,
               to_warehouse_id: params.to_warehouse_id,
-              status: params.status,
+              status: params.lifecycle ?? params.status,
             });
             return {
               data: result.items || [],
@@ -502,6 +514,7 @@ const InventoryTransferPage: React.FC = () => {
           setCurrentTransfer(null);
         }}
         dataSource={currentTransfer || {}}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[
           {
             title: '调拨单号',

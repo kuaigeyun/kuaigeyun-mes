@@ -6,7 +6,8 @@
  */
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Space } from 'antd';
+import { App, Button, Space } from 'antd';
+import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable, ReceivableListParams } from '../../../types/finance/receivable';
 import { useTranslation } from 'react-i18next';
@@ -91,12 +92,12 @@ const ReceivableList: React.FC = () => {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 150,
+            width: 200,
             render: (_, record) => (
                 <Space>
-                    <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}`)}>详情</a>
+                    <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}`)}>详情</Button>
                     {record.remaining_amount > 0 && (
-                        <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}/receipt`)}>收款</a>
+                        <Button type="link" size="small" icon={<DollarOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}/receipt`)}>收款</Button>
                     )}
                 </Space>
             ),

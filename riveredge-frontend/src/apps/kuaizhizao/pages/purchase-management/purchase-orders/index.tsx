@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
@@ -16,9 +17,9 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, PurchaseOrder } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -29,6 +30,8 @@ import {
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
+import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
@@ -36,8 +39,16 @@ type PurchaseOrderDetail = PurchaseOrder;
 
 const PurchaseOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
+  const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['purchaseOrderStatistics'] }); };
+  const { data: statistics } = useQuery({
+    queryKey: ['purchaseOrderStatistics'],
+    queryFn: getPurchaseOrderStatistics,
+  });
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -83,21 +94,32 @@ const PurchaseOrdersPage: React.FC = () => {
       width: 120,
     },
     {
-      title: '订单状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status) => {
-        const config = getStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag>;
+      valueType: 'select',
+      valueEnum: {
+        草稿: { text: '草稿' },
+        待审核: { text: '待审核' },
+        已审核: { text: '已审核' },
+        已下推入库: { text: '已下推入库' },
+        已完成: { text: '已完成' },
+        已驳回: { text: '已驳回' },
+        已取消: { text: '已取消' },
       },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      render: (status) => {
-        const config = getReviewStatusDisplay(status);
-        return <Tag color={config.color}>{config.text}</Tag>;
+      render: (_: unknown, record: PurchaseOrder) => {
+        const lifecycle = getPurchaseOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'warning',
+          已审核: 'green',
+          已下推入库: 'blue',
+          已完成: 'gold',
+          已驳回: 'error',
+          已取消: 'default',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -127,7 +149,7 @@ const PurchaseOrdersPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -153,7 +175,7 @@ const PurchaseOrdersPage: React.FC = () => {
               approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
               reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
             }}
-            onSuccess={() => actionRef.current?.reload()}
+            onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); }}
           />
           {isAuditedStatus(record.status) && (
             <Button
@@ -223,6 +245,7 @@ const PurchaseOrdersPage: React.FC = () => {
         try {
           const result = await pushPurchaseOrderToReceipt(record.id!);
           messageApi.success(`成功生成采购入库单：${result.receipt_code || '已创建'}`);
+          invalidateStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '下推采购入库失败');
@@ -241,6 +264,7 @@ const PurchaseOrdersPage: React.FC = () => {
         try {
           await deletePurchaseOrder(record.id!);
           messageApi.success('采购订单删除成功');
+          invalidateStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '采购订单删除失败');
@@ -262,6 +286,7 @@ const PurchaseOrdersPage: React.FC = () => {
           }
           messageApi.success(`已删除 ${keys.length} 条采购订单`);
           setSelectedRowKeys([]);
+          invalidateStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '批量删除失败');
@@ -287,6 +312,7 @@ const PurchaseOrdersPage: React.FC = () => {
         successCount += 1;
       }
       messageApi.success(`已同步 ${successCount} 条采购订单`);
+      invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
@@ -361,6 +387,7 @@ const PurchaseOrdersPage: React.FC = () => {
         messageApi.success('采购订单创建成功');
       }
       setModalVisible(false);
+      invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -436,52 +463,42 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   ];
 
+  const statCards: StatCard[] = statistics
+    ? [
+        { title: '活动订单', value: statistics.active_count },
+        {
+          title: '待审核',
+          value: statistics.pending_review_count,
+          valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
+          onClick:
+            statistics.pending_review_count > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ review_status: '待审核' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        { title: '执行中', value: statistics.in_progress_count },
+        {
+          title: '逾期未到',
+          value: statistics.overdue_count,
+          valueStyle: statistics.overdue_count > 0 ? { color: '#ff4d4f' } : undefined,
+        },
+        {
+          title: '订单总金额',
+          value: statistics.total_amount ?? 0,
+          prefix: '¥',
+          precision: 2,
+        },
+      ]
+    : [];
+
   return (
     <>
-      <ListPageTemplate
-        statCards={[
-          {
-            title: '总订单数',
-            value: 25,
-            prefix: <CheckCircleOutlined />,
-            valueStyle: { color: '#1890ff' },
-          },
-          {
-            title: '待审核订单',
-            value: 5,
-            suffix: '个',
-            valueStyle: { color: '#faad14' },
-          },
-          {
-            title: '已审核订单',
-            value: 18,
-            suffix: '个',
-            valueStyle: { color: '#52c41a' },
-          },
-          {
-            title: '订单总金额',
-            value: 125000,
-            prefix: '¥',
-            suffix: '万',
-            valueStyle: { color: '#722ed1' },
-          },
-          {
-            title: '本月采购额',
-            value: 45000,
-            prefix: '¥',
-            suffix: '万',
-            valueStyle: { color: '#13c2c2' },
-          },
-          {
-            title: '准时交货率',
-            value: 92.5,
-            suffix: '%',
-            valueStyle: { color: '#eb2f96' },
-          },
-        ]}
-      >
+      <ListPageTemplate statCards={statCards}>
         <UniTable<PurchaseOrder>
           headerTitle="采购订单"
+          formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -686,11 +703,69 @@ const PurchaseOrdersPage: React.FC = () => {
         }}
         dataSource={orderDetail || undefined}
         columns={detailColumns}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          orderDetail && (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'edit',
+                  visible: isDraftStatus(orderDetail.status),
+                  render: () => (
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit([orderDetail.id!]); }}>
+                      编辑
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'workflow',
+                  render: () => (
+                    <UniWorkflowActions
+                      record={orderDetail}
+                      entityName="采购订单"
+                      statusField="status"
+                      reviewStatusField="review_status"
+                      draftStatuses={['草稿', 'draft']}
+                      pendingStatuses={['待审核', 'pending_review']}
+                      approvedStatuses={['已审核', 'audited', '审核通过']}
+                      rejectedStatuses={['已驳回', 'rejected']}
+                      theme="link"
+                      size="small"
+                      actions={{
+                        submit: (id) => submitPurchaseOrder(id),
+                        approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
+                        reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
+                      }}
+                      onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); loadApprovalData(orderDetail.id!); getPurchaseOrder(orderDetail.id!).then(setOrderDetail); }}
+                    />
+                  ),
+                },
+                {
+                  key: 'push',
+                  visible: isAuditedStatus(orderDetail.status),
+                  render: () => (
+                    <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handlePushToReceipt(orderDetail)} style={{ color: '#722ed1' }}>
+                      下推入库
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'delete',
+                  visible: isDraftStatus(orderDetail.status),
+                  render: () => (
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(orderDetail)}>
+                      删除
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          )
+        }
         customContent={
           orderDetail && (
             <div>
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
+              <DetailDrawerSection title="基本信息">
                 <Row gutter={16}>
                   <Col span={8}>
                     <strong>订单编号：</strong>{orderDetail.order_code}
@@ -738,11 +813,41 @@ const PurchaseOrdersPage: React.FC = () => {
                     <strong>含税金额：</strong>¥{orderDetail.net_amount?.toLocaleString() || 0}
                   </Col>
                 </Row>
-              </Card>
+              </DetailDrawerSection>
 
-              {/* 订单明细 */}
+              {/* 生命周期 */}
+              {(() => {
+                const lifecycle = getPurchaseOrderLifecycle(orderDetail);
+                const mainStages = lifecycle.mainStages ?? [];
+                const subStages = lifecycle.subStages ?? [];
+                if (mainStages.length === 0 && subStages.length === 0) return null;
+                return (
+                  <DetailDrawerSection title="生命周期">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {mainStages.length > 0 && (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        />
+                      )}
+                      {subStages.length > 0 && (
+                        <div>
+                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                            执行中 · 全链路
+                          </div>
+                          <UniLifecycleStepper steps={subStages} showLabels />
+                        </div>
+                      )}
+                    </div>
+                  </DetailDrawerSection>
+                );
+              })()}
+
+              {/* 明细列表 */}
               {orderDetail.items && orderDetail.items.length > 0 && (
-                <Card title="订单明细" style={{ marginBottom: 16 }}>
+                <DetailDrawerSection title="订单明细">
                   <Table
                     size="small"
                     columns={[
@@ -763,7 +868,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     bordered
                     scroll={{ x: 1000 }}
                   />
-                </Card>
+                </DetailDrawerSection>
               )}
 
               {/* 审批流程 */}
@@ -840,15 +945,15 @@ const PurchaseOrdersPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* 操作记录与上下游 */}
+              {/* 操作历史 */}
               {orderDetail?.id && (
-                <div style={{ marginBottom: 16 }}>
+                <DetailDrawerSection title="操作历史">
                   <DocumentTrackingPanel
                     documentType="purchase_order"
                     documentId={orderDetail.id}
                     onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
                   />
-                </div>
+                </DetailDrawerSection>
               )}
 
               {/* 单据关联 */}

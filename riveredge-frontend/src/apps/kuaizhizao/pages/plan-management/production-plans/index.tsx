@@ -10,11 +10,14 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ModalForm, ProFormText, ProFormSelect, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
+import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useRequest } from 'ahooks';
 
 // 生产计划接口定义
@@ -114,18 +117,26 @@ const ProductionPlansPage: React.FC = () => {
       render: (_, record) => `${record.plan_start_date} ~ ${record.plan_end_date}`,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status) => {
-        const statusMap = {
-          '草稿': { text: '草稿', color: 'default' },
-          '已审核': { text: '已审核', color: 'processing' },
-          '已执行': { text: '已执行', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
+      valueType: 'select',
+      valueEnum: {
+        草稿: { text: '草稿' },
+        已审核: { text: '已审核' },
+        已执行: { text: '已执行' },
+        已取消: { text: '已取消' },
+      },
+      render: (_: unknown, record: ProductionPlan) => {
+        const lifecycle = getProductionPlanLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          已审核: 'processing',
+          已执行: 'success',
+          已取消: 'error',
         };
-        const config = statusMap[status as keyof typeof statusMap] || { text: status, color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -202,7 +213,8 @@ const ProductionPlansPage: React.FC = () => {
             total_count: res.total,
             mrp_count: 0,
             lrp_count: 0,
-            executed_count: 0
+            executed_count: 0,
+            pending_execution_count: 0,
         }));
     });
   });
@@ -328,10 +340,16 @@ const ProductionPlansPage: React.FC = () => {
           valueStyle: { color: '#722ed1' },
         },
         {
+          title: '待执行',
+          value: statistics?.pending_execution_count ?? 0,
+          suffix: '个',
+          valueStyle: (statistics?.pending_execution_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
+        },
+        {
           title: '已执行计划',
           value: statistics?.executed_count || 0,
           suffix: '个',
-          valueStyle: { color: '#faad14' },
+          valueStyle: { color: '#52c41a' },
         },
       ]}
     >
@@ -456,12 +474,23 @@ const ProductionPlansPage: React.FC = () => {
         title={`生产计划详情 - ${currentPlan?.plan_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        extra={
+          currentPlan && currentPlan.execution_status !== '已执行' && (
+            <DetailDrawerActions
+              items={[
+                { key: 'edit', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(currentPlan); }}>编辑</Button> },
+                { key: 'execute', visible: currentPlan.status === '已审核', render: () => <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(currentPlan)}>执行计划</Button> },
+                { key: 'delete', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(currentPlan)}>删除</Button> },
+              ]}
+            />
+          )
+        }
         customContent={
           currentPlan ? (
             <div style={{ padding: '16px 0' }}>
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
+              <DetailDrawerSection title="基本信息">
                 <Row gutter={16}>
                   <Col span={12}>
                     <strong>计划编号：</strong>{currentPlan.plan_code}
@@ -495,7 +524,37 @@ const ProductionPlansPage: React.FC = () => {
                     <strong>创建时间：</strong>{currentPlan.created_at}
                   </Col>
                 </Row>
-              </Card>
+              </DetailDrawerSection>
+
+              {/* 生命周期 */}
+              {(() => {
+                const lifecycle = getProductionPlanLifecycle(currentPlan);
+                const mainStages = lifecycle.mainStages ?? [];
+                const subStages = lifecycle.subStages ?? [];
+                if (mainStages.length === 0 && subStages.length === 0) return null;
+                return (
+                  <DetailDrawerSection title="生命周期">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {mainStages.length > 0 && (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        />
+                      )}
+                      {subStages.length > 0 && (
+                        <div>
+                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                            执行中 · 全链路
+                          </div>
+                          <UniLifecycleStepper steps={subStages} showLabels />
+                        </div>
+                      )}
+                    </div>
+                  </DetailDrawerSection>
+                );
+              })()}
 
               {/* 核心排程可视化：产能负荷感知 */}
               <Card 
@@ -542,7 +601,7 @@ const ProductionPlansPage: React.FC = () => {
 
               {/* 计划明细 */}
               {currentPlan.items && currentPlan.items.length > 0 && (
-                <Card title="计划明细">
+                <DetailDrawerSection title="计划明细">
                   <Table
                     size="small"
                     columns={[
@@ -597,7 +656,12 @@ const ProductionPlansPage: React.FC = () => {
                     rowKey="id"
                     bordered
                   />
-                </Card>
+                </DetailDrawerSection>
+              )}
+              {currentPlan?.id && (
+                <DetailDrawerSection title="操作历史">
+                  <DocumentTrackingPanel documentType="production_plan" documentId={currentPlan.id} />
+                </DetailDrawerSection>
               )}
             </div>
           ) : null

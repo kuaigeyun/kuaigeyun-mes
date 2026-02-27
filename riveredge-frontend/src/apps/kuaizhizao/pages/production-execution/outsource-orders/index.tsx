@@ -17,6 +17,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi } from '../../../services/production';
+import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import dayjs from 'dayjs';
 
@@ -142,18 +143,13 @@ export const OutsourceOrdersTable: React.FC = () => {
       valueType: 'money',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          'draft': { text: '草稿', color: 'default' },
-          'released': { text: '已下达', color: 'processing' },
-          'in_progress': { text: '执行中', color: 'blue' },
-          'completed': { text: '已完成', color: 'success' },
-          'cancelled': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+      title: '生命周期',
+      dataIndex: 'lifecycle',
+      render: (_, record) => {
+        const lifecycle = getOutsourceOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'blue', 已完成: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -251,19 +247,14 @@ export const OutsourceOrdersTable: React.FC = () => {
       valueType: 'money',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          'draft': { text: '草稿', color: 'default' },
-          'released': { text: '已下达', color: 'processing' },
-          'in_progress': { text: '执行中', color: 'blue' },
-          'completed': { text: '已完成', color: 'success' },
-          'cancelled': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+      render: (_, record) => {
+        const lifecycle = getOutsourceOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'blue', 已完成: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -648,7 +639,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         onClose={() => setDetailDrawerVisible(false)}
         dataSource={outsourceOrderDetail}
         columns={detailColumns}
-        {...DRAWER_CONFIG}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       />
     </>
   );

@@ -179,7 +179,7 @@ const DocumentTimingPage: React.FC = () => {
         title={`耗时统计 - ${currentTiming?.document_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentTiming ? (

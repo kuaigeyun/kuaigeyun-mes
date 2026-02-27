@@ -9,7 +9,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Button, message, Popconfirm, Space } from 'antd';
-import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice } from '../../../types/finance/invoice';
 import { useTranslation } from 'react-i18next';
@@ -96,10 +96,25 @@ const InvoiceList: React.FC = () => {
       title: '操作',
       valueType: 'option',
       fixed: 'right',
-      width: 150,
+      width: 200,
       render: (_, record) => (
         <Space>
-          <a key="edit" onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${record.invoice_code}`)}>编辑</a>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${record.invoice_code}`)}
+          >
+            详情
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${record.invoice_code}`)}
+          >
+            编辑
+          </Button>
           <Popconfirm
             title="确定要删除吗？"
             onConfirm={async () => {
@@ -108,7 +123,7 @@ const InvoiceList: React.FC = () => {
               actionRef.current?.reload();
             }}
           >
-            <a key="delete" style={{ color: 'red' }}>删除</a>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
         </Space>
       ),

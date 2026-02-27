@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
+import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
@@ -92,11 +93,13 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
     { title: '出库仓库', dataIndex: 'warehouse_name', width: 120 },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
+      render: (_, record) => {
+        const lifecycle = getShipmentNoticeLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待发货';
+        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
@@ -470,7 +473,7 @@ const ShipmentNoticesPage: React.FC = () => {
         title={`发货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={noticeDetail || {}}
       >

@@ -143,7 +143,7 @@ const SkillsPage: React.FC = () => {
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate<Skill> title="技能详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={skillDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.STANDARD_WIDTH} />
+      <DetailDrawerTemplate<Skill> title="技能详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={skillDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.HALF_WIDTH} />
       <SkillFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
     </>
   );

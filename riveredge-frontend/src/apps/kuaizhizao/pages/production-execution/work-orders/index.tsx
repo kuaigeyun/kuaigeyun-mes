@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ActionType,
   ProColumns,
@@ -49,6 +50,7 @@ import {
   theme,
   Typography,
   Empty,
+  Dropdown,
 } from 'antd'
 import {
   PlusOutlined,
@@ -60,6 +62,8 @@ import {
   QrcodeOutlined,
   DeleteOutlined,
   PrinterOutlined,
+  MoreOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -87,10 +91,11 @@ import {
   MODAL_CONFIG,
   DRAWER_CONFIG,
   TOUCH_SCREEN_CONFIG,
+  type StatCard,
 } from '../../../../../components/layout-templates'
 import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
-import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production'
+import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics } from '../../../services/production'
 import {
   stateTransitionApi,
   AvailableTransition,
@@ -166,8 +171,16 @@ interface WorkOrder {
 const WorkOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
+  const queryClient = useQueryClient()
   const actionRef = useRef<ActionType>(null)
+  const tableSearchFormRef = useRef<any>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+
+  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] }) }
+  const { data: statistics } = useQuery({
+    queryKey: ['workOrderStatistics'],
+    queryFn: getWorkOrderStatistics,
+  })
 
   // 产品列表状态
   const [productList, setProductList] = useState<any[]>([])
@@ -965,7 +978,7 @@ const WorkOrdersPage: React.FC = () => {
                         [workOrder.id!]: operations || [],
                       }))
                       // 刷新工单列表
-                      actionRef.current?.reload()
+                      invalidateStatistics(); actionRef.current?.reload()
                     } catch (error: any) {
                       messageApi.error(error.message || '开始工序失败')
                     }
@@ -1151,7 +1164,7 @@ const WorkOrdersPage: React.FC = () => {
         successCount += 1
       }
       messageApi.success(`已同步 ${successCount} 条工单`)
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败')
     }
@@ -1166,7 +1179,7 @@ const WorkOrdersPage: React.FC = () => {
           // 批量删除
           await Promise.all(keys.map(key => workOrderApi.delete(key.toString())))
           messageApi.success('删除成功')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || '删除失败')
         }
@@ -1256,7 +1269,7 @@ const WorkOrdersPage: React.FC = () => {
         messageApi.success('工单创建成功！系统已自动匹配工艺路线并生成工序单')
       }
       setModalVisible(false)
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '操作失败')
       throw error
@@ -1517,7 +1530,7 @@ const WorkOrdersPage: React.FC = () => {
             setBatchReleaseModalVisible(false)
             setSelectedRowKeys([])
             setBatchReleaseCheckResults([])
-            actionRef.current?.reload()
+            invalidateStatistics(); actionRef.current?.reload()
           } catch (error: any) {
             messageApi.error(error.message || '批量下达失败')
           }
@@ -1535,7 +1548,7 @@ const WorkOrdersPage: React.FC = () => {
     try {
       await workOrderApi.release(record.id!.toString())
       messageApi.success('工单下达成功')
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error?.message || '工单下达失败')
     }
@@ -1552,7 +1565,7 @@ const WorkOrdersPage: React.FC = () => {
         try {
           await workOrderApi.revoke(record.id!.toString())
           messageApi.success('工单撤回成功')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || '工单撤回失败')
         }
@@ -1571,7 +1584,7 @@ const WorkOrdersPage: React.FC = () => {
         try {
           await workOrderApi.complete(record.id!.toString())
           messageApi.success('工单已指定结束')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || '指定结束失败')
         }
@@ -1735,7 +1748,7 @@ const WorkOrdersPage: React.FC = () => {
         try {
           await workOrderApi.unfreeze(record.id!.toString())
           messageApi.success('工单解冻成功')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
           // 如果详情页打开，刷新详情
           if (workOrderDetail?.id === record.id) {
             const detail = await workOrderApi.get(record.id!.toString())
@@ -1779,7 +1792,7 @@ const WorkOrdersPage: React.FC = () => {
       setBatchFreezeModalVisible(false)
       setBatchFreezeReason('')
       setSelectedRowKeys([])
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '批量冻结失败')
     }
@@ -1804,7 +1817,7 @@ const WorkOrdersPage: React.FC = () => {
           )
           messageApi.success(`已批量取消 ${selectedRowKeys.length} 个工单`)
           setSelectedRowKeys([])
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || '批量取消失败')
         }
@@ -1825,7 +1838,7 @@ const WorkOrdersPage: React.FC = () => {
       setFreezeModalVisible(false)
       setCurrentWorkOrderForFreeze(null)
       freezeFormRef.current?.resetFields()
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
       // 如果详情页打开，刷新详情
       if (workOrderDetail?.id === currentWorkOrderForFreeze.id) {
         const detail = await workOrderApi.get(currentWorkOrderForFreeze.id.toString())
@@ -1844,7 +1857,7 @@ const WorkOrdersPage: React.FC = () => {
     try {
       await workOrderApi.setPriority(record.id!.toString(), { priority: newPriority })
       messageApi.success('优先级设置成功')
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
       // 如果详情页打开，刷新详情
       if (workOrderDetail?.id === record.id) {
         const detail = await workOrderApi.get(record.id!.toString())
@@ -1927,7 +1940,7 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       // 刷新列表
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '状态流转失败')
       throw error
@@ -1948,7 +1961,7 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.success(`已批量设置 ${selectedRowKeys.length} 个工单的优先级`)
       setBatchPriorityModalVisible(false)
       setSelectedRowKeys([])
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '批量设置优先级失败')
     }
@@ -1978,7 +1991,7 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.success(`工单合并成功，新工单编码：${result.merged_work_order.code}`)
       setMergeModalVisible(false)
       setSelectedRowKeys([])
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '工单合并失败')
       throw error
@@ -2032,7 +2045,7 @@ const WorkOrdersPage: React.FC = () => {
       setSplitModalVisible(false)
       setCurrentWorkOrderForSplit(null)
       setSplitQuantities([])
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '工单拆分失败')
     }
@@ -2304,90 +2317,80 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => handlePrint(record)}
-          >
-            打印
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          {(['draft', '草稿'].includes(record.status || '') ||
-            (['released', '已下达'].includes(record.status || '') &&
-              !record.actual_start_date &&
-              !Number(record.completed_quantity))) && (
-            <Popconfirm
-              title="确定要删除吗？"
-              description="删除后无法恢复"
-              onConfirm={async () => {
-                try {
-                  await workOrderApi.delete(record.id!.toString())
-                  messageApi.success('删除成功')
-                  actionRef.current?.reload()
-                } catch (error: any) {
-                  messageApi.error(error.message || '删除失败')
-                }
-              }}
-            >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>
-          )}
-          {record.status === 'draft' && (
-            <Button type="link" size="small" onClick={() => handleRelease(record)}>
-              下达
-            </Button>
-          )}
-          {(record.status === '已下达' || record.status === 'released') && (
-            <Button type="link" size="small" danger onClick={() => handleRevoke(record)}>
-              撤回
-            </Button>
-          )}
-          {(record.status === '已完成' || record.status === 'completed') &&
-            record.manually_completed && (
-              <Button type="link" size="small" danger onClick={() => handleRevoke(record)}>
-                撤回
-              </Button>
+      render: (_, record) => {
+        const canDelete = ['draft', '草稿'].includes(record.status || '') ||
+          (['released', '已下达'].includes(record.status || '') &&
+            !record.actual_start_date &&
+            !Number(record.completed_quantity))
+        const canRevoke = (record.status === '已下达' || record.status === 'released') ||
+          ((record.status === '已完成' || record.status === 'completed') && record.manually_completed)
+        const canComplete = record.status !== '已完成' &&
+          record.status !== 'completed' &&
+          record.status !== '已取消' &&
+          record.status !== 'cancelled'
+        const moreItems = [
+          { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
+          ...(canComplete ? [{ key: 'complete', label: '指定结束', icon: <StopOutlined />, onClick: () => handleComplete(record) }] : []),
+        ]
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+            {canDelete && (
+              <Popconfirm
+                title="确定要删除吗？"
+                description="删除后无法恢复"
+                onConfirm={async () => {
+                  try {
+                    await workOrderApi.delete(record.id!.toString())
+                    messageApi.success('删除成功')
+                    invalidateStatistics(); actionRef.current?.reload()
+                  } catch (error: any) {
+                    messageApi.error(error.message || '删除失败')
+                  }
+                }}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+              </Popconfirm>
             )}
-          {record.status !== '已完成' &&
-            record.status !== 'completed' &&
-            record.status !== '已取消' &&
-            record.status !== 'cancelled' && (
-              <Button type="link" size="small" onClick={() => handleComplete(record)}>
-                指定结束
-              </Button>
+            {record.status === 'draft' && (
+              <Button type="link" size="small" onClick={() => handleRelease(record)}>下达</Button>
             )}
-        </Space>
-      ),
+            {canRevoke && (
+              <Button type="link" size="small" danger onClick={() => handleRevoke(record)}>撤回</Button>
+            )}
+            {moreItems.length > 0 && (
+              <Dropdown
+                menu={{ items: moreItems }}
+                trigger={['click']}
+              >
+                <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+              </Dropdown>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
+  const statCards: StatCard[] = statistics
+    ? [
+        { title: '进行中', value: statistics.in_progress_count },
+        { title: '今日完成', value: statistics.completed_today_count, valueStyle: statistics.completed_today_count > 0 ? { color: '#52c41a' } : undefined },
+        { title: '逾期', value: statistics.overdue_count, valueStyle: statistics.overdue_count > 0 ? { color: '#ff4d4f' } : undefined },
+        { title: '草稿', value: statistics.draft_count },
+        { title: '已完成', value: statistics.completed_count },
+      ]
+    : []
+
   return (
     <>
-      <ListPageTemplate>
+      <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           headerTitle="工单管理"
+          formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -3012,7 +3015,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         customContent={
           <>
             {/* 操作按钮区域 */}

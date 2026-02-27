@@ -26,7 +26,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
   listSalesOrders,
@@ -48,6 +48,7 @@ import {
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
   deleteSalesOrder,
+  getSalesOrderStatistics,
   SalesOrder,
   SalesOrderItem,
   SalesOrderStatus,
@@ -75,7 +76,7 @@ import { getUserList, type User } from '../../../../../services/user';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
 type SalesOrderItemRow = SalesOrderItem & {
@@ -103,12 +104,21 @@ const SalesOrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
+  const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
   const invalidateOrdersCache = () => { lastOrdersCacheRef.current = null; };
   /** 刷新左侧菜单销售订单数量徽章 */
   const invalidateMenuBadge = () => { queryClient.invalidateQueries({ queryKey: ['menuBadgeCounts'] }); };
+  /** 刷新销售订单统计（指标卡片） */
+  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] }); };
+
+  const { data: statistics } = useQuery({
+    queryKey: ['salesOrderStatistics'],
+    queryFn: getSalesOrderStatistics,
+  });
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
@@ -436,6 +446,7 @@ const SalesOrdersPage: React.FC = () => {
           }
           invalidateOrdersCache();
           invalidateMenuBadge();
+          invalidateStatistics();
           actionRef.current?.reload();
           // 清除选中项
           if (actionRef.current?.clearSelected) {
@@ -464,6 +475,7 @@ const SalesOrdersPage: React.FC = () => {
           messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: 1 }));
           invalidateOrdersCache();
           invalidateMenuBadge();
+          invalidateStatistics();
           actionRef.current?.reload();
           if (currentSalesOrder?.id === id) {
             setDrawerVisible(false);
@@ -495,6 +507,7 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.syncSuccess', { count: successCount }));
       invalidateOrdersCache();
       invalidateMenuBadge();
+      invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
@@ -642,6 +655,7 @@ const SalesOrdersPage: React.FC = () => {
       setPreviewCode(null);
       invalidateOrdersCache();
       invalidateMenuBadge();
+      invalidateStatistics();
       actionRef.current?.reload();
       if (orderId && drawerVisible && currentSalesOrder?.id === orderId) {
         refreshDrawerOrder(orderId);
@@ -974,6 +988,7 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
         invalidateOrdersCache();
         invalidateMenuBadge();
+        invalidateStatistics();
         actionRef.current?.reload();
       } else {
         messageApi.warning(
@@ -993,6 +1008,7 @@ const SalesOrdersPage: React.FC = () => {
         }
         invalidateOrdersCache();
         invalidateMenuBadge();
+        invalidateStatistics();
         actionRef.current?.reload();
       }
     } catch (error: any) {
@@ -1135,7 +1151,7 @@ const SalesOrdersPage: React.FC = () => {
             theme="link"
             size="small"
             actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
-            onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); actionRef.current?.reload(); }}
+            onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
           {isApprovedRecord(record) && (
@@ -1148,16 +1164,12 @@ const SalesOrdersPage: React.FC = () => {
                   { type: 'divider' },
                   { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(record.id!) },
                   { key: 'invoice', label: t('app.kuaizhizao.salesOrder.salesInvoice'), icon: <FileTextOutlined />, onClick: () => handlePushToInvoice(record.id!) },
+                  ...(record.pushed_to_computation ? [{ type: 'divider' as const }, { key: 'withdraw', label: t('app.kuaizhizao.salesOrder.withdrawComputation'), icon: <RollbackOutlined />, onClick: () => handleWithdrawFromComputation(record.id!) }] : []),
                 ],
               }}
             >
               <Button type="link" size="small" icon={<ArrowDownOutlined />}>{t('app.kuaizhizao.salesOrder.push')}</Button>
             </Dropdown>
-          )}
-          {isApprovedRecord(record) && record.pushed_to_computation && (
-            <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdrawFromComputation(record.id!)}>
-              {t('app.kuaizhizao.salesOrder.withdrawComputation')}
-            </Button>
           )}
         </Space>
       ),
@@ -1287,6 +1299,7 @@ const SalesOrdersPage: React.FC = () => {
               }
               invalidateOrdersCache();
               invalidateMenuBadge();
+              invalidateStatistics();
               actionRef.current?.reload();
               if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
             } catch (error: any) {
@@ -1297,11 +1310,48 @@ const SalesOrdersPage: React.FC = () => {
       }
     : handleDelete;
 
+  const statCards: StatCard[] = statistics
+    ? [
+        {
+          title: t('app.kuaizhizao.salesOrder.statActive'),
+          value: statistics.active_count,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
+          value: statistics.pending_review_count,
+          valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
+          onClick:
+            statistics.pending_review_count > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.lifecycleInProgress'),
+          value: statistics.in_progress_count,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statOverdue'),
+          value: statistics.overdue_count,
+          valueStyle: statistics.overdue_count > 0 ? { color: '#ff4d4f' } : undefined,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+          value: statistics.total_amount ?? 0,
+          prefix: '¥',
+          precision: 2,
+        },
+      ]
+    : [];
+
   return (
     <>
-      <ListPageTemplate>
+      <ListPageTemplate statCards={statCards}>
         <SalesOrderIndicatorsProvider>
         <UniTable
+          formRef={tableSearchFormRef}
           headerTitle={t('app.kuaizhizao.salesOrder.title')}
           viewTypes={['table', 'detailTable', 'card', 'gantt', 'help']}
           defaultViewType="table"
@@ -2279,7 +2329,7 @@ const SalesOrdersPage: React.FC = () => {
             )}
           </Space>
         }
-        size="large"
+        width="50%"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         extra={
@@ -2330,7 +2380,7 @@ const SalesOrdersPage: React.FC = () => {
                   approve: approveSalesOrder,
                   revoke: unapproveSalesOrder,
                 }}
-                onSuccess={() => { invalidateMenuBadge(); refreshDrawerOrder(currentSalesOrder?.id); }}
+                onSuccess={() => { invalidateMenuBadge(); invalidateStatistics(); refreshDrawerOrder(currentSalesOrder?.id); }}
                 confirmMessages={{
                   submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
                 }}

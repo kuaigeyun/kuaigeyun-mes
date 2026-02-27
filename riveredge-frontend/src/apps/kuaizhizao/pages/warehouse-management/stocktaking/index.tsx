@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
+import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -315,14 +316,20 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         draft: { text: '草稿', status: 'default' },
         in_progress: { text: '盘点中', status: 'processing' },
         completed: { text: '已完成', status: 'success' },
         cancelled: { text: '已取消', status: 'error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getStocktakingLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = { 草稿: 'default', 盘点中: 'processing', 已完成: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -438,7 +445,7 @@ const StocktakingPage: React.FC = () => {
               limit: params.pageSize,
               code: params.code,
               warehouse_id: params.warehouse_id,
-              status: params.status,
+              status: params.lifecycle ?? params.status,
               stocktaking_type: params.stocktaking_type,
             });
             return {
@@ -607,6 +614,7 @@ const StocktakingPage: React.FC = () => {
           setCurrentStocktaking(null);
         }}
         dataSource={currentStocktaking || {}}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[
           {
             title: '盘点单号',

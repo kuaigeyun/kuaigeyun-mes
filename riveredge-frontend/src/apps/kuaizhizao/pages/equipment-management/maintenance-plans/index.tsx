@@ -525,7 +525,7 @@ const MaintenancePlansPage: React.FC = () => {
           setDrawerVisible(false);
           setPlanDetail(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={planDetail}
         columns={detailColumns}
       />

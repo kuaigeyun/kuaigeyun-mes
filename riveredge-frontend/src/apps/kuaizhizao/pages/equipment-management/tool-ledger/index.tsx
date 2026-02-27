@@ -495,7 +495,7 @@ const ToolLedgerPage: React.FC = () => {
         title={`工装详情 - ${toolDetail?.code || ''}`}
         columns={detailColumns}
         dataSource={toolDetail}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         customContent={
           toolDetail && (
             <Tabs
@@ -650,7 +650,7 @@ const ToolLedgerPage: React.FC = () => {
         }
       />
 
-      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} onCancel={() => setUsageModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="operator_name" label="领用人"><Input placeholder="请输入领用人" /></Form.Item>
@@ -667,7 +667,7 @@ const ToolLedgerPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} onCancel={() => setMaintModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={maintForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="maintenance_type" label="维保类型" rules={[{ required: true }]}>
@@ -690,7 +690,7 @@ const ToolLedgerPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>

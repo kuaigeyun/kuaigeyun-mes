@@ -9,8 +9,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col } from 'antd';
-import { DollarOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Card, Row, Col, Dropdown } from 'antd';
+import { DollarOutlined, EyeOutlined, FileTextOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { financeApi } from '../../../services/production';
@@ -187,35 +187,20 @@ const AccountsPayablePage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            size="small"
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
+          <Button size="small" type="link" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
           {record.status === '已审核' && (
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => handlePayment(record)}
-            >
-              付款
-            </Button>
+            <Button size="small" type="link" icon={<DollarOutlined />} onClick={() => handlePayment(record)}>付款</Button>
           )}
-          <Button
-            size="small"
-            type="link"
-            icon={<FileTextOutlined />}
-            onClick={() => messageApi.info('打印功能开发中...')}
+          <Dropdown
+            menu={{ items: [{ key: 'print', label: '打印', icon: <FileTextOutlined />, onClick: () => messageApi.info('打印功能开发中...') }] }}
+            trigger={['click']}
           >
-            打印
-          </Button>
+            <Button size="small" type="link" icon={<MoreOutlined />}>更多</Button>
+          </Dropdown>
         </Space>
       ),
     },
@@ -356,7 +341,7 @@ const AccountsPayablePage: React.FC = () => {
           setPayableDetail(null);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           payableDetail ? (

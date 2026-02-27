@@ -4,10 +4,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Table, Form, Input, Select } from 'antd';
-import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Card, Table, Form, Input, Select, Dropdown, Row, Col } from 'antd';
+import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
@@ -17,6 +17,9 @@ import {
   PurchaseRequisition,
   PurchaseRequisitionItem,
 } from '../../../services/purchase-requisition';
+import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 
 const PurchaseRequisitionsPage: React.FC = () => {
@@ -37,8 +40,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
     { title: '申请编码', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
     { title: '申请名称', dataIndex: 'requisition_name', width: 180 },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         '草稿': { text: '草稿', status: 'Default' },
@@ -47,6 +50,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
         '已通过': { text: '已通过', status: 'Success' },
         '部分转单': { text: '部分转单', status: 'Warning' },
         '全部转单': { text: '全部转单', status: 'Success' },
+      },
+      render: (_, record) => {
+        const lifecycle = getPurchaseRequisitionLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          待审核: 'processing',
+          已驳回: 'error',
+          已通过: 'success',
+          部分转单: 'warning',
+          全部转单: 'success',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     { title: '来源', dataIndex: 'source_code', width: 140 },
@@ -62,30 +78,31 @@ const PurchaseRequisitionsPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 260,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-            详情
-          </Button>
-          {record.status === '草稿' && (
-            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
-              提交
-            </Button>
-          )}
-          {(record.status === '已通过' || record.status === '部分转单') && (
-            <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>
-              转采购单
-            </Button>
-          )}
-          {(record.status === '草稿' || record.status === '待审核') && (
-            <Button type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleUrgent(record)}>
-              紧急采购
-            </Button>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const moreItems = [
+          ...(record.status === '草稿' || record.status === '待审核'
+            ? [{ key: 'urgent', label: '紧急采购', icon: <ThunderboltOutlined />, onClick: () => handleUrgent(record) }]
+            : []),
+        ]
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            {record.status === '草稿' && (
+              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
+            )}
+            {(record.status === '已通过' || record.status === '部分转单') && (
+              <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>转采购单</Button>
+            )}
+            {moreItems.length > 0 && (
+              <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+                <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+              </Dropdown>
+            )}
+          </Space>
+        )
+      },
     },
   ];
 
@@ -222,7 +239,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             const res = await listPurchaseRequisitions({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              status: params.status,
+              status: params.lifecycle ?? params.status,
               source_type: params.source_type,
             });
             return {
@@ -247,10 +264,62 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }}
         dataSource={currentReq || undefined}
         columns={detailColumns}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          currentReq && (
+            <DetailDrawerActions
+              items={[
+                { key: 'submit', visible: currentReq.status === '草稿', render: () => <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(currentReq)}>提交</Button> },
+                { key: 'convert', visible: currentReq.status === '已通过' || currentReq.status === '部分转单', render: () => <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>转采购单</Button> },
+              ]}
+            />
+          )
+        }
         customContent={
-          currentReq?.items && currentReq.items.length > 0 && (
-            <Card title="申请明细" style={{ marginTop: 16 }}>
+          currentReq && (
+            <>
+              <DetailDrawerSection title="基本信息">
+                <Row gutter={16}>
+                  <Col span={8}><strong>申请编码：</strong>{currentReq.requisition_code}</Col>
+                  <Col span={8}><strong>申请名称：</strong>{currentReq.requisition_name}</Col>
+                  <Col span={8}><strong>状态：</strong><Tag>{currentReq.status}</Tag></Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}><strong>来源：</strong>{currentReq.source_code || '-'}</Col>
+                  <Col span={8}><strong>要求到货日期：</strong>{currentReq.required_date || '-'}</Col>
+                  <Col span={8}><strong>是否紧急：</strong>{currentReq.is_urgent ? '是' : '否'}</Col>
+                </Row>
+              </DetailDrawerSection>
+              {(() => {
+                const lifecycle = getPurchaseRequisitionLifecycle(currentReq);
+                const mainStages = lifecycle.mainStages ?? [];
+                const subStages = lifecycle.subStages ?? [];
+                if (mainStages.length === 0 && subStages.length === 0) return null;
+                return (
+                  <DetailDrawerSection title="生命周期">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {mainStages.length > 0 && (
+                        <UniLifecycleStepper
+                          steps={mainStages}
+                          status={lifecycle.status}
+                          showLabels
+                          nextStepSuggestions={lifecycle.nextStepSuggestions}
+                        />
+                      )}
+                      {subStages.length > 0 && (
+                        <div>
+                          <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                            执行中 · 全链路
+                          </div>
+                          <UniLifecycleStepper steps={subStages} showLabels />
+                        </div>
+                      )}
+                    </div>
+                  </DetailDrawerSection>
+                );
+              })()}
+              {currentReq.items && currentReq.items.length > 0 && (
+            <DetailDrawerSection title="申请明细">
               <Table
                 size="small"
                 columns={[
@@ -272,7 +341,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 rowKey="id"
                 bordered
               />
-            </Card>
+            </DetailDrawerSection>
+              )}
+              {currentReq?.id && (
+                <DetailDrawerSection title="操作历史">
+                  <DocumentTrackingPanel documentType="purchase_requisition" documentId={currentReq.id} />
+                </DetailDrawerSection>
+              )}
+            </>
           )
         }
       />

@@ -160,7 +160,7 @@ const HolidaysPage: React.FC = () => {
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         />
       </ListPageTemplate>
-      <DetailDrawerTemplate<Holiday> title="假期详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={holidayDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.STANDARD_WIDTH} />
+      <DetailDrawerTemplate<Holiday> title="假期详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={holidayDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.HALF_WIDTH} />
       <HolidayFormModal open={modalVisible} onClose={() => { setModalVisible(false); setEditUuid(null); }} editUuid={editUuid} onSuccess={handleModalSuccess} />
     </>
   );

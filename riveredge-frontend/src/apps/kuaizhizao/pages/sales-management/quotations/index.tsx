@@ -9,8 +9,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, Row, Col, DatePicker } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, Row, Col, DatePicker, Dropdown } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -18,7 +18,7 @@ import { CustomerFormModal } from '../../../../master-data/components/CustomerFo
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniImport } from '../../../../../components/uni-import';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
   listQuotations,
@@ -29,6 +29,9 @@ import {
   convertQuotationToOrder,
   Quotation,
 } from '../../../services/quotation';
+import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
@@ -99,11 +102,20 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
+      valueEnum: {
+        草稿: { text: '草稿', status: 'Default' },
+        已发送: { text: '已发送', status: 'Processing' },
+        已接受: { text: '已接受', status: 'Success' },
+        已拒绝: { text: '已拒绝', status: 'Error' },
+        已转订单: { text: '已转订单', status: 'Success' },
+      },
+      render: (_, record) => {
+        const lifecycle = getQuotationLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
@@ -111,23 +123,30 @@ const QuotationsPage: React.FC = () => {
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 240,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
-          {record.status === '草稿' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-          {record.status !== '已转订单' && record.status !== '已拒绝' && (
-            <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)} style={{ color: '#1890ff' }}>转订单</Button>
-          )}
-          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
-        </Space>
-      ),
+      render: (_, record) => {
+        const moreItems = [
+          ...(record.status !== '已转订单' && record.status !== '已拒绝'
+            ? [{ key: 'convert', label: '转订单', icon: <SwapOutlined />, onClick: () => handleConvert(record) }]
+            : []),
+          { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
+        ]
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id!)}>详情</Button>
+            {record.status === '草稿' && (
+              <>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+              </>
+            )}
+            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+              <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+            </Dropdown>
+          </Space>
+        )
+      },
     },
   ];
 
@@ -829,7 +848,7 @@ const QuotationsPage: React.FC = () => {
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                status: params.status,
+                status: params.lifecycle ?? params.status,
                 start_date: params.start_date,
                 end_date: params.end_date,
               });
@@ -851,7 +870,7 @@ const QuotationsPage: React.FC = () => {
         title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setQuotationDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={quotationDetail || {}}
         extra={
@@ -860,7 +879,36 @@ const QuotationsPage: React.FC = () => {
           )
         }
       >
+        {quotationDetail && (() => {
+          const lifecycle = getQuotationLifecycle(quotationDetail);
+          const mainStages = lifecycle.mainStages ?? [];
+          const subStages = lifecycle.subStages ?? [];
+          if (mainStages.length === 0 && subStages.length === 0) return null;
+          return (
+            <DetailDrawerSection title="生命周期">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {mainStages.length > 0 && (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    status={lifecycle.status}
+                    showLabels
+                    nextStepSuggestions={lifecycle.nextStepSuggestions}
+                  />
+                )}
+                {subStages.length > 0 && (
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                      执行中 · 全链路
+                    </div>
+                    <UniLifecycleStepper steps={subStages} showLabels />
+                  </div>
+                )}
+              </div>
+            </DetailDrawerSection>
+          );
+        })()}
         {quotationDetail?.items && quotationDetail.items.length > 0 && (
+          <DetailDrawerSection title="报价明细">
           <Table
             size="small"
             rowKey="id"
@@ -878,6 +926,12 @@ const QuotationsPage: React.FC = () => {
             dataSource={quotationDetail.items}
             pagination={false}
           />
+          </DetailDrawerSection>
+        )}
+        {quotationDetail?.id && (
+          <DetailDrawerSection title="操作历史">
+            <DocumentTrackingPanel documentType="quotation" documentId={quotationDetail.id} />
+          </DetailDrawerSection>
         )}
       </DetailDrawerTemplate>
 
