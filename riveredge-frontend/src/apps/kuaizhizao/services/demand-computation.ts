@@ -99,6 +99,22 @@ export interface DemandComputationListResponse {
   success: boolean;
 }
 
+/** 需求计算统计（用于指标卡片） */
+export interface DemandComputationStatistics {
+  total_count: number;
+  mrp_count: number;
+  lrp_count: number;
+  pending_count: number;
+  completed_count: number;
+}
+
+/** 获取需求计算统计 */
+export async function getDemandComputationStatistics(): Promise<DemandComputationStatistics> {
+  return apiRequest<DemandComputationStatistics>('/apps/kuaizhizao/demand-computations/statistics', {
+    method: 'GET',
+  });
+}
+
 /**
  * 创建需求计算
  */

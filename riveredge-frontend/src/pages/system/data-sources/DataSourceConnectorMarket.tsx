@@ -61,7 +61,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
       onCancel={onClose}
       footer={null}
       width={720}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Radio.Group

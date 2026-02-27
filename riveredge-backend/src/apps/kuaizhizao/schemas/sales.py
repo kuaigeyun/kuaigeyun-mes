@@ -52,6 +52,7 @@ class SalesForecastResponse(SalesForecastBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
     class Config:
         from_attributes = True

@@ -71,6 +71,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     items: List["PurchaseOrderItemResponse"] = Field(default_factory=list, description="订单明细")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
 
 
 class PurchaseOrderListResponse(PurchaseOrderResponse):

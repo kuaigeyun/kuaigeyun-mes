@@ -4,7 +4,8 @@
 提供工单、返工单、工序委外管理的API接口。
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -76,6 +77,70 @@ async def create_work_order(
         work_order_data=work_order,
         created_by=current_user.id
     )
+
+
+@router.get("/work-orders/statistics", summary="获取工单统计（用于指标卡片）")
+async def get_work_order_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    返回工单各维度数量，用于列表页指标卡片。
+    指标：进行中、今日完成、逾期、草稿、已完成。
+    """
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+    today_end = datetime.combine(today, datetime.max.time())
+    base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+
+    try:
+        in_progress_count = await base.filter(
+            status__in=["released", "in_progress"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"work-order-statistics in_progress_count: {e}")
+        in_progress_count = 0
+
+    try:
+        completed_today_count = await base.filter(
+            status="completed",
+            actual_end_date__gte=today_start,
+            actual_end_date__lte=today_end,
+        ).count()
+    except Exception as e:
+        logger.warning(f"work-order-statistics completed_today_count: {e}")
+        completed_today_count = 0
+
+    try:
+        overdue_count = await base.filter(
+            status__in=["released", "in_progress"],
+            planned_end_date__lt=today_start,
+        ).count()
+    except Exception as e:
+        logger.warning(f"work-order-statistics overdue_count: {e}")
+        overdue_count = 0
+
+    try:
+        draft_count = await base.filter(status="draft").count()
+    except Exception as e:
+        logger.warning(f"work-order-statistics draft_count: {e}")
+        draft_count = 0
+
+    try:
+        completed_count = await base.filter(status="completed").count()
+    except Exception as e:
+        logger.warning(f"work-order-statistics completed_count: {e}")
+        completed_count = 0
+
+    return {
+        "in_progress_count": in_progress_count,
+        "completed_today_count": completed_today_count,
+        "overdue_count": overdue_count,
+        "draft_count": draft_count,
+        "completed_count": completed_count,
+    }
 
 
 @router.get("/work-orders", summary="获取工单列表")

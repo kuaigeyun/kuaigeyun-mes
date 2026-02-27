@@ -123,6 +123,22 @@ export interface SalesOrderListResponse {
   success: boolean;
 }
 
+/** 销售订单统计（用于指标卡片） */
+export interface SalesOrderStatistics {
+  active_count: number;
+  pending_review_count: number;
+  in_progress_count: number;
+  overdue_count: number;
+  total_amount: number;
+}
+
+/** 获取销售订单统计 */
+export async function getSalesOrderStatistics(): Promise<SalesOrderStatistics> {
+  return apiRequest<SalesOrderStatistics>('/apps/kuaizhizao/sales-orders/statistics', {
+    method: 'GET',
+  });
+}
+
 /**
  * 获取销售订单列表
  */

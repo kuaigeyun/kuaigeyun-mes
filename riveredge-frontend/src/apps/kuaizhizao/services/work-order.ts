@@ -4,6 +4,19 @@
 
 import { apiRequest } from '../../../services/api';
 
+/** 工单统计（用于指标卡片） */
+export interface WorkOrderStatistics {
+  in_progress_count: number;
+  completed_today_count: number;
+  overdue_count: number;
+  draft_count: number;
+  completed_count: number;
+}
+
+export async function getWorkOrderStatistics(): Promise<WorkOrderStatistics> {
+  return apiRequest<WorkOrderStatistics>('/apps/kuaizhizao/work-orders/statistics', { method: 'GET' });
+}
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),

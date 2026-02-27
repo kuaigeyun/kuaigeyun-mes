@@ -327,8 +327,7 @@ export async function apiRequest<T = any>(
           throw error;
         } else {
           // 其他接口返回 401，可能是 Token 过期或无效
-          // 清除过期的 Token，并跳转到登录页
-          console.warn('⚠️ API 返回 401，Token 已过期或无效，清除 Token 并跳转到登录页');
+          // 清除过期的 Token，并跳转到登录页（静默处理，不展示错误提示，避免登录页短暂闪烁）
           clearAuth();
           
           // 清除全局状态中的用户信息

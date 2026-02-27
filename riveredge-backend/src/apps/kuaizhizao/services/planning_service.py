@@ -65,7 +65,10 @@ class ProductionPlanningService(BaseService):
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
-        return ProductionPlanResponse.model_validate(plan)
+        resp = ProductionPlanResponse.model_validate(plan)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_plan_lifecycle
+        resp.lifecycle = get_production_plan_lifecycle(plan)
+        return resp
 
     async def update_production_plan(self, tenant_id: int, plan_id: int, plan_data: Any, updated_by: int) -> ProductionPlanResponse:
         """更新生产计划"""
@@ -109,7 +112,13 @@ class ProductionPlanningService(BaseService):
             query = query.filter(plan_code__icontains=filters['plan_code'])
 
         plans = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [ProductionPlanListResponse.model_validate(plan) for plan in plans]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_plan_lifecycle
+        result = []
+        for plan in plans:
+            resp = ProductionPlanListResponse.model_validate(plan)
+            resp.lifecycle = get_production_plan_lifecycle(plan)
+            result.append(resp)
+        return result
 
     async def get_production_plan_count(self, tenant_id: int, **filters) -> int:
         """获取生产计划总数"""
@@ -127,12 +136,14 @@ class ProductionPlanningService(BaseService):
         mrp_plans = await base_query.filter(plan_type='MRP').count()
         lrp_plans = await base_query.filter(plan_type='LRP').count()
         executed_plans = await base_query.filter(execution_status='已执行').count()
+        pending_execution_plans = await base_query.filter(execution_status='未执行').count()
 
         return {
             "total_count": total_plans,
             "mrp_count": mrp_plans,
             "lrp_count": lrp_plans,
-            "executed_count": executed_plans
+            "executed_count": executed_plans,
+            "pending_execution_count": pending_execution_plans,
         }
 
     async def get_plan_items(self, tenant_id: int, plan_id: int) -> List[ProductionPlanItemResponse]:

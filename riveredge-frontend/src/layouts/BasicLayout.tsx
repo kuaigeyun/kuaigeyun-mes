@@ -79,7 +79,6 @@ import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
-import { getInitSteps } from '../services/init-wizard';
 
 /** 左侧菜单 path 与业务单据未完成数量 key 的映射（用于数量徽标） */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
@@ -638,17 +637,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
 
-  // 检查租户初始化状态（仅在有租户上下文时，平台超管无租户时跳过）
-  const tenantId = getTenantId();
-  const userInfo = getUserInfo();
-  const isInfraSuperAdminNoTenant = userInfo?.user_type === 'infra_superadmin' && !tenantId;
-  const { data: initStepsData } = useQuery({
-    queryKey: ['initSteps', tenantId],
-    queryFn: () => getInitSteps(tenantId!),
-    enabled: !!tenantId && !isInfraSuperAdminNoTenant,
-    staleTime: 60 * 1000, // 1 分钟缓存
-  });
-  const showInitBanner = !!tenantId && !isInfraSuperAdminNoTenant && initStepsData?.init_completed === false;
+  // 组织初始化提醒已移至上线助手中，不再全局展示
 
 
 
@@ -2992,7 +2981,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 32px !important;
           line-height: 24px !important;
         }
-        /* 上线助手按钮 - 橙色系背景 */
+        /* 上线助手按钮 - 橙色系背景，hover 比普通状态更深 */
         .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn,
         .ant-pro-layout .ant-layout-header .go-live-assistant-btn {
           display: flex !important;
@@ -3001,7 +2990,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           gap: 6px !important;
           padding: 4px 12px !important;
           border-radius: 16px !important;
-          background-color: ${isLightModeLightBg ? token.colorWarningBg : `color-mix(in srgb, ${token.colorWarning} 50%, transparent)`} !important;
+          background-color: ${isLightModeLightBg ? token.colorWarning : `color-mix(in srgb, ${token.colorWarning} 70%, transparent)`} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           font-size: 14px !important;
           font-weight: 500 !important;
@@ -3012,7 +3001,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn:hover,
         .ant-pro-layout .ant-layout-header .go-live-assistant-btn:hover {
-          background-color: ${isLightModeLightBg ? token.colorWarningBgHover : `color-mix(in srgb, ${token.colorWarning} 26%, transparent)`} !important;
+          background-color: ${isLightModeLightBg ? token.colorWarning : `color-mix(in srgb, ${token.colorWarning} 75%, transparent)`} !important;
         }
         /* 上线助手按钮流光效果 - 仅播放一遍 */
         .go-live-assistant-btn-wrapper {
@@ -3030,18 +3019,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: linear-gradient(
             105deg,
             transparent 0%,
-            transparent 35%,
-            ${isLightModeLightBg ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.4)'} 50%,
-            transparent 65%,
+            transparent 25%,
+            ${isLightModeLightBg ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.25)'} 50%,
+            transparent 75%,
             transparent 100%
           );
-          background-size: 200% 100%;
-          animation: go-live-assistant-shimmer 2.2s ease-in-out 0.5s 1 forwards;
+          background-size: 300% 100%;
+          animation: go-live-assistant-shimmer 2.5s ease-out 0.8s 1 forwards;
           pointer-events: none;
           z-index: 1;
         }
         @keyframes go-live-assistant-shimmer {
-          0% { background-position: 200% 0; }
+          0% { background-position: 250% 0; }
           100% { background-position: -100% 0; }
         }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
@@ -4185,22 +4174,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           onToggleFullscreen={handleToggleFullscreen}
         >
           <>
-            {showInitBanner && (
-              <Alert
-                message={t('initWizard.bannerTitle', { defaultValue: '组织尚未完成初始化' })}
-                description={
-                  <span>
-                    {t('initWizard.bannerDesc', { defaultValue: '请完成组织初始化配置以获得最佳使用体验。' })}
-                    <Button type="link" size="small" onClick={() => navigate('/init/wizard')} style={{ padding: 0, marginLeft: 8 }}>
-                      {t('initWizard.bannerAction', { defaultValue: '前往完成' })}
-                    </Button>
-                  </span>
-                }
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-            )}
             {children}
           </>
         </UniTabs>

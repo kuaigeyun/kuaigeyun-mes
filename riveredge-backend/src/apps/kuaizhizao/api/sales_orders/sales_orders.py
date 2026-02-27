@@ -8,7 +8,7 @@ Date: 2026-01-19
 """
 
 from typing import Optional, Dict, Any, List
-from datetime import date
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from loguru import logger
 
@@ -69,6 +69,86 @@ SALES_ORDER_SORTABLE_FIELDS = frozenset({
     "total_quantity", "total_amount", "status", "review_status",
     "created_at", "updated_at",
 })
+
+
+@router.get("/statistics", summary="获取销售订单统计（用于指标卡片）")
+async def get_sales_order_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    返回销售订单各维度数量，用于列表页指标卡片。
+    指标：活动订单、待审核、执行中、逾期未交、总金额。
+    """
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    today = date.today()
+    base = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    audited = ("AUDITED", "已审核", "CONFIRMED", "已确认")
+    pending_review = ("PENDING", "PENDING_REVIEW", "待审核")
+
+    try:
+        # 活动订单：排除草稿、已取消、已驳回
+        active_count = await base.exclude(
+            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"sales-order-statistics active_count: {e}")
+        active_count = 0
+
+    try:
+        pending_review_count = await base.filter(
+            review_status__in=list(pending_review),
+        ).count()
+    except Exception as e:
+        logger.warning(f"sales-order-statistics pending_review_count: {e}")
+        pending_review_count = 0
+
+    try:
+        # 执行中：已审核/已确认，非草稿/待审核/已驳回
+        in_progress_count = await base.filter(
+            status__in=list(audited),
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"sales-order-statistics in_progress_count: {e}")
+        in_progress_count = 0
+
+    try:
+        # 逾期未交：交货日期 < 今天，且已审核/已确认（未完成）
+        overdue_count = await base.filter(
+            delivery_date__lt=today,
+            status__in=list(audited),
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"sales-order-statistics overdue_count: {e}")
+        overdue_count = 0
+
+    try:
+        # 活动订单总金额
+        from tortoise.functions import Sum
+        agg = await base.exclude(
+            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+        ).aggregate(total=Sum("total_amount"))
+        total_amount = float(agg.get("total") or 0)
+    except Exception as e:
+        logger.warning(f"sales-order-statistics total_amount: {e}")
+        total_amount = 0
+
+    return {
+        "active_count": active_count,
+        "pending_review_count": pending_review_count,
+        "in_progress_count": in_progress_count,
+        "overdue_count": overdue_count,
+        "total_amount": round(total_amount, 2),
+    }
 
 
 @router.get("", response_model=SalesOrderListResponse, summary="获取销售订单列表")

@@ -1,31 +1,30 @@
 /**
- * 初始化向导页面
+ * 初始化向导页面 - Modal 形式
  *
- * 新组织注册后的初始化向导页面
+ * 新组织注册后的初始化向导，以弹窗形式展示
  *
  * Author: Luigi Lu
  * Date: 2025-01-15
  */
 
 import React from 'react';
+import { Modal } from 'antd';
 import InitWizard from '../../../components/init-wizard';
 import { useNavigate } from 'react-router-dom';
 import { getTenantId } from '../../../utils/auth';
 
 /**
- * 初始化向导页面组件
+ * 初始化向导页面组件（Modal 形式）
  */
 const InitWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const tenantId = getTenantId();
 
   const handleComplete = () => {
-    // 初始化完成后跳转到工作台
     navigate('/system/dashboard/workplace', { replace: true });
   };
 
   const handleCancel = () => {
-    // 取消初始化，也跳转到工作台（用户可以稍后手动进行初始化）
     navigate('/system/dashboard/workplace', { replace: true });
   };
 
@@ -38,11 +37,25 @@ const InitWizardPage: React.FC = () => {
   }
 
   return (
-    <InitWizard
-      tenantId={tenantId}
-      onComplete={handleComplete}
-      onCancel={handleCancel}
-    />
+    <div style={{ minHeight: '100vh', background: 'rgba(0,0,0,0.02)' }}>
+      <Modal
+        title="初始化向导"
+        open
+        width={720}
+        closable
+        maskClosable={false}
+        footer={null}
+        destroyOnHidden
+        onCancel={handleCancel}
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+      >
+        <InitWizard
+          tenantId={tenantId}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+        />
+      </Modal>
+    </div>
   );
 };
 

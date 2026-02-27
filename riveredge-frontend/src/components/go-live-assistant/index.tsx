@@ -167,7 +167,7 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
         </Button>,
       ]}
       width={640}
-      destroyOnClose
+      destroyOnHidden
     >
       {isLoading ? (
         <div style={{ padding: 48, textAlign: 'center' }}>

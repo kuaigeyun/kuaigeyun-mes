@@ -35,48 +35,20 @@ class InitWizardService:
     提供初始化向导相关的业务逻辑处理。
     """
     
-    # 初始化步骤配置
+    # 初始化步骤配置（精简：仅保留最必要的核心设置）
     INIT_STEPS = [
         {
-            "step_id": "step1",
-            "title": "组织信息完善",
-            "description": "补充组织基本信息",
+            "step_id": "step2",
+            "title": "基础设置",
+            "description": "配置时区、货币、语言等核心设置",
             "order": 1,
             "required": True,
-        },
-        {
-            "step_id": "step2",
-            "title": "默认设置",
-            "description": "配置时区、货币、语言等默认设置",
-            "order": 2,
-            "required": True,
-        },
-        {
-            "step_id": "step2_5",
-            "title": "编码规则配置",
-            "description": "配置各种单据的编码规则（可选，可使用默认规则）",
-            "order": 2.5,
-            "required": False,
-        },
-        {
-            "step_id": "step3",
-            "title": "管理员信息",
-            "description": "完善管理员个人信息",
-            "order": 3,
-            "required": False,
-        },
-        {
-            "step_id": "step4",
-            "title": "选择行业模板",
-            "description": "选择适合的行业模板快速配置（可选）",
-            "order": 4,
-            "required": False,
         },
         {
             "step_id": "step5",
             "title": "完成",
             "description": "确认并完成初始化",
-            "order": 5,
+            "order": 2,
             "required": True,
         },
     ]
@@ -106,18 +78,10 @@ class InitWizardService:
         settings = tenant.settings or {}
         init_completed = bool(settings.get("init_completed"))
 
-        # 根据已保存的 init_step* 数据判断各步骤是否完成（有数据即视为完成）
+        # 根据已保存的数据判断各步骤是否完成
         completed_steps = set()
-        if settings.get("init_step1"):
-            completed_steps.add("step1")
         if settings.get("init_step2"):
             completed_steps.add("step2")
-        if settings.get("init_step2_5"):
-            completed_steps.add("step2_5")
-        if settings.get("init_step3"):
-            completed_steps.add("step3")
-        if settings.get("init_step4"):
-            completed_steps.add("step4")
         if init_completed:
             completed_steps.add("step5")
 

@@ -230,7 +230,10 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             NotFoundError: 返工单不存在
         """
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        return ReworkOrderResponse.model_validate(rework_order)
+        resp = ReworkOrderResponse.model_validate(rework_order)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
+        resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        return resp
 
     async def get_rework_order_by_uuid(
         self,
@@ -257,7 +260,10 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         )
         if not rework_order:
             raise NotFoundError(f"返工单不存在: {rework_order_uuid}")
-        return ReworkOrderResponse.model_validate(rework_order)
+        resp = ReworkOrderResponse.model_validate(rework_order)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
+        resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        return resp
 
     async def list_rework_orders(
         self,
@@ -306,7 +312,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             query = query.filter(rework_type=rework_type)
 
         rework_orders = await query.offset(skip).limit(limit).order_by("-created_at")
-        return [ReworkOrderListResponse.model_validate(ro) for ro in rework_orders]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
+        result = []
+        for ro in rework_orders:
+            resp = ReworkOrderListResponse.model_validate(ro)
+            resp.lifecycle = get_rework_order_lifecycle(ro)
+            result.append(resp)
+        return result
 
     async def update_rework_order(
         self,

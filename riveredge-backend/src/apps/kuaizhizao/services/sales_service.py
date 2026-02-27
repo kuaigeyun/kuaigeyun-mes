@@ -80,7 +80,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=forecast_id)
         if not forecast:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        return SalesForecastResponse.model_validate(forecast)
+        resp = SalesForecastResponse.model_validate(forecast)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle
+        resp.lifecycle = get_sales_forecast_lifecycle(forecast)
+        return resp
 
     async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售预测列表"""
@@ -97,13 +100,13 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         
         # 获取分页数据
         forecasts = await query.offset(skip).limit(limit).order_by('-created_at')
-        
-        # 返回前端期望的格式
-        return {
-            "data": [SalesForecastListResponse.model_validate(forecast).model_dump() for forecast in forecasts],
-            "total": total,
-            "success": True
-        }
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle
+        result = []
+        for forecast in forecasts:
+            resp = SalesForecastListResponse.model_validate(forecast)
+            resp.lifecycle = get_sales_forecast_lifecycle(forecast)
+            result.append(resp.model_dump())
+        return {"data": result, "total": total, "success": True}
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
         """更新销售预测；若提供 items 则先删后增，覆盖全部明细。已审核预测更新后同步关联需求。"""

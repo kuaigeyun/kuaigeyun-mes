@@ -421,20 +421,20 @@ GO_LIVE_ASSISTANT_PHASES = [
         "order": 1,
         "items": [
             {
+                "id": "init_completed",
+                "name": "组织初始化",
+                "required": True,
+                "description": "完成时区、货币、语言、日期格式等基础设置",
+                "jump_path": "/init/wizard",
+                "check_key": "init_completed",
+            },
+            {
                 "id": "blueprint_config",
                 "name": "业务蓝图配置",
                 "required": True,
                 "description": "配置行业、规模、启用模块、单据审核规则",
                 "jump_path": "/system/config-center?tab=graph",
                 "check_key": "blueprint_confirmed",
-            },
-            {
-                "id": "init_completed",
-                "name": "组织初始化",
-                "required": True,
-                "description": "完成组织信息、默认设置、编码规则、管理员配置",
-                "jump_path": "/init/wizard",
-                "check_key": "init_completed",
             },
         ],
     },

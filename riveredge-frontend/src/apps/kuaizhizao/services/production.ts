@@ -5,7 +5,7 @@
 
 import { apiRequest } from '../../../services/api';
 
-export { workOrderApi, reworkOrderApi } from './work-order';
+export { workOrderApi, reworkOrderApi, getWorkOrderStatistics } from './work-order';
 export { reportingApi, materialBindingApi } from './reporting';
 export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi } from './quality-execution';
