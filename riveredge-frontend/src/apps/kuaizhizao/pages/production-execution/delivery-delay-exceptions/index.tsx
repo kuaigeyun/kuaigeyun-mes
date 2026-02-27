@@ -277,7 +277,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentRecord ? (

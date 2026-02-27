@@ -342,7 +342,7 @@ const MaterialReturnsPage: React.FC = () => {
         title={`还料单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setReturnDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={returnDetail || {}}
       >

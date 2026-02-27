@@ -16,6 +16,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
+import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi } from '../../../../master-data/services/material';
 
@@ -89,17 +90,14 @@ const MaterialBorrowsPage: React.FC = () => {
     { title: '借料人', dataIndex: 'borrower_name', width: 100 },
     { title: '部门', dataIndex: 'department', width: 100 },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待借出': { text: '待借出', color: 'default' },
-          '已借出': { text: '已借出', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const c = map[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+      render: (_, record) => {
+        const lifecycle = getMaterialBorrowLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待借出';
+        const colorMap: Record<string, string> = { 待借出: 'default', 已借出: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
@@ -379,7 +377,7 @@ const MaterialBorrowsPage: React.FC = () => {
         title={`借料单详情${borrowDetail?.borrow_code ? ` - ${borrowDetail.borrow_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={borrowDetail || {}}
       >

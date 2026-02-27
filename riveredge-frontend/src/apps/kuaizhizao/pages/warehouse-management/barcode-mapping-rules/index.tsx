@@ -412,7 +412,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         title={`规则详情 - ${currentRecord?.code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentRecord ? (

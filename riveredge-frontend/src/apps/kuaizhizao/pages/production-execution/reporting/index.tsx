@@ -12,6 +12,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi, materialBindingApi } from '../../../services/production';
+import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
@@ -900,13 +901,19 @@ const ReportingPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         pending: { text: '待审核', status: 'default' },
         approved: { text: '已审核', status: 'success' },
         rejected: { text: '已驳回', status: 'error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getReportingLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待审核';
+        const colorMap: Record<string, string> = { 待审核: 'default', 已审核: 'success', 已驳回: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {

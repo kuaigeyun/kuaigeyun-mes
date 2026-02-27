@@ -14,6 +14,7 @@ import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
+import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi } from '../../../../master-data/services/material';
 
@@ -100,17 +101,14 @@ const OtherOutboundPage: React.FC = () => {
       render: (v) => <Tag>{v || '-'}</Tag>,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待出库': { text: '待出库', color: 'default' },
-          '已出库': { text: '已出库', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const c = map[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+      render: (_, record) => {
+        const lifecycle = getOtherOutboundLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待出库';
+        const colorMap: Record<string, string> = { 待出库: 'default', 已出库: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     { title: '出库人', dataIndex: 'deliverer_name', width: 100 },
@@ -293,7 +291,7 @@ const OtherOutboundPage: React.FC = () => {
         title={`其他出库单详情${outboundDetail?.outbound_code ? ` - ${outboundDetail.outbound_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setOutboundDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={outboundDetail || {}}
       >

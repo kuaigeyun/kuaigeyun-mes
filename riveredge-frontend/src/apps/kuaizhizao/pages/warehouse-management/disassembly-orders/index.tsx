@@ -14,6 +14,7 @@ import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { disassemblyOrderApi } from '../../../services/disassembly-order';
+import { getDisassemblyOrderLifecycle } from '../../../utils/disassemblyOrderLifecycle';
 
 interface DisassemblyOrder {
   id?: number;
@@ -73,14 +74,20 @@ const DisassemblyOrdersPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         draft: { text: '草稿', status: 'default' },
         in_progress: { text: '拆卸中', status: 'processing' },
         completed: { text: '已完成', status: 'success' },
         cancelled: { text: '已取消', status: 'error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getDisassemblyOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = { 草稿: 'default', 拆卸中: 'processing', 已完成: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {

@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
+import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
 import { materialApi } from '../../../../master-data/services/material';
 
@@ -87,11 +88,13 @@ const ReceiptNoticesPage: React.FC = () => {
     { title: '供应商', dataIndex: 'supplier_name', width: 140, ellipsis: true },
     { title: '入库仓库', dataIndex: 'warehouse_name', width: 120 },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
+      render: (_, record) => {
+        const lifecycle = getReceiptNoticeLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待收货';
+        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
@@ -450,7 +453,7 @@ const ReceiptNoticesPage: React.FC = () => {
         title={`收货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={noticeDetail || {}}
       >

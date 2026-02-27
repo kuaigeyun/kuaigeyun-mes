@@ -408,7 +408,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setSuggestionDetail(null);
         }}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={suggestionDetail}
       />

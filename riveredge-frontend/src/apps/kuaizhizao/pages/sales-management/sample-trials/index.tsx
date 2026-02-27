@@ -664,7 +664,7 @@ const SampleTrialsPage: React.FC = () => {
         title={`样品试用详情${trialDetail?.trial_code ? ` - ${trialDetail.trial_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setTrialDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={trialDetail || {}}
       >

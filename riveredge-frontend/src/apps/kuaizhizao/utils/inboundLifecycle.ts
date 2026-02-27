@@ -1,0 +1,72 @@
+/**
+ * 入库管理生命周期：草稿→已确认/待退料→已退料（生产退料）/已完成（采购/成品）
+ */
+
+import type { LifecycleResult } from '../../../../components/uni-lifecycle/types';
+import type { BackendLifecycle } from './backendLifecycle';
+import { parseBackendLifecycle } from './backendLifecycle';
+
+function norm(s: string | undefined): string {
+  return (s ?? '').trim();
+}
+
+const STATUS_TO_STAGE: Record<string, string> = {
+  草稿: '草稿',
+  已确认: '已确认',
+  已完成: '已完成',
+  已取消: '已取消',
+  待退料: '待退料',
+  已退料: '已退料',
+};
+
+function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
+  const status = norm(record?.status as string);
+  const stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
+  const keyMap: Record<string, string> = {
+    草稿: 'draft',
+    已确认: 'confirmed',
+    已完成: 'completed',
+    已取消: 'cancelled',
+    待退料: 'pending_return',
+    已退料: 'returned',
+  };
+  const key = keyMap[stageName] ?? 'draft';
+  const stageDefs = [
+    { key: 'draft', label: '草稿' },
+    { key: 'confirmed', label: '已确认' },
+    { key: 'completed', label: '已完成' },
+  ];
+  const stageToIdx: Record<string, number> = {
+    草稿: 0,
+    已确认: 1,
+    已完成: 2,
+    已取消: 0,
+    待退料: 1,
+    已退料: 2,
+  };
+  const curIdx = stageToIdx[stageName] ?? 0;
+  const isException = stageName === '已取消';
+  const mainStages = stageDefs.map((s, idx) => {
+    let st: 'done' | 'active' | 'pending' = 'pending';
+    if (isException) st = 'pending';
+    else if (idx < curIdx) st = 'done';
+    else if (idx === curIdx) st = 'active';
+    return { key: s.key, label: s.label, status: st };
+  });
+  return {
+    current_stage_key: key,
+    current_stage_name: stageName,
+    status: isException ? 'exception' : stageName === '已完成' || stageName === '已退料' ? 'success' : 'normal',
+    main_stages: mainStages,
+    next_step_suggestions: stageName === '草稿' ? ['确认'] : stageName === '已确认' || stageName === '待退料' ? ['完成'] : [],
+  };
+}
+
+export function getInboundLifecycle(
+  record: Record<string, unknown> | null | undefined
+): LifecycleResult {
+  if (!record) return { percent: 0, stageName: '-', mainStages: [] };
+  const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
+  if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
+  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+}

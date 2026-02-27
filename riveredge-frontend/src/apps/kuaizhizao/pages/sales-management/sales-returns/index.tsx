@@ -370,7 +370,7 @@ const SalesReturnsPage: React.FC = () => {
           setReturnDetail(null);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={returnDetail || undefined}
         customContent={

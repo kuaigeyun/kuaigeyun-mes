@@ -129,7 +129,7 @@ const SummariesPage: React.FC = () => {
         dataSource={detail || undefined}
         columns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       />
     </>
   );

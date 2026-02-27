@@ -12,6 +12,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
+import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -171,20 +172,21 @@ const InboundPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any, record) => {
-        const enumMap: Record<string, { text: string; status: string }> = {
-          '草稿': { text: '草稿', status: 'default' },
-          '已确认': { text: '已确认', status: 'processing' },
-          '已完成': { text: '已完成', status: 'success' },
-          '已取消': { text: '已取消', status: 'error' },
-          '待退料': { text: '待退料', status: 'default' },
-          '已退料': { text: '已退料', status: 'success' },
+      render: (_, record) => {
+        const lifecycle = getInboundLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          已确认: 'processing',
+          已完成: 'success',
+          已取消: 'error',
+          待退料: 'default',
+          已退料: 'success',
         };
-        const config = enumMap[status as string] || { text: status || '-', status: 'default' };
-        return <Tag color={config.status === 'success' ? 'success' : config.status === 'error' ? 'error' : config.status === 'processing' ? 'processing' : 'default'}>{config.text}</Tag>;
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -239,7 +241,7 @@ const InboundPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -445,7 +447,7 @@ const InboundPage: React.FC = () => {
         title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentOrder ? (

@@ -324,7 +324,7 @@ const InspectionPlansPage: React.FC = () => {
         }}
         dataSource={planDetail}
         columns={detailColumns}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       >
         {planDetail?.steps && planDetail.steps.length > 0 && (
           <Card title="检验步骤" size="small" style={{ marginTop: 16 }}>

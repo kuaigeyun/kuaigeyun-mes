@@ -16,6 +16,7 @@ import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
+import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLifecycle';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 
@@ -310,10 +311,15 @@ const ExceptionProcessPage: React.FC = () => {
       width: 100,
     },
     {
-      title: '处理状态',
-      dataIndex: 'process_status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (_, record) => getStatusTag(record.process_status),
+      render: (_, record) => {
+        const lifecycle = getExceptionProcessLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.process_status ?? '待处理';
+        const colorMap: Record<string, string> = { 待处理: 'default', 处理中: 'processing', 已解决: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
+      },
     },
     {
       title: '当前步骤',
@@ -479,7 +485,7 @@ const ExceptionProcessPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentRecord && ['pending', 'processing'].includes(currentRecord.process_status || '') ? (
             <Space>

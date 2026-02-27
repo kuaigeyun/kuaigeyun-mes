@@ -596,7 +596,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           inspectionDetail ? (

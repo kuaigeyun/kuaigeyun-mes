@@ -13,9 +13,12 @@ import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSe
 import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { reworkOrderApi } from '../../../services/production';
+import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
 interface ReworkOrder {
   id?: number;
@@ -220,19 +223,27 @@ const ReworkOrdersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          'draft': { text: '草稿', color: 'default' },
-          'released': { text: '已下达', color: 'processing' },
-          'in_progress': { text: '执行中', color: 'blue' },
-          'completed': { text: '已完成', color: 'success' },
-          'cancelled': { text: '已取消', color: 'error' },
+      valueEnum: {
+        draft: { text: '草稿', status: 'Default' },
+        released: { text: '已下达', status: 'Processing' },
+        in_progress: { text: '执行中', status: 'Processing' },
+        completed: { text: '已完成', status: 'Success' },
+        cancelled: { text: '已取消', status: 'Error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getReworkOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const statusMap: Record<string, string> = {
+          草稿: 'default',
+          已下达: 'processing',
+          执行中: 'blue',
+          已完成: 'success',
+          已取消: 'error',
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={statusMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -257,40 +268,25 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 180,
+      width: 200,
       fixed: 'right',
-      render: (_text, record) => [
-        <Button
-          key="detail"
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
-          onClick={() => handleDetail(record)}
-        >
-          详情
-        </Button>,
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-          disabled={record.status === 'completed' || record.status === 'cancelled'}
-        >
-          编辑
-        </Button>,
-        <Button
-          key="delete"
-          type="link"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete(record)}
-          disabled={record.status !== 'draft'}
-        >
-          删除
-        </Button>,
-      ],
+      render: (_text, record) => (
+        <Space>
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+            disabled={record.status === 'completed' || record.status === 'cancelled'}
+          >
+            编辑
+          </Button>
+          {record.status === 'draft' && (
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+          )}
+        </Space>
+      ),
     },
   ];
 
@@ -622,8 +618,52 @@ const ReworkOrdersPage: React.FC = () => {
         onClose={() => setDetailDrawerVisible(false)}
         dataSource={reworkOrderDetail}
         columns={detailColumns}
-        {...DRAWER_CONFIG}
-      />
+        width={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          reworkOrderDetail && (
+            <DetailDrawerActions
+              items={[
+                { key: 'edit', visible: reworkOrderDetail.status === 'draft', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
+                { key: 'delete', visible: reworkOrderDetail.status === 'draft', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(reworkOrderDetail)}>删除</Button> },
+              ]}
+            />
+          )
+        }
+      >
+        {reworkOrderDetail && (() => {
+          const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
+          const mainStages = lifecycle.mainStages ?? [];
+          const subStages = lifecycle.subStages ?? [];
+          if (mainStages.length === 0 && subStages.length === 0) return null;
+          return (
+            <DetailDrawerSection title="生命周期">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {mainStages.length > 0 && (
+                  <UniLifecycleStepper
+                    steps={mainStages}
+                    status={lifecycle.status}
+                    showLabels
+                    nextStepSuggestions={lifecycle.nextStepSuggestions}
+                  />
+                )}
+                {subStages.length > 0 && (
+                  <div>
+                    <div style={{ marginBottom: 8, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
+                      执行中 · 全链路
+                    </div>
+                    <UniLifecycleStepper steps={subStages} showLabels />
+                  </div>
+                )}
+              </div>
+            </DetailDrawerSection>
+          );
+        })()}
+        {reworkOrderDetail?.id && (
+          <DetailDrawerSection title="操作历史">
+            <DocumentTrackingPanel documentType="rework_order" documentId={reworkOrderDetail.id} />
+          </DetailDrawerSection>
+        )}
+      </DetailDrawerTemplate>
     </ListPageTemplate>
   );
 };

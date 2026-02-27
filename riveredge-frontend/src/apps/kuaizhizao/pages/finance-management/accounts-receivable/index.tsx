@@ -368,7 +368,7 @@ const AccountsReceivablePage: React.FC = () => {
           setReceivableDetail(null);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           receivableDetail ? (

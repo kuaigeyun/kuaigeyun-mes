@@ -659,7 +659,7 @@ const EquipmentPage: React.FC = () => {
           setDrawerVisible(false);
           setEquipmentDetail(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={equipmentDetail}
         columns={detailColumns}
       />
@@ -805,7 +805,7 @@ const EquipmentPage: React.FC = () => {
         )}
       </Modal>
 
-      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnClose width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />

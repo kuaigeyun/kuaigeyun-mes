@@ -10,13 +10,14 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker, Dropdown } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
+import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 
@@ -92,11 +93,13 @@ const DeliveryNotesPage: React.FC = () => {
     { title: '承运商', dataIndex: 'carrier', width: 100 },
     { title: '运单号', dataIndex: 'tracking_number', width: 120, ellipsis: true },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const c = STATUS_MAP[(status as string) || ''] || { text: (status as string) || '-', color: 'default' };
+      render: (_, record) => {
+        const lifecycle = getDeliveryNoticeLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待发送';
+        const c = STATUS_MAP[stageName] || { text: stageName || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
@@ -105,21 +108,30 @@ const DeliveryNotesPage: React.FC = () => {
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
       title: '操作',
-      width: 220,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待发送' && (
-            <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSend(record)} style={{ color: '#1890ff' }}>发送</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>打印</Button>
-        </Space>
-      ),
+      render: (_, record) => {
+        const moreItems = [
+          ...(record.status === '待发送'
+            ? [{ key: 'send', label: '发送', icon: <SendOutlined />, onClick: () => handleSend(record) }]
+            : []),
+          { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
+        ]
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            {record.status === '待发送' && (
+              <>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+              </>
+            )}
+            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+              <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+            </Dropdown>
+          </Space>
+        )
+      },
     },
   ];
 
@@ -510,7 +522,7 @@ const DeliveryNotesPage: React.FC = () => {
         title={`送货单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={noticeDetail || {}}
       >

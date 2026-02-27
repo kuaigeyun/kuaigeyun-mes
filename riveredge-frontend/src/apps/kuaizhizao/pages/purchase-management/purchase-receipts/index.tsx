@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
+import { getPurchaseReceiptLifecycle } from '../../../utils/purchaseReceiptLifecycle';
 import { getDocumentRelations } from '../../../services/document-relation';
 import { downloadFile } from '../../../services/common';
 
@@ -105,17 +106,18 @@ const PurchaseReceiptsPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '入库状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
-      render: (status: any) => {
-        const statusMap = {
-          '待入库': { text: '待入库', color: 'default' },
-          '已入库': { text: '已入库', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
+      render: (_, record) => {
+        const lifecycle = getPurchaseReceiptLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '待入库';
+        const colorMap: Record<string, string> = {
+          待入库: 'default',
+          已入库: 'success',
+          已取消: 'error',
         };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap['待入库'];
-        return <Tag color={config.color}>{config.text}</Tag>;
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -418,7 +420,7 @@ const PurchaseReceiptsPage: React.FC = () => {
           setReceiptDetail(null);
           setDocumentRelations(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={receiptDetail || undefined}
         customContent={

@@ -523,7 +523,7 @@ const EquipmentFaultsPage: React.FC = () => {
           setDrawerVisible(false);
           setFaultDetail(null);
         }}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={faultDetail}
         columns={detailColumns}
       />

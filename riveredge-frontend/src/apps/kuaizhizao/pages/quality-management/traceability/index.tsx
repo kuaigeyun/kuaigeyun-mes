@@ -141,7 +141,7 @@ const TraceabilityPage: React.FC = () => {
                 title={t('pages.traceability.details', { defaultValue: '详情信息' })}
                 open={detailVisible}
                 onClose={() => { setDetailVisible(false); setSelectedNode(null); }}
-                width={DRAWER_CONFIG.SMALL_WIDTH}
+                width={DRAWER_CONFIG.HALF_WIDTH}
                 columns={[]}
                 customContent={selectedNode ? (
                     <Descriptions column={1} bordered size="small">

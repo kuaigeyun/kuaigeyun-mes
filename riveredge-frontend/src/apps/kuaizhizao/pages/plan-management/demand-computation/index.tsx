@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ActionType,
   ProColumns,
@@ -32,6 +33,7 @@ import {
   Select,
   Tabs,
   Radio,
+  Dropdown,
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -39,10 +41,11 @@ import {
   ReloadOutlined,
   ArrowDownOutlined,
   DeleteOutlined,
+  MoreOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates'
+import { ListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import {
   listDemandComputations,
   getDemandComputation,
@@ -57,6 +60,7 @@ import {
   pushAll,
   validateMaterialSources,
   getMaterialSources,
+  getDemandComputationStatistics,
   type PushOptions,
   type PushPreview,
   listComputationRecalcHistory,
@@ -68,6 +72,7 @@ import {
   ComputationSnapshotItem,
   type PushRecordItem,
 } from '../../../services/demand-computation'
+import { getDemandComputationLifecycle } from '../../../utils/demandComputationLifecycle'
 import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
@@ -224,8 +229,15 @@ const InventoryParamsForm: React.FC<{
 
 const DemandComputationPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp()
+  const queryClient = useQueryClient()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
+
+  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] }) }
+  const { data: statistics } = useQuery({
+    queryKey: ['demandComputationStatistics'],
+    queryFn: getDemandComputationStatistics,
+  })
 
   // Modal 相关状态（新建计算）
   const [modalVisible, setModalVisible] = useState(false)
@@ -574,7 +586,7 @@ const DemandComputationPage: React.FC = () => {
       setPreviewData(null)
       setExecuteModalVisible(false)
       setExecuteRecord(null)
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error?.response?.data?.detail || '计算执行失败')
     } finally {
@@ -593,7 +605,7 @@ const DemandComputationPage: React.FC = () => {
         try {
           await recomputeDemandComputation(record.id!)
           messageApi.success('重新计算已提交，请稍后刷新查看结果')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '重新计算失败')
         }
@@ -614,7 +626,7 @@ const DemandComputationPage: React.FC = () => {
         try {
           await deleteDemandComputation(record.id!)
           messageApi.success('删除成功')
-          actionRef.current?.reload()
+          invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || '删除失败')
         }
@@ -648,7 +660,7 @@ const DemandComputationPage: React.FC = () => {
         return
       }
       setPushPanelRecord(null)
-      actionRef.current?.reload()
+      invalidateStatistics(); actionRef.current?.reload()
     } catch (e: any) {
       messageApi.error(e?.response?.data?.detail || '下推失败')
     } finally {
@@ -720,7 +732,7 @@ const DemandComputationPage: React.FC = () => {
                   '未生成任何工单或采购单。请检查计算结果中的建议数量是否大于0，以及物料来源类型是否正确配置。'
                 )
               }
-              actionRef.current?.reload()
+              invalidateStatistics(); actionRef.current?.reload()
             } catch (error: any) {
               messageApi.error(error?.response?.data?.detail || '生成草稿单失败')
             }
@@ -803,7 +815,7 @@ const DemandComputationPage: React.FC = () => {
                 '未生成任何工单或采购单。请检查计算结果中的建议数量是否大于0，以及物料来源类型是否正确配置。'
               )
             }
-            actionRef.current?.reload()
+            invalidateStatistics(); actionRef.current?.reload()
           } catch (error: any) {
 
             messageApi.error(error?.response?.data?.detail || '生成工单和采购单失败')
@@ -849,8 +861,8 @@ const DemandComputationPage: React.FC = () => {
       ),
     },
     {
-      title: '计算状态',
-      dataIndex: 'computation_status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueType: 'select',
       valueEnum: {
@@ -861,14 +873,15 @@ const DemandComputationPage: React.FC = () => {
       },
       hideInSearch: false,
       render: (_, record) => {
-        const status = record.computation_status || ''
+        const lifecycle = getDemandComputationLifecycle(record)
+        const stageName = lifecycle.stageName ?? record.computation_status ?? '进行中'
         const colorMap: Record<string, string> = {
           进行中: 'processing',
           计算中: 'processing',
           完成: 'success',
           失败: 'error',
         }
-        return <Tag color={colorMap[status] || 'default'}>{status}</Tag>
+        return <Tag color={colorMap[stageName] || 'default'}>{stageName}</Tag>
       },
     },
     {
@@ -907,64 +920,47 @@ const DemandComputationPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 220,
+      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail([record.id!])}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            删除
-          </Button>
-          {record.computation_status === '进行中' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<PlayCircleOutlined />}
-              onClick={() => handleExecute(record)}
-            >
-              执行计算
-            </Button>
-          )}
-          {(record.computation_status === '完成' || record.computation_status === '失败') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ReloadOutlined />}
-              onClick={() => handleRecompute(record)}
-            >
-              重新计算
-            </Button>
-          )}
-          {record.computation_status === '完成' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ArrowDownOutlined />}
-              onClick={() => handleOpenPushPanel(record)}
-            >
-              下推
-            </Button>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const moreItems = [
+          ...(record.computation_status === '进行中'
+            ? [{ key: 'execute', label: '执行计算', icon: <PlayCircleOutlined />, onClick: () => handleExecute(record) }]
+            : []),
+          ...(record.computation_status === '完成' || record.computation_status === '失败'
+            ? [{ key: 'recompute', label: '重新计算', icon: <ReloadOutlined />, onClick: () => handleRecompute(record) }]
+            : []),
+        ]
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>详情</Button>
+            {record.computation_status === '完成' && (
+              <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handleOpenPushPanel(record)}>下推</Button>
+            )}
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+            {moreItems.length > 0 && (
+              <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+                <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+              </Dropdown>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
+  const statCards: StatCard[] = statistics
+    ? [
+        { title: '总计算数', value: statistics.total_count },
+        { title: '按预测计划', value: statistics.mrp_count },
+        { title: '按订单计划', value: statistics.lrp_count },
+        { title: '进行中', value: statistics.pending_count, valueStyle: statistics.pending_count > 0 ? { color: '#faad14' } : undefined },
+        { title: '已完成', value: statistics.completed_count },
+      ]
+    : []
+
   return (
-    <ListPageTemplate>
+    <ListPageTemplate statCards={statCards}>
       <UniTable<DemandComputation>
         actionRef={actionRef}
         columns={columns}
@@ -985,8 +981,8 @@ const DemandComputationPage: React.FC = () => {
           if (searchFormValues?.computation_type) {
             apiParams.computation_type = searchFormValues.computation_type
           }
-          if (searchFormValues?.computation_status) {
-            apiParams.computation_status = searchFormValues.computation_status
+          if (searchFormValues?.lifecycle ?? searchFormValues?.computation_status) {
+            apiParams.computation_status = searchFormValues?.lifecycle ?? searchFormValues?.computation_status
           }
           if (searchFormValues?.business_mode) {
             apiParams.business_mode = searchFormValues.business_mode
@@ -1087,7 +1083,7 @@ const DemandComputationPage: React.FC = () => {
 
             messageApi.success(`创建成功，已合并 ${selectedDemandIds.length} 个需求`)
             setModalVisible(false)
-            actionRef.current?.reload()
+            invalidateStatistics(); actionRef.current?.reload()
           } catch (error: any) {
             messageApi.error(error?.response?.data?.detail || '创建失败')
           }
@@ -1363,7 +1359,8 @@ const DemandComputationPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         title="计算详情"
         rootClassName="demand-computation-drawer"
-        styles={{ wrapper: { width: 1300 } }}
+        width="50%"
+        styles={{ wrapper: { width: '50%' } }}
       >
         {currentComputation && (
           <Tabs

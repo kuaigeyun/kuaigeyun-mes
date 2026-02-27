@@ -528,7 +528,7 @@ const IncomingInspectionPage: React.FC = () => {
         title={`检验详情 - ${inspectionDetail?.inspection_code || ''}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={DRAWER_CONFIG.SMALL_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           inspectionDetail ? (

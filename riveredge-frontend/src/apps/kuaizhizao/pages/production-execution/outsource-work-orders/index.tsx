@@ -18,6 +18,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-de
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
+import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -458,19 +459,14 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          draft: { color: 'default', text: '草稿' },
-          released: { color: 'processing', text: '已下达' },
-          in_progress: { color: 'processing', text: '执行中' },
-          completed: { color: 'success', text: '已完成' },
-          cancelled: { color: 'error', text: '已取消' },
-        };
-        const status = statusMap[record.status || 'draft'] || { color: 'default', text: record.status || '未知' };
-        return <Tag color={status.color}>{status.text}</Tag>;
+        const lifecycle = getOutsourceWorkOrderLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = { 草稿: 'default', 已下达: 'processing', 执行中: 'processing', 已完成: 'success', 已取消: 'error' };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -1068,7 +1064,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       />
 
       {/* 委外发料 Modal */}

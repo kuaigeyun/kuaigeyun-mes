@@ -70,7 +70,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   onClose,
   dataSource,
   columns = [],
-  width = DRAWER_CONFIG.STANDARD_WIDTH,
+  width = DRAWER_CONFIG.HALF_WIDTH,
   loading = false,
   column = 2,
   customContent,
@@ -83,9 +83,12 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   // size='default' | 'large'；自定义宽度通过 styles.body 设置
   const isLarge = typeof width === 'number' ? width > 500 : false;
   const size: 'default' | 'large' = isLarge ? 'large' : 'default';
-  const bodyStyle = typeof width === 'number' && width > 0
-    ? { width: width, maxWidth: '100%' }
-    : undefined;
+  const bodyStyle =
+    typeof width === 'string' && width
+      ? { width, maxWidth: '100%', minWidth: 360 }
+      : typeof width === 'number' && width > 0
+        ? { width, maxWidth: '100%' }
+        : undefined;
 
   return (
     <Drawer

@@ -12,6 +12,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
+import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -138,14 +139,25 @@ const OutboundPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'status',
+      title: '生命周期',
+      dataIndex: 'lifecycle',
       width: 100,
       valueEnum: {
         '草稿': { text: '草稿', status: 'default' },
         '已确认': { text: '已确认', status: 'processing' },
         '已完成': { text: '已完成', status: 'success' },
         '已取消': { text: '已取消', status: 'error' },
+      },
+      render: (_, record) => {
+        const lifecycle = getOutboundLifecycle(record);
+        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
+        const colorMap: Record<string, string> = {
+          草稿: 'default',
+          已确认: 'processing',
+          已完成: 'success',
+          已取消: 'error',
+        };
+        return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
     },
     {
@@ -198,7 +210,7 @@ const OutboundPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 120,
+      width: 180,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -394,7 +406,7 @@ const OutboundPage: React.FC = () => {
         title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         customContent={
           currentOrder ? (

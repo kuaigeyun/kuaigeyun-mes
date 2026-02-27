@@ -10,13 +10,14 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col, Spin } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import {
   listDemands,
   getDemand,
@@ -28,6 +29,7 @@ import {
   cleanOrphanDemands,
   listDemandRecalcHistory,
   listDemandSnapshots,
+  getDemandStatistics,
   Demand,
   DemandItem,
   DemandStatus,
@@ -94,9 +96,17 @@ function reviewStatusDisplayText(reviewStatus: string | undefined): string {
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  const tableSearchFormRef = useRef<any>(null);
   const [searchParams] = useSearchParams();
+
+  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['demandStatistics'] }); };
+  const { data: statistics } = useQuery({
+    queryKey: ['demandStatistics'],
+    queryFn: getDemandStatistics,
+  });
 
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -221,6 +231,7 @@ const DemandManagementPage: React.FC = () => {
       await updateDemand(currentId, values);
       messageApi.success('需求更新成功');
       setModalVisible(false);
+      invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -249,6 +260,7 @@ const DemandManagementPage: React.FC = () => {
           const computation = await createDemandComputation(payload);
           messageApi.success('合并计算任务已创建');
           setSelectedRowKeys([]);
+          invalidateStatistics();
           actionRef.current?.reload();
           if (computation?.id) {
             window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
@@ -274,6 +286,7 @@ const DemandManagementPage: React.FC = () => {
           if (result.computation_code) {
             messageApi.info(`计算编码：${result.computation_code}`);
           }
+          invalidateStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '下推失败');
@@ -363,6 +376,7 @@ const DemandManagementPage: React.FC = () => {
             try {
               await updateDemand(record.id, { priority: v });
               messageApi.success('优先级已更新');
+              invalidateStatistics();
               actionRef.current?.reload();
             } catch (e: any) {
               messageApi.error(e?.message || '更新失败');
@@ -473,7 +487,7 @@ const DemandManagementPage: React.FC = () => {
               return rejectDemand(id, reason.trim());
             },
             }}
-            onSuccess={() => actionRef.current?.reload()}
+            onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); }}
           />
           {isDemandAuditedAndApproved(record) && !record.pushed_to_computation && (
             <Button
@@ -491,11 +505,38 @@ const DemandManagementPage: React.FC = () => {
     },
   ];
 
+  const statCards: StatCard[] = statistics
+    ? [
+        { title: '活动需求', value: statistics.active_count },
+        {
+          title: '待审核',
+          value: statistics.pending_review_count,
+          valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
+          onClick:
+            statistics.pending_review_count > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        { title: '已审核', value: statistics.audited_count },
+        { title: '已下推计算', value: statistics.pushed_count },
+        {
+          title: '总金额',
+          value: statistics.total_amount ?? 0,
+          prefix: '¥',
+          precision: 2,
+        },
+      ]
+    : [];
+
   return (
     <>
-      <ListPageTemplate>
+      <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
           headerTitle="需求管理"
+          formRef={tableSearchFormRef}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -613,7 +654,7 @@ const DemandManagementPage: React.FC = () => {
         title={isEditingDraft ? '编辑需求' : '修改需求'}
         width={MODAL_CONFIG.SMALL_WIDTH}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
           formRef={formRef}
@@ -791,6 +832,7 @@ const DemandManagementPage: React.FC = () => {
                   },
                 }}
                 onSuccess={async () => {
+                  invalidateStatistics();
                   actionRef.current?.reload();
                   if (currentDemand?.id) {
                     const updated = await getDemand(currentDemand.id);
