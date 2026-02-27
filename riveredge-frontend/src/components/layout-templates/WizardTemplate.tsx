@@ -60,6 +60,10 @@ export interface WizardTemplateProps {
   nextDisabled?: boolean;
   /** 是否禁用完成 */
   finishDisabled?: boolean;
+  /** 稍后完成回调（点击后不完成向导，仅跳转离开） */
+  onSkip?: () => void;
+  /** 稍后完成按钮文本 */
+  skipText?: string;
   /** 自定义样式类名 */
   className?: string;
   /** 自定义样式 */
@@ -99,6 +103,8 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
   finishText = '完成',
   nextDisabled = false,
   finishDisabled = false,
+  onSkip,
+  skipText = '稍后完成',
   className,
   style,
 }) => {
@@ -142,7 +148,7 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
           onChange={onStepChange}
           items={steps.map((step) => ({
             title: step.title,
-            description: step.description,
+            ...(step.description && { content: step.description }),
           }))}
         />
       </Card>
@@ -170,6 +176,11 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
           {showPrev && !isFirstStep && (
             <Button onClick={handlePrev}>
               {prevText}
+            </Button>
+          )}
+          {onSkip && (
+            <Button onClick={onSkip}>
+              {skipText}
             </Button>
           )}
         </Space>

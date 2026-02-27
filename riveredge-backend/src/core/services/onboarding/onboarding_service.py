@@ -413,13 +413,433 @@ ROLE_ONBOARDING_GUIDES: Dict[str, Dict[str, Any]] = {
 }
 
 
+# 上线助手四阶段配置（蓝图确认 → 基础数据 → 业务流程 → 期初数据对齐）
+GO_LIVE_ASSISTANT_PHASES = [
+    {
+        "id": "phase1_blueprint",
+        "name": "蓝图确认",
+        "order": 1,
+        "items": [
+            {
+                "id": "blueprint_config",
+                "name": "业务蓝图配置",
+                "required": True,
+                "description": "配置行业、规模、启用模块、单据审核规则",
+                "jump_path": "/system/config-center?tab=graph",
+                "check_key": "blueprint_confirmed",
+            },
+            {
+                "id": "init_completed",
+                "name": "组织初始化",
+                "required": True,
+                "description": "完成组织信息、默认设置、编码规则、管理员配置",
+                "jump_path": "/init/wizard",
+                "check_key": "init_completed",
+            },
+        ],
+    },
+    {
+        "id": "phase2_basic_data",
+        "name": "基础数据",
+        "order": 2,
+        "items": [
+            {"id": "customer", "name": "客户", "required": True, "description": "至少1个客户", "jump_path": "/apps/master-data/supply-chain/customers", "check_key": "customer_count"},
+            {"id": "supplier", "name": "供应商", "required": True, "description": "至少1个供应商", "jump_path": "/apps/master-data/supply-chain/suppliers", "check_key": "supplier_count"},
+            {"id": "material", "name": "物料/产品", "required": True, "description": "至少1个物料", "jump_path": "/apps/master-data/materials", "check_key": "material_count"},
+            {"id": "warehouse", "name": "仓库", "required": True, "description": "至少1个仓库", "jump_path": "/apps/master-data/warehouse/warehouses", "check_key": "warehouse_count"},
+            {"id": "bom", "name": "BOM", "required": False, "description": "生产型需BOM（可选）", "jump_path": "/apps/master-data/materials", "check_key": "bom_count"},
+            {"id": "process_route", "name": "工艺路线", "required": False, "description": "生产型需工艺路线（可选）", "jump_path": "/apps/master-data/process", "check_key": "routing_count"},
+            {"id": "user", "name": "业务用户", "required": True, "description": "除管理员外至少1个用户", "jump_path": "/system/users", "check_key": "user_count"},
+        ],
+    },
+    {
+        "id": "phase3_business_flow",
+        "name": "业务流程",
+        "order": 3,
+        "items": [
+            {"id": "sales_order", "name": "创建销售订单", "required": True, "description": "新建并提交销售订单", "jump_path": "/apps/kuaizhizao/sales-management/sales-orders", "check_key": "sales_order_count"},
+            {"id": "demand_computation", "name": "下推需求计算", "required": True, "description": "需求计算已生成", "jump_path": "/apps/kuaizhizao/plan-management/demand-computation", "check_key": "demand_computation_count"},
+            {"id": "work_order", "name": "下推工单", "required": True, "description": "工单已生成", "jump_path": "/apps/kuaizhizao/production-execution/work-orders", "check_key": "work_order_count"},
+            {"id": "reporting", "name": "工单报工", "required": True, "description": "至少1条报工记录", "jump_path": "/apps/kuaizhizao/production-execution/work-orders", "check_key": "reporting_record_count"},
+            {"id": "finished_goods_receipt", "name": "成品入库", "required": True, "description": "成品入库单已创建", "jump_path": "/apps/kuaizhizao/warehouse-management/inbound", "check_key": "finished_goods_receipt_count"},
+            {"id": "sales_delivery", "name": "销售出库", "required": True, "description": "销售出库单已创建", "jump_path": "/apps/kuaizhizao/warehouse-management/inbound", "check_key": "sales_delivery_count"},
+        ],
+    },
+    {
+        "id": "phase4_initial_data",
+        "name": "期初数据对齐",
+        "order": 4,
+        "items": [
+            {"id": "initial_inventory", "name": "期初库存", "required": True, "description": "导入期初库存", "jump_path": "/apps/kuaizhizao/warehouse-management/initial-data", "check_key": "initial_inventory_count"},
+            {"id": "initial_wip", "name": "期初在制品", "required": False, "description": "导入期初在制品（可选）", "jump_path": "/apps/kuaizhizao/warehouse-management/initial-data", "check_key": "initial_wip_count"},
+            {"id": "initial_receivable_payable", "name": "期初应收应付", "required": False, "description": "导入期初应收应付（可选）", "jump_path": "/apps/kuaizhizao/warehouse-management/initial-data", "check_key": "initial_receivable_payable_count"},
+            {"id": "initial_data_verified", "name": "数据核对完成", "required": True, "description": "确认期初数据已核对", "jump_path": "/apps/kuaizhizao/warehouse-management/initial-data", "check_key": "initial_data_verified"},
+        ],
+    },
+]
+
+
+# 系统上线向导步骤配置（从0到可开单）
+SYSTEM_GO_LIVE_CHECKLIST = {
+    "name": "系统上线",
+    "checklist": [
+        {
+            "id": "data_preparation",
+            "name": "基础数据准备",
+            "items": [
+                {
+                    "id": "customer_data",
+                    "name": "创建客户",
+                    "required": True,
+                    "description": "至少创建1个客户，用于销售订单",
+                    "jump_path": "/apps/master-data/supply-chain/customers",
+                    "check_key": "customer_count",
+                },
+                {
+                    "id": "material_data",
+                    "name": "创建物料/产品",
+                    "required": True,
+                    "description": "至少创建1个物料，用于销售订单、采购订单、工单",
+                    "jump_path": "/apps/master-data/materials",
+                    "check_key": "material_count",
+                },
+                {
+                    "id": "warehouse_data",
+                    "name": "创建仓库",
+                    "required": True,
+                    "description": "至少创建1个仓库，用于出入库单据",
+                    "jump_path": "/apps/master-data/warehouse/warehouses",
+                    "check_key": "warehouse_count",
+                },
+                {
+                    "id": "supplier_data",
+                    "name": "创建供应商",
+                    "required": True,
+                    "description": "至少创建1个供应商，用于采购订单",
+                    "jump_path": "/apps/master-data/supply-chain/suppliers",
+                    "check_key": "supplier_count",
+                },
+            ],
+        },
+        {
+            "id": "user_config",
+            "name": "用户与权限",
+            "items": [
+                {
+                    "id": "user_data",
+                    "name": "创建业务用户",
+                    "required": True,
+                    "description": "除管理员外至少1个用户，用于业务单据",
+                    "jump_path": "/system/users",
+                    "check_key": "user_count",
+                },
+            ],
+        },
+        {
+            "id": "verification",
+            "name": "完成验证",
+            "items": [
+                {
+                    "id": "create_first_document",
+                    "name": "开出一张测试单据",
+                    "required": True,
+                    "description": "创建销售订单或采购订单，验证系统可正常开单",
+                    "jump_path": "/apps/kuaizhizao/sales-management/sales-orders",
+                    "check_key": None,
+                },
+            ],
+        },
+    ],
+}
+
+
 class OnboardingService:
     """
     上线向导服务类
     
     处理角色上线准备和使用场景引导相关的业务逻辑。
     """
-    
+
+    @staticmethod
+    async def get_system_go_live_guide(tenant_id: int) -> Dict[str, Any]:
+        """
+        获取系统上线向导（从0到可开单的步骤式引导）
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            Dict[str, Any]: 系统上线向导信息，含 init_completed、checklist 及每项完成状态
+        """
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            return {
+                "init_completed": False,
+                "message": "组织不存在",
+                "checklist": [],
+            }
+
+        settings = tenant.settings or {}
+        init_completed = bool(settings.get("init_completed"))
+
+        if not init_completed:
+            return {
+                "init_completed": False,
+                "message": "请先完成组织初始化",
+                "checklist": SYSTEM_GO_LIVE_CHECKLIST["checklist"],
+                "guide": SYSTEM_GO_LIVE_CHECKLIST,
+            }
+
+        # 校验各步骤数据是否存在（懒加载避免循环依赖）
+        check_results = {}
+        try:
+            from apps.master_data.models.customer import Customer
+            from apps.master_data.models.material import Material
+            from apps.master_data.models.warehouse import Warehouse
+            from apps.master_data.models.supplier import Supplier
+            from infra.models.user import User
+
+            customer_count = await Customer.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            material_count = await Material.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            warehouse_count = await Warehouse.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            supplier_count = await Supplier.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            user_count = await User.filter(
+                tenant_id=tenant_id, is_tenant_admin=False, deleted_at__isnull=True
+            ).count()
+
+            check_results = {
+                "customer_count": customer_count >= 1,
+                "material_count": material_count >= 1,
+                "warehouse_count": warehouse_count >= 1,
+                "supplier_count": supplier_count >= 1,
+                "user_count": user_count >= 1,
+            }
+        except Exception as e:
+            logger.warning(f"系统上线向导数据校验失败: {e}")
+            check_results = {}
+
+        # 为 checklist 每项填充 completed 状态
+        def enrich_checklist(items: list, results: dict) -> list:
+            enriched = []
+            for item in items:
+                check_key = item.get("check_key")
+                completed = results.get(check_key, False) if check_key else False
+                enriched.append({**item, "completed": completed})
+            return enriched
+
+        enriched_checklist = []
+        for category in SYSTEM_GO_LIVE_CHECKLIST["checklist"]:
+            enriched_items = enrich_checklist(category["items"], check_results)
+            enriched_checklist.append({
+                **category,
+                "items": enriched_items,
+            })
+
+        return {
+            "init_completed": True,
+            "guide": {
+                "name": SYSTEM_GO_LIVE_CHECKLIST["name"],
+                "checklist": enriched_checklist,
+            },
+        }
+
+    @staticmethod
+    async def get_go_live_assistant(tenant_id: int) -> Dict[str, Any]:
+        """
+        获取上线助手四阶段及每项完成状态
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            Dict[str, Any]: 四阶段 phases、每项 completed 状态、all_completed 总览
+        """
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            return {"phases": [], "all_completed": False, "message": "组织不存在"}
+
+        settings = tenant.settings or {}
+        check_results: Dict[str, Any] = {
+            "blueprint_confirmed": bool(settings.get("blueprint_confirmed")),
+            "init_completed": bool(settings.get("init_completed")),
+            "initial_data_verified": bool(settings.get("initial_data_verified")),
+        }
+
+        try:
+            from apps.master_data.models.customer import Customer
+            from apps.master_data.models.material import Material, BOM
+            from apps.master_data.models.warehouse import Warehouse
+            from apps.master_data.models.supplier import Supplier
+            from apps.master_data.models.process import ProcessRoute
+            from infra.models.user import User
+
+            customer_count = await Customer.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            material_count = await Material.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            warehouse_count = await Warehouse.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            supplier_count = await Supplier.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            user_count = await User.filter(
+                tenant_id=tenant_id, is_tenant_admin=False, deleted_at__isnull=True
+            ).count()
+            bom_count = await BOM.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            routing_count = await ProcessRoute.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+
+            check_results.update({
+                "customer_count": customer_count >= 1,
+                "supplier_count": supplier_count >= 1,
+                "material_count": material_count >= 1,
+                "warehouse_count": warehouse_count >= 1,
+                "bom_count": bom_count >= 1,
+                "routing_count": routing_count >= 1,
+                "user_count": user_count >= 1,
+            })
+        except Exception as e:
+            logger.warning(f"上线助手基础数据校验失败: {e}")
+
+        try:
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.models.demand_computation import DemandComputation
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            from apps.kuaizhizao.models.reporting_record import ReportingRecord
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            sales_order_count = await SalesOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            demand_computation_count = await DemandComputation.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            work_order_count = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).exclude(name__icontains="期初在制品").count()
+            reporting_record_count = await ReportingRecord.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            finished_goods_receipt_count = await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            sales_delivery_count = await SalesDelivery.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+
+            check_results.update({
+                "sales_order_count": sales_order_count >= 1,
+                "demand_computation_count": demand_computation_count >= 1,
+                "work_order_count": work_order_count >= 1,
+                "reporting_record_count": reporting_record_count >= 1,
+                "finished_goods_receipt_count": finished_goods_receipt_count >= 1,
+                "sales_delivery_count": sales_delivery_count >= 1,
+            })
+        except Exception as e:
+            logger.warning(f"上线助手业务流程校验失败: {e}")
+
+        try:
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            from apps.kuaizhizao.models.receivable import Receivable
+            from apps.kuaizhizao.models.payable import Payable
+
+            initial_inventory_count = await PurchaseReceipt.filter(
+                tenant_id=tenant_id,
+                purchase_order_code="期初库存",
+                deleted_at__isnull=True,
+            ).count()
+            initial_wip_count = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                name__icontains="期初在制品",
+                deleted_at__isnull=True,
+            ).count()
+            initial_receivable_count = await Receivable.filter(
+                tenant_id=tenant_id,
+                notes__icontains="期初应收",
+                deleted_at__isnull=True,
+            ).count()
+            initial_payable_count = await Payable.filter(
+                tenant_id=tenant_id,
+                notes__icontains="期初应付",
+                deleted_at__isnull=True,
+            ).count()
+            initial_receivable_payable_count = initial_receivable_count >= 1 or initial_payable_count >= 1
+
+            check_results.update({
+                "initial_inventory_count": initial_inventory_count >= 1,
+                "initial_wip_count": initial_wip_count >= 1,
+                "initial_receivable_payable_count": initial_receivable_payable_count,
+            })
+        except Exception as e:
+            logger.warning(f"上线助手期初数据校验失败: {e}")
+
+        def enrich_phase(phase: dict) -> dict:
+            items = []
+            for item in phase.get("items", []):
+                check_key = item.get("check_key")
+                completed = check_results.get(check_key, False) if check_key else False
+                items.append({**item, "completed": completed})
+            return {**phase, "items": items}
+
+        phases = [enrich_phase(p) for p in GO_LIVE_ASSISTANT_PHASES]
+        all_required_completed = all(
+            item.get("completed", False)
+            for phase in phases
+            for item in phase.get("items", [])
+            if item.get("required", True)
+        )
+        return {
+            "phases": phases,
+            "all_completed": all_required_completed,
+        }
+
+    @staticmethod
+    async def mark_blueprint_confirmed(tenant_id: int) -> None:
+        """标记业务蓝图已确认"""
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError("组织不存在")
+        settings = dict(tenant.settings or {})
+        settings["blueprint_confirmed"] = True
+        tenant.settings = settings
+        await tenant.save(update_fields=["settings"])
+
+    @staticmethod
+    async def mark_initial_data_verified(tenant_id: int) -> None:
+        """标记期初数据已核对"""
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError("组织不存在")
+        settings = dict(tenant.settings or {})
+        settings["initial_data_verified"] = True
+        tenant.settings = settings
+        await tenant.save(update_fields=["settings"])
+
     @staticmethod
     async def get_role_onboarding_guide(
         tenant_id: int,

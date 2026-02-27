@@ -845,6 +845,9 @@ class BusinessConfigService:
             business_config["industry"] = industry
         if scale:
             business_config["scale"] = scale
+
+        # 保存业务蓝图配置时标记蓝图已确认（供上线助手阶段1检查）
+        settings["blueprint_confirmed"] = True
             
         settings["business_config"] = business_config
         await Tenant.filter(id=tenant_id).update(settings=settings)

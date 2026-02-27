@@ -28,6 +28,7 @@ export interface InitStepsResponse {
   steps: InitWizardStep[];
   current_step?: string;
   progress: number;
+  init_completed?: boolean;
 }
 
 /**
@@ -40,12 +41,13 @@ export interface Step1OrganizationInfo {
 }
 
 /**
- * 步骤2：默认设置
+ * 步骤2：默认设置（与站点设置格式一致）
  */
 export interface Step2DefaultSettings {
   timezone: string;
-  currency: string;
-  language: string;
+  default_currency: string;
+  default_language: string;
+  date_format: string;
 }
 
 /**

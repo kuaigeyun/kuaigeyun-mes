@@ -22,8 +22,9 @@ import {
   LockOutlined,
   BellOutlined,
   DeleteOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Alert } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +56,7 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
+import GoLiveAssistant from '../components/go-live-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
@@ -77,6 +79,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
+import { getInitSteps } from '../services/init-wizard';
 
 /** 左侧菜单 path 与业务单据未完成数量 key 的映射（用于数量徽标） */
 const MENU_BADGE_PATH_KEY: Record<string, string> = {
@@ -635,6 +638,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
 
+  // 检查租户初始化状态（仅在有租户上下文时，平台超管无租户时跳过）
+  const tenantId = getTenantId();
+  const userInfo = getUserInfo();
+  const isInfraSuperAdminNoTenant = userInfo?.user_type === 'infra_superadmin' && !tenantId;
+  const { data: initStepsData } = useQuery({
+    queryKey: ['initSteps', tenantId],
+    queryFn: () => getInitSteps(tenantId!),
+    enabled: !!tenantId && !isInfraSuperAdminNoTenant,
+    staleTime: 60 * 1000, // 1 分钟缓存
+  });
+  const showInitBanner = !!tenantId && !isInfraSuperAdminNoTenant && initStepsData?.init_completed === false;
+
 
 
 
@@ -646,6 +661,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
+  const [goLiveAssistantOpen, setGoLiveAssistantOpen] = useState(false);
 
   // 获取消息统计
   const { data: messageStats, refetch: refetchMessageStats } = useQuery({
@@ -2860,8 +2876,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* ==================== 菜单动画 - 使用 Ant Design 默认 ==================== */
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
-        .ant-pro-layout .ant-pro-layout-header .ant-space {
+        .ant-pro-layout .ant-pro-layout-header .ant-space,
+        .ant-pro-layout .ant-layout-header .ant-space {
           gap: 8px !important;
+          align-items: center !important;
+        }
+        /* 上线助手按钮与搜索框等垂直对齐 */
+        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper),
+        .ant-pro-layout .ant-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper) {
+          display: flex !important;
+          align-items: center !important;
         }
         /* 统一按钮样式 - 保留圆形背景，浅色背景时图标颜色统一为黑色 */
         /* 注意：这些样式会被之前的通用顶栏按钮样式覆盖，但保留这里作为备用和补充 */
@@ -2952,18 +2976,73 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0;
           transition: none !important;
         }
-        /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 根据显示模式统一 */
+        /* 顶栏胶囊型按钮统一样式（租户选择器 - 与组织选择器完全一致） */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper > span {
-          display: inline-block;
-          padding: 4px 12px;
+          display: flex !important;
+          align-items: center !important;
+          vertical-align: middle !important;
+          gap: 6px !important;
+          padding: 4px 12px !important;
           border-radius: 16px !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: 14px;
-          font-weight: 500;
-          height: 32px;
-          line-height: 24px;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          height: 32px !important;
+          line-height: 24px !important;
+        }
+        /* 上线助手按钮 - 橙色系背景 */
+        .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn,
+        .ant-pro-layout .ant-layout-header .go-live-assistant-btn {
+          display: flex !important;
+          align-items: center !important;
+          vertical-align: middle !important;
+          gap: 6px !important;
+          padding: 4px 12px !important;
+          border-radius: 16px !important;
+          background-color: ${isLightModeLightBg ? token.colorWarningBg : `color-mix(in srgb, ${token.colorWarning} 50%, transparent)`} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          height: 32px !important;
+          line-height: 24px !important;
+          cursor: pointer !important;
+          align-self: center !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn:hover,
+        .ant-pro-layout .ant-layout-header .go-live-assistant-btn:hover {
+          background-color: ${isLightModeLightBg ? token.colorWarningBgHover : `color-mix(in srgb, ${token.colorWarning} 26%, transparent)`} !important;
+        }
+        /* 上线助手按钮流光效果 - 仅播放一遍 */
+        .go-live-assistant-btn-wrapper {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          align-self: center;
+          overflow: hidden;
+          border-radius: 16px;
+        }
+        .go-live-assistant-btn-wrapper::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            105deg,
+            transparent 0%,
+            transparent 35%,
+            ${isLightModeLightBg ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.4)'} 50%,
+            transparent 65%,
+            transparent 100%
+          );
+          background-size: 200% 100%;
+          animation: go-live-assistant-shimmer 2.2s ease-in-out 0.5s 1 forwards;
+          pointer-events: none;
+          z-index: 1;
+        }
+        @keyframes go-live-assistant-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -100% 0; }
         }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
@@ -3561,6 +3640,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         actionsRender={() => {
           const actions = [];
 
+          // 上线助手按钮（与组织选择器统一样式，由顶栏胶囊型 CSS 控制，带流光效果）
+          actions.push(
+            <span key="goLiveAssistant" className="go-live-assistant-btn-wrapper">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => setGoLiveAssistantOpen(true)}
+                onKeyDown={(e) => e.key === 'Enter' && setGoLiveAssistantOpen(true)}
+                className="go-live-assistant-btn"
+              >
+                <RocketOutlined />
+                {t('goLiveAssistant.title') || '上线助手'}
+              </span>
+            </span>
+          );
+
           // 搜索框（始终展开）
           actions.push(
             <TopBarSearch
@@ -3827,7 +3922,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  marginLeft: 4,
                 }}
               >
                 <TenantSelector headerLightText={!isLightModeLightBg} />
@@ -3916,7 +4010,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Tooltip>
           );
 
-          return actions;
+          return <Space size={8} align="center">{actions}</Space>;
         }}
         menuDataRender={() => {
           return filteredMenuData;
@@ -4090,7 +4184,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           isFullscreen={isFullscreen}
           onToggleFullscreen={handleToggleFullscreen}
         >
-          {children}
+          <>
+            {showInitBanner && (
+              <Alert
+                message={t('initWizard.bannerTitle', { defaultValue: '组织尚未完成初始化' })}
+                description={
+                  <span>
+                    {t('initWizard.bannerDesc', { defaultValue: '请完成组织初始化配置以获得最佳使用体验。' })}
+                    <Button type="link" size="small" onClick={() => navigate('/init/wizard')} style={{ padding: 0, marginLeft: 8 }}>
+                      {t('initWizard.bannerAction', { defaultValue: '前往完成' })}
+                    </Button>
+                  </span>
+                }
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            {children}
+          </>
         </UniTabs>
       </ProLayout >
 
@@ -4108,6 +4220,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         onThemeUpdate={(themeConfig) => {
           // 主题更新回调（可选）
         }}
+      />
+
+      {/* 上线助手 */}
+      <GoLiveAssistant
+        open={goLiveAssistantOpen}
+        onClose={() => setGoLiveAssistantOpen(false)}
       />
     </>
   );

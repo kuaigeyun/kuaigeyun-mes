@@ -127,6 +127,7 @@ class DynamicDatabaseConfigService:
             "infra.models.infra_superadmin",
             "infra.models.package",
             "infra.models.saved_search",
+            "infra.models.industry_template",  # 行业模板模型（平台级）
             "infra.models.platform_settings",
             "infra.models.invitation_code",
 

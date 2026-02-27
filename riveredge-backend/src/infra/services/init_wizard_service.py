@@ -102,17 +102,26 @@ class InitWizardService:
                 detail="组织不存在"
             )
         
-        # 构建步骤响应列表
-        steps = []
-        completed_steps = set()  # 根据组织设置判断已完成的步骤
-        
-        # 检查步骤完成情况（简化实现，后续可根据实际情况完善）
-        if tenant.settings and tenant.settings.get("init_completed"):
+        # 构建步骤响应列表，根据 tenant.settings 细粒度判断各步骤完成状态
+        settings = tenant.settings or {}
+        init_completed = bool(settings.get("init_completed"))
+
+        # 根据已保存的 init_step* 数据判断各步骤是否完成（有数据即视为完成）
+        completed_steps = set()
+        if settings.get("init_step1"):
             completed_steps.add("step1")
+        if settings.get("init_step2"):
             completed_steps.add("step2")
+        if settings.get("init_step2_5"):
+            completed_steps.add("step2_5")
+        if settings.get("init_step3"):
             completed_steps.add("step3")
+        if settings.get("init_step4"):
             completed_steps.add("step4")
-        
+        if init_completed:
+            completed_steps.add("step5")
+
+        steps = []
         for step_config in self.INIT_STEPS:
             steps.append(InitWizardStepResponse(
                 step_id=step_config["step_id"],
@@ -122,25 +131,24 @@ class InitWizardService:
                 required=step_config["required"],
                 completed=step_config["step_id"] in completed_steps,
             ))
-        
-        # 计算当前步骤和进度
+
+        # 计算当前步骤：第一个未完成的步骤
         current_step = None
+        for step in steps:
+            if not step.completed:
+                current_step = step.step_id
+                break
+
+        # 进度：已完成步骤数 / 总步骤数 * 100
+        total_count = len(self.INIT_STEPS)
         completed_count = len(completed_steps)
-        total_count = len([s for s in self.INIT_STEPS if s["required"]])
-        
-        if completed_count < total_count:
-            # 找到第一个未完成的必填步骤
-            for step in steps:
-                if step.required and not step.completed:
-                    current_step = step.step_id
-                    break
-        
         progress = (completed_count / total_count * 100) if total_count > 0 else 0
-        
+
         return InitStepsResponse(
             steps=steps,
             current_step=current_step,
-            progress=progress
+            progress=progress,
+            init_completed=init_completed,
         )
     
     async def complete_step(
@@ -178,12 +186,21 @@ class InitWizardService:
             await Tenant.filter(id=tenant_id).update(settings=settings)
             
         elif step_id == "step2":
-            # 步骤2：默认设置
+            # 步骤2：默认设置（同步到站点设置，与站点设置格式一致）
             step_data = Step2DefaultSettings(**data)
             settings = tenant.settings or {}
             settings["init_step2"] = step_data.model_dump()
-            # 更新时区、货币、语言等（如果有对应字段）
             await Tenant.filter(id=tenant_id).update(settings=settings)
+            # 同步到站点设置
+            from core.schemas.site_setting import SiteSettingUpdate
+            from core.services.system.site_setting_service import SiteSettingService
+            site_settings = {
+                "timezone": step_data.timezone,
+                "default_currency": step_data.default_currency,
+                "default_language": step_data.default_language,
+                "date_format": step_data.date_format,
+            }
+            await SiteSettingService.update_settings(tenant_id, SiteSettingUpdate(settings=site_settings))
             
         elif step_id == "step2_5":
             # 步骤2.5：编码规则配置
@@ -276,6 +293,17 @@ class InitWizardService:
         
         if init_data.step2_default_settings:
             settings["init_step2"] = init_data.step2_default_settings.model_dump()
+            # 同步到站点设置（与站点设置格式一致）
+            from core.schemas.site_setting import SiteSettingUpdate
+            from core.services.system.site_setting_service import SiteSettingService
+            s2 = init_data.step2_default_settings
+            site_settings = {
+                "timezone": s2.timezone,
+                "default_currency": s2.default_currency,
+                "default_language": s2.default_language,
+                "date_format": s2.date_format,
+            }
+            await SiteSettingService.update_settings(tenant_id, SiteSettingUpdate(settings=site_settings))
         
         if init_data.step3_admin_info:
             settings["init_step3"] = init_data.step3_admin_info.model_dump()

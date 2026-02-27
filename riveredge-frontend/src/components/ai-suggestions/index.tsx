@@ -139,7 +139,7 @@ const AISuggestions: React.FC<AISuggestionsProps> = ({
           placement="right"
           onClose={() => setDrawerVisible(false)}
           open={drawerVisible}
-          width={400}
+          size={400}
         >
           <SuggestionsList
             suggestions={suggestions}

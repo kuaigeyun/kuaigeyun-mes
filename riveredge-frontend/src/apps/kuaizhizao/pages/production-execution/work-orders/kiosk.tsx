@@ -27,7 +27,7 @@ import {
 
 import { PremiumTerminalTemplate, HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
-import StationBinder, { STATION_STORAGE_KEY, type StationInfo } from '../../../components/StationBinder';
+import StationBinder, { getStationStorageKey, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
 import MaterialBindingModal from './components/MaterialBindingModal';
 import BarcodePrintModal from './components/BarcodePrintModal';
@@ -109,14 +109,15 @@ const WorkOrdersKioskPage: React.FC = () => {
              // Optionally redirect to login if critical
         });
 
-        const savedStation = localStorage.getItem(STATION_STORAGE_KEY);
+        const storageKey = getStationStorageKey();
+        const savedStation = localStorage.getItem(storageKey);
         if (savedStation) {
             try {
                 const info = JSON.parse(savedStation);
                 setStationInfo(info);
                 loadWorkOrders((info as any).workCenterId);
             } catch (e) {
-                localStorage.removeItem(STATION_STORAGE_KEY);
+                localStorage.removeItem(storageKey);
             }
         }
     }, []);
@@ -184,7 +185,7 @@ const WorkOrdersKioskPage: React.FC = () => {
     };
 
     const handleSwitchStation = () => {
-        localStorage.removeItem(STATION_STORAGE_KEY);
+        localStorage.removeItem(getStationStorageKey());
         setStationInfo(null);
         setWorkOrders([]);
         setSelectedWorkOrder(null);
@@ -1037,7 +1038,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         }}
                     >
                         <StationBinder onBindSuccess={() => {
-                            const info = JSON.parse(localStorage.getItem(STATION_STORAGE_KEY) || '{}') as StationInfo;
+                            const info = JSON.parse(localStorage.getItem(getStationStorageKey()) || '{}') as StationInfo;
                             setStationInfo(info);
                             loadWorkOrders(info.workCenterId);
                         }} />

@@ -12,10 +12,18 @@ import React, { useState, useEffect } from 'react';
 import { Select, message, Typography, Space, Form, Button } from 'antd';
 import { LoginOutlined, EnvironmentOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { workshopApi, productionLineApi, workstationApi } from '../../master-data/services/factory';
+import { getTenantId } from '../../../utils/auth';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+/** 工位绑定存储 key（按租户隔离） */
+export function getStationStorageKey(): string {
+  const tenantId = getTenantId();
+  return tenantId != null ? `kuaizhizao_current_station_t${tenantId}` : 'kuaizhizao_current_station';
+}
+
+/** @deprecated 使用 getStationStorageKey() 以支持租户隔离 */
 export const STATION_STORAGE_KEY = 'kuaizhizao_current_station';
 
 export interface StationInfo {
@@ -167,7 +175,7 @@ const StationBinder: React.FC<StationBinderProps> = ({ onBindSuccess, onCancel, 
                 workCenterName: (station as any).workCenterName ?? (station as any).work_center_name,
             };
 
-            localStorage.setItem(STATION_STORAGE_KEY, JSON.stringify(info));
+            localStorage.setItem(getStationStorageKey(), JSON.stringify(info));
              message.success(`工位绑定成功：${station.name}`);
              onBindSuccess();
         }

@@ -2,11 +2,20 @@
  * 标签栏持久化存储
  *
  * 统一管理 riveredge_saved_tabs、riveredge_saved_active_key 的读写，
- * 避免多处直接操作 localStorage 造成技术栈分散。
+ * 按租户隔离，切换租户时使用各自标签。
  */
 
-const SAVED_TABS_KEY = 'riveredge_saved_tabs';
-const SAVED_ACTIVE_KEY = 'riveredge_saved_active_key';
+import { getTenantId } from '../utils/auth';
+
+function getTabsKey(): string {
+  const tenantId = getTenantId();
+  return tenantId != null ? `riveredge_saved_tabs_t${tenantId}` : 'riveredge_saved_tabs';
+}
+
+function getActiveKey(): string {
+  const tenantId = getTenantId();
+  return tenantId != null ? `riveredge_saved_active_key_t${tenantId}` : 'riveredge_saved_active_key';
+}
 
 export interface TabItem {
   key: string;
@@ -19,7 +28,7 @@ export interface TabItem {
 export function getSavedTabs(): TabItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(SAVED_TABS_KEY);
+    const raw = localStorage.getItem(getTabsKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -31,7 +40,7 @@ export function getSavedTabs(): TabItem[] {
 export function setSavedTabs(tabs: TabItem[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(SAVED_TABS_KEY, JSON.stringify(tabs));
+    localStorage.setItem(getTabsKey(), JSON.stringify(tabs));
   } catch {
     // ignore
   }
@@ -39,15 +48,16 @@ export function setSavedTabs(tabs: TabItem[]): void {
 
 export function getSavedActiveKey(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(SAVED_ACTIVE_KEY);
+  return localStorage.getItem(getActiveKey());
 }
 
 export function setSavedActiveKey(key: string | null): void {
   if (typeof window === 'undefined') return;
+  const storageKey = getActiveKey();
   if (key) {
-    localStorage.setItem(SAVED_ACTIVE_KEY, key);
+    localStorage.setItem(storageKey, key);
   } else {
-    localStorage.removeItem(SAVED_ACTIVE_KEY);
+    localStorage.removeItem(storageKey);
   }
 }
 
@@ -55,8 +65,8 @@ export function setSavedActiveKey(key: string | null): void {
 export function clearTabsData(): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.removeItem(SAVED_TABS_KEY);
-    localStorage.removeItem(SAVED_ACTIVE_KEY);
+    localStorage.removeItem(getTabsKey());
+    localStorage.removeItem(getActiveKey());
   } catch {
     // ignore
   }

@@ -33,6 +33,7 @@ import {
 import {
   CodeRuleComponentService,
 } from '../../../../utils/codeRuleComponent';
+import { getCodeRulePageConfigsKey } from '../../../../utils/codeRulePage';
 
 const { Text, Paragraph } = Typography;
 
@@ -234,7 +235,7 @@ const CodeRuleListPage: React.FC = () => {
       const pages = await getCodeRulePages();
 
       // 合并保存的配置和默认配置，确保所有页面都存在
-      const savedConfigs = localStorage.getItem('codeRulePageConfigs');
+      const savedConfigs = localStorage.getItem(getCodeRulePageConfigsKey());
       if (savedConfigs) {
         try {
           const parsed = JSON.parse(savedConfigs);
@@ -667,7 +668,7 @@ const CodeRuleListPage: React.FC = () => {
         ruleCode: page.ruleCode,
         autoGenerate: page.autoGenerate,
       }));
-      localStorage.setItem('codeRulePageConfigs', JSON.stringify(configsToSave));
+      localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
       return updated;
     });
     messageApi.success(t('pages.system.codeRules.configSaved'));

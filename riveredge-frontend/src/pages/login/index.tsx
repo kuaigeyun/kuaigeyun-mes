@@ -16,6 +16,7 @@ import Lottie from 'lottie-react';
 import loginAnimation from '../../../static/lottie/login.json';
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
+import { getInitSteps } from '../../services/init-wizard';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
@@ -720,11 +721,21 @@ export default function LoginPage() {
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
       
-      // 延迟执行消息提示和导航，避免阻塞主线程
+      // 延迟执行消息提示和导航，检查初始化状态
       const urlParams = new URL(window.location.href).searchParams;
-      setTimeout(() => {
+      const redirect = urlParams.get('redirect');
+      setTimeout(async () => {
         message.success(t('pages.login.success'));
-        navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
+        try {
+          const stepsRes = await getInitSteps(selectedTenantId);
+          if (stepsRes.init_completed === false) {
+            navigate('/init/wizard', { replace: true });
+          } else {
+            navigate(redirect || '/system/dashboard/workplace', { replace: true });
+          }
+        } catch {
+          navigate(redirect || '/system/dashboard/workplace', { replace: true });
+        }
       }, 0);
     } else {
       message.error(t('pages.login.loginFailed'));
@@ -1219,11 +1230,21 @@ export default function LoginPage() {
         setLoginResponse(null);
         setLoginCredentials(null);
 
-        // 延迟执行消息提示和导航，避免阻塞主线程
+        // 延迟执行消息提示和导航，检查初始化状态
         const urlParams = new URL(window.location.href).searchParams;
-        setTimeout(() => {
+        const redirect = urlParams.get('redirect');
+        setTimeout(async () => {
           message.success(t('pages.login.tenantSelected'));
-          navigate(urlParams.get('redirect') || '/system/dashboard/workplace');
+          try {
+            const stepsRes = await getInitSteps(selectedTenantId);
+            if (stepsRes.init_completed === false) {
+              navigate('/init/wizard', { replace: true });
+            } else {
+              navigate(redirect || '/system/dashboard/workplace', { replace: true });
+            }
+          } catch {
+            navigate(redirect || '/system/dashboard/workplace', { replace: true });
+          }
         }, 0);
       } else {
         message.error(t('pages.login.tenantSelectFailed'));

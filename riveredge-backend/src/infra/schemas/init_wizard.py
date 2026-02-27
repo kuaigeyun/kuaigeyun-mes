@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -26,7 +26,7 @@ class InitWizardStepResponse(BaseModel):
     step_id: str = Field(..., description="步骤ID")
     title: str = Field(..., description="步骤标题")
     description: str = Field(..., description="步骤描述")
-    order: int = Field(..., description="步骤顺序")
+    order: float = Field(..., description="步骤顺序（支持 2.5 等小数）")
     required: bool = Field(..., description="是否必填")
     completed: bool = Field(False, description="是否已完成")
 
@@ -36,6 +36,7 @@ class InitStepsResponse(BaseModel):
     steps: List[InitWizardStepResponse] = Field(..., description="步骤列表")
     current_step: Optional[str] = Field(None, description="当前步骤ID")
     progress: float = Field(0.0, description="完成进度（0-100）")
+    init_completed: bool = Field(False, description="是否已完成整个初始化")
 
 
 # 步骤1：组织信息完善
@@ -46,12 +47,26 @@ class Step1OrganizationInfo(BaseModel):
     scale: Optional[str] = Field(None, max_length=50, description="规模（small/medium/large）")
 
 
-# 步骤2：默认设置
+# 步骤2：默认设置（与站点设置格式一致）
 class Step2DefaultSettings(BaseModel):
     """步骤2：默认设置"""
     timezone: str = Field("Asia/Shanghai", description="时区")
-    currency: str = Field("CNY", description="货币")
-    language: str = Field("zh-CN", description="语言")
+    default_currency: str = Field("CNY", description="默认货币")
+    default_language: str = Field("zh-CN", description="默认语言")
+    date_format: str = Field("YYYY-MM-DD", description="日期格式")
+
+    @model_validator(mode="before")
+    @classmethod
+    def compat_legacy_format(cls, data: Any) -> Any:
+        """兼容旧格式：currency -> default_currency, language -> default_language"""
+        if isinstance(data, dict):
+            if "currency" in data and "default_currency" not in data:
+                data = {**data, "default_currency": data["currency"]}
+            if "language" in data and "default_language" not in data:
+                data = {**data, "default_language": data["language"]}
+            if "date_format" not in data:
+                data = {**data, "date_format": "YYYY-MM-DD"}
+        return data
 
 
 # 步骤2.5：编码规则配置
