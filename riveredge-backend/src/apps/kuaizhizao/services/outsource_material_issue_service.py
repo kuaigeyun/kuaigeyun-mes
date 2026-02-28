@@ -133,8 +133,19 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             )
             await outsource_work_order.save()
 
-            # TODO: 更新库存（待库存服务实现后补充）
-            # await inventory_service.decrease_stock(...)
+            # 调用统一库存服务扣减库存
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=issue_data.material_id,
+                quantity=issue_data.quantity,
+                warehouse_id=issue_data.warehouse_id,
+                batch_no=getattr(issue_data, "batch_number", None),
+                source_type="outsource_material_issue",
+                source_doc_id=material_issue.id,
+                source_doc_code=code,
+            )
 
             logger.info(f"创建委外发料单成功: {code}")
             

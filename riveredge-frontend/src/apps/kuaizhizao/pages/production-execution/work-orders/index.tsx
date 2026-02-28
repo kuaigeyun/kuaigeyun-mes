@@ -1438,26 +1438,28 @@ const WorkOrdersPage: React.FC = () => {
             checks.errors.push(`工单状态为"${wo.status}"，不能下达`)
           }
 
-          // 检查3：齐套料检查（TODO: 调用后端API检查物料齐套情况）
-          // 这里先模拟，后续对接后端API
-          // const materialCheck = await checkMaterialAvailability(wo);
-          // if (!materialCheck.available) {
-          //   checks.warnings.push(`物料不齐套：${materialCheck.missingMaterials.join(', ')}`);
-          // }
+          // 检查3：齐套料检查（调用后端API）
+          try {
+            const materialCheck = await workOrderApi.checkShortage(String(wo.id));
+            if (materialCheck && !materialCheck.available && materialCheck.missing_materials?.length) {
+              const names = materialCheck.missing_materials.map((m: any) => `${m.material_code}(${m.material_name})`).join(', ');
+              checks.warnings.push(`物料不齐套：${names}`);
+            }
+          } catch {
+            // 忽略检查失败，不阻塞下达
+          }
 
-          // 检查4：交期风险评估（TODO: 调用后端API评估交期风险）
-          // 这里先模拟，后续对接后端API
-          // const deadlineRisk = await assessDeadlineRisk(wo);
-          // if (deadlineRisk.risk === 'high') {
-          //   checks.warnings.push(`交期风险高：预计延期${deadlineRisk.delayDays}天`);
-          // }
+          // 检查4：交期风险评估（后端暂无独立API，由 detect-delay 在异常模块处理）
+          if (wo.planned_end_date && wo.due_date) {
+            const endDate = new Date(wo.planned_end_date);
+            const dueDate = new Date(wo.due_date);
+            if (endDate > dueDate) {
+              const delayDays = Math.ceil((endDate.getTime() - dueDate.getTime()) / (24 * 3600 * 1000));
+              checks.warnings.push(`交期风险：计划结束晚于交货期约${delayDays}天`);
+            }
+          }
 
-          // 检查5：工作中心能力检查（TODO: 调用后端API检查工作中心产能）
-          // 这里先模拟，后续对接后端API
-          // const capacityCheck = await checkWorkCenterCapacity(wo);
-          // if (capacityCheck.conflict) {
-          //   checks.warnings.push(`工作中心产能冲突：${capacityCheck.conflictWorkCenters.join(', ')}`);
-          // }
+          // 检查5：工作中心能力检查（后端待实现，暂跳过）
 
           // 检查6：计划时间检查（优化，新增）
           if (wo.planned_start_date && wo.planned_end_date) {

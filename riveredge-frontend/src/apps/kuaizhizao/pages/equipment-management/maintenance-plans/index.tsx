@@ -51,6 +51,11 @@ const MaintenancePlansPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [planDetail, setPlanDetail] = useState<MaintenancePlan | null>(null);
 
+  // 执行维护保养 Modal 状态
+  const [executeModalVisible, setExecuteModalVisible] = useState(false);
+  const [executePlan, setExecutePlan] = useState<MaintenancePlan | null>(null);
+  const executeFormRef = useRef<any>(null);
+
   /**
    * 处理新建维护计划
    */
@@ -159,25 +164,47 @@ const MaintenancePlansPage: React.FC = () => {
   };
 
   /**
-   * 处理执行维护保养
+   * 打开执行维护保养 Modal
    */
-  const handleExecute = async (record: MaintenancePlan) => {
-    Modal.confirm({
-      title: '确认执行',
-      content: `确定要执行维护计划"${record.plan_name}"吗？`,
-      onOk: async () => {
-        try {
-          if (!record.uuid) {
-            messageApi.error('维护计划UUID不存在');
-            return;
-          }
-          // TODO: 打开执行维护保养的Modal
-          messageApi.info('执行维护保养功能开发中');
-        } catch (error: any) {
-          messageApi.error(error.message || '执行失败');
-        }
-      },
-    });
+  const handleExecute = (record: MaintenancePlan) => {
+    if (!record.uuid || !record.equipment_uuid) {
+      messageApi.error('维护计划或设备信息不完整');
+      return;
+    }
+    setExecutePlan(record);
+    setExecuteModalVisible(true);
+    setTimeout(() => {
+      executeFormRef.current?.setFieldsValue({
+        execution_date: dayjs(),
+        execution_result: '正常',
+        execution_content: `执行维护计划：${record.plan_name}`,
+      });
+    }, 100);
+  };
+
+  /**
+   * 提交执行维护保养
+   */
+  const handleExecuteSubmit = async (values: any) => {
+    if (!executePlan?.uuid || !executePlan?.equipment_uuid) return;
+    try {
+      await maintenancePlanApi.execute({
+        equipment_uuid: executePlan.equipment_uuid,
+        maintenance_plan_uuid: executePlan.uuid,
+        execution_date: values.execution_date?.format?.('YYYY-MM-DD HH:mm:ss') ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
+        execution_content: values.execution_content,
+        execution_result: values.execution_result ?? '正常',
+        status: '已确认',
+      });
+      messageApi.success('执行记录已提交');
+      setExecuteModalVisible(false);
+      setExecutePlan(null);
+      executeFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '提交失败');
+      throw error;
+    }
   };
 
   /**
@@ -511,6 +538,45 @@ const MaintenancePlansPage: React.FC = () => {
             { label: '已取消', value: '已取消' },
           ]}
           rules={[{ required: true, message: '请选择状态' }]}
+        />
+      </FormModalTemplate>
+
+      {/* 执行维护保养 Modal */}
+      <FormModalTemplate
+        title="执行维护保养"
+        open={executeModalVisible}
+        onClose={() => {
+          setExecuteModalVisible(false);
+          setExecutePlan(null);
+          executeFormRef.current?.resetFields();
+        }}
+        onFinish={handleExecuteSubmit}
+        isEdit={false}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={executeFormRef}
+      >
+        <ProFormDatePicker
+          name="execution_date"
+          label="执行日期"
+          placeholder="请选择执行日期"
+          rules={[{ required: true, message: '请选择执行日期' }]}
+          fieldProps={{ showTime: true }}
+        />
+        <ProFormSelect
+          name="execution_result"
+          label="执行结果"
+          placeholder="请选择执行结果"
+          options={[
+            { label: '正常', value: '正常' },
+            { label: '异常', value: '异常' },
+            { label: '待处理', value: '待处理' },
+          ]}
+        />
+        <ProFormTextArea
+          name="execution_content"
+          label="执行内容"
+          placeholder="请输入执行内容"
+          fieldProps={{ rows: 4 }}
         />
       </FormModalTemplate>
 

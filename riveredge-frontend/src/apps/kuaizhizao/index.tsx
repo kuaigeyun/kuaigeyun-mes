@@ -35,7 +35,7 @@ import PurchaseRequisitionsPage from './pages/purchase-management/purchase-requi
 import ReceiptNoticesPage from './pages/purchase-management/receipt-notices';
 
 // 销售管理页面
-// TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理
+// 说明：销售预测数据已纳入统一需求管理(demand-management)，本页面为销售预测专用入口，与需求管理中的 demand_type=sales_forecast 数据一致
 import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import QuotationsPage from './pages/sales-management/quotations';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
@@ -158,7 +158,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/exception-process" element={<ExceptionProcessPage />} />
 
       {/* 销售管理路由 */}
-      {/* TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理 */}
       <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
       <Route path="sales-management/quotations" element={<QuotationsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />

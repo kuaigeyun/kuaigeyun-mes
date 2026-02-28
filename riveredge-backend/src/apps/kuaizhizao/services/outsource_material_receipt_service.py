@@ -150,8 +150,21 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
             await outsource_work_order.save()
 
-            # TODO: 更新库存（待库存服务实现后补充）
-            # await inventory_service.increase_stock(...)
+            # 调用统一库存服务增加库存（委外收货为成品入库）
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            product_id = outsource_work_order.product_id
+            if product_id:
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=product_id,
+                    quantity=receipt_data.qualified_quantity or receipt_data.quantity,
+                    warehouse_id=receipt_data.warehouse_id,
+                    batch_no=getattr(receipt_data, "batch_number", None),
+                    source_type="outsource_material_receipt",
+                    source_doc_id=material_receipt.id,
+                    source_doc_code=code,
+                )
 
             # TODO: 自动生成应付单（委外费用，待财务模块实现后补充）
             # await accounts_payable_service.create_payable(...)

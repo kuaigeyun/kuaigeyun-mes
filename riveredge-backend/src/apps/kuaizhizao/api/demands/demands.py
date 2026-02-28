@@ -341,6 +341,29 @@ async def get_demand_snapshots(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.delete("/{demand_id}", summary="删除需求")
+async def delete_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除需求
+
+    只能删除草稿或待审核状态的需求。已审核或已下推计算的需求不允许删除。
+    """
+    try:
+        await demand_service.delete_demand(tenant_id=tenant_id, demand_id=demand_id)
+        return {"success": True, "message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"删除需求失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求失败")
+
+
 @router.put("/{demand_id}", response_model=DemandResponse, summary="更新需求")
 async def update_demand(
     demand_id: int = Path(..., description="需求ID"),

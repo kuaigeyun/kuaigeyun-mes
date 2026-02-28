@@ -297,7 +297,20 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             order.updated_by_name = user_info["name"]
             await order.save()
 
-            # TODO: 调用库存服务扣减主仓库存，可选补货至线边仓
+            # 调用统一库存服务扣减主仓库存（配料从主仓拣选，warehouse_id=None 表示主仓 MaterialBatch）
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            for item in items:
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.required_quantity,
+                    warehouse_id=None,  # 主仓
+                    batch_no=getattr(item, "batch_no", None),
+                    source_type="batching_order",
+                    source_doc_id=order.id,
+                    source_doc_code=order.code,
+                )
 
             return BatchingOrderResponse.model_validate(order)
 

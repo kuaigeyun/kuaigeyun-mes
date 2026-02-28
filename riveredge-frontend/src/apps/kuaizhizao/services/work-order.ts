@@ -33,6 +33,29 @@ export const workOrderApi = {
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),
   dispatchOperation: async (workOrderId: string, operationId: number, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data }),
+  checkShortage: async (workOrderId: string, warehouseId?: number) => {
+    const res = await apiRequest<{
+      has_shortage: boolean;
+      shortage_items?: Array<{
+        material_code: string;
+        material_name: string;
+        required_quantity: number;
+        available_quantity: number;
+      }>;
+    }>(`/apps/kuaizhizao/work-orders/${workOrderId}/check-shortage`, {
+      method: 'GET',
+      params: warehouseId ? { warehouse_id: warehouseId } : undefined,
+    });
+    return {
+      available: !res.has_shortage,
+      missing_materials: (res.shortage_items || []).map((m) => ({
+        material_code: m.material_code,
+        material_name: m.material_name,
+        required: m.required_quantity,
+        available: m.available_quantity,
+      })),
+    };
+  },
   freeze: async (id: string, data: { freeze_reason: string }) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/freeze`, { method: 'POST', data }),
   unfreeze: async (id: string, data?: { unfreeze_reason?: string }) =>

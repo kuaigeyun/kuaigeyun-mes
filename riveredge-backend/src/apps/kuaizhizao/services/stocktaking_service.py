@@ -506,10 +506,19 @@ class StocktakingService(AppBaseService[Stocktaking]):
             user_info = await self.get_user_info(created_by)
 
             # 创建盘点明细
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
             created_items = []
             for item_data in items:
-                # TODO: 从库存服务获取账面数量（book_quantity）
-                # 这里简化处理，假设item_data中已包含账面数量
+                # 从库存服务获取账面数量（若未传入则自动获取）
+                book_quantity = item_data.book_quantity
+                if book_quantity is None:
+                    book_quantity = await InventoryService.get_quantity(
+                        tenant_id=tenant_id,
+                        material_id=item_data.material_id,
+                        warehouse_id=item_data.warehouse_id,
+                        batch_no=item_data.batch_no,
+                    ) or Decimal("0")
 
                 item = await StocktakingItem.create(
                     tenant_id=tenant_id,
@@ -522,7 +531,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
                     location_id=item_data.location_id,
                     location_code=item_data.location_code,
                     batch_no=item_data.batch_no,
-                    book_quantity=item_data.book_quantity,
+                    book_quantity=book_quantity,
                     actual_quantity=item_data.actual_quantity,
                     difference_quantity=Decimal("0"),
                     unit_price=item_data.unit_price,
@@ -667,16 +676,18 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 difference_quantity__ne=Decimal("0")
             )
 
-            # TODO: 调用库存服务调整库存
-            # 对于每个有差异的明细，更新库存数量
+            # 调用统一库存服务调整库存（将库存调整为实际数量）
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
             for item in items:
-                # TODO: 调用库存服务更新库存
-                # inventory_service.adjust_inventory(
-                #     material_id=item.material_id,
-                #     warehouse_id=item.warehouse_id,
-                #     quantity=item.difference_quantity,
-                #     ...
-                # )
+                await InventoryService.adjust_inventory(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.actual_quantity,
+                    warehouse_id=item.warehouse_id,
+                    batch_no=item.batch_no,
+                    reason="stocktaking",
+                )
                 item.status = "adjusted"
                 await item.save()
 

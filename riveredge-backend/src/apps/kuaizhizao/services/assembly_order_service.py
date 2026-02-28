@@ -255,10 +255,31 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             if not items:
                 raise ValidationError("组装单没有待消耗的明细")
 
-            # TODO: 调用库存服务更新库存（消耗组件、增加成品）
+            # 调用统一库存服务：消耗组件、增加成品
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
             for item in items:
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.quantity,
+                    warehouse_id=order.warehouse_id,
+                    source_type="assembly_order",
+                    source_doc_id=order_id,
+                    source_doc_code=order.code,
+                )
                 item.status = "consumed"
                 await item.save()
+
+            await InventoryService.increase_stock(
+                tenant_id=tenant_id,
+                material_id=order.product_material_id,
+                quantity=order.total_quantity,
+                warehouse_id=order.warehouse_id,
+                source_type="assembly_order",
+                source_doc_id=order_id,
+                source_doc_code=order.code,
+            )
 
             user_info = await self.get_user_info(executed_by)
             executed_at = datetime.now()

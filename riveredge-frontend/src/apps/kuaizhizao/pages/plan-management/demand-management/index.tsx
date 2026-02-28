@@ -22,6 +22,7 @@ import {
   listDemands,
   getDemand,
   updateDemand,
+  deleteDemand,
   submitDemand,
   approveDemand,
   rejectDemand,
@@ -216,10 +217,40 @@ const DemandManagementPage: React.FC = () => {
 
   /**
    * 处理删除需求
+   * 只能删除草稿或待审核状态的需求
    */
-  const handleDelete = async (_keys: React.Key[]) => {
-    // TODO: 实现删除功能
-    messageApi.info('删除功能待实现');
+  const handleDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning('请选择要删除的需求');
+      return;
+    }
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除选中的 ${keys.length} 个需求吗？只能删除草稿或待审核状态的需求。`,
+      onOk: async () => {
+        let successCount = 0;
+        const errors: string[] = [];
+        for (const k of keys) {
+          const id = Number(k);
+          if (isNaN(id)) continue;
+          try {
+            await deleteDemand(id);
+            successCount += 1;
+          } catch (e: any) {
+            errors.push(`ID ${id}: ${e?.message || '删除失败'}`);
+          }
+        }
+        if (successCount > 0) {
+          messageApi.success(`成功删除 ${successCount} 个需求`);
+          invalidateStatistics();
+          actionRef.current?.reload();
+          setSelectedRowKeys((prev) => prev.filter((pk) => !keys.includes(pk)));
+        }
+        if (errors.length > 0) {
+          messageApi.error(errors.slice(0, 3).join('；') + (errors.length > 3 ? ` 等${errors.length}条` : ''));
+        }
+      },
+    });
   };
 
   /**
@@ -603,7 +634,8 @@ const DemandManagementPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton={false}
           showEditButton={false}
-          showDeleteButton={false}
+          showDeleteButton={true}
+          onDelete={handleDelete}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {

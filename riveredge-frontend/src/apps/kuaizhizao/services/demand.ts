@@ -251,6 +251,16 @@ export async function updateDemandItem(demandId: number, itemId: number, data: P
 }
 
 /**
+ * 删除需求
+ * 只能删除草稿或待审核状态的需求
+ */
+export async function deleteDemand(id: number): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>(`/apps/kuaizhizao/demands/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
  * 删除需求明细
  */
 export async function deleteDemandItem(demandId: number, itemId: number): Promise<void> {

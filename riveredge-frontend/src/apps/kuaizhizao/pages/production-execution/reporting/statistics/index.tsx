@@ -99,7 +99,22 @@ const ReportingStatisticsPage: React.FC = () => {
    * 处理导出
    */
   const handleExport = () => {
-    messageApi.info('导出功能开发中');
+    if (!statistics) {
+      messageApi.warning('暂无数据可导出');
+      return;
+    }
+    try {
+      const blob = new Blob([JSON.stringify(statistics, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporting-statistics-${dateRange[0].format('YYYY-MM-DD')}-${dateRange[1].format('YYYY-MM-DD')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error?.message || '导出失败');
+    }
   };
 
   // 工序统计表格列

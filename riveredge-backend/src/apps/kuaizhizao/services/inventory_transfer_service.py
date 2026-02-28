@@ -466,26 +466,30 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             if not items:
                 raise ValidationError("调拨单没有待调拨的明细")
 
-            # TODO: 调用库存服务更新库存
-            # 对于每个明细，从调出仓库扣减库存，向调入仓库增加库存
+            # 调用统一库存服务：从调出仓库扣减，向调入仓库增加
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
             for item in items:
-                # TODO: 调用库存服务更新库存
-                # inventory_service.decrease_inventory(
-                #     material_id=item.material_id,
-                #     warehouse_id=item.from_warehouse_id,
-                #     location_id=item.from_location_id,
-                #     quantity=item.quantity,
-                #     batch_no=item.batch_no,
-                #     ...
-                # )
-                # inventory_service.increase_inventory(
-                #     material_id=item.material_id,
-                #     warehouse_id=item.to_warehouse_id,
-                #     location_id=item.to_location_id,
-                #     quantity=item.quantity,
-                #     batch_no=item.batch_no,
-                #     ...
-                # )
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.quantity,
+                    warehouse_id=item.from_warehouse_id,
+                    batch_no=getattr(item, "batch_no", None),
+                    source_type="inventory_transfer",
+                    source_doc_id=transfer_id,
+                    source_doc_code=transfer.code,
+                )
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.quantity,
+                    warehouse_id=item.to_warehouse_id,
+                    batch_no=getattr(item, "batch_no", None),
+                    source_type="inventory_transfer",
+                    source_doc_id=transfer_id,
+                    source_doc_code=transfer.code,
+                )
                 item.status = "transferred"
                 await item.save()
 

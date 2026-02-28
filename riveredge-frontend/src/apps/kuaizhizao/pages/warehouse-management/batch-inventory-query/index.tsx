@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { Tag, message, Space, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -24,6 +24,7 @@ interface BatchInventoryItem {
 
 const BatchInventoryQuery: React.FC = () => {
     const [includeExpired, setIncludeExpired] = useState(false);
+    const lastParamsRef = useRef<Record<string, any>>({});
 
     const columns: ProColumns<BatchInventoryItem>[] = [
         {
@@ -108,23 +109,26 @@ const BatchInventoryQuery: React.FC = () => {
     ];
 
     const fetchBatchInventory = async (params: any) => {
+        const apiParams = {
+            material_id: params.material_id,
+            warehouse_id: params.warehouse_id,
+            batch_number: params.batch_no,
+            include_expired: includeExpired,
+        };
+        lastParamsRef.current = apiParams;
         try {
-            const response = await apiRequest<{ total: number; items: BatchInventoryItem[] }>(
+            const response = await apiRequest<{ total?: number; items?: BatchInventoryItem[] }>(
                 '/apps/kuaizhizao/reports/inventory/batch-query',
                 {
                     method: 'GET',
-                    params: {
-                        material_id: params.material_id,
-                        warehouse_id: params.warehouse_id,
-                        batch_number: params.batch_no,
-                        include_expired: includeExpired,
-                    },
+                    params: apiParams,
                 }
             );
-
+            const items = response.items ?? (Array.isArray(response) ? response : []);
+            const total = response.total ?? items.length;
             return {
-                data: response.items || [],
-                total: response.total || 0,
+                data: items,
+                total,
                 success: true,
             };
         } catch (error) {
@@ -137,8 +141,31 @@ const BatchInventoryQuery: React.FC = () => {
         }
     };
 
-    const handleExport = () => {
-        message.info('导出功能开发中...');
+    const handleExport = async () => {
+        try {
+            const response = await apiRequest<{ items?: BatchInventoryItem[] }>(
+                '/apps/kuaizhizao/reports/inventory/batch-query',
+                {
+                    method: 'GET',
+                    params: { ...lastParamsRef.current, include_expired: includeExpired },
+                }
+            );
+            const items = response.items ?? (Array.isArray(response) ? response : []);
+            if (items.length === 0) {
+                message.warning('暂无数据可导出');
+                return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `batch-inventory-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            message.success(`已导出 ${items.length} 条记录`);
+        } catch (error: any) {
+            message.error(error?.message || '导出失败');
+        }
     };
 
     return (
