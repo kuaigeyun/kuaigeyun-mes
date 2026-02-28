@@ -65,9 +65,33 @@ const ComputationHistoryPage: React.FC = () => {
       messageApi.warning('请选择要导出的记录');
       return;
     }
-    
-    // TODO: 实现导出功能
-    messageApi.info('导出功能开发中');
+    try {
+      const items: DemandComputation[] = [];
+      for (const k of keys) {
+        const id = Number(k);
+        if (isNaN(id)) continue;
+        try {
+          const detail = await getDemandComputation(id, true);
+          items.push(detail);
+        } catch {
+          // 跳过获取失败的记录
+        }
+      }
+      if (items.length === 0) {
+        messageApi.warning('无有效数据可导出');
+        return;
+      }
+      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      messageApi.success(`已导出 ${items.length} 条记录`);
+    } catch (error: any) {
+      messageApi.error(error?.message || '导出失败');
+    }
   };
 
   /**

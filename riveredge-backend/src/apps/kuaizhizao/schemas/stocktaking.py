@@ -104,7 +104,7 @@ class StocktakingItemBase(BaseModel):
     location_id: Optional[int] = Field(None, description="库位ID（可选）")
     location_code: Optional[str] = Field(None, description="库位编码（可选）")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
-    book_quantity: Decimal = Field(..., description="账面数量")
+    book_quantity: Optional[Decimal] = Field(None, description="账面数量（不传则从库存服务自动获取）")
     actual_quantity: Optional[Decimal] = Field(None, description="实际数量")
     unit_price: Decimal = Field(default=0, description="单价")
     remarks: Optional[str] = Field(None, description="备注")

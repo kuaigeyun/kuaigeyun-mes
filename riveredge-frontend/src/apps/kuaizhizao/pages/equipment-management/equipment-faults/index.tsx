@@ -49,6 +49,11 @@ const EquipmentFaultsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [faultDetail, setFaultDetail] = useState<EquipmentFault | null>(null);
 
+  // 创建维修记录 Modal 状态
+  const [repairModalVisible, setRepairModalVisible] = useState(false);
+  const [repairFault, setRepairFault] = useState<EquipmentFault | null>(null);
+  const repairFormRef = useRef<any>(null);
+
   /**
    * 处理新建故障记录
    */
@@ -154,25 +159,48 @@ const EquipmentFaultsPage: React.FC = () => {
   };
 
   /**
-   * 处理创建维修记录
+   * 打开创建维修记录 Modal
    */
-  const handleCreateRepair = async (record: EquipmentFault) => {
-    Modal.confirm({
-      title: '确认创建维修记录',
-      content: `确定要为故障"${record.fault_no}"创建维修记录吗？`,
-      onOk: async () => {
-        try {
-          if (!record.uuid) {
-            messageApi.error('故障记录UUID不存在');
-            return;
-          }
-          // TODO: 打开创建维修记录的Modal
-          messageApi.info('创建维修记录功能开发中');
-        } catch (error: any) {
-          messageApi.error(error.message || '创建失败');
-        }
-      },
-    });
+  const handleCreateRepair = (record: EquipmentFault) => {
+    if (!record.uuid || !record.equipment_uuid) {
+      messageApi.error('故障记录或设备信息不完整');
+      return;
+    }
+    setRepairFault(record);
+    setRepairModalVisible(true);
+    setTimeout(() => {
+      repairFormRef.current?.setFieldsValue({
+        repair_date: dayjs(),
+        repair_type: '现场维修',
+        repair_description: `维修故障：${record.fault_no} - ${record.fault_description || ''}`,
+        status: '进行中',
+      });
+    }, 100);
+  };
+
+  /**
+   * 提交创建维修记录
+   */
+  const handleRepairSubmit = async (values: any) => {
+    if (!repairFault?.uuid || !repairFault?.equipment_uuid) return;
+    try {
+      await equipmentFaultApi.createRepair({
+        equipment_uuid: repairFault.equipment_uuid,
+        equipment_fault_uuid: repairFault.uuid,
+        repair_date: values.repair_date?.format?.('YYYY-MM-DD HH:mm:ss') ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
+        repair_type: values.repair_type ?? '现场维修',
+        repair_description: values.repair_description ?? '',
+        status: values.status ?? '进行中',
+      });
+      messageApi.success('维修记录已创建');
+      setRepairModalVisible(false);
+      setRepairFault(null);
+      repairFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '创建失败');
+      throw error;
+    }
   };
 
   /**
@@ -371,7 +399,7 @@ const EquipmentFaultsPage: React.FC = () => {
               Modal.confirm({
                 title: '确认删除',
                 content: `确定要删除故障记录"${record.fault_no}"吗？`,
-                onOk: () => handleDelete([record]),
+                onOk: () => handleDelete(record.uuid ? [record.uuid] : []),
               });
             }}
           >
@@ -509,6 +537,57 @@ const EquipmentFaultsPage: React.FC = () => {
             { label: '否', value: false },
           ]}
           rules={[{ required: true, message: '请选择是否需要维修' }]}
+        />
+      </FormModalTemplate>
+
+      {/* 创建维修记录 Modal */}
+      <FormModalTemplate
+        title="创建维修记录"
+        open={repairModalVisible}
+        onClose={() => {
+          setRepairModalVisible(false);
+          setRepairFault(null);
+          repairFormRef.current?.resetFields();
+        }}
+        onFinish={handleRepairSubmit}
+        isEdit={false}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={repairFormRef}
+      >
+        <ProFormDatePicker
+          name="repair_date"
+          label="维修日期"
+          placeholder="请选择维修日期"
+          rules={[{ required: true, message: '请选择维修日期' }]}
+          fieldProps={{ showTime: true }}
+        />
+        <ProFormSelect
+          name="repair_type"
+          label="维修类型"
+          placeholder="请选择维修类型"
+          options={[
+            { label: '现场维修', value: '现场维修' },
+            { label: '返厂维修', value: '返厂维修' },
+            { label: '委外维修', value: '委外维修' },
+          ]}
+          rules={[{ required: true, message: '请选择维修类型' }]}
+        />
+        <ProFormTextArea
+          name="repair_description"
+          label="维修描述"
+          placeholder="请输入维修描述"
+          rules={[{ required: true, message: '请输入维修描述' }]}
+          fieldProps={{ rows: 4 }}
+        />
+        <ProFormSelect
+          name="status"
+          label="维修状态"
+          placeholder="请选择维修状态"
+          options={[
+            { label: '进行中', value: '进行中' },
+            { label: '已完成', value: '已完成' },
+            { label: '已取消', value: '已取消' },
+          ]}
         />
       </FormModalTemplate>
 

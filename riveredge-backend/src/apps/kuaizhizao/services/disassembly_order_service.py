@@ -249,8 +249,28 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             if not items:
                 raise ValidationError("拆卸单没有待产出的明细")
 
-            # TODO: 调用库存服务更新库存（消耗成品、增加组件）
+            # 调用统一库存服务：消耗成品、增加组件
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=order.product_material_id,
+                quantity=order.total_quantity,
+                warehouse_id=order.warehouse_id,
+                source_type="disassembly_order",
+                source_doc_id=order_id,
+                source_doc_code=order.code,
+            )
             for item in items:
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.quantity,
+                    warehouse_id=order.warehouse_id,
+                    source_type="disassembly_order",
+                    source_doc_id=order_id,
+                    source_doc_code=order.code,
+                )
                 item.status = "produced"
                 await item.save()
 
