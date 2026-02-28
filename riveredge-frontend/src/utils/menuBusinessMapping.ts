@@ -47,27 +47,31 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   // 质量管理
   'incoming-inspection': { node: 'quality_inspection', module: 'quality' },
   'inspection-plans': { module: 'quality' },
+  'quality-standards': { module: 'quality' },
   'process-inspection': { node: 'quality_inspection', module: 'quality' },
   'finished-goods-inspection': { node: 'quality_inspection', module: 'quality' },
   'traceability': { node: 'quality_inspection', module: 'quality' },
   // 仓储管理
   'inbound': { node: 'inbound', module: 'warehouse' },
-  'other-inbound': { module: 'warehouse' },
-  'material-returns': { module: 'warehouse' },
+  'other-inbound': { node: 'other_inbound', module: 'warehouse' },
+  'material-returns': { node: 'material_return', module: 'warehouse' },
   'customer-material-registration': { module: 'warehouse' },
   'outbound': { node: 'outbound', module: 'warehouse' },
-  'other-outbound': { module: 'warehouse' },
-  'material-borrows': { module: 'warehouse' },
+  'other-outbound': { node: 'other_outbound', module: 'warehouse' },
+  'material-borrows': { node: 'material_borrow', module: 'warehouse' },
   'delivery-notes': { node: 'delivery_notice', module: 'warehouse' },
   'line-side-warehouse': { module: 'warehouse' },
   'backflush-records': { module: 'warehouse' },
   'inventory': { module: 'warehouse' },
   'initial-data': { module: 'warehouse' },
-  'barcode-mapping-rules': { module: 'warehouse' },
+  'barcode-mapping-rules': { node: 'barcode_mapping', module: 'warehouse' },
   'stocktaking': { node: 'stocktaking', module: 'warehouse' },
   'inventory-transfer': { node: 'inventory_transfer', module: 'warehouse' },
+  'batching-center': { module: 'warehouse' },
   'assembly-orders': { node: 'assembly_order', module: 'warehouse' },
   'disassembly-orders': { node: 'disassembly_order', module: 'warehouse' },
+  'inventory-alert': { module: 'warehouse' },
+  'packing-binding': { module: 'production' },
   // 分析中心
   'document-timing': { module: 'analysis' },
   'document-efficiency': { module: 'analysis' },
@@ -80,8 +84,15 @@ const PATH_SEGMENT_TO_BUSINESS: Record<string, MenuBusinessMeta> = {
   'maintenance-plans': { node: 'maintenance_plan', module: 'equipment' },
   'maintenance-reminders': { node: 'maintenance_reminder', module: 'equipment' },
   'equipment-status': { node: 'equipment_status', module: 'equipment' },
+  'mold-usages': { node: 'mold_usage', module: 'equipment' },
+  'mold-calibrations': { node: 'mold_calibration', module: 'equipment' },
+  'mold-maintenance-reminders': { node: 'mold_maintenance_reminder', module: 'equipment' },
+  'tool-usages': { node: 'tool_usage', module: 'equipment' },
+  'tool-maintenances': { node: 'tool_maintenance', module: 'equipment' },
+  'tool-calibrations': { node: 'tool_calibration', module: 'equipment' },
+  'tool-maintenance-reminders': { node: 'tool_maintenance_reminder', module: 'equipment' },
   // 成本 / 财务管理
-  'cost-calculations': { module: 'finance' },
+  'cost-calculations': { node: 'cost_calculation', module: 'finance' },
   'cost-comparison': { module: 'finance' },
   'receivables': { node: 'receivable', module: 'finance' },
   'sales-invoices': { module: 'finance' },
@@ -170,10 +181,26 @@ const KUAIZHIZAO_PATH_PREFIX = '/apps/kuaizhizao';
 
 /**
  * 从菜单项解析业务 meta（优先用 meta，否则按 path 回退）
+ *
+ * 重要：当 meta 仅有 module 而无 node 时（如 manifest 中 quotations、sample-trials），
+ * 需按 path 回退解析 node，否则蓝图禁用节点时无法正确过滤菜单。
  */
 export function getMenuBusinessMeta(menu: { path?: string | null; name?: string; meta?: Record<string, unknown> | null }): MenuBusinessMeta | null {
   const meta = menu.meta as { node?: string; module?: string } | undefined;
   if (meta && (meta.node || meta.module)) {
+    // meta 已有 node 时直接使用
+    if (meta.node) {
+      return { node: meta.node, module: meta.module };
+    }
+    // meta 仅有 module 无 node：按 path 回退解析 node（如 quotations、sample-trials）
+    if (menu.path && menu.path.startsWith(KUAIZHIZAO_PATH_PREFIX)) {
+      const segments = menu.path.split('/').filter(Boolean);
+      const lastSegment = segments[segments.length - 1];
+      const pathMeta = lastSegment ? PATH_SEGMENT_TO_BUSINESS[lastSegment] : undefined;
+      if (pathMeta?.node) {
+        return { node: pathMeta.node, module: meta.module ?? pathMeta.module };
+      }
+    }
     return { node: meta.node, module: meta.module };
   }
   if (menu.path && menu.path.startsWith(KUAIZHIZAO_PATH_PREFIX)) {

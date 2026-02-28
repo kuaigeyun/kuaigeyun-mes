@@ -231,12 +231,28 @@ class MoldCalibrationResponse(BaseModel):
     uuid: str = Field(..., description="校验记录UUID")
     id: int = Field(..., description="校验记录ID")
     mold_uuid: str = Field(..., description="模具UUID")
+    mold_code: Optional[str] = Field(None, description="模具编码")
+    mold_name: Optional[str] = Field(None, description="模具名称")
     calibration_date: date = Field(..., description="校验日期")
     result: str = Field(..., description="校验结果")
     certificate_no: Optional[str] = Field(None, description="证书编号")
     expiry_date: Optional[date] = Field(None, description="有效期至")
     remark: Optional[str] = Field(None, description="备注")
     created_at: datetime = Field(..., description="创建时间")
+
+
+class MoldMaintenanceReminderResponse(BaseModel):
+    """
+    模具保养提醒响应 Schema（基于使用次数）
+    """
+    mold_uuid: str = Field(..., description="模具UUID")
+    mold_code: str = Field(..., description="模具编码")
+    mold_name: str = Field(..., description="模具名称")
+    total_usage_count: int = Field(..., description="当前累计使用次数")
+    maintenance_interval: int = Field(..., description="保养间隔（使用次数）")
+    next_maintenance_at_count: int = Field(..., description="下次保养使用次数")
+    usages_until_due: int = Field(..., description="距下次保养剩余使用次数（负数表示已过期）")
+    reminder_type: str = Field(..., description="提醒类型（due_soon/overdue）")
 
 
 class MoldCalibrationListResponse(BaseModel):
@@ -246,6 +262,16 @@ class MoldCalibrationListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: list[MoldCalibrationResponse] = Field(..., description="校验记录列表")
+    total: int = Field(..., description="总数量")
+    skip: int = Field(..., description="跳过数量")
+    limit: int = Field(..., description="限制数量")
+
+
+class MoldMaintenanceReminderListResponse(BaseModel):
+    """
+    模具保养提醒列表响应 Schema
+    """
+    items: list[MoldMaintenanceReminderResponse] = Field(..., description="提醒列表")
     total: int = Field(..., description="总数量")
     skip: int = Field(..., description="跳过数量")
     limit: int = Field(..., description="限制数量")

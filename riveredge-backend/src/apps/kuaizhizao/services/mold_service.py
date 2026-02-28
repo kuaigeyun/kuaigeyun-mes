@@ -518,3 +518,98 @@ class MoldCalibrationService:
         await mold.save()
         return calib
 
+    @staticmethod
+    async def list_all_calibrations(
+        tenant_id: int,
+        mold_uuid: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[MoldCalibration], int]:
+        """
+        获取全量模具校验记录列表（支持按模具筛选）
+
+        Args:
+            tenant_id: 组织ID
+            mold_uuid: 模具UUID（可选）
+            skip: 跳过数量
+            limit: 限制数量
+
+        Returns:
+            tuple[list[MoldCalibration], int]: 校验记录列表和总数量
+        """
+        query = MoldCalibration.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if mold_uuid:
+            query = query.filter(mold_uuid=mold_uuid)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        return list(items), total
+
+
+class MoldMaintenanceReminderService:
+    """
+    模具保养提醒服务（基于使用次数 maintenance_interval）
+    """
+
+    @staticmethod
+    async def list_reminders(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        reminder_type: Optional[str] = None,
+    ) -> tuple[List[dict], int]:
+        """
+        获取模具保养提醒列表
+
+        基于 maintenance_interval 与 total_usage_count 计算：
+        - next_maintenance_at_count = ceil(total_usage_count / interval) * interval
+        - overdue: total_usage_count >= next_maintenance_at_count
+        - due_soon: (next_maintenance_at_count - total_usage_count) <= max(5, interval*0.1)
+
+        Args:
+            tenant_id: 组织ID
+            skip: 跳过数量
+            limit: 限制数量
+            reminder_type: 提醒类型（due_soon/overdue，可选）
+
+        Returns:
+            tuple[list[dict], int]: 提醒列表和总数量
+        """
+        import math
+        molds = await Mold.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            maintenance_interval__not_isnull=True,
+        ).filter(maintenance_interval__gt=0)
+        results = []
+        for mold in molds:
+            interval = mold.maintenance_interval
+            total = mold.total_usage_count or 0
+            next_at = math.ceil(total / interval) * interval if total > 0 else interval
+            usages_until = next_at - total
+            if usages_until <= 0:
+                rtype = "overdue"
+            elif usages_until <= max(5, int(interval * 0.1)):
+                rtype = "due_soon"
+            else:
+                continue
+            if reminder_type and rtype != reminder_type:
+                continue
+            results.append({
+                "mold_uuid": mold.uuid,
+                "mold_code": mold.code,
+                "mold_name": mold.name,
+                "total_usage_count": total,
+                "maintenance_interval": interval,
+                "next_maintenance_at_count": next_at,
+                "usages_until_due": usages_until,  # 负数表示已过期
+                "reminder_type": rtype,
+            })
+        results.sort(key=lambda x: (0 if x["reminder_type"] == "overdue" else 1, x["usages_until_due"]))
+        total_count = len(results)
+        items = results[skip : skip + limit]
+        return items, total_count
+

@@ -16,6 +16,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.assembly_order import AssemblyOrder, AssemblyOrderItem
+from apps.kuaizhizao.models.assembly_material_binding import AssemblyMaterialBinding
 from apps.kuaizhizao.schemas.assembly_order import (
     AssemblyOrderCreate,
     AssemblyOrderUpdate,
@@ -26,6 +27,10 @@ from apps.kuaizhizao.schemas.assembly_order import (
     AssemblyOrderItemUpdate,
     AssemblyOrderItemResponse,
     AssemblyOrderWithItemsResponse,
+)
+from apps.kuaizhizao.schemas.assembly_material_binding import (
+    AssemblyMaterialBindingCreate,
+    ExecuteAssemblyOrderRequest,
 )
 
 from apps.base_service import AppBaseService
@@ -227,7 +232,8 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
         self,
         tenant_id: int,
         order_id: int,
-        executed_by: int
+        executed_by: int,
+        request_data: Optional[ExecuteAssemblyOrderRequest] = None
     ) -> AssemblyOrderResponse:
         async with in_transaction():
             order = await AssemblyOrder.get_or_none(
@@ -255,13 +261,37 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                 await item.save()
 
             user_info = await self.get_user_info(executed_by)
+            executed_at = datetime.now()
             order.status = "completed"
             order.executed_by = executed_by
             order.executed_by_name = user_info["name"]
-            order.executed_at = datetime.now()
+            order.executed_at = executed_at
             order.updated_by = executed_by
             order.updated_by_name = user_info["name"]
             await order.save()
+
+            # 创建装配物料绑定记录（可选，用于追溯）
+            if request_data and request_data.material_bindings:
+                for binding in request_data.material_bindings:
+                    await AssemblyMaterialBinding.create(
+                        tenant_id=tenant_id,
+                        uuid=str(uuid.uuid4()),
+                        assembly_order_id=order_id,
+                        assembly_order_item_id=binding.assembly_order_item_id,
+                        parent_material_id=binding.parent_material_id,
+                        parent_material_code=binding.parent_material_code,
+                        parent_material_name=binding.parent_material_name,
+                        parent_batch_no=binding.parent_batch_no,
+                        child_material_id=binding.child_material_id,
+                        child_material_code=binding.child_material_code,
+                        child_material_name=binding.child_material_name,
+                        child_batch_no=binding.child_batch_no,
+                        quantity=binding.quantity,
+                        executed_by=executed_by,
+                        executed_by_name=user_info["name"],
+                        executed_at=executed_at,
+                        remarks=binding.remarks,
+                    )
 
             return AssemblyOrderResponse.model_validate(order)
 

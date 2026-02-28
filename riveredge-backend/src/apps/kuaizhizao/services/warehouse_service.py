@@ -1258,6 +1258,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
     def __init__(self):
         super().__init__(PurchaseReceipt)
+        self.business_config_service = BusinessConfigService()
 
     async def create_purchase_receipt(self, tenant_id: int, receipt_data: PurchaseReceiptCreate, created_by: int) -> PurchaseReceiptResponse:
         """创建采购入库单"""
@@ -1337,6 +1338,31 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             if receipt.status != '待入库':
                 raise BusinessLogicError("只有待入库状态的采购入库单才能确认入库")
+
+            # 质检合格才入库：若配置了 require_incoming_inspection_for_receipt，需先完成来料检验且合格
+            config = await self.business_config_service.get_business_config(tenant_id)
+            params = config.get("parameters", {})
+            quality_params = params.get("quality", {})
+            if quality_params.get("require_incoming_inspection_for_receipt"):
+                from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+                inspections = await IncomingInspection.filter(
+                    tenant_id=tenant_id,
+                    purchase_receipt_id=receipt_id,
+                    deleted_at__isnull=True,
+                ).all()
+                if not inspections:
+                    raise BusinessLogicError(
+                        "已启用「质检合格才入库」，请先创建并完成来料检验，检验合格后再确认入库"
+                    )
+                passed = any(
+                    (i.quality_status == "合格" and i.review_status in ("已审核", "通过", "APPROVED"))
+                    for i in inspections
+                )
+                if not passed:
+                    raise BusinessLogicError(
+                        "已启用「质检合格才入库」，来料检验须审核通过且质量状态为合格后才能确认入库"
+                    )
 
             confirmer_name = await self.get_user_name(confirmed_by)
 

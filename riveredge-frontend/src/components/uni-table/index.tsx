@@ -14,7 +14,8 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider } from 'antd'
+import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider, Dropdown } from 'antd'
+import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -27,7 +28,11 @@ import {
   QuestionCircleOutlined,
   UnorderedListOutlined,
   ProjectOutlined,
+  ImportOutlined,
+  DownloadOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
+import { UniImport } from '../uni-import'
 import { QuerySearchButton } from '../uni-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
 // 内联的 useProTableSearch hook（简化实现）
@@ -621,6 +626,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 存储选中的行键
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  // 导入弹窗可见状态（用于 showImportButton 时）
+  const [importModalVisible, setImportModalVisible] = useState(false)
 
   // 延迟 loading：仅在 loadingDelay 毫秒后才显示，避免快速请求时的闪烁
   const [showDelayedLoading, setShowDelayedLoading] = useState(false)
@@ -669,6 +676,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return col
     })
   }, [effectiveColumns, dateFormatKey])
+
+  // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
+  const effectiveImportConfig = React.useMemo(() => {
+    if (importHeaders && importHeaders.length > 0) {
+      return { headers: importHeaders, exampleRow: importExampleRow }
+    }
+    if (autoGenerateImportConfig && processedColumns) {
+      const { headers, exampleRow } = generateImportConfigFromColumns(processedColumns, { t })
+      return { headers, exampleRow }
+    }
+    return { headers: undefined, exampleRow: undefined }
+  }, [importHeaders, importExampleRow, autoGenerateImportConfig, processedColumns, t])
 
   // 检测是否有操作列（用于决定scroll配置）
   // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
@@ -1006,10 +1025,68 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  // 构建右侧工具栏按钮
-  // 导入导出已由 UniImport、UniExport 在页面层统一管理，操作按钮不再包含导入导出
+  // 构建右侧工具栏按钮（导入、导出、同步）
   const buildRightActions = () => {
-    return undefined
+    const rightButtons: ReactNode[] = []
+
+    // 导入按钮
+    if (showImportButton && onImport) {
+      rightButtons.push(
+        <Button
+          key="import"
+          icon={<ImportOutlined />}
+          size={toolBarButtonSize}
+          onClick={() => setImportModalVisible(true)}
+        >
+          {t('components.uniTable.import')}
+        </Button>
+      )
+    }
+
+    // 导出按钮（下拉：导出选中/导出本页/导出全部）
+    if (showExportButton && onExport) {
+      const exportMenuItems: MenuProps['items'] = [
+        {
+          key: 'selected',
+          label: t('components.uniTable.exportSelected'),
+          disabled: selectedRowKeys.length === 0,
+          onClick: () => onExport('selected', selectedRowKeys, tableData),
+        },
+        {
+          key: 'currentPage',
+          label: t('components.uniTable.exportCurrentPage'),
+          onClick: () => onExport('currentPage', undefined, tableData),
+        },
+        {
+          key: 'all',
+          label: t('components.uniTable.exportAll'),
+          onClick: () => onExport('all'),
+        },
+      ]
+      rightButtons.push(
+        <Dropdown key="export" menu={{ items: exportMenuItems }} placement="bottomRight">
+          <Button icon={<DownloadOutlined />} size={toolBarButtonSize}>
+            {t('components.uniTable.export')}
+          </Button>
+        </Dropdown>
+      )
+    }
+
+    // 同步按钮
+    if (showSyncButton && onSync) {
+      rightButtons.push(
+        <Button
+          key="sync"
+          icon={<SyncOutlined />}
+          size={toolBarButtonSize}
+          onClick={onSync}
+        >
+          {syncButtonText ?? t('components.uniTable.sync')}
+        </Button>
+      )
+    }
+
+    return rightButtons.length > 0 ? <Space size="small">{rightButtons}</Space> : undefined
   }
 
   const buildHeaderActions = () => {
@@ -1726,6 +1803,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
         </div>
       </div>
+
+      {/* 导入弹窗（showImportButton 且 onImport 时显示） */}
+      {showImportButton && onImport && (
+        <UniImport
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          onConfirm={(data) => {
+            onImport(data)
+            setImportModalVisible(false)
+            actionRef?.current?.reload?.()
+          }}
+          headers={effectiveImportConfig.headers}
+          exampleRow={effectiveImportConfig.exampleRow}
+        />
+      )}
     </>
   )
 }

@@ -300,6 +300,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.inventory_alert",  # 库存预警
                 f"apps.{module_code}.models.stocktaking",  # 库存盘点
                 f"apps.{module_code}.models.packing_binding",  # 装箱绑定
+                f"apps.{module_code}.models.assembly_material_binding",  # 装配物料绑定
                 f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
                 # 线边仓与倒冲模块
                 f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存
@@ -490,6 +491,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.inventory_alert",  # 库存预警
                 f"apps.{module_code}.models.stocktaking",  # 库存盘点
                 f"apps.{module_code}.models.packing_binding",  # 装箱绑定
+                f"apps.{module_code}.models.assembly_material_binding",  # 装配物料绑定
                 f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
                 # 线边仓与倒冲模块
                 f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存

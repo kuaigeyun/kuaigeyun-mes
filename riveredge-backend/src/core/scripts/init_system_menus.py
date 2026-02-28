@@ -60,7 +60,7 @@ SYSTEM_MENU_CONFIG = [
                     {"name": "menu.system.applications", "path": "/system/applications", "sort_order": 0},
                     {"name": "menu.system.menus", "path": "/system/menus", "sort_order": 1},
                     {"name": "menu.system.site-settings", "path": "/system/site-settings", "sort_order": 2},
-                    {"name": "menu.system.config-center", "path": "/system/config-center", "sort_order": 3},
+                    {"name": "menu.system.business-config", "path": "/system/business-config", "sort_order": 3},
                     {"name": "menu.system.data-dictionaries", "path": "/system/data-dictionaries", "sort_order": 4},
                     {"name": "menu.system.languages", "path": "/system/languages", "sort_order": 5},
                     {"name": "menu.system.code-rules", "path": "/system/code-rules", "sort_order": 6},

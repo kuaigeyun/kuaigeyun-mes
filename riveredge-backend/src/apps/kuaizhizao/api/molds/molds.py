@@ -23,8 +23,10 @@ from apps.kuaizhizao.schemas.mold import (
     MoldCalibrationCreate,
     MoldCalibrationResponse,
     MoldCalibrationListResponse,
+    MoldMaintenanceReminderResponse,
+    MoldMaintenanceReminderListResponse,
 )
-from apps.kuaizhizao.services.mold_service import MoldService, MoldUsageService, MoldCalibrationService
+from apps.kuaizhizao.services.mold_service import MoldService, MoldUsageService, MoldCalibrationService, MoldMaintenanceReminderService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -101,33 +103,82 @@ async def list_molds(
 
 @router.get("/calibrations", response_model=MoldCalibrationListResponse)
 async def list_mold_calibrations(
-    mold_uuid: str = Query(..., description="模具UUID"),
+    mold_uuid: Optional[str] = Query(None, description="模具UUID（可选，不传则返回全量）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    获取模具校验记录列表
+    获取模具校验记录列表（支持按模具筛选或全量）
     """
-    try:
-        items, total = await MoldCalibrationService.list_calibrations(
+    if mold_uuid:
+        try:
+            items, total = await MoldCalibrationService.list_calibrations(
+                tenant_id=tenant_id,
+                mold_uuid=mold_uuid,
+                skip=skip,
+                limit=limit,
+            )
+        except NotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    else:
+        items, total = await MoldCalibrationService.list_all_calibrations(
             tenant_id=tenant_id,
-            mold_uuid=mold_uuid,
+            mold_uuid=None,
             skip=skip,
             limit=limit,
         )
-        return MoldCalibrationListResponse(
-            items=[MoldCalibrationResponse.model_validate(c) for c in items],
-            total=total,
-            skip=skip,
-            limit=limit,
+    mold_ids = {c.mold_id for c in items}
+    molds = {m.id: m for m in await Mold.filter(id__in=mold_ids)}
+    resp_items = []
+    for c in items:
+        m = molds.get(c.mold_id)
+        d = MoldCalibrationResponse(
+            uuid=c.uuid,
+            id=c.id,
+            mold_uuid=c.mold_uuid,
+            mold_code=m.code if m else None,
+            mold_name=m.name if m else None,
+            calibration_date=c.calibration_date,
+            result=c.result,
+            certificate_no=c.certificate_no,
+            expiry_date=c.expiry_date,
+            remark=c.remark,
+            created_at=c.created_at,
         )
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
+        resp_items.append(d)
+    return MoldCalibrationListResponse(
+        items=resp_items,
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/maintenance-reminders", response_model=MoldMaintenanceReminderListResponse)
+async def list_mold_maintenance_reminders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    reminder_type: Optional[str] = Query(None, description="提醒类型（due_soon/overdue）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取模具保养提醒列表（基于使用次数）
+    """
+    items, total = await MoldMaintenanceReminderService.list_reminders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        reminder_type=reminder_type,
+    )
+    return MoldMaintenanceReminderListResponse(
+        items=[MoldMaintenanceReminderResponse.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.post("/calibrations", response_model=MoldCalibrationResponse, status_code=status.HTTP_201_CREATED)

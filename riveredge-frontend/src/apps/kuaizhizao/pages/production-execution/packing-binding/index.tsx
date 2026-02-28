@@ -2,6 +2,7 @@
  * 装箱打包绑定管理页面
  *
  * 提供装箱打包绑定记录的管理功能，包括查看、更新、删除等。
+ * 归属生产管理：产线末端打包/装箱时记录每箱内含产品批次，用于出货追溯。
  *
  * Author: Luigi Lu
  * Date: 2026-01-15
@@ -9,17 +10,15 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Popconfirm, Card } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Space, Popconfirm, Card } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { packingBindingApi } from '../../../services/packing-binding';
-import { materialApi } from '../../../../master-data/services/material';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
-import dayjs from 'dayjs';
 
 interface PackingBinding {
   id?: number;
@@ -67,22 +66,18 @@ const PackingBindingPage: React.FC = () => {
   useEffect(() => {
     const boxUuid = searchParams.get('uuid');
     const action = searchParams.get('action');
-    
+
     if (boxUuid && action === 'detail') {
-      // 通过boxUuid查找对应的装箱绑定记录
-      // 注意：这里需要根据实际情况调整，因为boxUuid可能对应box_no字段或uuid字段
       packingBindingApi.list({ box_no: boxUuid })
         .then((list) => {
           if (list && list.length > 0) {
             handleDetail(list[0]);
             setSearchParams({}, { replace: true });
           } else {
-            // 如果通过box_no找不到，尝试通过uuid查找
-            // 这里需要根据实际API调整
             messageApi.warning('未找到对应的装箱记录');
           }
         })
-        .catch((error) => {
+        .catch(() => {
           messageApi.error('获取装箱记录失败');
         });
     }
@@ -99,18 +94,16 @@ const PackingBindingPage: React.FC = () => {
     }
 
     try {
-      // 通过API获取选中的装箱记录数据
       const bindings = await Promise.all(
         selectedRowKeys.map(async (key) => {
           try {
             return await packingBindingApi.get(key.toString());
-          } catch (error) {
-            console.error(`获取装箱记录失败: ${key}`, error);
+          } catch {
             return null;
           }
         })
       );
-      
+
       const validBindings = bindings.filter((binding) => binding !== null) as PackingBinding[];
 
       if (validBindings.length === 0) {
@@ -118,7 +111,6 @@ const PackingBindingPage: React.FC = () => {
         return;
       }
 
-      // 生成二维码
       const qrcodePromises = validBindings.map((binding) =>
         qrcodeApi.generateBox({
           box_uuid: binding.box_no || binding.uuid || '',
@@ -129,16 +121,11 @@ const PackingBindingPage: React.FC = () => {
 
       const qrcodes = await Promise.all(qrcodePromises);
       messageApi.success(`成功生成 ${qrcodes.length} 个装箱二维码`);
-      
-      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
     } catch (error: any) {
       messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
     }
   };
 
-  /**
-   * 处理查看详情
-   */
   const handleDetail = async (record: PackingBinding) => {
     try {
       const detail = await packingBindingApi.get(record.id!.toString());
@@ -149,9 +136,6 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理编辑
-   */
   const handleEdit = async (record: PackingBinding) => {
     try {
       setCurrentBindingId(record.id!);
@@ -168,9 +152,6 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理提交编辑
-   */
   const handleEditSubmit = async (values: any) => {
     try {
       if (!currentBindingId) {
@@ -194,9 +175,6 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理删除
-   */
   const handleDelete = async (record: PackingBinding) => {
     try {
       await packingBindingApi.delete(record.id!.toString());
@@ -207,9 +185,6 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  /**
-   * 表格列定义
-   */
   const columns: ProColumns<PackingBinding>[] = [
     {
       title: '箱号',
@@ -333,7 +308,7 @@ const PackingBindingPage: React.FC = () => {
               success: true,
               total: result?.length || 0,
             };
-          } catch (error) {
+          } catch {
             return {
               data: [],
               success: false,
@@ -357,7 +332,6 @@ const PackingBindingPage: React.FC = () => {
         ]}
       />
 
-      {/* 编辑Modal */}
       <FormModalTemplate
         title="编辑装箱绑定记录"
         open={editModalVisible}
@@ -391,7 +365,6 @@ const PackingBindingPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 详情Drawer */}
       <DetailDrawerTemplate
         title="装箱绑定记录详情"
         open={detailDrawerVisible}
@@ -405,34 +378,13 @@ const PackingBindingPage: React.FC = () => {
               dataSource={currentBinding || undefined}
               column={2}
               columns={[
-                {
-                  title: '箱号',
-                  dataIndex: 'box_no',
-                },
-                {
-                  title: '产品编码',
-                  dataIndex: 'product_code',
-                },
-                {
-                  title: '产品名称',
-                  dataIndex: 'product_name',
-                },
-                {
-                  title: '产品序列号',
-                  dataIndex: 'product_serial_no',
-                },
-                {
-                  title: '装箱数量',
-                  dataIndex: 'packing_quantity',
-                },
-                {
-                  title: '包装物料编码',
-                  dataIndex: 'packing_material_code',
-                },
-                {
-                  title: '包装物料名称',
-                  dataIndex: 'packing_material_name',
-                },
+                { title: '箱号', dataIndex: 'box_no' },
+                { title: '产品编码', dataIndex: 'product_code' },
+                { title: '产品名称', dataIndex: 'product_name' },
+                { title: '产品序列号', dataIndex: 'product_serial_no' },
+                { title: '装箱数量', dataIndex: 'packing_quantity' },
+                { title: '包装物料编码', dataIndex: 'packing_material_code' },
+                { title: '包装物料名称', dataIndex: 'packing_material_name' },
                 {
                   title: '绑定方式',
                   dataIndex: 'binding_method',
@@ -441,28 +393,13 @@ const PackingBindingPage: React.FC = () => {
                     manual: { text: '手动', status: 'default' },
                   },
                 },
-                {
-                  title: '条码',
-                  dataIndex: 'barcode',
-                },
-                {
-                  title: '绑定人',
-                  dataIndex: 'bound_by_name',
-                },
-                {
-                  title: '绑定时间',
-                  dataIndex: 'bound_at',
-                  valueType: 'dateTime',
-                },
-                {
-                  title: '备注',
-                  dataIndex: 'remarks',
-                  span: 2,
-                },
+                { title: '条码', dataIndex: 'barcode' },
+                { title: '绑定人', dataIndex: 'bound_by_name' },
+                { title: '绑定时间', dataIndex: 'bound_at', valueType: 'dateTime' },
+                { title: '备注', dataIndex: 'remarks', span: 2 },
               ]}
             />
-            
-            {/* 装箱二维码 */}
+
             {currentBinding && (
               <div style={{ marginTop: 24 }}>
                 <Card title="装箱二维码">

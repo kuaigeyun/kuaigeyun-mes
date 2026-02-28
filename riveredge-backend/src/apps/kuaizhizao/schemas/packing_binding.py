@@ -21,7 +21,8 @@ class PackingBindingBase(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
-    finished_goods_receipt_id: int = Field(..., description="成品入库单ID（关联FinishedGoodsReceipt）")
+    finished_goods_receipt_id: Optional[int] = Field(None, description="成品入库单ID（与sales_delivery_id二选一）")
+    sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID（与finished_goods_receipt_id二选一）")
     product_id: int = Field(..., description="产品ID")
     product_code: str = Field(..., description="产品编码")
     product_name: str = Field(..., description="产品名称")
@@ -44,6 +45,24 @@ class PackingBindingCreate(PackingBindingBase):
     用于创建新装箱打包绑定记录的数据验证。
     """
     pass
+
+
+class PackingBindingCreateFromDelivery(BaseModel):
+    """
+    从销售出库单创建装箱绑定记录请求Schema
+    """
+    product_id: int = Field(..., description="产品ID")
+    product_code: Optional[str] = Field(None, description="产品编码（可选）")
+    product_name: Optional[str] = Field(None, description="产品名称（可选）")
+    product_serial_no: Optional[str] = Field(None, description="产品序列号（可选）")
+    packing_material_id: Optional[int] = Field(None, description="包装物料ID（可选）")
+    packing_material_code: Optional[str] = Field(None, description="包装物料编码（可选）")
+    packing_material_name: Optional[str] = Field(None, description="包装物料名称（可选）")
+    packing_quantity: Decimal = Field(..., gt=0, description="装箱数量")
+    box_no: Optional[str] = Field(None, description="箱号（可选）")
+    binding_method: str = Field("manual", description="绑定方式（scan/manual）")
+    barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
+    remarks: Optional[str] = Field(None, description="备注")
 
 
 class PackingBindingCreateFromReceipt(BaseModel):
@@ -104,7 +123,8 @@ class PackingBindingListResponse(BaseModel):
 
     id: int = Field(..., description="装箱绑定记录ID")
     uuid: str = Field(..., description="业务ID")
-    finished_goods_receipt_id: int = Field(..., description="成品入库单ID")
+    finished_goods_receipt_id: Optional[int] = Field(None, description="成品入库单ID")
+    sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID")
     product_code: str = Field(..., description="产品编码")
     product_name: str = Field(..., description="产品名称")
     product_serial_no: Optional[str] = Field(None, description="产品序列号")

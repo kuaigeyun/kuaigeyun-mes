@@ -10,13 +10,15 @@ Date: 2026-02-02
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
+from apps.kuaizhizao.models.tool import Tool
 from apps.kuaizhizao.schemas.tool import (
     ToolCreate, ToolUpdate, ToolResponse, ToolListResponse,
     ToolUsageCreate, ToolUsageResponse, ToolUsageListResponse,
     ToolMaintenanceCreate, ToolMaintenanceResponse, ToolMaintenanceListResponse,
-    ToolCalibrationCreate, ToolCalibrationResponse, ToolCalibrationListResponse
+    ToolCalibrationCreate, ToolCalibrationResponse, ToolCalibrationListResponse,
+    ToolMaintenanceReminderResponse, ToolMaintenanceReminderListResponse,
 )
-from apps.kuaizhizao.services.tool_service import ToolService, ToolUsageService, ToolMaintenanceService
+from apps.kuaizhizao.services.tool_service import ToolService, ToolUsageService, ToolMaintenanceService, ToolMaintenanceReminderService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -51,6 +53,77 @@ async def list_tools(
 ):
     items, total = await ToolService.list_tools(tenant_id, skip, limit, type, status, search)
     return ToolListResponse(items=[ToolResponse.model_validate(i) for i in items], total=total)
+
+
+@router.get("/usages", response_model=ToolUsageListResponse)
+async def list_all_tool_usages(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tool_uuid: Optional[str] = Query(None, description="工装UUID（可选）"),
+    status: Optional[str] = Query(None, description="状态（使用中/已归还）"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    items, total = await ToolUsageService.list_all_usages(tenant_id, tool_uuid, status, skip, limit)
+    tools = {t.id: t for t in await Tool.filter(id__in={u.tool_id for u in items})}
+    resp_items = []
+    for u in items:
+        t = tools.get(u.tool_id)
+        r = ToolUsageResponse.model_validate(u)
+        r = r.model_copy(update={"tool_code": t.code if t else None, "tool_name": t.name if t else None})
+        resp_items.append(r)
+    return ToolUsageListResponse(items=resp_items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/maintenances", response_model=ToolMaintenanceListResponse)
+async def list_all_tool_maintenances(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tool_uuid: Optional[str] = Query(None, description="工装UUID（可选）"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    items, total = await ToolMaintenanceService.list_all_maintenances(tenant_id, tool_uuid, skip, limit)
+    tools = {t.id: t for t in await Tool.filter(id__in={m.tool_id for m in items})}
+    resp_items = []
+    for m in items:
+        t = tools.get(m.tool_id)
+        r = ToolMaintenanceResponse.model_validate(m)
+        r = r.model_copy(update={"tool_code": t.code if t else None, "tool_name": t.name if t else None})
+        resp_items.append(r)
+    return ToolMaintenanceListResponse(items=resp_items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/calibrations", response_model=ToolCalibrationListResponse)
+async def list_all_tool_calibrations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    tool_uuid: Optional[str] = Query(None, description="工装UUID（可选）"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    items, total = await ToolMaintenanceService.list_all_calibrations(tenant_id, tool_uuid, skip, limit)
+    tools = {t.id: t for t in await Tool.filter(id__in={c.tool_id for c in items})}
+    resp_items = []
+    for c in items:
+        t = tools.get(c.tool_id)
+        r = ToolCalibrationResponse.model_validate(c)
+        r = r.model_copy(update={"tool_code": t.code if t else None, "tool_name": t.name if t else None})
+        resp_items.append(r)
+    return ToolCalibrationListResponse(items=resp_items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/maintenance-reminders", response_model=ToolMaintenanceReminderListResponse)
+async def list_tool_maintenance_reminders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    due_type: Optional[str] = Query(None, description="due_soon/overdue"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    items, total = await ToolMaintenanceReminderService.list_reminders(tenant_id, skip, limit, due_type)
+    return ToolMaintenanceReminderListResponse(
+        items=[ToolMaintenanceReminderResponse.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/{uuid}/usages", response_model=ToolUsageListResponse)

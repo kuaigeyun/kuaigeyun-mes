@@ -85,7 +85,6 @@ const UsersPage = React.lazy(() => import('../pages/system/users/list'));
 const UserProfilePage = React.lazy(() => import('../pages/personal/profile'));
 const LanguagesPage = React.lazy(() => import('../pages/system/languages/list'));
 const SiteSettingsPage = React.lazy(() => import('../pages/system/site-settings'));
-const BusinessConfigPage = React.lazy(() => import('../pages/system/business-config'));
 const ConfigCenterPage = React.lazy(() => import('../pages/system/config-center'));
 const ApplicationCenterPage = React.lazy(() => import('../pages/system/applications/list'));
 const PluginManagerPage = React.lazy(() => import('../pages/system/plugin-manager'));
@@ -162,9 +161,9 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/user-profile" element={withSuspense(UserProfilePage)} />
     <Route path="/system/languages" element={withSuspense(LanguagesPage)} />
     <Route path="/system/site-settings" element={withSuspense(SiteSettingsPage)} />
-    <Route path="/system/config-center" element={withSuspense(ConfigCenterPage)} />
-    <Route path="/system/system-parameters" element={<Navigate to="/system/config-center" replace />} />
-    <Route path="/system/business-config" element={<Navigate to="/system/config-center?tab=graph" replace />} />
+    <Route path="/system/business-config" element={withSuspense(ConfigCenterPage)} />
+    <Route path="/system/config-center" element={<Navigate to="/system/business-config" replace />} />
+    <Route path="/system/system-parameters" element={<Navigate to="/system/business-config" replace />} />
     <Route path="/system/applications" element={withSuspense(ApplicationCenterPage)} />
     <Route path="/system/plugin-manager" element={withSuspense(PluginManagerPage)} />
     <Route path="/system/operation-logs" element={withSuspense(OperationLogsPage)} />
