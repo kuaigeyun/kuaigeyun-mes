@@ -298,6 +298,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={true}
+        createButtonText="新建客户来料登记"
         onCreate={handleCreate}
         request={async (params: any) => {
           try {

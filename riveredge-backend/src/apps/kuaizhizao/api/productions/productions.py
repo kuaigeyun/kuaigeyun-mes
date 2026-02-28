@@ -2768,6 +2768,19 @@ async def adjust_stocktaking_differences(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/stocktakings/{stocktaking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除盘点单")
+async def delete_stocktaking(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除盘点单（软删除，仅草稿可删）"""
+    await stocktaking_service.delete_stocktaking(
+        tenant_id=tenant_id,
+        stocktaking_id=stocktaking_id
+    )
+
+
 # ============ 库存调拨 API ============
 
 @router.post("/inventory-transfers", response_model=InventoryTransferResponse, summary="创建库存调拨单")
@@ -2976,6 +2989,19 @@ async def execute_inventory_transfer(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/inventory-transfers/{transfer_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除调拨单")
+async def delete_inventory_transfer(
+    transfer_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除调拨单（软删除，仅草稿可删）"""
+    await inventory_transfer_service.delete_inventory_transfer(
+        tenant_id=tenant_id,
+        transfer_id=transfer_id
+    )
+
+
 # ============ 组装单 API ============
 
 @router.post("/assembly-orders", response_model=AssemblyOrderResponse, summary="创建组装单")
@@ -3096,6 +3122,19 @@ async def update_assembly_order_item(
         raise HTTPException(status_code=404, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/assembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除组装单")
+async def delete_assembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除组装单（软删除，仅草稿可删）"""
+    await assembly_order_service.delete_assembly_order(
+        tenant_id=tenant_id,
+        order_id=order_id
+    )
 
 
 @router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="执行组装")
@@ -3237,6 +3276,19 @@ async def update_disassembly_order_item(
         raise HTTPException(status_code=404, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/disassembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除拆卸单")
+async def delete_disassembly_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除拆卸单（软删除，仅草稿可删）"""
+    await disassembly_order_service.delete_disassembly_order(
+        tenant_id=tenant_id,
+        order_id=order_id
+    )
 
 
 @router.post("/disassembly-orders/{order_id}/execute", response_model=DisassemblyOrderResponse, summary="执行拆卸")

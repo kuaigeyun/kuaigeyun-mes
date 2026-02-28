@@ -2051,7 +2051,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
     async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesReturnResponse]:
         """获取销售退货单列表"""
-        query = SalesReturn.filter(tenant_id=tenant_id)
+        query = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -2089,6 +2089,18 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
             updated_return = await self.get_sales_return_by_id(tenant_id, return_id)
             return updated_return
+
+    async def delete_sales_return(self, tenant_id: int, return_id: int) -> bool:
+        """删除销售退货单（软删除，仅待退货状态可删）"""
+        return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+        if return_obj.status != "待退货":
+            raise BusinessLogicError("只有待退货状态的销售退货单才能删除")
+        await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
 
 
 class PurchaseReturnService(AppBaseService[PurchaseReturn]):
@@ -2210,7 +2222,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
     async def list_purchase_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReturnResponse]:
         """获取采购退货单列表"""
-        query = PurchaseReturn.filter(tenant_id=tenant_id)
+        query = PurchaseReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('status'):
@@ -2248,6 +2260,18 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
             return updated_return
+
+    async def delete_purchase_return(self, tenant_id: int, return_id: int) -> bool:
+        """删除采购退货单（软删除，仅待退货状态可删）"""
+        return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+        if return_obj.status != "待退货":
+            raise BusinessLogicError("只有待退货状态的采购退货单才能删除")
+        await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
 
 
 class OtherInboundService(AppBaseService[OtherInbound]):

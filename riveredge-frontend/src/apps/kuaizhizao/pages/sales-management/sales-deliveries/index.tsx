@@ -67,7 +67,6 @@ interface SalesDeliveryItem {
 const SalesDeliveriesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -436,6 +435,16 @@ const SalesDeliveriesPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate
+        toolbarExtra={
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportVisible(true)}>
+              批量导入
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+              批量导出
+            </Button>
+          </Space>
+        }
         statCards={[
           {
             title: '总出库单数',
@@ -485,23 +494,33 @@ const SalesDeliveriesPage: React.FC = () => {
               };
             }
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
+          enableRowSelection={true}
+          showCreateButton={true}
+          createButtonText="新建销售出库单"
+          onCreate={() => {
+            setIsEdit(false);
+            setCurrentDelivery(null);
+            setModalVisible(true);
+          }}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条销售出库单吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await warehouseApi.salesDelivery.delete(String(id));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
           }}
           toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setIsEdit(false);
-                setCurrentDelivery(null);
-                setModalVisible(true);
-              }}
-            >
-              新建出库单
-            </Button>,
             <Button
               key="pullFromOrder"
               icon={<PlusOutlined />}
@@ -515,20 +534,6 @@ const SalesDeliveriesPage: React.FC = () => {
               onClick={() => setPullFromForecastVisible(true)}
             >
               从预测上拉
-            </Button>,
-            <Button
-              key="import"
-              icon={<UploadOutlined />}
-              onClick={() => setImportVisible(true)}
-            >
-              批量导入
-            </Button>,
-            <Button
-              key="export"
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              批量导出
             </Button>,
           ]}
           scroll={{ x: 1200 }}

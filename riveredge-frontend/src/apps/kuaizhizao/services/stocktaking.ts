@@ -52,4 +52,9 @@ export const stocktakingApi = {
   adjust: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/adjust`, { method: 'POST' });
   },
+
+  // 删除盘点单
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/stocktakings/${id}`, { method: 'DELETE' });
+  },
 };

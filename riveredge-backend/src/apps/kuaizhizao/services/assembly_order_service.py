@@ -265,6 +265,22 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
 
             return AssemblyOrderResponse.model_validate(order)
 
+    async def delete_assembly_order(self, tenant_id: int, order_id: int) -> bool:
+        """删除组装单（软删除，仅草稿可删）"""
+        order = await AssemblyOrder.get_or_none(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"组装单不存在: {order_id}")
+        if order.status not in ['draft']:
+            raise ValidationError(f"组装单状态为{order.status}，不能删除")
+        await AssemblyOrder.filter(id=order_id, tenant_id=tenant_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
     async def _update_order_statistics(self, tenant_id: int, order_id: int) -> None:
         items = await AssemblyOrderItem.filter(
             assembly_order_id=order_id,

@@ -1088,7 +1088,7 @@ export default {
   'components.uniTable.sync': '同步',
   'components.uniTable.create': '新建',
   'components.uniTable.edit': '修改',
-  'components.uniTable.delete': '删除',
+  'components.uniTable.delete': '批量删除',
   'components.uniTable.configOnImport': '请配置 onImport 回调函数来处理导入数据',
   'components.uniTable.configOnSync': '请配置 onSync 回调函数',
   'components.uniTable.configOnExport': '请配置 onExport 回调函数来处理导出数据',

@@ -132,6 +132,17 @@ async def update_tool(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tool(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        await ToolService.delete_tool(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # --- 领用归还 ---
 
 @router.post("/checkout", response_model=ToolUsageResponse)

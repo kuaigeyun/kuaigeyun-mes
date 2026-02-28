@@ -1,0 +1,18 @@
+[Unit]
+Description=RiverEdge Backend (uvicorn)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/riveredge/riveredge-backend
+EnvironmentFile=/opt/riveredge/.env
+Environment=PYTHONPATH=/opt/riveredge/riveredge-backend/src
+# 若使用 uv 且 .venv 路径不同，可改为：ExecStart=/usr/local/bin/uv run uvicorn server.main:app --host 127.0.0.1 --port 8200
+ExecStart=/opt/riveredge/riveredge-backend/.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8200
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -41,6 +41,8 @@ export interface ListPageTemplateProps {
   statCards?: StatCard[];
   /** 主要内容（通常是 UniTable） */
   children: ReactNode;
+  /** 工具栏扩展区（如导入、导出按钮，由 UniImport、UniExport 在页面层管理） */
+  toolbarExtra?: ReactNode;
   /** 自定义样式类名 */
   className?: string;
   /** 自定义样式 */
@@ -69,6 +71,7 @@ export interface ListPageTemplateProps {
 export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   statCards,
   children,
+  toolbarExtra,
   className,
   style,
 }) => {
@@ -124,6 +127,11 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
             ))}
           </Row>
         </div>
+      )}
+
+      {/* 工具栏扩展区（导入、导出等，由 UniImport、UniExport 管理） */}
+      {toolbarExtra && (
+        <div style={{ marginBottom: 16 }}>{toolbarExtra}</div>
       )}
 
       {/* 主要内容区域 */}

@@ -1,0 +1,19 @@
+[Unit]
+Description=RiverEdge Inngest (self-hosted)
+After=network.target postgresql.service redis-server.service riveredge-backend.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/riveredge
+EnvironmentFile=/opt/riveredge/.env
+# Inngest 从 .env 读取 INNGEST_EVENT_KEY、INNGEST_SIGNING_KEY、INNGEST_POSTGRES_URI、INNGEST_REDIS_URI
+# 需在 .env 中配置：INNGEST_POSTGRES_URI=postgres://riveredge:密码@127.0.0.1:5432/inngest
+# 以及 INNGEST_REDIS_URI=redis://127.0.0.1:6379（有密码时：redis://:密码@127.0.0.1:6379）
+ExecStart=/usr/local/bin/inngest start -u http://127.0.0.1:8200/api/inngest
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

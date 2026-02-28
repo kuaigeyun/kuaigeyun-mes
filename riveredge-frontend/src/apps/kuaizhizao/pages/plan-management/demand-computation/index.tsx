@@ -1020,14 +1020,34 @@ const DemandComputationPage: React.FC = () => {
           }
         }}
         rowKey="id"
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          modalApi.confirm({
+            title: '批量删除需求计算',
+            content: `确定要删除选中的 ${keys.length} 条需求计算吗？仅当尚未下推工单/采购单等下游单据时可删除。`,
+            okText: '删除',
+            okType: 'danger',
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await deleteDemandComputation(Number(id))
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`)
+                invalidateStatistics()
+                actionRef.current?.reload()
+              } catch (error: any) {
+                messageApi.error(error?.response?.data?.detail || '删除失败')
+              }
+            },
+          })
+        }}
         search={{
           labelWidth: 'auto',
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" onClick={handleCreate}>
-            新建计算
-          </Button>,
-        ]}
+        showCreateButton={true}
+        createButtonText="新建需求计算"
+        onCreate={handleCreate}
       />
 
       {/* 新建计算Modal */}

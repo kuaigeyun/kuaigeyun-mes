@@ -188,6 +188,9 @@ export const toolApi = {
   get: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'GET' });
   },
+  delete: async (uuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/tools/${uuid}`, { method: 'DELETE' });
+  },
   listUsages: async (toolUuid: string, params?: { skip?: number; limit?: number }) => {
     return apiRequest(`/apps/kuaizhizao/tools/${toolUuid}/usages`, { method: 'GET', params });
   },

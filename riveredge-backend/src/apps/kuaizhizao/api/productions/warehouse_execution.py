@@ -2157,6 +2157,19 @@ async def confirm_sales_return(
     )
 
 
+@router.delete("/sales-returns/{return_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除销售退货单")
+async def delete_sales_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除销售退货单（软删除，仅待退货状态可删）"""
+    await SalesReturnService().delete_sales_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
 # ============ 采购入库管理 API ============
 
 @router.post("/purchase-receipts", response_model=PurchaseReceiptResponse, summary="创建采购入库单")
@@ -2417,6 +2430,19 @@ async def confirm_purchase_return(
         tenant_id=tenant_id,
         return_id=return_id,
         confirmed_by=current_user.id
+    )
+
+
+@router.delete("/purchase-returns/{return_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除采购退货单")
+async def delete_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除采购退货单（软删除，仅待退货状态可删）"""
+    await PurchaseReturnService().delete_purchase_return(
+        tenant_id=tenant_id,
+        return_id=return_id
     )
 
 

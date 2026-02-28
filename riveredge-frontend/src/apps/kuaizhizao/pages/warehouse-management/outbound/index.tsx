@@ -57,8 +57,6 @@ const OutboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
   // Modal 相关状态（创建出库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
@@ -255,7 +253,7 @@ const OutboundPage: React.FC = () => {
       <UniTable
         headerTitle="出库管理"
         actionRef={actionRef}
-        rowKey="id"
+        rowKey={(record) => `${record.outbound_type}::${record.id}`}
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
@@ -305,9 +303,29 @@ const OutboundPage: React.FC = () => {
             };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条出库单吗？`,
+            onOk: async () => {
+              try {
+                for (const key of keys) {
+                  const [type, id] = String(key).split('::');
+                  if (type === 'production_picking') {
+                    await warehouseApi.productionPicking.delete(id);
+                  } else if (type === 'sales_delivery') {
+                    await warehouseApi.salesDelivery.delete(id);
+                  }
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error?.message || '删除失败');
+              }
+            },
+          });
         }}
         toolBarRender={() => [
           <Button

@@ -39,4 +39,9 @@ export const inventoryTransferApi = {
   execute: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/inventory-transfers/${id}/execute`, { method: 'POST' });
   },
+
+  // 删除调拨单
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/inventory-transfers/${id}`, { method: 'DELETE' });
+  },
 };

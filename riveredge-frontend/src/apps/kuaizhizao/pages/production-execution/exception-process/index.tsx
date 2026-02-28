@@ -441,7 +441,27 @@ const ExceptionProcessPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           showCreateButton={true}
+          createButtonText="新建异常处理"
           onCreate={() => openStartModal()}
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量取消',
+              content: `确定要取消选中的 ${keys.length} 条异常处理流程吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await exceptionApi.process.cancel(String(id));
+                  }
+                  messageApi.success(`成功取消 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error?.message || '取消失败');
+                }
+              },
+            });
+          }}
           searchFormItems={[
             {
               name: 'exception_type',

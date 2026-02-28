@@ -388,9 +388,28 @@ const ToolLedgerPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建工装</Button>,
-          ]}
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条工装吗？`,
+              onOk: async () => {
+                try {
+                  for (const uuid of keys) {
+                    await toolApi.delete(String(uuid));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
+          }}
+          showCreateButton
+          createButtonText="新建工装"
+          onCreate={handleCreate}
         />
       </ListPageTemplate>
 

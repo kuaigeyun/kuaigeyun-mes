@@ -146,6 +146,22 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
         return response
 
+    async def delete_inventory_transfer(self, tenant_id: int, transfer_id: int) -> bool:
+        """删除调拨单（软删除，仅草稿可删）"""
+        transfer = await InventoryTransfer.get_or_none(
+            id=transfer_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not transfer:
+            raise NotFoundError(f"调拨单不存在: {transfer_id}")
+        if transfer.status != "draft":
+            raise BusinessLogicError("只有草稿状态的调拨单才能删除")
+        await InventoryTransfer.filter(id=transfer_id, tenant_id=tenant_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
     async def update_inventory_transfer(
         self,
         tenant_id: int,

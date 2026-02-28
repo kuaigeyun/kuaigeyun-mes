@@ -36,11 +36,11 @@ const SkillsPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) { messageApi.warning(t('common.selectToDelete')); return; }
+  const handleBatchDelete = (keys: React.Key[]) => {
+    if (keys.length === 0) { messageApi.warning(t('common.selectToDelete')); return; }
     Modal.confirm({
       title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      content: t('common.confirmBatchDeleteContent', { count: keys.length }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
       okType: 'danger',
@@ -48,7 +48,7 @@ const SkillsPage: React.FC = () => {
         try {
           let successCount = 0, failCount = 0;
           const errors: string[] = [];
-          for (const key of selectedRowKeys) {
+          for (const key of keys) {
             try { await skillApi.delete(key.toString()); successCount++; } catch (error: any) { failCount++; errors.push(error.message || t('common.deleteFailed')); }
           }
           if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
@@ -136,11 +136,14 @@ const SkillsPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建技能</Button>,
-            <Button key="batch-delete" danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0} onClick={handleBatchDelete}>批量删除</Button>,
-          ]}
-          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          showCreateButton
+          createButtonText="新建技能"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
         />
       </ListPageTemplate>
       <DetailDrawerTemplate<Skill> title="技能详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={skillDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.HALF_WIDTH} />
