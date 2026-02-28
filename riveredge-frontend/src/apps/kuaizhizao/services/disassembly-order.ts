@@ -30,4 +30,7 @@ export const disassemblyOrderApi = {
   execute: async (orderId: string) => {
     return apiRequest(`/apps/kuaizhizao/disassembly-orders/${orderId}/execute`, { method: 'POST' });
   },
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/disassembly-orders/${id}`, { method: 'DELETE' });
+  },
 };

@@ -12,7 +12,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
@@ -330,39 +330,6 @@ export const OutsourceOrdersTable: React.FC = () => {
   };
 
   /**
-   * 处理编辑（从选中行）
-   */
-  const handleEdit = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const id = Number(keys[0]);
-      try {
-        const detail = await outsourceOrderApi.get(id.toString());
-        setIsEdit(true);
-        setCurrentOutsourceOrder(detail);
-        setModalVisible(true);
-        setTimeout(() => {
-          formRef.current?.setFieldsValue({
-            supplier_id: detail.supplier_id,
-            outsource_quantity: detail.outsource_quantity,
-            unit_price: detail.unit_price,
-            status: detail.status,
-            planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : undefined,
-            planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : undefined,
-            received_quantity: detail.received_quantity,
-            qualified_quantity: detail.qualified_quantity,
-            unqualified_quantity: detail.unqualified_quantity,
-            remarks: detail.remarks,
-          });
-        }, 100);
-      } catch (error) {
-        messageApi.error('获取工序委外单详情失败');
-      }
-    } else {
-      messageApi.warning('请选择一条工序委外进行编辑');
-    }
-  };
-
-  /**
    * 处理删除（从选中行）
    */
   const handleDelete = async (keys: React.Key[]) => {
@@ -507,24 +474,13 @@ export const OutsourceOrdersTable: React.FC = () => {
         columns={columns}
         request={handleRequest}
         rowKey="id"
-        showCreateButton={false}
+        enableRowSelection={true}
+        showCreateButton={true}
+        createButtonText="新建工序委外"
         onCreate={handleCreate}
-        showEditButton={true}
-        onEdit={handleEdit}
         showDeleteButton={true}
         onDelete={handleDelete}
         showAdvancedSearch={true}
-        toolBarRender={() => [
-          <Button
-            key="create-outsource-order"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-            disabled={true}
-          >
-            新建工序委外
-          </Button>,
-        ]}
       />
       {/* 表单Modal（主要用于编辑） */}
       {isEdit && (

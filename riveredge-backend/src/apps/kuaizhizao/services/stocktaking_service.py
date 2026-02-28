@@ -144,6 +144,22 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
         return response
 
+    async def delete_stocktaking(self, tenant_id: int, stocktaking_id: int) -> bool:
+        """删除盘点单（软删除，仅草稿可删）"""
+        stocktaking = await Stocktaking.get_or_none(
+            id=stocktaking_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not stocktaking:
+            raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+        if stocktaking.status != "draft":
+            raise BusinessLogicError("只有草稿状态的盘点单才能删除")
+        await Stocktaking.filter(id=stocktaking_id, tenant_id=tenant_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
     async def update_stocktaking(
         self,
         tenant_id: int,

@@ -62,7 +62,6 @@ interface BorrowItemForReturn {
 const MaterialReturnsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [returnDetail, setReturnDetail] = useState<MaterialReturnDetail | null>(null);
@@ -315,6 +314,7 @@ const MaterialReturnsPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch
           showCreateButton
+          createButtonText="新建还料单"
           onCreate={handleCreate}
           request={async (params) => {
             try {
@@ -333,7 +333,25 @@ const MaterialReturnsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条还料单吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await warehouseApi.materialReturn.delete(String(id));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
+          }}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

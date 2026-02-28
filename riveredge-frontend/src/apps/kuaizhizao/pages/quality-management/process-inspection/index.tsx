@@ -10,13 +10,11 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined, ScanOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { qualityApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
-import { downloadFile } from '../../../services/common';
 
 // 过程检验接口定义
 interface ProcessInspection {
@@ -59,8 +57,6 @@ interface ProcessInspection {
 const ProcessInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<ProcessInspection | null>(null);
@@ -74,9 +70,6 @@ const ProcessInspectionPage: React.FC = () => {
   // 从工单创建Modal状态
   const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
   const createFromWorkOrderFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
-
-  // 批量导入状态
-  const [importVisible, setImportVisible] = useState(false);
 
   // 扫码检验Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
@@ -166,34 +159,6 @@ const ProcessInspectionPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建过程检验单失败');
-    }
-  };
-
-  // 批量导入
-  const handleImport = async (data: any[][]) => {
-    try {
-      const result = await qualityApi.processInspection.import(data);
-      if (result.success) {
-        messageApi.success(result.message || '导入成功');
-        setImportVisible(false);
-        actionRef.current?.reload();
-      } else {
-        messageApi.error(result.message || '导入失败');
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
-    }
-  };
-
-  // 批量导出
-  const handleExport = async () => {
-    try {
-      const blob = await qualityApi.processInspection.export();
-      const filename = `过程检验单_${new Date().toISOString().slice(0, 10)}.csv`;
-      downloadFile(blob, filename);
-      messageApi.success('导出成功');
-    } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -424,34 +389,28 @@ const ProcessInspectionPage: React.FC = () => {
             };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        showCreateButton={true}
+        createButtonText="从工单创建"
+        onCreate={handleCreateFromWorkOrder}
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条过程检验单吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await qualityApi.processInspection.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
         }}
-        toolBarRender={() => [
-          <Button
-            key="create-from-work-order"
-            type="primary"
-            icon={<FileAddOutlined />}
-            onClick={handleCreateFromWorkOrder}
-          >
-            从工单创建
-          </Button>,
-          <Button
-            key="import"
-            icon={<UploadOutlined />}
-            onClick={() => setImportVisible(true)}
-          >
-            批量导入
-          </Button>,
-          <Button
-            key="export"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-          >
-            批量导出
-          </Button>,
-        ]}
         scroll={{ x: 1400 }}
       />
 
@@ -600,21 +559,6 @@ const ProcessInspectionPage: React.FC = () => {
           }}
         />
       </FormModalTemplate>
-
-      {/* 批量导入 */}
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleImport}
-        headers={[
-          '工单编码',
-          '工序编码',
-          '检验数量',
-          '合格数量',
-          '不合格数量',
-          '备注',
-        ]}
-      />
 
       {/* 过程检验详情 Drawer */}
       <DetailDrawerTemplate

@@ -39,14 +39,14 @@ const HolidaysPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = (keys: React.Key[]) => {
+    if (keys.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
       return;
     }
     Modal.confirm({
       title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
+      content: t('common.confirmBatchDeleteContent', { count: keys.length }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
       okType: 'danger',
@@ -55,7 +55,7 @@ const HolidaysPage: React.FC = () => {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
-          for (const key of selectedRowKeys) {
+          for (const key of keys) {
             try {
               await holidayApi.delete(key.toString());
               successCount++;
@@ -153,11 +153,14 @@ const HolidaysPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建假期</Button>,
-            <Button key="batch-delete" danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0} onClick={handleBatchDelete}>批量删除</Button>,
-          ]}
-          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          showCreateButton
+          createButtonText="新建假期"
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText="批量删除"
         />
       </ListPageTemplate>
       <DetailDrawerTemplate<Holiday> title="假期详情" open={drawerVisible} onClose={handleCloseDetail} dataSource={holidayDetail || undefined} columns={detailColumns} loading={detailLoading} width={DRAWER_CONFIG.HALF_WIDTH} />

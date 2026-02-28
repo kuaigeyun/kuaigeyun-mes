@@ -13,7 +13,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Divider } from 'antd';
+import { App, Button, Tag, Space, message, Divider, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -172,14 +172,23 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   /**
    * 处理删除工单委外
    */
-  const handleDelete = async (record: OutsourceWorkOrder) => {
-    try {
-      await outsourceWorkOrderApi.delete(record.id!.toString());
-      messageApi.success('工单委外删除成功');
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
-    }
+  const handleDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${keys.length} 条工单委外吗？`,
+      onOk: async () => {
+        try {
+          for (const id of keys) {
+            await outsourceWorkOrderApi.delete(String(id));
+          }
+          messageApi.success(`成功删除 ${keys.length} 条记录`);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
   };
 
   /**
@@ -772,17 +781,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             };
           }
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建工单委外
-          </Button>,
-        ]}
+        enableRowSelection={true}
+        showCreateButton={true}
+        createButtonText="新建工单委外"
+        onCreate={handleCreate}
+        showDeleteButton={true}
         onDelete={handleDelete}
+        toolBarRender={() => []}
       />
 
       {/* 创建/编辑工单委外 Modal */}

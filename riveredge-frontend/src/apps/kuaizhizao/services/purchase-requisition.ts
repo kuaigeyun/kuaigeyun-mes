@@ -64,6 +64,10 @@ export async function updatePurchaseRequisition(id: number, data: Partial<Purcha
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}`, { method: 'PUT', data });
 }
 
+export async function deletePurchaseRequisition(id: number): Promise<void> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}`, { method: 'DELETE' });
+}
+
 export async function submitPurchaseRequisition(id: number): Promise<PurchaseRequisition> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/submit`, { method: 'POST' });
 }

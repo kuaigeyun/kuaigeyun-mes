@@ -3,14 +3,17 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, Table, Form, Input, Select, Dropdown, Row, Col } from 'antd';
-import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined } from '@ant-design/icons';
+import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { materialApi } from '../../../../master-data/services/material';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
+  createPurchaseRequisition,
+  deletePurchaseRequisition,
   submitPurchaseRequisition,
   convertToPurchaseOrder,
   urgentPurchase,
@@ -28,6 +31,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const createFormRef = useRef<any>(null);
+  const [materialList, setMaterialList] = useState<Array<{ id: number; mainCode?: string; code?: string; name: string; specification?: string; baseUnit?: string }>>([]);
+  const [createItems, setCreateItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_spec?: string; unit: string; quantity: number; suggested_unit_price: number; required_date?: string }>>([
+    { material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
+  ]);
 
   useEffect(() => {
     supplierApi.list?.({ isActive: true } as any).then((res: any) => {
@@ -35,6 +44,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setSupplierList(list);
     }).catch(() => setSupplierList([]));
   }, []);
+
+  useEffect(() => {
+    if (createModalVisible) {
+      materialApi.list({ isActive: true, limit: 500 }).then((res: any) => {
+        const raw = Array.isArray(res) ? res : res?.data || res?.items || [];
+        setMaterialList(raw);
+      }).catch(() => setMaterialList([]));
+    }
+  }, [createModalVisible]);
 
   const columns: ProColumns<PurchaseRequisition>[] = [
     { title: '申请编码', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
@@ -105,6 +123,74 @@ const PurchaseRequisitionsPage: React.FC = () => {
       },
     },
   ];
+
+  const handleCreate = () => {
+    setCreateItems([{ material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 }]);
+    setCreateModalVisible(true);
+  };
+
+  const handleCreateSubmit = async (values: { requisition_name?: string; required_date?: any; notes?: string }) => {
+    const requiredDate = values.required_date?.format?.('YYYY-MM-DD') ?? values.required_date;
+    const validItems = createItems.filter((i) => i.material_id && i.quantity > 0);
+    if (validItems.length === 0) {
+      messageApi.error('请至少添加一条有效的申请明细');
+      return;
+    }
+    try {
+      await createPurchaseRequisition({
+        requisition_name: values.requisition_name,
+        required_date: requiredDate,
+        notes: values.notes,
+        items: validItems.map((i) => ({
+          material_id: i.material_id,
+          material_code: i.material_code,
+          material_name: i.material_name,
+          material_spec: i.material_spec,
+          unit: i.unit || '件',
+          quantity: i.quantity,
+          suggested_unit_price: i.suggested_unit_price || 0,
+          required_date: i.required_date,
+        })),
+      });
+      messageApi.success('创建成功');
+      setCreateModalVisible(false);
+      createFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || '创建失败');
+      throw e;
+    }
+  };
+
+  const addCreateItem = () => {
+    setCreateItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 }]);
+  };
+
+  const removeCreateItem = (idx: number) => {
+    setCreateItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  };
+
+  const onCreateItemMaterialSelect = (idx: number, materialId: number | undefined) => {
+    if (!materialId) {
+      const updated = [...createItems];
+      updated[idx] = { ...updated[idx], material_id: 0, material_code: '', material_name: '', unit: '件' };
+      setCreateItems(updated);
+      return;
+    }
+    const material = materialList.find((m: any) => (m.id ?? m.material_id) === materialId);
+    if (!material) return;
+    const m = material as any;
+    const updated = [...createItems];
+    updated[idx] = {
+      ...updated[idx],
+      material_id: m.id ?? m.material_id,
+      material_code: m.mainCode || m.main_code || m.code || '',
+      material_name: m.name || '',
+      material_spec: m.specification || m.spec || '',
+      unit: m.baseUnit || m.base_unit || '件',
+    };
+    setCreateItems(updated);
+  };
 
   const handleDetail = async (record: PurchaseRequisition) => {
     try {
@@ -252,9 +338,123 @@ const PurchaseRequisitionsPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           search={false}
-          toolBarRender={() => []}
+          showCreateButton
+          createButtonText="新建采购申请"
+          onCreate={handleCreate}
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            modalApi.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条采购申请吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await deletePurchaseRequisition(Number(id));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.response?.data?.detail || '删除失败');
+                }
+              },
+            });
+          }}
         />
       </ListPageTemplate>
+
+      <FormModalTemplate
+        title="新建采购申请"
+        open={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onFinish={handleCreateSubmit}
+        formRef={createFormRef}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+      >
+        <ProFormText name="requisition_name" label="申请名称" placeholder="请输入申请名称" colProps={{ span: 12 }} />
+        <ProFormDatePicker name="required_date" label="要求到货日期" colProps={{ span: 12 }} />
+        <ProFormTextArea name="notes" label="备注" placeholder="备注" colProps={{ span: 24 }} />
+        <div style={{ width: '100%', marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>申请明细 <span style={{ color: 'red' }}>*</span></div>
+          <div>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={addCreateItem} style={{ marginBottom: 8 }}>
+              添加明细
+            </Button>
+            <Table
+              size="small"
+              dataSource={createItems}
+              rowKey={(_, i) => String(i)}
+              pagination={false}
+              columns={[
+                {
+                  title: '物料',
+                  width: 220,
+                  render: (_, __, idx) => (
+                    <Select
+                      placeholder="请选择物料"
+                      style={{ width: '100%' }}
+                      showSearch
+                      optionFilterProp="label"
+                      value={createItems[idx]?.material_id || undefined}
+                      onChange={(v) => onCreateItemMaterialSelect(idx, v)}
+                      options={materialList.map((m: any) => ({
+                        value: m.id ?? m.material_id,
+                        label: `${m.mainCode || m.main_code || m.code || ''} ${m.name || ''}`.trim(),
+                      }))}
+                    />
+                  ),
+                },
+                {
+                  title: '数量',
+                  width: 100,
+                  render: (_, __, idx) => (
+                    <InputNumber
+                      min={0.0001}
+                      value={createItems[idx]?.quantity}
+                      onChange={(v) => {
+                        const u = [...createItems];
+                        u[idx] = { ...u[idx], quantity: Number(v) || 1 };
+                        setCreateItems(u);
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  ),
+                },
+                {
+                  title: '单位',
+                  width: 80,
+                  dataIndex: 'unit',
+                  render: (v) => v || '-',
+                },
+                {
+                  title: '建议单价',
+                  width: 100,
+                  render: (_, __, idx) => (
+                    <InputNumber
+                      min={0}
+                      value={createItems[idx]?.suggested_unit_price}
+                      onChange={(v) => {
+                        const u = [...createItems];
+                        u[idx] = { ...u[idx], suggested_unit_price: Number(v) || 0 };
+                        setCreateItems(u);
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 60,
+                  render: (_, __, idx) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeCreateItem(idx)} />
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </div>
+      </FormModalTemplate>
+
       <DetailDrawerTemplate
         title={`采购申请详情 - ${currentReq?.requisition_code || ''}`}
         open={detailVisible}

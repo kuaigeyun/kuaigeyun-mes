@@ -152,6 +152,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
 
+    async def delete_requisition(self, tenant_id: int, requisition_id: int) -> bool:
+        """删除采购申请（软删除，仅草稿可删）"""
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        if req.status != "草稿":
+            raise BusinessLogicError("只有草稿状态的采购申请可删除")
+        await PurchaseRequisition.filter(tenant_id=tenant_id, id=requisition_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
     async def update_requisition(
         self,
         tenant_id: int,

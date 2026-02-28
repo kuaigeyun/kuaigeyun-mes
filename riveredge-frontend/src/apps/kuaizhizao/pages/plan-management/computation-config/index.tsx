@@ -257,6 +257,7 @@ const ComputationConfigPage: React.FC = () => {
           request={handleRequest}
           rowKey="id"
           showCreateButton={true}
+          createButtonText="新建计算配置"
           onCreate={handleCreate}
           showEditButton={true}
           onEdit={handleEdit}

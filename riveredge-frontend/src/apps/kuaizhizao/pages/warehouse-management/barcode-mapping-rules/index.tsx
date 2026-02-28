@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Popconfirm } from 'antd';
+import { App, Tag, Button, Space, Popconfirm, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -267,6 +267,28 @@ const BarcodeMappingRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        showCreateButton={true}
+        createButtonText="新建条码映射规则"
+        onCreate={handleCreate}
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条条码映射规则吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await warehouseApi.barcodeMappingRule.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
+        }}
         request={async (params) => {
           try {
             const result = await warehouseApi.barcodeMappingRule.list({
@@ -287,16 +309,6 @@ const BarcodeMappingRulesPage: React.FC = () => {
             };
           }
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建规则
-          </Button>,
-        ]}
       />
 
       {/* 创建/编辑 Modal */}

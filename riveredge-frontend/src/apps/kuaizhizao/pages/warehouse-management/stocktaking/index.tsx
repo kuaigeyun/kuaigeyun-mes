@@ -64,7 +64,6 @@ interface StocktakingItem {
 const StocktakingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -437,6 +436,7 @@ const StocktakingPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={true}
+        createButtonText="新建盘点单"
         onCreate={handleCreate}
         request={async (params) => {
           try {
@@ -461,9 +461,24 @@ const StocktakingPage: React.FC = () => {
             };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条盘点单吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await stocktakingApi.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
         }}
       />
 

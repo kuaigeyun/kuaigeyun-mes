@@ -24,11 +24,8 @@ import {
   submitSalesForecast,
   approveSalesForecast,
   pushSalesForecastToMrp,
-  importSalesForecasts,
-  exportSalesForecasts,
   type SalesForecast,
   type SalesForecastItem,
-  type SalesForecastListParams,
 } from '../../../services/sales-forecast';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
@@ -326,40 +323,6 @@ const SalesForecastsPage: React.FC = () => {
     });
   };
 
-  const handleImport = async (data: any[][]) => {
-    if (!data?.length) {
-      messageApi.warning('导入数据为空');
-      return;
-    }
-    try {
-      const result = await importSalesForecasts(data);
-      if (result.failure_count === 0) {
-        messageApi.success(`导入成功，共 ${result.success_count} 条`);
-      } else {
-        messageApi.warning(`导入完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
-      }
-      if (result.success_count > 0) actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.message || '导入失败');
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      const params: SalesForecastListParams = {};
-      const blob = await exportSalesForecasts(params);
-      const url = window.URL.createObjectURL(blob as Blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales_forecasts_${dayjs().format('YYYYMMDDHHmmss')}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      messageApi.success('导出成功');
-    } catch (e: any) {
-      messageApi.error(e?.message || '导出失败');
-    }
-  };
-
   const columns: ProColumns<SalesForecast>[] = [
     { title: '预测编码', dataIndex: 'forecast_code', width: 140, ellipsis: true, fixed: 'left' },
     { title: '预测名称', dataIndex: 'forecast_name', width: 180, ellipsis: true },
@@ -442,7 +405,8 @@ const SalesForecastsPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
+      <ListPageTemplate
+      >
         <UniTable<SalesForecast>
           headerTitle="销售预测"
           actionRef={actionRef}
@@ -474,17 +438,10 @@ const SalesForecastsPage: React.FC = () => {
             rowExpandable: (record) => record.id != null,
           }}
           showCreateButton={true}
+          createButtonText="新建销售预测"
           onCreate={handleCreate}
-          showEditButton={true}
-          onEdit={handleEdit}
           showDeleteButton={true}
           onDelete={handleDelete}
-          showImportButton={true}
-          onImport={handleImport}
-          importHeaders={['预测名称', '预测周期', '开始日期', '结束日期', '备注']}
-          importExampleRow={['2026年1月预测', '2026-01', '2026-01-01', '2026-01-31', '示例']}
-          showExportButton={true}
-          onExport={async () => { await handleExport(); }}
         />
       </ListPageTemplate>
 

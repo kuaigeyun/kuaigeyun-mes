@@ -14,10 +14,8 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty, ConfigProvider } from 'antd'
+import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider } from 'antd'
 import {
-  DownloadOutlined,
-  UploadOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -25,10 +23,8 @@ import {
   AppstoreOutlined,
   BarsOutlined,
   BarChartOutlined,
-  DownOutlined,
   TabletOutlined,
   QuestionCircleOutlined,
-  SyncOutlined,
   UnorderedListOutlined,
   ProjectOutlined,
 } from '@ant-design/icons'
@@ -46,7 +42,6 @@ const useProTableSearch = () => {
     actionRef,
   }
 }
-import { UniImport } from '../uni-import'
 import ErrorBoundary from '../error-boundary'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
@@ -624,9 +619,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ProFormInstance | undefined
   >
 
-  // 导入弹窗状态
-  const [importModalVisible, setImportModalVisible] = useState(false)
-
   // 存储选中的行键
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
@@ -643,30 +635,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       })
     })
   }, [])
-
-  // 自动生成导入配置（如果启用且未手动提供）
-  const autoImportConfig = React.useMemo(() => {
-    if (!autoGenerateImportConfig || (importHeaders && importExampleRow)) {
-      return null
-    }
-    return generateImportConfigFromColumns(columns, {
-      fieldMap: importFieldMap,
-      fieldRules: importFieldRules,
-      t,
-    })
-  }, [
-    columns,
-    autoGenerateImportConfig,
-    importHeaders,
-    importExampleRow,
-    importFieldMap,
-    importFieldRules,
-    t,
-  ])
-
-  // 使用自动生成的配置或手动提供的配置
-  const finalImportHeaders = importHeaders || autoImportConfig?.headers
-  const finalImportExampleRow = importExampleRow || autoImportConfig?.exampleRow
 
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
   const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')
@@ -954,27 +922,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }
 
   /**
-   * 处理导入按钮点击
-   */
-  const handleImportClick = () => {
-    setImportModalVisible(true)
-  }
-
-  /**
-   * 处理导入确认
-   */
-  const handleImportConfirm = (data: any[][]) => {
-    if (onImport) {
-      // 如果提供了字段映射和验证规则，在调用 onImport 之前进行数据转换和验证
-      // 注意：这里只是传递原始数据，具体的验证和转换应该在 onImport 回调中处理
-      // 但我们可以将字段映射和验证规则作为额外参数传递（如果需要）
-      onImport(data)
-    } else {
-      message.warning(t('components.uniTable.configOnImport'))
-    }
-  }
-
-  /**
    * 构建头部操作按钮（显示在原来标题的位置）
    */
 
@@ -1059,146 +1006,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  // 构建右侧工具栏按钮（导入、导出）
+  // 构建右侧工具栏按钮
+  // 导入导出已由 UniImport、UniExport 在页面层统一管理，操作按钮不再包含导入导出
   const buildRightActions = () => {
-    const actions: ReactNode[] = []
-
-    // 导入按钮（使用 success 绿色系，filled 样式，无框线，淡色）
-    // 参考 Material Design、Ant Design、Figma 等主流设计系统：
-    // - 导入/上传操作使用绿色（success）表示正向操作
-    // - filled 样式：使用填充背景色，无边框，淡色版本
-    if (showImportButton) {
-      actions.push(
-        <Button
-          key="import"
-          icon={<UploadOutlined />}
-          size={toolBarButtonSize}
-          onClick={handleImportClick}
-          style={{
-            backgroundColor: token.colorSuccessBg || token.colorFillTertiary,
-            border: 'none',
-            color: token.colorSuccess,
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor =
-              token.colorSuccessBgHover || token.colorFillSecondary
-            e.currentTarget.style.color = token.colorSuccessHover || token.colorSuccess
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor = token.colorSuccessBg || token.colorFillTertiary
-            e.currentTarget.style.color = token.colorSuccess
-          }}
-        >
-          {t('components.uniTable.import')}
-        </Button>
-      )
-    }
-
-    // 同步按钮（导入与导出之间，橙色系）
-    if (showSyncButton) {
-      actions.push(
-        <Button
-          key="sync"
-          icon={<SyncOutlined />}
-          size={toolBarButtonSize}
-          onClick={() => (onSync ? onSync() : message.warning(t('components.uniTable.configOnSync')))}
-          style={{
-            backgroundColor: token.colorWarningBg || token.colorFillTertiary,
-            border: 'none',
-            color: token.colorWarning,
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor =
-              token.colorWarningBgHover || token.colorFillSecondary
-            e.currentTarget.style.color = token.colorWarningHover || token.colorWarning
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor =
-              token.colorWarningBg || token.colorFillTertiary
-            e.currentTarget.style.color = token.colorWarning
-          }}
-        >
-          {syncButtonText ?? t('components.uniTable.sync')}
-        </Button>
-      )
-    }
-
-    // 导出按钮（下拉菜单）
-    if (showExportButton && onExport) {
-      // 构建导出菜单项
-      const exportMenuItems: MenuProps['items'] = [
-        {
-          key: 'selected',
-          label: t('components.uniTable.exportSelected'),
-          icon: <DownloadOutlined />,
-          disabled: !selectedRowKeys || selectedRowKeys.length === 0,
-        },
-        {
-          key: 'currentPage',
-          label: t('components.uniTable.exportCurrentPage'),
-          icon: <DownloadOutlined />,
-        },
-        {
-          key: 'all',
-          label: t('components.uniTable.exportAll'),
-          icon: <DownloadOutlined />,
-        },
-      ]
-
-      // 处理导出菜单点击
-      const handleExportMenuClick: MenuProps['onClick'] = ({ key }) => {
-        if (!onExport) {
-          message.warning(t('components.uniTable.configOnExport'))
-          return
-        }
-
-        switch (key) {
-          case 'selected':
-            onExport('selected', selectedRowKeys || [])
-            break
-          case 'currentPage':
-            // 获取当前页数据
-            onExport('currentPage', undefined, tableData)
-            break
-          case 'all':
-            onExport('all')
-            break
-        }
-      }
-
-      actions.push(
-        <Dropdown
-          key="export"
-          menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}
-          trigger={['click']}
-        >
-          <Button
-            icon={<DownloadOutlined />}
-            size={toolBarButtonSize}
-            style={{
-              backgroundColor: token.colorPrimaryBg || token.colorFillTertiary,
-              border: 'none',
-              color: token.colorPrimary,
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor =
-                token.colorPrimaryBgHover || token.colorFillSecondary
-              e.currentTarget.style.color = token.colorPrimaryHover || token.colorPrimary
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor =
-                token.colorPrimaryBg || token.colorFillTertiary
-              e.currentTarget.style.color = token.colorPrimary
-            }}
-          >
-            {t('components.uniTable.export')}
-            <DownOutlined style={{ marginLeft: 4, fontSize: '12px' }} />
-          </Button>
-        </Dropdown>
-      )
-    }
-
-    return actions.length > 0 ? <Space>{actions}</Space> : undefined
+    return undefined
   }
 
   const buildHeaderActions = () => {
@@ -1913,16 +1724,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             </div>
           )}
 
-          {/* 导入弹窗 */}
-          {showImportButton && (
-            <UniImport
-              visible={importModalVisible}
-              onCancel={() => setImportModalVisible(false)}
-              onConfirm={handleImportConfirm}
-              headers={finalImportHeaders}
-              exampleRow={finalImportExampleRow}
-            />
-          )}
         </div>
       </div>
     </>

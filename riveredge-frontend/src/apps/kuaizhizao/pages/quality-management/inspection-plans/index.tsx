@@ -18,7 +18,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Table } from 'antd';
+import { App, Button, Tag, Space, Card, Table, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -249,11 +249,28 @@ const InspectionPlansPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            新建质检方案
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText="新建质检方案"
+        onCreate={handleCreate}
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条质检方案吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await inspectionPlanApi.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
+        }}
       />
 
       <FormModalTemplate

@@ -84,6 +84,14 @@ class ToolService:
         await tool.save()
         return tool
 
+    @staticmethod
+    async def delete_tool(tenant_id: int, uuid: str) -> None:
+        """软删除工装"""
+        from tortoise import timezone as tz
+        tool = await ToolService.get_tool_by_uuid(tenant_id, uuid)
+        tool.deleted_at = tz.now()
+        await tool.save()
+
 
 class ToolUsageService:
     """

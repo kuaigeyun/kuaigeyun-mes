@@ -143,6 +143,19 @@ async def convert_to_purchase_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/purchase-requisitions/{requisition_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除采购申请")
+async def delete_requisition(
+    requisition_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除采购申请（软删除，仅草稿可删）"""
+    await PurchaseRequisitionService().delete_requisition(
+        tenant_id=tenant_id,
+        requisition_id=requisition_id,
+    )
+
+
 @router.post("/purchase-requisitions/{requisition_id}/urgent-purchase", summary="紧急采购")
 async def urgent_purchase(
     data: UrgentPurchaseRequest,

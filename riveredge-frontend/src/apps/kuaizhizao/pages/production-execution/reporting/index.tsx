@@ -37,7 +37,6 @@ interface ReportingRecord {
 const ReportingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
@@ -1082,19 +1081,29 @@ const ReportingPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        enableRowSelection={true}
+        showCreateButton={true}
+        createButtonText="新建报工"
+        onCreate={handleNewReporting}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条报工记录吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await reportingApi.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
         }}
         toolBarRender={() => [
-          <Button
-            key="new"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleNewReporting}
-          >
-            新建报工
-          </Button>,
           <Button
             key="scan"
             icon={<ScanOutlined />}

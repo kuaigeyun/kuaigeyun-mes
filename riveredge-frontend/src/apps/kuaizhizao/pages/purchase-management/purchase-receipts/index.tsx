@@ -68,7 +68,6 @@ interface PurchaseReceiptItem {
 const PurchaseReceiptsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -338,6 +337,16 @@ const PurchaseReceiptsPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate
+        toolbarExtra={
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={() => setImportVisible(true)}>
+              批量导入
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+              批量导出
+            </Button>
+          </Space>
+        }
         statCards={[
           {
             title: '总入库单数',
@@ -387,26 +396,25 @@ const PurchaseReceiptsPage: React.FC = () => {
               };
             }
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条采购入库单吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await warehouseApi.purchaseReceipt.delete(String(id));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error.message || '删除失败');
+                }
+              },
+            });
           }}
-          toolBarRender={() => [
-            <Button
-              key="import"
-              icon={<UploadOutlined />}
-              onClick={() => setImportVisible(true)}
-            >
-              批量导入
-            </Button>,
-            <Button
-              key="export"
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              批量导出
-            </Button>,
-          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

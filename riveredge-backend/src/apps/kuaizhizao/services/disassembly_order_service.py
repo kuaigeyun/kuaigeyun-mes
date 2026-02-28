@@ -265,6 +265,22 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
 
             return DisassemblyOrderResponse.model_validate(order)
 
+    async def delete_disassembly_order(self, tenant_id: int, order_id: int) -> bool:
+        """删除拆卸单（软删除，仅草稿可删）"""
+        order = await DisassemblyOrder.get_or_none(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"拆卸单不存在: {order_id}")
+        if order.status not in ['draft']:
+            raise ValidationError(f"拆卸单状态为{order.status}，不能删除")
+        await DisassemblyOrder.filter(id=order_id, tenant_id=tenant_id).update(
+            deleted_at=datetime.now()
+        )
+        return True
+
     async def _update_order_statistics(self, tenant_id: int, order_id: int) -> None:
         items = await DisassemblyOrderItem.filter(
             disassembly_order_id=order_id,

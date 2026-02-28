@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -100,9 +100,28 @@ const HourlyRatesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建</Button>,
-          ]}
+          enableRowSelection={true}
+          showDeleteButton={true}
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认批量删除',
+              content: `确定要删除选中的 ${keys.length} 条时薪单价吗？`,
+              onOk: async () => {
+                try {
+                  for (const id of keys) {
+                    await employeePerformanceApi.deleteHourlyRate(Number(id));
+                  }
+                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error?.message || '删除失败');
+                }
+              },
+            });
+          }}
+          showCreateButton
+          createButtonText="新建时薪单价"
+          onCreate={handleCreate}
         />
       </ListPageTemplate>
 

@@ -275,22 +275,24 @@ const MoldsPage: React.FC = () => {
   };
 
   /**
-   * 处理删除模具
+   * 处理批量删除模具（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    try {
-      const records = keys as any[];
-      await Promise.all(records.map(record => {
-        if (record.uuid) {
-          return moldApi.delete(record.uuid);
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${keys.length} 条模具吗？`,
+      onOk: async () => {
+        try {
+          for (const uuid of keys) {
+            await moldApi.delete(String(uuid));
+          }
+          messageApi.success(`成功删除 ${keys.length} 条记录`);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
         }
-        return Promise.resolve();
-      }));
-      messageApi.success('删除成功');
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
-    }
+      },
+    });
   };
 
   /**
@@ -618,17 +620,12 @@ const MoldsPage: React.FC = () => {
               };
             }
           }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建模具
-            </Button>,
-          ]}
+          enableRowSelection={true}
+          showDeleteButton={true}
           onDelete={handleDelete}
+          showCreateButton={true}
+          createButtonText="新建模具"
+          onCreate={handleCreate}
         />
       </ListPageTemplate>
 

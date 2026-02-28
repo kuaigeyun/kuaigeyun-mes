@@ -9,14 +9,12 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Card, Row, Col } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileAddOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Table, Card, Row, Col, Modal } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { qualityApi, warehouseApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
-import { downloadFile } from '../../../services/common';
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -54,8 +52,6 @@ interface IncomingInspection {
 const IncomingInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<IncomingInspection | null>(null);
@@ -71,8 +67,6 @@ const IncomingInspectionPage: React.FC = () => {
   const createFromReceiptFormRef = useRef<any>(null);
 
   // 批量导入状态
-  const [importVisible, setImportVisible] = useState(false);
-
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
@@ -184,34 +178,6 @@ const IncomingInspectionPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '创建不合格品记录失败');
       throw error;
-    }
-  };
-
-  // 批量导入
-  const handleImport = async (data: any[][]) => {
-    try {
-      const result = await qualityApi.incomingInspection.import(data);
-      if (result.success) {
-        messageApi.success(result.message || '导入成功');
-        setImportVisible(false);
-        actionRef.current?.reload();
-      } else {
-        messageApi.error(result.message || '导入失败');
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || '导入失败');
-    }
-  };
-
-  // 批量导出
-  const handleExport = async () => {
-    try {
-      const blob = await qualityApi.incomingInspection.export();
-      const filename = `来料检验单_${new Date().toISOString().slice(0, 10)}.csv`;
-      downloadFile(blob, filename);
-      messageApi.success('导出成功');
-    } catch (error: any) {
-      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -410,34 +376,28 @@ const IncomingInspectionPage: React.FC = () => {
             };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
+        showCreateButton={true}
+        createButtonText="从采购入库单创建"
+        onCreate={handleCreateFromReceipt}
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条来料检验单吗？`,
+            onOk: async () => {
+              try {
+                for (const id of keys) {
+                  await qualityApi.incomingInspection.delete(String(id));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败');
+              }
+            },
+          });
         }}
-        toolBarRender={() => [
-          <Button
-            key="create-from-receipt"
-            type="primary"
-            icon={<FileAddOutlined />}
-            onClick={handleCreateFromReceipt}
-          >
-            从采购入库单创建
-          </Button>,
-          <Button
-            key="import"
-            icon={<UploadOutlined />}
-            onClick={() => setImportVisible(true)}
-          >
-            批量导入
-          </Button>,
-          <Button
-            key="export"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-          >
-            批量导出
-          </Button>,
-        ]}
         scroll={{ x: 1400 }}
       />
 
@@ -700,21 +660,6 @@ const IncomingInspectionPage: React.FC = () => {
           }}
         />
       </FormModalTemplate>
-
-      {/* 批量导入 */}
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleImport}
-        headers={[
-          '采购入库单号',
-          '物料编码',
-          '检验数量',
-          '合格数量',
-          '不合格数量',
-          '备注',
-        ]}
-      />
 
       {/* 创建不合格品记录Modal */}
       <FormModalTemplate

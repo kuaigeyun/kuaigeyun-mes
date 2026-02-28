@@ -480,6 +480,7 @@ const ReworkOrdersPage: React.FC = () => {
         request={handleRequest}
         rowKey="id"
         showCreateButton={true}
+        createButtonText="新建返工工单"
         onCreate={handleCreate}
         showEditButton={true}
         onEdit={handleEditFromSelection}

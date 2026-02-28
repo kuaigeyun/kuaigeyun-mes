@@ -9,7 +9,7 @@
 
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Space } from 'antd';
+import { App, Button, Space, Modal, Tag } from 'antd';
 import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -33,6 +33,7 @@ interface AssemblyOrder {
 }
 
 const AssemblyOrdersPage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
   const columns: ProColumns<AssemblyOrder>[] = [
@@ -118,8 +119,28 @@ const AssemblyOrdersPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        showAdvancedSearch={false}
+        showAdvancedSearch={true}
+        enableRowSelection={true}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 条组装单吗？`,
+            onOk: async () => {
+              try {
+                for (const key of keys) {
+                  await assemblyOrderApi.delete(String(key));
+                }
+                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error?.message || '删除失败');
+              }
+            },
+          });
+        }}
         showCreateButton={true}
+        createButtonText="新建组装单"
         onCreate={() => {
           // 新建：后端就绪后打开创建弹窗
         }}

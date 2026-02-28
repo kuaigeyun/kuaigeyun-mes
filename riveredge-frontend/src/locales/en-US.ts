@@ -1081,7 +1081,7 @@ export default {
   'components.uniTable.sync': 'Sync',
   'components.uniTable.create': 'Create',
   'components.uniTable.edit': 'Edit',
-  'components.uniTable.delete': 'Delete',
+  'components.uniTable.delete': 'Batch Delete',
   'components.uniTable.configOnImport': 'Configure onImport callback to handle import data',
   'components.uniTable.configOnSync': 'Configure onSync callback',
   'components.uniTable.configOnExport': 'Configure onExport callback to handle export data',
