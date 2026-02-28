@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col } from 'antd';
+import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
@@ -42,6 +42,7 @@ const SiteSettingsPage: React.FC = () => {
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
   const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>([]);
+  const systemSettingsRef = React.useRef<Record<string, any>>({});
   const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>([]);
 
   /**
@@ -228,7 +229,29 @@ const SiteSettingsPage: React.FC = () => {
         enable_register: setting.settings?.enable_register !== false,
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
+        // 系统设置
+        'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
+        'security.inactivity_timeout': setting.settings?.security?.inactivity_timeout ?? 1800,
+        'security.user_cache_time': setting.settings?.security?.user_cache_time ?? 300,
+        'ui.max_tabs': setting.settings?.ui?.max_tabs ?? 20,
+        'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
+        'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 800,
+        'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+        'network.timeout': setting.settings?.network?.timeout ?? 10000,
+        'system.max_retries': setting.settings?.system?.max_retries ?? 3,
       });
+
+      systemSettingsRef.current = {
+        'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
+        'security.inactivity_timeout': setting.settings?.security?.inactivity_timeout ?? 1800,
+        'security.user_cache_time': setting.settings?.security?.user_cache_time ?? 300,
+        'ui.max_tabs': setting.settings?.ui?.max_tabs ?? 20,
+        'ui.default_page_size': setting.settings?.ui?.default_page_size ?? 20,
+        'ui.table_loading_delay': setting.settings?.ui?.table_loading_delay ?? 800,
+        'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+        'network.timeout': setting.settings?.network?.timeout ?? 10000,
+        'system.max_retries': setting.settings?.system?.max_retries ?? 3,
+      };
 
       // 加载LOGO预览
       await loadLogoPreview(siteLogoValue);
@@ -358,6 +381,7 @@ const SiteSettingsPage: React.FC = () => {
     try {
       setSaving(true);
       const values = await form.validateFields();
+      const allValues = { ...systemSettingsRef.current, ...values };
 
       const settings: Record<string, any> = {
         site_name: values.site_name,
@@ -375,8 +399,52 @@ const SiteSettingsPage: React.FC = () => {
         description: values.description,
       };
 
+      // 系统设置
+      const sys = allValues;
+      if (sys['security.token_check_interval'] !== undefined) {
+        settings.security = {
+          ...(settings.security || {}),
+          token_check_interval: sys['security.token_check_interval'],
+          inactivity_timeout: sys['security.inactivity_timeout'],
+          user_cache_time: sys['security.user_cache_time'],
+        };
+      }
+      if (sys['ui.max_tabs'] !== undefined) {
+        settings.ui = {
+          ...(settings.ui || {}),
+          max_tabs: sys['ui.max_tabs'],
+          default_page_size: sys['ui.default_page_size'],
+          table_loading_delay: sys['ui.table_loading_delay'],
+        };
+      }
+      if (sys['theme_config.colorPrimary'] !== undefined) {
+        settings.theme_config = { ...(settings.theme_config || {}), colorPrimary: sys['theme_config.colorPrimary'] };
+      }
+      if (sys['network.timeout'] !== undefined) {
+        settings.network = { ...(settings.network || {}), timeout: sys['network.timeout'] };
+      }
+      if (sys['system.max_retries'] !== undefined) {
+        settings.system = { ...(settings.system || {}), max_retries: sys['system.max_retries'] };
+      }
+
       await updateSiteSetting({ settings });
       messageApi.success(t('pages.system.siteSettings.saveSuccess'));
+
+      if (settings.security || settings.ui || settings.theme_config || settings.network || settings.system) {
+        useThemeStore.getState().initFromApi();
+        systemSettingsRef.current = {
+          ...systemSettingsRef.current,
+          'security.token_check_interval': settings.security?.token_check_interval,
+          'security.inactivity_timeout': settings.security?.inactivity_timeout,
+          'security.user_cache_time': settings.security?.user_cache_time,
+          'ui.max_tabs': settings.ui?.max_tabs,
+          'ui.default_page_size': settings.ui?.default_page_size,
+          'ui.table_loading_delay': settings.ui?.table_loading_delay,
+          'theme_config.colorPrimary': settings.theme_config?.colorPrimary,
+          'network.timeout': settings.network?.timeout,
+          'system.max_retries': settings.system?.max_retries,
+        };
+      }
 
       // 刷新 configStore 使日期格式、站点名称、LOGO 等配置立即生效（BasicLayout 等从 configStore 读取）
       await fetchConfigs();
@@ -589,6 +657,92 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
+  const systemSettingsContent = (
+    <Row gutter={[24, 16]}>
+      <Col xs={24}>
+        <Card title={t('pages.system.configCenter.param.security_token_check_interval')} size="small" style={{ marginBottom: 16 }}>
+          <Form.Item
+            name="security.token_check_interval"
+            label={t('pages.system.configCenter.param.security_token_check_interval')}
+            tooltip={t('pages.system.configCenter.param.security_token_check_interval_desc')}
+          >
+            <InputNumber min={10} max={300} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="security.inactivity_timeout"
+            label={t('pages.system.configCenter.param.security_inactivity_timeout')}
+            tooltip={t('pages.system.configCenter.param.security_inactivity_timeout_desc')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="security.user_cache_time"
+            label={t('pages.system.configCenter.param.security_user_cache_time')}
+            tooltip={t('pages.system.configCenter.param.security_user_cache_time_desc')}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </Card>
+        <Card title={t('pages.system.configCenter.param.ui_max_tabs')} size="small" style={{ marginBottom: 16 }}>
+          <Form.Item
+            name="ui.max_tabs"
+            label={t('pages.system.configCenter.param.ui_max_tabs')}
+            tooltip={t('pages.system.configCenter.param.ui_max_tabs_desc')}
+          >
+            <InputNumber min={5} max={50} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="ui.default_page_size"
+            label={t('pages.system.configCenter.param.ui_default_page_size')}
+            tooltip={t('pages.system.configCenter.param.ui_default_page_size_desc')}
+          >
+            <InputNumber min={5} max={100} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="ui.table_loading_delay"
+            label={t('pages.system.configCenter.param.ui_table_loading_delay')}
+            tooltip={t('pages.system.configCenter.param.ui_table_loading_delay_desc')}
+          >
+            <InputNumber min={0} max={1000} style={{ width: '100%' }} />
+          </Form.Item>
+        </Card>
+        <Card title={t('pages.system.configCenter.param.theme_config_colorPrimary')} size="small" style={{ marginBottom: 16 }}>
+          <Form.Item
+            name="theme_config.colorPrimary"
+            label={t('pages.system.configCenter.param.theme_config_colorPrimary')}
+            tooltip={t('pages.system.configCenter.param.theme_config_colorPrimary_desc')}
+            getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+          >
+            <ColorPicker showText />
+          </Form.Item>
+        </Card>
+        <Card title={t('pages.system.configCenter.param.network_timeout')} size="small" style={{ marginBottom: 16 }}>
+          <Form.Item
+            name="network.timeout"
+            label={t('pages.system.configCenter.param.network_timeout')}
+            tooltip={t('pages.system.configCenter.param.network_timeout_desc')}
+          >
+            <InputNumber min={1000} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="system.max_retries"
+            label={t('pages.system.configCenter.param.system_max_retries')}
+            tooltip={t('pages.system.configCenter.param.system_max_retries_desc')}
+          >
+            <InputNumber min={0} max={5} style={{ width: '100%' }} />
+          </Form.Item>
+        </Card>
+      </Col>
+    </Row>
+  );
+
+  const systemSettingsWithActions = (
+    <>
+      {systemSettingsContent}
+      {actionButtons}
+    </>
+  );
+
   return (
     <Form
       form={form}
@@ -608,6 +762,7 @@ const SiteSettingsPage: React.FC = () => {
         tabs={[
           { key: 'basic', label: t('pages.system.siteSettings.tabBasic'), children: basicInfoWithActions },
           { key: 'function', label: t('pages.system.siteSettings.tabFunction'), children: functionSettingsWithActions },
+          { key: 'system', label: t('pages.system.siteSettings.tabSystem'), children: systemSettingsWithActions },
         ]}
       />
 

@@ -36,8 +36,10 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
     CustomerMaterialRegistrationService,
 )
 from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
+from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
 
 # 初始化服务实例
+batching_order_service = BatchingOrderService()
 packing_binding_service = PackingBindingService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
@@ -103,6 +105,7 @@ from apps.kuaizhizao.schemas.inventory_alert import (
 )
 from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingCreateFromReceipt,
+    PackingBindingCreateFromDelivery,
     PackingBindingUpdate,
     PackingBindingResponse,
     PackingBindingListResponse,
@@ -116,6 +119,15 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
     CustomerMaterialRegistrationListResponse,
     ParseBarcodeRequest,
     ParseBarcodeResponse,
+)
+from apps.kuaizhizao.schemas.batching_order import (
+    BatchingOrderCreate,
+    BatchingOrderCreateWithItems,
+    BatchingOrderUpdate,
+    BatchingOrderResponse,
+    BatchingOrderListResponse,
+    BatchingOrderWithItemsResponse,
+    PullFromWorkOrderRequest,
 )
 
 router = APIRouter(tags=["Kuaige Zhizao - Warehouse Execution"])
@@ -1026,6 +1038,40 @@ async def create_packing_binding_from_receipt(
     )
 
 
+@router.post("/sales-deliveries/{delivery_id}/packing-binding", response_model=PackingBindingResponse, summary="从销售出库单创建装箱绑定")
+async def create_packing_binding_from_delivery(
+    delivery_id: int,
+    binding_data: PackingBindingCreateFromDelivery,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    从销售出库单创建装箱绑定（发货时按箱登记，用于出货追溯）
+
+    - **delivery_id**: 销售出库单ID
+    - **binding_data**: 装箱绑定创建数据
+    """
+    return await packing_binding_service.create_packing_binding_from_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.get("/sales-deliveries/{delivery_id}/packing-binding", response_model=List[PackingBindingListResponse], summary="获取销售出库单的装箱绑定记录")
+async def get_packing_bindings_by_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """获取销售出库单的装箱绑定记录列表"""
+    return await packing_binding_service.get_packing_bindings_by_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id
+    )
+
+
 @router.get("/finished-goods-receipts/{receipt_id}/packing-binding", response_model=List[PackingBindingListResponse], summary="获取成品入库单的装箱绑定记录")
 async def get_packing_bindings_by_receipt(
     receipt_id: int,
@@ -1050,6 +1096,7 @@ async def list_packing_bindings(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     receipt_id: Optional[int] = Query(None, description="成品入库单ID"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
     product_id: Optional[int] = Query(None, description="产品ID"),
     box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
     current_user: User = Depends(get_current_user),
@@ -1073,6 +1120,7 @@ async def list_packing_bindings(
         skip=skip,
         limit=limit,
         receipt_id=receipt_id,
+        sales_delivery_id=sales_delivery_id,
         product_id=product_id,
         box_no=box_no,
     )
@@ -2553,3 +2601,145 @@ async def process_replenishment_suggestion(
         process_data=process_data,
         processed_by=current_user.id
     )
+
+
+# ============ 配料单 API ============
+
+@router.get("/batching-orders", response_model=BatchingOrderListResponse, summary="获取配料单列表")
+async def list_batching_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="配料单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderListResponse:
+    """获取配料单列表"""
+    return await batching_order_service.list_batching_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        warehouse_id=warehouse_id,
+        work_order_id=work_order_id,
+        status=status,
+    )
+
+
+@router.post("/batching-orders", response_model=BatchingOrderResponse, summary="创建配料单")
+async def create_batching_order(
+    data: BatchingOrderCreateWithItems,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """创建配料单（手工创建）"""
+    try:
+        items = data.items
+        order_data = BatchingOrderCreate(**data.model_dump(exclude={"items"}))
+        return await batching_order_service.create_batching_order(
+            tenant_id=tenant_id,
+            order_data=order_data,
+            created_by=current_user.id,
+            items=items,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/batching-orders/pull-from-work-order", response_model=BatchingOrderWithItemsResponse, summary="从工单生成配料单")
+async def pull_batching_order_from_work_order(
+    request_data: PullFromWorkOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """从工单按 BOM 展开物料需求，生成配料单"""
+    try:
+        return await batching_order_service.pull_from_work_order(
+            tenant_id=tenant_id,
+            request_data=request_data,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/batching-orders/{order_id}", response_model=BatchingOrderWithItemsResponse, summary="获取配料单详情")
+async def get_batching_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """获取配料单详情（含明细）"""
+    try:
+        return await batching_order_service.get_batching_order_by_id(
+            tenant_id=tenant_id,
+            order_id=order_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/batching-orders/{order_id}", response_model=BatchingOrderResponse, summary="更新配料单")
+async def update_batching_order(
+    order_id: int,
+    data: BatchingOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """更新配料单"""
+    try:
+        return await batching_order_service.update_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_data=data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/batching-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除配料单")
+async def delete_batching_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除配料单（软删除，仅草稿可删）"""
+    try:
+        await batching_order_service.delete_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/batching-orders/{order_id}/confirm", response_model=BatchingOrderResponse, summary="确认配料")
+async def confirm_batching_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """确认配料（更新明细为已拣，扣减主仓库存）"""
+    try:
+        return await batching_order_service.confirm_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            executed_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))

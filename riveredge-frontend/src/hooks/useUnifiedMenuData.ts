@@ -4,6 +4,11 @@
  * 平台级/系统级：使用原有 getMenuConfig 硬编码
  * 应用级 APP：数据库 getMenuTree（manifest 同步）→ 业务配置过滤 → 输出
  *
+ * 菜单显示层级（蓝图设置 → 菜单管理 → 权限管理）：
+ * 1. 蓝图设置：filterMenuByBusinessConfig，模块/节点禁用则隐藏
+ * 2. 菜单管理：getMenuTree(is_active=true)，未入库或禁用则不返回
+ * 3. 权限管理：filterMenuByPermission，用户无权限则隐藏
+ *
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
 
@@ -12,45 +17,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { getMenuTree, type MenuTree } from '../services/menu';
 import { getBusinessConfig } from '../services/businessConfig';
-import type { BusinessConfig } from '../services/businessConfig';
-import { getMenuBusinessMeta } from '../utils/menuBusinessMapping';
+import { filterMenuByBusinessConfig } from '../utils/menuBusinessFilter';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { hasAnyPermission } from '../utils/permission';
 
 /** 与 BasicLayout 保持一致，确保缓存共享 */
 const APPLICATION_MENUS_QUERY_KEY = 'applicationMenus';
-
-/**
- * 按业务配置递归过滤菜单树
- */
-function filterMenuByBusinessConfig(
-  menus: MenuTree[],
-  config: BusinessConfig | null | undefined
-): MenuTree[] {
-  if (!config) return menus;
-  const modules = config.modules ?? {};
-  const nodes = config.nodes ?? {};
-
-  return menus
-    .map((menu) => {
-      const businessMeta = getMenuBusinessMeta(menu);
-      if (businessMeta) {
-        if (businessMeta.module !== undefined && modules[businessMeta.module] === false) return null;
-        if (businessMeta.node !== undefined) {
-          const nodeConfig = nodes[businessMeta.node];
-          if (nodeConfig && nodeConfig.enabled === false) return null;
-        }
-      }
-      if (menu.children && menu.children.length > 0) {
-        const filteredChildren = filterMenuByBusinessConfig(menu.children, config);
-        if (filteredChildren.length === 0 && !menu.path) return null;
-        return { ...menu, children: filteredChildren };
-      }
-      return menu;
-    })
-    .filter((m): m is MenuTree => m !== null);
-}
 
 function filterMenuByPermission(items: MenuDataItem[], currentUser: any): MenuDataItem[] {
   return items

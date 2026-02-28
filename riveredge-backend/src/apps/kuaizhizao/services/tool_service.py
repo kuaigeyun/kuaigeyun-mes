@@ -110,6 +110,28 @@ class ToolUsageService:
         total = await query.count()
         items = await query.offset(skip).limit(limit).order_by("-checkout_date")
         return items, total
+
+    @staticmethod
+    async def list_all_usages(
+        tenant_id: int,
+        tool_uuid: Optional[str] = None,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolUsage], int]:
+        """全量工装领用记录（支持按工装、状态筛选）"""
+        query = ToolUsage.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if tool_uuid:
+            try:
+                tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+                query = query.filter(tool_id=tool.id)
+            except NotFoundError:
+                return [], 0
+        if status:
+            query = query.filter(status=status)
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-checkout_date")
+        return list(items), total
     
     @staticmethod
     async def checkout_tool(tenant_id: int, data: ToolUsageCreate) -> ToolUsage:
@@ -230,3 +252,101 @@ class ToolMaintenanceService:
             
         await tool.save()
         return calib
+
+    @staticmethod
+    async def list_all_maintenances(
+        tenant_id: int,
+        tool_uuid: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolMaintenance], int]:
+        """全量工装维保记录"""
+        query = ToolMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if tool_uuid:
+            try:
+                tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+                query = query.filter(tool_id=tool.id)
+            except NotFoundError:
+                return [], 0
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-maintenance_date")
+        return list(items), total
+
+    @staticmethod
+    async def list_all_calibrations(
+        tenant_id: int,
+        tool_uuid: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ToolCalibration], int]:
+        """全量工装校准记录"""
+        query = ToolCalibration.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if tool_uuid:
+            try:
+                tool = await ToolService.get_tool_by_uuid(tenant_id, tool_uuid)
+                query = query.filter(tool_id=tool.id)
+            except NotFoundError:
+                return [], 0
+        total = await query.count()
+        items = await query.offset(skip).limit(limit).order_by("-calibration_date")
+        return list(items), total
+
+
+class ToolMaintenanceReminderService:
+    """工装保养/校准提醒服务（基于 next_maintenance_date、next_calibration_date）"""
+
+    @staticmethod
+    async def list_reminders(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        due_type: Optional[str] = None,
+    ) -> Tuple[List[dict], int]:
+        """获取工装保养、校准提醒列表"""
+        from datetime import date
+        today = date.today()
+        tools = await Tool.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        results = []
+        for tool in tools:
+            # 保养提醒
+            if tool.next_maintenance_date:
+                delta = (tool.next_maintenance_date - today).days
+                if delta <= 7:
+                    rtype = "overdue" if delta < 0 else "due_soon"
+                    if due_type and rtype != due_type:
+                        pass
+                    else:
+                        results.append({
+                            "tool_uuid": tool.uuid,
+                            "tool_code": tool.code,
+                            "tool_name": tool.name,
+                            "reminder_type": "maintenance",
+                            "due_type": rtype,
+                            "due_date": tool.next_maintenance_date,
+                            "days_until_due": delta,
+                        })
+            # 校准提醒（仅 needs_calibration 且 next_calibration_date 有值）
+            if tool.needs_calibration and tool.next_calibration_date:
+                delta = (tool.next_calibration_date - today).days
+                if delta <= 7:
+                    rtype = "overdue" if delta < 0 else "due_soon"
+                    if due_type and rtype != due_type:
+                        pass
+                    else:
+                        results.append({
+                            "tool_uuid": tool.uuid,
+                            "tool_code": tool.code,
+                            "tool_name": tool.name,
+                            "reminder_type": "calibration",
+                            "due_type": rtype,
+                            "due_date": tool.next_calibration_date,
+                            "days_until_due": delta,
+                        })
+        results.sort(key=lambda x: (0 if x["due_type"] == "overdue" else 1, x["days_until_due"]))
+        total = len(results)
+        items = results[skip : skip + limit]
+        return items, total

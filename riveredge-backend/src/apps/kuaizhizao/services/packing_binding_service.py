@@ -17,8 +17,10 @@ from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.packing_binding import PackingBinding
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingCreateFromReceipt,
+    PackingBindingCreateFromDelivery,
     PackingBindingUpdate,
     PackingBindingResponse,
     PackingBindingListResponse,
@@ -113,6 +115,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 finished_goods_receipt_id=receipt_id,
+                sales_delivery_id=None,
                 product_id=binding_data.product_id,
                 product_code=product_code,
                 product_name=product_name,
@@ -130,6 +133,74 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 remarks=binding_data.remarks,
             )
 
+            return PackingBindingResponse.model_validate(packing_binding)
+
+    async def create_packing_binding_from_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        binding_data: PackingBindingCreateFromDelivery,
+        bound_by: int
+    ) -> PackingBindingResponse:
+        """
+        从销售出库单创建装箱绑定记录（发货时按箱登记，用于出货追溯）
+        """
+        async with in_transaction():
+            delivery = await SalesDelivery.get_or_none(
+                id=delivery_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not delivery:
+                raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+
+            product_code = binding_data.product_code or f"PROD{binding_data.product_id}"
+            product_name = binding_data.product_name or f"产品{binding_data.product_id}"
+            packing_material_code = binding_data.packing_material_code
+            packing_material_name = binding_data.packing_material_name
+            if binding_data.packing_material_id and not packing_material_code:
+                packing_material_code = f"PACK{binding_data.packing_material_id}"
+                packing_material_name = packing_material_name or f"包装物料{binding_data.packing_material_id}"
+
+            user_info = await self.get_user_info(bound_by)
+            box_no = binding_data.box_no
+            if not box_no:
+                today = datetime.now().strftime("%Y%m%d")
+                try:
+                    box_no = await self.generate_code(
+                        tenant_id=tenant_id,
+                        code_type="BOX_CODE",
+                        prefix=f"BOX{today}"
+                    )
+                except Exception:
+                    existing_count = await PackingBinding.filter(
+                        tenant_id=tenant_id,
+                        sales_delivery_id=delivery_id,
+                        deleted_at__isnull=True
+                    ).count()
+                    box_no = f"BOX{today}{str(existing_count + 1).zfill(4)}"
+
+            packing_binding = await PackingBinding.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                finished_goods_receipt_id=None,
+                sales_delivery_id=delivery_id,
+                product_id=binding_data.product_id,
+                product_code=product_code,
+                product_name=product_name,
+                product_serial_no=binding_data.product_serial_no,
+                packing_material_id=binding_data.packing_material_id,
+                packing_material_code=packing_material_code,
+                packing_material_name=packing_material_name,
+                packing_quantity=binding_data.packing_quantity,
+                box_no=box_no,
+                binding_method=binding_data.binding_method,
+                barcode=binding_data.barcode,
+                bound_by=bound_by,
+                bound_by_name=user_info["name"],
+                bound_at=binding_data.bound_at or datetime.now(),
+                remarks=binding_data.remarks,
+            )
             return PackingBindingResponse.model_validate(packing_binding)
 
     async def get_packing_bindings_by_receipt(
@@ -152,7 +223,19 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             finished_goods_receipt_id=receipt_id,
             deleted_at__isnull=True
         ).order_by('-bound_at')
+        return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
 
+    async def get_packing_bindings_by_delivery(
+        self,
+        tenant_id: int,
+        delivery_id: int
+    ) -> List[PackingBindingListResponse]:
+        """根据销售出库单ID获取装箱绑定记录列表"""
+        bindings = await PackingBinding.filter(
+            tenant_id=tenant_id,
+            sales_delivery_id=delivery_id,
+            deleted_at__isnull=True
+        ).order_by('-bound_at')
         return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
 
     async def delete_packing_binding(
@@ -189,6 +272,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         skip: int = 0,
         limit: int = 100,
         receipt_id: Optional[int] = None,
+        sales_delivery_id: Optional[int] = None,
         product_id: Optional[int] = None,
         box_no: Optional[str] = None,
     ) -> List[PackingBindingListResponse]:
@@ -213,6 +297,8 @@ class PackingBindingService(AppBaseService[PackingBinding]):
 
         if receipt_id:
             query = query.filter(finished_goods_receipt_id=receipt_id)
+        if sales_delivery_id:
+            query = query.filter(sales_delivery_id=sales_delivery_id)
         if product_id:
             query = query.filter(product_id=product_id)
         if box_no:

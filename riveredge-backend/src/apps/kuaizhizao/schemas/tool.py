@@ -100,6 +100,8 @@ class ToolUsageResponse(ToolUsageBase):
     uuid: str
     id: int
     tenant_id: int
+    tool_code: Optional[str] = None
+    tool_name: Optional[str] = None
     created_at: datetime
 
 
@@ -124,6 +126,8 @@ class ToolMaintenanceResponse(ToolMaintenanceBase):
     model_config = ConfigDict(from_attributes=True)
     uuid: str
     id: int
+    tool_code: Optional[str] = None
+    tool_name: Optional[str] = None
     created_at: datetime
 
 
@@ -148,6 +152,8 @@ class ToolCalibrationResponse(ToolCalibrationBase):
     model_config = ConfigDict(from_attributes=True)
     uuid: str
     id: int
+    tool_code: Optional[str] = None
+    tool_name: Optional[str] = None
     created_at: datetime
 
 
@@ -174,6 +180,24 @@ class ToolMaintenanceListResponse(BaseModel):
 
 class ToolCalibrationListResponse(BaseModel):
     items: List[ToolCalibrationResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
+class ToolMaintenanceReminderResponse(BaseModel):
+    """工装保养/校准提醒"""
+    tool_uuid: str
+    tool_code: str
+    tool_name: str
+    reminder_type: str = Field(..., description="maintenance/calibration")
+    due_type: str = Field(..., description="due_soon/overdue")
+    due_date: Optional[date] = None
+    days_until_due: int = Field(..., description="距到期天数，负数表示已过期")
+
+
+class ToolMaintenanceReminderListResponse(BaseModel):
+    items: List[ToolMaintenanceReminderResponse]
     total: int
     skip: int = 0
     limit: int = 100

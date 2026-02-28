@@ -168,7 +168,7 @@ const MoldsPage: React.FC = () => {
   const loadCalibrations = async (moldUuid: string) => {
     setCalibLoading(true);
     try {
-      const res = await moldApi.listCalibrations(moldUuid, { limit: 100 });
+      const res = await moldApi.listCalibrations({ mold_uuid: moldUuid, limit: 100 });
       setCalibrations(res.items || []);
     } catch {
       setCalibrations([]);

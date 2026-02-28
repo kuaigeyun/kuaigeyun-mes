@@ -11,7 +11,13 @@ from .rework_order import ReworkOrder
 from .cost_rule import CostRule
 from .cost_calculation import CostCalculation
 from .outsource_order import OutsourceOrder
-from .outsource_work_order import OutsourceWorkOrder, OutsourceMaterialIssue, OutsourceMaterialReceipt
+from .outsource_work_order import (
+    OutsourceWorkOrder,
+    OutsourceMaterialIssue,
+    OutsourceMaterialReceipt,
+    OutsourceMaterialReturn,
+    OutsourceProductReturn,
+)
 from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
@@ -19,6 +25,8 @@ from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
 from .inventory_transfer import InventoryTransfer, InventoryTransferItem
 from .assembly_order import AssemblyOrder, AssemblyOrderItem
+from .assembly_material_binding import AssemblyMaterialBinding
+from .batching_order import BatchingOrder, BatchingOrderItem
 from .disassembly_order import DisassemblyOrder, DisassemblyOrderItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
 from .packing_binding import PackingBinding
@@ -180,6 +188,8 @@ __all__ = [
     'ReplenishmentSuggestion',
     'LineSideInventory',
     'BackflushRecord',
+    'BatchingOrder',
+    'BatchingOrderItem',
 
     # 采购管理模块
     'PurchaseOrder',

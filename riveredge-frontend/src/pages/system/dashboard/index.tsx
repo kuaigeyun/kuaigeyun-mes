@@ -74,6 +74,8 @@ import {
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
+import { getBusinessConfig } from '../../../services/businessConfig';
+import { filterMenuByBusinessConfig } from '../../../utils/menuBusinessFilter';
 import { getUserPreference } from '../../../services/userPreference';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
@@ -421,12 +423,26 @@ export default function DashboardPage() {
     refetchInterval: 60000,
   });
 
-  // 获取菜单树
+  // 获取菜单树（菜单管理）
   const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
     queryKey: ['dashboard-menu-tree'],
     queryFn: () => getMenuTree({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });
+
+  // 获取业务配置（蓝图设置），用于菜单过滤
+  const { data: businessConfig } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 按蓝图设置过滤菜单树，与侧边栏保持一致
+  const filteredMenuTree = useMemo(() => {
+    if (!menuTree) return [];
+    return filterMenuByBusinessConfig(menuTree, businessConfig ?? undefined);
+  }, [menuTree, businessConfig]);
 
   // 获取生产实时播报
   const { data: productionBroadcast, isLoading: productionBroadcastLoading } = useQuery({
@@ -473,9 +489,9 @@ export default function DashboardPage() {
     return null;
   };
 
-  // 构建快捷操作列表
+  // 构建快捷操作列表（使用蓝图过滤后的菜单）
   const quickActions = useMemo(() => {
-    if (!userPreference?.preferences?.dashboard_quick_actions || !menuTree) {
+    if (!userPreference?.preferences?.dashboard_quick_actions || !filteredMenuTree.length) {
       // 如果没有配置，返回默认快捷操作
       return [
         {
@@ -503,7 +519,7 @@ export default function DashboardPage() {
     return actions
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((action) => {
-        const menu = findMenuInTree(menuTree, action.menu_uuid);
+        const menu = findMenuInTree(filteredMenuTree, action.menu_uuid);
         if (!menu || !menu.path) {
           return null;
         }
@@ -516,7 +532,7 @@ export default function DashboardPage() {
         };
       })
       .filter((action): action is QuickAction => action !== null);
-  }, [userPreference, menuTree, navigate, t]);
+  }, [userPreference, filteredMenuTree, navigate, t]);
 
   // 打开配置模态框
   const handleOpenConfig = () => {
@@ -529,12 +545,12 @@ export default function DashboardPage() {
     setConfigModalVisible(true);
   };
 
-  // 保存快捷操作配置
+  // 保存快捷操作配置（仅允许选择蓝图过滤后的菜单）
   const handleSaveQuickActions = () => {
-    if (!menuTree) return;
+    if (!filteredMenuTree.length) return;
 
     const selectedMenus = selectedMenuKeys
-      .map(key => findMenuInTree(menuTree, key as string))
+      .map(key => findMenuInTree(filteredMenuTree, key as string))
       .filter((menu): menu is MenuTree => menu !== null && !!menu.path && !menu.is_external);
 
     const quickActions: QuickActionItem[] = selectedMenus.map((menu, index) => ({
@@ -586,11 +602,11 @@ export default function DashboardPage() {
     low: t('pages.dashboard.priorityLow'),
   }), [t]);
 
-  // 树形数据
+  // 树形数据（使用蓝图过滤后的菜单）
   const treeData = useMemo(() => {
-    if (!menuTree) return [];
-    return convertMenuTreeToTreeData(menuTree);
-  }, [menuTree]);
+    if (!filteredMenuTree.length) return [];
+    return convertMenuTreeToTreeData(filteredMenuTree);
+  }, [filteredMenuTree]);
 
   return (
     <>
@@ -998,14 +1014,14 @@ export default function DashboardPage() {
               </Space>
             }
             items={useMemo(() => {
-              // 从用户偏好设置中获取快捷入口配置
+              // 从用户偏好设置中获取快捷入口配置（使用蓝图过滤后的菜单）
               const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
               
-              if (quickEntries && quickEntries.length > 0 && menuTree) {
+              if (quickEntries && quickEntries.length > 0 && filteredMenuTree.length) {
                 return quickEntries
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((entry) => {
-                    const menu = findMenuInTree(menuTree, entry.menu_uuid);
+                    const menu = findMenuInTree(filteredMenuTree, entry.menu_uuid);
                     if (!menu || !menu.path) return null;
                     
                     return {
@@ -1028,19 +1044,19 @@ export default function DashboardPage() {
               ];
               
               return defaultEntries;
-            }, [userPreference, menuTree, t])}
+            }, [userPreference, filteredMenuTree, t])}
             menuTree={useMemo(() => {
-              if (!menuTree) return [];
-              return convertMenuTreeToTreeData(menuTree);
-            }, [menuTree])}
+              if (!filteredMenuTree.length) return [];
+              return convertMenuTreeToTreeData(filteredMenuTree);
+            }, [filteredMenuTree])}
             showConfig={true}
             onSave={async (items: QuickEntryItem[]) => {
               await updatePreferences({ dashboard_quick_entries: items });
               queryClient.invalidateQueries({ queryKey: ['dashboard-user-preference'] });
             }}
             renderMenuIcon={(menuUuid: string) => {
-              if (!menuTree) return <ShopOutlined />;
-              const menu = findMenuInTree(menuTree, menuUuid);
+              if (!filteredMenuTree.length) return <ShopOutlined />;
+              const menu = findMenuInTree(filteredMenuTree, menuUuid);
               return menu ? renderMenuIcon(menu) : <ShopOutlined />;
             }}
           />

@@ -66,6 +66,13 @@ import MoldsPage from './pages/equipment-management/molds';
 import ToolLedgerPage from './pages/equipment-management/tool-ledger';
 import EquipmentStatusPage from './pages/equipment-management/equipment-status';
 import MaintenanceRemindersPage from './pages/equipment-management/maintenance-reminders';
+import MoldUsagesPage from './pages/equipment-management/mold-usages';
+import MoldCalibrationsPage from './pages/equipment-management/mold-calibrations';
+import MoldMaintenanceRemindersPage from './pages/equipment-management/mold-maintenance-reminders';
+import ToolUsagesPage from './pages/equipment-management/tool-usages';
+import ToolMaintenancesPage from './pages/equipment-management/tool-maintenances';
+import ToolCalibrationsPage from './pages/equipment-management/tool-calibrations';
+import ToolMaintenanceRemindersPage from './pages/equipment-management/tool-maintenance-reminders';
 
 // 财务管理页面
 import InvoiceListPage from './pages/finance-management/invoices';
@@ -100,7 +107,10 @@ import BackflushRecordsPage from './pages/warehouse-management/backflush-records
 import StocktakingPage from './pages/warehouse-management/stocktaking';
 import InventoryTransferPage from './pages/warehouse-management/inventory-transfer';
 import AssemblyOrdersPage from './pages/warehouse-management/assembly-orders';
+import BatchingCenterPage from './pages/warehouse-management/batching-center';
 import DisassemblyOrdersPage from './pages/warehouse-management/disassembly-orders';
+import InventoryAlertPage from './pages/warehouse-management/inventory-alert';
+import PackingBindingPage from './pages/production-execution/packing-binding';
 import PlaceholderPage from './components/PlaceholderPage';
 
 // 绩效管理页面
@@ -140,6 +150,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
       {/* 委外管理：整合工序委外与委外工单，路由 /outsource-management */}
       <Route path="production-execution/outsource-management" element={<OutsourceManagementPage />} />
+      <Route path="production-execution/packing-binding" element={<PackingBindingPage />} />
       <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
       <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />
       <Route path="production-execution/quality-exceptions" element={<QualityExceptionsPage />} />
@@ -179,6 +190,13 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/tool-ledger" element={<ToolLedgerPage />} />
       <Route path="equipment-management/equipment-status" element={<EquipmentStatusPage />} />
       <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
+      <Route path="equipment-management/mold-usages" element={<MoldUsagesPage />} />
+      <Route path="equipment-management/mold-calibrations" element={<MoldCalibrationsPage />} />
+      <Route path="equipment-management/mold-maintenance-reminders" element={<MoldMaintenanceRemindersPage />} />
+      <Route path="equipment-management/tool-usages" element={<ToolUsagesPage />} />
+      <Route path="equipment-management/tool-maintenances" element={<ToolMaintenancesPage />} />
+      <Route path="equipment-management/tool-calibrations" element={<ToolCalibrationsPage />} />
+      <Route path="equipment-management/tool-maintenance-reminders" element={<ToolMaintenanceRemindersPage />} />
 
       {/* 财务管理路由 */}
       <Route path="finance-management/invoices" element={<InvoiceListPage />} />
@@ -222,9 +240,11 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/stocktaking" element={<StocktakingPage />} />
       <Route path="warehouse-management/inventory-transfer" element={<InventoryTransferPage />} />
       <Route path="warehouse-management/delivery-notes" element={<DeliveryNotesPage />} />
+      <Route path="warehouse-management/batching-center" element={<BatchingCenterPage />} />
       <Route path="warehouse-management/assembly-orders" element={<AssemblyOrdersPage />} />
       <Route path="warehouse-management/disassembly-orders" element={<DisassemblyOrdersPage />} />
       <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
+      <Route path="warehouse-management/inventory-alert" element={<InventoryAlertPage />} />
       <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />
       <Route path="warehouse-management/backflush-records" element={<BackflushRecordsPage />} />
 

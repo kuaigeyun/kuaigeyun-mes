@@ -50,6 +50,7 @@ class PackingBinding(BaseModel):
         indexes = [
             ("tenant_id",),
             ("finished_goods_receipt_id",),
+            ("sales_delivery_id",),
             ("product_id",),
             ("product_serial_no",),
             ("packing_material_id",),
@@ -60,8 +61,9 @@ class PackingBinding(BaseModel):
     # 主键
     id = fields.IntField(pk=True, description="主键ID")
 
-    # 关联信息
-    finished_goods_receipt_id = fields.IntField(description="成品入库单ID（关联FinishedGoodsReceipt）")
+    # 关联信息（成品入库或销售出库二选一）
+    finished_goods_receipt_id = fields.IntField(null=True, description="成品入库单ID（关联FinishedGoodsReceipt，与sales_delivery_id二选一）")
+    sales_delivery_id = fields.IntField(null=True, description="销售出库单ID（关联SalesDelivery，与finished_goods_receipt_id二选一）")
     product_id = fields.IntField(description="产品ID")
     product_code = fields.CharField(max_length=50, description="产品编码")
     product_name = fields.CharField(max_length=200, description="产品名称")

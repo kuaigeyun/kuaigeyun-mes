@@ -51,6 +51,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-equipment-management-tool": "TOOL",     # 工装
     "kuaizhizao-warehouse-assembly-order": "ZZD",        # 组装单
     "kuaizhizao-warehouse-disassembly-order": "CXD",    # 拆卸单
+    "kuaizhizao-warehouse-batching-order": "PL",        # 配料单
 }
 
 # 页面配置数据结构
@@ -559,6 +560,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "DISASSEMBLY_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-batching-order",
+        "page_name": "配料单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "code_field": "code",
+        "code_field_label": "配料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "BATCHING_ORDER_CODE",
         "allow_manual_edit": True,
     },
     {

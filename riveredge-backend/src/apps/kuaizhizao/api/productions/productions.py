@@ -162,6 +162,7 @@ from apps.kuaizhizao.schemas.assembly_order import (
     AssemblyOrderItemUpdate,
     AssemblyOrderItemResponse,
 )
+from apps.kuaizhizao.schemas.assembly_material_binding import ExecuteAssemblyOrderRequest
 from apps.kuaizhizao.schemas.disassembly_order import (
     DisassemblyOrderCreate,
     DisassemblyOrderUpdate,
@@ -3140,15 +3141,17 @@ async def delete_assembly_order(
 @router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="执行组装")
 async def execute_assembly_order(
     order_id: int,
+    request_data: Optional[ExecuteAssemblyOrderRequest] = None,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> AssemblyOrderResponse:
-    """执行组装（更新明细状态，TODO: 调用库存服务）"""
+    """执行组装（更新明细状态，支持可选物料绑定追溯）"""
     try:
         return await assembly_order_service.execute_assembly_order(
             tenant_id=tenant_id,
             order_id=order_id,
-            executed_by=current_user.id
+            executed_by=current_user.id,
+            request_data=request_data
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

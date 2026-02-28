@@ -345,3 +345,110 @@ class OutsourceMaterialReceipt(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.quantity} {self.unit}"
+
+
+class OutsourceMaterialReturn(BaseModel):
+    """
+    委外退料模型
+
+    供应商退回未使用的原料（委外发料的反向）。
+
+    Attributes:
+        outsource_work_order_id: 委外工单ID
+        outsource_material_issue_id: 委外发料单ID（可选，关联原发料）
+        material_id: 物料ID
+        quantity: 退料数量
+        warehouse_id: 入库仓库ID
+        status: 状态（draft/completed/cancelled）
+        returned_at: 退料时间
+    """
+
+    class Meta:
+        table = "apps_kuaizhizao_outsource_material_returns"
+        table_description = "快格轻制造 - 委外退料单"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("outsource_work_order_id",),
+            ("outsource_material_issue_id",),
+            ("status",),
+        ]
+        unique_together = [("tenant_id", "code")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    code = fields.CharField(max_length=50, description="委外退料单编码")
+    outsource_work_order_id = fields.IntField(description="委外工单ID")
+    outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
+    outsource_material_issue_id = fields.IntField(null=True, description="委外发料单ID（可选）")
+    material_id = fields.IntField(description="物料ID")
+    material_code = fields.CharField(max_length=50, description="物料编码")
+    material_name = fields.CharField(max_length=200, description="物料名称")
+    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="退料数量")
+    unit = fields.CharField(max_length=20, description="单位")
+    warehouse_id = fields.IntField(null=True, description="入库仓库ID")
+    warehouse_name = fields.CharField(max_length=200, null=True, description="仓库名称")
+    location_id = fields.IntField(null=True, description="库位ID")
+    batch_number = fields.CharField(max_length=100, null=True, description="批次号")
+    status = fields.CharField(max_length=20, default="draft", description="状态")
+    returned_at = fields.DatetimeField(null=True, description="退料时间")
+    returned_by = fields.IntField(null=True, description="退料人ID")
+    returned_by_name = fields.CharField(max_length=100, null=True, description="退料人姓名")
+    remarks = fields.TextField(null=True, description="备注")
+    created_by = fields.IntField(description="创建人ID")
+    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
+    updated_by = fields.IntField(null=True, description="更新人ID")
+    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
+    def __str__(self):
+        return f"{self.code} - {self.material_name} ({self.quantity} {self.unit})"
+
+
+class OutsourceProductReturn(BaseModel):
+    """
+    委外退货模型
+
+    委外成品不合格退回给供应商（委外收货的反向）。
+
+    Attributes:
+        outsource_work_order_id: 委外工单ID
+        outsource_material_receipt_id: 委外收货单ID（可选，关联原收货）
+        quantity: 退货数量
+        reason: 退货原因
+        status: 状态（draft/completed/cancelled）
+        returned_at: 退货时间
+    """
+
+    class Meta:
+        table = "apps_kuaizhizao_outsource_product_returns"
+        table_description = "快格轻制造 - 委外退货单"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("outsource_work_order_id",),
+            ("outsource_material_receipt_id",),
+            ("status",),
+        ]
+        unique_together = [("tenant_id", "code")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    code = fields.CharField(max_length=50, description="委外退货单编码")
+    outsource_work_order_id = fields.IntField(description="委外工单ID")
+    outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
+    outsource_material_receipt_id = fields.IntField(null=True, description="委外收货单ID（可选）")
+    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="退货数量")
+    unit = fields.CharField(max_length=20, description="单位")
+    return_reason = fields.CharField(max_length=500, null=True, description="退货原因")
+    status = fields.CharField(max_length=20, default="draft", description="状态")
+    returned_at = fields.DatetimeField(null=True, description="退货时间")
+    returned_by = fields.IntField(null=True, description="退货人ID")
+    returned_by_name = fields.CharField(max_length=100, null=True, description="退货人姓名")
+    remarks = fields.TextField(null=True, description="备注")
+    created_by = fields.IntField(description="创建人ID")
+    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
+    updated_by = fields.IntField(null=True, description="更新人ID")
+    updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
+    def __str__(self):
+        return f"{self.code} - {self.quantity} {self.unit}"
