@@ -45,6 +45,9 @@ riveredge-backend/backups/
 *.swo
 .DS_Store
 
+# ===== 文档（不推送） =====
+docs/
+
 # ===== 测试 =====
 .coverage
 htmlcov/
