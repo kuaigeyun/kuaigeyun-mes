@@ -28,13 +28,16 @@ else
     read -p "INNGEST_SIGNING_KEY: " INNGEST_SIGNING
 fi
 
-# 3. 平台管理员密码
-read -p "平台管理员密码（直接回车使用 platmaster@2026）: " ADMIN_PW
-ADMIN_PW=${ADMIN_PW:-platmaster@2026}
+# 3. 平台管理员密码（必填，勿使用默认值）
+read -p "平台管理员密码（必填，用于 /infra/login）: " ADMIN_PW
+while [ -z "$ADMIN_PW" ]; do
+    echo "  密码不能为空，请重新输入"
+    read -p "平台管理员密码: " ADMIN_PW
+done
 
 # 4. 域名
-read -p "域名 DOMAIN（直接回车使用 kuaigeyun.com）: " DOMAIN
-DOMAIN=${DOMAIN:-kuaigeyun.com}
+read -p "域名 DOMAIN（如 example.com）: " DOMAIN
+DOMAIN=${DOMAIN:-example.com}
 
 # 生成 .env
 cat > "$OUTPUT" << EOF
@@ -48,7 +51,7 @@ INNGEST_POSTGRES_URI=postgres://riveredge:${DB_PW}@127.0.0.1:5432/inngest
 INNGEST_REDIS_URI=redis://127.0.0.1:6379
 INFRA_SUPERADMIN_USERNAME=infra_admin
 INFRA_SUPERADMIN_PASSWORD=$ADMIN_PW
-INFRA_SUPERADMIN_EMAIL=infra_admin@riveredge.cn
+INFRA_SUPERADMIN_EMAIL=admin@${DOMAIN}
 INFRA_SUPERADMIN_FULL_NAME=平台超级管理员
 EOF
 
