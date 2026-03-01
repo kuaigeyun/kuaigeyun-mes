@@ -147,6 +147,19 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             END IF;
         END $$;
         
+        -- core_integration_configs 表（迁移70外键引用需主键）
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conrelid = 'core_integration_configs'::regclass
+                AND contype = 'p'
+            ) THEN
+                ALTER TABLE "core_integration_configs" 
+                ADD CONSTRAINT "core_integration_configs_pkey" PRIMARY KEY ("id");
+            END IF;
+        END $$;
+        
         -- core_datasets 表
         DO $$
         BEGIN
@@ -372,6 +385,19 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             END IF;
         END $$;
         
+        -- apps_master_data_defect_types 表（迁移65外键引用需主键）
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conrelid = 'apps_master_data_defect_types'::regclass
+                AND contype = 'p'
+            ) THEN
+                ALTER TABLE "apps_master_data_defect_types" 
+                ADD CONSTRAINT "apps_master_data_defect_types_pkey" PRIMARY KEY ("id");
+            END IF;
+        END $$;
+        
         -- apps_master_data_warehouses 表
         DO $$
         BEGIN
@@ -475,6 +501,32 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 ADD CONSTRAINT "apps_master_data_sop_executions_pkey" PRIMARY KEY ("id");
             END IF;
         END $$;
+        
+        -- apps_master_data_process_routes 表（迁移33外键引用需主键）
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conrelid = 'apps_master_data_process_routes'::regclass
+                AND contype = 'p'
+            ) THEN
+                ALTER TABLE "apps_master_data_process_routes" 
+                ADD CONSTRAINT "apps_master_data_process_routes_pkey" PRIMARY KEY ("id");
+            END IF;
+        END $$;
+        
+        -- apps_master_data_operations 表
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conrelid = 'apps_master_data_operations'::regclass
+                AND contype = 'p'
+            ) THEN
+                ALTER TABLE "apps_master_data_operations" 
+                ADD CONSTRAINT "apps_master_data_operations_pkey" PRIMARY KEY ("id");
+            END IF;
+        END $$;
     """
 
 
@@ -516,11 +568,20 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
         ALTER TABLE IF EXISTS "apps_master_data_bom" 
             DROP CONSTRAINT IF EXISTS "apps_master_data_bom_pkey";
         
+        ALTER TABLE IF EXISTS "apps_master_data_defect_types" 
+            DROP CONSTRAINT IF EXISTS "apps_master_data_defect_types_pkey";
+        
         ALTER TABLE IF EXISTS "apps_master_data_materials" 
             DROP CONSTRAINT IF EXISTS "apps_master_data_materials_pkey";
         
         ALTER TABLE IF EXISTS "apps_master_data_material_groups" 
             DROP CONSTRAINT IF EXISTS "apps_master_data_material_groups_pkey";
+        
+        ALTER TABLE IF EXISTS "apps_master_data_process_routes" 
+            DROP CONSTRAINT IF EXISTS "apps_master_data_process_routes_pkey";
+        
+        ALTER TABLE IF EXISTS "apps_master_data_operations" 
+            DROP CONSTRAINT IF EXISTS "apps_master_data_operations_pkey";
         
         -- ============================================
         -- 删除系统级表的主键约束
@@ -569,6 +630,9 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
         
         ALTER TABLE IF EXISTS "core_data_sources" 
             DROP CONSTRAINT IF EXISTS "core_data_sources_pkey";
+        
+        ALTER TABLE IF EXISTS "core_integration_configs" 
+            DROP CONSTRAINT IF EXISTS "core_integration_configs_pkey";
         
         ALTER TABLE IF EXISTS "core_menus" 
             DROP CONSTRAINT IF EXISTS "core_menus_pkey";
