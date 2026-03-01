@@ -142,6 +142,8 @@ export default defineConfig({
   },
   // 构建配置 - 优化性能
   build: {
+    // 输出到项目根目录的 dist，与面板/Caddy 期望的 riveredge-frontend/dist 一致
+    outDir: resolve(__dirname, 'dist'),
     // 单块告警阈值（KB），拆分后各块仍可能较大
     chunkSizeWarningLimit: 800,
     // 生产环境配置

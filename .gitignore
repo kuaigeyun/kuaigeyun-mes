@@ -20,7 +20,7 @@ node_modules/
 *.tsbuildinfo
 
 # ===== 构建产物 =====
-riveredge-frontend/dist/
+# riveredge-frontend/dist/ 已允许推送，本地构建后可直接推送到仓库，云服务器拉取后跳过构建
 riveredge-frontend/static/
 riveredge-frontend/.vite/
 *.log
