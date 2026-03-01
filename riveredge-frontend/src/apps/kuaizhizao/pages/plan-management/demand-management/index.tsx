@@ -39,9 +39,7 @@ import {
   DemandSnapshotItem,
 } from '../../../services/demand';
 import { createDemandComputation } from '../../../services/demand-computation';
-import { getDocumentRelations, getDemandChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
-import DocumentRelationDisplay from '../../../../../components/document-relation-display';
-import type { DocumentRelationData } from '../../../../../components/document-relation-display';
+import { getDemandChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
@@ -118,7 +116,6 @@ const DemandManagementPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
   const [recalcHistory, setRecalcHistory] = useState<DemandRecalcHistoryItem[]>([]);
   const [snapshots, setSnapshots] = useState<DemandSnapshotItem[]>([]);
   const [recalcHistoryLoading, setRecalcHistoryLoading] = useState(false);
@@ -198,15 +195,6 @@ const DemandManagementPage: React.FC = () => {
       try {
         const data = await getDemand(id, true, true);  // includeItems=true, includeDuration=true
         setCurrentDemand(data);
-
-        // 获取单据关联关系
-        try {
-          const relations = await getDocumentRelations('demand', id);
-          setDocumentRelations(relations);
-        } catch (error) {
-          console.error('获取单据关联关系失败:', error);
-          setDocumentRelations(null);
-        }
 
         setDrawerVisible(true);
       } catch (error: any) {
@@ -1144,14 +1132,6 @@ const DemandManagementPage: React.FC = () => {
                           />
                         </div>
                       )}
-
-                      <DocumentRelationDisplay
-                        relations={documentRelations}
-                        onDocumentClick={(documentType, documentId) => {
-                          messageApi.info(`跳转到${documentType}#${documentId}的详情页面`);
-                        }}
-                        style={{ marginTop: 24 }}
-                      />
                     </>
                   ),
                 },

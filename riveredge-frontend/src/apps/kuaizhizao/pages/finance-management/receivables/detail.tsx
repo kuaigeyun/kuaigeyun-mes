@@ -5,6 +5,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable } from '../../../types/finance/receivable';
 import { ModalForm, ProFormMoney, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
 import dayjs from 'dayjs';
 
 const ReceivableDetail: React.FC = () => {
@@ -54,6 +57,24 @@ const ReceivableDetail: React.FC = () => {
             title={`应收单详情: ${data.receivable_code}`}
             extra={[
                 <Button key="back" onClick={() => navigate(-1)}>返回</Button>,
+                <UniWorkflowActions
+                    key="workflow"
+                    record={data}
+                    entityName="应收单"
+                    statusField="status"
+                    reviewStatusField="review_status"
+                    draftStatuses={[]}
+                    pendingStatuses={['待审核']}
+                    approvedStatuses={['已审核']}
+                    rejectedStatuses={['已驳回']}
+                    theme="default"
+                    size="small"
+                    actions={{
+                        approve: (id) => receivableService.approveReceivable(id),
+                        reject: (id, reason) => receivableService.approveReceivable(id, reason),
+                    }}
+                    onSuccess={loadData}
+                />,
                 data.status !== '已结清' && (
                     <Button key="receipt" type="primary" onClick={() => setReceiptModalVisible(true)}>
                         登记收款
@@ -64,7 +85,7 @@ const ReceivableDetail: React.FC = () => {
             <Row gutter={24}>
                 <Col span={16}>
                     <ProCard title="基本信息" bordered headerBordered loading={loading}>
-                        <ProDescriptions column={2} dataSource={data}>
+                        <ProDescriptions column={2} dataSource={data as Record<string, unknown>}>
                             <ProDescriptions.Item label="客户名称">{data.customer_name}</ProDescriptions.Item>
                             <ProDescriptions.Item label="系统编号">{data.receivable_code}</ProDescriptions.Item>
                             <ProDescriptions.Item label="业务日期">{data.business_date}</ProDescriptions.Item>
@@ -75,6 +96,20 @@ const ReceivableDetail: React.FC = () => {
                             </ProDescriptions.Item>
                             <ProDescriptions.Item label="备注" span={2}>{data.notes || '-'}</ProDescriptions.Item>
                         </ProDescriptions>
+                    </ProCard>
+
+                    <ProCard title="生命周期" style={{ marginTop: 16 }} bordered headerBordered>
+                        {(() => {
+                            const lc = getReceivableLifecycle(data as Record<string, unknown>);
+                            return (
+                                <UniLifecycleStepper
+                                    steps={lc.mainStages ?? []}
+                                    showLabels
+                                    status={lc.status}
+                                    nextStepSuggestions={lc.nextStepSuggestions}
+                                />
+                            );
+                        })()}
                     </ProCard>
 
                     <ProCard title="关联明细" style={{ marginTop: 16 }} bordered headerBordered>

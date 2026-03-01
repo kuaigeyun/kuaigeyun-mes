@@ -17,6 +17,8 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDraw
 import { planningApi } from '../../../services/production';
 import { getProductionPlanLifecycle } from '../../../utils/productionPlanLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { apiRequest } from '../../../../../services/api';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useRequest } from 'ahooks';
 
@@ -126,6 +128,7 @@ const ProductionPlansPage: React.FC = () => {
         已审核: { text: '已审核' },
         已执行: { text: '已执行' },
         已取消: { text: '已取消' },
+        已驳回: { text: '已驳回' },
       },
       render: (_: unknown, record: ProductionPlan) => {
         const lifecycle = getProductionPlanLifecycle(record);
@@ -135,6 +138,7 @@ const ProductionPlansPage: React.FC = () => {
           已审核: 'processing',
           已执行: 'success',
           已取消: 'error',
+          已驳回: 'error',
         };
         return <Tag color={colorMap[stageName] ?? 'default'}>{stageName}</Tag>;
       },
@@ -153,7 +157,7 @@ const ProductionPlansPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 260,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -165,6 +169,33 @@ const ProductionPlansPage: React.FC = () => {
           >
             详情
           </Button>
+          <UniWorkflowActions
+            record={record}
+            entityName="生产计划"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[]}
+            pendingStatuses={['草稿']}
+            approvedStatuses={['已审核']}
+            rejectedStatuses={['已驳回']}
+            theme="link"
+            size="small"
+            actions={{
+              submit: (id) => planningApi.productionPlan.submit(id.toString()),
+              approve: (id) => planningApi.productionPlan.approve(id.toString()),
+              reject: (id, reason) =>
+                apiRequest(`/apps/kuaizhizao/production-plans/${id}/approve`, {
+                  method: 'POST',
+                  params: reason ? { rejection_reason: reason } : undefined,
+                }),
+            }}
+            onSuccess={() => {
+              actionRef.current?.reload();
+              if (currentPlan?.id === record.id) {
+                planningApi.productionPlan.get(record.id!.toString()).then(setCurrentPlan).catch(() => {});
+              }
+            }}
+          />
           <Button
             type="link"
             size="small"
@@ -478,13 +509,42 @@ const ProductionPlansPage: React.FC = () => {
         columns={[]}
         extra={
           currentPlan && currentPlan.execution_status !== '已执行' && (
-            <DetailDrawerActions
-              items={[
-                { key: 'edit', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(currentPlan); }}>编辑</Button> },
-                { key: 'execute', visible: currentPlan.status === '已审核', render: () => <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(currentPlan)}>执行计划</Button> },
-                { key: 'delete', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(currentPlan)}>删除</Button> },
-              ]}
-            />
+            <Space>
+              <UniWorkflowActions
+                record={currentPlan}
+                entityName="生产计划"
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={[]}
+                pendingStatuses={['草稿']}
+                approvedStatuses={['已审核']}
+                rejectedStatuses={['已驳回']}
+                theme="default"
+                size="small"
+                actions={{
+                  submit: (id) => planningApi.productionPlan.submit(id.toString()),
+                  approve: (id) => planningApi.productionPlan.approve(id.toString()),
+                  reject: (id, reason) =>
+                    apiRequest(`/apps/kuaizhizao/production-plans/${id}/approve`, {
+                      method: 'POST',
+                      params: reason ? { rejection_reason: reason } : undefined,
+                    }),
+                }}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                  if (currentPlan?.id) {
+                    planningApi.productionPlan.get(currentPlan.id.toString()).then(setCurrentPlan).catch(() => {});
+                  }
+                }}
+              />
+              <DetailDrawerActions
+                items={[
+                  { key: 'edit', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(currentPlan); }}>编辑</Button> },
+                  { key: 'execute', visible: currentPlan.status === '已审核', render: () => <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(currentPlan)}>执行计划</Button> },
+                  { key: 'delete', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(currentPlan)}>删除</Button> },
+                ]}
+              />
+            </Space>
           )
         }
         customContent={
@@ -556,50 +616,7 @@ const ProductionPlansPage: React.FC = () => {
                 );
               })()}
 
-              {/* 核心排程可视化：产能负荷感知 */}
-              <Card 
-                title={<Space><BarChartOutlined /> 智能排程建议与资源负荷</Space>} 
-                style={{ marginBottom: 16 }} 
-                size="small" 
-                headStyle={{ background: '#fafafa', borderBottom: `1px solid ${token.colorBorder}` }}
-              >
-                <div style={{ padding: '8px 4px' }}>
-                   <Row gutter={12}>
-                      {[0, 1, 2, 3].map((off) => {
-                        const dateStr = `02-${14 + off}`; 
-                        const load = off === 0 ? 95 : (off === 1 ? 40 : 20);
-                        return (
-                          <Col span={6} key={off}>
-                            <div style={{ background: '#fff', border: `1px solid ${token.colorBorder}`, padding: '10px', borderRadius: 6 }}>
-                               <div style={{ fontSize: 12, color: '#8c8c8c' }}>{dateStr} 负荷预期</div>
-                               <div style={{ margin: '4px 0', fontSize: 18, fontWeight: 'bold', color: load > 80 ? '#cf1322' : '#000' }}>
-                                 {load}%
-                               </div>
-                               <div style={{ height: 6, background: '#f5f5f5', borderRadius: 3, overflow: 'hidden' }}>
-                                  <div style={{ 
-                                    height: '100%', 
-                                    width: `${load}%`, 
-                                    background: load > 80 ? 'linear-gradient(90deg, #ff4d4f, #cf1322)' : '#52c41a',
-                                    transition: 'width 0.3s'
-                                  }} />
-                               </div>
-                            </div>
-                          </Col>
-                        );
-                      })}
-                   </Row>
-                   <div style={{ marginTop: 12, padding: '10px 12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 4, display: 'flex', alignItems: 'flex-start' }}>
-                      <PlayCircleOutlined style={{ color: '#faad14', marginRight: 8, marginTop: 3 }} />
-                      <div style={{ fontSize: 13, lineHeight: '20px' }}>
-                        <div style={{ fontWeight: 'bold', color: '#856404' }}>排程专家建议：</div>
-                        检测到今日（02-14）车间负荷即将触顶，算法驱动的排程引擎已将部分低优先级工单标记为红色。
-                        建议在执行该计划前，将红色背景的明细项手动顺延至 **02-16** 以平衡车间负载。
-                      </div>
-                   </div>
-                </div>
-              </Card>
-
-              {/* 计划明细 */}
+              {/* 3. 单据明细 */}
               {currentPlan.items && currentPlan.items.length > 0 && (
                 <DetailDrawerSection title="计划明细">
                   <Table
@@ -658,11 +675,56 @@ const ProductionPlansPage: React.FC = () => {
                   />
                 </DetailDrawerSection>
               )}
+
+              {/* 4. 操作记录 */}
               {currentPlan?.id && (
                 <DetailDrawerSection title="操作历史">
                   <DocumentTrackingPanel documentType="production_plan" documentId={currentPlan.id} />
                 </DetailDrawerSection>
               )}
+
+              {/* 5. 其他功能：智能排程可视化 */}
+              <Card 
+                title={<Space><BarChartOutlined /> 智能排程建议与资源负荷</Space>} 
+                style={{ marginBottom: 16 }} 
+                size="small" 
+                headStyle={{ background: '#fafafa', borderBottom: `1px solid ${token.colorBorder}` }}
+              >
+                <div style={{ padding: '8px 4px' }}>
+                   <Row gutter={12}>
+                      {[0, 1, 2, 3].map((off) => {
+                        const dateStr = `02-${14 + off}`; 
+                        const load = off === 0 ? 95 : (off === 1 ? 40 : 20);
+                        return (
+                          <Col span={6} key={off}>
+                            <div style={{ background: '#fff', border: `1px solid ${token.colorBorder}`, padding: '10px', borderRadius: 6 }}>
+                               <div style={{ fontSize: 12, color: '#8c8c8c' }}>{dateStr} 负荷预期</div>
+                               <div style={{ margin: '4px 0', fontSize: 18, fontWeight: 'bold', color: load > 80 ? '#cf1322' : '#000' }}>
+                                 {load}%
+                               </div>
+                               <div style={{ height: 6, background: '#f5f5f5', borderRadius: 3, overflow: 'hidden' }}>
+                                  <div style={{ 
+                                    height: '100%', 
+                                    width: `${load}%`, 
+                                    background: load > 80 ? 'linear-gradient(90deg, #ff4d4f, #cf1322)' : '#52c41a',
+                                    transition: 'width 0.3s'
+                                  }} />
+                               </div>
+                            </div>
+                          </Col>
+                        );
+                      })}
+                   </Row>
+                   <div style={{ marginTop: 12, padding: '10px 12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 4, display: 'flex', alignItems: 'flex-start' }}>
+                      <PlayCircleOutlined style={{ color: '#faad14', marginRight: 8, marginTop: 3 }} />
+                      <div style={{ fontSize: 13, lineHeight: '20px' }}>
+                        <div style={{ fontWeight: 'bold', color: '#856404' }}>排程专家建议：</div>
+                        检测到今日（02-14）车间负荷即将触顶，算法驱动的排程引擎已将部分低优先级工单标记为红色。
+                        建议在执行该计划前，将红色背景的明细项手动顺延至 **02-16** 以平衡车间负载。
+                      </div>
+                   </div>
+                </div>
+              </Card>
             </div>
           ) : null
         }

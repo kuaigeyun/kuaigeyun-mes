@@ -12,7 +12,7 @@ import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, Pro
 import { App, Button, Space, Popconfirm } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import dayjs from 'dayjs';
 
@@ -429,6 +429,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRegistration(null);
         }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={currentRegistration || {}}
         columns={[
           {

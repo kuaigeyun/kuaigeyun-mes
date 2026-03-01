@@ -79,24 +79,12 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   children,
 }: DetailDrawerTemplateProps<T>) => {
 
-  // Ant Design 6: 使用 size 替代已废弃的 width
-  // size='default' | 'large'；自定义宽度通过 styles.body 设置
-  const isLarge = typeof width === 'number' ? width > 500 : false;
-  const size: 'default' | 'large' = isLarge ? 'large' : 'default';
-  const bodyStyle =
-    typeof width === 'string' && width
-      ? { width, maxWidth: '100%', minWidth: 360 }
-      : typeof width === 'number' && width > 0
-        ? { width, maxWidth: '100%' }
-        : undefined;
-
   return (
     <Drawer
       title={title}
       open={open ?? visible}
       onClose={onClose}
-      size={size}
-      styles={bodyStyle ? { body: bodyStyle } : undefined}
+      width={width}
       loading={loading}
       className={className}
       extra={extra}

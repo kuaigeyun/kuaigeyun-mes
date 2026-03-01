@@ -45,7 +45,9 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { ListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import { ListPageTemplate, DetailDrawerSection, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
 import {
   listDemandComputations,
   getDemandComputation,
@@ -1431,6 +1433,22 @@ const DemandComputationPage: React.FC = () => {
                       ]}
                     />
 
+                    {(() => {
+                      const lifecycle = getDemandComputationLifecycle(currentComputation)
+                      const mainStages = lifecycle.mainStages ?? []
+                      if (mainStages.length === 0) return null
+                      return (
+                        <DetailDrawerSection title="生命周期">
+                          <UniLifecycleStepper
+                            steps={mainStages}
+                            status={lifecycle.status}
+                            showLabels
+                            nextStepSuggestions={lifecycle.nextStepSuggestions}
+                          />
+                        </DetailDrawerSection>
+                      )
+                    })()}
+
                     {validationResults && (
                       <div style={{ marginTop: 24, marginBottom: 24 }}>
                         <ProDescriptions
@@ -1547,6 +1565,15 @@ const DemandComputationPage: React.FC = () => {
                           scroll={{ x: 1200 }}
                         />
                       </>
+                    )}
+
+                    {currentComputation?.id && (
+                      <DetailDrawerSection title="操作记录" style={{ marginTop: 24 }}>
+                        <DocumentTrackingPanel
+                          documentType="demand_computation"
+                          documentId={currentComputation.id}
+                        />
+                      </DetailDrawerSection>
                     )}
                   </>
                 ),

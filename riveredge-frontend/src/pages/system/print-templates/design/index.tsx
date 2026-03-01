@@ -104,7 +104,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       }
       // 加固并修复已污染内容（如「备注」重复），设计器与预览均使用修复后的模板
       template = sanitizeTemplate(template);
-      document.title = '打印设计';
+      document.title = t('pages.system.printTemplatesDesign.documentTitle');
       setTemplateName(data.name);
       setInitialTemplate(template);
       setAvailableVariables(variableItems);
@@ -368,7 +368,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             {isUsed && (
               <div style={{ color: '#52c41a', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                 <CheckCircleOutlined />
-                <span>已添加</span>
+                <span>{t('pages.system.printTemplatesDesign.added')}</span>
               </div>
             )}
           </div>
@@ -376,41 +376,41 @@ const PrintTemplateDesignPage: React.FC = () => {
       })}
       {filteredVariables.length === 0 && (
         <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>
-          未找到匹配字段
+          {t('pages.system.printTemplatesDesign.noMatchField')}
         </div>
       )}
     </div>
-  ), [filteredVariables, usedKeys, handleAddVariable, token]);
+  ), [filteredVariables, usedKeys, handleAddVariable, token, t]);
 
 
 
   if (loading) {
-    return <div style={{ padding: 20 }}>加载中...</div>;
+    return <div style={{ padding: 20 }}>{t('pages.system.printTemplatesDesign.loading')}</div>;
   }
 
   return (
     <div style={{ height: 'calc(100vh - 48px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <CanvasPageTemplate
-        functionalTitle="打印设计"
+        functionalTitle={t('pages.system.printTemplatesDesign.functionalTitle')}
         toolbar={
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space>
               <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-                返回
+                {t('pages.system.printTemplatesDesign.back')}
               </Button>
               <Title level={5} style={{ margin: 0 }}>
-                {templateName || '设计模板'}
+                {templateName || t('pages.system.printTemplatesDesign.designTemplate')}
               </Title>
             </Space>
             <Space>
               <Button icon={<SettingOutlined />} onClick={handleOpenPageSettings}>
-                页面设置
+                {t('pages.system.printTemplatesDesign.pageSettings')}
               </Button>
               <Button icon={<EyeOutlined />} onClick={handlePreview}>
-                预览
+                {t('pages.system.printTemplatesDesign.preview')}
               </Button>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
-                保存
+                {t('pages.system.printTemplatesDesign.save')}
               </Button>
             </Space>
           </Space>
@@ -426,12 +426,12 @@ const PrintTemplateDesignPage: React.FC = () => {
         }
         canvasMinHeight={500}
         rightPanel={{
-          title: '可用业务变量',
+          title: t('pages.system.printTemplatesDesign.availableVariables'),
           children: (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
               <div style={{ padding: '4px 0' }}>
                 <Input.Search 
-                  placeholder="搜索字段名称或 Key" 
+                  placeholder={t('pages.system.printTemplatesDesign.searchFieldPlaceholder')} 
                   allowClear 
                   onSearch={setVarSearchText}
                   onChange={(e) => setVarSearchText(e.target.value)}
@@ -441,30 +441,30 @@ const PrintTemplateDesignPage: React.FC = () => {
                 {variableItemsList}
               </div>
               <div style={{ fontSize: 12, color: '#8c8c8c', background: '#fafafa', padding: 8, borderRadius: 4 }}>
-                提示：点击上方字段可直接将其添加到当前页面中心，无需手动配置名称。
+                {t('pages.system.printTemplatesDesign.variableHint')}
               </div>
             </div>
           )
         }}
       />
       <Modal
-        title="页面设置"
+        title={t('pages.system.printTemplatesDesign.modalPageSettings')}
         open={pageSettingsOpen}
         onCancel={() => {
           setPageSettingsOpen(false);
           setUploadedBasePdfFile(null);
         }}
         onOk={handleApplyPageSettings}
-        okText="应用"
-        cancelText="取消"
+        okText={t('pages.system.printTemplatesDesign.apply')}
+        cancelText={t('pages.system.printTemplatesDesign.cancel')}
         width={480}
       >
         <Form form={pageSettingsForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="basePdfSource" label="BasePDF 背景">
+          <Form.Item name="basePdfSource" label={t('pages.system.printTemplatesDesign.basePdfLabel')}>
             <Select
               options={[
-                { label: '空白页（可配置纸张与边距）', value: 'blank' },
-                { label: '使用 PDF 文件作为背景', value: 'custom' },
+                { label: t('pages.system.printTemplatesDesign.optionBlank'), value: 'blank' },
+                { label: t('pages.system.printTemplatesDesign.optionCustom'), value: 'custom' },
               ]}
             />
           </Form.Item>
@@ -476,7 +476,7 @@ const PrintTemplateDesignPage: React.FC = () => {
             {({ getFieldValue }) =>
               getFieldValue('basePdfSource') === 'blank' ? (
                 <>
-                  <Form.Item name="paperPreset" label="纸张规格">
+                  <Form.Item name="paperPreset" label={t('pages.system.printTemplatesDesign.paperPreset')}>
                     <Select
                       options={PAPER_PRESETS.map((p) => ({ label: p.label, value: p.id }))}
                       onChange={(id) => {
@@ -499,36 +499,36 @@ const PrintTemplateDesignPage: React.FC = () => {
                     {({ getFieldValue: gf }) =>
                       gf('paperPreset') === 'custom' ? (
                         <Space style={{ width: '100%' }} wrap>
-                          <Form.Item name="customWidth" label="宽度(mm)" rules={[{ required: true }]}>
+                          <Form.Item name="customWidth" label={t('pages.system.printTemplatesDesign.widthMm')} rules={[{ required: true }]}>
                             <InputNumber min={50} max={500} style={{ width: 120 }} />
                           </Form.Item>
-                          <Form.Item name="customHeight" label="高度(mm)" rules={[{ required: true }]}>
+                          <Form.Item name="customHeight" label={t('pages.system.printTemplatesDesign.heightMm')} rules={[{ required: true }]}>
                             <InputNumber min={50} max={600} style={{ width: 120 }} />
                           </Form.Item>
                         </Space>
                       ) : null
                     }
                   </Form.Item>
-                  <Form.Item label="边距(mm)" style={{ marginTop: 16 }}>
+                  <Form.Item label={t('pages.system.printTemplatesDesign.marginMm')} style={{ marginTop: 16 }}>
                     <Space wrap size="middle">
-                      <Form.Item name="paddingTop" label="上" style={{ marginBottom: 0 }}>
+                      <Form.Item name="paddingTop" label={t('pages.system.printTemplatesDesign.marginTop')} style={{ marginBottom: 0 }}>
                         <InputNumber min={0} max={50} style={{ width: 90 }} />
                       </Form.Item>
-                      <Form.Item name="paddingRight" label="右" style={{ marginBottom: 0 }}>
+                      <Form.Item name="paddingRight" label={t('pages.system.printTemplatesDesign.marginRight')} style={{ marginBottom: 0 }}>
                         <InputNumber min={0} max={50} style={{ width: 90 }} />
                       </Form.Item>
-                      <Form.Item name="paddingBottom" label="下" style={{ marginBottom: 0 }}>
+                      <Form.Item name="paddingBottom" label={t('pages.system.printTemplatesDesign.marginBottom')} style={{ marginBottom: 0 }}>
                         <InputNumber min={0} max={50} style={{ width: 90 }} />
                       </Form.Item>
-                      <Form.Item name="paddingLeft" label="左" style={{ marginBottom: 0 }}>
+                      <Form.Item name="paddingLeft" label={t('pages.system.printTemplatesDesign.marginLeft')} style={{ marginBottom: 0 }}>
                         <InputNumber min={0} max={50} style={{ width: 90 }} />
                       </Form.Item>
                     </Space>
                   </Form.Item>
                   <div style={{ background: '#fafafa', padding: 12, borderRadius: 6, marginTop: 16 }}>
-                    <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 13 }}>页眉页脚设置</div>
+                    <div style={{ fontWeight: 500, marginBottom: 12, fontSize: 13 }}>{t('pages.system.printTemplatesDesign.headerFooterTitle')}</div>
                     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                      <Form.Item label="页眉格式" style={{ marginBottom: 0 }}>
+                      <Form.Item label={t('pages.system.printTemplatesDesign.headerFormat')} style={{ marginBottom: 0 }}>
                         <Space.Compact style={{ width: '100%' }}>
                           <Form.Item name="headerPreset" noStyle>
                             <Select 
@@ -543,14 +543,14 @@ const PrintTemplateDesignPage: React.FC = () => {
                           </Form.Item>
                           <Form.Item name="headerText" noStyle>
                             <Input 
-                              placeholder="自定义内容或变量" 
+                              placeholder={t('pages.system.printTemplatesDesign.customPlaceholder')} 
                               onChange={() => pageSettingsForm.setFieldsValue({ headerPreset: 'custom' })}
                             />
                           </Form.Item>
                         </Space.Compact>
                       </Form.Item>
 
-                      <Form.Item label="页脚格式" style={{ marginBottom: 0 }}>
+                      <Form.Item label={t('pages.system.printTemplatesDesign.footerFormat')} style={{ marginBottom: 0 }}>
                         <Space.Compact style={{ width: '100%' }}>
                           <Form.Item name="footerPreset" noStyle>
                             <Select 
@@ -565,22 +565,22 @@ const PrintTemplateDesignPage: React.FC = () => {
                           </Form.Item>
                           <Form.Item name="footerText" noStyle>
                             <Input 
-                              placeholder="自定义内容或变量" 
+                              placeholder={t('pages.system.printTemplatesDesign.customPlaceholder')} 
                               onChange={() => pageSettingsForm.setFieldsValue({ footerPreset: 'custom' })}
                             />
                           </Form.Item>
                         </Space.Compact>
                       </Form.Item>
                       <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
-                        提示：支持 `{'{currentPage}'}`、`{'{totalPages}'}`、`{'{dateTime}'}` 等变量
+                        {t('pages.system.printTemplatesDesign.headerFooterHint')}
                       </div>
                     </Space>
                   </div>
                 </>
               ) : (
                 <Form.Item
-                  label="上传 PDF"
-                  extra="使用现有 PDF 作为背景，可在其上放置变量字段。选择「空白页」可清除并恢复为可配置纸张。"
+                  label={t('pages.system.printTemplatesDesign.uploadPdf')}
+                  extra={t('pages.system.printTemplatesDesign.uploadPdfExtra')}
                 >
                   <Upload
                     accept=".pdf,application/pdf"
@@ -597,7 +597,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                     }
                   >
                     <Button icon={<FilePdfOutlined />}>
-                      {basePdfWasCustomOnOpen ? '更换 PDF 文件' : '选择 PDF 文件'}
+                      {basePdfWasCustomOnOpen ? t('pages.system.printTemplatesDesign.replacePdfFile') : t('pages.system.printTemplatesDesign.selectPdfFile')}
                     </Button>
                   </Upload>
                 </Form.Item>
@@ -607,7 +607,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         </Form>
       </Modal>
       <Modal
-        title={templateType ? '模板预览（已用示例数据替换变量）' : '模板预览'}
+        title={templateType ? t('pages.system.printTemplatesDesign.previewTitleWithData') : t('pages.system.printTemplatesDesign.previewTitle')}
         open={previewOpen}
         onCancel={() => {
           setPreviewOpen(false);

@@ -239,6 +239,44 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
+    async def approve_requisition(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        approved: bool,
+        review_remarks: Optional[str] = None,
+        approved_by: int = None,
+    ) -> PurchaseRequisitionResponse:
+        """审核采购申请（通过或驳回）"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status
+
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+
+        normalized = normalize_status(req.status)
+        if normalized != DocumentStatus.PENDING_REVIEW.value:
+            raise BusinessLogicError("只有待审核状态的采购申请可审核")
+
+        reviewer_name = await self.get_user_name(approved_by) if approved_by else None
+        if approved:
+            req.status = "已通过"  # 采购申请业务用语
+            req.review_status = ReviewStatus.APPROVED.value
+        else:
+            req.status = "已驳回"
+            req.review_status = ReviewStatus.REJECTED.value
+
+        req.reviewer_id = approved_by
+        req.reviewer_name = reviewer_name
+        req.review_time = datetime.now()
+        req.review_remarks = review_remarks
+        req.updated_by = approved_by
+        await req.save()
+
+        return await self.get_requisition_by_id(tenant_id, requisition_id)
+
     async def convert_to_purchase_order(
         self,
         tenant_id: int,
@@ -331,6 +369,34 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         all_converted = all(i.purchase_order_id for i in all_items)
         req.status = DocumentStatus.FULL_CONVERTED.value if all_converted else DocumentStatus.PARTIAL_CONVERTED.value
         await req.save()
+
+        # 建立采购申请→采购订单 的 DocumentRelation（支持单据追溯）
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            po_code = getattr(po, "order_code", str(po.id))
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="purchase_requisition",
+                    source_id=requisition_id,
+                    source_code=req.requisition_code,
+                    source_name=req.requisition_name or req.requisition_code,
+                    target_type="purchase_order",
+                    target_id=po.id,
+                    target_code=po_code,
+                    target_name=getattr(po, "order_name", None) or po_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="采购申请转采购订单",
+                ),
+                created_by=created_by,
+            )
+        except Exception as e:
+            from loguru import logger
+            logger.warning("创建采购申请→采购订单 单据关联失败: %s", e)
 
         return {
             "success": True,

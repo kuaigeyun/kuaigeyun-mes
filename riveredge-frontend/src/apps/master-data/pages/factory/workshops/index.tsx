@@ -147,7 +147,7 @@ const WorkshopsPage: React.FC = () => {
       messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -165,9 +165,9 @@ const WorkshopsPage: React.FC = () => {
       const result = await workshopApi.batchDelete(uuids);
       
       if (result.success) {
-        messageApi.success(result.message || '批量删除成功');
+        messageApi.success(result.message || t('app.master-data.batchDeleteSuccess'));
       } else {
-        messageApi.warning(result.message || '部分删除失败');
+        messageApi.warning(result.message || t('app.master-data.batchDeletePartial'));
       }
       
       // 清空选择
@@ -175,7 +175,7 @@ const WorkshopsPage: React.FC = () => {
       // 刷新列表
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
     }
   };
 
@@ -199,8 +199,8 @@ const WorkshopsPage: React.FC = () => {
     // 如果厂区列表为空，提示用户先创建厂区
     if (plants.length === 0) {
       Modal.warning({
-        title: '无法导入',
-        content: '当前没有可用的厂区数据，请先创建厂区后再导入车间数据。',
+        title: t('app.master-data.importDisabled'),
+        content: t('app.master-data.workshops.importNoPlant'),
       });
       return;
     }
@@ -520,16 +520,16 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `车间数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `车间数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
         const allData = await workshopApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `车间数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workshops.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -538,7 +538,7 @@ const WorkshopsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = ['车间编码', '车间名称', '所属厂区', '描述', '状态', '创建时间'];
+      const headers = [t('app.master-data.workshops.code'), t('app.master-data.workshops.name'), t('app.master-data.workshops.plantName'), t('app.master-data.workshops.description'), t('app.master-data.workshops.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -548,7 +548,7 @@ const WorkshopsPage: React.FC = () => {
           item.name || '',
           plant ? plant.name : '',
           item.description || '',
-          (item.isActive ?? (item as any).is_active) ? '启用' : '禁用',
+          (item.isActive ?? (item as any).is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -611,7 +611,7 @@ const WorkshopsPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     const fixedColumns = [
       {
-        title: '车间编码',
+        title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
         width: 150,
         fixed: 'left' as const,
@@ -619,12 +619,12 @@ const WorkshopsPage: React.FC = () => {
         copyable: true,
       },
       {
-        title: '车间名称',
+        title: t('app.master-data.workshops.name'),
         dataIndex: 'name',
         width: 200,
       },
       {
-        title: '所属厂区',
+        title: t('app.master-data.workshops.plantName'),
         dataIndex: 'plantId',
         width: 150,
         valueType: 'select',
@@ -638,25 +638,25 @@ const WorkshopsPage: React.FC = () => {
         },
       },
       {
-        title: '描述',
+        title: t('app.master-data.workshops.description'),
         dataIndex: 'description',
         ellipsis: true,
         hideInSearch: true,
       },
       {
-        title: '启用状态',
+        title: t('app.master-data.workshops.statusLabel'),
         dataIndex: 'isActive',
         width: 100,
         valueType: 'select',
         valueEnum: {
-          true: { text: '启用', status: 'Success' },
-          false: { text: '禁用', status: 'Default' },
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: { text: t('common.disabled'), status: 'Default' },
         },
         render: (_, record) => {
           const isActive = record?.isActive ?? (record as any)?.is_active;
           return (
             <Tag color={isActive ? 'success' : 'default'}>
-              {isActive ? '启用' : '禁用'}
+              {isActive ? t('common.enabled') : t('common.disabled')}
             </Tag>
           );
         },
@@ -664,7 +664,7 @@ const WorkshopsPage: React.FC = () => {
       // 插入自定义字段列
       ...customFieldColumns,
       {
-        title: '创建时间',
+        title: t('common.createdAt'),
         dataIndex: 'createdAt',
         width: 180,
         valueType: 'dateTime',
@@ -672,7 +672,7 @@ const WorkshopsPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: '操作',
+        title: t('common.actions'),
         valueType: 'option',
         width: 150,
         fixed: 'right' as const,
@@ -683,7 +683,7 @@ const WorkshopsPage: React.FC = () => {
               size="small"
               onClick={() => handleOpenDetail(record)}
             >
-              详情
+              {t('field.customField.view')}
             </Button>
             <Button
               type="link"
@@ -691,11 +691,11 @@ const WorkshopsPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              编辑
+              {t('field.customField.edit')}
             </Button>
             <Popconfirm
-              title="确定要删除这个车间吗？"
-              description="删除车间前需要检查是否有关联的产线"
+              title={t('app.master-data.workshops.deleteConfirm')}
+              description={t('app.master-data.workshops.deleteDescription')}
               onConfirm={() => handleDelete(record)}
             >
               <Button
@@ -704,7 +704,7 @@ const WorkshopsPage: React.FC = () => {
                 size="small"
                 icon={<DeleteOutlined />}
               >
-                删除
+                {t('field.customField.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -713,22 +713,22 @@ const WorkshopsPage: React.FC = () => {
     ];
 
     return fixedColumns;
-  }, [customFields, plants]);
+  }, [customFields, plants, t]);
 
   /**
    * 详情 Drawer 的列定义
    */
   const detailColumns: ProDescriptionsItemType<Workshop>[] = [
     {
-      title: '车间编码',
+      title: t('app.master-data.workshops.code'),
       dataIndex: 'code',
     },
     {
-      title: '车间名称',
+      title: t('app.master-data.workshops.name'),
       dataIndex: 'name',
     },
     {
-      title: '所属厂区',
+      title: t('app.master-data.workshops.plantName'),
       dataIndex: 'plantId',
       render: (_, record) => {
         const plant = plants.find(p => p.id === (record?.plantId ?? (record as any)?.plant_id));
@@ -736,29 +736,29 @@ const WorkshopsPage: React.FC = () => {
       },
     },
     {
-      title: '描述',
+      title: t('app.master-data.workshops.description'),
       dataIndex: 'description',
       span: 2,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.workshops.statusLabel'),
       dataIndex: 'isActive',
       render: (_, record) => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -911,7 +911,7 @@ const WorkshopsPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取车间列表失败:', error);
-            messageApi.error(error?.message || '获取车间列表失败');
+            messageApi.error(error?.message || t('app.master-data.workshops.listFetchFailed'));
             return {
               data: [],
               success: false,
@@ -932,15 +932,15 @@ const WorkshopsPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建车间
+            {t('app.master-data.workshops.create')}
           </Button>,
           <Popconfirm
             key="batchDelete"
-            title="确定要批量删除选中的车间吗？"
-            description={`将删除 ${selectedRowKeys.length} 个车间，删除后无法恢复，请谨慎操作。`}
+            title={t('app.master-data.workshops.batchDeleteTitle')}
+            description={t('app.master-data.workshops.batchDeleteDescription', { count: selectedRowKeys.length })}
             onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
             disabled={selectedRowKeys.length === 0}
           >
             <Button
@@ -949,7 +949,7 @@ const WorkshopsPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={selectedRowKeys.length === 0}
             >
-              批量删除
+              {t('common.batchDelete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -962,7 +962,7 @@ const WorkshopsPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<Workshop>
-        title="车间详情"
+        title={t('app.master-data.workshops.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={workshopDetail || undefined}

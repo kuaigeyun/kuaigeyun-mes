@@ -134,23 +134,23 @@ const OperationGuidePage: React.FC = () => {
    */
   const guideColumns = [
     {
-      title: '页面标识',
+      title: t('pages.system.operationGuide.columnPageKey'),
       dataIndex: 'page_key',
       key: 'page_key',
     },
     {
-      title: '页面名称',
+      title: t('pages.system.operationGuide.columnPageName'),
       dataIndex: 'page_name',
       key: 'page_name',
     },
     {
-      title: '引导步骤数',
+      title: t('pages.system.operationGuide.columnStepCount'),
       dataIndex: 'steps',
       key: 'steps',
       render: (steps: OperationGuideStep[]) => steps?.length || 0,
     },
     {
-      title: '操作',
+      title: t('pages.system.operationGuide.columnActions'),
       key: 'action',
       width: 200,
       render: (_: any, record: OperationGuide) => (
@@ -160,14 +160,14 @@ const OperationGuidePage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handlePreviewGuide(record)}
           >
-            预览
+            {t('pages.system.operationGuide.preview')}
           </Button>
           <Button
             type="link"
             icon={<EditOutlined />}
             onClick={() => handleCreateOrEdit(record)}
           >
-            编辑
+            {t('pages.system.operationGuide.edit')}
           </Button>
         </Space>
       ),
@@ -179,17 +179,17 @@ const OperationGuidePage: React.FC = () => {
    */
   const helpDocumentColumns = [
     {
-      title: '文档标识',
+      title: t('pages.system.operationGuide.columnDocKey'),
       dataIndex: 'key',
       key: 'key',
     },
     {
-      title: '文档标题',
+      title: t('pages.system.operationGuide.columnDocTitle'),
       dataIndex: 'title',
       key: 'title',
     },
     {
-      title: '章节数',
+      title: t('pages.system.operationGuide.columnSectionCount'),
       dataIndex: 'sections',
       key: 'sections',
       render: (sections: any[]) => sections?.length || 0,
@@ -198,9 +198,9 @@ const OperationGuidePage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2}>操作引导和帮助系统</Title>
+      <Title level={2}>{t('pages.system.operationGuide.pageTitle')}</Title>
       <Paragraph>
-        管理系统中的操作引导配置和帮助文档，帮助用户快速了解系统功能和使用方法。
+        {t('pages.system.operationGuide.pageDesc')}
       </Paragraph>
 
       <Tabs
@@ -209,17 +209,17 @@ const OperationGuidePage: React.FC = () => {
         items={[
           {
             key: 'guides',
-            label: '操作引导',
+            label: t('pages.system.operationGuide.tabGuides'),
             children: (
               <Card
-                title="操作引导管理"
+                title={t('pages.system.operationGuide.guidesTitle')}
                 extra={
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => handleCreateOrEdit()}
                   >
-                    新建引导
+                    {t('pages.system.operationGuide.createGuide')}
                   </Button>
                 }
               >
@@ -235,10 +235,10 @@ const OperationGuidePage: React.FC = () => {
           },
           {
             key: 'help',
-            label: '帮助文档',
+            label: t('pages.system.operationGuide.tabHelp'),
             children: (
               <Card
-                title="帮助文档管理"
+                title={t('pages.system.operationGuide.helpTitle')}
                 extra={
                   <Space>
                     <HelpCenter mode="inline" />
@@ -257,14 +257,14 @@ const OperationGuidePage: React.FC = () => {
           },
           {
             key: 'preview',
-            label: '功能预览',
+            label: t('pages.system.operationGuide.tabPreview'),
             children: (
-              <Card title="功能预览">
+              <Card title={t('pages.system.operationGuide.previewTitle')}>
                 <Space direction="vertical" size="large" style={{ width: '100%' }}>
                   <div>
-                    <Title level={4}>操作引导组件</Title>
+                    <Title level={4}>{t('pages.system.operationGuide.guideComponentTitle')}</Title>
                     <Paragraph>
-                      操作引导组件使用 Ant Design Tour 组件实现，支持分步引导、高亮显示关键操作。
+                      {t('pages.system.operationGuide.guideComponentDesc')}
                     </Paragraph>
                     <Button
                       type="primary"
@@ -272,8 +272,8 @@ const OperationGuidePage: React.FC = () => {
                         const steps: GuideStep[] = [
                           {
                             target: '.ant-btn-primary',
-                            title: '示例按钮',
-                            description: '这是一个示例按钮，点击可以执行操作',
+                            title: t('pages.system.operationGuide.exampleButton'),
+                            description: t('pages.system.operationGuide.exampleDesc'),
                             placement: 'bottom',
                           },
                         ];
@@ -281,13 +281,13 @@ const OperationGuidePage: React.FC = () => {
                         setPreviewGuideVisible(true);
                       }}
                     >
-                      预览操作引导
+                      {t('pages.system.operationGuide.previewGuide')}
                     </Button>
                   </div>
                   <div>
-                    <Title level={4}>帮助中心组件</Title>
+                    <Title level={4}>{t('pages.system.operationGuide.helpComponentTitle')}</Title>
                     <Paragraph>
-                      帮助中心组件提供统一的帮助文档查看功能，支持搜索和分类浏览。
+                      {t('pages.system.operationGuide.helpComponentDesc')}
                     </Paragraph>
                     <HelpCenter mode="inline" />
                   </div>
@@ -300,7 +300,7 @@ const OperationGuidePage: React.FC = () => {
 
       {/* 操作引导编辑Modal */}
       <Modal
-        title={currentGuide ? '编辑操作引导' : '新建操作引导'}
+        title={currentGuide ? t('pages.system.operationGuide.modalEdit') : t('pages.system.operationGuide.modalCreate')}
         open={guideModalVisible}
         onCancel={() => setGuideModalVisible(false)}
         onOk={handleSaveGuide}
@@ -309,70 +309,70 @@ const OperationGuidePage: React.FC = () => {
         <Form form={form} layout="vertical">
           <Form.Item
             name="page_key"
-            label="页面标识"
-            rules={[{ required: true, message: '请输入页面标识' }]}
+            label={t('pages.system.operationGuide.labelPageKey')}
+            rules={[{ required: true, message: t('pages.system.operationGuide.pageKeyRequired') }]}
           >
-            <Input placeholder="如：user_management" disabled={!!currentGuide} />
+            <Input placeholder={t('pages.system.operationGuide.pageKeyPlaceholder')} disabled={!!currentGuide} />
           </Form.Item>
           <Form.Item
             name="page_name"
-            label="页面名称"
-            rules={[{ required: true, message: '请输入页面名称' }]}
+            label={t('pages.system.operationGuide.labelPageName')}
+            rules={[{ required: true, message: t('pages.system.operationGuide.pageNameRequired') }]}
           >
-            <Input placeholder="如：用户管理" />
+            <Input placeholder={t('pages.system.operationGuide.pageNamePlaceholder')} />
           </Form.Item>
           <Form.List name="steps">
             {(fields, { add, remove }) => (
               <>
                 {fields.map((field, index) => (
-                  <Card key={field.key} style={{ marginBottom: 16 }} title={`步骤 ${index + 1}`}>
+                  <Card key={field.key} style={{ marginBottom: 16 }} title={t('pages.system.operationGuide.stepTitle', { index: index + 1 })}>
                     <Form.Item
                       name={[field.name, 'step']}
-                      label="步骤序号"
+                      label={t('pages.system.operationGuide.labelStepOrder')}
                       rules={[{ required: true }]}
                     >
                       <InputNumber min={1} style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item
                       name={[field.name, 'target']}
-                      label="目标元素选择器"
-                      rules={[{ required: true, message: '请输入目标元素选择器' }]}
+                      label={t('pages.system.operationGuide.labelTarget')}
+                      rules={[{ required: true, message: t('pages.system.operationGuide.targetRequired') }]}
                     >
-                      <Input placeholder="如：.ant-btn-primary" />
+                      <Input placeholder={t('pages.system.operationGuide.targetPlaceholder')} />
                     </Form.Item>
                     <Form.Item
                       name={[field.name, 'title']}
-                      label="引导标题"
-                      rules={[{ required: true, message: '请输入引导标题' }]}
+                      label={t('pages.system.operationGuide.labelGuideTitle')}
+                      rules={[{ required: true, message: t('pages.system.operationGuide.guideTitleRequired') }]}
                     >
-                      <Input placeholder="如：创建用户" />
+                      <Input placeholder={t('pages.system.operationGuide.guideTitlePlaceholder')} />
                     </Form.Item>
                     <Form.Item
                       name={[field.name, 'description']}
-                      label="引导内容"
-                      rules={[{ required: true, message: '请输入引导内容' }]}
+                      label={t('pages.system.operationGuide.labelGuideContent')}
+                      rules={[{ required: true, message: t('pages.system.operationGuide.guideContentRequired') }]}
                     >
-                      <TextArea rows={3} placeholder="如：点击此按钮可以创建新用户" />
+                      <TextArea rows={3} placeholder={t('pages.system.operationGuide.guideContentPlaceholder')} />
                     </Form.Item>
                     <Form.Item
                       name={[field.name, 'placement']}
-                      label="引导位置"
+                      label={t('pages.system.operationGuide.labelPlacement')}
                       initialValue="bottom"
                     >
                       <Select>
-                        <Select.Option value="top">上方</Select.Option>
-                        <Select.Option value="right">右侧</Select.Option>
-                        <Select.Option value="bottom">下方</Select.Option>
-                        <Select.Option value="left">左侧</Select.Option>
+                        <Select.Option value="top">{t('pages.system.operationGuide.placementTop')}</Select.Option>
+                        <Select.Option value="right">{t('pages.system.operationGuide.placementRight')}</Select.Option>
+                        <Select.Option value="bottom">{t('pages.system.operationGuide.placementBottom')}</Select.Option>
+                        <Select.Option value="left">{t('pages.system.operationGuide.placementLeft')}</Select.Option>
                       </Select>
                     </Form.Item>
                     <Button type="link" danger onClick={() => remove(field.name)}>
-                      删除步骤
+                      {t('pages.system.operationGuide.removeStep')}
                     </Button>
                   </Card>
                 ))}
                 <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                  添加步骤
+                  {t('pages.system.operationGuide.addStep')}
                 </Button>
               </>
             )}

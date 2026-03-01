@@ -346,7 +346,7 @@ const CustomFieldListPage: React.FC = () => {
             messageApi.success(t('pages.system.deleteSuccess'));
           }
           if (failCount > 0) {
-            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? t('field.customField.errorDetailPrefix') + errors.join('; ') : ''));
           }
 
           setSelectedRowKeys([]);
@@ -609,7 +609,7 @@ const CustomFieldListPage: React.FC = () => {
                 fieldProps={{ rows: 6 }}
                 extra={
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    {t('field.customField.formatExample')}：
+                    {t('field.customField.formatExampleLabel')}
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
                       {`[
   {"label": "${t('field.customField.exampleOption1')}", "value": "1"},
@@ -633,7 +633,7 @@ const CustomFieldListPage: React.FC = () => {
                 fieldProps={{ rows: 6 }}
                 extra={
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    {t('field.customField.formatExample')}：
+                    {t('field.customField.formatExampleLabel')}
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
                       {`[
   {"label": "${t('field.customField.exampleOption1')}", "value": "1"},

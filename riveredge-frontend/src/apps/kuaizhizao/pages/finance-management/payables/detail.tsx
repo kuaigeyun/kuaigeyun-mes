@@ -5,6 +5,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { payableService } from '../../../services/finance/payable';
 import { Payable } from '../../../types/finance/payable';
 import { ModalForm, ProFormMoney, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { getPayableLifecycle } from '../../../utils/payableLifecycle';
 import dayjs from 'dayjs';
 
 const PayableDetail: React.FC = () => {
@@ -54,6 +57,24 @@ const PayableDetail: React.FC = () => {
             title={`应付单详情: ${data.payable_code}`}
             extra={[
                 <Button key="back" onClick={() => navigate(-1)}>返回</Button>,
+                <UniWorkflowActions
+                    key="workflow"
+                    record={data}
+                    entityName="应付单"
+                    statusField="status"
+                    reviewStatusField="review_status"
+                    draftStatuses={[]}
+                    pendingStatuses={['待审核']}
+                    approvedStatuses={['已审核']}
+                    rejectedStatuses={['已驳回']}
+                    theme="default"
+                    size="small"
+                    actions={{
+                        approve: (id) => payableService.approvePayable(id),
+                        reject: (id, reason) => payableService.approvePayable(id, reason),
+                    }}
+                    onSuccess={loadData}
+                />,
                 data.status !== '已结清' && (
                     <Button key="payment" type="primary" onClick={() => setPaymentModalVisible(true)}>
                         登记付款
@@ -64,7 +85,7 @@ const PayableDetail: React.FC = () => {
             <Row gutter={24}>
                 <Col span={16}>
                     <ProCard title="基本信息" bordered headerBordered loading={loading}>
-                        <ProDescriptions column={2} dataSource={data}>
+                        <ProDescriptions column={2} dataSource={data as Record<string, unknown>}>
                             <ProDescriptions.Item label="供应商名称">{data.supplier_name}</ProDescriptions.Item>
                             <ProDescriptions.Item label="系统编号">{data.payable_code}</ProDescriptions.Item>
                             <ProDescriptions.Item label="业务日期">{data.business_date}</ProDescriptions.Item>
@@ -75,6 +96,20 @@ const PayableDetail: React.FC = () => {
                             </ProDescriptions.Item>
                             <ProDescriptions.Item label="备注" span={2}>{data.notes || '-'}</ProDescriptions.Item>
                         </ProDescriptions>
+                    </ProCard>
+
+                    <ProCard title="生命周期" style={{ marginTop: 16 }} bordered headerBordered>
+                        {(() => {
+                            const lc = getPayableLifecycle(data as Record<string, unknown>);
+                            return (
+                                <UniLifecycleStepper
+                                    steps={lc.mainStages ?? []}
+                                    showLabels
+                                    status={lc.status}
+                                    nextStepSuggestions={lc.nextStepSuggestions}
+                                />
+                            );
+                        })()}
                     </ProCard>
                 </Col>
                 <Col span={8}>

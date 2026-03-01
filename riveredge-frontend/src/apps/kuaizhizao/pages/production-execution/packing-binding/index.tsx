@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Card } from 'antd';
+import { App, Button, Space, Popconfirm, Card, Row, Col } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -368,54 +368,61 @@ const PackingBindingPage: React.FC = () => {
       <DetailDrawerTemplate
         title="装箱绑定记录详情"
         open={detailDrawerVisible}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
         }}
         customContent={
-          <>
-            <ProDescriptions<PackingBinding>
-              dataSource={currentBinding || undefined}
-              column={2}
-              columns={[
-                { title: '箱号', dataIndex: 'box_no' },
-                { title: '产品编码', dataIndex: 'product_code' },
-                { title: '产品名称', dataIndex: 'product_name' },
-                { title: '产品序列号', dataIndex: 'product_serial_no' },
-                { title: '装箱数量', dataIndex: 'packing_quantity' },
-                { title: '包装物料编码', dataIndex: 'packing_material_code' },
-                { title: '包装物料名称', dataIndex: 'packing_material_name' },
-                {
-                  title: '绑定方式',
-                  dataIndex: 'binding_method',
-                  valueEnum: {
-                    scan: { text: '扫码', status: 'success' },
-                    manual: { text: '手动', status: 'default' },
-                  },
-                },
-                { title: '条码', dataIndex: 'barcode' },
-                { title: '绑定人', dataIndex: 'bound_by_name' },
-                { title: '绑定时间', dataIndex: 'bound_at', valueType: 'dateTime' },
-                { title: '备注', dataIndex: 'remarks', span: 2 },
-              ]}
-            />
-
-            {currentBinding && (
-              <div style={{ marginTop: 24 }}>
-                <Card title="装箱二维码">
-                  <QRCodeGenerator
-                    qrcodeType="BOX"
-                    data={{
-                      box_uuid: currentBinding.box_no || currentBinding.uuid || '',
-                      box_no: currentBinding.box_no || '',
-                      box_name: currentBinding.product_name || currentBinding.box_no || '',
-                    }}
-                    autoGenerate={true}
-                  />
-                </Card>
+          currentBinding && (
+            <>
+              {/* 1. 单据详情（含二维码，3列显示） */}
+              <div style={{ padding: '16px 0' }}>
+                <h4 style={{ marginBottom: 12 }}>单据详情</h4>
+                <Row gutter={16}>
+                  <Col span={16}>
+                    <ProDescriptions<PackingBinding>
+                      dataSource={currentBinding}
+                      column={2}
+                      columns={[
+                        { title: '箱号', dataIndex: 'box_no' },
+                        { title: '产品编码', dataIndex: 'product_code' },
+                        { title: '产品名称', dataIndex: 'product_name' },
+                        { title: '产品序列号', dataIndex: 'product_serial_no' },
+                        { title: '装箱数量', dataIndex: 'packing_quantity' },
+                        { title: '包装物料编码', dataIndex: 'packing_material_code' },
+                        { title: '包装物料名称', dataIndex: 'packing_material_name' },
+                        {
+                          title: '绑定方式',
+                          dataIndex: 'binding_method',
+                          valueEnum: {
+                            scan: { text: '扫码', status: 'success' },
+                            manual: { text: '手动', status: 'default' },
+                          },
+                        },
+                        { title: '条码', dataIndex: 'barcode' },
+                        { title: '绑定人', dataIndex: 'bound_by_name' },
+                        { title: '绑定时间', dataIndex: 'bound_at', valueType: 'dateTime' },
+                        { title: '备注', dataIndex: 'remarks', span: 2 },
+                      ]}
+                    />
+                  </Col>
+                  <Col span={8}>
+                    <QRCodeGenerator
+                      qrcodeType="BOX"
+                      data={{
+                        box_uuid: currentBinding.box_no || currentBinding.uuid || '',
+                        box_no: currentBinding.box_no || '',
+                        box_name: currentBinding.product_name || currentBinding.box_no || '',
+                      }}
+                      autoGenerate={true}
+                      size={6}
+                    />
+                  </Col>
+                </Row>
               </div>
-            )}
-          </>
+            </>
+          )
         }
       />
     </ListPageTemplate>

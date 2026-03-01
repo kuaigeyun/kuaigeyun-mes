@@ -11,14 +11,18 @@ import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { payableService } from '../../../services/finance/payable';
 import { Payable } from '../../../types/finance/payable';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const location = useLocation();
+    const isPaymentsPage = location.pathname.includes('/payments');
+    const headerTitle = isPaymentsPage ? '付款单' : '应付账款';
 
     const columns: ProColumns<Payable>[] = [
         {
@@ -91,10 +95,27 @@ const PayableList: React.FC = () => {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 200,
+            width: 280,
             render: (_, record) => (
                 <Space>
                     <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}`)}>详情</Button>
+                    <UniWorkflowActions
+                        record={record}
+                        entityName="应付单"
+                        statusField="status"
+                        reviewStatusField="review_status"
+                        draftStatuses={[]}
+                        pendingStatuses={['待审核']}
+                        approvedStatuses={['已审核']}
+                        rejectedStatuses={['已驳回']}
+                        theme="link"
+                        size="small"
+                        actions={{
+                            approve: (id) => payableService.approvePayable(id),
+                            reject: (id, reason) => payableService.approvePayable(id, reason),
+                        }}
+                        onSuccess={() => actionRef.current?.reload()}
+                    />
                     {record.remaining_amount > 0 && <Button type="link" size="small" icon={<DollarOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/payables/${record.id}/payment`)}>付款</Button>}
                 </Space>
             ),
@@ -104,7 +125,7 @@ const PayableList: React.FC = () => {
     return (
         <ListPageTemplate>
             <UniTable<Payable>
-                headerTitle="应付单列表"
+                headerTitle={headerTitle}
                 actionRef={actionRef}
                 rowKey="id"
                 search={{

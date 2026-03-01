@@ -8,8 +8,9 @@
  * @date 2026-01-27
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Steps, Checkbox, Space, Typography, Tag, Button, List, Empty, Alert } from 'antd';
 import { getTenantId } from '../../../utils/auth';
 import { CheckCircleOutlined, ExclamationCircleOutlined, LinkOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -19,35 +20,33 @@ import { getRoleOnboardingGuide, getSystemGoLiveGuide } from '../../../services/
 const { Title, Paragraph, Text } = Typography;
 const { Step } = Steps;
 
-/**
- * Tab 列表：系统上线（第一个）
- */
-const SYSTEM_TAB = { code: 'system', name: '系统上线', icon: '🚀' };
-
-/**
- * 角色列表
- */
-const ROLE_LIST = [
-  { code: 'sales', name: '销售', icon: '💼' },
-  { code: 'purchase', name: '采购', icon: '🛒' },
-  { code: 'warehouse', name: '仓库', icon: '📦' },
-  { code: 'technician', name: '技术研发人员', icon: '🔧' },
-  { code: 'planner', name: '生产计划人员', icon: '📋' },
-  { code: 'supervisor', name: '班组长', icon: '👔' },
-  { code: 'operator', name: '生产人员', icon: '👷' },
-  { code: 'quality', name: '质量组', icon: '✅' },
-  { code: 'equipment', name: '设备组', icon: '⚙️' },
-  { code: 'finance', name: '财务', icon: '💰' },
-  { code: 'manager', name: '管理者', icon: '👤' },
-  { code: 'implementer', name: '系统实施人员', icon: '🚀' },
+const ROLE_KEYS: Array<{ code: string; nameKey: string; icon: string }> = [
+  { code: 'sales', nameKey: 'roleSales', icon: '💼' },
+  { code: 'purchase', nameKey: 'rolePurchase', icon: '🛒' },
+  { code: 'warehouse', nameKey: 'roleWarehouse', icon: '📦' },
+  { code: 'technician', nameKey: 'roleTechnician', icon: '🔧' },
+  { code: 'planner', nameKey: 'rolePlanner', icon: '📋' },
+  { code: 'supervisor', nameKey: 'roleSupervisor', icon: '👔' },
+  { code: 'operator', nameKey: 'roleOperator', icon: '👷' },
+  { code: 'quality', nameKey: 'roleQuality', icon: '✅' },
+  { code: 'equipment', nameKey: 'roleEquipment', icon: '⚙️' },
+  { code: 'finance', nameKey: 'roleFinance', icon: '💰' },
+  { code: 'manager', nameKey: 'roleManager', icon: '👤' },
+  { code: 'implementer', nameKey: 'roleImplementer', icon: '🚀' },
 ];
 
 /**
  * 自助式上线向导页面组件
  */
 const OnboardingWizardPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+
+  const allTabs = useMemo(() => [
+    { code: 'system', name: t('pages.system.onboardingWizard.tabSystem'), icon: '🚀' },
+    ...ROLE_KEYS.map((r) => ({ code: r.code, name: t(`pages.system.onboardingWizard.${r.nameKey}`), icon: r.icon })),
+  ], [t]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('system');
   const [guideData, setGuideData] = useState<any>(null);
@@ -63,7 +62,7 @@ const OnboardingWizardPage: React.FC = () => {
       const data = await getSystemGoLiveGuide();
       setSystemGuideData(data);
     } catch (error: any) {
-      messageApi.error(error?.message || '加载系统上线向导失败');
+      messageApi.error(error?.message || t('pages.system.onboardingWizard.loadSystemFailed'));
       setSystemGuideData(null);
     } finally {
       setLoading(false);
@@ -89,7 +88,7 @@ const OnboardingWizardPage: React.FC = () => {
         setCompletedItems(new Set());
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '加载上线向导失败');
+      messageApi.error(error?.message || t('pages.system.onboardingWizard.loadRoleFailed'));
       setGuideData(null);
     } finally {
       setLoading(false);
@@ -158,21 +157,21 @@ const OnboardingWizardPage: React.FC = () => {
       return <Card loading={loading} />;
     }
     if (!systemGuideData) {
-      return <Card><Empty description="暂无系统上线向导数据" /></Card>;
+      return <Card><Empty description={t('pages.system.onboardingWizard.emptySystem')} /></Card>;
     }
     const { init_completed, message, guide } = systemGuideData;
     if (!init_completed) {
       return (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Alert
-            message="请先完成组织初始化"
+            message={t('pages.system.onboardingWizard.alertInitTitle')}
             description={
               <div>
                 <Paragraph style={{ marginBottom: 8 }}>
-                  组织初始化用于加载系统必须的初始化字段（组织信息、默认设置、编码规则、管理员信息、行业模板等）。
+                  {t('pages.system.onboardingWizard.alertInitDesc')}
                 </Paragraph>
                 <Button type="primary" onClick={() => navigate('/init/wizard')}>
-                  前往组织初始化
+                  {t('pages.system.onboardingWizard.goToInit')}
                 </Button>
               </div>
             }
@@ -199,10 +198,10 @@ const OnboardingWizardPage: React.FC = () => {
         <Card>
           <Space direction="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong>系统上线进度</Text>
+              <Text strong>{t('pages.system.onboardingWizard.systemProgress')}</Text>
               <Space>
                 <Button size="small" icon={<ReloadOutlined />} onClick={loadSystemGuide}>
-                  刷新状态
+                  {t('pages.system.onboardingWizard.refresh')}
                 </Button>
                 <Tag color={sysProgress === 100 ? 'success' : 'processing'}>{sysProgress}%</Tag>
               </Space>
@@ -220,7 +219,7 @@ const OnboardingWizardPage: React.FC = () => {
           </Space>
         </Card>
 
-        <Card title={`${guide?.name || '系统上线'} - 从0到可开单`}>
+        <Card title={`${guide?.name || t('pages.system.onboardingWizard.tabSystem')} - ${t('pages.system.onboardingWizard.fromZeroToOrder')}`}>
           <Steps
             direction="vertical"
             current={checklist.length}
@@ -245,7 +244,7 @@ const OnboardingWizardPage: React.FC = () => {
                           <div style={{ flex: 1 }}>
                             <Space>
                               <Text strong={item.required}>{item.name}</Text>
-                              {item.required && <Tag color="red" size="small">必填</Tag>}
+                              {item.required && <Tag color="red" size="small">{t('pages.system.onboardingWizard.required')}</Tag>}
                               {isCompleted && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
                             </Space>
                             <div style={{ marginTop: 4 }}>
@@ -261,7 +260,7 @@ const OnboardingWizardPage: React.FC = () => {
                               icon={<LinkOutlined />}
                               onClick={() => navigate(item.jump_path)}
                             >
-                              前往配置
+                              {t('pages.system.onboardingWizard.goToConfig')}
                             </Button>
                           )}
                         </Space>
@@ -276,8 +275,8 @@ const OnboardingWizardPage: React.FC = () => {
 
         {sysProgress === 100 && (
           <Alert
-            message="系统上线完成"
-            description="恭喜！您已完成基础数据配置，可以开出业务单据了。建议创建一张销售订单或采购订单进行验证。"
+            message={t('pages.system.onboardingWizard.systemComplete')}
+            description={t('pages.system.onboardingWizard.systemCompleteDesc')}
             type="success"
             showIcon
             icon={<CheckCircleOutlined />}
@@ -290,13 +289,13 @@ const OnboardingWizardPage: React.FC = () => {
   /** 角色 Tab 内容 */
   const renderRoleTab = () => {
     if (loading && !guideData) return <Card loading={loading} />;
-    if (!guideData) return <Card><Empty description="暂无上线向导数据" /></Card>;
+    if (!guideData) return <Card><Empty description={t('pages.system.onboardingWizard.emptyRole')} /></Card>;
     return (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <Card>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text strong>上线准备进度</Text>
+                <Text strong>{t('pages.system.onboardingWizard.roleProgress')}</Text>
                 <Tag color={progress === 100 ? 'success' : 'processing'}>{progress}%</Tag>
               </div>
               <div style={{ width: '100%', height: 8, backgroundColor: '#f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
@@ -313,7 +312,7 @@ const OnboardingWizardPage: React.FC = () => {
           </Card>
 
           {/* 上线准备清单 */}
-          <Card title={guideData.name + ' - 上线准备清单'}>
+          <Card title={`${guideData.name} - ${t('pages.system.onboardingWizard.roleChecklist')}`}>
             <Steps
               direction="vertical"
               current={guideData.checklist.length}
@@ -342,7 +341,7 @@ const OnboardingWizardPage: React.FC = () => {
                             <div style={{ flex: 1 }}>
                               <Space>
                                 <Text strong={item.required}>{item.name}</Text>
-                                {item.required && <Tag color="red" size="small">必填</Tag>}
+                                {item.required && <Tag color="red" size="small">{t('pages.system.onboardingWizard.required')}</Tag>}
                                 {isCompleted && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
                               </Space>
                               <div style={{ marginTop: 4 }}>
@@ -364,14 +363,14 @@ const OnboardingWizardPage: React.FC = () => {
           {/* 提示信息 */}
           {progress < 100 && (
             <Alert
-              message="上线准备提示"
+              message={t('pages.system.onboardingWizard.roleTip')}
               description={
                 <div>
                   <Paragraph style={{ marginBottom: 8 }}>
-                    请按照清单逐步完成上线准备工作。必填项（红色标签）必须完成，可选项可根据实际情况选择完成。
+                    {t('pages.system.onboardingWizard.roleTipDesc1')}
                   </Paragraph>
                   <Paragraph style={{ marginBottom: 0 }}>
-                    完成所有必填项后，即可开始使用系统。建议完成所有项以获得最佳使用体验。
+                    {t('pages.system.onboardingWizard.roleTipDesc2')}
                   </Paragraph>
                 </div>
               }
@@ -383,8 +382,8 @@ const OnboardingWizardPage: React.FC = () => {
 
           {progress === 100 && (
             <Alert
-              message="上线准备完成"
-              description="恭喜！您已完成所有上线准备工作，可以开始使用系统了。如有疑问，请查看帮助文档或联系系统管理员。"
+              message={t('pages.system.onboardingWizard.roleComplete')}
+              description={t('pages.system.onboardingWizard.roleCompleteDesc')}
               type="success"
               showIcon
               icon={<CheckCircleOutlined />}
@@ -394,20 +393,18 @@ const OnboardingWizardPage: React.FC = () => {
       );
   };
 
-  const allTabs = [SYSTEM_TAB, ...ROLE_LIST];
-
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2}>自助式上线向导</Title>
+      <Title level={2}>{t('pages.system.onboardingWizard.title')}</Title>
       <Paragraph>
-        系统上线：从0开始完成基础数据配置直至可开出业务单据。按角色：为各角色提供数据准备、权限配置、操作培训等清单。
+        {t('pages.system.onboardingWizard.subtitle')}
       </Paragraph>
 
       <Tabs
         activeKey={activeTab}
         onChange={handleTabChange}
         type="card"
-        items={allTabs.map(tab => ({
+        items={allTabs.map((tab) => ({
           key: tab.code,
           label: (
             <Space>

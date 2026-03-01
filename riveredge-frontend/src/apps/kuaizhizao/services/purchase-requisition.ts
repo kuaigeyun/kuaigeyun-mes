@@ -72,6 +72,16 @@ export async function submitPurchaseRequisition(id: number): Promise<PurchaseReq
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/submit`, { method: 'POST' });
 }
 
+export async function approvePurchaseRequisition(
+  id: number,
+  data: { approved: boolean; review_remarks?: string }
+): Promise<PurchaseRequisition> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/approve`, {
+    method: 'POST',
+    data,
+  });
+}
+
 export async function convertToPurchaseOrder(
   requisitionId: number,
   data: { item_ids: number[]; supplier_id: number; supplier_name: string }

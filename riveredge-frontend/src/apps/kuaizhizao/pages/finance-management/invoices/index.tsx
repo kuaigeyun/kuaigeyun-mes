@@ -24,6 +24,7 @@ const InvoiceList: React.FC = () => {
   const location = useLocation();
   const initialTab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
   const [activeTabKey, setActiveTabKey] = useState<string>(initialTab);
+  const headerTitle = location.pathname.includes('sales-invoices') ? '销售发票' : location.pathname.includes('purchase-invoices') ? '采购发票' : '发票列表';
 
   useEffect(() => {
     const tab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
@@ -51,8 +52,8 @@ const InvoiceList: React.FC = () => {
       title: '业务类型',
       dataIndex: 'category',
       valueEnum: {
-        IN: { text: '进项(采购)', status: 'Processing' },
-        OUT: { text: '销项(销售)', status: 'Success' },
+        IN: { text: '采购发票', status: 'Processing' },
+        OUT: { text: '销售发票', status: 'Success' },
       },
       width: 100,
     },
@@ -163,7 +164,7 @@ const InvoiceList: React.FC = () => {
       ]}
     >
       <UniTable<Invoice>
-        headerTitle="发票列表"
+        headerTitle={headerTitle}
         actionRef={actionRef}
         rowKey="id"
         search={{
@@ -201,8 +202,8 @@ const InvoiceList: React.FC = () => {
             activeKey: activeTabKey,
             items: [
               { key: 'all', label: '全部发票' },
-              { key: 'OUT', label: '销项发票(销售)' },
-              { key: 'IN', label: '进项发票(采购)' },
+              { key: 'OUT', label: '销售发票' },
+              { key: 'IN', label: '采购发票' },
             ],
             onChange: (key) => {
               setActiveTabKey(key as string);

@@ -557,11 +557,11 @@ const SiteSettingsPage: React.FC = () => {
             ))}
             {currencyOptions.length === 0 && (
               <>
-                <Select.Option value="CNY">人民币 (CNY)</Select.Option>
-                <Select.Option value="USD">美元 (USD)</Select.Option>
-                <Select.Option value="EUR">欧元 (EUR)</Select.Option>
-                <Select.Option value="JPY">日元 (JPY)</Select.Option>
-                <Select.Option value="GBP">英镑 (GBP)</Select.Option>
+                <Select.Option value="CNY">{t('pages.system.siteSettings.currencyCNY')}</Select.Option>
+                <Select.Option value="USD">{t('pages.system.siteSettings.currencyUSD')}</Select.Option>
+                <Select.Option value="EUR">{t('pages.system.siteSettings.currencyEUR')}</Select.Option>
+                <Select.Option value="JPY">{t('pages.system.siteSettings.currencyJPY')}</Select.Option>
+                <Select.Option value="GBP">{t('pages.system.siteSettings.currencyGBP')}</Select.Option>
               </>
             )}
           </Select>
@@ -570,10 +570,10 @@ const SiteSettingsPage: React.FC = () => {
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="date_format" label={t('pages.system.siteSettings.dateFormat')}>
           <Select placeholder={t('pages.system.siteSettings.dateFormatPlaceholder')}>
-            <Select.Option value="YYYY-MM-DD">YYYY-MM-DD</Select.Option>
-            <Select.Option value="DD/MM/YYYY">DD/MM/YYYY</Select.Option>
-            <Select.Option value="MM/DD/YYYY">MM/DD/YYYY</Select.Option>
-            <Select.Option value="YYYY年MM月DD日">YYYY年MM月DD日</Select.Option>
+            <Select.Option value="YYYY-MM-DD">{t('pages.system.siteSettings.dateFormatYMD')}</Select.Option>
+            <Select.Option value="DD/MM/YYYY">{t('pages.system.siteSettings.dateFormatDMY')}</Select.Option>
+            <Select.Option value="MM/DD/YYYY">{t('pages.system.siteSettings.dateFormatMDY')}</Select.Option>
+            <Select.Option value="YYYY年MM月DD日">{t('pages.system.siteSettings.dateFormatChinese')}</Select.Option>
           </Select>
         </Form.Item>
       </Col>
@@ -587,8 +587,8 @@ const SiteSettingsPage: React.FC = () => {
             ))}
             {languageOptions.length === 0 && (
               <>
-                <Select.Option value="zh-CN">中文 (简体)</Select.Option>
-                <Select.Option value="en-US">English (US)</Select.Option>
+                <Select.Option value="zh-CN">{t('pages.system.siteSettings.langZhCN')}</Select.Option>
+                <Select.Option value="en-US">{t('pages.system.siteSettings.langEnUS')}</Select.Option>
               </>
             )}
           </Select>
@@ -604,12 +604,12 @@ const SiteSettingsPage: React.FC = () => {
             ))}
             {timezoneOptions.length === 0 && (
               <>
-                <Select.Option value="Asia/Shanghai">东八区 (UTC+8)</Select.Option>
-                <Select.Option value="Asia/Tokyo">东京 (UTC+9)</Select.Option>
-                <Select.Option value="Asia/Seoul">首尔 (UTC+9)</Select.Option>
-                <Select.Option value="America/New_York">纽约 (UTC-5)</Select.Option>
-                <Select.Option value="Europe/London">伦敦 (UTC+0)</Select.Option>
-                <Select.Option value="Europe/Paris">巴黎 (UTC+1)</Select.Option>
+                <Select.Option value="Asia/Shanghai">{t('pages.system.siteSettings.tzShanghai')}</Select.Option>
+                <Select.Option value="Asia/Tokyo">{t('pages.system.siteSettings.tzTokyo')}</Select.Option>
+                <Select.Option value="Asia/Seoul">{t('pages.system.siteSettings.tzSeoul')}</Select.Option>
+                <Select.Option value="America/New_York">{t('pages.system.siteSettings.tzNewYork')}</Select.Option>
+                <Select.Option value="Europe/London">{t('pages.system.siteSettings.tzLondon')}</Select.Option>
+                <Select.Option value="Europe/Paris">{t('pages.system.siteSettings.tzParis')}</Select.Option>
               </>
             )}
           </Select>

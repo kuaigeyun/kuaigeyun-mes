@@ -387,7 +387,7 @@ const BOMPage: React.FC = () => {
       cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
-          await bomApi.batchApprove(uuids, true, '反审核', recursiveUnapproveRef.current, true);
+          await bomApi.batchApprove(uuids, true, t('app.master-data.bom.unapproveComment'), recursiveUnapproveRef.current, true);
           messageApi.success(t('app.master-data.bom.unapproveSuccess'));
           actionRef.current?.reload();
         } catch (error: any) {
@@ -594,7 +594,7 @@ const BOMPage: React.FC = () => {
       onOk: async () => {
         try {
           // 直接调用批量审核API
-          await bomApi.batchApprove(toProcess, true, '批量审核通过', recursiveApprovalRef.current, false);
+          await bomApi.batchApprove(toProcess, true, t('app.master-data.bom.batchApproveComment'), recursiveApprovalRef.current, false);
           messageApi.success(t('app.master-data.bom.approveSuccess', { count }));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
@@ -651,7 +651,7 @@ const BOMPage: React.FC = () => {
       cancelText: t('app.master-data.bom.cancel'),
       onOk: async () => {
         try {
-          await bomApi.batchApprove(toProcess, true, '批量反审核', recursiveApprovalRef.current, true);
+          await bomApi.batchApprove(toProcess, true, t('app.master-data.bom.batchUnapproveComment'), recursiveApprovalRef.current, true);
           messageApi.success(t('app.master-data.bom.unapproveCountSuccess', { count }));
           setSelectedRowKeys([]);
           actionRef.current?.reload();
@@ -704,7 +704,7 @@ const BOMPage: React.FC = () => {
               materialName = `${item.componentCode} - ${item.componentName}`;
             } else if (item.componentId) {
               const material = materials.find(m => m.id === item.componentId);
-              materialName = material ? `${material.code} - ${material.name}` : `物料ID: ${item.componentId}`;
+              materialName = material ? `${material.code} - ${material.name}` : `${t('app.master-data.bom.materialIdPrefix')}: ${item.componentId}`;
             } else {
               materialName = t('app.master-data.bom.materialIdUnknown');
             }
@@ -715,13 +715,13 @@ const BOMPage: React.FC = () => {
                 <span style={{ fontWeight: 500 }}>{materialName}</span>
                 <Tag color="blue">{item.quantity} {item.unit || ''}</Tag>
                 {item.wasteRate > 0 && (
-                  <Tag color="orange">损耗率: {item.wasteRate}%</Tag>
+                  <Tag color="orange">{t('app.master-data.bom.hierarchyWasteRateLabel')}: {item.wasteRate}%</Tag>
                 )}
                 {!item.isRequired && (
-                  <Tag color="default">可选</Tag>
+                  <Tag color="default">{t('app.master-data.bom.optionalLabel')}</Tag>
                 )}
                 <span style={{ color: '#999', fontSize: '12px' }}>
-                  层级: {item.level}
+                  {t('app.master-data.bom.hierarchyLevelLabel')}: {item.level}
                 </span>
               </div>
             );
@@ -1685,7 +1685,7 @@ const BOMPage: React.FC = () => {
               icon={<UndoOutlined />}
               onClick={handleBatchUnapprove}
             >
-              批量反审核
+              {t('app.master-data.bom.batchUnapproveBtn')}
             </Button>
             <Button
               danger
@@ -1693,7 +1693,7 @@ const BOMPage: React.FC = () => {
               icon={<DeleteOutlined />}
               onClick={handleBatchDelete}
             >
-              批量删除
+              {t('common.batchDelete')}
             </Button>
           </Space>
         }
@@ -1719,7 +1719,7 @@ const BOMPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<BOM>
-        title="BOM详情"
+        title={t('app.master-data.bom.bomDetailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={bomDetail || undefined}
@@ -2547,14 +2547,14 @@ const BOMPage: React.FC = () => {
                       <Space direction="vertical" size="small" style={{ width: '100%' }}>
                         {Object.entries(item.changes || {}).map(([field, change]: [string, any]) => (
                           <div key={field} style={{ paddingLeft: 16 }}>
-                            <span style={{ fontWeight: 500 }}>{field === 'quantity' ? '用量' : field === 'unit' ? '单位' : field === 'wasteRate' ? '损耗率' : field === 'isRequired' ? '是否必选' : field}</span>
+                            <span style={{ fontWeight: 500 }}>{field === 'quantity' ? t('app.master-data.bom.quantityTitle') : field === 'unit' ? t('app.master-data.bom.unitTitle') : field === 'wasteRate' ? t('app.master-data.bom.wasteRateTitle') : field === 'isRequired' ? t('app.master-data.bom.isRequiredTitle') : field}</span>
                             {'：'}
                             <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginLeft: 8 }}>
-                              {field === 'isRequired' ? (change.old ? '是' : '否') : change.old}
+                              {field === 'isRequired' ? (change.old ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')) : change.old}
                             </span>
                             {' → '}
                             <span style={{ color: '#52c41a', fontWeight: 500 }}>
-                              {field === 'isRequired' ? (change.new ? '是' : '否') : change.new}
+                              {field === 'isRequired' ? (change.new ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')) : change.new}
                             </span>
                           </div>
                         ))}
@@ -2570,7 +2570,7 @@ const BOMPage: React.FC = () => {
               (!versionCompareResult.removed_items || versionCompareResult.removed_items.length === 0) &&
               (!versionCompareResult.modified_items || versionCompareResult.modified_items.length === 0) && (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                  两个版本之间没有差异
+                  {t('app.master-data.bom.noVersionDiff')}
                 </div>
               )}
           </div>
@@ -2580,7 +2580,7 @@ const BOMPage: React.FC = () => {
 
       {/* 用量计算Modal */}
       <Modal
-        title="BOM用量计算"
+        title={t('app.master-data.bom.quantityModalTitle')}
         open={quantityModalVisible}
         onCancel={() => {
           setQuantityModalVisible(false);
@@ -2601,23 +2601,23 @@ const BOMPage: React.FC = () => {
         >
           <ProFormDigit
             name="parentQuantity"
-            label="父物料数量"
-            placeholder="请输入父物料数量"
+            label={t('app.master-data.bom.parentQuantityLabel')}
+            placeholder={t('app.master-data.bom.parentQuantityPlaceholder')}
             rules={[
-              { required: true, message: '请输入父物料数量' },
-              { type: 'number', min: 0.0001, message: '数量必须大于0' },
+              { required: true, message: t('app.master-data.bom.parentQuantityRequired') },
+              { type: 'number', min: 0.0001, message: t('app.master-data.bom.parentQuantityMin') },
             ]}
             fieldProps={{
               precision: 4,
               style: { width: '100%' },
             }}
-            extra="输入要生产的父物料数量，系统将自动计算所需子物料数量（考虑损耗率）"
+            extra={t('app.master-data.bom.parentQuantityExtra')}
           />
           <ProFormText
             name="version"
-            label="BOM版本"
-            placeholder="留空则使用最新版本"
-            extra="可选，如果不填写则使用最新版本"
+            label={t('app.master-data.bom.versionLabelForQuantity')}
+            placeholder={t('app.master-data.bom.versionPlaceholderOptional')}
+            extra={t('app.master-data.bom.versionPlaceholderExtra')}
           />
           <div style={{ marginTop: 16 }}>
             <Button
@@ -2631,7 +2631,7 @@ const BOMPage: React.FC = () => {
               }}
               loading={quantityLoading}
             >
-              计算用量
+              {t('app.master-data.bom.calculateBtn')}
             </Button>
           </div>
         </ProForm>
@@ -2640,14 +2640,14 @@ const BOMPage: React.FC = () => {
           <div style={{ marginTop: 24 }}>
             <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', border: '1px solid #91d5ff' }}>
               <Space>
-                <span style={{ fontWeight: 500 }}>父物料数量：</span>
+                <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.parentQuantityResultLabel')}：</span>
                 <span>{quantityResult.parentQuantity}</span>
                 <span style={{ color: '#999' }}>个</span>
               </Space>
             </div>
             
             <div style={{ marginBottom: 8 }}>
-              <h4>子物料用量清单（考虑损耗率）</h4>
+              <h4>{t('app.master-data.bom.childComponentListTitle')}</h4>
             </div>
             
             {quantityResult.components && quantityResult.components.length > 0 ? (

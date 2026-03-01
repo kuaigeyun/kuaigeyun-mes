@@ -325,14 +325,14 @@ const WorkCentersPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `工作中心数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         exportData = currentPageData;
-        filename = `工作中心数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         const allData = await workCenterApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `工作中心数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workCenters.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -340,7 +340,7 @@ const WorkCentersPage: React.FC = () => {
         return;
       }
 
-      const headers = ['工作中心编码', '工作中心名称', '描述', '状态', '创建时间'];
+      const headers = [t('field.workCenter.code'), t('field.workCenter.name'), t('field.workCenter.description'), t('app.master-data.plants.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -348,7 +348,7 @@ const WorkCentersPage: React.FC = () => {
           item.code || '',
           item.name || '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         csvRows.push(row.map(cell => {
@@ -404,17 +404,17 @@ const WorkCentersPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? '启用' : '禁用'}
+          {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -422,7 +422,7 @@ const WorkCentersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -433,7 +433,7 @@ const WorkCentersPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -441,14 +441,14 @@ const WorkCentersPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
             title={t('app.master-data.workCenters.deleteConfirm')}
             description={t('app.master-data.workCenters.deleteDescription')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -456,7 +456,7 @@ const WorkCentersPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -487,13 +487,13 @@ const WorkCentersPage: React.FC = () => {
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: WorkCenter) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? '启用' : '禁用'}
+          {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
       span: 2,
     },
-    { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (
@@ -528,7 +528,7 @@ const WorkCentersPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取工作中心列表失败:', error);
-              messageApi.error(error?.message || '获取工作中心列表失败');
+              messageApi.error(error?.message || t('app.master-data.workCenters.listFetchFailed'));
               return {
                 data: [],
                 success: false,
@@ -555,9 +555,9 @@ const WorkCentersPage: React.FC = () => {
               key="batchDelete"
               title={t('app.master-data.workCenters.batchDeleteConfirm')}
               description={t('app.master-data.workCenters.batchDeleteDescription', { count: selectedRowKeys.length })}
-              onConfirm={handleBatchDelete}
-              okText="确定"
-              cancelText="取消"
+            onConfirm={handleBatchDelete}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
               disabled={selectedRowKeys.length === 0}
             >
               <Button
@@ -566,8 +566,8 @@ const WorkCentersPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 disabled={selectedRowKeys.length === 0}
               >
-                批量删除
-              </Button>
+              {t('common.batchDelete')}
+            </Button>
             </Popconfirm>,
           ]}
           rowSelection={{

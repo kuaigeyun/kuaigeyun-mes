@@ -680,6 +680,7 @@ const InventoryAlertPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentAlert(null);
         }}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={currentAlert || {}}
         columns={[
           {

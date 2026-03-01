@@ -4,7 +4,8 @@
  * 提供序列号规则的 CRUD 功能，用于配置序列号生成规则。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
@@ -14,15 +15,16 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { serialRuleApi } from '../../../services/batchSerialRules';
 import type { SerialRule, SerialRuleCreate, SerialRuleUpdate } from '../../../services/batchSerialRules';
 
-const SEQ_RESET_OPTIONS = [
-  { label: '不重置', value: 'never' },
-  { label: '按日', value: 'daily' },
-  { label: '按月', value: 'monthly' },
-  { label: '按年', value: 'yearly' },
-];
-
 const SerialRulesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+
+  const seqResetOptions = useMemo(() => [
+    { label: t('app.master-data.seqRules.seqResetNever'), value: 'never' },
+    { label: t('app.master-data.seqRules.seqResetDaily'), value: 'daily' },
+    { label: t('app.master-data.seqRules.seqResetMonthly'), value: 'monthly' },
+    { label: t('app.master-data.seqRules.seqResetYearly'), value: 'yearly' },
+  ], [t]);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -53,7 +55,7 @@ const SerialRulesPage: React.FC = () => {
         isActive: detail.isActive,
       });
     } catch (e: any) {
-      messageApi.error(e?.message || '获取详情失败');
+      messageApi.error(e?.message || t('app.master-data.seqRules.getDetailFailed'));
     }
   };
 
@@ -69,7 +71,7 @@ const SerialRulesPage: React.FC = () => {
           seqResetRule: values.seqResetRule as string,
           isActive: values.isActive as boolean,
         });
-        messageApi.success('更新成功');
+        messageApi.success(t('common.updateSuccess'));
       } else {
         await serialRuleApi.create({
           name: values.name as string,
@@ -80,12 +82,12 @@ const SerialRulesPage: React.FC = () => {
           seqResetRule: values.seqResetRule as string,
           isActive: (values.isActive as boolean) ?? true,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '操作失败');
+      messageApi.error(e?.message || t('common.operationFailed'));
       throw e;
     }
   };
@@ -93,33 +95,33 @@ const SerialRulesPage: React.FC = () => {
   const handleDelete = async (record: SerialRule) => {
     try {
       await serialRuleApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '删除失败');
+      messageApi.error(e?.message || t('common.deleteFailed'));
     }
   };
 
   const columns: ProColumns<SerialRule>[] = [
-    { title: '规则名称', dataIndex: 'name', width: 150, ellipsis: true, fixed: 'left' },
-    { title: '规则代码', dataIndex: 'code', width: 120 },
-    { title: '描述', dataIndex: 'description', width: 200, ellipsis: true },
+    { title: t('app.master-data.seqRules.ruleName'), dataIndex: 'name', width: 150, ellipsis: true, fixed: 'left' },
+    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', width: 120 },
+    { title: t('app.master-data.seqRules.description'), dataIndex: 'description', width: 200, ellipsis: true },
     {
-      title: '序号重置',
+      title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
       width: 100,
-      render: (_, r) => SEQ_RESET_OPTIONS.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
+      render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
     },
     {
-      title: '状态',
+      title: t('app.master-data.seqRules.status'),
       dataIndex: 'isActive',
       width: 80,
       render: (_, r) => (
-        <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? '启用' : '停用'}</Tag>
+        <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}</Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 150,
       fixed: 'right',
       render: (_, record) => (
@@ -131,15 +133,15 @@ const SerialRulesPage: React.FC = () => {
             onClick={() => handleEdit(record)}
             disabled={record.isSystem}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定删除此规则？"
+            title={t('app.master-data.seqRules.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
             disabled={record.isSystem}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={record.isSystem}>
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -150,7 +152,7 @@ const SerialRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<SerialRule>
-        headerTitle="序列号规则"
+        headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
         columns={columns}
@@ -164,13 +166,13 @@ const SerialRulesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            新建
+            {t('pages.system.create')}
           </Button>,
         ]}
       />
 
       <FormModalTemplate
-        title={isEdit ? '编辑序列号规则' : '新建序列号规则'}
+        title={isEdit ? t('app.master-data.serialRules.editTitle') : t('app.master-data.serialRules.createTitle')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
@@ -178,23 +180,23 @@ const SerialRulesPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
       >
-        <ProFormText name="name" label="规则名称" rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormText name="code" label="规则代码" rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormTextArea name="description" label="描述" colProps={{ span: 24 }} />
-        <ProFormDigit name="seqStart" label="序号起始值" initialValue={1} colProps={{ span: 12 }} />
-        <ProFormDigit name="seqStep" label="序号步长" initialValue={1} colProps={{ span: 12 }} />
+        <ProFormText name="name" label={t('app.master-data.seqRules.ruleName')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+        <ProFormText name="code" label={t('app.master-data.seqRules.ruleCode')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} />
+        <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 12 }} />
+        <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 12 }} />
         <ProFormSelect
           name="seqResetRule"
-          label="序号重置规则"
-          options={SEQ_RESET_OPTIONS}
+          label={t('app.master-data.seqRules.seqResetRule')}
+          options={seqResetOptions}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="isActive"
-          label="状态"
+          label={t('app.master-data.seqRules.status')}
           options={[
-            { label: '启用', value: true },
-            { label: '停用', value: false },
+            { label: t('app.master-data.seqRules.enabled'), value: true },
+            { label: t('app.master-data.seqRules.disabled'), value: false },
           ]}
           initialValue={true}
           colProps={{ span: 12 }}

@@ -414,7 +414,7 @@ const EquipmentStatusPage: React.FC = () => {
         title="设备状态详情"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={DRAWER_CONFIG.large}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       >
         {currentEquipment && (
           <>

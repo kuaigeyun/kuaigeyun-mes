@@ -15,11 +15,13 @@ import {
   createPurchaseRequisition,
   deletePurchaseRequisition,
   submitPurchaseRequisition,
+  approvePurchaseRequisition,
   convertToPurchaseOrder,
   urgentPurchase,
   PurchaseRequisition,
   PurchaseRequisitionItem,
 } from '../../../services/purchase-requisition';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPurchaseRequisitionLifecycle } from '../../../utils/purchaseRequisitionLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -107,9 +109,24 @@ const PurchaseRequisitionsPage: React.FC = () => {
         return (
           <Space>
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-            {record.status === '草稿' && (
-              <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>提交</Button>
-            )}
+            <UniWorkflowActions
+              record={record}
+              entityName="采购申请"
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={['草稿', 'draft']}
+              pendingStatuses={['待审核', 'pending_review']}
+              approvedStatuses={['已通过', '已审核', 'audited', 'approved']}
+              rejectedStatuses={['已驳回', 'rejected']}
+              theme="link"
+              size="small"
+              actions={{
+                submit: (id) => submitPurchaseRequisition(id),
+                approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
+                reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
+              }}
+              onSuccess={() => actionRef.current?.reload()}
+            />
             {(record.status === '已通过' || record.status === '部分转单') && (
               <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(record)}>转采购单</Button>
             )}
@@ -469,7 +486,34 @@ const PurchaseRequisitionsPage: React.FC = () => {
           currentReq && (
             <DetailDrawerActions
               items={[
-                { key: 'submit', visible: currentReq.status === '草稿', render: () => <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(currentReq)}>提交</Button> },
+                { key: 'workflow', visible: true, render: () => (
+                  <UniWorkflowActions
+                    record={currentReq}
+                    entityName="采购申请"
+                    statusField="status"
+                    reviewStatusField="review_status"
+                    draftStatuses={['草稿', 'draft']}
+                    pendingStatuses={['待审核', 'pending_review']}
+                    approvedStatuses={['已通过', '已审核', 'audited', 'approved']}
+                    rejectedStatuses={['已驳回', 'rejected']}
+                    theme="default"
+                    size="small"
+                    actions={{
+                      submit: (id) => submitPurchaseRequisition(id),
+                      approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
+                      reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
+                    }}
+                    onSuccess={async () => {
+                      actionRef.current?.reload();
+                      if (currentReq?.id) {
+                        try {
+                          const res = await getPurchaseRequisition(currentReq.id);
+                          setCurrentReq(res);
+                        } catch { /* ignore */ }
+                      }
+                    }}
+                  />
+                ) },
                 { key: 'convert', visible: currentReq.status === '已通过' || currentReq.status === '部分转单', render: () => <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => handleConvert(currentReq)}>转采购单</Button> },
               ]}
             />

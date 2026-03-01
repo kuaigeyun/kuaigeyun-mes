@@ -185,6 +185,8 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.material_binding",  # 物料绑定模型
                 "apps.kuaizhizao.models.production_picking",  # 生产领料模型
                 "apps.kuaizhizao.models.production_picking_item",  # 生产领料明细模型
+                "apps.kuaizhizao.models.production_return",  # 生产退料模型
+                "apps.kuaizhizao.models.production_return_item",  # 生产退料明细模型
                 "apps.kuaizhizao.models.finished_goods_receipt",  # 成品入库模型
                 "apps.kuaizhizao.models.finished_goods_receipt_item",  # 成品入库明细模型
                 "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
@@ -224,6 +226,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.mrp_result",  # MRP结果模型
                 "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
                 "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
+                "apps.kuaizhizao.models.document_relation",  # 单据关联模型
             ],
             "default_connection": "default",
         },

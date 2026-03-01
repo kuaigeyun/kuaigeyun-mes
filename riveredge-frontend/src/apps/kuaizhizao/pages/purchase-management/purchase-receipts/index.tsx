@@ -13,7 +13,9 @@ import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { warehouseApi } from '../../../services/production';
 import { getPurchaseReceiptLifecycle } from '../../../utils/purchaseReceiptLifecycle';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -219,6 +221,12 @@ const PurchaseReceiptsPage: React.FC = () => {
           await warehouseApi.purchaseReceipt.confirm(record.id!.toString());
           messageApi.success('采购入库确认成功');
           actionRef.current?.reload();
+          if (receiptDetail?.id === record.id) {
+            try {
+              const detail = await warehouseApi.purchaseReceipt.get(record.id!.toString());
+              setReceiptDetail(detail as PurchaseReceiptDetail);
+            } catch { /* ignore */ }
+          }
         } catch (error: any) {
           messageApi.error(error.message || '采购入库确认失败');
         }
@@ -431,9 +439,36 @@ const PurchaseReceiptsPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={receiptDetail || undefined}
+        extra={
+          receiptDetail?.status === '待入库' && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(receiptDetail)}
+            >
+              确认入库
+            </Button>
+          )
+        }
         customContent={
           receiptDetail ? (
             <div style={{ padding: '16px 0' }}>
+              {/* 生命周期 */}
+              {(() => {
+                const lifecycle = getPurchaseReceiptLifecycle(receiptDetail);
+                const mainStages = lifecycle.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <DetailDrawerSection title="生命周期">
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      status={lifecycle.status}
+                      showLabels
+                      nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    />
+                  </DetailDrawerSection>
+                );
+              })()}
               {/* 明细表格 */}
               {receiptDetail.items && receiptDetail.items.length > 0 && (
                 <Card title="入库明细" style={{ marginBottom: 16 }}>
@@ -518,6 +553,13 @@ const PurchaseReceiptsPage: React.FC = () => {
                     </div>
                   )}
                 </Card>
+              )}
+
+              {/* 操作记录 */}
+              {receiptDetail?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel documentType="purchase_receipt" documentId={receiptDetail.id} />
+                </DetailDrawerSection>
               )}
             </div>
           ) : null

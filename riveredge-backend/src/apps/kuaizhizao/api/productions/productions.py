@@ -1740,6 +1740,45 @@ async def get_production_plan_items(
     )
 
 
+@router.post("/production-plans/{plan_id}/submit", response_model=ProductionPlanResponse, summary="提交生产计划审核")
+async def submit_production_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPlanResponse:
+    """
+    提交生产计划审核（已驳回时重新提交）
+
+    - **plan_id**: 生产计划ID
+    """
+    return await ProductionPlanningService().submit_production_plan(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        submitted_by=current_user.id
+    )
+
+
+@router.post("/production-plans/{plan_id}/approve", response_model=ProductionPlanResponse, summary="审核生产计划")
+async def approve_production_plan(
+    plan_id: int,
+    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPlanResponse:
+    """
+    审核生产计划
+
+    - **plan_id**: 生产计划ID
+    - **rejection_reason**: 驳回原因（可选，不填则通过）
+    """
+    return await ProductionPlanningService().approve_production_plan(
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        approved_by=current_user.id,
+        rejection_reason=rejection_reason
+    )
+
+
 @router.post("/production-plans/{plan_id}/execute", response_model=ProductionPlanResponse, summary="执行生产计划")
 async def execute_production_plan(
     plan_id: int,

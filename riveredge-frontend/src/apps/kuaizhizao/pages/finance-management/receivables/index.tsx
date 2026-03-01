@@ -11,15 +11,19 @@ import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable, ReceivableListParams } from '../../../types/finance/receivable';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const { message: messageApi } = App.useApp();
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const location = useLocation();
+    const isReceiptsPage = location.pathname.includes('/receipts');
+    const headerTitle = isReceiptsPage ? '收款单' : '应收账款';
 
     const columns: ProColumns<Receivable>[] = [
         {
@@ -92,10 +96,27 @@ const ReceivableList: React.FC = () => {
             title: '操作',
             valueType: 'option',
             fixed: 'right',
-            width: 200,
+            width: 280,
             render: (_, record) => (
                 <Space>
                     <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}`)}>详情</Button>
+                    <UniWorkflowActions
+                        record={record}
+                        entityName="应收单"
+                        statusField="status"
+                        reviewStatusField="review_status"
+                        draftStatuses={[]}
+                        pendingStatuses={['待审核']}
+                        approvedStatuses={['已审核']}
+                        rejectedStatuses={['已驳回']}
+                        theme="link"
+                        size="small"
+                        actions={{
+                            approve: (id) => receivableService.approveReceivable(id),
+                            reject: (id, reason) => receivableService.approveReceivable(id, reason),
+                        }}
+                        onSuccess={() => actionRef.current?.reload()}
+                    />
                     {record.remaining_amount > 0 && (
                         <Button type="link" size="small" icon={<DollarOutlined />} onClick={() => navigate(`/apps/kuaizhizao/finance-management/receivables/${record.id}/receipt`)}>收款</Button>
                     )}
@@ -107,7 +128,7 @@ const ReceivableList: React.FC = () => {
     return (
         <ListPageTemplate>
             <UniTable<Receivable>
-                headerTitle="应收账款"
+                headerTitle={headerTitle}
                 actionRef={actionRef}
                 columns={columns}
                 request={async (params, sort, _filter, searchFormValues) => {

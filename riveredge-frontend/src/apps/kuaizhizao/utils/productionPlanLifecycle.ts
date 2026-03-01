@@ -62,6 +62,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   let key = 'draft';
   if (executionStatus === '已执行' || status === '已执行') key = 'executed';
   else if (status === '已审核' || status === 'audited') key = 'audited';
+  else if (status === '已驳回' || status === 'rejected') key = 'draft';
   else if (status === '草稿' || status === 'draft') key = 'draft';
 
   const labels: Record<string, string> = {
@@ -70,6 +71,16 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     executed: '已执行',
     cancelled: '已取消',
   };
+
+  if (status === '已驳回' || status === 'rejected') {
+    return {
+      current_stage_key: 'draft',
+      current_stage_name: '已驳回',
+      status: 'exception',
+      main_stages: buildMainStages('draft'),
+      next_step_suggestions: ['重新编辑后再次提交审核'],
+    };
+  }
 
   if (key === 'cancelled' || status === '已取消') {
     return {

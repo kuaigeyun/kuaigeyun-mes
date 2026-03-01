@@ -454,6 +454,7 @@ const CostRulePage: React.FC = () => {
         title="成本核算规则详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={costRuleDetail}
         columns={detailItems}
       />

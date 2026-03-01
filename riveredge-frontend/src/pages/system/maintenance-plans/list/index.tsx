@@ -204,6 +204,31 @@ const MaintenancePlanListPage: React.FC = () => {
     }
   };
 
+  const planTypeKey: Record<string, string> = {
+    '定期保养': 'pages.system.maintenancePlans.planTypeRegular',
+    '预防性维护': 'pages.system.maintenancePlans.planTypePreventive',
+    '故障维修': 'pages.system.maintenancePlans.planTypeFault',
+    '其他': 'pages.system.maintenancePlans.planTypeOther',
+  };
+  const maintenanceTypeKey: Record<string, string> = {
+    '日常保养': 'pages.system.maintenancePlans.maintenanceDaily',
+    '一级保养': 'pages.system.maintenancePlans.maintenanceLevel1',
+    '二级保养': 'pages.system.maintenancePlans.maintenanceLevel2',
+    '三级保养': 'pages.system.maintenancePlans.maintenanceLevel3',
+    '大修': 'pages.system.maintenancePlans.maintenanceOverhaul',
+  };
+  const cycleTypeKey: Record<string, string> = {
+    '按时间': 'pages.system.maintenancePlans.cycleByTime',
+    '按使用次数': 'pages.system.maintenancePlans.cycleByCount',
+    '按运行时长': 'pages.system.maintenancePlans.cycleByRuntime',
+  };
+  const detailStatusKey: Record<string, string> = {
+    '待执行': 'pages.system.maintenancePlans.statusPending',
+    '执行中': 'pages.system.maintenancePlans.statusRunning',
+    '已完成': 'pages.system.maintenancePlans.statusCompleted',
+    '已取消': 'pages.system.maintenancePlans.statusCancelled',
+  };
+
   /**
    * 表格列定义
    */
@@ -549,9 +574,9 @@ const MaintenancePlanListPage: React.FC = () => {
           { title: t('pages.system.maintenancePlans.columnPlanNo'), dataIndex: 'plan_no' },
           { title: t('pages.system.maintenancePlans.columnPlanName'), dataIndex: 'plan_name' },
           { title: t('pages.system.maintenancePlans.columnEquipment'), dataIndex: 'equipment_name' },
-          { title: t('pages.system.maintenancePlans.columnPlanType'), dataIndex: 'plan_type' },
-          { title: t('pages.system.maintenancePlans.columnMaintenanceType'), dataIndex: 'maintenance_type' },
-          { title: t('pages.system.maintenancePlans.columnCycleType'), dataIndex: 'cycle_type' },
+          { title: t('pages.system.maintenancePlans.columnPlanType'), dataIndex: 'plan_type', render: (v: string) => (planTypeKey[v] ? t(planTypeKey[v]) : v) },
+          { title: t('pages.system.maintenancePlans.columnMaintenanceType'), dataIndex: 'maintenance_type', render: (v: string) => (maintenanceTypeKey[v] ? t(maintenanceTypeKey[v]) : v) },
+          { title: t('pages.system.maintenancePlans.columnCycleType'), dataIndex: 'cycle_type', render: (v: string) => (cycleTypeKey[v] ? t(cycleTypeKey[v]) : v) },
           {
             title: t('pages.system.maintenancePlans.columnCycleValue'),
             dataIndex: 'cycle_value',
@@ -566,7 +591,7 @@ const MaintenancePlanListPage: React.FC = () => {
           { title: t('pages.system.maintenancePlans.columnPlannedStart'), dataIndex: 'planned_start_date' },
           { title: t('pages.system.maintenancePlans.columnPlannedEnd'), dataIndex: 'planned_end_date' },
           { title: t('pages.system.maintenancePlans.columnResponsible'), dataIndex: 'responsible_person_name' },
-          { title: t('pages.system.maintenancePlans.columnStatus'), dataIndex: 'status' },
+          { title: t('pages.system.maintenancePlans.columnStatus'), dataIndex: 'status', render: (v: string) => (detailStatusKey[v] ? t(detailStatusKey[v]) : v) },
           { title: t('pages.system.maintenancePlans.labelRemark'), dataIndex: 'remark', span: 2 },
           { title: t('pages.system.maintenancePlans.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
           { title: t('pages.system.maintenancePlans.columnUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },

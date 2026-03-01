@@ -184,12 +184,16 @@ class InfraSettings(BaseSettings):
         Returns:
             List[str]: CORS 允许的来源列表
         """
-        # 如果 CORS_ORIGINS 是默认值，则从前端配置生成
+        # 如果 CORS_ORIGINS 是默认值，则从前端配置生成，并包含移动端 Expo Web 常用端口
         default_origins = ["http://127.0.0.1:8100", "http://localhost:8100"]
         if self.CORS_ORIGINS == default_origins:
             return [
                 f"http://{self.FRONTEND_HOST}:{self.FRONTEND_PORT}",
                 f"http://localhost:{self.FRONTEND_PORT}",
+                "http://127.0.0.1:8081",
+                "http://localhost:8081",
+                "http://127.0.0.1:8101",
+                "http://localhost:8101",
             ]
         return self.CORS_ORIGINS
 

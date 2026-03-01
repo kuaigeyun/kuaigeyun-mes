@@ -328,6 +328,27 @@ async def get_process_inspection(
     )
 
 
+@router.post("/process-inspections/{inspection_id}/approve", response_model=ProcessInspectionResponse, summary="审核工序检验单")
+async def approve_process_inspection(
+    inspection_id: int,
+    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessInspectionResponse:
+    """
+    审核工序检验单
+
+    - **inspection_id**: 检验单ID
+    - **rejection_reason**: 驳回原因（可选，不填则通过）
+    """
+    return await ProcessInspectionService().approve_inspection(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        approved_by=current_user.id,
+        rejection_reason=rejection_reason
+    )
+
+
 @router.post("/process-inspections/{inspection_id}/conduct", response_model=ProcessInspectionResponse, summary="执行过程检验")
 async def conduct_process_inspection(
     inspection_id: int,
@@ -515,6 +536,27 @@ async def get_finished_goods_inspection(
     return await service.get_finished_goods_inspection_by_id(
         tenant_id=tenant_id,
         inspection_id=inspection_id
+    )
+
+
+@router.post("/finished-goods-inspections/{inspection_id}/approve", response_model=FinishedGoodsInspectionResponse, summary="审核成品检验单")
+async def approve_finished_goods_inspection(
+    inspection_id: int,
+    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsInspectionResponse:
+    """
+    审核成品检验单
+
+    - **inspection_id**: 检验单ID
+    - **rejection_reason**: 驳回原因（可选，不填则通过）
+    """
+    return await FinishedGoodsInspectionService().approve_inspection(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        approved_by=current_user.id,
+        rejection_reason=rejection_reason
     )
 
 

@@ -153,6 +153,34 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
                 updated_by_name=user_info["name"]
             )
 
+            # 建立工单→工序委外的 DocumentRelation（支持单据追溯）
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=outsource_order_data.work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="outsource_order",
+                        target_id=outsource_order.id,
+                        target_code=outsource_order.code,
+                        target_name=outsource_order_data.operation_name,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单工序委外",
+                    ),
+                    created_by=created_by,
+                )
+            except BusinessLogicError:
+                pass  # 关联已存在，忽略
+            except Exception as e:
+                logger.warning("建立工单→工序委外关联失败: %s", e)
+
             logger.info(f"创建委外单成功: {code}, 工单: {work_order.code}, 工序: {outsource_order_data.operation_name}")
             return OutsourceOrderResponse.model_validate(outsource_order)
 

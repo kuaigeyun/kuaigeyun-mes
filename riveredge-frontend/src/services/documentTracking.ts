@@ -32,6 +32,14 @@ export interface DocumentTrackingTimelineItem {
   source_type?: string;
   source_id?: number;
   source_code?: string;
+  /** 报工记录字段 */
+  operation_name?: string;
+  operation_code?: string;
+  reported_quantity?: string;
+  qualified_quantity?: string;
+  unqualified_quantity?: string;
+  work_hours?: string;
+  status?: string;
 }
 
 export interface DocumentTrackingRelation {
