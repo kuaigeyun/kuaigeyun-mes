@@ -194,11 +194,11 @@ const ProductionLinesPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '产线编码', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.productionLines.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '产线名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.productionLines.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -232,7 +232,7 @@ const ProductionLinesPage: React.FC = () => {
         const workshopNameIndex = headerIndexMap['workshopName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
-          errors.push({ row: actualRowIndex, message: '表头映射错误，无法找到必需字段' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
           return;
         }
 
@@ -377,19 +377,19 @@ const ProductionLinesPage: React.FC = () => {
         importFn: async (item: ProductionLineCreate) => {
           return await productionLineApi.create(item);
         },
-        title: '正在导入产线数据',
+        title: t('app.master-data.productionLines.importTitle'),
         concurrency: 5,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
               <p>
-                <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
               </p>
               {result.errors.length > 0 && (
                 <List
@@ -398,7 +398,7 @@ const ProductionLinesPage: React.FC = () => {
                   renderItem={(item) => (
                     <List.Item>
                       <Typography.Text type="danger">
-                        第 {item.row} 行：{item.error}
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
                       </Typography.Text>
                     </List.Item>
                   )}
@@ -408,7 +408,7 @@ const ProductionLinesPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+        messageApi.success(t('app.master-data.productionLines.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -439,16 +439,16 @@ const ProductionLinesPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `产线数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.productionLines.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `产线数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.productionLines.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
         const allData = await productionLineApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `产线数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.productionLines.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -457,7 +457,7 @@ const ProductionLinesPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = ['产线编码', '产线名称', '所属车间', '描述', '状态', '创建时间'];
+      const headers = [t('app.master-data.productionLines.code'), t('app.master-data.productionLines.name'), t('app.master-data.productionLines.workshopName'), t('app.master-data.productionLines.description'), t('app.master-data.productionLines.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const workshop = workshops.find(w => w.id === item.workshopId);
         return [
@@ -465,7 +465,7 @@ const ProductionLinesPage: React.FC = () => {
           item.name || '',
           workshop ? `${workshop.code}(${workshop.name})` : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -478,7 +478,7 @@ const ProductionLinesPage: React.FC = () => {
 
       // 下载文件
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
-      messageApi.success(t('app.master-data.exportSuccess'));
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
@@ -516,7 +516,7 @@ const ProductionLinesPage: React.FC = () => {
    */
   const columns: ProColumns<ProductionLine>[] = [
     {
-      title: '产线编码',
+      title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -524,43 +524,43 @@ const ProductionLinesPage: React.FC = () => {
       copyable: true,
     },
     {
-      title: '产线名称',
+      title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '所属车间',
+      title: t('app.master-data.productionLines.workshopName'),
       dataIndex: 'workshopId',
       width: 200,
       hideInSearch: true,
       render: (_, record) => getWorkshopName(record?.workshopId ?? (record as any)?.workshop_id),
     },
     {
-      title: '描述',
+      title: t('app.master-data.productionLines.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.productionLines.statusLabel'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => {
         const isActive = record?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -568,7 +568,7 @@ const ProductionLinesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -579,7 +579,7 @@ const ProductionLinesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -587,11 +587,11 @@ const ProductionLinesPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这条产线吗？"
-            description="删除产线前需要检查是否有关联的工位"
+            title={t('app.master-data.productionLines.deleteConfirm')}
+            description={t('app.master-data.productionLines.deleteDescription')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -600,7 +600,7 @@ const ProductionLinesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -622,42 +622,42 @@ const ProductionLinesPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemProps<ProductionLine>[] = [
     {
-      title: '产线编码',
+      title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
     },
     {
-      title: '产线名称',
+      title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',
     },
     {
-      title: '所属车间',
+      title: t('app.master-data.productionLines.workshopName'),
       dataIndex: 'workshopId',
       render: (_, record) => getWorkshopName(record?.workshopId ?? (record as any)?.workshop_id),
     },
     {
-      title: '描述',
+      title: t('app.master-data.productionLines.description'),
       dataIndex: 'description',
       span: 2,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.productionLines.statusLabel'),
       dataIndex: 'isActive',
       render: (_, record) => {
         const isActive = record?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -758,15 +758,15 @@ const ProductionLinesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建产线
+            {t('app.master-data.productionLines.create')}
           </Button>,
           <Popconfirm
             key="batchDelete"
-            title="确定要批量删除选中的产线吗？"
-            description={`将删除 ${selectedRowKeys.length} 个产线，删除后无法恢复，请谨慎操作。`}
+            title={t('app.master-data.productionLines.batchDeleteTitle')}
+            description={t('app.master-data.productionLines.batchDeleteDescription', { count: selectedRowKeys.length })}
             onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
             disabled={selectedRowKeys.length === 0}
           >
             <Button
@@ -775,7 +775,7 @@ const ProductionLinesPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={selectedRowKeys.length === 0}
             >
-              批量删除
+              {t('common.batchDelete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -788,7 +788,7 @@ const ProductionLinesPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<ProductionLine>
-        title="产线详情"
+        title={t('app.master-data.productionLines.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={productionLineDetail || undefined}

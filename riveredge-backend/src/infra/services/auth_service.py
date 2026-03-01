@@ -720,6 +720,7 @@ class AuthService:
                 "username": user.username,
                 "email": user.email,
                 "full_name": user.full_name,
+                "avatar": user.avatar,
                 "tenant_id": final_tenant_id,
                 "is_infra_admin": user.is_infra_admin,
                 "is_tenant_admin": user.is_tenant_admin,

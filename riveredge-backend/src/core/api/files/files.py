@@ -405,15 +405,18 @@ async def download_file(
 async def get_file_preview(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    for_avatar: bool = Query(False, description="头像场景：强制返回直接下载URL，便于移动端 Image 组件加载"),
 ):
     """
     获取文件预览信息
     
     根据配置返回简单预览或 kkFileView 预览URL。
+    for_avatar=True 时强制使用简单预览，返回直接下载URL（移动端头像等场景需要）。
     
     Args:
         uuid: 文件UUID
         tenant_id: 当前组织ID（依赖注入）
+        for_avatar: 是否用于头像展示（强制直接下载URL）
         
     Returns:
         FilePreviewResponse: 预览信息
@@ -425,6 +428,7 @@ async def get_file_preview(
         preview_info = await FilePreviewService.get_preview_info(
             file_uuid=uuid,
             tenant_id=tenant_id,
+            force_simple_for_image=for_avatar,
         )
         return FilePreviewResponse(**preview_info)
     except NotFoundError as e:

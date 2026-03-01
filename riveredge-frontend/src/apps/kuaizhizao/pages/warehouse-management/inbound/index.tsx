@@ -9,10 +9,13 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { parseBackendLifecycle } from '../../../utils/backendLifecycle';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -119,6 +122,21 @@ const InboundPage: React.FC = () => {
           }
           messageApi.success(record.receipt_type === 'production_return' ? '退料确认成功' : '入库确认成功，库存已更新');
           actionRef.current?.reload();
+          if (currentOrder?.id === record.id) {
+            try {
+              let detailData: any;
+              if (record.receipt_type === 'purchase') {
+                detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
+              } else if (record.receipt_type === 'finished_goods') {
+                detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
+              } else if (record.receipt_type === 'production_return') {
+                detailData = await warehouseApi.productionReturn.get(record.id!.toString());
+              }
+              if (detailData) {
+                setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
+              }
+            } catch { /* ignore */ }
+          }
         } catch (error) {
           messageApi.error(record.receipt_type === 'production_return' ? '退料确认失败' : '入库确认失败');
         }
@@ -469,6 +487,17 @@ const InboundPage: React.FC = () => {
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        extra={
+          currentOrder && (currentOrder.status === 'draft' || currentOrder.status === '待退料' || currentOrder.status === '草稿' || currentOrder.status === '待入库') && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(currentOrder)}
+            >
+              {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+            </Button>
+          )
+        }
         customContent={
           currentOrder ? (
             <div style={{ padding: '16px 0' }}>
@@ -511,6 +540,25 @@ const InboundPage: React.FC = () => {
                 )}
               </Card>
 
+              {/* 生命周期 */}
+              <DetailDrawerSection title="生命周期">
+                {(() => {
+                  const lifecycle = (currentOrder as any).lifecycle?.main_stages?.length
+                    ? parseBackendLifecycle((currentOrder as any).lifecycle)
+                    : getInboundLifecycle(currentOrder);
+                  const mainStages = lifecycle.mainStages ?? [];
+                  if (mainStages.length === 0) return null;
+                  return (
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      status={lifecycle.status}
+                      showLabels
+                      nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    />
+                  );
+                })()}
+              </DetailDrawerSection>
+
               {/* 入库/退料明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
                 <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
@@ -537,6 +585,22 @@ const InboundPage: React.FC = () => {
                     dataSource={currentOrder.items}
                   />
                 </Card>
+              )}
+
+              {/* 操作记录 */}
+              {currentOrder?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel
+                    documentType={
+                      currentOrder.receipt_type === 'purchase'
+                        ? 'purchase_receipt'
+                        : currentOrder.receipt_type === 'finished_goods'
+                          ? 'finished_goods_receipt'
+                          : 'production_return'
+                    }
+                    documentId={currentOrder.id}
+                  />
+                </DetailDrawerSection>
               )}
             </div>
           ) : null

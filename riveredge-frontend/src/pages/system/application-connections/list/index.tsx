@@ -69,111 +69,53 @@ dayjs.extend(relativeTime);
 
 const {  } = Typography;
 
-const TYPE_DISPLAY: Record<string, string> = {
-  feishu: '飞书',
-  dingtalk: '钉钉',
-  wecom: '企业微信',
-  sap: 'SAP',
-  kingdee: '金蝶',
-  yonyou: '用友',
-  dsc: '鼎捷',
-  inspur: '浪潮',
-  digiwin_e10: '鼎捷 E10',
-  grasp_erp: '管家婆',
-  super_erp: '速达 ERP',
-  chanjet_tplus: '畅捷通 T+',
-  kingdee_kis: '金蝶 KIS',
-  oracle_netsuite: 'Oracle NetSuite',
-  erpnext: 'ERPNext',
-  odoo: 'Odoo',
-  sunlike_erp: '天心天思 ERP',
-  teamcenter: 'Teamcenter',
-  windchill: 'Windchill',
-  caxa: 'CAXA (数码大方)',
-  sanpin_plm: '三品 PLM',
-  sunlike_plm: '天心天思 PLM',
-  sipm: '思普 PLM',
-  inteplm: '英特 PLM',
-  salesforce: 'Salesforce',
-  xiaoshouyi: '销售易',
-  fenxiang: '纷享销客',
-  qidian: '腾讯企点',
-  supra_crm: '超兔 CRM',
-  weaver: '泛微 OA',
-  seeyon: '致远 OA',
-  landray: '蓝凌 OA',
-  cloudhub: '云之家',
-  tongda_oa: '通达 OA',
-  rootcloud: '树根互联',
-  casicloud: '航天云网',
-  alicloud_iot: '阿里云 IoT',
-  huaweicloud_iot: '华为云 IoT',
-  thingsboard: 'ThingsBoard',
-  jetlinks: 'JetLinks',
-  flux_wms: '富勒 WMS',
-  kejian_wms: '科箭 WMS',
-  digiwin_wms: '鼎捷 WMS',
-  openwms: 'OpenWMS',
+const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
+  feishu: { color: 'blue', icon: <MessageOutlined /> },
+  dingtalk: { color: 'cyan', icon: <MessageOutlined /> },
+  wecom: { color: 'green', icon: <MessageOutlined /> },
+  sap: { color: 'gold', icon: <DatabaseOutlined /> },
+  kingdee: { color: 'orange', icon: <CloudOutlined /> },
+  yonyou: { color: 'purple', icon: <CloudOutlined /> },
+  dsc: { color: 'magenta', icon: <DatabaseOutlined /> },
+  inspur: { color: 'cyan', icon: <CloudOutlined /> },
+  digiwin_e10: { color: 'blue', icon: <DatabaseOutlined /> },
+  grasp_erp: { color: 'orange', icon: <DatabaseOutlined /> },
+  super_erp: { color: 'magenta', icon: <DatabaseOutlined /> },
+  chanjet_tplus: { color: 'blue', icon: <CloudOutlined /> },
+  kingdee_kis: { color: 'cyan', icon: <CloudOutlined /> },
+  oracle_netsuite: { color: 'blue', icon: <CloudOutlined /> },
+  erpnext: { color: 'blue', icon: <CloudOutlined /> },
+  odoo: { color: 'purple', icon: <CloudOutlined /> },
+  sunlike_erp: { color: 'cyan', icon: <DatabaseOutlined /> },
+  teamcenter: { color: 'blue', icon: <AppstoreOutlined /> },
+  windchill: { color: 'geekblue', icon: <AppstoreOutlined /> },
+  caxa: { color: 'blue', icon: <AppstoreOutlined /> },
+  sanpin_plm: { color: 'cyan', icon: <AppstoreOutlined /> },
+  sunlike_plm: { color: 'geekblue', icon: <AppstoreOutlined /> },
+  sipm: { color: 'cyan', icon: <AppstoreOutlined /> },
+  inteplm: { color: 'geekblue', icon: <AppstoreOutlined /> },
+  salesforce: { color: 'cyan', icon: <TeamOutlined /> },
+  xiaoshouyi: { color: 'green', icon: <TeamOutlined /> },
+  fenxiang: { color: 'orange', icon: <TeamOutlined /> },
+  qidian: { color: 'blue', icon: <TeamOutlined /> },
+  supra_crm: { color: 'volcano', icon: <TeamOutlined /> },
+  weaver: { color: 'purple', icon: <ApartmentOutlined /> },
+  seeyon: { color: 'geekblue', icon: <ApartmentOutlined /> },
+  landray: { color: 'cyan', icon: <ApartmentOutlined /> },
+  cloudhub: { color: 'blue', icon: <ApartmentOutlined /> },
+  tongda_oa: { color: 'purple', icon: <ApartmentOutlined /> },
+  rootcloud: { color: 'blue', icon: <RocketOutlined /> },
+  casicloud: { color: 'cyan', icon: <InteractionOutlined /> },
+  alicloud_iot: { color: 'orange', icon: <CloudOutlined /> },
+  huaweicloud_iot: { color: 'red', icon: <CloudOutlined /> },
+  thingsboard: { color: 'green', icon: <RocketOutlined /> },
+  jetlinks: { color: 'blue', icon: <RocketOutlined /> },
+  flux_wms: { color: 'gold', icon: <DatabaseOutlined /> },
+  kejian_wms: { color: 'orange', icon: <CloudOutlined /> },
+  digiwin_wms: { color: 'cyan', icon: <DatabaseOutlined /> },
+  openwms: { color: 'green', icon: <DatabaseOutlined /> },
 };
 
-const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
-  const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-    feishu: { color: 'blue', text: '飞书', icon: <MessageOutlined /> },
-    dingtalk: { color: 'cyan', text: '钉钉', icon: <MessageOutlined /> },
-    wecom: { color: 'green', text: '企业微信', icon: <MessageOutlined /> },
-    sap: { color: 'gold', text: 'SAP', icon: <DatabaseOutlined /> },
-    kingdee: { color: 'orange', text: '金蝶', icon: <CloudOutlined /> },
-    yonyou: { color: 'purple', text: '用友', icon: <CloudOutlined /> },
-    dsc: { color: 'magenta', text: '鼎捷', icon: <DatabaseOutlined /> },
-    inspur: { color: 'cyan', text: '浪潮', icon: <CloudOutlined /> },
-    digiwin_e10: { color: 'blue', text: '鼎捷 E10', icon: <DatabaseOutlined /> },
-    grasp_erp: { color: 'orange', text: '管家婆', icon: <DatabaseOutlined /> },
-    super_erp: { color: 'magenta', text: '速达 ERP', icon: <DatabaseOutlined /> },
-    chanjet_tplus: { color: 'blue', text: '畅捷通 T+', icon: <CloudOutlined /> },
-    kingdee_kis: { color: 'cyan', text: '金蝶 KIS', icon: <CloudOutlined /> },
-    oracle_netsuite: { color: 'blue', text: 'Oracle NetSuite', icon: <CloudOutlined /> },
-    erpnext: { color: 'blue', text: 'ERPNext', icon: <CloudOutlined /> },
-    odoo: { color: 'purple', text: 'Odoo', icon: <CloudOutlined /> },
-    sunlike_erp: { color: 'cyan', text: '天心天思 ERP', icon: <DatabaseOutlined /> },
-    teamcenter: { color: 'blue', text: 'Teamcenter', icon: <AppstoreOutlined /> },
-    windchill: { color: 'geekblue', text: 'Windchill', icon: <AppstoreOutlined /> },
-    caxa: { color: 'blue', text: 'CAXA (数码大方)', icon: <AppstoreOutlined /> },
-    sanpin_plm: { color: 'cyan', text: '三品 PLM', icon: <AppstoreOutlined /> },
-    sunlike_plm: { color: 'geekblue', text: '天心天思 PLM', icon: <AppstoreOutlined /> },
-    sipm: { color: 'cyan', text: '思普 PLM', icon: <AppstoreOutlined /> },
-    inteplm: { color: 'geekblue', text: '英特 PLM', icon: <AppstoreOutlined /> },
-    salesforce: { color: 'cyan', text: 'Salesforce', icon: <TeamOutlined /> },
-    xiaoshouyi: { color: 'green', text: '销售易', icon: <TeamOutlined /> },
-    fenxiang: { color: 'orange', text: '纷享销客', icon: <TeamOutlined /> },
-    qidian: { color: 'blue', text: '腾讯企点', icon: <TeamOutlined /> },
-    supra_crm: { color: 'volcano', text: '超兔 CRM', icon: <TeamOutlined /> },
-    weaver: { color: 'purple', text: '泛微 OA', icon: <ApartmentOutlined /> },
-    seeyon: { color: 'geekblue', text: '致远 OA', icon: <ApartmentOutlined /> },
-    landray: { color: 'cyan', text: '蓝凌 OA', icon: <ApartmentOutlined /> },
-    cloudhub: { color: 'blue', text: '云之家', icon: <ApartmentOutlined /> },
-    tongda_oa: { color: 'purple', text: '通达 OA', icon: <ApartmentOutlined /> },
-    rootcloud: { color: 'blue', text: '树根互联', icon: <RocketOutlined /> },
-    casicloud: { color: 'cyan', text: '航天云网', icon: <InteractionOutlined /> },
-    alicloud_iot: { color: 'orange', text: '阿里云 IoT', icon: <CloudOutlined /> },
-    huaweicloud_iot: { color: 'red', text: '华为云 IoT', icon: <CloudOutlined /> },
-    thingsboard: { color: 'green', text: 'ThingsBoard', icon: <RocketOutlined /> },
-    jetlinks: { color: 'blue', text: 'JetLinks', icon: <RocketOutlined /> },
-    flux_wms: { color: 'gold', text: '富勒 WMS', icon: <DatabaseOutlined /> },
-    kejian_wms: { color: 'orange', text: '科箭 WMS', icon: <CloudOutlined /> },
-    digiwin_wms: { color: 'cyan', text: '鼎捷 WMS', icon: <DatabaseOutlined /> },
-    openwms: { color: 'green', text: 'OpenWMS', icon: <DatabaseOutlined /> },
-  };
-  return typeMap[type] || { color: 'default', text: TYPE_DISPLAY[type] || type, icon: <AppstoreOutlined /> };
-};
-
-const getConnectionStatus = (
-  conn: ApplicationConnection
-): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
-  if (!conn.is_active) return { status: 'default', text: '已禁用' };
-  if (conn.is_connected) return { status: 'success', text: '已连接' };
-  if (conn.last_error) return { status: 'error', text: '连接失败' };
-  return { status: 'warning', text: '未连接' };
-};
 
 const SENSITIVE_KEYS = [
   'password',
@@ -188,6 +130,24 @@ const SENSITIVE_KEYS = [
 
 const ApplicationConnectionsListPage: React.FC = () => {
   const { t } = useTranslation();
+
+  const getConnectionStatus = (
+    conn: ApplicationConnection
+  ): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
+    if (!conn.is_active) return { status: 'default', text: t('pages.system.applicationConnections.statusDisabled') };
+    if (conn.is_connected) return { status: 'success', text: t('pages.system.applicationConnections.statusConnected') };
+    if (conn.last_error) return { status: 'error', text: t('pages.system.applicationConnections.statusFailed') };
+    return { status: 'warning', text: t('pages.system.applicationConnections.statusDisconnected') };
+  };
+
+  const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
+    const tc = type ? `type${type.charAt(0).toUpperCase()}${type.slice(1)}` : '';
+    const key = tc ? `pages.system.applicationConnections.${tc}` : '';
+    let text = key ? t(key) : type;
+    if (key && text === key) text = type;
+    const info = TYPE_COLORS[type] || { color: 'default', icon: <AppstoreOutlined /> };
+    return { ...info, text: text || type };
+  };
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -290,7 +250,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         fail++;
       }
     }
-    messageApi.info(`测试完成：成功 ${ok}，失败 ${fail}`);
+    messageApi.info(t('pages.system.applicationConnections.testComplete', { ok, fail }));
     actionRef.current?.reload();
   };
 
@@ -421,12 +381,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
       inactive: allConnections.filter((c) => !c.is_active).length,
     };
     return [
-      { title: '总应用连接数', value: stats.total, valueStyle: { color: '#1890ff' } },
-      { title: '已连接', value: stats.connected, valueStyle: { color: '#52c41a' } },
-      { title: '未连接', value: stats.disconnected, valueStyle: { color: '#ff4d4f' } },
-      { title: '已禁用', value: stats.inactive, valueStyle: { color: '#faad14' } },
+      { title: t('pages.system.applicationConnections.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+      { title: t('pages.system.applicationConnections.statConnected'), value: stats.connected, valueStyle: { color: '#52c41a' } },
+      { title: t('pages.system.applicationConnections.statDisconnected'), value: stats.disconnected, valueStyle: { color: '#ff4d4f' } },
+      { title: t('pages.system.applicationConnections.statInactive'), value: stats.inactive, valueStyle: { color: '#faad14' } },
     ];
-  }, [allConnections]);
+  }, [allConnections, t]);
 
   const renderConfigForm = (type: string) => {
     const common = (

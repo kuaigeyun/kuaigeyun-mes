@@ -1,11 +1,12 @@
+/**
+ * 登录页 - Ant Design Mobile 规范
+ * 参考：Form + InputItem、品牌区、白底卡片、主色按钮
+ */
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button, InputItem, List, WhiteSpace, WingBlank, Toast } from '@ant-design/react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { GlassCard } from '../../src/components/GlassCard';
-
-const { width } = Dimensions.get('window');
+import { Button, InputItem, List, WingBlank, Toast, WhiteSpace } from '@ant-design/react-native';
+import { login } from '../../src/services/authService';
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -20,118 +21,105 @@ export default function LoginScreen() {
         }
 
         setLoading(true);
-        // Simulate login
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            await login({ username: username.trim(), password });
             Toast.success('登录成功');
             router.replace('/(tabs)');
-        }, 1000);
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || '登录失败';
+            Toast.fail(typeof msg === 'string' ? msg : '登录失败，请检查网络');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <LinearGradient
-            // Use a trendy "Liquid" gradient: Blue -> Purple -> Pinkish
-            colors={['#e0c3fc', '#8ec5fc']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+        <KeyboardAvoidingView
             style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
-            <WingBlank size="lg">
-                <View style={styles.header}>
-                    <View style={styles.logoShadow}>
-                        <Image source={require('../../assets/icon.png')} style={styles.logo} />
-                    </View>
-                </View>
+            <View style={styles.brandArea}>
+                <Image source={require('../../assets/icon.png')} style={styles.logo} />
+                <Text style={styles.brandTitle}>快格轻制造</Text>
+                <Text style={styles.brandSubtitle}>车间移动工作台</Text>
+            </View>
 
-                <GlassCard style={styles.card}>
-                    <View style={{ padding: 20 }}>
-                        <View style={{ marginBottom: 20 }}>
-                            <InputItem
-                                clear
-                                value={username}
-                                onChange={(value: string) => setUsername(value)}
-                                placeholder="请输入用户名"
-                                style={styles.input}
-                            >
-                                <Image source={require('../../assets/icon.png')} style={{ width: 20, height: 20, opacity: 0 }} /> {/* Spacer hack or use Icon */}
-                                账号
-                            </InputItem>
-                            <View style={styles.divider} />
-                            <InputItem
-                                clear
-                                type="password"
-                                value={password}
-                                onChange={(value: string) => setPassword(value)}
-                                placeholder="请输入密码"
-                                style={styles.input}
-                            >
-                                密码
-                            </InputItem>
-                        </View>
-
-                        <Button type="primary" loading={loading} onPress={handleLogin} style={styles.button}>
-                            登录
-                        </Button>
-                    </View>
-                </GlassCard>
-
-                <View style={styles.footer}>
-                    <Image source={require('../../assets/icon.png')} style={{ width: 20, height: 20, tintColor: '#fff', opacity: 0.8 }} />
-                    {/* Simple footer text */}
-                </View>
-            </WingBlank>
-        </LinearGradient>
+            <View style={styles.formArea}>
+                <List style={styles.formList}>
+                    <InputItem
+                        clear
+                        value={username}
+                        onChange={(v: string) => setUsername(v)}
+                        placeholder="请输入用户名"
+                        placeholderTextColor="#bfbfbf"
+                    >
+                        账号
+                    </InputItem>
+                    <InputItem
+                        clear
+                        type="password"
+                        value={password}
+                        onChange={(v: string) => setPassword(v)}
+                        placeholder="请输入密码"
+                        placeholderTextColor="#bfbfbf"
+                    >
+                        密码
+                    </InputItem>
+                </List>
+                <WhiteSpace size="xl" />
+                <WingBlank size="lg">
+                    <Button
+                        type="primary"
+                        loading={loading}
+                        onPress={handleLogin}
+                        style={styles.submitBtn}
+                    >
+                        登录
+                    </Button>
+                </WingBlank>
+            </View>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+        paddingTop: Platform.OS === 'ios' ? 80 : 60,
     },
-    header: {
+    brandArea: {
         alignItems: 'center',
         marginBottom: 40,
     },
-    logoShadow: {
-        shadowColor: '#7a42f4',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 15,
-    },
     logo: {
-        width: 100,
-        height: 100,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.8)',
+        width: 64,
+        height: 64,
+        borderRadius: 12,
+        marginBottom: 12,
     },
-    card: {
-        borderRadius: 30,
+    brandTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#1a1a1a',
     },
-    input: {
-        backgroundColor: 'transparent',
-        fontSize: 16,
+    brandSubtitle: {
+        fontSize: 13,
+        color: '#8c8c8c',
+        marginTop: 4,
     },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        marginLeft: 15,
+    formArea: {
+        flex: 1,
+        paddingHorizontal: 16,
     },
-    button: {
-        borderRadius: 25,
-        height: 50,
-        backgroundColor: '#1890ff', // Or gradient button? Keep Ant Design primary for now
-        shadowColor: '#1890ff',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        borderWidth: 0,
+    formList: {
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        overflow: 'hidden',
     },
-    footer: {
-        alignItems: 'center',
-        marginTop: 30,
-        opacity: 0.6
-    }
+    submitBtn: {
+        height: 48,
+        borderRadius: 8,
+    },
 });

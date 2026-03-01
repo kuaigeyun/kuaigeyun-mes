@@ -205,111 +205,127 @@ const EquipmentFaultListPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const faultTypeTextKey: Record<string, string> = {
+    '机械故障': 'pages.system.equipmentFaults.typeMechanical',
+    '电气故障': 'pages.system.equipmentFaults.typeElectrical',
+    '软件故障': 'pages.system.equipmentFaults.typeSoftware',
+    '其他': 'pages.system.equipmentFaults.typeOther',
+  };
+  const faultLevelTextKey: Record<string, string> = {
+    '轻微': 'pages.system.equipmentFaults.levelMinor',
+    '一般': 'pages.system.equipmentFaults.levelNormal',
+    '严重': 'pages.system.equipmentFaults.levelSerious',
+    '紧急': 'pages.system.equipmentFaults.levelUrgent',
+  };
+  const statusTextKey: Record<string, string> = {
+    '待处理': 'pages.system.equipmentFaults.statusPending',
+    '处理中': 'pages.system.equipmentFaults.statusProcessing',
+    '已修复': 'pages.system.equipmentFaults.statusFixed',
+    '已关闭': 'pages.system.equipmentFaults.statusClosed',
+  };
+
   const columns: ProColumns<EquipmentFault>[] = [
     {
-      title: '故障编号',
+      title: t('pages.system.equipmentFaults.columnFaultNo'),
       dataIndex: 'fault_no',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '设备名称',
+      title: t('pages.system.equipmentFaults.columnEquipment'),
       dataIndex: 'equipment_name',
       width: 200,
     },
     {
-      title: '故障日期',
+      title: t('pages.system.equipmentFaults.columnFaultDate'),
       dataIndex: 'fault_date',
       width: 150,
       valueType: 'date',
     },
     {
-      title: '故障类型',
+      title: t('pages.system.equipmentFaults.columnFaultType'),
       dataIndex: 'fault_type',
       width: 120,
       valueType: 'select',
-      valueEnum: {
-        '机械故障': { text: '机械故障' },
-        '电气故障': { text: '电气故障' },
-        '软件故障': { text: '软件故障' },
-        '其他': { text: '其他' },
-      },
+      valueEnum: Object.fromEntries(
+        Object.entries(faultTypeTextKey).map(([k, key]) => [k, { text: t(key) }])
+      ),
     },
     {
-      title: '故障级别',
+      title: t('pages.system.equipmentFaults.columnFaultLevel'),
       dataIndex: 'fault_level',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        '轻微': { text: '轻微', status: 'Default' },
-        '一般': { text: '一般', status: 'Processing' },
-        '严重': { text: '严重', status: 'Warning' },
-        '紧急': { text: '紧急', status: 'Error' },
+        '轻微': { text: t('pages.system.equipmentFaults.levelMinor'), status: 'Default' },
+        '一般': { text: t('pages.system.equipmentFaults.levelNormal'), status: 'Processing' },
+        '严重': { text: t('pages.system.equipmentFaults.levelSerious'), status: 'Warning' },
+        '紧急': { text: t('pages.system.equipmentFaults.levelUrgent'), status: 'Error' },
       },
       render: (_, record) => {
         const levelMap: Record<string, { color: string; text: string }> = {
-          '轻微': { color: 'default', text: '轻微' },
-          '一般': { color: 'processing', text: '一般' },
-          '严重': { color: 'warning', text: '严重' },
-          '紧急': { color: 'error', text: '紧急' },
+          '轻微': { color: 'default', text: t('pages.system.equipmentFaults.levelMinor') },
+          '一般': { color: 'processing', text: t('pages.system.equipmentFaults.levelNormal') },
+          '严重': { color: 'warning', text: t('pages.system.equipmentFaults.levelSerious') },
+          '紧急': { color: 'error', text: t('pages.system.equipmentFaults.levelUrgent') },
         };
         const levelInfo = levelMap[record.fault_level] || { color: 'default', text: record.fault_level };
         return <Tag color={levelInfo.color}>{levelInfo.text}</Tag>;
       },
     },
     {
-      title: '故障描述',
+      title: t('pages.system.equipmentFaults.columnFaultDesc'),
       dataIndex: 'fault_description',
       width: 250,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '报告人',
+      title: t('pages.system.equipmentFaults.columnReporter'),
       dataIndex: 'reporter_name',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '状态',
+      title: t('pages.system.equipmentFaults.columnStatus'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        '待处理': { text: '待处理', status: 'Default' },
-        '处理中': { text: '处理中', status: 'Processing' },
-        '已修复': { text: '已修复', status: 'Success' },
-        '已关闭': { text: '已关闭', status: 'Error' },
+        '待处理': { text: t('pages.system.equipmentFaults.statusPending'), status: 'Default' },
+        '处理中': { text: t('pages.system.equipmentFaults.statusProcessing'), status: 'Processing' },
+        '已修复': { text: t('pages.system.equipmentFaults.statusFixed'), status: 'Success' },
+        '已关闭': { text: t('pages.system.equipmentFaults.statusClosed'), status: 'Error' },
       },
       render: (_, record) => {
         const statusMap: Record<string, { color: string; text: string }> = {
-          '待处理': { color: 'default', text: '待处理' },
-          '处理中': { color: 'processing', text: '处理中' },
-          '已修复': { color: 'success', text: '已修复' },
-          '已关闭': { color: 'error', text: '已关闭' },
+          '待处理': { color: 'default', text: t('pages.system.equipmentFaults.statusPending') },
+          '处理中': { color: 'processing', text: t('pages.system.equipmentFaults.statusProcessing') },
+          '已修复': { color: 'success', text: t('pages.system.equipmentFaults.statusFixed') },
+          '已关闭': { color: 'error', text: t('pages.system.equipmentFaults.statusClosed') },
         };
         const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       },
     },
     {
-      title: '需要维修',
+      title: t('pages.system.equipmentFaults.columnRepairRequired'),
       dataIndex: 'repair_required',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Success' },
-        false: { text: '否', status: 'Default' },
+        true: { text: t('pages.system.equipmentFaults.yes'), status: 'Success' },
+        false: { text: t('pages.system.equipmentFaults.no'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.repair_required ? 'success' : 'default'}>
-          {record.repair_required ? '是' : '否'}
+          {record.repair_required ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')}
         </Tag>
       ),
       hideInSearch: true,
     },
     {
-      title: '创建时间',
+      title: t('pages.system.equipmentFaults.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -317,7 +333,7 @@ const EquipmentFaultListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.equipmentFaults.columnActions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -329,7 +345,7 @@ const EquipmentFaultListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.equipmentFaults.view')}
           </Button>
           <Button
             type="link"
@@ -337,7 +353,7 @@ const EquipmentFaultListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.equipmentFaults.edit')}
           </Button>
           <Popconfirm
             title={t('pages.system.equipmentFaults.confirmDeleteOne')}
@@ -349,7 +365,7 @@ const EquipmentFaultListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.equipmentFaults.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -381,13 +397,13 @@ const EquipmentFaultListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建故障记录"
+          createButtonText={t('pages.system.equipmentFaults.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.equipmentFaults.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -426,7 +442,7 @@ const EquipmentFaultListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑故障记录' : '新建故障记录'}
+        title={isEdit ? t('pages.system.equipmentFaults.modalEdit') : t('pages.system.equipmentFaults.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -440,99 +456,99 @@ const EquipmentFaultListPage: React.FC = () => {
       >
         <ProFormSelect
           name="equipment_uuid"
-          label="设备"
-          rules={[{ required: true, message: '请选择设备' }]}
+          label={t('pages.system.equipmentFaults.labelEquipment')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.equipmentRequired') }]}
           options={equipmentList.map((eq) => ({
             label: `${eq.name} (${eq.code})`,
             value: eq.uuid,
           }))}
-          placeholder="请选择设备"
+          placeholder={t('pages.system.equipmentFaults.equipmentPlaceholder')}
         />
         <ProFormDatePicker
           name="fault_date"
-          label="故障日期"
-          rules={[{ required: true, message: '请选择故障日期' }]}
-          placeholder="请选择故障日期"
+          label={t('pages.system.equipmentFaults.columnFaultDate')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.faultDateRequired') }]}
+          placeholder={t('pages.system.equipmentFaults.faultDatePlaceholder')}
           fieldProps={{ showTime: true }}
         />
         <ProFormSelect
           name="fault_type"
-          label="故障类型"
-          rules={[{ required: true, message: '请选择故障类型' }]}
+          label={t('pages.system.equipmentFaults.columnFaultType')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.faultTypeRequired') }]}
           options={[
-            { label: '机械故障', value: '机械故障' },
-            { label: '电气故障', value: '电气故障' },
-            { label: '软件故障', value: '软件故障' },
-            { label: '其他', value: '其他' },
+            { label: t('pages.system.equipmentFaults.typeMechanical'), value: '机械故障' },
+            { label: t('pages.system.equipmentFaults.typeElectrical'), value: '电气故障' },
+            { label: t('pages.system.equipmentFaults.typeSoftware'), value: '软件故障' },
+            { label: t('pages.system.equipmentFaults.typeOther'), value: '其他' },
           ]}
         />
         <ProFormSelect
           name="fault_level"
-          label="故障级别"
-          rules={[{ required: true, message: '请选择故障级别' }]}
+          label={t('pages.system.equipmentFaults.columnFaultLevel')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.faultLevelRequired') }]}
           options={[
-            { label: '轻微', value: '轻微' },
-            { label: '一般', value: '一般' },
-            { label: '严重', value: '严重' },
-            { label: '紧急', value: '紧急' },
+            { label: t('pages.system.equipmentFaults.levelMinor'), value: '轻微' },
+            { label: t('pages.system.equipmentFaults.levelNormal'), value: '一般' },
+            { label: t('pages.system.equipmentFaults.levelSerious'), value: '严重' },
+            { label: t('pages.system.equipmentFaults.levelUrgent'), value: '紧急' },
           ]}
         />
         <ProFormTextArea
           name="fault_description"
-          label="故障描述"
-          rules={[{ required: true, message: '请输入故障描述' }]}
-          placeholder="请输入故障描述"
+          label={t('pages.system.equipmentFaults.columnFaultDesc')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.faultDescRequired') }]}
+          placeholder={t('pages.system.equipmentFaults.faultDescPlaceholder')}
           fieldProps={{ rows: 4 }}
         />
         <ProFormText
           name="reporter_name"
-          label="报告人姓名"
-          placeholder="请输入报告人姓名"
+          label={t('pages.system.equipmentFaults.labelReporterName')}
+          placeholder={t('pages.system.equipmentFaults.reporterPlaceholder')}
         />
         <ProFormSelect
           name="status"
-          label="状态"
-          rules={[{ required: true, message: '请选择状态' }]}
+          label={t('pages.system.equipmentFaults.columnStatus')}
+          rules={[{ required: true, message: t('pages.system.equipmentFaults.statusRequired') }]}
           options={[
-            { label: '待处理', value: '待处理' },
-            { label: '处理中', value: '处理中' },
-            { label: '已修复', value: '已修复' },
-            { label: '已关闭', value: '已关闭' },
+            { label: t('pages.system.equipmentFaults.statusPending'), value: '待处理' },
+            { label: t('pages.system.equipmentFaults.statusProcessing'), value: '处理中' },
+            { label: t('pages.system.equipmentFaults.statusFixed'), value: '已修复' },
+            { label: t('pages.system.equipmentFaults.statusClosed'), value: '已关闭' },
           ]}
         />
         <ProFormSwitch
           name="repair_required"
-          label="是否需要维修"
+          label={t('pages.system.equipmentFaults.labelRepairRequired')}
           initialValue={true}
         />
         <ProFormTextArea
           name="remark"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('pages.system.equipmentFaults.labelRemark')}
+          placeholder={t('pages.system.equipmentFaults.remarkPlaceholder')}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="故障记录详情"
+        title={t('pages.system.equipmentFaults.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
         columns={[
-          { title: '故障编号', dataIndex: 'fault_no' },
-          { title: '设备名称', dataIndex: 'equipment_name' },
-          { title: '故障日期', dataIndex: 'fault_date', valueType: 'dateTime' },
-          { title: '故障类型', dataIndex: 'fault_type' },
-          { title: '故障级别', dataIndex: 'fault_level' },
-          { title: '故障描述', dataIndex: 'fault_description', span: 2 },
-          { title: '报告人', dataIndex: 'reporter_name' },
-          { title: '状态', dataIndex: 'status' },
-          { title: '需要维修', dataIndex: 'repair_required', render: (value: boolean) => (value ? '是' : '否') },
-          { title: '备注', dataIndex: 'remark', span: 2 },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          { title: t('pages.system.equipmentFaults.columnFaultNo'), dataIndex: 'fault_no' },
+          { title: t('pages.system.equipmentFaults.columnEquipment'), dataIndex: 'equipment_name' },
+          { title: t('pages.system.equipmentFaults.columnFaultDate'), dataIndex: 'fault_date', valueType: 'dateTime' },
+          { title: t('pages.system.equipmentFaults.columnFaultType'), dataIndex: 'fault_type', render: (v: string) => (faultTypeTextKey[v] ? t(faultTypeTextKey[v]) : v) },
+          { title: t('pages.system.equipmentFaults.columnFaultLevel'), dataIndex: 'fault_level', render: (v: string) => (faultLevelTextKey[v] ? t(faultLevelTextKey[v]) : v) },
+          { title: t('pages.system.equipmentFaults.columnFaultDesc'), dataIndex: 'fault_description', span: 2 },
+          { title: t('pages.system.equipmentFaults.columnReporter'), dataIndex: 'reporter_name' },
+          { title: t('pages.system.equipmentFaults.columnStatus'), dataIndex: 'status', render: (v: string) => (statusTextKey[v] ? t(statusTextKey[v]) : v) },
+          { title: t('pages.system.equipmentFaults.columnRepairRequired'), dataIndex: 'repair_required', render: (value: boolean) => (value ? t('pages.system.equipmentFaults.yes') : t('pages.system.equipmentFaults.no')) },
+          { title: t('pages.system.equipmentFaults.labelRemark'), dataIndex: 'remark', span: 2 },
+          { title: t('pages.system.equipmentFaults.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('pages.system.equipmentFaults.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ]}
       />
     </>

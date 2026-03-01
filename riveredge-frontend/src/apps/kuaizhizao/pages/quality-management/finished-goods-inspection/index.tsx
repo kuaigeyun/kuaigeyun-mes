@@ -12,9 +12,14 @@ import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } 
 import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
 // 成品检验接口定义
 interface FinishedGoodsInspection {
@@ -49,6 +54,7 @@ interface FinishedGoodsInspection {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  lifecycle?: { main_stages?: Array<unknown> };
 }
 
 
@@ -282,7 +288,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -304,6 +310,32 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               >
                 详情
               </Button>
+              <UniWorkflowActions
+                record={record}
+                entityName="成品检验单"
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={[]}
+                pendingStatuses={['待审核', '已检验']}
+                approvedStatuses={['已审核']}
+                rejectedStatuses={['已驳回']}
+                theme="link"
+                size="small"
+                actions={{
+                  approve: (id) => apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST' }),
+                  reject: (id, reason) =>
+                    apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, {
+                      method: 'POST',
+                      params: reason ? { rejection_reason: reason } : undefined,
+                    }),
+                }}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                  if (inspectionDetail?.id === record.id) {
+                    qualityApi.finishedGoodsInspection.get(record.id!.toString()).then(setInspectionDetail).catch(() => {});
+                  }
+                }}
+              />
               {record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0 && (
                 <Button
                   size="small"
@@ -543,6 +575,36 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        extra={
+          inspectionDetail && (
+            <UniWorkflowActions
+              record={inspectionDetail}
+              entityName="成品检验单"
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={[]}
+              pendingStatuses={['待审核', '已检验']}
+              approvedStatuses={['已审核']}
+              rejectedStatuses={['已驳回']}
+              theme="default"
+              size="small"
+              actions={{
+                approve: (id) => apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST' }),
+                reject: (id, reason) =>
+                  apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, {
+                    method: 'POST',
+                    params: reason ? { rejection_reason: reason } : undefined,
+                  }),
+              }}
+              onSuccess={() => {
+                actionRef.current?.reload();
+                if (inspectionDetail?.id) {
+                  qualityApi.finishedGoodsInspection.get(inspectionDetail.id.toString()).then(setInspectionDetail).catch(() => {});
+                }
+              }}
+            />
+          )
+        }
         customContent={
           inspectionDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -605,6 +667,20 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 </Row>
               </Card>
 
+              <DetailDrawerSection title="生命周期">
+                {(() => {
+                  const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
+                  return (
+                    <UniLifecycleStepper
+                      steps={lc.mainStages ?? []}
+                      showLabels
+                      status={lc.status}
+                      nextStepSuggestions={lc.nextStepSuggestions}
+                    />
+                  );
+                })()}
+              </DetailDrawerSection>
+
               <Card title="检验结果">
                 <Row gutter={16}>
                   <Col span={12}>
@@ -636,6 +712,13 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                   </Row>
                 )}
               </Card>
+
+              {/* 操作记录 */}
+              {inspectionDetail?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel documentType="finished_goods_inspection" documentId={inspectionDetail.id} />
+                </DetailDrawerSection>
+              )}
             </div>
           ) : null
         }

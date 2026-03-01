@@ -70,6 +70,60 @@ class ProductionPlanningService(BaseService):
         resp.lifecycle = get_production_plan_lifecycle(plan)
         return resp
 
+    async def approve_production_plan(
+        self, tenant_id: int, plan_id: int, approved_by: int, rejection_reason: Optional[str] = None
+    ) -> ProductionPlanResponse:
+        """审核生产计划"""
+        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
+        if not plan:
+            raise NotFoundError(f"生产计划不存在: {plan_id}")
+        if plan.execution_status == "已执行":
+            raise BusinessLogicError("已执行的生产计划不允许审核")
+
+        from apps.base_service import AppBaseService
+        reviewer_name = await AppBaseService().get_user_name(approved_by)
+
+        if rejection_reason:
+            await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(
+                reviewer_id=approved_by,
+                reviewer_name=reviewer_name,
+                review_time=datetime.now(),
+                review_status="驳回",
+                review_remarks=rejection_reason,
+                status="已驳回",
+                updated_by=approved_by
+            )
+        else:
+            await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(
+                reviewer_id=approved_by,
+                reviewer_name=reviewer_name,
+                review_time=datetime.now(),
+                review_status="通过",
+                review_remarks=None,
+                status="已审核",
+                updated_by=approved_by
+            )
+
+        return await self.get_production_plan_by_id(tenant_id, plan_id)
+
+    async def submit_production_plan(self, tenant_id: int, plan_id: int, submitted_by: int) -> ProductionPlanResponse:
+        """提交生产计划审核（已驳回时重新提交）"""
+        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
+        if not plan:
+            raise NotFoundError(f"生产计划不存在: {plan_id}")
+        if plan.status != "已驳回":
+            raise BusinessLogicError("只有已驳回状态的生产计划才能重新提交")
+        if plan.execution_status == "已执行":
+            raise BusinessLogicError("已执行的生产计划不允许操作")
+
+        await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(
+            status="草稿",
+            review_status="待审核",
+            review_remarks=None,
+            updated_by=submitted_by
+        )
+        return await self.get_production_plan_by_id(tenant_id, plan_id)
+
     async def update_production_plan(self, tenant_id: int, plan_id: int, plan_data: Any, updated_by: int) -> ProductionPlanResponse:
         """更新生产计划"""
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)

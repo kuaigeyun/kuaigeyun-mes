@@ -1096,6 +1096,33 @@ class SalesOrderService:
                 **d,
             )
         logger.info("从销售订单 %s 生成需求 %s", order.order_code, demand.demand_code)
+
+        # 建立销售订单→Demand 的 DocumentRelation（支持单据追溯）
+        try:
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="sales_order",
+                    source_id=sales_order_id,
+                    source_code=order.order_code,
+                    source_name=order.order_code,
+                    target_type="demand",
+                    target_id=demand.id,
+                    target_code=demand.demand_code,
+                    target_name=demand.demand_name or demand.demand_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="销售订单审核通过自动生成需求",
+                ),
+                created_by=created_by,
+            )
+        except Exception as e:
+            logger.warning("创建销售订单→Demand 单据关联失败: %s", e)
+
         return demand
 
     async def push_sales_order_to_production_plan(

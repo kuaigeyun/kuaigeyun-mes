@@ -12,9 +12,14 @@ import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } 
 import { App, Button, Tag, Space, Table, Card, Row, Col, Modal } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { apiRequest } from '../../../../../services/api';
 import { qualityApi, warehouseApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -276,7 +281,7 @@ const IncomingInspectionPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -298,6 +303,32 @@ const IncomingInspectionPage: React.FC = () => {
               >
                 详情
               </Button>
+              <UniWorkflowActions
+                record={record}
+                entityName="来料检验单"
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={[]}
+                pendingStatuses={['待审核', '已检验']}
+                approvedStatuses={['已审核']}
+                rejectedStatuses={['已驳回']}
+                theme="link"
+                size="small"
+                actions={{
+                  approve: (id) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST' }),
+                  reject: (id, reason) =>
+                    apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, {
+                      method: 'POST',
+                      params: reason ? { rejection_reason: reason } : undefined,
+                    }),
+                }}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                  if (inspectionDetail?.id === record.id) {
+                    qualityApi.incomingInspection.get(record.id!.toString()).then(setInspectionDetail).catch(() => {});
+                  }
+                }}
+              />
               {record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0 && (
                 <Button
                   size="small"
@@ -490,6 +521,36 @@ const IncomingInspectionPage: React.FC = () => {
         onClose={() => setDetailVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        extra={
+          inspectionDetail && (
+            <UniWorkflowActions
+              record={inspectionDetail}
+              entityName="来料检验单"
+              statusField="status"
+              reviewStatusField="review_status"
+              draftStatuses={[]}
+              pendingStatuses={['待审核', '已检验']}
+              approvedStatuses={['已审核']}
+              rejectedStatuses={['已驳回']}
+              theme="default"
+              size="small"
+              actions={{
+                approve: (id) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST' }),
+                reject: (id, reason) =>
+                  apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, {
+                    method: 'POST',
+                    params: reason ? { rejection_reason: reason } : undefined,
+                  }),
+              }}
+              onSuccess={() => {
+                actionRef.current?.reload();
+                if (inspectionDetail?.id) {
+                  qualityApi.incomingInspection.get(inspectionDetail.id.toString()).then(setInspectionDetail).catch(() => {});
+                }
+              }}
+            />
+          )
+        }
         customContent={
           inspectionDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -575,6 +636,20 @@ const IncomingInspectionPage: React.FC = () => {
                 </Row>
               </Card>
 
+              <DetailDrawerSection title="生命周期">
+                {(() => {
+                  const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
+                  return (
+                    <UniLifecycleStepper
+                      steps={lc.mainStages ?? []}
+                      showLabels
+                      status={lc.status}
+                      nextStepSuggestions={lc.nextStepSuggestions}
+                    />
+                  );
+                })()}
+              </DetailDrawerSection>
+
               <Card title="检验结果">
                 <Row gutter={16}>
                   <Col span={12}>
@@ -620,6 +695,13 @@ const IncomingInspectionPage: React.FC = () => {
                   </Row>
                 )}
               </Card>
+
+              {/* 操作记录 */}
+              {inspectionDetail?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel documentType="incoming_inspection" documentId={inspectionDetail.id} />
+                </DetailDrawerSection>
+              )}
             </div>
           ) : null
         }

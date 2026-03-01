@@ -100,6 +100,38 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 created_by_name=user_info["name"],
                 **picking_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
+
+            # 建立工单→生产领料 的 DocumentRelation（支持单据追溯）
+            work_order_id = getattr(picking, "work_order_id", None) or getattr(picking_data, "work_order_id", None)
+            if work_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.work_order import WorkOrder
+
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True)
+                    if wo:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=work_order_id,
+                                source_code=wo.code,
+                                source_name=wo.name,
+                                target_type="production_picking",
+                                target_id=picking.id,
+                                target_code=picking.picking_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单创建生产领料单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立工单→生产领料 单据关联失败: %s", e)
+
             return ProductionPickingResponse.model_validate(picking)
 
     async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingResponse:
@@ -166,8 +198,32 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存
-            # TODO: 更新工单状态
+            # 更新库存（扣减）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                picking_items = await ProductionPickingItem.filter(
+                    tenant_id=tenant_id, picking_id=picking_id
+                ).all()
+                picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
+                for item in picking_items:
+                    qty = item.required_quantity or item.picked_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="production_picking",
+                        source_doc_id=picking_id,
+                        source_doc_code=picking.picking_code,
+                    )
+            except Exception as inv_e:
+                logger.error("生产领料确认-更新库存失败: %s", inv_e)
+                raise
 
             updated_picking = await self.get_production_picking_by_id(tenant_id, picking_id)
             return updated_picking
@@ -271,6 +327,32 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     warehouse_name=final_warehouse_name or '',
                     status='待领料'
                 )
+
+            # 建立工单→生产领料 的 DocumentRelation（支持单据追溯）
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="production_picking",
+                        target_id=picking.id,
+                        target_code=picking.picking_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单一键领料创建生产领料单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("建立工单→生产领料 单据关联失败: %s", e)
             
             return ProductionPickingResponse.model_validate(picking)
     
@@ -350,6 +432,67 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     return_id=ret.id,
                     **item_data.model_dump(exclude_unset=True)
                 )
+
+            # 建立工单→生产退料 的 DocumentRelation（支持单据追溯）
+            work_order_id = getattr(ret, "work_order_id", None) or getattr(return_data, "work_order_id", None)
+            if work_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.work_order import WorkOrder
+
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True)
+                    if wo:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=work_order_id,
+                                source_code=wo.code,
+                                source_name=wo.name,
+                                target_type="production_return",
+                                target_id=ret.id,
+                                target_code=ret.return_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单创建生产退料单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立工单→生产退料 单据关联失败: %s", e)
+
+            # 建立领料单→生产退料 的 DocumentRelation（当有 picking_id 时）
+            picking_id = getattr(ret, "picking_id", None) or getattr(return_data, "picking_id", None)
+            if picking_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=picking_id)
+                    if picking:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="production_picking",
+                                source_id=picking_id,
+                                source_code=picking.picking_code,
+                                source_name=None,
+                                target_type="production_return",
+                                target_id=ret.id,
+                                target_code=ret.return_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="领料单创建生产退料单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立领料单→生产退料 单据关联失败: %s", e)
 
             return ProductionReturnResponse.model_validate(ret)
 
@@ -444,7 +587,30 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     id=item.id
                 ).update(status="已退料", return_time=datetime.now())
 
-            # TODO: 更新库存（增加仓库库存）
+            # 更新库存（增加）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                ret_obj = await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
+                for item in ret.items:
+                    qty = item.return_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=getattr(item, "batch_number", None) or None,
+                        source_type="production_return",
+                        source_doc_id=return_id,
+                        source_doc_code=ret_obj.return_code,
+                    )
+            except Exception as inv_e:
+                logger.error("生产退料确认-更新库存失败: %s", inv_e)
+                raise
+
             return ProductionReturnResponse.model_validate(
                 await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
             )
@@ -539,6 +705,37 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         receipt_time=getattr(item_data, 'receipt_time', None),
                         notes=getattr(item_data, 'notes', None),
                     )
+
+            # 建立工单→成品入库 的 DocumentRelation（支持单据追溯）
+            work_order_id = getattr(receipt, "work_order_id", None) or getattr(receipt_data, "work_order_id", None)
+            if work_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.work_order import WorkOrder
+
+                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True)
+                    if wo:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=work_order_id,
+                                source_code=wo.code,
+                                source_name=wo.name,
+                                target_type="finished_goods_receipt",
+                                target_id=receipt.id,
+                                target_code=receipt.receipt_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单创建成品入库单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立工单→成品入库 单据关联失败: %s", e)
             
             return FinishedGoodsReceiptResponse.model_validate(receipt)
 
@@ -580,8 +777,32 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存
-            # TODO: 更新工单状态为已完工
+            # 更新库存（增加）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                receipt = await FinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                items = await FinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).all()
+                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                for item in items:
+                    qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="finished_goods_receipt",
+                        source_doc_id=receipt_id,
+                        source_doc_code=receipt.receipt_code,
+                    )
+            except Exception as inv_e:
+                logger.error("成品入库确认-更新库存失败: %s", inv_e)
+                raise
 
             updated_receipt = await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
@@ -693,6 +914,32 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 warehouse_name=warehouse_name or '',
                 status='待入库'
             )
+
+            # 建立工单→成品入库 的 DocumentRelation（支持单据追溯）
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="finished_goods_receipt",
+                        target_id=receipt.id,
+                        target_code=receipt.receipt_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单一键入库创建成品入库单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("建立工单→成品入库 单据关联失败: %s", e)
             
             return FinishedGoodsReceiptResponse.model_validate(receipt)
     
@@ -890,15 +1137,78 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         delivery_time=getattr(item_data, 'delivery_time', None),
                         notes=getattr(item_data, 'notes', None),
                     )
+
+            # 建立销售订单→销售出库 的 DocumentRelation
+            if sales_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+                    so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True)
+                    if so:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="sales_order",
+                                source_id=sales_order_id,
+                                source_code=so.order_code,
+                                source_name=so.order_name,
+                                target_type="sales_delivery",
+                                target_id=delivery.id,
+                                target_code=delivery.delivery_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="销售订单创建销售出库单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立销售订单→销售出库 单据关联失败: %s", e)
+
+            # 建立销售预测→销售出库 的 DocumentRelation（MTS 模式）
+            if sales_forecast_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.sales_forecast import SalesForecast
+
+                    sf = await SalesForecast.get_or_none(tenant_id=tenant_id, id=sales_forecast_id, deleted_at__isnull=True)
+                    if sf:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="sales_forecast",
+                                source_id=sales_forecast_id,
+                                source_code=sf.forecast_code,
+                                source_name=sf.forecast_name,
+                                target_type="sales_delivery",
+                                target_id=delivery.id,
+                                target_code=delivery.delivery_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="销售预测创建销售出库单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立销售预测→销售出库 单据关联失败: %s", e)
             
             return SalesDeliveryResponse.model_validate(delivery)
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryResponse:
         """根据ID获取销售出库单"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_sales_delivery_lifecycle
+
         delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=delivery_id)
         if not delivery:
             raise NotFoundError(f"销售出库单不存在: {delivery_id}")
-        return SalesDeliveryResponse.model_validate(delivery)
+        resp = SalesDeliveryResponse.model_validate(delivery)
+        return resp.model_copy(update={"lifecycle": get_sales_delivery_lifecycle(delivery)})
 
     async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
         """获取销售出库单列表"""
@@ -931,9 +1241,33 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存
-            # TODO: 更新销售订单状态
-            
+            # 更新库存（扣减）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                delivery = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
+                items = await SalesDeliveryItem.filter(
+                    tenant_id=tenant_id, delivery_id=delivery_id
+                ).all()
+                wh_id = delivery.warehouse_id if delivery.warehouse_id else None
+                for item in items:
+                    qty = item.delivery_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="sales_delivery",
+                        source_doc_id=delivery_id,
+                        source_doc_code=delivery.delivery_code,
+                    )
+            except Exception as inv_e:
+                logger.error("销售出库确认-更新库存失败: %s", inv_e)
+                raise
+
             # 自动生成应收单
             try:
                 from apps.kuaizhizao.services.finance_service import ReceivableService
@@ -961,11 +1295,36 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     notes=f"由销售出库单 {delivery.delivery_code} 自动生成"
                 )
                 
-                await receivable_service.create_receivable(
+                receivable = await receivable_service.create_receivable(
                     tenant_id=tenant_id,
                     receivable_data=receivable_data,
                     created_by=confirmed_by
                 )
+                # 建立销售出库→应收单 的 DocumentRelation（支持单据追溯）
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="sales_delivery",
+                            source_id=delivery_id,
+                            source_code=delivery.delivery_code,
+                            source_name=None,
+                            target_type="receivable",
+                            target_id=receivable.id,
+                            target_code=getattr(receivable, "receivable_code", None),
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="销售出库确认自动生成应收单",
+                        ),
+                        created_by=confirmed_by,
+                    )
+                except Exception as rel_e:
+                    logger.warning("创建销售出库→应收单 单据关联失败: %s", rel_e)
             except Exception as e:
                 logger.error(f"自动生成应收单失败: {str(e)}")
                 # 不抛出异常，避免影响出库确认
@@ -1308,15 +1667,49 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 total_quantity=total_quantity,
                 total_amount=total_amount
             )
+
+            # 建立采购订单→采购入库 的 DocumentRelation
+            purchase_order_id = getattr(receipt, "purchase_order_id", None) or getattr(receipt_data, "purchase_order_id", None)
+            if purchase_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+                    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+                    po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id, deleted_at__isnull=True)
+                    if po:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="purchase_order",
+                                source_id=purchase_order_id,
+                                source_code=po.order_code,
+                                source_name=po.order_name,
+                                target_type="purchase_receipt",
+                                target_id=receipt.id,
+                                target_code=receipt.receipt_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="采购订单创建采购入库单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
             
             return PurchaseReceiptResponse.model_validate(receipt)
 
     async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptResponse:
         """根据ID获取采购入库单"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_receipt_lifecycle
+
         receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
         if not receipt:
             raise NotFoundError(f"采购入库单不存在: {receipt_id}")
-        return PurchaseReceiptResponse.model_validate(receipt)
+        resp = PurchaseReceiptResponse.model_validate(receipt)
+        return resp.model_copy(update={"lifecycle": get_purchase_receipt_lifecycle(receipt)})
 
     async def list_purchase_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReceiptResponse]:
         """获取采购入库单列表"""
@@ -1374,9 +1767,33 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存
-            # TODO: 更新采购订单状态
-            
+            # 更新库存（增加）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                items = await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).all()
+                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                for item in items:
+                    qty = item.receipt_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="purchase_receipt",
+                        source_doc_id=receipt_id,
+                        source_doc_code=receipt.receipt_code,
+                    )
+            except Exception as inv_e:
+                logger.error("采购入库确认-更新库存失败: %s", inv_e)
+                raise
+
             # 自动生成应付单
             try:
                 from apps.kuaizhizao.services.finance_service import PayableService
@@ -1404,11 +1821,36 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     notes=f"由采购入库单 {receipt.receipt_code} 自动生成"
                 )
                 
-                await payable_service.create_payable(
+                payable = await payable_service.create_payable(
                     tenant_id=tenant_id,
                     payable_data=payable_data,
                     created_by=confirmed_by
                 )
+                # 建立采购入库→应付单 的 DocumentRelation（支持单据追溯）
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_receipt",
+                            source_id=receipt_id,
+                            source_code=receipt.receipt_code,
+                            source_name=None,
+                            target_type="payable",
+                            target_id=payable.id,
+                            target_code=getattr(payable, "payable_code", None),
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="采购入库确认自动生成应付单",
+                        ),
+                        created_by=confirmed_by,
+                    )
+                except Exception as rel_e:
+                    logger.warning("创建采购入库→应付单 单据关联失败: %s", rel_e)
             except Exception as e:
                 logger.error(f"自动生成应付单失败: {str(e)}")
                 # 不抛出异常，避免影响入库确认
@@ -2065,6 +2507,35 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         return_time=getattr(item_data, 'return_time', None),
                         notes=getattr(item_data, 'notes', None),
                     )
+
+            # 建立销售出库→销售退货 的 DocumentRelation
+            if sales_delivery_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sales_delivery_id)
+                    if delivery:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="sales_delivery",
+                                source_id=sales_delivery_id,
+                                source_code=delivery.delivery_code,
+                                source_name=None,
+                                target_type="sales_return",
+                                target_id=return_obj.id,
+                                target_code=return_obj.return_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="销售出库创建销售退货单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立销售出库→销售退货 单据关联失败: %s", e)
             
             return SalesReturnResponse.model_validate(return_obj)
 
@@ -2108,10 +2579,63 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存（增加库存）
-            # TODO: 更新销售出库单状态
-            
-            # TODO: 如果关联了应收单，需要处理应收单调整（减少应收账款或创建红字应收单）
+            # 更新库存（增加，销售退货入库）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                ret_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
+                items = await SalesReturnItem.filter(
+                    tenant_id=tenant_id, return_id=return_id
+                ).all()
+                wh_id = ret_obj.warehouse_id if ret_obj.warehouse_id else None
+                for item in items:
+                    qty = item.return_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="sales_return",
+                        source_doc_id=return_id,
+                        source_doc_code=ret_obj.return_code,
+                    )
+            except Exception as inv_e:
+                logger.error("销售退货确认-更新库存失败: %s", inv_e)
+                raise
+
+            # 创建红字应收单（销售退货冲减）
+            try:
+                from apps.kuaizhizao.services.finance_service import ReceivableService
+                from apps.kuaizhizao.schemas.finance import ReceivableCreate
+
+                ret_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
+                total_amount = float(ret_obj.total_amount or 0)
+                if total_amount > 0 and ret_obj.customer_id:
+                    receivable_service = ReceivableService()
+                    receivable_data = ReceivableCreate(
+                        source_type="销售退货",
+                        source_id=return_id,
+                        source_code=ret_obj.return_code,
+                        customer_id=ret_obj.customer_id,
+                        customer_name=ret_obj.customer_name,
+                        total_amount=total_amount,
+                        received_amount=0.0,
+                        remaining_amount=total_amount,
+                        due_date=(datetime.now() + timedelta(days=30)).date(),
+                        business_date=datetime.now().date(),
+                        status="已冲减",
+                        notes=f"销售退货冲减-由销售退货单 {ret_obj.return_code} 自动生成",
+                    )
+                    await receivable_service.create_receivable(
+                        tenant_id=tenant_id,
+                        receivable_data=receivable_data,
+                        created_by=confirmed_by,
+                    )
+            except Exception as fin_e:
+                logger.warning("销售退货确认-创建红字应收单失败: %s", fin_e)
 
             updated_return = await self.get_sales_return_by_id(tenant_id, return_id)
             return updated_return
@@ -2236,6 +2760,35 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         return_time=getattr(item_data, 'return_time', None),
                         notes=getattr(item_data, 'notes', None),
                     )
+
+            # 建立采购入库→采购退货 的 DocumentRelation
+            if purchase_receipt_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+                    if receipt:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="purchase_receipt",
+                                source_id=purchase_receipt_id,
+                                source_code=receipt.receipt_code,
+                                source_name=None,
+                                target_type="purchase_return",
+                                target_id=return_obj.id,
+                                target_code=return_obj.return_code,
+                                target_name=None,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="采购入库创建采购退货单",
+                            ),
+                            created_by=created_by,
+                        )
+                except Exception as e:
+                    logger.warning("建立采购入库→采购退货 单据关联失败: %s", e)
             
             return PurchaseReturnResponse.model_validate(return_obj)
 
@@ -2279,10 +2832,63 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 updated_by=confirmed_by
             )
 
-            # TODO: 更新库存（扣减库存）
-            # TODO: 更新采购入库单状态
-            
-            # TODO: 如果关联了应付单，需要处理应付单调整（减少应付账款或创建红字应付单）
+            # 更新库存（扣减，采购退货出库）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                ret_obj = await PurchaseReturn.get(tenant_id=tenant_id, id=return_id)
+                items = await PurchaseReturnItem.filter(
+                    tenant_id=tenant_id, return_id=return_id
+                ).all()
+                wh_id = ret_obj.warehouse_id if ret_obj.warehouse_id else None
+                for item in items:
+                    qty = item.return_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="purchase_return",
+                        source_doc_id=return_id,
+                        source_doc_code=ret_obj.return_code,
+                    )
+            except Exception as inv_e:
+                logger.error("采购退货确认-更新库存失败: %s", inv_e)
+                raise
+
+            # 创建红字应付单（采购退货冲减）
+            try:
+                from apps.kuaizhizao.services.finance_service import PayableService
+                from apps.kuaizhizao.schemas.finance import PayableCreate
+
+                ret_obj = await PurchaseReturn.get(tenant_id=tenant_id, id=return_id)
+                total_amount = float(ret_obj.total_amount or 0)
+                if total_amount > 0 and ret_obj.supplier_id:
+                    payable_service = PayableService()
+                    payable_data = PayableCreate(
+                        source_type="采购退货",
+                        source_id=return_id,
+                        source_code=ret_obj.return_code,
+                        supplier_id=ret_obj.supplier_id,
+                        supplier_name=ret_obj.supplier_name,
+                        total_amount=total_amount,
+                        paid_amount=0.0,
+                        remaining_amount=total_amount,
+                        due_date=(datetime.now() + timedelta(days=30)).date(),
+                        business_date=datetime.now().date(),
+                        status="已冲减",
+                        notes=f"采购退货冲减-由采购退货单 {ret_obj.return_code} 自动生成",
+                    )
+                    await payable_service.create_payable(
+                        tenant_id=tenant_id,
+                        payable_data=payable_data,
+                        created_by=confirmed_by,
+                    )
+            except Exception as fin_e:
+                logger.warning("采购退货确认-创建红字应付单失败: %s", fin_e)
 
             updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
             return updated_return

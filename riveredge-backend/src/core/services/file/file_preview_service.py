@@ -453,6 +453,7 @@ class FilePreviewService:
     async def get_preview_info(
         file_uuid: str,
         tenant_id: int,
+        force_simple_for_image: bool = False,
     ) -> Dict[str, Any]:
         """
         获取文件预览信息（根据配置选择预览模式）
@@ -460,6 +461,7 @@ class FilePreviewService:
         Args:
             file_uuid: 文件UUID
             tenant_id: 组织ID
+            force_simple_for_image: 图片类文件强制使用简单预览（用于头像等需直接URL的场景）
             
         Returns:
             Dict[str, Any]: 预览信息
@@ -477,8 +479,23 @@ class FilePreviewService:
         # 2. 读取预览模式配置
         kkfileview_enabled = await FilePreviewService._get_kkfileview_enabled(tenant_id)
         
-        # 3. 根据配置选择预览模式
-        if kkfileview_enabled:
+        # 3. 头像等场景：图片强制使用简单预览，返回直接下载URL（移动端 Image 组件需要）
+        use_simple = force_simple_for_image and FilePreviewService._is_simple_preview_supported(file.file_type)
+        
+        # 4. 根据配置选择预览模式
+        if use_simple or (not kkfileview_enabled):
+            # 使用简单预览（直接下载URL，移动端 Image 可加载）
+            preview_url = await FilePreviewService.generate_simple_preview_url(
+                file_uuid=file.uuid,
+                tenant_id=file.tenant_id,
+            )
+            return {
+                "preview_mode": "simple",
+                "preview_url": preview_url,
+                "file_type": file.file_type,
+                "supported": FilePreviewService._is_simple_preview_supported(file.file_type),
+            }
+        else:
             # 使用 kkFileView 预览
             preview_url = await FilePreviewService.generate_kkfileview_preview_url(
                 file_uuid=file.uuid,
@@ -491,18 +508,6 @@ class FilePreviewService:
                 "preview_url": preview_url,
                 "file_type": file.file_type,
                 "supported": True,
-            }
-        else:
-            # 使用简单预览
-            preview_url = await FilePreviewService.generate_simple_preview_url(
-                file_uuid=file.uuid,
-                tenant_id=file.tenant_id,
-            )
-            return {
-                "preview_mode": "simple",
-                "preview_url": preview_url,
-                "file_type": file.file_type,
-                "supported": FilePreviewService._is_simple_preview_supported(file.file_type),
             }
     
     @staticmethod

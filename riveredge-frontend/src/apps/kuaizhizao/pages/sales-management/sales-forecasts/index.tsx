@@ -27,9 +27,6 @@ import {
   type SalesForecast,
   type SalesForecastItem,
 } from '../../../services/sales-forecast';
-import { getDocumentRelations } from '../../../services/document-relation';
-import DocumentRelationDisplay from '../../../../../components/document-relation-display';
-import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import dayjs from 'dayjs';
@@ -105,7 +102,6 @@ const SalesForecastsPage: React.FC = () => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentForecast, setCurrentForecast] = useState<SalesForecast | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
 
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -198,12 +194,6 @@ const SalesForecastsPage: React.FC = () => {
     try {
       const data = await getSalesForecast(id);
       setCurrentForecast(data);
-      try {
-        const relations = await getDocumentRelations('sales_forecast', id);
-        setDocumentRelations(relations);
-      } catch {
-        setDocumentRelations(null);
-      }
       setDrawerVisible(true);
     } catch (e: any) {
       messageApi.error(e?.message || '获取详情失败');
@@ -714,11 +704,6 @@ const SalesForecastsPage: React.FC = () => {
               <div style={{ marginTop: 24 }}>
                 <div style={{ marginBottom: 8, fontWeight: 600 }}>操作历史</div>
                 <DocumentTrackingPanel documentType="sales_forecast" documentId={currentForecast.id} />
-              </div>
-            )}
-            {documentRelations && (
-              <div style={{ marginTop: 24 }}>
-                <DocumentRelationDisplay relations={documentRelations} />
               </div>
             )}
             <div style={{ marginTop: 24 }}>

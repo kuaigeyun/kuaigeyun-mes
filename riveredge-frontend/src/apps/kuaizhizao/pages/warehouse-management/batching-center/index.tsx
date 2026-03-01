@@ -412,7 +412,7 @@ const BatchingCenterPage: React.FC = () => {
           setCurrentOrder(null);
         }}
         dataSource={currentOrder || {}}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[
           { title: '配料单号', dataIndex: 'code' },
           { title: '仓库', dataIndex: 'warehouse_name' },

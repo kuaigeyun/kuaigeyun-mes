@@ -407,7 +407,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         title="维护提醒详情"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={DRAWER_CONFIG.large}
+        width={DRAWER_CONFIG.HALF_WIDTH}
       >
         {currentReminder && (
           <div>

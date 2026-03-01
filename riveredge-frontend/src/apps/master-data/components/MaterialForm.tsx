@@ -1336,11 +1336,11 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
       }
       
       if (!unit.numerator || unit.numerator <= 0) {
-        errors.push(t('app.master-data.materialForm.numeratorMin', { unit: unit.unit || `第${index + 1}行` }));
+        errors.push(t('app.master-data.materialForm.numeratorMin', { unit: unit.unit || t('app.master-data.materialForm.rowLabel', { index: index + 1 }) }));
       }
       
       if (!unit.denominator || unit.denominator <= 0) {
-        errors.push(t('app.master-data.materialForm.denominatorMin', { unit: unit.unit || `第${index + 1}行` }));
+        errors.push(t('app.master-data.materialForm.denominatorMin', { unit: unit.unit || t('app.master-data.materialForm.rowLabel', { index: index + 1 }) }));
       }
     });
     
@@ -1365,7 +1365,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
 
     if (hasErrors) {
       messages.push({
-        text: `配置错误：\n${validationErrors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`,
+        text: t('app.master-data.materialForm.configErrorFormat', { errors: validationErrors.map((e, i) => `${i + 1}. ${e}`).join('\n') }),
         title: t('app.master-data.materialForm.configValidation'),
       });
     } else if (units.length > 0 && baseUnit) {
@@ -1380,13 +1380,13 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
           return `• ${ul}：1 ${ul} = ${isInt ? rate : `${n}/${d}`} ${baseLabel}`;
         })
         .join('\n');
-      let configText = `多单位配置正确\n\n基础单位：${baseLabel}（库存单位）\n\n辅助单位配置：\n${unitLines}`;
+      let configText = `${t('app.master-data.materialForm.multiUnitConfigCorrect')}\n\n${t('app.master-data.materialForm.baseUnitWithStock', { label: baseLabel })}\n\n${t('app.master-data.materialForm.auxiliaryUnitConfig')}\n${unitLines}`;
       if (scenarios.purchase || scenarios.sale || scenarios.production) {
-        configText += '\n\n场景单位映射：';
-        if (scenarios.purchase) configText += `\n• 采购单位：${unitValueToLabel[scenarios.purchase] || scenarios.purchase}`;
-        if (scenarios.sale) configText += `\n• 销售单位：${unitValueToLabel[scenarios.sale] || scenarios.sale}`;
-        if (scenarios.production) configText += `\n• 生产单位：${unitValueToLabel[scenarios.production] || scenarios.production}`;
-        configText += `\n• 库存单位：${baseLabel}（基础单位）`;
+        configText += `\n\n${t('app.master-data.materialForm.scenarioUnitMapping')}`;
+        if (scenarios.purchase) configText += `\n• ${t('app.master-data.materialForm.purchaseUnitLabel', { unit: unitValueToLabel[scenarios.purchase] || scenarios.purchase })}`;
+        if (scenarios.sale) configText += `\n• ${t('app.master-data.materialForm.saleUnitLabel', { unit: unitValueToLabel[scenarios.sale] || scenarios.sale })}`;
+        if (scenarios.production) configText += `\n• ${t('app.master-data.materialForm.productionUnitLabel', { unit: unitValueToLabel[scenarios.production] || scenarios.production })}`;
+        configText += `\n• ${t('app.master-data.materialForm.stockUnitBaseLabel', { unit: baseLabel })}`;
       }
       messages.push({ text: configText, title: t('app.master-data.materialForm.configOverview') });
     }

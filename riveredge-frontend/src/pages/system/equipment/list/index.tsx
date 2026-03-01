@@ -261,100 +261,108 @@ const EquipmentListPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const statusTextKey: Record<string, string> = {
+    '正常': 'statusNormal',
+    '维修中': 'statusMaintenance',
+    '停用': 'statusStopped',
+    '报废': 'statusScrapped',
+  };
+
   const columns: ProColumns<Equipment>[] = [
     {
-      title: '设备编码',
+      title: t('pages.system.equipment.columnCode'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '设备名称',
+      title: t('pages.system.equipment.columnName'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '设备类型',
+      title: t('pages.system.equipment.columnType'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '加工设备': { text: '加工设备' },
-        '检测设备': { text: '检测设备' },
-        '包装设备': { text: '包装设备' },
-        '其他': { text: '其他' },
+        '加工设备': { text: t('pages.system.equipment.typeProcessing') },
+        '检测设备': { text: t('pages.system.equipment.typeInspection') },
+        '包装设备': { text: t('pages.system.equipment.typePackaging') },
+        '其他': { text: t('pages.system.equipment.typeOther') },
       },
     },
     {
-      title: '设备分类',
+      title: t('pages.system.equipment.columnCategory'),
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '品牌',
+      title: t('pages.system.equipment.columnBrand'),
       dataIndex: 'brand',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '型号',
+      title: t('pages.system.equipment.columnModel'),
       dataIndex: 'model',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '序列号',
+      title: t('pages.system.equipment.columnSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '关联工位',
+      title: t('pages.system.equipment.columnWorkstation'),
       dataIndex: 'workstation_name',
       width: 150,
       hideInSearch: true,
       render: (_, record) => record.workstation_name || '-',
     },
     {
-      title: '设备状态',
+      title: t('pages.system.equipment.columnStatus'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        '正常': { text: '正常', status: 'Success' },
-        '维修中': { text: '维修中', status: 'Warning' },
-        '停用': { text: '停用', status: 'Default' },
-        '报废': { text: '报废', status: 'Error' },
+        '正常': { text: t('pages.system.equipment.statusNormal'), status: 'Success' },
+        '维修中': { text: t('pages.system.equipment.statusMaintenance'), status: 'Warning' },
+        '停用': { text: t('pages.system.equipment.statusStopped'), status: 'Default' },
+        '报废': { text: t('pages.system.equipment.statusScrapped'), status: 'Error' },
       },
       render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          '正常': { color: 'success', text: '正常' },
-          '维修中': { color: 'warning', text: '维修中' },
-          '停用': { color: 'default', text: '停用' },
-          '报废': { color: 'error', text: '报废' },
+        const key = statusTextKey[record.status];
+        const text = key ? t(`pages.system.equipment.${key}`) : record.status;
+        const colorMap: Record<string, string> = {
+          '正常': 'success',
+          '维修中': 'warning',
+          '停用': 'default',
+          '报废': 'error',
         };
-        const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
       },
     },
     {
-      title: '是否启用',
+      title: t('pages.system.equipment.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.equipment.enabled'), status: 'Success' },
+        false: { text: t('pages.system.equipment.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('pages.system.equipment.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -362,7 +370,7 @@ const EquipmentListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.equipment.columnActions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -374,7 +382,7 @@ const EquipmentListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.equipment.view')}
           </Button>
           <Button
             type="link"
@@ -382,7 +390,7 @@ const EquipmentListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.equipment.edit')}
           </Button>
           <Button
             type="link"
@@ -390,7 +398,7 @@ const EquipmentListPage: React.FC = () => {
             icon={<HistoryOutlined />}
             onClick={() => navigate(`/system/equipment/${record.uuid}/trace`)}
           >
-            追溯
+            {t('pages.system.equipment.trace')}
           </Button>
           <Popconfirm
             title={t('pages.system.equipment.confirmDeleteOne')}
@@ -402,7 +410,7 @@ const EquipmentListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.equipment.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -435,13 +443,13 @@ const EquipmentListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建设备"
+          createButtonText={t('pages.system.equipment.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.equipment.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -482,7 +490,7 @@ const EquipmentListPage: React.FC = () => {
               disabled={selectedRowKeys.length === 0}
               onClick={handleBatchGenerateQRCode}
             >
-              批量生成二维码
+              {t('pages.system.equipment.batchQrcode')}
             </Button>,
           ]}
         />
@@ -490,7 +498,7 @@ const EquipmentListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑设备' : '新建设备'}
+        title={isEdit ? t('pages.system.equipment.modalEdit') : t('pages.system.equipment.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -504,110 +512,110 @@ const EquipmentListPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="设备编码"
-          placeholder="设备编码（可选，不填则自动生成）"
+          label={t('pages.system.equipment.labelCode')}
+          placeholder={t('pages.system.equipment.codePlaceholder')}
           disabled={isEdit}
         />
         <ProFormText
           name="name"
-          label="设备名称"
-          rules={[{ required: true, message: '请输入设备名称' }]}
-          placeholder="请输入设备名称"
+          label={t('pages.system.equipment.labelName')}
+          rules={[{ required: true, message: t('pages.system.equipment.nameRequired') }]}
+          placeholder={t('pages.system.equipment.namePlaceholder')}
         />
         <ProFormSelect
           name="type"
-          label="设备类型"
-          placeholder="请选择设备类型（可选）"
+          label={t('pages.system.equipment.columnType')}
+          placeholder={t('pages.system.equipment.typePlaceholder')}
           options={[
-            { label: '加工设备', value: '加工设备' },
-            { label: '检测设备', value: '检测设备' },
-            { label: '包装设备', value: '包装设备' },
-            { label: '其他', value: '其他' },
+            { label: t('pages.system.equipment.typeProcessing'), value: '加工设备' },
+            { label: t('pages.system.equipment.typeInspection'), value: '检测设备' },
+            { label: t('pages.system.equipment.typePackaging'), value: '包装设备' },
+            { label: t('pages.system.equipment.typeOther'), value: '其他' },
           ]}
           allowClear
         />
         <ProFormText
           name="category"
-          label="设备分类"
-          placeholder="请输入设备分类（如：CNC、注塑机、冲压机等）"
+          label={t('pages.system.equipment.columnCategory')}
+          placeholder={t('pages.system.equipment.categoryPlaceholder')}
         />
         <ProFormText
           name="brand"
-          label="品牌"
-          placeholder="请输入品牌"
+          label={t('pages.system.equipment.columnBrand')}
+          placeholder={t('pages.system.equipment.brandPlaceholder')}
         />
         <ProFormText
           name="model"
-          label="型号"
-          placeholder="请输入型号"
+          label={t('pages.system.equipment.columnModel')}
+          placeholder={t('pages.system.equipment.modelPlaceholder')}
         />
         <ProFormText
           name="serial_number"
-          label="序列号"
-          placeholder="请输入序列号"
+          label={t('pages.system.equipment.columnSerialNumber')}
+          placeholder={t('pages.system.equipment.serialPlaceholder')}
         />
         <ProFormText
           name="manufacturer"
-          label="制造商"
-          placeholder="请输入制造商"
+          label={t('pages.system.equipment.labelManufacturer')}
+          placeholder={t('pages.system.equipment.manufacturerPlaceholder')}
         />
         <ProFormText
           name="supplier"
-          label="供应商"
-          placeholder="请输入供应商"
+          label={t('pages.system.equipment.labelSupplier')}
+          placeholder={t('pages.system.equipment.supplierPlaceholder')}
         />
         <ProFormDatePicker
           name="purchase_date"
-          label="采购日期"
-          placeholder="请选择采购日期"
+          label={t('pages.system.equipment.labelPurchaseDate')}
+          placeholder={t('pages.system.equipment.purchaseDatePlaceholder')}
         />
         <ProFormDatePicker
           name="installation_date"
-          label="安装日期"
-          placeholder="请选择安装日期"
+          label={t('pages.system.equipment.labelInstallDate')}
+          placeholder={t('pages.system.equipment.installDatePlaceholder')}
         />
         <ProFormDigit
           name="warranty_period"
-          label="保修期（月）"
-          placeholder="请输入保修期（月）"
+          label={t('pages.system.equipment.labelWarranty')}
+          placeholder={t('pages.system.equipment.warrantyPlaceholder')}
           fieldProps={{ min: 0 }}
         />
         <ProFormText
           name="workstation_code"
-          label="工位编码"
-          placeholder="请输入工位编码（可选）"
+          label={t('pages.system.equipment.labelWorkstationCode')}
+          placeholder={t('pages.system.equipment.workstationCodePlaceholder')}
         />
         <ProFormText
           name="workstation_name"
-          label="工位名称"
-          placeholder="请输入工位名称（可选）"
+          label={t('pages.system.equipment.labelWorkstationName')}
+          placeholder={t('pages.system.equipment.workstationNamePlaceholder')}
         />
         <ProFormSelect
           name="status"
-          label="设备状态"
-          rules={[{ required: true, message: '请选择设备状态' }]}
+          label={t('pages.system.equipment.columnStatus')}
+          rules={[{ required: true, message: t('pages.system.equipment.statusRequired') }]}
           options={[
-            { label: '正常', value: '正常' },
-            { label: '维修中', value: '维修中' },
-            { label: '停用', value: '停用' },
-            { label: '报废', value: '报废' },
+            { label: t('pages.system.equipment.statusNormal'), value: '正常' },
+            { label: t('pages.system.equipment.statusMaintenance'), value: '维修中' },
+            { label: t('pages.system.equipment.statusStopped'), value: '停用' },
+            { label: t('pages.system.equipment.statusScrapped'), value: '报废' },
           ]}
         />
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('pages.system.equipment.columnActive')}
           initialValue={true}
         />
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="请输入设备描述"
+          label={t('pages.system.equipment.labelDescription')}
+          placeholder={t('pages.system.equipment.descPlaceholder')}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="设备详情"
+        title={t('pages.system.equipment.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
@@ -618,47 +626,41 @@ const EquipmentListPage: React.FC = () => {
               dataSource={detailData || undefined}
               column={2}
               columns={[
-                { title: '设备编码', dataIndex: 'code' },
-                { title: '设备名称', dataIndex: 'name' },
-                { title: '设备类型', dataIndex: 'type' },
-                { title: '设备分类', dataIndex: 'category' },
-                { title: '品牌', dataIndex: 'brand' },
-                { title: '型号', dataIndex: 'model' },
-                { title: '序列号', dataIndex: 'serial_number' },
-                { title: '制造商', dataIndex: 'manufacturer' },
-                { title: '供应商', dataIndex: 'supplier' },
-                { title: '采购日期', dataIndex: 'purchase_date' },
-                { title: '安装日期', dataIndex: 'installation_date' },
-                { title: '保修期（月）', dataIndex: 'warranty_period' },
-                { title: '关联工位', dataIndex: 'workstation_name' },
+                { title: t('pages.system.equipment.columnCode'), dataIndex: 'code' },
+                { title: t('pages.system.equipment.columnName'), dataIndex: 'name' },
+                { title: t('pages.system.equipment.columnType'), dataIndex: 'type' },
+                { title: t('pages.system.equipment.columnCategory'), dataIndex: 'category' },
+                { title: t('pages.system.equipment.columnBrand'), dataIndex: 'brand' },
+                { title: t('pages.system.equipment.columnModel'), dataIndex: 'model' },
+                { title: t('pages.system.equipment.columnSerialNumber'), dataIndex: 'serial_number' },
+                { title: t('pages.system.equipment.labelManufacturer'), dataIndex: 'manufacturer' },
+                { title: t('pages.system.equipment.labelSupplier'), dataIndex: 'supplier' },
+                { title: t('pages.system.equipment.labelPurchaseDate'), dataIndex: 'purchase_date' },
+                { title: t('pages.system.equipment.labelInstallDate'), dataIndex: 'installation_date' },
+                { title: t('pages.system.equipment.labelWarranty'), dataIndex: 'warranty_period' },
+                { title: t('pages.system.equipment.columnWorkstation'), dataIndex: 'workstation_name' },
                 {
-                  title: '设备状态',
+                  title: t('pages.system.equipment.columnStatus'),
                   dataIndex: 'status',
                   render: (value: string) => {
-                    const statusMap: Record<string, string> = {
-                      '正常': '正常',
-                      '维修中': '维修中',
-                      '停用': '停用',
-                      '报废': '报废',
-                    };
-                    return statusMap[value] || value;
+                    const key = statusTextKey[value];
+                    return key ? t(`pages.system.equipment.${key}`) : value;
                   },
                 },
                 {
-                  title: '是否启用',
+                  title: t('pages.system.equipment.columnActive'),
                   dataIndex: 'is_active',
-                  render: (value: boolean) => (value ? '启用' : '禁用'),
+                  render: (value: boolean) => (value ? t('pages.system.equipment.enabled') : t('pages.system.equipment.disabled')),
                 },
-                { title: '描述', dataIndex: 'description', span: 2 },
-                { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+                { title: t('pages.system.equipment.labelDescription'), dataIndex: 'description', span: 2 },
+                { title: t('pages.system.equipment.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: t('pages.system.equipment.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
               ]}
             />
             
-            {/* 设备二维码 */}
             {detailData && (
               <div style={{ marginTop: 24 }}>
-                <Card title="设备二维码">
+                <Card title={t('pages.system.equipment.qrcodeCardTitle')}>
                   <QRCodeGenerator
                     qrcodeType="EQ"
                     data={{

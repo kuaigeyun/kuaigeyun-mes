@@ -6,11 +6,11 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Card, Row, Col, Input, Radio, Space, Typography, Spin, Tag, theme } from 'antd';
 import { SearchOutlined, MessageOutlined, CloudOutlined, DatabaseOutlined, AppstoreOutlined, TeamOutlined } from '@ant-design/icons';
 import {
   APP_CONNECTOR_DEFINITIONS,
-  APP_CONNECTOR_CATEGORIES,
   AppConnectorDefinition,
 } from './connectors';
 import { getConnectorDefinitions, ConnectorDefinition } from '../../../services/applicationConnection';
@@ -25,11 +25,14 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   TeamOutlined: <TeamOutlined />,
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  collaboration: '协作',
-  erp: 'ERP',
-  plm: 'PLM',
-  crm: 'CRM',
+const CATEGORY_KEYS: Record<string, string> = {
+  collaboration: 'categoryCollaboration',
+  erp: 'categoryErp',
+  plm: 'categoryPlm',
+  crm: 'categoryCrm',
+  oa: 'categoryOa',
+  iot: 'categoryIot',
+  wms: 'categoryWms',
 };
 
 function toAppConnectorDefinition(c: ConnectorDefinition): AppConnectorDefinition {
@@ -55,11 +58,21 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
   onClose,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const [category, setCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [connectors, setConnectors] = useState<AppConnectorDefinition[]>(APP_CONNECTOR_DEFINITIONS);
-  const [categories] = useState(APP_CONNECTOR_CATEGORIES);
+  const categories = useMemo(() => [
+    { key: 'all', label: t('pages.system.applicationConnections.categoryAll') },
+    { key: 'collaboration', label: t('pages.system.applicationConnections.categoryCollaboration') },
+    { key: 'erp', label: t('pages.system.applicationConnections.categoryErp') },
+    { key: 'plm', label: t('pages.system.applicationConnections.categoryPlm') },
+    { key: 'crm', label: t('pages.system.applicationConnections.categoryCrm') },
+    { key: 'oa', label: t('pages.system.applicationConnections.categoryOa') },
+    { key: 'iot', label: t('pages.system.applicationConnections.categoryIot') },
+    { key: 'wms', label: t('pages.system.applicationConnections.categoryWms') },
+  ], [t]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -102,7 +115,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
 
   return (
     <Modal
-      title="选择应用连接器"
+      title={t('pages.system.applicationConnections.marketTitle')}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -123,7 +136,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
           ))}
         </Radio.Group>
         <Input
-          placeholder="搜索连接器名称、类型..."
+          placeholder={t('pages.system.applicationConnections.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -152,7 +165,11 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                     <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
                     <Text strong>{connector.name}</Text>
                     {connector.category && (
-                      <Tag color="blue">{CATEGORY_LABELS[connector.category] || connector.category}</Tag>
+                      <Tag color="blue">
+                        {CATEGORY_KEYS[connector.category]
+                          ? t(`pages.system.applicationConnections.${CATEGORY_KEYS[connector.category]}`)
+                          : connector.category}
+                      </Tag>
                     )}
                   </Space>
                   {connector.description && (
@@ -167,7 +184,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
         </Row>
         {filteredConnectors.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-            暂无匹配的连接器
+            {t('pages.system.applicationConnections.noMatch')}
           </div>
         )}
         </div>

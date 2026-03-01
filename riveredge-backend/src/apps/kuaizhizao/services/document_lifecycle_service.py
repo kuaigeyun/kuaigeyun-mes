@@ -585,6 +585,15 @@ def get_production_plan_lifecycle(plan: Any) -> Dict[str, Any]:
             "sub_stages": None,
             "next_step_suggestions": [],
         }
+    if status in ("已驳回", "rejected"):
+        return {
+            "current_stage_key": "draft",
+            "current_stage_name": "已驳回",
+            "status": "exception",
+            "main_stages": _build_main_stages(PRODUCTION_PLAN_MAIN_STAGES, "draft", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": ["重新编辑后再次提交审核"],
+        }
     if status in ("草稿", "draft"):
         return {
             "current_stage_key": "draft",
@@ -660,6 +669,120 @@ def get_purchase_requisition_lifecycle(requisition: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 采购入库单生命周期（待入库→已入库）
+# ---------------------------------------------------------------------------
+PURCHASE_RECEIPT_MAIN_STAGES = [
+    {"key": "pending", "label": "待入库"},
+    {"key": "completed", "label": "已入库"},
+]
+
+
+def get_purchase_receipt_lifecycle(receipt: Any) -> Dict[str, Any]:
+    """采购入库单生命周期计算"""
+    status = _norm(getattr(receipt, "status", None))
+    key = "completed" if status in ("已入库", "completed", "已完成") else "pending"
+    stage_name = "已入库" if key == "completed" else "待入库"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(PURCHASE_RECEIPT_MAIN_STAGES, key),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认入库"] if key == "pending" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 销售出库单生命周期（待出库→已出库）
+# ---------------------------------------------------------------------------
+SALES_DELIVERY_MAIN_STAGES = [
+    {"key": "pending", "label": "待出库"},
+    {"key": "completed", "label": "已出库"},
+]
+
+
+def get_sales_delivery_lifecycle(delivery: Any) -> Dict[str, Any]:
+    """销售出库单生命周期计算"""
+    status = _norm(getattr(delivery, "status", None))
+    key = "completed" if status in ("已出库", "completed", "已完成") else "pending"
+    stage_name = "已出库" if key == "completed" else "待出库"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(SALES_DELIVERY_MAIN_STAGES, key),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认出库"] if key == "pending" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 来料检验单生命周期（待检验→已检验→待审核→已审核/已驳回）
+# ---------------------------------------------------------------------------
+INCOMING_INSPECTION_MAIN_STAGES = [
+    {"key": "pending", "label": "待检验"},
+    {"key": "inspected", "label": "已检验"},
+    {"key": "pending_review", "label": "待审核"},
+    {"key": "approved", "label": "已审核"},
+]
+
+
+def get_incoming_inspection_lifecycle(inspection: Any) -> Dict[str, Any]:
+    """来料检验单生命周期计算"""
+    status = _norm(getattr(inspection, "status", None))
+    review_status = _norm(getattr(inspection, "review_status", None))
+
+    if _is_rejected(review_status) or status in ("已驳回", "rejected"):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "已驳回",
+            "status": "exception",
+            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending_review", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    if _is_approved(review_status) or status in ("已审核", "audited"):
+        return {
+            "current_stage_key": "approved",
+            "current_stage_name": "已审核",
+            "status": "success",
+            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "approved"),
+            "sub_stages": None,
+            "next_step_suggestions": [],
+        }
+    if status in ("已检验", "inspected"):
+        return {
+            "current_stage_key": "pending_review",
+            "current_stage_name": "待审核",
+            "status": "normal",
+            "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending_review"),
+            "sub_stages": None,
+            "next_step_suggestions": ["审核"],
+        }
+    return {
+        "current_stage_key": "pending",
+        "current_stage_name": "待检验",
+        "status": "normal",
+        "main_stages": _build_main_stages(INCOMING_INSPECTION_MAIN_STAGES, "pending"),
+        "sub_stages": None,
+        "next_step_suggestions": ["执行检验"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 工序检验单、成品检验单生命周期（与来料检验相同：待检验→已检验→待审核→已审核/已驳回）
+# ---------------------------------------------------------------------------
+def get_process_inspection_lifecycle(inspection: Any) -> Dict[str, Any]:
+    """工序检验单生命周期计算（复用来料检验逻辑）"""
+    return get_incoming_inspection_lifecycle(inspection)
+
+
+def get_finished_goods_inspection_lifecycle(inspection: Any) -> Dict[str, Any]:
+    """成品检验单生命周期计算（复用来料检验逻辑）"""
+    return get_incoming_inspection_lifecycle(inspection)
+
+
+# ---------------------------------------------------------------------------
 # 报价单生命周期（草稿→已发送→已接受/已拒绝→已转订单）
 # ---------------------------------------------------------------------------
 QUOTATION_MAIN_STAGES = [
@@ -670,6 +793,59 @@ QUOTATION_MAIN_STAGES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# 需求计算生命周期（进行中→完成/失败）
+# ---------------------------------------------------------------------------
+DEMAND_COMPUTATION_MAIN_STAGES = [
+    {"key": "running", "label": "进行中"},
+    {"key": "completed", "label": "完成"},
+]
+
+
+def get_demand_computation_lifecycle(computation: Any) -> Dict[str, Any]:
+    """需求计算生命周期计算：根据 computation_status 映射"""
+    status = _norm(getattr(computation, "computation_status", None))
+    status_map = {
+        "进行中": "running", "计算中": "running", "pending": "running", "running": "running",
+        "完成": "completed", "completed": "completed", "success": "completed",
+        "失败": "failed", "failed": "failed", "error": "failed",
+    }
+    key = status_map.get(status, "running")
+    stage_name = {"running": "进行中", "completed": "完成", "failed": "失败"}.get(key, status or "进行中")
+    if status in ("失败", "failed", "error"):
+        stage_name = "失败"
+
+    if key == "failed":
+        return {
+            "current_stage_key": "running",
+            "current_stage_name": "失败",
+            "status": "exception",
+            "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "running", is_exception=True),
+            "sub_stages": None,
+            "next_step_suggestions": ["重新计算"],
+        }
+    if key == "completed":
+        return {
+            "current_stage_key": "completed",
+            "current_stage_name": "完成",
+            "status": "success",
+            "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "completed"),
+            "sub_stages": None,
+            "next_step_suggestions": ["下推工单", "下推采购单", "下推生产计划", "下推采购申请"],
+        }
+    return {
+        "current_stage_key": "running",
+        "current_stage_name": "进行中",
+        "status": "normal",
+        "main_stages": _build_main_stages(DEMAND_COMPUTATION_MAIN_STAGES, "running"),
+        "sub_stages": None,
+        "next_step_suggestions": ["等待计算完成"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 报价单生命周期（草稿→已发送→已接受/已拒绝→已转订单）
+# ---------------------------------------------------------------------------
 def get_quotation_lifecycle(quotation: Any) -> Dict[str, Any]:
     """报价单生命周期计算"""
     status = _norm(getattr(quotation, "status", None))

@@ -23,9 +23,11 @@ from apps.kuaizhizao.models.material_borrow import MaterialBorrow
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+from apps.kuaizhizao.models.sales_return import SalesReturn
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.payable import Payable
@@ -33,6 +35,9 @@ from apps.kuaizhizao.models.receivable import Receivable
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+from apps.kuaizhizao.models.rework_order import ReworkOrder
+from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -857,6 +862,22 @@ class DocumentRelationService:
                 "created_at": receivable.created_at.isoformat() if receivable.created_at else None
             })
 
+        # 销售退货单
+        sales_returns = await SalesReturn.filter(
+            tenant_id=tenant_id,
+            sales_delivery_id=delivery_id,
+            deleted_at__isnull=True
+        ).limit(10)
+        for sr in sales_returns:
+            downstream.append({
+                "document_type": "sales_return",
+                "document_id": sr.id,
+                "document_code": sr.return_code,
+                "document_name": None,
+                "status": sr.status if hasattr(sr, 'status') else None,
+                "created_at": sr.created_at.isoformat() if sr.created_at else None
+            })
+
         return downstream
 
     async def _get_receivable_upstream(
@@ -1559,6 +1580,21 @@ class DocumentRelationService:
                 "created_at": picking.created_at.isoformat() if picking.created_at else None
             })
 
+        # 生产退料单
+        production_returns = await ProductionReturn.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id
+        ).limit(10)
+        for ret in production_returns:
+            downstream.append({
+                "document_type": "production_return",
+                "document_id": ret.id,
+                "document_code": ret.return_code,
+                "document_name": None,
+                "status": ret.status,
+                "created_at": ret.created_at.isoformat() if ret.created_at else None
+            })
+
         # 报工记录
         reporting_records = await ReportingRecord.filter(
             tenant_id=tenant_id,
@@ -1605,6 +1641,91 @@ class DocumentRelationService:
                         "status": delivery.status if hasattr(delivery, 'status') else None,
                         "created_at": delivery.created_at.isoformat() if delivery.created_at else None
                     })
+
+        # 返工单（工单作为原工单）
+        rework_orders = await ReworkOrder.filter(
+            tenant_id=tenant_id,
+            original_work_order_id=work_order_id,
+            deleted_at__isnull=True
+        ).limit(10)
+        for ro in rework_orders:
+            downstream.append({
+                "document_type": "rework_order",
+                "document_id": ro.id,
+                "document_code": ro.code,
+                "document_name": ro.product_name,
+                "status": ro.status,
+                "created_at": ro.created_at.isoformat() if ro.created_at else None
+            })
+
+        # 工序委外单
+        outsource_orders = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True
+        ).limit(10)
+        for os_order in outsource_orders:
+            downstream.append({
+                "document_type": "outsource_order",
+                "document_id": os_order.id,
+                "document_code": os_order.code,
+                "document_name": os_order.operation_name,
+                "status": os_order.status,
+                "created_at": os_order.created_at.isoformat() if os_order.created_at else None
+            })
+
+        # 过程检验单
+        process_inspections = await ProcessInspection.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id
+        ).limit(10)
+        for pi in process_inspections:
+            downstream.append({
+                "document_type": "process_inspection",
+                "document_id": pi.id,
+                "document_code": pi.inspection_code,
+                "document_name": None,
+                "status": pi.status,
+                "created_at": pi.created_at.isoformat() if pi.created_at else None
+            })
+
+        # 成品检验单
+        finished_inspections = await FinishedGoodsInspection.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id
+        ).limit(10)
+        for fi in finished_inspections:
+            downstream.append({
+                "document_type": "finished_goods_inspection",
+                "document_id": fi.id,
+                "document_code": fi.inspection_code,
+                "document_name": None,
+                "status": fi.status,
+                "created_at": fi.created_at.isoformat() if fi.created_at else None
+            })
+
+        # 拆分工单（通过 DocumentRelation 追溯）
+        split_relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="work_order",
+            source_id=work_order_id,
+            target_type="work_order",
+        ).limit(10)
+        for rel in split_relations:
+            split_wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=rel.target_id,
+                deleted_at__isnull=True
+            )
+            if split_wo:
+                downstream.append({
+                    "document_type": "work_order",
+                    "document_id": split_wo.id,
+                    "document_code": split_wo.code,
+                    "document_name": split_wo.name,
+                    "status": split_wo.status,
+                    "created_at": split_wo.created_at.isoformat() if split_wo.created_at else None
+                })
 
         return downstream
 
@@ -1729,6 +1850,22 @@ class DocumentRelationService:
                 "document_name": None,
                 "status": payable.status,
                 "created_at": payable.created_at.isoformat() if payable.created_at else None
+            })
+
+        # 采购退货单
+        purchase_returns = await PurchaseReturn.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id=receipt_id,
+            deleted_at__isnull=True
+        ).limit(10)
+        for pr in purchase_returns:
+            downstream.append({
+                "document_type": "purchase_return",
+                "document_id": pr.id,
+                "document_code": pr.return_code,
+                "document_name": None,
+                "status": pr.status if hasattr(pr, 'status') else None,
+                "created_at": pr.created_at.isoformat() if pr.created_at else None
             })
 
         return downstream

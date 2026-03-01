@@ -311,10 +311,13 @@ class DemandComputationService:
         items: List[DemandComputationItem]
     ) -> DemandComputationResponse:
         """构建计算响应对象"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_demand_computation_lifecycle
+
         item_responses = [
             DemandComputationItemResponse.model_validate(item) for item in items
         ]
-        
+        lifecycle = get_demand_computation_lifecycle(computation)
+
         return DemandComputationResponse(
             id=computation.id,
             uuid=str(computation.uuid),
@@ -336,7 +339,8 @@ class DemandComputationService:
             updated_at=computation.updated_at,
             created_by=computation.created_by,
             updated_by=computation.updated_by,
-            items=item_responses
+            items=item_responses,
+            lifecycle=lifecycle
         )
     
     async def get_computation_by_id(

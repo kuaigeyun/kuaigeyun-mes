@@ -28,6 +28,7 @@ from apps.kuaizhizao.schemas.packing_binding import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from loguru import logger
 
 
 class PackingBindingService(AppBaseService[PackingBinding]):
@@ -133,6 +134,32 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 remarks=binding_data.remarks,
             )
 
+            # 建立成品入库→装箱绑定 的 DocumentRelation
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="finished_goods_receipt",
+                        source_id=receipt_id,
+                        source_code=receipt.receipt_code,
+                        source_name=None,
+                        target_type="packing_binding",
+                        target_id=packing_binding.id,
+                        target_code=packing_binding.box_no,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="成品入库创建装箱绑定",
+                    ),
+                    created_by=bound_by,
+                )
+            except Exception as e:
+                logger.warning("建立成品入库→装箱绑定 单据关联失败: %s", e)
+
             return PackingBindingResponse.model_validate(packing_binding)
 
     async def create_packing_binding_from_delivery(
@@ -201,6 +228,33 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 bound_at=binding_data.bound_at or datetime.now(),
                 remarks=binding_data.remarks,
             )
+
+            # 建立销售出库→装箱绑定 的 DocumentRelation
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="sales_delivery",
+                        source_id=delivery_id,
+                        source_code=delivery.delivery_code,
+                        source_name=None,
+                        target_type="packing_binding",
+                        target_id=packing_binding.id,
+                        target_code=packing_binding.box_no,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="销售出库创建装箱绑定",
+                    ),
+                    created_by=bound_by,
+                )
+            except Exception as e:
+                logger.warning("建立销售出库→装箱绑定 单据关联失败: %s", e)
+
             return PackingBindingResponse.model_validate(packing_binding)
 
     async def get_packing_bindings_by_receipt(

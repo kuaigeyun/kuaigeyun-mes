@@ -148,63 +148,63 @@ const SuppliersPage: React.FC = () => {
    */
   const columns: ProColumns<Supplier>[] = [
     {
-      title: '供应商编码',
+      title: t('field.supplier.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '供应商名称',
+      title: t('field.supplier.name'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '简称',
+      title: t('field.supplier.shortName'),
       dataIndex: 'shortName',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '联系人',
+      title: t('field.supplier.contactPerson'),
       dataIndex: 'contactPerson',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '电话',
+      title: t('field.supplier.phone'),
       dataIndex: 'phone',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '邮箱',
+      title: t('field.supplier.email'),
       dataIndex: 'email',
       width: 200,
       hideInSearch: true,
     },
     {
-      title: '分类',
+      title: t('field.supplier.category'),
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? '启用' : '禁用'}
+          {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -212,7 +212,7 @@ const SuppliersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('app.master-data.warehouses.action'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -223,7 +223,7 @@ const SuppliersPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -231,10 +231,10 @@ const SuppliersPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个供应商吗？"
+            title={t('app.master-data.suppliers.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -243,7 +243,7 @@ const SuppliersPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -254,54 +254,54 @@ const SuppliersPage: React.FC = () => {
   // 详情列定义
   const detailColumns: ProDescriptionsItemType<Supplier>[] = [
     {
-      title: '供应商编码',
+      title: t('field.supplier.code'),
       dataIndex: 'code',
     },
     {
-      title: '供应商名称',
+      title: t('field.supplier.name'),
       dataIndex: 'name',
     },
     {
-      title: '简称',
+      title: t('field.supplier.shortName'),
       dataIndex: 'shortName',
     },
     {
-      title: '联系人',
+      title: t('field.supplier.contactPerson'),
       dataIndex: 'contactPerson',
     },
     {
-      title: '电话',
+      title: t('field.supplier.phone'),
       dataIndex: 'phone',
     },
     {
-      title: '邮箱',
+      title: t('field.supplier.email'),
       dataIndex: 'email',
     },
     {
-      title: '地址',
+      title: t('field.supplier.address'),
       dataIndex: 'address',
       span: 2,
     },
     {
-      title: '分类',
+      title: t('field.supplier.category'),
       dataIndex: 'category',
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? '启用' : '禁用'}
+          {record?.isActive ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('app.master-data.warehouses.updateTime'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -353,7 +353,7 @@ const SuppliersPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取供应商列表失败:', error);
-            messageApi.error(error?.message || '获取供应商列表失败');
+            messageApi.error(error?.message || t('app.master-data.suppliers.getListFailed'));
             return {
               data: [],
               success: false,
@@ -374,7 +374,7 @@ const SuppliersPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建供应商
+            {t('app.master-data.suppliers.create')}
           </Button>,
           <Button
             key="batch-delete"
@@ -383,7 +383,7 @@ const SuppliersPage: React.FC = () => {
             disabled={selectedRowKeys.length === 0}
             onClick={handleBatchDelete}
           >
-            批量删除
+            {t('common.batchDelete')}
           </Button>,
         ]}
         rowSelection={{
@@ -395,7 +395,7 @@ const SuppliersPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<Supplier>
-        title="供应商详情"
+        title={t('app.master-data.suppliers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={supplierDetail || undefined}

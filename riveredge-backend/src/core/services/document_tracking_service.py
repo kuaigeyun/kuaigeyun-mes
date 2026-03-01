@@ -22,6 +22,14 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
     from apps.kuaizhizao.models.quotation import Quotation
     from apps.kuaizhizao.models.rework_order import ReworkOrder
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.production_return import ProductionReturn
+    from apps.kuaizhizao.models.production_picking import ProductionPicking
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
     return {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
@@ -33,6 +41,14 @@ def _get_model_registry() -> Dict[str, tuple]:
         "purchase_requisition": (PurchaseRequisition, "requisition_code"),
         "quotation": (Quotation, "quotation_code"),
         "rework_order": (ReworkOrder, "code"),
+        "purchase_receipt": (PurchaseReceipt, "receipt_code"),
+        "sales_delivery": (SalesDelivery, "delivery_code"),
+        "incoming_inspection": (IncomingInspection, "inspection_code"),
+        "process_inspection": (ProcessInspection, "inspection_code"),
+        "finished_goods_inspection": (FinishedGoodsInspection, "inspection_code"),
+        "production_return": (ProductionReturn, "return_code"),
+        "production_picking": (ProductionPicking, "picking_code"),
+        "finished_goods_receipt": (FinishedGoodsReceipt, "receipt_code"),
     }
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry
@@ -146,6 +162,44 @@ class DocumentTrackingService:
                     })
         except Exception:
             pass
+
+        # 2.5 报工记录（仅工单）
+        if document_type == "work_order":
+            try:
+                from apps.kuaizhizao.models.reporting_record import ReportingRecord
+
+                records = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=document_id,
+                ).order_by("reported_at").all()
+
+                for r in records:
+                    at_val = r.reported_at.isoformat() if r.reported_at else (r.created_at.isoformat() if r.created_at else None)
+                    detail_parts = [f"{r.operation_name or r.operation_code or '工序'}"]
+                    if r.reported_quantity is not None:
+                        detail_parts.append(f"报工 {r.reported_quantity}")
+                    if r.qualified_quantity is not None:
+                        detail_parts.append(f"合格 {r.qualified_quantity}")
+                    if r.unqualified_quantity is not None and float(r.unqualified_quantity) > 0:
+                        detail_parts.append(f"不合格 {r.unqualified_quantity}")
+                    if r.work_hours is not None and float(r.work_hours) > 0:
+                        detail_parts.append(f"工时 {r.work_hours}h")
+                    timeline.append({
+                        "type": "report",
+                        "at": at_val,
+                        "by": r.worker_name or str(r.worker_id or ""),
+                        "by_id": r.worker_id,
+                        "detail": " · ".join(detail_parts),
+                        "operation_name": r.operation_name,
+                        "operation_code": r.operation_code,
+                        "reported_quantity": str(r.reported_quantity) if r.reported_quantity is not None else None,
+                        "qualified_quantity": str(r.qualified_quantity) if r.qualified_quantity is not None else None,
+                        "unqualified_quantity": str(r.unqualified_quantity) if r.unqualified_quantity is not None else None,
+                        "work_hours": str(r.work_hours) if r.work_hours is not None else None,
+                        "status": r.status,
+                    })
+            except Exception:
+                pass
 
         # 3. DocumentRelation (上下游)
         try:

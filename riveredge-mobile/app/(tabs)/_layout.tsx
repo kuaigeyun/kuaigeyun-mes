@@ -3,7 +3,7 @@ import { Icon } from '@ant-design/react-native';
 
 export default function TabLayout() {
     return (
-        <Tabs screenOptions={{ tabBarActiveTintColor: '#1890ff', headerShown: false }}>
+        <Tabs screenOptions={{ tabBarActiveTintColor: '#1677ff', headerShown: false }}>
             <Tabs.Screen
                 name="index"
                 options={{

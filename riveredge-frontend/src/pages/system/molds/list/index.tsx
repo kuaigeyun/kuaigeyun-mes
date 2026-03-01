@@ -185,103 +185,108 @@ const MoldListPage: React.FC = () => {
     }
   };
 
-  /**
-   * 表格列定义
-   */
+  const statusTextKey: Record<string, string> = {
+    '正常': 'statusNormal',
+    '维修中': 'statusMaintenance',
+    '停用': 'statusStopped',
+    '报废': 'statusScrapped',
+  };
+
   const columns: ProColumns<Mold>[] = [
     {
-      title: '模具编码',
+      title: t('pages.system.molds.columnCode'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '模具名称',
+      title: t('pages.system.molds.columnName'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '模具类型',
+      title: t('pages.system.molds.columnType'),
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '注塑模具': { text: '注塑模具' },
-        '压铸模具': { text: '压铸模具' },
-        '冲压模具': { text: '冲压模具' },
-        '其他': { text: '其他' },
+        '注塑模具': { text: t('pages.system.molds.typeInjection') },
+        '压铸模具': { text: t('pages.system.molds.typeDieCasting') },
+        '冲压模具': { text: t('pages.system.molds.typeStamping') },
+        '其他': { text: t('pages.system.molds.typeOther') },
       },
     },
     {
-      title: '模具分类',
+      title: t('pages.system.molds.columnCategory'),
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '品牌',
+      title: t('pages.system.molds.columnBrand'),
       dataIndex: 'brand',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '型号',
+      title: t('pages.system.molds.columnModel'),
       dataIndex: 'model',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '序列号',
+      title: t('pages.system.molds.columnSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '累计使用次数',
+      title: t('pages.system.molds.columnTotalUsage'),
       dataIndex: 'total_usage_count',
       width: 120,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '模具状态',
+      title: t('pages.system.molds.columnStatus'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        '正常': { text: '正常', status: 'Success' },
-        '维修中': { text: '维修中', status: 'Warning' },
-        '停用': { text: '停用', status: 'Default' },
-        '报废': { text: '报废', status: 'Error' },
+        '正常': { text: t('pages.system.molds.statusNormal'), status: 'Success' },
+        '维修中': { text: t('pages.system.molds.statusMaintenance'), status: 'Warning' },
+        '停用': { text: t('pages.system.molds.statusStopped'), status: 'Default' },
+        '报废': { text: t('pages.system.molds.statusScrapped'), status: 'Error' },
       },
       render: (_, record) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          '正常': { color: 'success', text: '正常' },
-          '维修中': { color: 'warning', text: '维修中' },
-          '停用': { color: 'default', text: '停用' },
-          '报废': { color: 'error', text: '报废' },
+        const key = statusTextKey[record.status];
+        const text = key ? t(`pages.system.molds.${key}`) : record.status;
+        const colorMap: Record<string, string> = {
+          '正常': 'success',
+          '维修中': 'warning',
+          '停用': 'default',
+          '报废': 'error',
         };
-        const statusInfo = statusMap[record.status] || { color: 'default', text: record.status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        return <Tag color={colorMap[record.status] || 'default'}>{text}</Tag>;
       },
     },
     {
-      title: '是否启用',
+      title: t('pages.system.molds.columnActive'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('pages.system.molds.enabled'), status: 'Success' },
+        false: { text: t('pages.system.molds.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('pages.system.molds.columnCreatedAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -289,7 +294,7 @@ const MoldListPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('pages.system.molds.columnActions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -301,7 +306,7 @@ const MoldListPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
-            查看
+            {t('pages.system.molds.view')}
           </Button>
           <Button
             type="link"
@@ -309,7 +314,7 @@ const MoldListPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('pages.system.molds.edit')}
           </Button>
           <Popconfirm
             title={t('pages.system.molds.confirmDeleteOne')}
@@ -321,7 +326,7 @@ const MoldListPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('pages.system.molds.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -353,13 +358,13 @@ const MoldListPage: React.FC = () => {
           rowKey="uuid"
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建模具"
+          createButtonText={t('pages.system.molds.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('pages.system.molds.batchDelete')}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -398,7 +403,7 @@ const MoldListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑模具' : '新建模具'}
+        title={isEdit ? t('pages.system.molds.modalEdit') : t('pages.system.molds.modalCreate')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -412,141 +417,136 @@ const MoldListPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="模具编码"
-          placeholder="模具编码（可选，不填则自动生成）"
+          label={t('pages.system.molds.labelCode')}
+          placeholder={t('pages.system.molds.codePlaceholder')}
           disabled={isEdit}
         />
         <ProFormText
           name="name"
-          label="模具名称"
-          rules={[{ required: true, message: '请输入模具名称' }]}
-          placeholder="请输入模具名称"
+          label={t('pages.system.molds.labelName')}
+          rules={[{ required: true, message: t('pages.system.molds.nameRequired') }]}
+          placeholder={t('pages.system.molds.namePlaceholder')}
         />
         <ProFormSelect
           name="type"
-          label="模具类型"
-          placeholder="请选择模具类型（可选）"
+          label={t('pages.system.molds.columnType')}
+          placeholder={t('pages.system.molds.typePlaceholder')}
           options={[
-            { label: '注塑模具', value: '注塑模具' },
-            { label: '压铸模具', value: '压铸模具' },
-            { label: '冲压模具', value: '冲压模具' },
-            { label: '其他', value: '其他' },
+            { label: t('pages.system.molds.typeInjection'), value: '注塑模具' },
+            { label: t('pages.system.molds.typeDieCasting'), value: '压铸模具' },
+            { label: t('pages.system.molds.typeStamping'), value: '冲压模具' },
+            { label: t('pages.system.molds.typeOther'), value: '其他' },
           ]}
           allowClear
         />
         <ProFormText
           name="category"
-          label="模具分类"
-          placeholder="请输入模具分类"
+          label={t('pages.system.molds.columnCategory')}
+          placeholder={t('pages.system.molds.categoryPlaceholder')}
         />
         <ProFormText
           name="brand"
-          label="品牌"
-          placeholder="请输入品牌"
+          label={t('pages.system.molds.columnBrand')}
+          placeholder={t('pages.system.molds.brandPlaceholder')}
         />
         <ProFormText
           name="model"
-          label="型号"
-          placeholder="请输入型号"
+          label={t('pages.system.molds.columnModel')}
+          placeholder={t('pages.system.molds.modelPlaceholder')}
         />
         <ProFormText
           name="serial_number"
-          label="序列号"
-          placeholder="请输入序列号"
+          label={t('pages.system.molds.columnSerialNumber')}
+          placeholder={t('pages.system.molds.serialPlaceholder')}
         />
         <ProFormText
           name="manufacturer"
-          label="制造商"
-          placeholder="请输入制造商"
+          label={t('pages.system.molds.labelManufacturer')}
+          placeholder={t('pages.system.molds.manufacturerPlaceholder')}
         />
         <ProFormText
           name="supplier"
-          label="供应商"
-          placeholder="请输入供应商"
+          label={t('pages.system.molds.labelSupplier')}
+          placeholder={t('pages.system.molds.supplierPlaceholder')}
         />
         <ProFormDatePicker
           name="purchase_date"
-          label="采购日期"
-          placeholder="请选择采购日期"
+          label={t('pages.system.molds.labelPurchaseDate')}
+          placeholder={t('pages.system.molds.purchaseDatePlaceholder')}
         />
         <ProFormDatePicker
           name="installation_date"
-          label="安装日期"
-          placeholder="请选择安装日期"
+          label={t('pages.system.molds.labelInstallDate')}
+          placeholder={t('pages.system.molds.installDatePlaceholder')}
         />
         <ProFormDigit
           name="warranty_period"
-          label="保修期（月）"
-          placeholder="请输入保修期（月）"
+          label={t('pages.system.molds.labelWarranty')}
+          placeholder={t('pages.system.molds.warrantyPlaceholder')}
           fieldProps={{ min: 0 }}
         />
         <ProFormSelect
           name="status"
-          label="模具状态"
-          rules={[{ required: true, message: '请选择模具状态' }]}
+          label={t('pages.system.molds.columnStatus')}
+          rules={[{ required: true, message: t('pages.system.molds.statusRequired') }]}
           options={[
-            { label: '正常', value: '正常' },
-            { label: '维修中', value: '维修中' },
-            { label: '停用', value: '停用' },
-            { label: '报废', value: '报废' },
+            { label: t('pages.system.molds.statusNormal'), value: '正常' },
+            { label: t('pages.system.molds.statusMaintenance'), value: '维修中' },
+            { label: t('pages.system.molds.statusStopped'), value: '停用' },
+            { label: t('pages.system.molds.statusScrapped'), value: '报废' },
           ]}
         />
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('pages.system.molds.columnActive')}
           initialValue={true}
         />
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="请输入模具描述"
+          label={t('pages.system.molds.labelDescription')}
+          placeholder={t('pages.system.molds.descPlaceholder')}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="模具详情"
+        title={t('pages.system.molds.detailTitle')}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
-        columns={[
-          { title: '模具编码', dataIndex: 'code' },
-          { title: '模具名称', dataIndex: 'name' },
-          { title: '模具类型', dataIndex: 'type' },
-          { title: '模具分类', dataIndex: 'category' },
-          { title: '品牌', dataIndex: 'brand' },
-          { title: '型号', dataIndex: 'model' },
-          { title: '序列号', dataIndex: 'serial_number' },
-          { title: '制造商', dataIndex: 'manufacturer' },
-          { title: '供应商', dataIndex: 'supplier' },
-          { title: '采购日期', dataIndex: 'purchase_date' },
-          { title: '安装日期', dataIndex: 'installation_date' },
-          { title: '保修期（月）', dataIndex: 'warranty_period' },
-          { title: '累计使用次数', dataIndex: 'total_usage_count' },
-          {
-            title: '模具状态',
-            dataIndex: 'status',
-            render: (value: string) => {
-              const statusMap: Record<string, string> = {
-                '正常': '正常',
-                '维修中': '维修中',
-                '停用': '停用',
-                '报废': '报废',
-              };
-              return statusMap[value] || value;
-            },
-          },
-          {
-            title: '是否启用',
-            dataIndex: 'is_active',
-            render: (value: boolean) => (value ? '启用' : '禁用'),
-          },
-          { title: '描述', dataIndex: 'description', span: 2 },
-          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-        ]}
+          columns={[
+                { title: t('pages.system.molds.columnCode'), dataIndex: 'code' },
+                { title: t('pages.system.molds.columnName'), dataIndex: 'name' },
+                { title: t('pages.system.molds.columnType'), dataIndex: 'type' },
+                { title: t('pages.system.molds.columnCategory'), dataIndex: 'category' },
+                { title: t('pages.system.molds.columnBrand'), dataIndex: 'brand' },
+                { title: t('pages.system.molds.columnModel'), dataIndex: 'model' },
+                { title: t('pages.system.molds.columnSerialNumber'), dataIndex: 'serial_number' },
+                { title: t('pages.system.molds.labelManufacturer'), dataIndex: 'manufacturer' },
+                { title: t('pages.system.molds.labelSupplier'), dataIndex: 'supplier' },
+                { title: t('pages.system.molds.labelPurchaseDate'), dataIndex: 'purchase_date' },
+                { title: t('pages.system.molds.labelInstallDate'), dataIndex: 'installation_date' },
+                { title: t('pages.system.molds.labelWarranty'), dataIndex: 'warranty_period' },
+                { title: t('pages.system.molds.columnTotalUsage'), dataIndex: 'total_usage_count' },
+                {
+                  title: t('pages.system.molds.columnStatus'),
+                  dataIndex: 'status',
+                  render: (value: string) => {
+                    const key = statusTextKey[value];
+                    return key ? t(`pages.system.molds.${key}`) : value;
+                  },
+                },
+                {
+                  title: t('pages.system.molds.columnActive'),
+                  dataIndex: 'is_active',
+                  render: (value: boolean) => (value ? t('pages.system.molds.enabled') : t('pages.system.molds.disabled')),
+                },
+                { title: t('pages.system.molds.labelDescription'), dataIndex: 'description', span: 2 },
+                { title: t('pages.system.molds.columnCreatedAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: t('pages.system.molds.labelUpdatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+              ]}
       />
     </>
   );

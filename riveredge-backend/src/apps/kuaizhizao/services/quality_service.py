@@ -65,10 +65,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
     async def get_incoming_inspection_by_id(self, tenant_id: int, inspection_id: int) -> IncomingInspectionResponse:
         """根据ID获取来料检验单"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_incoming_inspection_lifecycle
+
         inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"来料检验单不存在: {inspection_id}")
-        return IncomingInspectionResponse.model_validate(inspection)
+        resp = IncomingInspectionResponse.model_validate(inspection)
+        return resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection)})
 
     async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取来料检验单列表"""
@@ -189,8 +192,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
             
-            if receipt.status != '已入库':
-                raise BusinessLogicError("只有已入库状态的采购入库单才能创建来料检验单")
+            # 允许「待入库」或「已入库」状态创建检验单，支持先检验后入库流程
+            if receipt.status not in ('待入库', '已入库'):
+                raise BusinessLogicError("只有待入库或已入库状态的采购入库单才能创建来料检验单")
             
             # 获取采购入库单明细
             receipt_items = await PurchaseReceiptItem.filter(
@@ -240,6 +244,32 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     created_by=created_by,
                 )
                 inspections.append(IncomingInspectionResponse.model_validate(inspection))
+
+                # 建立采购入库→来料检验 的 DocumentRelation（支持单据追溯）
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="purchase_receipt",
+                            source_id=purchase_receipt_id,
+                            source_code=receipt.receipt_code,
+                            source_name=None,
+                            target_type="incoming_inspection",
+                            target_id=inspection.id,
+                            target_code=inspection.inspection_code,
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="从采购入库单创建来料检验单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_e:
+                    logger.warning("创建采购入库→来料检验 单据关联失败: %s", rel_e)
             
             return inspections
 
@@ -475,10 +505,13 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
 
     async def get_process_inspection_by_id(self, tenant_id: int, inspection_id: int) -> ProcessInspectionResponse:
         """根据ID获取过程检验单"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_process_inspection_lifecycle
+
         inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"过程检验单不存在: {inspection_id}")
-        return ProcessInspectionResponse.model_validate(inspection)
+        resp = ProcessInspectionResponse.model_validate(inspection)
+        return resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection)})
 
     async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProcessInspectionListResponse]:
         """获取过程检验单列表"""
@@ -541,6 +574,33 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 )
             
             return updated_inspection
+
+    async def approve_inspection(
+        self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None
+    ) -> ProcessInspectionResponse:
+        """审核工序检验单"""
+        async with in_transaction():
+            inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
+
+            if inspection.review_status != '待审核':
+                raise BusinessLogicError("工序检验单审核状态不是待审核")
+
+            approver_name = await self.get_user_name(approved_by)
+
+            review_status = "驳回" if rejection_reason else "通过"
+            status = "已驳回" if rejection_reason else "已审核"
+
+            await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                reviewer_id=approved_by,
+                reviewer_name=approver_name,
+                review_time=datetime.now(),
+                review_status=review_status,
+                review_remarks=rejection_reason,
+                status=status,
+                updated_by=approved_by
+            )
+
+            return await self.get_process_inspection_by_id(tenant_id, inspection_id)
 
     async def _update_reporting_qualified_quantity(
         self,
@@ -652,6 +712,31 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 status="待检验",
                 created_by=created_by,
             )
+            # 建立工单→过程检验 的 DocumentRelation
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="process_inspection",
+                        target_id=inspection.id,
+                        target_code=inspection.inspection_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单创建过程检验单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("建立工单→过程检验 单据关联失败: %s", e)
             return ProcessInspectionResponse.model_validate(inspection)
 
     async def import_from_data(
@@ -839,10 +924,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
     async def get_finished_goods_inspection_by_id(self, tenant_id: int, inspection_id: int) -> FinishedGoodsInspectionResponse:
         """根据ID获取成品检验单"""
+        from apps.kuaizhizao.services.document_lifecycle_service import get_finished_goods_inspection_lifecycle
+
         inspection = await FinishedGoodsInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
         if not inspection:
             raise NotFoundError(f"成品检验单不存在: {inspection_id}")
-        return FinishedGoodsInspectionResponse.model_validate(inspection)
+        resp = FinishedGoodsInspectionResponse.model_validate(inspection)
+        return resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection)})
 
     async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsInspectionListResponse]:
         """获取成品检验单列表"""
@@ -895,6 +983,33 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
+
+    async def approve_inspection(
+        self, tenant_id: int, inspection_id: int, approved_by: int, rejection_reason: Optional[str] = None
+    ) -> FinishedGoodsInspectionResponse:
+        """审核成品检验单"""
+        async with in_transaction():
+            inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+
+            if inspection.review_status != '待审核':
+                raise BusinessLogicError("成品检验单审核状态不是待审核")
+
+            approver_name = await self.get_user_name(approved_by)
+
+            review_status = "驳回" if rejection_reason else "通过"
+            status = "已驳回" if rejection_reason else "已审核"
+
+            await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
+                reviewer_id=approved_by,
+                reviewer_name=approver_name,
+                review_time=datetime.now(),
+                review_status=review_status,
+                review_remarks=rejection_reason,
+                status=status,
+                updated_by=approved_by
+            )
+
+            return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
 
     async def issue_certificate(self, tenant_id: int, inspection_id: int, certificate_number: str, issued_by: int) -> FinishedGoodsInspectionResponse:
         """出具放行证书"""
@@ -986,6 +1101,31 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 status="待检验",
                 created_by=created_by,
             )
+            # 建立工单→成品检验 的 DocumentRelation
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="finished_goods_inspection",
+                        target_id=inspection.id,
+                        target_code=inspection.inspection_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单创建成品检验单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("建立工单→成品检验 单据关联失败: %s", e)
             return FinishedGoodsInspectionResponse.model_validate(inspection)
 
     async def import_from_data(

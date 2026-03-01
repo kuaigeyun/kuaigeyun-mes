@@ -16,6 +16,7 @@ from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 from apps.kuaizhizao.schemas.purchase_requisition import (
     PurchaseRequisitionCreate, PurchaseRequisitionUpdate, PurchaseRequisitionResponse,
     PurchaseRequisitionListResponse, ConvertToPurchaseOrderRequest, UrgentPurchaseRequest,
+    ApproveRequisitionRequest,
 )
 from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
@@ -105,6 +106,23 @@ async def update_requisition(
         requisition_id=requisition_id,
         data=data,
         updated_by=current_user.id,
+    )
+
+
+@router.post("/purchase-requisitions/{requisition_id}/approve", response_model=PurchaseRequisitionResponse, summary="审核采购申请")
+async def approve_requisition(
+    data: ApproveRequisitionRequest,
+    requisition_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """审核采购申请（通过或驳回）"""
+    return await PurchaseRequisitionService().approve_requisition(
+        tenant_id=tenant_id,
+        requisition_id=requisition_id,
+        approved=data.approved,
+        review_remarks=data.review_remarks,
+        approved_by=current_user.id,
     )
 
 

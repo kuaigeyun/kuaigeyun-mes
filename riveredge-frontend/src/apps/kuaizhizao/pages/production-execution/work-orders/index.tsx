@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ActionType,
   ProColumns,
+  ProDescriptions,
   ProDescriptionsItemProps,
   ProFormText,
   ProFormSelect,
@@ -43,7 +44,6 @@ import {
   Spin,
   Divider,
   Input,
-  Timeline,
   Form,
   Segmented,
   ConfigProvider,
@@ -96,11 +96,7 @@ import {
 import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
 import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics } from '../../../services/production'
-import {
-  stateTransitionApi,
-  AvailableTransition,
-  StateTransitionLog,
-} from '../../../services/state-transition'
+import { stateTransitionApi, AvailableTransition } from '../../../services/state-transition'
 import { listSalesOrders } from '../../../services/sales'
 import { getSalesOrder } from '../../../services/sales-order'
 import {
@@ -109,7 +105,6 @@ import {
   getSalesForecastItems,
 } from '../../../services/sales-forecast'
 import { listDemands, getDemand } from '../../../services/demand'
-import { getDocumentRelations } from '../../../services/document-relation'
 import { operationApi, processRouteApi } from '../../../../master-data/services/process'
 import { workshopApi } from '../../../../master-data/services/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'
@@ -124,10 +119,8 @@ import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
 import WorkOrderPrintModal from './components/WorkOrderPrintModal'
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
-import DocumentRelationDisplay from '../../../../../components/document-relation-display'
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
-import type { DocumentRelationData } from '../../../../../components/document-relation-display'
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 
 interface WorkOrder {
@@ -443,7 +436,6 @@ const WorkOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null)
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null)
   const [workOrderOperations, setWorkOrderOperations] = useState<any[]>([])
   const [operationsModalVisible, setOperationsModalVisible] = useState(false)
   const [currentOperation, setCurrentOperation] = useState<any>(null)
@@ -482,7 +474,6 @@ const WorkOrdersPage: React.FC = () => {
   // 状态流转相关状态
   const [stateTransitionModalVisible, setStateTransitionModalVisible] = useState(false)
   const [availableTransitions, setAvailableTransitions] = useState<AvailableTransition[]>([])
-  const [transitionHistory, setTransitionHistory] = useState<StateTransitionLog[]>([])
   const [transitionLoading, setTransitionLoading] = useState(false)
   const transitionFormRef = useRef<any>(null)
 
@@ -1106,15 +1097,6 @@ const WorkOrdersPage: React.FC = () => {
       const detail = await workOrderApi.get(record.id!.toString())
       setWorkOrderDetail(detail)
 
-      // 获取单据关联关系
-      try {
-        const relations = await getDocumentRelations('work_order', record.id!)
-        setDocumentRelations(relations)
-      } catch (error) {
-        console.error('获取单据关联关系失败:', error)
-        setDocumentRelations(null)
-      }
-
       // 加载工单工序列表
       try {
         const operations = await workOrderApi.getOperations(record.id!.toString())
@@ -1124,19 +1106,17 @@ const WorkOrdersPage: React.FC = () => {
         setWorkOrderOperations([])
       }
 
-      // 加载状态流转历史和可用状态流转选项
+      // 加载可用状态流转选项
       try {
         if (detail.status) {
-          const [history, transitions] = await Promise.all([
-            stateTransitionApi.getHistory('work_order', record.id!),
-            stateTransitionApi.getAvailableTransitions('work_order', detail.status),
-          ])
-          setTransitionHistory(history)
+          const transitions = await stateTransitionApi.getAvailableTransitions(
+            'work_order',
+            detail.status
+          )
           setAvailableTransitions(transitions)
         }
       } catch (error) {
         console.error('获取状态流转信息失败:', error)
-        setTransitionHistory([])
         setAvailableTransitions([])
       }
 
@@ -1924,13 +1904,9 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.success('状态流转成功')
       setStateTransitionModalVisible(false)
 
-      // 刷新工单详情和状态流转历史
-      const [detail, history] = await Promise.all([
-        workOrderApi.get(workOrderDetail.id.toString()),
-        stateTransitionApi.getHistory('work_order', workOrderDetail.id),
-      ])
+      // 刷新工单详情
+      const detail = await workOrderApi.get(workOrderDetail.id.toString())
       setWorkOrderDetail(detail)
-      setTransitionHistory(history)
 
       // 重新获取可用状态流转选项
       if (detail.status) {
@@ -3013,91 +2989,129 @@ const WorkOrdersPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false)
           setWorkOrderDetail(null)
-          setDocumentRelations(null)
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        customContent={
-          <>
-            {/* 操作按钮区域 */}
-            <div
-              style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}
-            >
-              <Space wrap>
-                {availableTransitions.length > 0 && (
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={handleStateTransition}
-                    disabled={!workOrderDetail}
-                  >
-                    状态流转
-                  </Button>
-                )}
-                <Divider orientation="vertical" />
+        extra={
+          workOrderDetail && (
+            <Space wrap>
+              {availableTransitions.length > 0 && (
                 <Button
-                  type="primary"
-                  onClick={() => handleCreateRework(workOrderDetail!)}
-                  disabled={!workOrderDetail || workOrderDetail.status === 'cancelled'}
+                  type="link"
+                  size="small"
+                  onClick={handleStateTransition}
+                  disabled={!workOrderDetail}
                 >
-                  创建返工单
+                  状态流转
                 </Button>
+              )}
+              <Divider orientation="vertical" />
+              <Button
+                type="primary"
+                onClick={() => handleCreateRework(workOrderDetail!)}
+                disabled={!workOrderDetail || workOrderDetail.status === 'cancelled'}
+              >
+                创建返工单
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => handleCreateOutsource(workOrderDetail!)}
+                disabled={
+                  !workOrderDetail ||
+                  workOrderDetail.status === 'cancelled' ||
+                  !workOrderOperations ||
+                  workOrderOperations.length === 0
+                }
+              >
+                创建工序委外
+              </Button>
+              <Button
+                type="default"
+                onClick={() => handleSplit(workOrderDetail!)}
+                disabled={
+                  !workOrderDetail ||
+                  !['draft', 'released'].includes(workOrderDetail.status || '')
+                }
+              >
+                拆分工单
+              </Button>
+              {workOrderDetail?.is_frozen ? (
+                <Button type="default" onClick={() => handleUnfreeze(workOrderDetail!)}>
+                  解冻工单
+                </Button>
+              ) : (
                 <Button
-                  type="primary"
-                  onClick={() => handleCreateOutsource(workOrderDetail!)}
+                  type="default"
+                  danger
+                  onClick={() => handleFreeze(workOrderDetail!)}
                   disabled={
                     !workOrderDetail ||
                     workOrderDetail.status === 'cancelled' ||
-                    !workOrderOperations ||
-                    workOrderOperations.length === 0
+                    workOrderDetail.status === 'completed'
                   }
                 >
-                  创建工序委外
+                  冻结工单
                 </Button>
+              )}
+              {['draft', 'released'].includes(workOrderDetail.status || '') && (
                 <Button
-                  type="default"
-                  onClick={() => handleSplit(workOrderDetail!)}
-                  disabled={
-                    !workOrderDetail ||
-                    !['draft', 'released'].includes(workOrderDetail.status || '')
-                  }
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setCurrentOperation(null)
+                    setOperationsModalVisible(true)
+                    operationFormRef.current?.resetFields()
+                  }}
                 >
-                  拆分工单
+                  添加工序
                 </Button>
-                {workOrderDetail?.is_frozen ? (
-                  <Button type="default" onClick={() => handleUnfreeze(workOrderDetail!)}>
-                    解冻工单
-                  </Button>
-                ) : (
-                  <Button
-                    type="default"
-                    danger
-                    onClick={() => handleFreeze(workOrderDetail!)}
-                    disabled={
-                      !workOrderDetail ||
-                      workOrderDetail.status === 'cancelled' ||
-                      workOrderDetail.status === 'completed'
-                    }
-                  >
-                    冻结工单
-                  </Button>
-                )}
-                <Select
-                  value={workOrderDetail?.priority || 'normal'}
-                  onChange={value => handleSetPriority(workOrderDetail!, value)}
-                  disabled={!workOrderDetail}
-                  style={{ width: 120 }}
-                >
-                  <Select.Option value="low">低</Select.Option>
-                  <Select.Option value="normal">正常</Select.Option>
-                  <Select.Option value="high">高</Select.Option>
-                  <Select.Option value="urgent">紧急</Select.Option>
-                </Select>
-              </Space>
-            </div>
+              )}
+              <Select
+                value={workOrderDetail?.priority || 'normal'}
+                onChange={value => handleSetPriority(workOrderDetail!, value)}
+                disabled={!workOrderDetail}
+                style={{ width: 120 }}
+              >
+                <Select.Option value="low">低</Select.Option>
+                <Select.Option value="normal">正常</Select.Option>
+                <Select.Option value="high">高</Select.Option>
+                <Select.Option value="urgent">紧急</Select.Option>
+              </Select>
+            </Space>
+          )
+        }
+        customContent={
+          <>
+            {/* 1. 单据详情（含二维码） */}
+            {workOrderDetail && (
+              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
+                <h4 style={{ marginBottom: 12 }}>单据详情</h4>
+                <Row gutter={16}>
+                  <Col span={16}>
+                    <ProDescriptions
+                      dataSource={workOrderDetail}
+                      column={2}
+                      columns={detailColumns}
+                    />
+                  </Col>
+                  <Col span={8}>
+                    <QRCodeGenerator
+                      qrcodeType="WO"
+                      data={{
+                        work_order_uuid: workOrderDetail.id?.toString() || '',
+                        work_order_code: workOrderDetail.code || '',
+                        work_order_name: workOrderDetail.name || '',
+                      }}
+                      autoGenerate={true}
+                      size={6}
+                    />
+                  </Col>
+                </Row>
+              </div>
+            )}
 
-            {/* 生命周期（UniLifecycleStepper） */}
+            {/* 2. 生命周期 */}
             {workOrderDetail && (() => {
               const lifecycle = getWorkOrderLifecycle(workOrderDetail)
               const mainStages = lifecycle.mainStages ?? []
@@ -3115,47 +3129,9 @@ const WorkOrdersPage: React.FC = () => {
               )
             })()}
 
-            {/* 单据关联（DocumentRelationDisplay） */}
-            {documentRelations && (
-              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
-                <DocumentRelationDisplay
-                  relations={documentRelations}
-                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                />
-              </div>
-            )}
-
-            {workOrderDetail?.id && (
-              <div style={{ padding: '16px 0' }}>
-                <DocumentTrackingPanel
-                  documentType="work_order"
-                  documentId={workOrderDetail.id}
-                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                />
-              </div>
-            )}
-            {/* 工单工序管理 */}
-            <div style={{ padding: '16px 0' }}>
-              <Card
-                title="工单工序"
-                extra={
-                  workOrderDetail &&
-                  ['draft', 'released'].includes(workOrderDetail.status || '') ? (
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        setCurrentOperation(null)
-                        setOperationsModalVisible(true)
-                        operationFormRef.current?.resetFields()
-                      }}
-                    >
-                      添加工序
-                    </Button>
-                  ) : null
-                }
-              >
+            {/* 3. 单据明细（工单工序） */}
+            <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
+              <Card title="工单工序">
                 <WorkOrderOperationsList
                   workOrderId={workOrderDetail?.id}
                   operations={workOrderOperations}
@@ -3177,105 +3153,18 @@ const WorkOrdersPage: React.FC = () => {
               </Card>
             </div>
 
-            {/* 工单二维码 */}
-            {workOrderDetail && (
-              <div style={{ padding: '16px 0' }}>
-                <Card title="工单二维码">
-                  <QRCodeGenerator
-                    qrcodeType="WO"
-                    data={{
-                      work_order_uuid: workOrderDetail.id?.toString() || '',
-                      work_order_code: workOrderDetail.code || '',
-                      work_order_name: workOrderDetail.name || '',
-                    }}
-                    autoGenerate={true}
-                  />
-                </Card>
+            {/* 4. 操作记录 */}
+            {workOrderDetail?.id && (
+              <div style={{ padding: '16px 0', borderBottom: `1px solid ${token.colorBorder}`, marginBottom: '16px' }}>
+                <h4 style={{ marginBottom: 12 }}>操作记录</h4>
+                <DocumentTrackingPanel
+                  documentType="work_order"
+                  documentId={workOrderDetail.id}
+                  onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                />
               </div>
             )}
 
-            {/* 状态流转历史 */}
-            <div style={{ padding: '16px 0' }}>
-              <Card title="状态流转历史">
-                {transitionHistory.length > 0 ? (
-                  <Timeline>
-                    {transitionHistory.map((log, index) => {
-                      const statusColor =
-                        log.to_state === 'draft'
-                          ? 'default'
-                          : log.to_state === 'released'
-                            ? 'processing'
-                            : log.to_state === 'in_progress'
-                              ? 'processing'
-                              : log.to_state === 'completed'
-                                ? 'success'
-                                : log.to_state === 'cancelled'
-                                  ? 'error'
-                                  : 'default'
-
-                      const statusText =
-                        log.to_state === 'draft'
-                          ? '草稿'
-                          : log.to_state === 'released'
-                            ? '已下达'
-                            : log.to_state === 'in_progress'
-                              ? '执行中'
-                              : log.to_state === 'completed'
-                                ? '已完成'
-                                : log.to_state === 'cancelled'
-                                  ? '已取消'
-                                  : log.to_state
-
-                      const fromStatusText =
-                        log.from_state === 'draft'
-                          ? '草稿'
-                          : log.from_state === 'released'
-                            ? '已下达'
-                            : log.from_state === 'in_progress'
-                              ? '执行中'
-                              : log.from_state === 'completed'
-                                ? '已完成'
-                                : log.from_state === 'cancelled'
-                                  ? '已取消'
-                                  : log.from_state
-
-                      return (
-                        <Timeline.Item key={log.id} color={statusColor}>
-                          <div>
-                            <div style={{ marginBottom: 4 }}>
-                              <Tag color={statusColor}>{statusText}</Tag>
-                              <span style={{ marginLeft: 8, color: '#666' }}>
-                                {fromStatusText} → {statusText}
-                              </span>
-                            </div>
-                            {log.transition_reason && (
-                              <div style={{ marginBottom: 4, color: '#666', fontSize: 12 }}>
-                                原因：{log.transition_reason}
-                              </div>
-                            )}
-                            {log.transition_comment && (
-                              <div style={{ marginBottom: 4, color: '#666', fontSize: 12 }}>
-                                备注：{log.transition_comment}
-                              </div>
-                            )}
-                            <div style={{ color: '#999', fontSize: 12 }}>
-                              {log.operator_name} ·{' '}
-                              {log.transition_time
-                                ? dayjs(log.transition_time).format('YYYY-MM-DD HH:mm:ss')
-                                : ''}
-                            </div>
-                          </div>
-                        </Timeline.Item>
-                      )
-                    })}
-                  </Timeline>
-                ) : (
-                  <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
-                    暂无状态流转记录
-                  </div>
-                )}
-              </Card>
-            </div>
           </>
         }
       />

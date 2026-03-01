@@ -194,11 +194,11 @@ const WorkstationsPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工位编码', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workstations.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '工位名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.workstations.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -232,7 +232,7 @@ const WorkstationsPage: React.FC = () => {
         const productionLineNameIndex = headerIndexMap['productionLineName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
-          errors.push({ row: actualRowIndex, message: '表头映射错误，无法找到必需字段' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
           return;
         }
 
@@ -377,19 +377,19 @@ const WorkstationsPage: React.FC = () => {
         importFn: async (item: WorkstationCreate) => {
           return await workstationApi.create(item);
         },
-        title: '正在导入工位数据',
+        title: t('app.master-data.workstations.importTitle'),
         concurrency: 5,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.importPartialResultTitle'),
           width: 600,
           content: (
             <div>
               <p>
-                <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
               </p>
               {result.errors.length > 0 && (
                 <List
@@ -398,7 +398,7 @@ const WorkstationsPage: React.FC = () => {
                   renderItem={(item) => (
                     <List.Item>
                       <Typography.Text type="danger">
-                        第 {item.row} 行：{item.error}
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
                       </Typography.Text>
                     </List.Item>
                   )}
@@ -408,7 +408,7 @@ const WorkstationsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+        messageApi.success(t('app.master-data.workstations.importSuccess', { count: result.successCount }));
       }
 
       // 刷新列表
@@ -439,16 +439,16 @@ const WorkstationsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `工位数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `工位数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
         const allData = await workstationApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `工位数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.workstations.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -457,7 +457,7 @@ const WorkstationsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = ['工位编码', '工位名称', '所属产线', '描述', '状态', '创建时间'];
+      const headers = [t('app.master-data.workstations.code'), t('app.master-data.workstations.name'), t('app.master-data.workstations.productionLineName'), t('app.master-data.workstations.description'), t('app.master-data.workstations.status'), t('common.createdAt')];
       const rows = exportData.map(item => {
         const productionLine = productionLines.find(p => p.id === item.productionLineId);
         return [
@@ -465,7 +465,7 @@ const WorkstationsPage: React.FC = () => {
           item.name || '',
           productionLine ? `${productionLine.code}(${productionLine.name})` : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -478,7 +478,7 @@ const WorkstationsPage: React.FC = () => {
 
       // 下载文件
       downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
-      messageApi.success(t('app.master-data.exportSuccess'));
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.exportFailed'));
     }
@@ -524,7 +524,7 @@ const WorkstationsPage: React.FC = () => {
    */
   const columns: ProColumns<Workstation>[] = [
     {
-      title: '工位编码',
+      title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -532,42 +532,42 @@ const WorkstationsPage: React.FC = () => {
       copyable: true,
     },
     {
-      title: '工位名称',
+      title: t('app.master-data.workstations.name'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '所属产线',
+      title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
       width: 200,
       hideInSearch: true,
       render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
     },
     {
-      title: '描述',
+      title: t('app.master-data.workstations.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.workstations.statusLabel'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? '启用' : '禁用'}
+            {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -575,7 +575,7 @@ const WorkstationsPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -586,7 +586,7 @@ const WorkstationsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -594,10 +594,10 @@ const WorkstationsPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个工位吗？"
+            title={t('app.master-data.workstations.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -606,7 +606,7 @@ const WorkstationsPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -619,42 +619,42 @@ const WorkstationsPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemProps<Workstation>[] = [
     {
-      title: '工位编码',
+      title: t('app.master-data.workstations.code'),
       dataIndex: 'code',
     },
     {
-      title: '工位名称',
+      title: t('app.master-data.workstations.name'),
       dataIndex: 'name',
     },
     {
-      title: '所属产线',
+      title: t('app.master-data.workstations.productionLineName'),
       dataIndex: 'productionLineId',
       render: (_, record) => getProductionLineName(record?.productionLineId ?? (record as any)?.production_line_id),
     },
     {
-      title: '描述',
+      title: t('app.master-data.workstations.description'),
       dataIndex: 'description',
       span: 2,
     },
     {
-      title: '状态',
+      title: t('app.master-data.workstations.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? '启用' : '禁用'}
+            {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
       span: 2,
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -755,15 +755,15 @@ const WorkstationsPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建工位
+            {t('app.master-data.workstations.create')}
           </Button>,
           <Popconfirm
             key="batchDelete"
-            title="确定要批量删除选中的工位吗？"
-            description={`将删除 ${selectedRowKeys.length} 个工位，删除后无法恢复，请谨慎操作。`}
+            title={t('app.master-data.workstations.batchDeleteTitle')}
+            description={t('app.master-data.workstations.batchDeleteDescription', { count: selectedRowKeys.length })}
             onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
             disabled={selectedRowKeys.length === 0}
           >
             <Button
@@ -772,7 +772,7 @@ const WorkstationsPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={selectedRowKeys.length === 0}
             >
-              批量删除
+              {t('common.batchDelete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -785,7 +785,7 @@ const WorkstationsPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<Workstation>
-        title="工位详情"
+        title={t('app.master-data.workstations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={workstationDetail || undefined}

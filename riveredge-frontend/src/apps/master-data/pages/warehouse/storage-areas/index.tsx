@@ -194,11 +194,11 @@ const StorageAreasPage: React.FC = () => {
 
     // 验证必需字段
     if (headerIndexMap['code'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '库区编码', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageAreas.code'), headers: headers.join(', ') }));
       return;
     }
     if (headerIndexMap['name'] === undefined) {
-      messageApi.error(t('app.master-data.importMissingField', { field: '库区名称', headers: headers.join(', ') }));
+      messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.storageAreas.name'), headers: headers.join(', ') }));
       return;
     }
 
@@ -232,7 +232,7 @@ const StorageAreasPage: React.FC = () => {
         const warehouseNameIndex = headerIndexMap['warehouseName'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
-          errors.push({ row: actualRowIndex, message: '表头映射错误，无法找到必需字段' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.headerMapError') });
           return;
         }
 
@@ -252,11 +252,11 @@ const StorageAreasPage: React.FC = () => {
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
         
         if (!codeValue) {
-          errors.push({ row: actualRowIndex, message: '库区编码不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.storageAreas.codeRequired') });
           return;
         }
         if (!nameValue) {
-          errors.push({ row: actualRowIndex, message: '库区名称不能为空' });
+          errors.push({ row: actualRowIndex, message: t('app.master-data.storageAreas.nameRequired') });
           return;
         }
 
@@ -274,7 +274,7 @@ const StorageAreasPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `仓库编码 "${warehouseCodeValue}" 不存在，请检查仓库编码是否正确` 
+                message: t('app.master-data.storageAreas.warehouseCodeNotExist', { value: warehouseCodeValue }) 
               });
               return;
             }
@@ -287,7 +287,7 @@ const StorageAreasPage: React.FC = () => {
             } else {
               errors.push({ 
                 row: actualRowIndex, 
-                message: `仓库名称 "${warehouseNameValue}" 不存在，请检查仓库名称是否正确` 
+                message: t('app.master-data.storageAreas.warehouseNameNotExist', { value: warehouseNameValue }) 
               });
               return;
             }
@@ -295,7 +295,7 @@ const StorageAreasPage: React.FC = () => {
         } else {
           errors.push({ 
             row: actualRowIndex, 
-            message: '所属仓库不能为空' 
+            message: t('app.master-data.storageAreas.warehouseRequired') 
           });
           return;
         }
@@ -313,28 +313,28 @@ const StorageAreasPage: React.FC = () => {
       } catch (error: any) {
         errors.push({
           row: actualRowIndex,
-          message: error.message || '数据解析失败',
+          message: error.message || t('app.master-data.warehouses.dataParseFailed'),
         });
       }
     });
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
-      const hasWarehouseError = errors.some(e => e.message.includes('仓库'));
+      const hasWarehouseError = errors.some(e => e.message.includes('仓库') || e.message.includes('Warehouse'));
       
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.master-data.warehouses.importValidationFailed'),
         width: 700,
         content: (
           <div>
-            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.warehouses.importValidationIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
                   <Typography.Text type="danger">
-                    第 {item.row} 行：{item.message}
+                    {t('app.master-data.warehouses.rowError', { row: item.row, message: item.message })}
                   </Typography.Text>
                 </List.Item>
               )}
@@ -342,7 +342,7 @@ const StorageAreasPage: React.FC = () => {
             {hasWarehouseError && warehouses.length > 0 && (
               <div style={{ marginTop: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  当前可用的仓库列表：
+                  {t('app.master-data.storageAreas.availableWarehouseList')}
                 </Typography.Text>
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {warehouses.map(warehouse => (
@@ -355,7 +355,7 @@ const StorageAreasPage: React.FC = () => {
                   ))}
                 </ul>
                 <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
-                  提示：所属仓库列可以填写仓库编码（如：{warehouses[0]?.code}）或仓库名称（如：{warehouses[0]?.name}）
+                  {t('app.master-data.storageAreas.importTip', { code: warehouses[0]?.code || '', name: warehouses[0]?.name || '' })}
                 </Typography.Text>
               </div>
             )}
@@ -377,19 +377,19 @@ const StorageAreasPage: React.FC = () => {
         importFn: async (item: StorageAreaCreate) => {
           return await storageAreaApi.create(item);
         },
-        title: '正在导入库区数据',
+        title: t('app.master-data.storageAreas.importTitle'),
         concurrency: 5,
       });
 
       // 显示导入结果
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.master-data.warehouses.importPartialFailure'),
           width: 600,
           content: (
             <div>
               <p>
-                <strong>导入结果：</strong>成功 {result.successCount} 条，失败 {result.failureCount} 条
+                <strong>{t('app.master-data.warehouses.importResult', { success: result.successCount, failure: result.failureCount })}</strong>
               </p>
               {result.errors.length > 0 && (
                 <List
@@ -398,7 +398,7 @@ const StorageAreasPage: React.FC = () => {
                   renderItem={(item) => (
                     <List.Item>
                       <Typography.Text type="danger">
-                        第 {item.row} 行：{item.error}
+                        {t('app.master-data.warehouses.rowError', { row: item.row, message: item.error })}
                       </Typography.Text>
                     </List.Item>
                   )}
@@ -439,16 +439,16 @@ const StorageAreasPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `库区数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = t('app.master-data.storageAreas.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) });
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `库区数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = t('app.master-data.storageAreas.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) });
       } else {
         // 导出全部数据
         const allData = await storageAreaApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `库区数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = t('app.master-data.storageAreas.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) });
       }
 
       if (exportData.length === 0) {
@@ -457,7 +457,7 @@ const StorageAreasPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = ['库区编码', '库区名称', '所属仓库', '描述', '状态', '创建时间'];
+      const headers = [t('app.master-data.storageAreas.code'), t('app.master-data.storageAreas.name'), t('app.master-data.storageAreas.warehouse'), t('app.master-data.warehouses.description'), t('app.master-data.warehouses.status'), t('app.master-data.warehouses.createTime')];
       const rows = exportData.map(item => {
         const warehouse = warehouses.find(w => w.id === item.warehouseId);
         return [
@@ -465,7 +465,7 @@ const StorageAreasPage: React.FC = () => {
           item.name || '',
           warehouse ? `${warehouse.code}(${warehouse.name})` : '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          item.isActive ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
       });
@@ -516,7 +516,7 @@ const StorageAreasPage: React.FC = () => {
    */
   const getWarehouseName = (warehouseId: number): string => {
     const warehouse = warehouses.find(w => w.id === warehouseId);
-    return warehouse ? `${warehouse.code} - ${warehouse.name}` : `仓库ID: ${warehouseId}`;
+    return warehouse ? `${warehouse.code} - ${warehouse.name}` : `${t('app.master-data.storageAreas.warehouseIdPrefix')}: ${warehouseId}`;
   };
 
   /**
@@ -524,7 +524,7 @@ const StorageAreasPage: React.FC = () => {
    */
   const columns: ProColumns<StorageArea>[] = [
     {
-      title: '库区编码',
+      title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -532,42 +532,42 @@ const StorageAreasPage: React.FC = () => {
       copyable: true,
     },
     {
-      title: '库区名称',
+      title: t('app.master-data.storageAreas.name'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '所属仓库',
+      title: t('app.master-data.storageAreas.warehouse'),
       dataIndex: 'warehouseId',
       width: 200,
       hideInSearch: true,
       render: (_, record) => getWarehouseName(record?.warehouseId),
     },
     {
-      title: '描述',
+      title: t('app.master-data.warehouses.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? '启用' : '禁用'}
+            {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -575,7 +575,7 @@ const StorageAreasPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('app.master-data.warehouses.action'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -586,7 +586,7 @@ const StorageAreasPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -594,11 +594,11 @@ const StorageAreasPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个库区吗？"
-            description="删除库区前需要检查是否有关联的库位"
+            title={t('app.master-data.storageAreas.deleteConfirm')}
+            description={t('app.master-data.storageAreas.deleteDescription')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -607,7 +607,7 @@ const StorageAreasPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -620,41 +620,41 @@ const StorageAreasPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemProps<StorageArea>[] = [
     {
-      title: '库区编码',
+      title: t('app.master-data.storageAreas.code'),
       dataIndex: 'code',
     },
     {
-      title: '库区名称',
+      title: t('app.master-data.storageAreas.name'),
       dataIndex: 'name',
     },
     {
-      title: '所属仓库',
+      title: t('app.master-data.storageAreas.warehouse'),
       dataIndex: 'warehouseId',
       render: (_, record) => getWarehouseName(record?.warehouseId),
     },
     {
-      title: '描述',
+      title: t('app.master-data.warehouses.description'),
       dataIndex: 'description',
       span: 2,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? '启用' : '禁用'}
+            {record?.isActive ? t('common.enabled') : t('common.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('app.master-data.warehouses.updateTime'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -755,15 +755,15 @@ const StorageAreasPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建库区
+            {t('app.master-data.storageAreas.create')}
           </Button>,
           <Popconfirm
             key="batchDelete"
-            title="确定要批量删除选中的库区吗？"
-            description={`将删除 ${selectedRowKeys.length} 个库区，删除后无法恢复，请谨慎操作。`}
+            title={t('app.master-data.storageAreas.batchDeleteTitle')}
+            description={t('app.master-data.storageAreas.batchDeleteDescription', { count: selectedRowKeys.length })}
             onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
             disabled={selectedRowKeys.length === 0}
           >
             <Button
@@ -772,7 +772,7 @@ const StorageAreasPage: React.FC = () => {
               icon={<DeleteOutlined />}
               disabled={selectedRowKeys.length === 0}
             >
-              批量删除
+              {t('common.batchDelete')}
             </Button>
           </Popconfirm>,
         ]}
@@ -785,7 +785,7 @@ const StorageAreasPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<StorageArea>
-        title="库区详情"
+        title={t('app.master-data.storageAreas.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={storageAreaDetail || undefined}

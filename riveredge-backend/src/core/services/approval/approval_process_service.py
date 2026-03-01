@@ -12,6 +12,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.approval_process import ApprovalProcess
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
+from core.inngest.approval_registration import register_approval_workflow, unregister_approval_workflow
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -78,15 +79,13 @@ class ApprovalProcessService:
                 **data.model_dump()
             )
             await approval_process.save()
-            
-            # TODO: 集成 Inngest 工作流注册
-            # 将 ProFlow 设计转换为 Inngest 工作流配置
-            # if approval_process.is_active:
-            #     inngest_config = ApprovalProcessService.convert_proflow_to_inngest(approval_process.nodes)
-            #     workflow_id = await register_approval_workflow(approval_process, inngest_config)
-            #     approval_process.inngest_workflow_id = workflow_id
-            #     await approval_process.save()
-            
+
+            if approval_process.is_active:
+                inngest_config = ApprovalProcessService.convert_proflow_to_inngest(approval_process.nodes)
+                workflow_id = await register_approval_workflow(approval_process, inngest_config)
+                approval_process.inngest_workflow_id = workflow_id
+                await approval_process.save()
+
             return approval_process
         except IntegrityError:
             raise ValidationError(f"审批流程代码 {data.code} 已存在")
@@ -176,20 +175,16 @@ class ApprovalProcessService:
             setattr(approval_process, key, value)
         
         await approval_process.save()
-        
-        # TODO: 集成 Inngest 工作流更新
-        # 如果节点配置发生变化，需要重新注册 Inngest 工作流
-        # if 'nodes' in update_data:
-        #     if approval_process.inngest_workflow_id:
-        #         # 取消注册旧工作流
-        #         await unregister_approval_workflow(approval_process.inngest_workflow_id)
-        #     if approval_process.is_active:
-        #         # 注册新工作流
-        #         inngest_config = ApprovalProcessService.convert_proflow_to_inngest(approval_process.nodes)
-        #         workflow_id = await register_approval_workflow(approval_process, inngest_config)
-        #         approval_process.inngest_workflow_id = workflow_id
-        #         await approval_process.save()
-        
+
+        if 'nodes' in update_data:
+            if approval_process.inngest_workflow_id:
+                await unregister_approval_workflow(approval_process.inngest_workflow_id)
+            if approval_process.is_active:
+                inngest_config = ApprovalProcessService.convert_proflow_to_inngest(approval_process.nodes)
+                workflow_id = await register_approval_workflow(approval_process, inngest_config)
+                approval_process.inngest_workflow_id = workflow_id
+                await approval_process.save()
+
         return approval_process
     
     @staticmethod
@@ -208,12 +203,10 @@ class ApprovalProcessService:
             NotFoundError: 当审批流程不存在时抛出
         """
         approval_process = await ApprovalProcessService.get_approval_process_by_uuid(tenant_id, uuid)
-        
-        # TODO: 集成 Inngest 工作流注销
-        # 如果流程已注册到 Inngest，需要先注销
-        # if approval_process.inngest_workflow_id:
-        #     await unregister_approval_workflow(approval_process.inngest_workflow_id)
-        
+
+        if approval_process.inngest_workflow_id:
+            await unregister_approval_workflow(approval_process.inngest_workflow_id)
+
         approval_process.deleted_at = datetime.now()
         await approval_process.save()
 

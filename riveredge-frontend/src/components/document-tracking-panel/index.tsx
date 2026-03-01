@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Timeline, Empty, Spin, Card, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { SwapOutlined, CheckCircleOutlined, ArrowRightOutlined, LinkOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { SwapOutlined, CheckCircleOutlined, ArrowRightOutlined, LinkOutlined, EditOutlined, PlusOutlined, FormOutlined } from '@ant-design/icons';
 import type {
   DocumentTrackingResponse,
   DocumentTrackingTimelineItem,
@@ -101,6 +101,7 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     push: t('components.documentTrackingPanel.typePush'),
     pull: t('components.documentTrackingPanel.typePull'),
     from: t('components.documentTrackingPanel.typeFrom'),
+    report: t('components.documentTrackingPanel.typeReport'),
   };
 
   useEffect(() => {
@@ -163,6 +164,8 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
         <EditOutlined />
       ) : item.type === 'approve' ? (
         <CheckCircleOutlined />
+      ) : item.type === 'report' ? (
+        <FormOutlined />
       ) : item.type === 'push' || item.type === 'from' ? (
         <ArrowRightOutlined />
       ) : (

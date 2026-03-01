@@ -122,26 +122,26 @@ const LaunchProgressPage: React.FC = () => {
    */
   const stageColumns = [
     {
-      title: '阶段名称',
+      title: t('pages.system.launchProgress.columnStageName'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '状态',
+      title: t('pages.system.launchProgress.columnStatus'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string, record: any) => {
         if (record.completed) {
-          return <Tag color="success" icon={<CheckCircleOutlined />}>已完成</Tag>;
+          return <Tag color="success" icon={<CheckCircleOutlined />}>{t('pages.system.launchProgress.completed')}</Tag>;
         } else if (status === 'in_progress') {
-          return <Tag color="processing" icon={<ClockCircleOutlined />}>进行中</Tag>;
+          return <Tag color="processing" icon={<ClockCircleOutlined />}>{t('pages.system.launchProgress.inProgress')}</Tag>;
         } else {
-          return <Tag color="default" icon={<ClockCircleOutlined />}>待开始</Tag>;
+          return <Tag color="default" icon={<ClockCircleOutlined />}>{t('pages.system.launchProgress.pending')}</Tag>;
         }
       },
     },
     {
-      title: '更新时间',
+      title: t('pages.system.launchProgress.columnUpdatedAt'),
       dataIndex: 'updated_at',
       key: 'updated_at',
       render: (text: string) => text || '-',
@@ -153,35 +153,35 @@ const LaunchProgressPage: React.FC = () => {
    */
   const taskColumns = [
     {
-      title: '任务名称',
+      title: t('pages.system.launchProgress.columnTaskName'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '状态',
+      title: t('pages.system.launchProgress.columnStatus'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
         if (status === 'completed') {
-          return <Tag color="success" icon={<CheckCircleOutlined />}>已完成</Tag>;
+          return <Tag color="success" icon={<CheckCircleOutlined />}>{t('pages.system.launchProgress.completed')}</Tag>;
         } else if (status === 'in_progress') {
-          return <Tag color="processing" icon={<ClockCircleOutlined />}>进行中</Tag>;
+          return <Tag color="processing" icon={<ClockCircleOutlined />}>{t('pages.system.launchProgress.inProgress')}</Tag>;
         } else {
-          return <Tag color="default" icon={<ClockCircleOutlined />}>待开始</Tag>;
+          return <Tag color="default" icon={<ClockCircleOutlined />}>{t('pages.system.launchProgress.pending')}</Tag>;
         }
       },
     },
     {
-      title: '关键任务',
+      title: t('pages.system.launchProgress.columnCritical'),
       dataIndex: 'is_critical',
       key: 'is_critical',
-      render: (isCritical: boolean) => isCritical ? <Tag color="red">关键</Tag> : '-',
+      render: (isCritical: boolean) => isCritical ? <Tag color="red">{t('pages.system.launchProgress.tagCritical')}</Tag> : '-',
     },
     {
-      title: '即将到期',
+      title: t('pages.system.launchProgress.columnDueSoon'),
       dataIndex: 'is_due_soon',
       key: 'is_due_soon',
-      render: (isDueSoon: boolean) => isDueSoon ? <Tag color="orange">即将到期</Tag> : '-',
+      render: (isDueSoon: boolean) => isDueSoon ? <Tag color="orange">{t('pages.system.launchProgress.tagDueSoon')}</Tag> : '-',
     },
   ];
 
@@ -190,37 +190,37 @@ const LaunchProgressPage: React.FC = () => {
    */
   const checklistColumns = [
     {
-      title: '检查项',
+      title: t('pages.system.launchProgress.columnCheckItem'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '分类',
+      title: t('pages.system.launchProgress.columnCategory'),
       dataIndex: 'category_name',
       key: 'category_name',
     },
     {
-      title: '检查状态',
+      title: t('pages.system.launchProgress.columnCheckStatus'),
       dataIndex: 'check_status',
       key: 'check_status',
       render: (status: string, record: ChecklistItem) => {
         if (status === 'passed') {
-          return <Tag color="success" icon={<CheckCircleOutlined />}>通过</Tag>;
+          return <Tag color="success" icon={<CheckCircleOutlined />}>{t('pages.system.launchProgress.passed')}</Tag>;
         } else if (status === 'failed') {
-          return <Tag color="error" icon={<ExclamationCircleOutlined />}>未通过</Tag>;
+          return <Tag color="error" icon={<ExclamationCircleOutlined />}>{t('pages.system.launchProgress.failed')}</Tag>;
         } else {
-          return <Tag color="default">待检查</Tag>;
+          return <Tag color="default">{t('pages.system.launchProgress.toCheck')}</Tag>;
         }
       },
     },
     {
-      title: '关键项',
+      title: t('pages.system.launchProgress.columnCriticalItem'),
       dataIndex: 'is_critical',
       key: 'is_critical',
-      render: (isCritical: boolean) => isCritical ? <Tag color="red">关键</Tag> : '-',
+      render: (isCritical: boolean) => isCritical ? <Tag color="red">{t('pages.system.launchProgress.tagCritical')}</Tag> : '-',
     },
     {
-      title: '检查时间',
+      title: t('pages.system.launchProgress.columnCheckTime'),
       dataIndex: 'check_time',
       key: 'check_time',
       render: (text: string) => text || '-',
@@ -229,9 +229,9 @@ const LaunchProgressPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2}>上线进度跟踪和检查清单</Title>
+      <Title level={2}>{t('pages.system.launchProgress.pageTitle')}</Title>
       <Paragraph>
-        跟踪上线进度，管理检查清单，确保系统顺利上线。
+        {t('pages.system.launchProgress.pageDesc')}
       </Paragraph>
 
       <Tabs
@@ -240,16 +240,16 @@ const LaunchProgressPage: React.FC = () => {
         items={[
           {
             key: 'tracking',
-            label: '进度跟踪',
+            label: t('pages.system.launchProgress.tabTracking'),
             children: (
               <div>
                 <Card
-                  title="上线进度跟踪"
+                  title={t('pages.system.launchProgress.trackingTitle')}
                   extra={
                     <Space>
-                      <Button icon={<ReloadOutlined />} onClick={loadProgressTracking}>刷新</Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadProgressTracking}>{t('pages.system.launchProgress.refresh')}</Button>
                       <Button type="primary" icon={<FileTextOutlined />} onClick={loadProgressReport}>
-                        生成报告
+                        {t('pages.system.launchProgress.generateReport')}
                       </Button>
                     </Space>
                   }
@@ -262,9 +262,9 @@ const LaunchProgressPage: React.FC = () => {
                         <Card>
                           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                             <Statistic
-                              title="距离上线还有"
+                              title={t('pages.system.launchProgress.daysRemaining')}
                               value={progressTracking.days_remaining}
-                              suffix="天"
+                              suffix={t('pages.system.launchProgress.days')}
                               valueStyle={{ color: progressTracking.days_remaining <= 3 ? '#cf1322' : '#1890ff' }}
                             />
                             <Progress
@@ -279,7 +279,7 @@ const LaunchProgressPage: React.FC = () => {
                         </Card>
 
                         {/* 阶段列表 */}
-                        <Card title="阶段进度">
+                        <Card title={t('pages.system.launchProgress.stageProgress')}>
                           <Table
                             dataSource={progressTracking.stages}
                             columns={stageColumns}
@@ -289,7 +289,7 @@ const LaunchProgressPage: React.FC = () => {
                         </Card>
 
                         {/* 任务清单 */}
-                        <Card title="任务清单">
+                        <Card title={t('pages.system.launchProgress.taskList')}>
                           <Table
                             dataSource={progressTracking.tasks}
                             columns={taskColumns}
@@ -301,8 +301,8 @@ const LaunchProgressPage: React.FC = () => {
                     </div>
                   ) : (
                     <Alert
-                      message="未启动上线倒计时"
-                      description="请先启动上线倒计时功能，才能查看进度跟踪信息。"
+                      message={t('pages.system.launchProgress.noCountdown')}
+                      description={t('pages.system.launchProgress.noCountdownDesc')}
                       type="info"
                       showIcon
                     />
@@ -311,17 +311,17 @@ const LaunchProgressPage: React.FC = () => {
 
                 {/* 进度报告 */}
                 {progressReport && (
-                  <Card title="进度报告" style={{ marginTop: 16 }}>
+                  <Card title={t('pages.system.launchProgress.progressReport')} style={{ marginTop: 16 }}>
                     <Space direction="vertical" size="large" style={{ width: '100%' }}>
                       <div>
-                        <Title level={4}>统计信息</Title>
+                        <Title level={4}>{t('pages.system.launchProgress.statsTitle')}</Title>
                         <Space size="large">
-                          <Statistic title="总任务数" value={progressReport.summary.total_tasks} />
-                          <Statistic title="已完成" value={progressReport.summary.completed_tasks} />
-                          <Statistic title="进行中" value={progressReport.summary.in_progress_tasks} />
-                          <Statistic title="待开始" value={progressReport.summary.pending_tasks} />
+                          <Statistic title={t('pages.system.launchProgress.totalTasks')} value={progressReport.summary.total_tasks} />
+                          <Statistic title={t('pages.system.launchProgress.completed')} value={progressReport.summary.completed_tasks} />
+                          <Statistic title={t('pages.system.launchProgress.inProgress')} value={progressReport.summary.in_progress_tasks} />
+                          <Statistic title={t('pages.system.launchProgress.pending')} value={progressReport.summary.pending_tasks} />
                           <Statistic
-                            title="完成率"
+                            title={t('pages.system.launchProgress.completionRate')}
                             value={progressReport.summary.completion_rate}
                             suffix="%"
                           />
@@ -330,7 +330,7 @@ const LaunchProgressPage: React.FC = () => {
 
                       {progressReport.risks && progressReport.risks.length > 0 && (
                         <div>
-                          <Title level={4}>风险提示</Title>
+                          <Title level={4}>{t('pages.system.launchProgress.riskTitle')}</Title>
                           <List
                             dataSource={progressReport.risks}
                             renderItem={(risk) => (
@@ -353,17 +353,17 @@ const LaunchProgressPage: React.FC = () => {
           },
           {
             key: 'checklist',
-            label: '检查清单',
+            label: t('pages.system.launchProgress.tabChecklist'),
             children: (
               <div>
                 <Card
-                  title="上线检查清单"
+                  title={t('pages.system.launchProgress.checklistTitle')}
                   extra={
                     <Space>
-                      <Button icon={<ReloadOutlined />} onClick={loadChecklist}>刷新</Button>
-                      <Button type="primary" onClick={handleCheckItems}>执行检查</Button>
+                      <Button icon={<ReloadOutlined />} onClick={loadChecklist}>{t('pages.system.launchProgress.refresh')}</Button>
+                      <Button type="primary" onClick={handleCheckItems}>{t('pages.system.launchProgress.runCheck')}</Button>
                       <Button icon={<FileTextOutlined />} onClick={loadCheckReport}>
-                        生成报告
+                        {t('pages.system.launchProgress.generateReport')}
                       </Button>
                     </Space>
                   }
@@ -379,17 +379,17 @@ const LaunchProgressPage: React.FC = () => {
 
                 {/* 检查报告 */}
                 {checkReport && (
-                  <Card title="检查报告" style={{ marginTop: 16 }}>
+                  <Card title={t('pages.system.launchProgress.checkReport')} style={{ marginTop: 16 }}>
                     <Space direction="vertical" size="large" style={{ width: '100%' }}>
                       <div>
-                        <Title level={4}>统计信息</Title>
+                        <Title level={4}>{t('pages.system.launchProgress.statsTitle')}</Title>
                         <Space size="large">
-                          <Statistic title="总检查项" value={checkReport.summary.total_items} />
-                          <Statistic title="通过" value={checkReport.summary.passed_items} />
-                          <Statistic title="未通过" value={checkReport.summary.failed_items} />
-                          <Statistic title="待检查" value={checkReport.summary.pending_items} />
+                          <Statistic title={t('pages.system.launchProgress.totalItems')} value={checkReport.summary.total_items} />
+                          <Statistic title={t('pages.system.launchProgress.passed')} value={checkReport.summary.passed_items} />
+                          <Statistic title={t('pages.system.launchProgress.failed')} value={checkReport.summary.failed_items} />
+                          <Statistic title={t('pages.system.launchProgress.toCheck')} value={checkReport.summary.pending_items} />
                           <Statistic
-                            title="通过率"
+                            title={t('pages.system.launchProgress.passRate')}
                             value={checkReport.summary.pass_rate}
                             suffix="%"
                           />
@@ -399,11 +399,11 @@ const LaunchProgressPage: React.FC = () => {
                       <Divider />
 
                       <div>
-                        <Title level={4}>关键检查项</Title>
+                        <Title level={4}>{t('pages.system.launchProgress.criticalTitle')}</Title>
                         <Space size="large">
-                          <Statistic title="关键项总数" value={checkReport.summary.critical_total} />
-                          <Statistic title="已通过" value={checkReport.summary.critical_passed} />
-                          <Statistic title="未通过" value={checkReport.summary.critical_failed} />
+                          <Statistic title={t('pages.system.launchProgress.criticalTotal')} value={checkReport.summary.critical_total} />
+                          <Statistic title={t('pages.system.launchProgress.criticalPassed')} value={checkReport.summary.critical_passed} />
+                          <Statistic title={t('pages.system.launchProgress.criticalFailed')} value={checkReport.summary.critical_failed} />
                         </Space>
                       </div>
                     </Space>

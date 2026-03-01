@@ -147,63 +147,63 @@ const CustomersPage: React.FC = () => {
    */
   const columns: ProColumns<Customer>[] = [
     {
-      title: '客户编码',
+      title: t('field.customer.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '客户名称',
+      title: t('field.customer.name'),
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '简称',
+      title: t('field.customer.shortName'),
       dataIndex: 'shortName',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '联系人',
+      title: t('field.customer.contactPerson'),
       dataIndex: 'contactPerson',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '电话',
+      title: t('field.customer.phone'),
       dataIndex: 'phone',
       width: 150,
       hideInSearch: true,
     },
     {
-      title: '邮箱',
+      title: t('field.customer.email'),
       dataIndex: 'email',
       width: 200,
       hideInSearch: true,
     },
     {
-      title: '分类',
+      title: t('field.customer.category'),
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -211,7 +211,7 @@ const CustomersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('app.master-data.warehouses.action'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -222,7 +222,7 @@ const CustomersPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -230,10 +230,10 @@ const CustomersPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个客户吗？"
+            title={t('app.master-data.customers.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -242,7 +242,7 @@ const CustomersPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -253,54 +253,54 @@ const CustomersPage: React.FC = () => {
   // 详情列定义
   const detailColumns: ProDescriptionsItemType<Customer>[] = [
     {
-      title: '客户编码',
+      title: t('field.customer.code'),
       dataIndex: 'code',
     },
     {
-      title: '客户名称',
+      title: t('field.customer.name'),
       dataIndex: 'name',
     },
     {
-      title: '简称',
+      title: t('field.customer.shortName'),
       dataIndex: 'shortName',
     },
     {
-      title: '联系人',
+      title: t('field.customer.contactPerson'),
       dataIndex: 'contactPerson',
     },
     {
-      title: '电话',
+      title: t('field.customer.phone'),
       dataIndex: 'phone',
     },
     {
-      title: '邮箱',
+      title: t('field.customer.email'),
       dataIndex: 'email',
     },
     {
-      title: '地址',
+      title: t('field.customer.address'),
       dataIndex: 'address',
       span: 2,
     },
     {
-      title: '分类',
+      title: t('field.customer.category'),
       dataIndex: 'category',
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
       render: (_, record) => (
         <Tag color={(record?.isActive ?? (record as any)?.is_active) ? 'success' : 'default'}>
-          {(record?.isActive ?? (record as any)?.is_active) ? '启用' : '禁用'}
+          {(record?.isActive ?? (record as any)?.is_active) ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('app.master-data.warehouses.updateTime'),
       dataIndex: 'updatedAt',
       valueType: 'dateTime',
     },
@@ -338,7 +338,7 @@ const CustomersPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取客户列表失败:', error);
-            messageApi.error(error?.message || '获取客户列表失败');
+            messageApi.error(error?.message || t('app.master-data.customers.getListFailed'));
             return {
               data: [],
               success: false,
@@ -359,7 +359,7 @@ const CustomersPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建客户
+            {t('app.master-data.customers.create')}
           </Button>,
           <Button
             key="batch-delete"
@@ -368,7 +368,7 @@ const CustomersPage: React.FC = () => {
             disabled={selectedRowKeys.length === 0}
             onClick={handleBatchDelete}
           >
-            批量删除
+            {t('common.batchDelete')}
           </Button>,
         ]}
         rowSelection={{
@@ -380,7 +380,7 @@ const CustomersPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<Customer>
-        title="客户详情"
+        title={t('app.master-data.customers.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={customerDetail || undefined}

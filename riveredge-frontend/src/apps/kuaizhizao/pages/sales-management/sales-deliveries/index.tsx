@@ -13,7 +13,9 @@ import { App, Button, Tag, Space, Modal, Card, Table, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 import { getSalesDeliveryLifecycle } from '../../../utils/salesDeliveryLifecycle';
@@ -231,6 +233,12 @@ const SalesDeliveriesPage: React.FC = () => {
           await warehouseApi.salesDelivery.confirm(record.id!.toString());
           messageApi.success('销售出库确认成功');
           actionRef.current?.reload();
+          if (deliveryDetail?.id === record.id) {
+            try {
+              const detail = await warehouseApi.salesDelivery.get(record.id!.toString());
+              setDeliveryDetail(detail as SalesDeliveryDetail);
+            } catch { /* ignore */ }
+          }
         } catch (error: any) {
           messageApi.error(error.message || '销售出库确认失败');
         }
@@ -552,9 +560,36 @@ const SalesDeliveriesPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={deliveryDetail || undefined}
+        extra={
+          deliveryDetail?.status === '待出库' && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(deliveryDetail)}
+            >
+              确认出库
+            </Button>
+          )
+        }
         customContent={
           deliveryDetail ? (
             <div style={{ padding: '16px 0' }}>
+              {/* 生命周期 */}
+              {(() => {
+                const lifecycle = getSalesDeliveryLifecycle(deliveryDetail);
+                const mainStages = lifecycle.mainStages ?? [];
+                if (mainStages.length === 0) return null;
+                return (
+                  <DetailDrawerSection title="生命周期">
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      status={lifecycle.status}
+                      showLabels
+                      nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    />
+                  </DetailDrawerSection>
+                );
+              })()}
               {/* 明细表格 */}
               {deliveryDetail.items && deliveryDetail.items.length > 0 && (
                 <Card title="出库明细" style={{ marginBottom: 16 }}>
@@ -636,6 +671,13 @@ const SalesDeliveriesPage: React.FC = () => {
                     </div>
                   )}
                 </Card>
+              )}
+
+              {/* 操作记录 */}
+              {deliveryDetail?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel documentType="sales_delivery" documentId={deliveryDetail.id} />
+                </DetailDrawerSection>
               )}
             </div>
           ) : null

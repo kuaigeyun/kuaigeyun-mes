@@ -59,9 +59,7 @@ import {
 /** 已审核状态值集合（与后端 document_lifecycle _is_approved 一致，用于按钮显示） */
 const APPROVED_STATUS_VALUES = ['已审核', SalesOrderStatus.AUDITED, ReviewStatus.APPROVED, '审核通过', '通过', '已通过'] as const;
 const isApprovedRecord = (r: SalesOrder) => APPROVED_STATUS_VALUES.some((v) => r.status === v || r.review_status === v);
-import { getDocumentRelations, getSalesOrderChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
-import DocumentRelationDisplay from '../../../../../components/document-relation-display';
-import type { DocumentRelationData } from '../../../../../components/document-relation-display';
+import { getSalesOrderChangeImpact, type ChangeImpactResponse } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
@@ -159,7 +157,6 @@ const SalesOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
   const [changeImpactVisible, setChangeImpactVisible] = useState(false);
   const [changeImpactData, setChangeImpactData] = useState<ChangeImpactResponse | null>(null);
   const [changeImpactLoading, setChangeImpactLoading] = useState(false);
@@ -395,15 +392,6 @@ const SalesOrdersPage: React.FC = () => {
       try {
         const data = await getSalesOrder(id, true, true);  // includeItems=true, includeDuration=true
         setCurrentSalesOrder(data);
-
-        // 获取单据关联关系（使用 sales_order 作为文档类型）
-        try {
-          const relations = await getDocumentRelations('sales_order', id);
-          setDocumentRelations(relations);
-        } catch (error) {
-          console.error('获取单据关联关系失败:', error);
-          setDocumentRelations(null);
-        }
 
         setDrawerVisible(true);
       } catch (error: any) {
@@ -2590,7 +2578,7 @@ const SalesOrdersPage: React.FC = () => {
               </div>
             )}
 
-            {/* 操作记录与上下游 */}
+            {/* 操作记录（含上下游关联） */}
             {currentSalesOrder?.id && (
               <div style={{ marginTop: 24 }}>
                 <DocumentTrackingPanel
@@ -2599,13 +2587,6 @@ const SalesOrdersPage: React.FC = () => {
                   refreshKey={trackingRefreshKey}
                   onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
                 />
-              </div>
-            )}
-
-            {/* 单据关联 */}
-            {documentRelations && (
-              <div style={{ marginTop: 24 }}>
-                <DocumentRelationDisplay relations={documentRelations} />
               </div>
             )}
           </>

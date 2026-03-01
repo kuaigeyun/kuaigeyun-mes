@@ -146,7 +146,7 @@ const ConditionNode: React.FC<NodeProps> = ({ data }) => {
       </div>
       {data?.conditions?.length > 0 && (
          <div style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
-           {data.conditions.length} {t('pages.approval.designer.addConditionNode').replace('增加', '')}
+           {t('pages.approval.designer.conditionCount', { count: data.conditions.length })}
          </div>
       )}
       <Handle type="source" position={isHorizontal ? Position.Right : Position.Bottom} style={{ background: '#faad14' }} />
@@ -538,16 +538,16 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   }), []);
 
   if (loading) {
-    return <div style={{ padding: 16 }}>加载中...</div>;
+    return <div style={{ padding: 16 }}>{t('pages.approval.designer.loading')}</div>;
   }
 
   if (!processData) {
-    return <div style={{ padding: 16 }}>流程数据不存在</div>;
+    return <div style={{ padding: 16 }}>{t('pages.approval.designer.notFound')}</div>;
   }
 
   return (
     <CanvasPageTemplate
-      functionalTitle="审批流设计"
+      functionalTitle={t('pages.approval.designer.functionalTitle')}
       style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
         <Space>
@@ -747,10 +747,10 @@ const ApprovalProcessDesignerPage: React.FC = () => {
                     placeholder={t('pages.approval.designer.field')}
                     width="xs"
                     options={[
-                      { value: 'amount', label: '审批金额' },
-                      { value: 'department', label: '发起人部门' },
-                      { value: 'urgent_level', label: '紧急程度' },
-                      { value: 'custom', label: '自定义路径' },
+                      { value: 'amount', label: t('pages.approval.designer.fieldAmount') },
+                      { value: 'department', label: t('pages.approval.designer.fieldDepartment') },
+                      { value: 'urgent_level', label: t('pages.approval.designer.fieldUrgentLevel') },
+                      { value: 'custom', label: t('pages.approval.designer.fieldCustom') },
                     ]}
                   />
                   <ProFormSelect
@@ -758,11 +758,11 @@ const ApprovalProcessDesignerPage: React.FC = () => {
                     placeholder={t('pages.approval.designer.operator')}
                     width="xs"
                     options={[
-                      { value: '==', label: '等于' },
-                      { value: '!=', label: '不等于' },
-                      { value: '>', label: '大于' },
-                      { value: '<', label: '小于' },
-                      { value: 'contains', label: '包含' },
+                      { value: '==', label: t('pages.approval.designer.opEqual') },
+                      { value: '!=', label: t('pages.approval.designer.opNotEqual') },
+                      { value: '>', label: t('pages.approval.designer.opGreater') },
+                      { value: '<', label: t('pages.approval.designer.opLess') },
+                      { value: 'contains', label: t('pages.approval.designer.opContains') },
                     ]}
                   />
                   <ProFormText

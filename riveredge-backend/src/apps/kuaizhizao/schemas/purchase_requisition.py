@@ -123,6 +123,12 @@ class ConvertToPurchaseOrderRequest(BaseModel):
     supplier_name: str = Field(..., description="供应商名称")
 
 
+class ApproveRequisitionRequest(BaseModel):
+    """审核采购申请请求"""
+    approved: bool = Field(True, description="是否通过")
+    review_remarks: Optional[str] = Field(None, description="审核备注/驳回原因")
+
+
 class UrgentPurchaseRequest(BaseModel):
     """紧急采购请求"""
     urgent_reason: str = Field(..., min_length=1, description="紧急原因（必填）")

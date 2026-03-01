@@ -143,6 +143,7 @@ class DemandComputationResponse(DemandComputationBase):
     created_by: Optional[int]
     updated_by: Optional[int]
     items: Optional[List[DemandComputationItemResponse]] = Field(default_factory=list)
-    
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+
     class Config:
         from_attributes = True

@@ -134,7 +134,8 @@ const FileListPage: React.FC = () => {
   const [filteredTreeData, setFilteredTreeData] = useState<DataNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [selectedTreeKeys, setSelectedTreeKeys] = useState<React.Key[]>([]);
-  const [currentPath, setCurrentPath] = useState<string[]>(['全部文件']);
+  const ROOT_PATH_KEY = 'all';
+  const [currentPath, setCurrentPath] = useState<string[]>([ROOT_PATH_KEY]);
   const [treeSearchValue, setTreeSearchValue] = useState<string>('');
   
   // Modal 相关状态
@@ -322,10 +323,10 @@ const FileListPage: React.FC = () => {
       setSelectedTreeKeys(selectedKeys);
       
       if (key === 'all') {
-        setCurrentPath(['全部文件']);
+        setCurrentPath([ROOT_PATH_KEY]);
         loadFileList();
       } else {
-        setCurrentPath(['全部文件', key]);
+        setCurrentPath([ROOT_PATH_KEY, key]);
         loadFileList(key);
       }
     }
@@ -389,7 +390,7 @@ const FileListPage: React.FC = () => {
       
       await uploadFile(placeholderFile, {
         category: folderName.trim(),
-        description: '文件夹占位文件',
+        description: t('pages.system.files.folderPlaceholderDesc'),
       });
       
       messageApi.success(t('pages.system.files.folderCreateSuccess'));
@@ -399,7 +400,7 @@ const FileListPage: React.FC = () => {
       await loadFileList();
       // 自动选中新创建的文件夹
       setSelectedTreeKeys([folderName.trim()]);
-      setCurrentPath(['全部文件', folderName.trim()]);
+      setCurrentPath([ROOT_PATH_KEY, folderName.trim()]);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.folderCreateFailed'));
     } finally {
@@ -799,7 +800,7 @@ const FileListPage: React.FC = () => {
             center: (
               <Breadcrumb
                 items={currentPath.map((path, index) => {
-                  const displayPath = path === '全部文件' ? t('pages.system.files.allFiles') : path;
+                  const displayPath = path === ROOT_PATH_KEY ? t('pages.system.files.allFiles') : path;
                   return {
                     title: index === currentPath.length - 1 ? (
                       <span style={{ fontWeight: 500 }}>{displayPath}</span>

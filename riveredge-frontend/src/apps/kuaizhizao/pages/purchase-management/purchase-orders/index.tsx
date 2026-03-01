@@ -22,7 +22,6 @@ import CodeField from '../../../../../components/code-field';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import {
   getStatusDisplay,
@@ -59,7 +58,6 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
   // 审批流程相关状态
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
@@ -203,15 +201,6 @@ const PurchaseOrdersPage: React.FC = () => {
     try {
       const detail = await getPurchaseOrder(record.id!);
       setOrderDetail(detail as PurchaseOrderDetail);
-
-      // 获取单据关联关系
-      try {
-        const relations = await getDocumentRelations('purchase_order', record.id!);
-        setDocumentRelations(relations);
-      } catch (error) {
-        console.error('获取单据关联关系失败:', error);
-        setDocumentRelations(null);
-      }
 
       // 获取审批流程状态和记录（采购审批流程增强）
       await loadApprovalData(record.id!);
@@ -698,7 +687,6 @@ const PurchaseOrdersPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
-          setDocumentRelations(null);
           setApprovalStatus(null);
         }}
         dataSource={orderDetail || undefined}
@@ -845,7 +833,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 );
               })()}
 
-              {/* 明细列表 */}
+              {/* 3. 单据明细 */}
               {orderDetail.items && orderDetail.items.length > 0 && (
                 <DetailDrawerSection title="订单明细">
                   <Table
@@ -871,7 +859,18 @@ const PurchaseOrdersPage: React.FC = () => {
                 </DetailDrawerSection>
               )}
 
-              {/* 审批流程 */}
+              {/* 4. 操作记录 */}
+              {orderDetail?.id && (
+                <DetailDrawerSection title="操作历史">
+                  <DocumentTrackingPanel
+                    documentType="purchase_order"
+                    documentId={orderDetail.id}
+                    onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
+                  />
+                </DetailDrawerSection>
+              )}
+
+              {/* 5. 其他功能：审批流程 */}
               {approvalStatus && approvalStatus.has_flow && (
                 <Card
                   title="审批流程"
@@ -945,77 +944,6 @@ const PurchaseOrdersPage: React.FC = () => {
                 </Card>
               )}
 
-              {/* 操作历史 */}
-              {orderDetail?.id && (
-                <DetailDrawerSection title="操作历史">
-                  <DocumentTrackingPanel
-                    documentType="purchase_order"
-                    documentId={orderDetail.id}
-                    onDocumentClick={(type, id) => messageApi.info(`跳转到${type}#${id}`)}
-                  />
-                </DetailDrawerSection>
-              )}
-
-              {/* 单据关联 */}
-              {documentRelations && (
-                <Card title="单据关联">
-                  {documentRelations.upstream_count > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        上游单据 ({documentRelations.upstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>
-                          },
-                        ]}
-                        dataSource={documentRelations.upstream_documents}
-                        pagination={false}
-                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.downstream_count > 0 && (
-                    <div>
-                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                        下游单据 ({documentRelations.downstream_count})
-                      </div>
-                      <Table
-                        size="small"
-                        columns={[
-                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 100,
-                            render: (status: string) => <Tag>{status}</Tag>
-                          },
-                        ]}
-                        dataSource={documentRelations.downstream_documents}
-                        pagination={false}
-                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
-                        bordered
-                      />
-                    </div>
-                  )}
-                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
-                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
-                      暂无关联单据
-                    </div>
-                  )}
-                </Card>
-              )}
             </div>
           )
         }

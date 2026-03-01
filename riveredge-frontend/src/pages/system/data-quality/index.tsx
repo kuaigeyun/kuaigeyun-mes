@@ -141,35 +141,35 @@ const DataQualityPage: React.FC = () => {
    */
   const issueColumns = [
     {
-      title: '行号',
+      title: t('pages.system.dataQuality.columnRowNo'),
       dataIndex: 'row_index',
       key: 'row_index',
       width: 80,
     },
     {
-      title: '字段',
+      title: t('pages.system.dataQuality.columnField'),
       dataIndex: 'field',
       key: 'field',
       width: 120,
     },
     {
-      title: '类型',
+      title: t('pages.system.dataQuality.columnType'),
       dataIndex: 'issue_type',
       key: 'issue_type',
       width: 100,
       render: (type: string) => (
         <Tag color={type === 'error' ? 'red' : 'orange'}>
-          {type === 'error' ? '错误' : '警告'}
+          {type === 'error' ? t('pages.system.dataQuality.typeError') : t('pages.system.dataQuality.typeWarning')}
         </Tag>
       ),
     },
     {
-      title: '问题描述',
+      title: t('pages.system.dataQuality.columnIssueDesc'),
       dataIndex: 'message',
       key: 'message',
     },
     {
-      title: '建议',
+      title: t('pages.system.dataQuality.columnSuggestion'),
       dataIndex: 'suggestion',
       key: 'suggestion',
       render: (text: string) => text || '-',
@@ -181,46 +181,47 @@ const DataQualityPage: React.FC = () => {
    */
   const suggestionColumns = [
     {
-      title: '问题类型',
+      title: t('pages.system.dataQuality.columnIssueType'),
       dataIndex: 'issue_type',
       key: 'issue_type',
       width: 120,
       render: (type: string) => {
-        const typeMap: Record<string, { text: string; color: string }> = {
-          duplicate: { text: '重复', color: 'orange' },
-          anomaly: { text: '异常', color: 'red' },
-          missing: { text: '缺失', color: 'blue' },
-          format: { text: '格式', color: 'purple' },
+        const typeMap: Record<string, string> = {
+          duplicate: 'pages.system.dataQuality.issueDuplicate',
+          anomaly: 'pages.system.dataQuality.issueAnomaly',
+          missing: 'pages.system.dataQuality.issueMissing',
+          format: 'pages.system.dataQuality.issueFormat',
         };
-        const info = typeMap[type] || { text: type, color: 'default' };
-        return <Tag color={info.color}>{info.text}</Tag>;
+        const key = typeMap[type];
+        const colorMap: Record<string, string> = { duplicate: 'orange', anomaly: 'red', missing: 'blue', format: 'purple' };
+        return <Tag color={colorMap[type] || 'default'}>{key ? t(key) : type}</Tag>;
       },
     },
     {
-      title: '描述',
+      title: t('pages.system.dataQuality.columnDesc'),
       dataIndex: 'description',
       key: 'description',
     },
     {
-      title: '影响行数',
+      title: t('pages.system.dataQuality.columnAffectedRows'),
       dataIndex: 'affected_rows',
       key: 'affected_rows',
       width: 120,
-      render: (rows: number[]) => `${rows.length}行`,
+      render: (rows: number[]) => t('pages.system.dataQuality.rowsUnit', { count: rows.length }),
     },
     {
-      title: '建议',
+      title: t('pages.system.dataQuality.columnSuggestion'),
       dataIndex: 'suggestion',
       key: 'suggestion',
     },
     {
-      title: '可自动修复',
+      title: t('pages.system.dataQuality.columnAutoFix'),
       dataIndex: 'auto_fixable',
       key: 'auto_fixable',
       width: 100,
       render: (fixable: boolean) => (
         <Tag color={fixable ? 'green' : 'default'}>
-          {fixable ? '是' : '否'}
+          {fixable ? t('pages.system.dataQuality.yes') : t('pages.system.dataQuality.no')}
         </Tag>
       ),
     },
@@ -228,36 +229,36 @@ const DataQualityPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={2}>数据质量保障</Title>
+      <Title level={2}>{t('pages.system.dataQuality.pageTitle')}</Title>
       <Paragraph>
-        提供数据验证、数据清洗建议、数据质量报告等功能，确保导入数据的质量和准确性。
+        {t('pages.system.dataQuality.pageDesc')}
       </Paragraph>
 
       <Card
-        title="数据导入"
+        title={t('pages.system.dataQuality.importTitle')}
         extra={
           <Space>
-            <Button onClick={() => setImportVisible(true)}>导入数据</Button>
+            <Button onClick={() => setImportVisible(true)}>{t('pages.system.dataQuality.importData')}</Button>
             <Button type="primary" onClick={handleValidate} loading={loading}>
-              执行验证
+              {t('pages.system.dataQuality.runValidate')}
             </Button>
             <Button onClick={handleDetectIssues} loading={loading}>
-              检测问题
+              {t('pages.system.dataQuality.detectIssues')}
             </Button>
             <Button onClick={handleGenerateReport} loading={loading}>
-              生成报告
+              {t('pages.system.dataQuality.generateReport')}
             </Button>
           </Space>
         }
       >
         {importData.length > 0 ? (
           <Alert
-            message={`已导入数据：${importData.length - 1}行（表头除外）`}
+            message={t('pages.system.dataQuality.importedInfo', { count: importData.length - 1 })}
             type="info"
             showIcon
           />
         ) : (
-          <Empty description="请先导入数据" />
+          <Empty description={t('pages.system.dataQuality.emptyImport')} />
         )}
       </Card>
 
@@ -267,32 +268,32 @@ const DataQualityPage: React.FC = () => {
         items={[
           {
             key: 'validate',
-            label: '数据验证',
+            label: t('pages.system.dataQuality.tabValidate'),
             children: validationReport ? (
               <Card>
                 <Space direction="vertical" style={{ width: '100%' }} size="large">
                   <div>
-                    <Text strong>验证结果概览</Text>
+                    <Text strong>{t('pages.system.dataQuality.validateOverview')}</Text>
                     <div style={{ marginTop: 16 }}>
                       <Space size="large">
                         <div>
-                          <Text>总行数：</Text>
+                          <Text>{t('pages.system.dataQuality.totalRows')}：</Text>
                           <Text strong>{validationReport.total_rows}</Text>
                         </div>
                         <div>
-                          <Text>有效行数：</Text>
+                          <Text>{t('pages.system.dataQuality.validRows')}：</Text>
                           <Text strong style={{ color: '#52c41a' }}>
                             {validationReport.valid_rows}
                           </Text>
                         </div>
                         <div>
-                          <Text>错误行数：</Text>
+                          <Text>{t('pages.system.dataQuality.errorRows')}：</Text>
                           <Text strong style={{ color: '#ff4d4f' }}>
                             {validationReport.error_rows}
                           </Text>
                         </div>
                         <div>
-                          <Text>警告行数：</Text>
+                          <Text>{t('pages.system.dataQuality.warningRows')}：</Text>
                           <Text strong style={{ color: '#faad14' }}>
                             {validationReport.warning_rows}
                           </Text>
@@ -308,7 +309,7 @@ const DataQualityPage: React.FC = () => {
                   </div>
                   {validationReport.issues.length > 0 && (
                     <div>
-                      <Text strong>验证问题详情</Text>
+                      <Text strong>{t('pages.system.dataQuality.issueDetail')}</Text>
                       <Table
                         dataSource={validationReport.issues}
                         columns={issueColumns}
@@ -322,13 +323,13 @@ const DataQualityPage: React.FC = () => {
               </Card>
             ) : (
               <Card>
-                <Empty description="请先执行数据验证" />
+                <Empty description={t('pages.system.dataQuality.emptyValidate')} />
               </Card>
             ),
           },
           {
             key: 'cleaning',
-            label: '数据清洗建议',
+            label: t('pages.system.dataQuality.tabCleaning'),
             children: cleaningSuggestions.length > 0 ? (
               <Card>
                 <Table
@@ -339,7 +340,7 @@ const DataQualityPage: React.FC = () => {
                   expandable={{
                     expandedRowRender: (record) => (
                       <div>
-                        <Text strong>影响行号：</Text>
+                        <Text strong>{t('pages.system.dataQuality.affectedRows')}：</Text>
                         <Text>{record.affected_rows.join(', ')}</Text>
                       </div>
                     ),
@@ -348,37 +349,37 @@ const DataQualityPage: React.FC = () => {
               </Card>
             ) : (
               <Card>
-                <Empty description="请先检测数据问题" />
+                <Empty description={t('pages.system.dataQuality.emptyCleaning')} />
               </Card>
             ),
           },
           {
             key: 'report',
-            label: '数据质量报告',
+            label: t('pages.system.dataQuality.tabReport'),
             children: qualityReport ? (
               <Card>
                 <Space direction="vertical" style={{ width: '100%' }} size="large">
                   <div>
-                    <Text strong>质量指标</Text>
+                    <Text strong>{t('pages.system.dataQuality.qualityMetrics')}</Text>
                     <div style={{ marginTop: 16 }}>
                       <Space direction="vertical" style={{ width: '100%' }} size="middle">
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <Text>完整性</Text>
+                            <Text>{t('pages.system.dataQuality.completeness')}</Text>
                             <Text strong>{qualityReport.completeness}%</Text>
                           </div>
                           <Progress percent={qualityReport.completeness} status="active" />
                         </div>
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <Text>准确性</Text>
+                            <Text>{t('pages.system.dataQuality.accuracy')}</Text>
                             <Text strong>{qualityReport.accuracy}%</Text>
                           </div>
                           <Progress percent={qualityReport.accuracy} status="active" />
                         </div>
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <Text>一致性</Text>
+                            <Text>{t('pages.system.dataQuality.consistency')}</Text>
                             <Text strong>{qualityReport.consistency}%</Text>
                           </div>
                           <Progress percent={qualityReport.consistency} status="active" />
@@ -388,7 +389,7 @@ const DataQualityPage: React.FC = () => {
                   </div>
                   {qualityReport.issues.length > 0 && (
                     <div>
-                      <Text strong>问题汇总</Text>
+                      <Text strong>{t('pages.system.dataQuality.issueSummary')}</Text>
                       <Table
                         dataSource={qualityReport.issues}
                         columns={issueColumns}
@@ -400,7 +401,7 @@ const DataQualityPage: React.FC = () => {
                   )}
                   {qualityReport.suggestions.length > 0 && (
                     <div>
-                      <Text strong>清洗建议</Text>
+                      <Text strong>{t('pages.system.dataQuality.cleaningSuggestions')}</Text>
                       <List
                         dataSource={qualityReport.suggestions}
                         renderItem={(item) => (
@@ -424,7 +425,7 @@ const DataQualityPage: React.FC = () => {
               </Card>
             ) : (
               <Card>
-                <Empty description="请先生成数据质量报告" />
+                <Empty description={t('pages.system.dataQuality.emptyReport')} />
               </Card>
             ),
           },
@@ -435,7 +436,7 @@ const DataQualityPage: React.FC = () => {
         visible={importVisible}
         onCancel={() => setImportVisible(false)}
         onConfirm={handleImportConfirm}
-        title="导入数据"
+        title={t('pages.system.dataQuality.importModalTitle')}
         headers={headers}
       />
     </div>

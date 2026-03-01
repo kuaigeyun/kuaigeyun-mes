@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Co
 import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined, BulbOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { costCalculationApi } from '../../../services/cost';
 import dayjs from 'dayjs';
 
@@ -463,6 +463,7 @@ const CostCalculationPage: React.FC = () => {
         title="成本核算记录详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
+        width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={costCalculationDetail}
         columns={detailItems}
       />

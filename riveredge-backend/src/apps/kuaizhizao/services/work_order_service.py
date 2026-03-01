@@ -1578,6 +1578,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             original_work_order.updated_by_name = user_info["name"]
             await original_work_order.save()
 
+            # 建立原工单→拆分工单的 DocumentRelation（支持单据追溯）
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                for split_wo in split_work_orders:
+                    try:
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=original_work_order.id,
+                                source_code=original_work_order.code,
+                                source_name=original_work_order.name,
+                                target_type="work_order",
+                                target_id=split_wo.id,
+                                target_code=split_wo.code,
+                                target_name=split_wo.name,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单拆分",
+                            ),
+                            created_by=created_by,
+                        )
+                    except BusinessLogicError:
+                        pass  # 关联已存在，忽略
+            except Exception as e:
+                logger.warning("建立工单拆分关联失败: %s", e)
+
             logger.info(f"工单 {original_work_order.code} 拆分为 {len(split_work_orders)} 个工单")
 
             return WorkOrderSplitResponse(
@@ -2216,6 +2246,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order.updated_by = created_by
                 work_order.updated_by_name = user_info["name"]
                 await work_order.save()
+
+            # 建立原工单→合并工单 的 DocumentRelation（支持单据追溯）
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                for work_order in work_orders:
+                    try:
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=work_order.id,
+                                source_code=work_order.code,
+                                source_name=work_order.name,
+                                target_type="work_order",
+                                target_id=merged_work_order.id,
+                                target_code=merged_work_order.code,
+                                target_name=merged_work_order.name,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单合并",
+                            ),
+                            created_by=created_by,
+                        )
+                    except Exception as wo_rel_e:
+                        logger.warning("创建工单合并单据关联失败(工单%s): %s", work_order.code, wo_rel_e)
+            except Exception as e:
+                logger.warning("创建工单合并单据关联失败: %s", e)
 
             logger.info(f"成功合并 {len(work_orders)} 个工单（{', '.join(original_codes)}）为新工单 {merged_code}")
 

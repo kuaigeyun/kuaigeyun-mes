@@ -127,6 +127,41 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 updated_by_name=user_info["name"],
             )
 
+            # 建立工单→返工单的 DocumentRelation（支持单据追溯）
+            if rework_order_data.original_work_order_id:
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    original_work_order = await WorkOrder.get_or_none(
+                        tenant_id=tenant_id,
+                        id=rework_order_data.original_work_order_id,
+                        deleted_at__isnull=True,
+                    )
+                    if original_work_order:
+                        rel_svc = DocumentRelationNewService()
+                        await rel_svc.create_relation(
+                            tenant_id=tenant_id,
+                            relation_data=DocumentRelationCreate(
+                                source_type="work_order",
+                                source_id=rework_order_data.original_work_order_id,
+                                source_code=original_work_order.code,
+                                source_name=original_work_order.name,
+                                target_type="rework_order",
+                                target_id=rework_order.id,
+                                target_code=rework_order.code,
+                                target_name=rework_order.product_name,
+                                relation_type="source",
+                                relation_mode="push",
+                                relation_desc="工单创建返工单",
+                            ),
+                            created_by=created_by,
+                        )
+                except BusinessLogicError:
+                    pass  # 关联已存在，忽略
+                except Exception as e:
+                    logger.warning("建立工单→返工单关联失败: %s", e)
+
             return ReworkOrderResponse.model_validate(rework_order)
 
     async def create_rework_order_from_work_order(

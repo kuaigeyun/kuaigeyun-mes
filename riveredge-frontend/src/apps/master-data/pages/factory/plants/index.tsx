@@ -374,16 +374,16 @@ const PlantsPage: React.FC = () => {
           return;
         }
         exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
-        filename = `厂区数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else if (type === 'currentPage' && currentPageData) {
         // 导出当前页数据
         exportData = currentPageData;
-        filename = `厂区数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       } else {
         // 导出全部数据
         const allData = await plantApi.list({ skip: 0, limit: 10000 });
         exportData = allData;
-        filename = `厂区数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+        filename = `${t('app.master-data.plants.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       }
 
       if (exportData.length === 0) {
@@ -392,7 +392,7 @@ const PlantsPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = ['厂区编码', '厂区名称', '地址', '描述', '状态', '创建时间'];
+      const headers = [t('app.master-data.plants.code'), t('app.master-data.plants.name'), t('app.master-data.plants.address'), t('app.master-data.plants.description'), t('app.master-data.plants.status'), t('common.createdAt')];
       const csvRows: string[] = [headers.join(',')];
 
       exportData.forEach((item) => {
@@ -401,7 +401,7 @@ const PlantsPage: React.FC = () => {
           item.name || '',
           item.address || '',
           item.description || '',
-          item.isActive ? '启用' : '禁用',
+          item.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
         ];
         // 处理包含逗号、引号或换行符的字段
@@ -435,7 +435,7 @@ const PlantsPage: React.FC = () => {
    */
   const columns: ProColumns<Plant>[] = [
     {
-      title: '厂区编码',
+      title: t('app.master-data.plants.code'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -443,44 +443,44 @@ const PlantsPage: React.FC = () => {
       copyable: true,
     },
     {
-      title: '厂区名称',
+      title: t('app.master-data.plants.name'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '地址',
+      title: t('app.master-data.plants.address'),
       dataIndex: 'address',
       width: 300,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '描述',
+      title: t('app.master-data.plants.description'),
       dataIndex: 'description',
       width: 250,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '状态',
+      title: t('app.master-data.plants.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_, record) => {
         return (
           <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? '启用' : '禁用'}
+            {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -488,7 +488,7 @@ const PlantsPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -499,7 +499,7 @@ const PlantsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button
             type="link"
@@ -507,14 +507,14 @@ const PlantsPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个厂区吗？"
-            description="删除后无法恢复，请谨慎操作。"
+            title={t('app.master-data.plants.deleteConfirm')}
+            description={t('app.master-data.plants.deleteDescription')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -522,7 +522,7 @@ const PlantsPage: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -534,22 +534,22 @@ const PlantsPage: React.FC = () => {
    * 详情 Drawer 的列定义
    */
   const detailColumns: ProDescriptionsItemProps<Plant>[] = [
-    { title: '厂区编码', dataIndex: 'code' },
-    { title: '厂区名称', dataIndex: 'name' },
-    { title: '地址', dataIndex: 'address', span: 2 },
-    { title: '描述', dataIndex: 'description', span: 2 },
+    { title: t('app.master-data.plants.code'), dataIndex: 'code' },
+    { title: t('app.master-data.plants.name'), dataIndex: 'name' },
+    { title: t('app.master-data.plants.address'), dataIndex: 'address', span: 2 },
+    { title: t('app.master-data.plants.description'), dataIndex: 'description', span: 2 },
     {
-      title: '状态',
+      title: t('app.master-data.plants.status'),
       dataIndex: 'isActive',
       render: (_: React.ReactNode, record: Plant) => (
         <Tag color={record?.isActive ? 'success' : 'default'}>
-          {record?.isActive ? '启用' : '禁用'}
+          {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
       span: 2,
     },
-    { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-    { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (
@@ -583,7 +583,7 @@ const PlantsPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取厂区列表失败:', error);
-              messageApi.error(error?.message || '获取厂区列表失败');
+              messageApi.error(error?.message || t('app.master-data.plants.listFetchFailed'));
               return {
                 data: [],
                 success: false,
@@ -604,15 +604,15 @@ const PlantsPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              新建厂区
+              {t('app.master-data.plants.create')}
             </Button>,
             <Popconfirm
               key="batchDelete"
-              title="确定要批量删除选中的厂区吗？"
-              description={`将删除 ${selectedRowKeys.length} 个厂区，删除后无法恢复，请谨慎操作。`}
+              title={t('app.master-data.plants.batchDeleteTitle')}
+              description={t('app.master-data.plants.batchDeleteDescription', { count: selectedRowKeys.length })}
               onConfirm={handleBatchDelete}
-              okText="确定"
-              cancelText="取消"
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
               disabled={selectedRowKeys.length === 0}
             >
               <Button
@@ -621,7 +621,7 @@ const PlantsPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 disabled={selectedRowKeys.length === 0}
               >
-                批量删除
+                {t('app.master-data.plants.batchDelete')}
               </Button>
             </Popconfirm>,
           ]}
@@ -662,7 +662,7 @@ const PlantsPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate<Plant>
-        title="厂区详情"
+        title={t('app.master-data.plants.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         dataSource={plantDetail || undefined}

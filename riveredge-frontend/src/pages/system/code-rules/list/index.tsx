@@ -418,10 +418,10 @@ const CodeRuleListPage: React.FC = () => {
             // 生成表达式（向后兼容）
             const defaultExpression = CodeRuleComponentService.componentsToExpression(defaultComponents);
             pageRuleFormRef.current?.setFieldsValue({
-              name: `${pageConfig?.pageName || ''}编码规则`,
+              name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
               code: ruleCode, // 使用生成的规则代码
               expression: defaultExpression,
-              description: `自动为${pageConfig?.pageName || ''}生成编码`,
+              description: t('pages.system.codeRules.ruleDescTemplate', { pageName: pageConfig?.pageName || '' }),
               seq_start: 1,
               seq_step: 1,
               seq_reset_rule: isBusinessDocument ? 'daily' : 'never',
@@ -449,10 +449,10 @@ const CodeRuleListPage: React.FC = () => {
     const defaultRuleCode = `auto-${pageCode}`;
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
-      name: `${pageConfig?.pageName || ''}编码规则`,
+      name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
       code: defaultRuleCode,
       expression: defaultExpression,
-      description: `自动为${pageConfig?.pageName || ''}生成编码`,
+      description: t('pages.system.codeRules.ruleDescTemplate', { pageName: pageConfig?.pageName || '' }),
       seq_start: 1,
       seq_step: 1,
       seq_reset_rule: 'never',

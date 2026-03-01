@@ -9,10 +9,13 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } f
 import { App, Button, Tag, Space, Modal, message, Card, theme } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { parseBackendLifecycle } from '../../../utils/backendLifecycle';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -85,7 +88,7 @@ const OutboundPage: React.FC = () => {
       } else if (record.outbound_type === 'sales_delivery') {
         detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
       }
-      setCurrentOrder(detailData);
+      setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : undefined);
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取出库单详情失败');
@@ -108,6 +111,19 @@ const OutboundPage: React.FC = () => {
           }
           messageApi.success('出库确认成功，库存已更新');
           actionRef.current?.reload();
+          if (currentOrder?.id === record.id) {
+            try {
+              let detailData: any;
+              if (record.outbound_type === 'production_picking') {
+                detailData = await warehouseApi.productionPicking.get(record.id!.toString());
+              } else if (record.outbound_type === 'sales_delivery') {
+                detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+              }
+              if (detailData) {
+                setCurrentOrder({ ...detailData, outbound_type: record.outbound_type });
+              }
+            } catch { /* ignore */ }
+          }
         } catch (error) {
           messageApi.error('出库确认失败');
         }
@@ -426,6 +442,17 @@ const OutboundPage: React.FC = () => {
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
+        extra={
+          currentOrder && (currentOrder.status === 'draft' || currentOrder.status === '草稿' || currentOrder.status === '待领料' || currentOrder.status === '待出库') && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(currentOrder)}
+            >
+              确认出库
+            </Button>
+          )
+        }
         customContent={
           currentOrder ? (
             <div style={{ padding: '16px 0' }}>
@@ -463,6 +490,25 @@ const OutboundPage: React.FC = () => {
                 )}
               </Card>
 
+              {/* 生命周期 */}
+              <DetailDrawerSection title="生命周期">
+                {(() => {
+                  const lifecycle = (currentOrder as any).lifecycle?.main_stages?.length
+                    ? parseBackendLifecycle((currentOrder as any).lifecycle)
+                    : getOutboundLifecycle(currentOrder);
+                  const mainStages = lifecycle.mainStages ?? [];
+                  if (mainStages.length === 0) return null;
+                  return (
+                    <UniLifecycleStepper
+                      steps={mainStages}
+                      status={lifecycle.status}
+                      showLabels
+                      nextStepSuggestions={lifecycle.nextStepSuggestions}
+                    />
+                  );
+                })()}
+              </DetailDrawerSection>
+
               {/* 出库单明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
                 <Card title="出库明细">
@@ -480,6 +526,20 @@ const OutboundPage: React.FC = () => {
                     </div>
                   ))}
                 </Card>
+              )}
+
+              {/* 操作记录 */}
+              {currentOrder?.id && (
+                <DetailDrawerSection title="操作记录">
+                  <DocumentTrackingPanel
+                    documentType={
+                      currentOrder.outbound_type === 'production_picking'
+                        ? 'production_picking'
+                        : 'sales_delivery'
+                    }
+                    documentId={currentOrder.id}
+                  />
+                </DetailDrawerSection>
               )}
             </div>
           ) : null
