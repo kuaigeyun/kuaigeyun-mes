@@ -48,6 +48,11 @@ riveredge-backend/backups/
 # ===== 文档（不推送） =====
 docs/
 
+# ===== 本地/部署（不推送） =====
+bin/
+deploy/
+scripts/
+
 # ===== 测试 =====
 .coverage
 htmlcov/
