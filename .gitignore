@@ -9,7 +9,7 @@ venv/
 ENV/
 *.egg-info/
 *.egg
-dist/
+/dist/
 build/
 *.manifest
 
