@@ -179,6 +179,18 @@ async def lifespan(app: FastAPI):
     init_route_manager(app)
     logger.info("✅ 应用路由管理器已初始化")
 
+    # 若数据库无应用记录，自动扫描 riveredge-frontend/src/apps 并注册（解决生产环境应用中心为空）
+    try:
+        from core.models.application import Application
+        from core.services.application.application_service import ApplicationService
+        count = await Application.filter(tenant_id=1, deleted_at__isnull=True).count()
+        if count == 0:
+            logger.info("📋 数据库无应用记录，自动扫描并注册应用...")
+            await ApplicationService.scan_and_register_plugins(tenant_id=1)
+            logger.info("✅ 应用自动注册完成")
+    except Exception as e:
+        logger.warning(f"⚠️ 应用自动扫描失败（可稍后在应用中心手动扫描）: {e}")
+
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
     await ApplicationRegistryService.reload_apps()
     logger.info("✅ 应用注册服务已重新初始化")

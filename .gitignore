@@ -41,6 +41,7 @@ riveredge-backend/backups/
 # ===== IDE =====
 .cursor/
 .vscode/
+nul
 *.swp
 *.swo
 .DS_Store

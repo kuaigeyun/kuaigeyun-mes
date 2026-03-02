@@ -66,6 +66,20 @@ export interface ApplicationUpdate {
 }
 
 /**
+ * 扫描并注册应用
+ *
+ * 从 riveredge-frontend/src/apps 扫描 manifest.json 并注册到数据库。
+ * 用于生产环境首次部署或应用中心为空时。
+ *
+ * @returns 已注册的应用列表
+ */
+export async function scanApplications(): Promise<Application[]> {
+  return apiRequest<Application[]>('/core/applications/scan', {
+    method: 'POST',
+  });
+}
+
+/**
  * 获取应用列表
  * 
  * 自动过滤当前组织的应用。

@@ -40,6 +40,7 @@ import {
   disableApplication,
   updateApplication,
   syncApplicationManifest,
+  scanApplications,
   Application,
 } from '../../../../services/application';
 
@@ -101,7 +102,25 @@ const ApplicationListPage: React.FC = () => {
   // 升版相关状态
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
+  const [scanning, setScanning] = useState(false);
 
+  /**
+   * 处理扫描应用（从 src/apps 发现并注册）
+   */
+  const handleScanApplications = async () => {
+    try {
+      setScanning(true);
+      const apps = await scanApplications();
+      messageApi.success(t('pages.system.applications.scanSuccess', { count: apps?.length ?? 0, defaultValue: `已扫描并注册 ${apps?.length ?? 0} 个应用` }));
+      actionRef.current?.reload();
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      useGlobalStore.getState().incrementApplicationMenuVersion();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.scanFailed', { defaultValue: '扫描应用失败' }));
+    } finally {
+      setScanning(false);
+    }
+  };
 
   /**
    * 处理查看详情
@@ -701,7 +720,17 @@ const ApplicationListPage: React.FC = () => {
             showSizeChanger: true,
             pageSizeOptions: ['12', '24', '48', '96'],
           }}
-          toolBarRender={() => []}
+          toolBarRender={() => [
+            <Button
+              key="scan"
+              type="primary"
+              icon={<AppstoreOutlined />}
+              loading={scanning}
+              onClick={handleScanApplications}
+            >
+              {t('pages.system.applications.scanApplications', { defaultValue: '扫描应用' })}
+            </Button>,
+          ]}
           viewTypes={['card', 'table', 'help']}
           defaultViewType="card"
           cardViewConfig={{
