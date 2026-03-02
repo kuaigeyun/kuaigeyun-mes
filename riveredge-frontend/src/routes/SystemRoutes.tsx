@@ -13,13 +13,16 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import PageSkeleton from '../components/page-skeleton';
+import LoginSkeleton from '../components/login-skeleton';
 import { useGlobalStore } from '../stores/globalStore';
 import { hasAnyPermission } from '../utils/permission';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
-import LoginPage from '../pages/login';
 import NotFoundPage from '../pages/404';
+
+// 登录页懒加载（第一印象页，按需加载以减小主包）
+const LoginPage = React.lazy(() => import('../pages/login'));
 import InfraLoginPage from '../pages/infra/login';
 import LockScreenPage from '../pages/lock-screen';
 import InitWizardPage from '../pages/init/wizard';
@@ -29,6 +32,11 @@ import QRCodeScanPage from '../pages/qrcode/scan';
 // 懒加载包装（默认骨架屏）
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+);
+
+// 登录页专用骨架屏（与登录页布局一致）
+const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<LoginSkeleton />}><LazyComponent /></Suspense>
 );
 
 // 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
@@ -138,7 +146,7 @@ const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 const SystemRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<IndexPage />} />
-    <Route path="/login" element={<LoginPage />} />
+    <Route path="/login" element={withLoginSuspense(LoginPage)} />
     <Route path="/infra/login" element={<InfraLoginPage />} />
     <Route path="/lock-screen" element={<LockScreenPage />} />
     <Route path="/init/wizard" element={<InitWizardPage />} />

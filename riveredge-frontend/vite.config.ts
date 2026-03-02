@@ -172,6 +172,7 @@ export default defineConfig({
           }
           if (id.includes('/components/uni-import')) return 'component-uni-import';
           if (id.includes('/components/uni-query')) return 'component-uni-query';
+          if (id.includes('/pages/login')) return 'page-login';
           if (id.includes('/apps/')) {
             const appMatch = id.match(/\/apps\/([^/]+)/);
             if (appMatch) return `app-${appMatch[1]}`;
