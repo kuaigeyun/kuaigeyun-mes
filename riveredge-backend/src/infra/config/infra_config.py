@@ -5,7 +5,7 @@
 """
 
 from typing import List, Union
-from pydantic import Field, field_validator
+from pydantic import Field, AliasChoices, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -205,14 +205,16 @@ class InfraSettings(BaseSettings):
     USE_TZ: bool = Field(default=False, description="是否启用时区支持（Tortoise ORM）")
     TIMEZONE: str = Field(default="UTC", description="默认时区（Tortoise ORM）")
     
-    # 平台超级管理员配置
+    # 平台超级管理员配置（兼容 PLATFORM_SUPERADMIN_* 与 INFRA_SUPERADMIN_*）
     infra_superadmin_USERNAME: str = Field(
         default="infra_admin",
-        description="平台超级管理员用户名"
+        description="平台超级管理员用户名",
+        validation_alias=AliasChoices("PLATFORM_SUPERADMIN_USERNAME", "INFRA_SUPERADMIN_USERNAME"),
     )
     infra_superadmin_PASSWORD: str = Field(
         default="",
-        description="平台超级管理员密码（必须设置，建议使用强密码）"
+        description="平台超级管理员密码（必须设置，建议使用强密码）",
+        validation_alias=AliasChoices("PLATFORM_SUPERADMIN_PASSWORD", "INFRA_SUPERADMIN_PASSWORD"),
     )
     infra_superadmin_EMAIL: str = Field(
         default="infra_admin@riveredge.cn",

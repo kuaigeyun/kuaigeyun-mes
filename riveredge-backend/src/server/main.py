@@ -7,6 +7,7 @@ RiverEdge App - SaaS平台主服务
 import os
 import sys
 import asyncio
+import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Request, Response
@@ -155,6 +156,24 @@ async def lifespan(app: FastAPI):
     from infra.services.interfaces.service_initializer import InfraServiceInitializer
     await InfraServiceInitializer.initialize_services()
     logger.info("✅ 平台级服务接口层已初始化")
+
+    # 确保平台超级管理员存在（表为空时从 .env 创建）
+    try:
+        from infra.models.infra_superadmin import InfraSuperAdmin
+        from infra.config.infra_config import infra_settings
+        existing = await InfraSuperAdmin.get_or_none()
+        if not existing and infra_settings.infra_superadmin_PASSWORD:
+            admin = await InfraSuperAdmin.create(
+                uuid=str(uuid.uuid4()),
+                username=infra_settings.infra_superadmin_USERNAME,
+                email=infra_settings.infra_superadmin_EMAIL or f"{infra_settings.infra_superadmin_USERNAME}@riveredge.cn",
+                password_hash=InfraSuperAdmin.hash_password(infra_settings.infra_superadmin_PASSWORD),
+                full_name=infra_settings.infra_superadmin_FULL_NAME or "平台超级管理员",
+                is_active=True,
+            )
+            logger.info(f"✅ 已创建平台超级管理员: {admin.username}")
+    except Exception as e:
+        logger.warning(f"确保平台超级管理员时出错: {e}")
 
     # ⚠️ 第一阶段改进：初始化应用路由管理器
     init_route_manager(app)

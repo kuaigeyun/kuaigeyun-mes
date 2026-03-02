@@ -68,15 +68,25 @@ export async function createPlatformSettings(
   return api.post<PlatformSettings>('/infra/platform-settings', data);
 }
 
+/** 默认平台设置（API 失败时降级使用） */
+const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
+  platform_name: 'RiverEdge SaaS Framework',
+  theme_color: '#1890ff',
+};
+
 /**
  * 获取平台设置（公开接口，不需要认证）
  * 用于登录页等公开页面
+ * API 失败时返回默认值，确保登录页可加载
  */
 export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
-  // 使用原生fetch，因为这是公开接口，不需要认证
-  const response = await fetch('/api/v1/infra/platform-settings/public');
-  if (!response.ok) {
-    throw new Error(`获取平台设置失败: ${response.statusText}`);
+  try {
+    const response = await fetch('/api/v1/infra/platform-settings/public');
+    if (!response.ok) {
+      return DEFAULT_PLATFORM_SETTINGS;
+    }
+    return response.json();
+  } catch {
+    return DEFAULT_PLATFORM_SETTINGS;
   }
-  return response.json();
 }
