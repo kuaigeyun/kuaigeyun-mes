@@ -9,6 +9,7 @@
         "dev:monolithic": "vite",
         "dev:saas": "vite",
         "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src && node scripts/move-dist.js",
+        "build:16g": "cross-env NODE_OPTIONS=--max-old-space-size=16384 vite build src && node scripts/move-dist.js",
         "build:monolithic": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src",
         "build:saas": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src",
         "test": "vitest",

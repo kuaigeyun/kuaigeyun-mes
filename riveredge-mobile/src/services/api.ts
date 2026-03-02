@@ -85,7 +85,14 @@ instance.interceptors.response.use(
       displayMsg = `无法连接服务器，请检查：\n1) 后端是否已启动（端口 ${API_PORT}）\n2) 真机：Expo 高级设置中的 IP 会自动用于 API，请确保与后端电脑 IP 一致\n3) 后端需设置 HOST=0.0.0.0 以接受内网连接\n4) 手机与电脑需在同一 WiFi`;
     }
     console.error('API Error:', error);
-    Alert.alert('请求失败', displayMsg);
+    try {
+      Alert.alert('请求失败', displayMsg);
+    } catch {
+      // Web 平台 Alert 可能不可用，静默处理
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        console.warn('API 请求失败:', displayMsg);
+      }
+    }
     return Promise.reject(error);
   }
 );

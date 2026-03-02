@@ -71,50 +71,13 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 
 /**
  * 获取天气信息
- * 使用多个免费天气API，优先使用 wttr.in，备用 Open-Meteo
+ * 经纬度时优先 Open-Meteo（国内可访问），城市名时尝试 wttr.in
  * 
  * @param city 城市名称或经纬度（格式：lat,lon）
  */
 export async function getWeather(city: string): Promise<WeatherData | null> {
   try {
-    // 方法1: 尝试使用 wttr.in（更详细的数据）
-    try {
-      const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
-      const wttrResponse = await fetch(wttrUrl, {
-        headers: {
-          'Accept': 'application/json',
-        },
-        // 设置超时
-        signal: AbortSignal.timeout(5000),
-      });
-      
-      if (wttrResponse.ok) {
-        const data = await wttrResponse.json();
-        
-        if (data.current_condition && data.current_condition.length > 0) {
-          const current = data.current_condition[0];
-          const location = data.nearest_area?.[0] || {};
-          
-          const weatherCode = parseInt(current.weatherCode) || 100;
-          
-          return {
-            city: location.areaName?.[0]?.value || city,
-            temperature: parseInt(current.temp_C) || 0,
-            description: current.lang_zh?.[0]?.value || current.weatherDesc?.[0]?.value || '未知',
-            iconCode: weatherCode.toString(),
-            humidity: parseInt(current.humidity) || 0,
-            windSpeed: parseInt(current.windspeedKmph) || 0,
-            feelsLike: parseInt(current.FeelsLikeC) || 0,
-          };
-        }
-      }
-    } catch (wttrError) {
-      // wttr.in 失败是预期内的（如超时），静默失败并尝试备用方案
-      // console.debug('wttr.in API 请求失败，尝试备用方案:', wttrError);
-    }
-    
-    // 方法2: 备用方案 - 使用 Open-Meteo（免费，无需API Key）
-    // 如果 city 是经纬度格式
+    // 若有经纬度，优先使用 Open-Meteo（国内可访问，wttr.in 在国内常超时）
     if (city.includes(',')) {
       const [lat, lon] = city.split(',').map(Number);
       if (!isNaN(lat) && !isNaN(lon)) {
@@ -129,18 +92,17 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
             const current = data.current;
             
             if (current) {
-              // Open-Meteo 天气代码映射到描述
               const weatherCode = current.weather_code || 0;
               const description = getWeatherDescription(weatherCode);
               
               return {
-                city: city, // Open-Meteo 不返回城市名，使用传入的参数
+                city: city,
                 temperature: Math.round(current.temperature_2m || 0),
                 description: description,
                 iconCode: weatherCode.toString(),
                 humidity: Math.round(current.relative_humidity_2m || 0),
-                windSpeed: Math.round((current.wind_speed_10m || 0) * 3.6), // m/s 转 km/h
-                feelsLike: Math.round(current.temperature_2m || 0), // Open-Meteo 不提供体感温度
+                windSpeed: Math.round((current.wind_speed_10m || 0) * 3.6),
+                feelsLike: Math.round(current.temperature_2m || 0),
               };
             }
           }
@@ -148,6 +110,35 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
           console.warn('Open-Meteo API 请求失败:', meteoError);
         }
       }
+    }
+    
+    // 城市名称：尝试 wttr.in（国内可能超时，失败则返回 null）
+    try {
+      const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
+      const wttrResponse = await fetch(wttrUrl, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(3000),
+      });
+      
+      if (wttrResponse.ok) {
+        const data = await wttrResponse.json();
+        if (data.current_condition?.[0]) {
+          const current = data.current_condition[0];
+          const location = data.nearest_area?.[0] || {};
+          const weatherCode = parseInt(current.weatherCode) || 100;
+          return {
+            city: location.areaName?.[0]?.value || city,
+            temperature: parseInt(current.temp_C) || 0,
+            description: current.lang_zh?.[0]?.value || current.weatherDesc?.[0]?.value || '未知',
+            iconCode: weatherCode.toString(),
+            humidity: parseInt(current.humidity) || 0,
+            windSpeed: parseInt(current.windspeedKmph) || 0,
+            feelsLike: parseInt(current.FeelsLikeC) || 0,
+          };
+        }
+      }
+    } catch {
+      // wttr.in 失败静默跳过
     }
     
     return null;

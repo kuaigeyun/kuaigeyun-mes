@@ -16,7 +16,7 @@ echo "=========================================="
 echo ""
 echo "[1/3] 构建 WEB (riveredge-frontend)..."
 cd "$PROJECT_ROOT/riveredge-frontend"
-npm run build
+npm run build:16g
 echo "WEB 构建完成"
 
 # 2. 构建 H5 (riveredge-mobile)

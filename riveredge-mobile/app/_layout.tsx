@@ -1,8 +1,8 @@
 import { Stack, router } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { Provider } from '@ant-design/react-native';
 import zhCN from '@ant-design/react-native/lib/locale-provider/zh_CN';
 import 'react-native-reanimated'; // Import reanimated
@@ -11,23 +11,31 @@ import { setOn401Callback } from '../src/services/api';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+    const [fontTimeout, setFontTimeout] = useState(false);
+
     useEffect(() => {
         setOn401Callback(() => router.replace('/(auth)/login'));
     }, []);
 
     const [loaded, error] = useFonts({
-        // Load Ant Design fonts locally to ensure web compatibility
         'antoutline': require('../assets/fonts/antoutline.ttf'),
         'antfill': require('../assets/fonts/antfill.ttf'),
     });
 
+    // Web 平台：字体加载超时 3 秒后强制继续，避免 useFonts 卡住导致白屏
     useEffect(() => {
-        if (loaded || error) {
+        if (Platform.OS !== 'web') return;
+        const t = setTimeout(() => setFontTimeout(true), 3000);
+        return () => clearTimeout(t);
+    }, []);
+
+    useEffect(() => {
+        if (loaded || error || fontTimeout) {
             SplashScreen.hideAsync();
         }
-    }, [loaded, error]);
+    }, [loaded, error, fontTimeout]);
 
-    if (!loaded && !error) {
+    if (!loaded && !error && !fontTimeout) {
         return null;
     }
 
