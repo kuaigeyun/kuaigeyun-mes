@@ -6,22 +6,21 @@
 
 from tortoise import fields
 from typing import Optional
-from .base import BaseModel
+from .base import LogBaseModel
 
 
-class OperationLog(BaseModel):
+class OperationLog(LogBaseModel):
     """
     操作日志模型
 
     用于记录系统操作日志，支持自动记录和手动记录。
     支持多组织隔离，每个组织的操作日志相互独立。
 
-    注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
-    注意：操作日志不可修改和删除，因此不需要 updated_at 和 deleted_at 字段。
+    注意：继承自 LogBaseModel，仅包含 uuid、tenant_id、created_at（无 updated_at）。
     """
     id = fields.IntField(pk=True, description="操作日志ID（主键，自增ID，内部使用）")
-    # uuid 字段由 BaseModel 提供
-    # tenant_id 字段由 BaseModel 提供
+    # uuid、created_at 由 LogBaseModel 提供
+    tenant_id = fields.IntField(db_index=True, description="组织 ID")  # 操作日志必填
     
     # 操作用户
     user_id = fields.IntField(description="操作用户ID（外键）")

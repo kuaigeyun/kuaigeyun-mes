@@ -13,6 +13,7 @@ import type { ProxyOptions } from 'vite'
 // src 目录路径（src 目录）
 const srcPath = resolve(__dirname, 'src')
 
+
 export default defineConfig({
   base: '/',
   // ⚠️ 优化：设置根目录为src目录，因为index.html在src目录下

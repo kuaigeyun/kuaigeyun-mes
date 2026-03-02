@@ -5,7 +5,33 @@
 继承自 infra.models.base.BaseModel，确保与平台级模型保持一致。
 """
 
+import uuid as uuid_module
+from tortoise import fields
+from tortoise.models import Model
+
 from infra.models.base import BaseModel as SoilBaseModel
+
+
+def _generate_uuid() -> str:
+    """生成 UUID 字符串"""
+    return str(uuid_module.uuid4())
+
+
+class LogBaseModel(Model):
+    """
+    日志类模型基类（无 updated_at）
+
+    用于登录日志、操作日志等只增不改的模型。
+    数据库表仅有 created_at，无 updated_at。
+    子类可覆盖 tenant_id 为必填（如 OperationLog）。
+    """
+
+    uuid = fields.CharField(max_length=36, description="业务ID", default=_generate_uuid)
+    tenant_id = fields.IntField(null=True, db_index=True, description="组织 ID（登录失败时可为空）")
+    created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
+
+    class Meta:
+        abstract = True
 
 
 class BaseModel(SoilBaseModel):

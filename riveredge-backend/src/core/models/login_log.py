@@ -6,10 +6,10 @@
 
 from tortoise import fields
 from typing import Optional
-from .base import BaseModel
+from .base import LogBaseModel
 
 
-class LoginLog(BaseModel):
+class LoginLog(LogBaseModel):
     """
     登录日志模型
     

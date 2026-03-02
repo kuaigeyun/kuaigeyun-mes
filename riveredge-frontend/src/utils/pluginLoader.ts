@@ -74,30 +74,31 @@ function getPluginSourcePath(pluginCode: string): string {
 }
 
 /**
- * 获取插件构建路径
- * 
- * @param entryPoint - 插件入口点（如 /apps/kuaimes/index.js）
- * @returns 插件构建路径
+ * 插件 APP 静态导入映射（生产环境）
+ *
+ * 使用静态 import 确保 Vite 将插件打包为独立 chunk（app-xxx-[hash].js），
+ * 生产环境通过此映射加载，无需额外构建步骤。
+ */
+const APP_LOADERS: Record<string, () => Promise<unknown>> = {
+  kuaizhizao: () => import('../apps/kuaizhizao/index'),
+  kuaireport: () => import('../apps/kuaireport/index'),
+  'master-data': () => import('../apps/master-data/index'),
+};
+
+/**
+ * 获取插件构建路径（开发环境用）
  */
 function getPluginBuildPath(entryPoint: string): string {
-  // 如果 entryPoint 已经是完整 URL，直接返回
   if (entryPoint.startsWith('http://') || entryPoint.startsWith('https://')) {
     return entryPoint;
   }
-  
-  // 如果是相对路径（如 ../apps/kuaimes/index.tsx），直接返回（开发环境）
   if (entryPoint.startsWith('../') || entryPoint.startsWith('./')) {
     return entryPoint;
   }
-  
-  // 如果是 /apps/xxx/index.js 格式，转换为相对路径
   if (entryPoint.startsWith('/apps/')) {
-    // 在生产环境中，构建产物应该在 /apps/xxx/index.js
-    // 在开发环境中，转换为相对路径
     const pluginCode = entryPoint.replace('/apps/', '').replace('/index.js', '').replace('/index.tsx', '');
     return `../apps/${pluginCode}/index.tsx`;
   }
-  
   return entryPoint;
 }
 
@@ -117,7 +118,7 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
     if (application.entry_point.startsWith('../') || application.entry_point.startsWith('./')) {
       sourcePath = application.entry_point;
     } else {
-      // 如果是绝对路径或其他格式，使用 getPluginBuildPath 转换
+      // 如果是绝对路径或其他格式，使用 getPluginBuildPath 转换（开发环境）
       sourcePath = getPluginBuildPath(application.entry_point);
     }
   } else {
@@ -210,24 +211,28 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
  * @returns 插件路由配置
  */
 async function loadPluginInProduction(application: Application): Promise<PluginRoute[]> {
-  const entryPath = application.entry_point;
+  const pluginCode = application.code;
 
-  if (!entryPath) {
-    throw new Error(`插件 ${application.code} 的 entry_point 未配置`);
+  if (!application.entry_point) {
+    throw new Error(`插件 ${pluginCode} 的 entry_point 未配置`);
   }
 
-  const buildPath = getPluginBuildPath(entryPath);
-
-  // 使用重试机制加载插件
+  // 优先使用静态导入映射（Vite 会打包为 app-xxx chunk）
+  const loader = APP_LOADERS[pluginCode];
   const pluginModule = await withRetry(
     async () => {
-      // 生产环境也使用动态导入，但加载构建后的文件
-      // 构建产物应该是 ES Module 格式
-      const module = await import(
-        /* @vite-ignore */
-        buildPath
+      if (loader) {
+        return (await loader()) as Record<string, unknown>;
+      }
+      // 兼容外部 URL 或未来扩展
+      const entryPath = application.entry_point!;
+      if (entryPath.startsWith('http://') || entryPath.startsWith('https://')) {
+        const mod = await import(/* @vite-ignore */ entryPath);
+        return mod as Record<string, unknown>;
+      }
+      throw new Error(
+        `插件 ${pluginCode} 未在 APP_LOADERS 中注册。生产环境请确保插件在 src/utils/pluginLoader.ts 的 APP_LOADERS 中配置`
       );
-      return module;
     },
     {
       maxRetries: 2,
@@ -244,7 +249,6 @@ async function loadPluginInProduction(application: Application): Promise<PluginR
   );
 
   // 获取插件路由组件
-  const pluginCode = application.code;
   const PluginRoutes = pluginModule.default || pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`];
 
   if (!PluginRoutes) {
@@ -332,8 +336,8 @@ export async function loadPlugin(
     if (errorObj.message.includes('Failed to fetch') || errorObj.message.includes('404')) {
       throw new Error(
         `插件 ${pluginCode} 的前端文件不存在。` +
-        `开发环境请确保插件源码在 riveredge-apps/${pluginCode}/frontend/src/index.tsx，` +
-        `生产环境请确保插件已构建并部署到 ${application.entry_point}`
+          `开发环境请确保插件源码在 src/apps/${pluginCode}/index.tsx，` +
+          `生产环境请确保插件已加入 src/utils/pluginLoader.ts 的 APP_LOADERS 并重新构建`
       );
     }
 
