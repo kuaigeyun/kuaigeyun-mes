@@ -35,7 +35,7 @@ git status
 if git diff --staged --quiet 2>/dev/null; then
   echo "无变更需要提交，跳过 push"
 else
-  git commit -m "chore: build WEB and H5 (16GB memory)" || true
+  git commit -m "chore: build WEB and H5" || true
   git push
   echo "远程推送完成"
 fi

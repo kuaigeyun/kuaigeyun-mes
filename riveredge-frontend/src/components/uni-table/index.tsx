@@ -5,7 +5,7 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, ReactNode, useState, useEffect } from 'react'
+import React, { useRef, ReactNode, useState, useEffect, Suspense, lazy } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ProTable,
@@ -32,9 +32,14 @@ import {
   DownloadOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
-import { UniImport } from '../uni-import'
-import { QuerySearchButton } from '../uni-query'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
+
+// 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
+const LazyUniImport = lazy(() => import('../uni-import'))
+// 懒加载：QuerySearchButton 内含 @dnd-kit、savedSearch 等，首屏不阻塞
+const LazyQuerySearchButton = lazy(() =>
+  import('../uni-query').then(m => ({ default: m.QuerySearchButton }))
+)
 // 内联的 useProTableSearch hook（简化实现）
 const useProTableSearch = () => {
   const searchParamsRef = useRef<Record<string, any> | undefined>(undefined)
@@ -1339,12 +1344,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 />
                 {showAdvancedSearch && (
                   <ErrorBoundary fallback={<span style={{ color: 'red', fontSize: '12px' }}>{t('components.uniTable.searchError')}</span>}>
-                    <QuerySearchButton
-                      columns={processedColumns}
-                      formRef={formRef as React.MutableRefObject<ProFormInstance>}
-                      actionRef={actionRef as React.MutableRefObject<ActionType>}
-                      searchParamsRef={searchParamsRef}
-                    />
+                    <Suspense fallback={<span style={{ opacity: 0.6 }}>…</span>}>
+                      <LazyQuerySearchButton
+                        columns={processedColumns}
+                        formRef={formRef as React.MutableRefObject<ProFormInstance>}
+                        actionRef={actionRef as React.MutableRefObject<ActionType>}
+                        searchParamsRef={searchParamsRef}
+                      />
+                    </Suspense>
                   </ErrorBoundary>
                 )}
                 {afterSearchButtons}
@@ -1804,19 +1811,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         </div>
       </div>
 
-      {/* 导入弹窗（showImportButton 且 onImport 时显示） */}
-      {showImportButton && onImport && (
-        <UniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={(data) => {
-            onImport(data)
-            setImportModalVisible(false)
-            actionRef?.current?.reload?.()
-          }}
-          headers={effectiveImportConfig.headers}
-          exampleRow={effectiveImportConfig.exampleRow}
-        />
+      {/* 导入弹窗：仅当用户点击导入时才加载 UniverJS 相关 chunk，显著减轻首屏体积 */}
+      {showImportButton && onImport && importModalVisible && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={(data) => {
+              onImport(data)
+              setImportModalVisible(false)
+              actionRef?.current?.reload?.()
+            }}
+            headers={effectiveImportConfig.headers}
+            exampleRow={effectiveImportConfig.exampleRow}
+          />
+        </Suspense>
       )}
     </>
   )
