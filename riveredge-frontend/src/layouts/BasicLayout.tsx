@@ -30,6 +30,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined } from '@ant-design/icons';
 import { translateMenuName, translatePathTitle, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation, getAppDisplayName } from '../utils/menuTranslation';
+import { prefetchPlugin } from '../utils/pluginLoader';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -4169,6 +4170,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <div
                 onClick={(e) => {
                   e.stopPropagation();
+                }}
+                onMouseEnter={() => {
+                  if (path.startsWith('/apps/')) {
+                    const appCode = extractAppCodeFromPath(path);
+                    if (appCode) prefetchPlugin(appCode);
+                  }
                 }}
                 style={{ display: 'block', width: '100%' }}
               >

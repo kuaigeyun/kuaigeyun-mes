@@ -111,15 +111,15 @@ const SalesForecastsPage: React.FC = () => {
       try {
         setMaterialsLoading(true);
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(Array.isArray(result) ? result : []);
-      } catch (e: any) {
-        messageApi.error(e?.message || '加载物料列表失败');
+        setMaterials(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
+      } catch {
+        setMaterials([]);
       } finally {
         setMaterialsLoading(false);
       }
     };
     load();
-  }, [messageApi]);
+  }, []);
 
   const handleMaterialSelectForForecastItem = (index: number, materialId: number | undefined) => {
     const items = formRef.current?.getFieldValue('items') ?? [];

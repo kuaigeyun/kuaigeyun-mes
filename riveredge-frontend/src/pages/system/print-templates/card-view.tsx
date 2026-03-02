@@ -24,7 +24,7 @@ import {
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSamplePreviewVariables } from '../../../config/printTemplateSchemas';
 import { isPdfmeTemplate } from '../../../utils/pdfmeTemplateUtils';
 import PdfmePreview from '../../../components/pdfme-doc/preview';
-import { EMPTY_PDFME_TEMPLATE_JSON } from '../../../components/pdfme-doc/constants';
+import { EMPTY_PDFME_TEMPLATE_JSON } from '../../../components/pdfme-doc/constants-json';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';

@@ -2,9 +2,10 @@
  * API 基础配置
  * BASE_URL 优先级：
  * 1. EXPO_PUBLIC_API_BASE_URL（.env）
- * 2. Expo 高级设置中的 IP（hostUri，真机开发时自动同步）
- * 3. Android 模拟器：10.0.2.2
- * 4. 默认：localhost
+ * 2. Web 平台：当前页面 origin（扫码/浏览器访问时与前端同源）
+ * 3. Expo 高级设置中的 IP（hostUri，真机开发时自动同步）
+ * 4. Android 模拟器：10.0.2.2
+ * 5. 默认：localhost
  */
 
 import axios from 'axios';
@@ -25,7 +26,12 @@ function getDefaultBaseUrl(): string {
   const envUrl = typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_API_BASE_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim()) return envUrl.trim();
 
-  // 2. 开发模式下，从 Expo hostUri 获取（与「高级设置」中配置的 IP 一致）
+  // 2. Web 平台（扫码/浏览器访问）：使用当前页面 origin，确保 API 指向同一服务器
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/api/v1`;
+  }
+
+  // 3. 开发模式下，从 Expo hostUri 获取（与「高级设置」中配置的 IP 一致）
   try {
     const hostUri = Constants.expoConfig?.hostUri ?? (Constants as any).manifest?.hostUri;
     if (hostUri && typeof hostUri === 'string') {
@@ -38,7 +44,7 @@ function getDefaultBaseUrl(): string {
     // 忽略
   }
 
-  // 3. Android 模拟器：10.0.2.2 映射宿主机 localhost
+  // 4. Android 模拟器：10.0.2.2 映射宿主机 localhost
   if (Platform.OS === 'android') {
     return `http://10.0.2.2:${API_PORT}/api/v1`;
   }

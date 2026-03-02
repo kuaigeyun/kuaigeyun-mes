@@ -86,6 +86,16 @@ const APP_LOADERS: Record<string, () => Promise<unknown>> = {
 };
 
 /**
+ * 预取插件 chunk（菜单 hover 时调用，缩短首次进入应用页时间）
+ */
+export function prefetchPlugin(appCode: string): void {
+  const loader = APP_LOADERS[appCode];
+  if (loader) {
+    loader().catch(() => {});
+  }
+}
+
+/**
  * 获取插件构建路径（开发环境用）
  */
 function getPluginBuildPath(entryPoint: string): string {

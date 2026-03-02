@@ -258,6 +258,10 @@ app.add_middleware(
     allow_headers=infra_settings.CORS_ALLOW_HEADERS,
 )
 
+# 启用 GZip 压缩（Caddy 透明代理时也会压缩，直连后端时生效）
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # 注册统一异常处理中间件（应该在其他中间件之前注册）
 from core.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
 app.add_middleware(ExceptionHandlerMiddleware)

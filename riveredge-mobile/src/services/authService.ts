@@ -103,6 +103,27 @@ export async function logout(): Promise<void> {
 }
 
 /**
+ * 免注册体验登录（guest）
+ * 对接 /api/v1/auth/guest-login，无需输入账号密码
+ */
+export async function guestLogin(): Promise<LoginResponse> {
+  const res = await apiRequest<LoginResponse>('/auth/guest-login', {
+    method: 'POST',
+  });
+  if (res?.access_token) {
+    await authStorage.setToken(res.access_token);
+    if (res.user) {
+      await authStorage.setStoredUser(JSON.stringify(res.user));
+    }
+    const tenantId = res.default_tenant_id ?? res.user?.tenant_id;
+    if (tenantId != null) {
+      await authStorage.setStoredTenantId(String(tenantId));
+    }
+  }
+  return res;
+}
+
+/**
  * 检查是否已登录（有 token）
  */
 export async function isAuthenticated(): Promise<boolean> {

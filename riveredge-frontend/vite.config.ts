@@ -156,11 +156,12 @@ export default defineConfig({
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // 大体积库优先单独拆分
+            // 大体积库优先单独拆分，避免误入主包
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('@ant-design/pro-flow')) return 'vendor-pro-flow';
             if (id.includes('@svar-ui/react-gantt')) return 'vendor-gantt';
             if (id.includes('@pdfme')) return 'vendor-pdfme';
+            if (id.includes('lodash')) return 'vendor-lodash';
             if (id.includes('@ant-design/pro-components')) return 'vendor-pro-components';
             if (id.includes('@ant-design/charts') || id.includes('@ant-design/plots')) return 'vendor-charts';
             if (id.includes('@ant-design/graphs')) return 'vendor-graphs';
@@ -198,12 +199,12 @@ export default defineConfig({
         },
       },
     },
-    // 构建目标
-    target: 'es2015',
+    // 构建目标（es2020 可减小 polyfill 体积，现代浏览器均支持）
+    target: 'es2020',
     // CSS 代码分割
     cssCodeSplit: true,
-    // 资源内联阈值（小于4KB的资源内联为base64）
-    assetsInlineLimit: 4096,
+    // 资源内联阈值（小于 8KB 的资源内联为 base64，减少请求数）
+    assetsInlineLimit: 8192,
     // 压缩配置
     terserOptions: process.env.NODE_ENV === 'production' ? {
       compress: {
@@ -268,7 +269,7 @@ export default defineConfig({
     // exclude: [], // UniverJS 体积较大，但排除可能导致 bundling 问题，且 '@univerjs' 写法可能无效
     // 优化预构建配置
     esbuildOptions: {
-      target: 'es2015',
+      target: 'es2020',
     },
   },
   // ⚠️ 优化：适当的日志级别

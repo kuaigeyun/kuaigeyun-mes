@@ -15,10 +15,13 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
+
+const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] as const;
 
 /**
  * 延迟显示的 Fallback 组件
@@ -141,102 +144,79 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
 const AppRoutes: React.FC = () => {
   const { t } = useTranslation();
   const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const loadApps = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // 检查用户是否已登录
-      const { getToken, getTenantId } = await import('../utils/auth');
-      const token = getToken();
-      const tenantId = getTenantId();
-
-      // 如果用户未登录或没有组织上下文，不加载应用
-      if (!token || !tenantId) {
-        console.log('⚠️ [AppRoutes] 用户未登录或没有组织上下文，跳过应用加载', { hasToken: !!token, hasTenantId: !!tenantId });
-        setIsAuthenticated(false);
-        setLoading(false);
-        return;
-      }
-
-      setIsAuthenticated(true);
-
-
-      // 获取已安装且启用的应用列表
-      let applications = await getInstalledApplicationList({ is_active: true });
-      // console.log('📦 [AppRoutes] 获取到的应用列表:', applications.length, applications.map(a => ({ code: a.code, name: a.name, entry_point: a.entry_point, route_path: a.route_path })));
-
-      // 如果应用列表为空且尚未扫描过，尝试扫描并注册应用
-      if (applications.length === 0 && !hasScanned) {
-        // console.log('🔄 [AppRoutes] 应用列表为空，尝试扫描并注册应用...');
-        try {
-          const scannedApps = await scanPlugins();
-          // console.log('✅ [AppRoutes] 扫描完成，发现应用:', scannedApps.length, scannedApps.map(a => ({ code: a.code, name: a.name, is_installed: a.is_installed, is_active: a.is_active })));
-          setHasScanned(true);
-          
-          // 重新获取已安装且启用的应用列表
-          applications = await getInstalledApplicationList({ is_active: true });
-          // console.log('📦 [AppRoutes] 重新获取应用列表:', applications.length);
-        } catch (scanError: any) {
-          console.error('❌ [AppRoutes] 扫描应用失败:', scanError);
-          // 扫描失败不影响后续流程，继续使用空列表
-          setHasScanned(true);
-        }
-      }
-
-      // 按需加载：仅根据应用列表创建路由，各应用在首次访问时才加载 chunk
-      const routes: React.ReactNode[] = [];
-      for (const app of applications) {
-        if (!app.entry_point || !app.route_path) {
-          console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`);
-          continue;
-        }
-        const relativePath = app.route_path.startsWith('/apps/')
-          ? app.route_path.replace('/apps/', '')
-          : app.route_path;
-        const LazyApp = createLazyApp(app);
-        routes.push(
-          <Route
-            key={`app-${app.code}-${relativePath}`}
-            path={`${relativePath}/*`}
-            element={
-              <Suspense fallback={<DelayedFallback />}>
-                <AppErrorBoundary appName={app.name}>
-                  <LazyApp />
-                </AppErrorBoundary>
-              </Suspense>
-            }
-          />
-        );
-      }
-      setAppRoutes(routes);
-      setLoading(false);
-
-    } catch (err) {
-      console.error('❌ 应用加载过程出现严重错误:', err);
-      setError(err as Error);
-      setLoading(false);
-    }
-  };
-
-  // 组件挂载时加载应用
+  // 检查用户是否已登录（与 useUnifiedMenuData 并行发起请求）
+  const [token, setToken] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<string | null>(null);
   useEffect(() => {
-    loadApps();
+    import('../utils/auth').then(({ getToken, getTenantId }) => {
+      setToken(getToken());
+      setTenantId(getTenantId());
+    });
   }, []);
 
-  // 加载中状态
-  if (loading) {
+  const isAuthenticated = !!(token && tenantId);
+
+  const { data: applications = [], isLoading: loading, error, refetch } = useQuery({
+    queryKey: INSTALLED_APPS_QUERY_KEY,
+    queryFn: async () => {
+      let apps = await getInstalledApplicationList({ is_active: true });
+      if (apps.length === 0 && !hasScanned) {
+        try {
+          await scanPlugins();
+          setHasScanned(true);
+          apps = await getInstalledApplicationList({ is_active: true });
+        } catch (scanError: any) {
+          console.error('❌ [AppRoutes] 扫描应用失败:', scanError);
+          setHasScanned(true);
+        }
+      }
+      return apps;
+    },
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  // 根据应用列表创建路由
+  useEffect(() => {
+    if (!applications.length) return;
+    const routes: React.ReactNode[] = [];
+    for (const app of applications) {
+      if (!app.entry_point || !app.route_path) {
+        console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`);
+        continue;
+      }
+      const relativePath = app.route_path.startsWith('/apps/')
+        ? app.route_path.replace('/apps/', '')
+        : app.route_path;
+      const LazyApp = createLazyApp(app);
+      routes.push(
+        <Route
+          key={`app-${app.code}-${relativePath}`}
+          path={`${relativePath}/*`}
+          element={
+            <Suspense fallback={<DelayedFallback />}>
+              <AppErrorBoundary appName={app.name}>
+                <LazyApp />
+              </AppErrorBoundary>
+            </Suspense>
+          }
+        />
+      );
+    }
+    setAppRoutes(routes);
+  }, [applications]);
+
+  // 加载中状态（认证检查中或应用列表加载中）
+  if (token === null || (isAuthenticated && loading)) {
     return <LoadingFallback />;
   }
 
   // 加载出错状态
   if (error) {
-    return <AppLoadError error={error} onRetry={loadApps} />;
+    return <AppLoadError error={error as Error} onRetry={() => refetch()} />;
   }
 
   // 正常状态：渲染应用路由

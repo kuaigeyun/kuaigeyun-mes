@@ -72,14 +72,9 @@ const QuotationsPage: React.FC = () => {
         const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
         setCustomerList(Array.isArray(custList) ? custList : []);
         setMaterialList(Array.isArray(matList) ? matList : []);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'load', hypothesisId: 'H5_H6_H7_H8', location: 'quotations/index.tsx:load', message: 'customer/material API result', data: { custIsArray: Array.isArray(custRes), matIsArray: Array.isArray(matRes), custListLen: Array.isArray(custList) ? custList.length : 0, matListLen: Array.isArray(matList) ? matList.length : 0, custResKeys: custRes && typeof custRes === 'object' ? Object.keys(custRes as object) : [], matResKeys: matRes && typeof matRes === 'object' ? Object.keys(matRes as object) : [], firstCustId: Array.isArray(custList) && custList[0] != null ? (custList[0] as any).id ?? (custList[0] as any).customer_id : undefined, firstMatId: Array.isArray(matList) && matList[0] != null ? (matList[0] as any).id ?? (matList[0] as any).material_id : undefined }, timestamp: Date.now() }) }).catch(() => {});
-        // #endregion
-      } catch (e) {
-        console.error('加载客户/物料失败', e);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'load', hypothesisId: 'H5_H7', location: 'quotations/index.tsx:load catch', message: 'customer/material load failed', data: { errMessage: (e as Error)?.message, errName: (e as Error)?.name }, timestamp: Date.now() }) }).catch(() => {});
-        // #endregion
+      } catch {
+        setCustomerList([]);
+        setMaterialList([]);
       }
     };
     load();
@@ -532,7 +527,13 @@ const QuotationsPage: React.FC = () => {
                   { name: 'contactPerson', label: '联系人' },
                 ],
                 onSearch: async (values) => {
-                  const list = await customerApi.list({ limit: 200, skip: 0 });
+                  let list: any[] = [];
+                  try {
+                    const res = await customerApi.list({ limit: 200, skip: 0 });
+                    list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+                  } catch {
+                    return [];
+                  }
                   let filtered = list;
                   if (values.code?.trim()) {
                     const k = values.code.trim().toLowerCase();

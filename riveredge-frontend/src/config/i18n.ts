@@ -11,14 +11,12 @@ import { getTranslations } from '../services/language';
 import { getUserPreference } from '../services/userPreference';
 import { getToken } from '../utils/auth';
 
-// 默认语言包（本地静态文件，作为后备）
+// 默认语言包（zh-CN 同步加载，en-US 懒加载以减小主包体积）
 import zhCN from '../locales/zh-CN';
-import enUS from '../locales/en-US';
 
-/** 本地 locale 映射 */
+/** 本地 locale 映射（en-US 在首次切换时动态加载） */
 const LOCALE_BUNDLES: Record<string, Record<string, string>> = {
   'zh-CN': zhCN,
-  'en-US': enUS,
 };
 
 /**
@@ -65,13 +63,10 @@ i18n
     keySeparator: false,
     nsSeparator: false,
     
-    // 资源（本地静态文件作为后备）
+    // 资源（仅默认语言同步加载，en-US 在首次切换时懒加载）
     resources: {
       'zh-CN': {
         translation: zhCN,
-      },
-      'en-US': {
-        translation: enUS,
       },
     },
     
@@ -91,6 +86,22 @@ i18n
       },
     },
   });
+
+/** 确保语言包已加载（en-US 懒加载） */
+async function ensureLanguageLoaded(languageCode: string): Promise<void> {
+  if (languageCode === 'en-US' && !i18n.hasResourceBundle('en-US', 'translation')) {
+    const { default: enUS } = await import('../locales/en-US');
+    LOCALE_BUNDLES['en-US'] = enUS;
+    i18n.addResourceBundle('en-US', 'translation', enUS, true, true);
+  }
+}
+
+// 包装 changeLanguage，在切换前确保目标语言已加载
+const originalChangeLanguage = i18n.changeLanguage.bind(i18n);
+i18n.changeLanguage = async (language: string) => {
+  await ensureLanguageLoaded(language);
+  return originalChangeLanguage(language);
+};
 
 /**
  * 加载用户选择的语言
@@ -144,6 +155,7 @@ export async function loadUserLanguage(): Promise<void> {
  */
 export async function refreshTranslations(): Promise<void> {
   const currentLanguage = i18n.language;
+  await ensureLanguageLoaded(currentLanguage);
   try {
     const response = await getTranslations(currentLanguage);
     if (response.translations) {

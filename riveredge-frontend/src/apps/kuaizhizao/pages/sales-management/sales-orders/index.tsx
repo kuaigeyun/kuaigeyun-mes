@@ -190,45 +190,44 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsLoading, setPaymentTermsLoading] = useState(false);
 
   /**
-   * 加载物料列表
+   * 加载物料列表（无基础资料时使用空数组，不阻塞页面）
    */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
         setMaterialsLoading(true);
         const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(result);
-      } catch (error: any) {
-        console.error('加载物料列表失败:', error);
-        messageApi.error(t('app.kuaizhizao.salesOrder.loadMaterialsFailed'));
+        setMaterials(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
+      } catch {
+        setMaterials([]);
       } finally {
         setMaterialsLoading(false);
       }
     };
     loadMaterials();
-  }, [messageApi]);
+  }, []);
 
   /**
-   * 加载客户列表（技术数据管理 - 供应链 - 客户）
+   * 加载客户列表（无基础资料时使用空数组，不阻塞页面）
    */
   React.useEffect(() => {
     const loadCustomers = async () => {
       try {
         setCustomersLoading(true);
         const result = await customerApi.list({ limit: 1000, isActive: true });
-        setCustomers(result);
-      } catch (error: any) {
-        console.error('加载客户列表失败:', error);
-        messageApi.error(t('app.kuaizhizao.salesOrder.loadCustomersFailed'));
+        setCustomers(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
+      } catch {
+        setCustomers([]);
       } finally {
         setCustomersLoading(false);
       }
     };
     loadCustomers();
-  }, [messageApi]);
+  }, []);
 
   /**
    * 加载用户列表（系统管理-用户管理-帐户管理 /core/users）
+   * 无用户数据时使用空数组，不阻塞页面
    */
   React.useEffect(() => {
     const loadUsers = async () => {
@@ -236,15 +235,14 @@ const SalesOrdersPage: React.FC = () => {
         setUsersLoading(true);
         const result = await getUserList({ page: 1, page_size: 100, is_active: true });
         setUsers(result.items || []);
-      } catch (error: any) {
-        console.error('加载用户列表失败:', error);
-        messageApi.error(t('app.kuaizhizao.salesOrder.loadUsersFailed'));
+      } catch {
+        setUsers([]);
       } finally {
         setUsersLoading(false);
       }
     };
     loadUsers();
-  }, [messageApi]);
+  }, []);
 
   /**
    * 加载发货方式、付款条件数据字典
@@ -1749,7 +1747,13 @@ const SalesOrdersPage: React.FC = () => {
                       { name: 'contactPerson', label: '联系人' },
                     ],
                     onSearch: async (values) => {
-                      const list = await customerApi.list({ limit: 200, skip: 0 });
+                      let list: Customer[] = [];
+                      try {
+                        const res = await customerApi.list({ limit: 200, skip: 0 });
+                        list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+                      } catch {
+                        return [];
+                      }
                       let filtered = list;
                       if (values.code?.trim()) {
                         const k = values.code.trim().toLowerCase();

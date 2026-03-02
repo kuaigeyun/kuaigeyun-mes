@@ -84,11 +84,13 @@ const SampleTrialsPage: React.FC = () => {
           materialApi.list({ limit: 2000, isActive: true }),
           warehouseApi.list({ limit: 1000, isActive: true }),
         ]);
-        setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
-        setWarehouseList(Array.isArray(wh) ? wh : wh?.items || []);
-      } catch (e) {
-        console.error('加载客户/物料/仓库失败', e);
+        setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.items ?? []);
+        setMaterialList(Array.isArray(mat) ? mat : (mat as any)?.items ?? []);
+        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items ?? []);
+      } catch {
+        setCustomerList([]);
+        setMaterialList([]);
+        setWarehouseList([]);
       }
     };
     load();

@@ -50,11 +50,11 @@ export const MobileQRCode: React.FC = () => {
     const mobileUrl = getMobileUrl();
 
     const content = (
-        <div style={{ textAlign: 'center', padding: '12px 16px', width: 232 }}>
+        <div style={{ textAlign: 'left', padding: '12px 16px', width: 232 }}>
             <div style={{ marginBottom: 12, background: 'white', padding: 8, borderRadius: 4, border: `1px solid ${token.colorBorder}` }}>
                 <QRCodeSVG value={mobileUrl} size={180} />
             </div>
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Space direction="vertical" size={8} style={{ width: '100%', alignItems: 'flex-start' }}>
                 <Text strong>扫码体验移动端</Text>
 
                 <Collapse
@@ -64,7 +64,7 @@ export const MobileQRCode: React.FC = () => {
                         {
                             key: '1',
                             showArrow: false,
-                            label: <div style={{ fontSize: 12, color: '#999', textAlign: 'center', width: '100%' }}>高级设置</div>,
+                            label: <div style={{ fontSize: 12, color: '#999', textAlign: 'left', width: '100%' }}>高级设置</div>,
                             children: (
                                 <div style={{ marginTop: -8 }}>
                                     <Input
@@ -85,7 +85,7 @@ export const MobileQRCode: React.FC = () => {
                     ]}
                 />
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', width: '100%' }}>
                     <Button
                         type="primary"
                         size="small"
