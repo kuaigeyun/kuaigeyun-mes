@@ -110,7 +110,7 @@
 
 | 登录页面 | 工作台 |
 |:---:|:---:|
-| ![登录页面](docs/screenshots/1.%20登录页面.png) | ![工作台](docs/screenshots/2.%20工作台.png) |
+| ![登录页面](docs/screenshots/system/1.%20登录页面.png) | ![工作台](docs/screenshots/system/2.%20工作台.png) |
 
 **设计亮点**：简洁登录、工作台数据概览，支持多租户与主题切换。
 
@@ -120,11 +120,11 @@
 
 | 主题配置 | 插件式应用 | 业务蓝图配置 |
 |:---:|:---:|:---:|
-| ![主题配置](docs/screenshots/3.%20主题配置.png) | ![插件式应用](docs/screenshots/4.%20插件式应用.png) | ![业务蓝图配置](docs/screenshots/5.%20业务蓝图配置.png) |
+| ![主题配置](docs/screenshots/system/3.%20主题配置.png) | ![插件式应用](docs/screenshots/system/4.%20插件式应用.png) | ![业务蓝图配置](docs/screenshots/system/5.%20业务蓝图配置.png) |
 
 | 自定义字段设置 | 外部数据连接 | 外部应用连接 |
 |:---:|:---:|:---:|
-| ![自定义字段](docs/screenshots/6.%20自定义字段设置.png) | ![外部数据连接](docs/screenshots/7.%20外部数据连接.png) | ![外部应用连接](docs/screenshots/8.%20外部应用连接.png) |
+| ![自定义字段](docs/screenshots/system/6.%20自定义字段设置.png) | ![外部数据连接](docs/screenshots/system/7.%20外部数据连接.png) | ![外部应用连接](docs/screenshots/system/8.%20外部应用连接.png) |
 
 **设计亮点**：插件化架构、业务蓝图可视化配置、自定义字段扩展、外部系统与数据源连接，满足企业个性化与集成需求。
 
@@ -134,7 +134,7 @@
 
 | 审批流设计 | 定时消息 |
 |:---:|:---:|
-| ![审批流设计](docs/screenshots/9.%20审批流设计.png) | ![定时消息](docs/screenshots/10.%20定时消息.png) |
+| ![审批流设计](docs/screenshots/system/9.%20审批流设计.png) | ![定时消息](docs/screenshots/system/10.%20定时消息.png) |
 
 **设计亮点**：图形化审批流编排、定时消息推送，流程可配置、消息可追溯。
 
@@ -144,7 +144,7 @@
 
 | 打印模板设计 | BI 大屏设计 |
 |:---:|:---:|
-| ![打印模板设计](docs/screenshots/11.%20打印模板设计.png) | ![BI大屏设计](docs/screenshots/12.%20BI大屏设计.png) |
+| ![打印模板设计](docs/screenshots/system/11.%20打印模板设计.png) | ![BI大屏设计](docs/screenshots/system/12.%20BI大屏设计.png) |
 
 **设计亮点**：打印模板自由设计、BI 大屏可视化，支持报表与看板定制。
 
@@ -154,11 +154,11 @@
 
 | 智能建议 | 图形化 BOM 设计 | 工单便捷操作 |
 |:---:|:---:|:---:|
-| ![智能建议](docs/screenshots/13.%20智能建议.png) | ![图形化BOM设计](docs/screenshots/14.%20图形化BOM设计.png) | ![工单便捷操作](docs/screenshots/15.%20工单便捷操作.png) |
+| ![智能建议](docs/screenshots/system/13.%20智能建议.png) | ![图形化BOM设计](docs/screenshots/system/14.%20图形化BOM设计.png) | ![工单便捷操作](docs/screenshots/system/15.%20工单便捷操作.png) |
 
 | 触屏终端界面 | 全流程跟踪 | 甘特图排产 |
 |:---:|:---:|:---:|
-| ![触屏终端](docs/screenshots/16.%20触屏终端界面.png) | ![全流程跟踪](docs/screenshots/19.%20全流程跟踪.png) | ![甘特图排产](docs/screenshots/21.%20甘特图排产.png) |
+| ![触屏终端](docs/screenshots/system/16.%20触屏终端界面.png) | ![全流程跟踪](docs/screenshots/system/19.%20全流程跟踪.png) | ![甘特图排产](docs/screenshots/system/21.%20甘特图排产.png) |
 
 **设计亮点**：智能建议辅助决策、图形化 BOM 编辑、工单快捷操作、工位机触屏大按钮、甘特图排产、需求→工单→入库全链路追溯。
 
@@ -168,7 +168,7 @@
 
 | 手机端集成 | 锁屏界面 |
 |:---:|:---:|
-| ![手机端集成](docs/screenshots/17.%20手机端集成.png) | ![锁屏界面](docs/screenshots/18.%20锁屏界面.png) |
+| ![手机端集成](docs/screenshots/system/17.%20手机端集成.png) | ![锁屏界面](docs/screenshots/system/18.%20锁屏界面.png) |
 
 **设计亮点**：移动端适配、工位机锁屏保护，支持现场与远程协同。
 
@@ -178,7 +178,7 @@
 
 | 高级搜索面板 | 嵌入式 Excel 在线导入 | 上线检查助手 |
 |:---:|:---:|:---:|
-| ![高级搜索](docs/screenshots/20.%20高级搜索面板.png) | ![Excel导入](docs/screenshots/22.%20嵌入式EXCEL在线导入.png) | ![上线检查](docs/screenshots/23.%20上线检查助手.png) |
+| ![高级搜索](docs/screenshots/system/20.%20高级搜索面板.png) | ![Excel导入](docs/screenshots/system/22.%20嵌入式EXCEL在线导入.png) | ![上线检查](docs/screenshots/system/23.%20上线检查助手.png) |
 
 **设计亮点**：高级搜索多条件筛选、Univer 嵌入式 Excel 在线导入导出、上线检查助手引导配置，降低数据录入与上线门槛。
 
