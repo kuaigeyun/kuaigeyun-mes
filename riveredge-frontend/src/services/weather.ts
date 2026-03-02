@@ -45,18 +45,18 @@ export interface LocationData {
 
 /**
  * 获取IP定位信息
- * 使用免费的IP定位API
+ * 通过后端代理调用 ip-api.com，避免 HTTPS 页面的 Mixed Content 问题
  */
 export async function getLocationByIP(): Promise<LocationData | null> {
   try {
-    // 使用 ip-api.com 免费API（无需API Key，限制：45次/分钟）
-    const response = await fetch('http://ip-api.com/json/?lang=zh-CN&fields=status,country,regionName,city,lat,lon');
-    const data = await response.json();
-    
-    if (data.status === 'success') {
+    const { apiRequest } = await import('./api');
+    const data = await apiRequest<{ city?: string; region?: string; country?: string; lat?: number; lon?: number }>(
+      '/core/ip-location'
+    );
+    if (data && (data.city || data.region || data.country)) {
       return {
         city: data.city || '',
-        region: data.regionName || '',
+        region: data.region || '',
         country: data.country || '',
         lat: data.lat,
         lon: data.lon,

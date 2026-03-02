@@ -491,21 +491,20 @@ async def sync_application_manifest(
         dict: 同步结果
     """
     try:
-        # 构建manifest.json文件路径
-        # 从后端API文件位置向上查找前端应用目录
-        current_dir = Path(__file__).parent  # applications/
-        backend_src = current_dir.parent.parent.parent  # src/
-        backend_root = backend_src.parent  # riveredge-backend/
-        project_root = backend_root.parent  # 项目根目录
-        manifest_path = project_root / "riveredge-frontend" / "src" / "apps" / app_code / "manifest.json"
-
-        logger.info(f"Manifest文件路径: {manifest_path}")
-
-        if not manifest_path.exists():
+        # 构建manifest.json文件路径（后端 apps 为来源，支持 code 与目录名不一致如 master-data/master_data）
+        plugins_dir = ApplicationService._get_plugins_directory()
+        for dir_name in (app_code, app_code.replace("-", "_")):
+            candidate = plugins_dir / dir_name / "manifest.json"
+            if candidate.exists():
+                manifest_path = candidate
+                break
+        else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"manifest.json文件不存在: {manifest_path}"
+                detail=f"manifest.json文件不存在: {app_code}"
             )
+
+        logger.info(f"Manifest文件路径: {manifest_path}")
 
         # 读取manifest.json
         with open(manifest_path, 'r', encoding='utf-8') as f:
@@ -554,7 +553,7 @@ async def sync_application_manifest(
             "data": {
                 "app_code": app_code,
                 "version": version,
-                "menu_count": len(menu_config.get('children', [])),
+                "menu_count": len((menu_config or {}).get('children', [])),
                 "updated_at": updated_app.get('updated_at')
             }
         }

@@ -68,7 +68,7 @@ export interface ApplicationUpdate {
 /**
  * 扫描并注册应用
  *
- * 从 riveredge-frontend/src/apps 扫描 manifest.json 并注册到数据库。
+ * 从 riveredge-backend/src/apps 扫描 manifest.json 并注册到数据库。
  * 用于生产环境首次部署或应用中心为空时。
  *
  * @returns 已注册的应用列表
@@ -239,7 +239,7 @@ export async function scanPlugins(): Promise<Application[]> {
 /**
  * 同步应用清单配置
  *
- * 从前端应用的manifest.json文件同步菜单配置到数据库。
+ * 从后端应用的 manifest.json 文件同步菜单配置到数据库。
  * 解决应用菜单更新后需要重新安装的问题。
  *
  * @param appCode - 应用代码

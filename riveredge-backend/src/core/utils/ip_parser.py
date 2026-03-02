@@ -184,6 +184,41 @@ async def get_public_ip() -> Optional[str]:
         return None
 
 
+async def get_ip_location_detail(ip: str, timeout: float = 2.0) -> Optional[Dict[str, Any]]:
+    """
+    获取IP地址的详细地理位置信息（含经纬度，供前端天气组件使用）
+    
+    使用 ip-api.com 免费API，服务端调用无 Mixed Content 问题。
+    
+    Args:
+        ip: IP地址字符串
+        timeout: 请求超时时间（秒）
+        
+    Returns:
+        Optional[Dict]: {"city","region","country","lat","lon"} 或 None
+    """
+    if not ip or is_private_ip(ip):
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                f"http://ip-api.com/json/{ip}?lang=zh-CN&fields=status,country,regionName,city,lat,lon",
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    return {
+                        "city": data.get("city", ""),
+                        "region": data.get("regionName", ""),
+                        "country": data.get("country", ""),
+                        "lat": data.get("lat"),
+                        "lon": data.get("lon"),
+                    }
+    except Exception:
+        pass
+    return None
+
+
 async def get_ip_location(ip: str, timeout: float = 2.0) -> Optional[str]:
     """
     获取IP地址的地理位置信息

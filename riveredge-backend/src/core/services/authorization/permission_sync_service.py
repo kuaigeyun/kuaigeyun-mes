@@ -329,10 +329,8 @@ class PermissionSyncService:
 
     @staticmethod
     def _get_apps_dir() -> Path:
-        # riveredge-backend/src/core/services/authorization -> riveredge-backend -> project root
-        backend_root = Path(__file__).resolve().parents[4]
-        project_root = backend_root.parent
-        return project_root / "riveredge-frontend" / "src" / "apps"
+        from core.services.application.application_service import ApplicationService
+        return ApplicationService._get_plugins_directory()
 
     @staticmethod
     def _split_code(code: str) -> tuple[str, str]:

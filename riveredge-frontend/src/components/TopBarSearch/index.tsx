@@ -92,7 +92,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
         setOpen(!!value.trim());
     };
 
-    // Styles based on the existing BasicLayout input styles
+    // Styles based on the existing BasicLayout input styles（与顶栏上线助手等 32px 高度对齐）
     const inputStyle: React.CSSProperties = {
         width: 280,
         height: 32,

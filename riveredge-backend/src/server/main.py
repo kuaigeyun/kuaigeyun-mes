@@ -70,6 +70,7 @@ from core.api.invitation_codes.invitation_codes import router as invitation_code
 from core.api.languages.languages import router as languages_router
 from core.api.applications.applications import router as applications_router
 from core.api.menus.menus import router as menus_router
+from core.api.ip_location import router as ip_location_router
 from core.api.integration_configs.integration_configs import router as integration_configs_router
 from core.api.files.files import router as files_router
 from core.api.files.public import router as files_public_router
@@ -179,15 +180,24 @@ async def lifespan(app: FastAPI):
     init_route_manager(app)
     logger.info("✅ 应用路由管理器已初始化")
 
-    # 若数据库无应用记录，自动扫描 riveredge-frontend/src/apps 并注册（解决生产环境应用中心为空）
+    # 若数据库无应用记录，自动扫描 riveredge-backend/src/apps 并注册（manifest 以后端为单一来源）
     try:
         from core.models.application import Application
         from core.services.application.application_service import ApplicationService
-        count = await Application.filter(tenant_id=1, deleted_at__isnull=True).count()
-        if count == 0:
+        from infra.models.tenant import Tenant
+        total_count = await Application.filter(deleted_at__isnull=True).count()
+        if total_count == 0:
             logger.info("📋 数据库无应用记录，自动扫描并注册应用...")
-            await ApplicationService.scan_and_register_plugins(tenant_id=1)
-            logger.info("✅ 应用自动注册完成")
+            plugins_dir = ApplicationService._get_plugins_directory()
+            if not plugins_dir.exists():
+                logger.warning(f"⚠️ 应用 manifest 目录不存在: {plugins_dir}，请设置 APPS_MANIFEST_DIR")
+            else:
+                # 为所有租户扫描注册（解决非 tenant_id=1 的组织应用中心为空）
+                tenants = await Tenant.all()
+                tenant_ids = [t.id for t in tenants] if tenants else [1]
+                for tid in tenant_ids:
+                    await ApplicationService.scan_and_register_plugins(tenant_id=tid)
+                logger.info(f"✅ 应用自动注册完成，已为 {len(tenant_ids)} 个组织注册")
     except Exception as e:
         logger.warning(f"⚠️ 应用自动扫描失败（可稍后在应用中心手动扫描）: {e}")
 
@@ -654,6 +664,7 @@ app.include_router(invitation_codes_router, prefix="/api/v1/core")
 app.include_router(languages_router, prefix="/api/v1/core")
 app.include_router(applications_router, prefix="/api/v1/core")
 app.include_router(menus_router, prefix="/api/v1/core")
+app.include_router(ip_location_router, prefix="/api/v1/core")
 app.include_router(integration_configs_router, prefix="/api/v1/core")
 app.include_router(files_router, prefix="/api/v1/core")
 app.include_router(apis_router, prefix="/api/v1/core")

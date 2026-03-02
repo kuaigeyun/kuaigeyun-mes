@@ -2872,8 +2872,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 上线助手按钮与搜索框等垂直对齐 */
         .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper),
-        .ant-pro-layout .ant-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper) {
+        .ant-pro-layout .ant-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper),
+        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.header-search-wrapper),
+        .ant-pro-layout .ant-layout-header .ant-space-item:has(.header-search-wrapper) {
           display: flex !important;
+          align-items: center !important;
+        }
+        /* 搜索框与顶栏其他元素垂直居中，修正 Input 内部 baseline 导致的视觉偏低 */
+        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper,
+        .ant-pro-layout .ant-layout-header .header-search-wrapper {
+          display: inline-flex !important;
+          align-items: center !important;
+          align-self: center !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper .ant-input-affix-wrapper,
+        .ant-pro-layout .ant-layout-header .header-search-wrapper .ant-input-affix-wrapper {
+          display: inline-flex !important;
           align-items: center !important;
         }
         /* 统一按钮样式 - 保留圆形背景，浅色背景时图标颜色统一为黑色 */
@@ -3645,15 +3659,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </span>
           );
 
-          // 搜索框（始终展开）
+          // 搜索框（始终展开，与上线助手垂直对齐）
           actions.push(
-            <TopBarSearch
-              key="search"
-              menuData={filteredMenuData}
-              isLightModeLightBg={isLightModeLightBg}
-              token={token}
-              placeholder={t('common.searchPlaceholder')}
-            />
+            <span key="search" className="header-search-wrapper" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <TopBarSearch
+                menuData={filteredMenuData}
+                isLightModeLightBg={isLightModeLightBg}
+                token={token}
+                placeholder={t('common.searchPlaceholder')}
+              />
+            </span>
           );
 
           // 消息提醒（带数量徽标）

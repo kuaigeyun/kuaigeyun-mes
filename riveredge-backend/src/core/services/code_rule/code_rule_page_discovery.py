@@ -25,17 +25,12 @@ class CodeRulePageDiscoveryService:
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
-        获取插件目录路径（统一使用前端 manifest 为单一来源）
+        获取插件目录路径（统一使用前端 manifest 为单一来源，支持 APPS_MANIFEST_DIR）
         
         Returns:
             Path: 插件目录路径（riveredge-frontend/src/apps）
         """
-        current_file = Path(__file__).resolve()
-        # riveredge-backend/src/core/services/code_rule/ -> ... -> riveredge-backend/
-        backend_root = current_file.parent.parent.parent.parent.parent
-        project_root = backend_root.parent
-        plugins_dir = project_root / "riveredge-frontend" / "src" / "apps"
-        return plugins_dir
+        return ApplicationService._get_plugins_directory()
     
     @staticmethod
     def _scan_app_manifests() -> List[Dict[str, Any]]:

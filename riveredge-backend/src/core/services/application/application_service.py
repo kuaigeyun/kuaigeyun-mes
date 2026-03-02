@@ -6,6 +6,7 @@
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
@@ -644,17 +645,18 @@ class ApplicationService:
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
-        获取插件目录路径（统一使用前端 manifest 为单一来源）
+        获取应用 manifest 目录（后端为单一来源，生产环境无需部署前端 src）
         
-        Returns:
-            Path: 插件目录路径（riveredge-frontend/src/apps）
+        优先使用环境变量 APPS_MANIFEST_DIR；否则扫描 riveredge-backend/src/apps
         """
+        env_dir = os.getenv("APPS_MANIFEST_DIR")
+        if env_dir and os.path.isdir(env_dir):
+            return Path(env_dir)
         current_file = Path(__file__).resolve()
         # riveredge-backend/src/core/services/application/ -> ... -> riveredge-backend/
         backend_root = current_file.parent.parent.parent.parent.parent  # riveredge-backend/
-        project_root = backend_root.parent  # 项目根目录
-        # 菜单系统来源简化：仅使用前端 manifest 目录，与 sync-manifest API 一致
-        plugins_dir = project_root / "riveredge-frontend" / "src" / "apps"
+        # 应用 manifest 以后端 src/apps 为单一来源（后端部署时必含此目录）
+        plugins_dir = backend_root / "src" / "apps"
         return plugins_dir
     
     @staticmethod
