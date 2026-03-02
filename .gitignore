@@ -49,6 +49,8 @@ riveredge-backend/backups/
 bin/
 deploy/
 scripts/
+riveredge-panel/diagnose.sh
+riveredge-panel/fix-and-start.sh
 
 # ===== 后端脚本与测试（不推送） =====
 riveredge-backend/scripts/
