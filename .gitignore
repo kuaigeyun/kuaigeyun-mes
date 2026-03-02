@@ -50,6 +50,10 @@ bin/
 deploy/
 scripts/
 
+# ===== 后端脚本与测试（不推送） =====
+riveredge-backend/scripts/
+riveredge-backend/tests/
+
 # ===== 测试 =====
 .coverage
 htmlcov/
