@@ -1084,7 +1084,7 @@ class AuthService:
             request: 请求对象
         """
         try:
-            from core.services.interfaces.service_registry import ServiceLocator
+            from core.services.interfaces.service_registry import ServiceLocator, ServiceNotFoundError
 
             # 获取客户端真实IP地址（优先获取外网IP）
             # 优先级：X-Forwarded-For > X-Real-IP > request.client.host
@@ -1139,19 +1139,30 @@ class AuthService:
                 logger.debug(f"IP地址解析失败: {login_ip}, 错误: {e}")
 
             # 通过服务接口记录登录事件
-            audit_log_service = ServiceLocator.get_service("audit_log_service")
-            await audit_log_service.log_login_event(
-                tenant_id=tenant_id or 0,  # 登录失败时可能为空
-                user_id=user_id or 0,      # 登录失败时可能为空
-                username=username,
-                login_ip=login_ip,
-                user_agent=user_agent,
-                login_location=ip_info.get("location"),  # IP地理位置
-                login_device=ip_info.get("device"),  # 设备类型
-                login_browser=ip_info.get("browser"),  # 浏览器信息
-                success=(login_status == "success"),
-                failure_reason=failure_reason,
-            )
+            if not ServiceLocator.has_service("audit_log_service"):
+                logger.warning("audit_log_service 未注册，跳过登录日志记录（请检查服务初始化顺序）")
+            else:
+                audit_log_service = ServiceLocator.get_service("audit_log_service")
+                await audit_log_service.log_login_event(
+                    tenant_id=tenant_id or 0,  # 登录失败时可能为空
+                    user_id=user_id or 0,      # 登录失败时可能为空
+                    username=username,
+                    login_ip=login_ip,
+                    user_agent=user_agent,
+                    login_location=ip_info.get("location"),  # IP地理位置
+                    login_device=ip_info.get("device"),  # 设备类型
+                    login_browser=ip_info.get("browser"),  # 浏览器信息
+                    success=(login_status == "success"),
+                    failure_reason=failure_reason,
+                )
+                logger.debug(f"登录日志已记录: username={username}, tenant_id={tenant_id}, status={login_status}")
+        except ServiceNotFoundError as e:
+            logger.warning(f"audit_log_service 未找到，无法记录登录日志: {e}")
         except Exception as e:
-            # 登录日志记录失败不影响登录流程，静默处理
-            logger.warning(f"记录登录日志失败: {e}")
+            # 登录日志记录失败不影响登录流程，记录详细错误便于生产环境排查
+            import traceback
+            logger.warning(
+                f"记录登录日志失败: {e}\n"
+                f"username={username}, tenant_id={tenant_id}, status={login_status}\n"
+                f"traceback: {traceback.format_exc()}"
+            )

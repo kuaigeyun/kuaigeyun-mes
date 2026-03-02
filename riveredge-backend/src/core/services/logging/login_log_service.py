@@ -4,10 +4,13 @@
 提供登录日志的创建、查询和统计功能。
 """
 
+import logging
 from typing import List, Optional, Dict
 from datetime import datetime
 
 from tortoise.expressions import Q
+
+logger = logging.getLogger(__name__)
 from tortoise.functions import Count
 
 from core.models.login_log import LoginLog
@@ -76,6 +79,8 @@ class LoginLogService:
         if tenant_id is not None:
             query &= Q(tenant_id=tenant_id)
         
+        logger.debug(f"get_login_logs: tenant_id={tenant_id}, page={page}, filters: user_id={user_id}, username={username}")
+        
         if user_id:
             query &= Q(user_id=user_id)
         if username:
@@ -90,6 +95,10 @@ class LoginLogService:
             query &= Q(created_at__lte=end_time)
         
         total = await LoginLog.filter(query).count()
+        if total == 0 and tenant_id is not None and logger.isEnabledFor(logging.DEBUG):
+            # 无数据时记录调试信息，便于排查 tenant_id 不匹配
+            any_count = await LoginLog.filter().count()
+            logger.debug(f"get_login_logs: 当前租户 tenant_id={tenant_id} 无记录 (total=0), 全表记录数={any_count}")
         
         offset = (page - 1) * page_size
         logs = await LoginLog.filter(query).order_by("-created_at").offset(offset).limit(page_size)
