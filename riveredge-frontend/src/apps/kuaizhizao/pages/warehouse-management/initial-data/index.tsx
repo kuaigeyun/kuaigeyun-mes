@@ -7,11 +7,11 @@
  * @date 2026-01-15
  */
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { App, Card, Steps, Button, Space, DatePicker } from 'antd';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { ImportOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import { 
   importInitialInventory, 
   importInitialWIP, 
@@ -278,34 +278,40 @@ const InitialDataImportPage: React.FC = () => {
       </Card>
 
       {/* 期初库存导入弹窗 */}
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleImportInventory}
-        title="导入期初库存"
-        headers={['物料编码', '仓库编码', '期初数量', '期初金额', '批次号', '库位编码']}
-        exampleRow={['MAT001', 'WH001', '100', '1000.00', 'BATCH001', 'LOC001']}
-      />
-
-      {/* 期初在制品导入弹窗 */}
-      <UniImport
-        visible={wipImportVisible}
-        onCancel={() => setWipImportVisible(false)}
-        onConfirm={handleImportWIP}
-        title="导入期初在制品"
-        headers={['工单号', '产品编码', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编码']}
-        exampleRow={['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001']}
-      />
-
-      {/* 期初应收应付导入弹窗 */}
-      <UniImport
-        visible={receivablesPayablesImportVisible}
-        onCancel={() => setReceivablesPayablesImportVisible(false)}
-        onConfirm={handleImportReceivablesPayables}
-        title="导入期初应收应付"
-        headers={['类型', '客户编码', '供应商编码', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
-        exampleRow={['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001']}
-      />
+      {(importVisible || wipImportVisible || receivablesPayablesImportVisible) && (
+        <Suspense fallback={null}>
+          {importVisible && (
+            <LazyUniImport
+              visible={importVisible}
+              onCancel={() => setImportVisible(false)}
+              onConfirm={handleImportInventory}
+              title="导入期初库存"
+              headers={['物料编码', '仓库编码', '期初数量', '期初金额', '批次号', '库位编码']}
+              exampleRow={['MAT001', 'WH001', '100', '1000.00', 'BATCH001', 'LOC001']}
+            />
+          )}
+          {wipImportVisible && (
+            <LazyUniImport
+              visible={wipImportVisible}
+              onCancel={() => setWipImportVisible(false)}
+              onConfirm={handleImportWIP}
+              title="导入期初在制品"
+              headers={['工单号', '产品编码', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编码']}
+              exampleRow={['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001']}
+            />
+          )}
+          {receivablesPayablesImportVisible && (
+            <LazyUniImport
+              visible={receivablesPayablesImportVisible}
+              onCancel={() => setReceivablesPayablesImportVisible(false)}
+              onConfirm={handleImportReceivablesPayables}
+              title="导入期初应收应付"
+              headers={['类型', '客户编码', '供应商编码', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
+              exampleRow={['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001']}
+            />
+          )}
+        </Suspense>
+      )}
     </ListPageTemplate>
   );
 };

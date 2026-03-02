@@ -1,10 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Input, Dropdown } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import type { MenuProps } from 'antd';
-import { match } from 'pinyin-pro';
 
 export interface TopBarSearchProps {
     menuData: MenuDataItem[];
@@ -22,6 +21,12 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
     const navigate = useNavigate();
     const [searchValue, setSearchValue] = useState('');
     const [open, setOpen] = useState(false);
+    const [pinyinMatch, setPinyinMatch] = useState<((text: string, pattern: string) => any) | null>(null);
+
+    // 动态加载 pinyin-pro，避免首屏同步引入
+    useEffect(() => {
+        import('pinyin-pro').then(m => { setPinyinMatch(() => m.match); }).catch(() => {});
+    }, []);
 
     // Flatten the menu data into a searchable list
     const flatMenuData = useMemo(() => {
@@ -62,8 +67,8 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
         return flatMenuData
             .filter(item => {
                 const name = item.name.toLowerCase();
-                // Match by name or pinyin (including first letters)
-                return name.includes(lowerValue) || !!match(item.name, searchValue);
+                // Match by name or pinyin (including first letters, when pinyin-pro loaded)
+                return name.includes(lowerValue) || (!!pinyinMatch && !!pinyinMatch(item.name, searchValue));
             })
             .slice(0, 10) // Limit results
             .map(item => ({
@@ -84,7 +89,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                     setSearchValue('');
                 }
             }));
-    }, [searchValue, flatMenuData, navigate]);
+    }, [searchValue, flatMenuData, navigate, pinyinMatch]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;

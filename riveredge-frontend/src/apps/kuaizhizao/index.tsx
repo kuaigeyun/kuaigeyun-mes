@@ -1,251 +1,254 @@
 /**
  * 快格轻制造 APP 入口文件
+ *
+ * 路由级代码分割：各页面使用 React.lazy 按需加载，避免 70+ 页面打包成单一 10MB chunk
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
-
-// 计划管理页面（MRP/LRP 已合并为统一需求计算 demand-computation）
-import DemandManagementPage from './pages/plan-management/demand-management';
-import DemandComputationPage from './pages/plan-management/demand-computation';
-import ComputationConfigPage from './pages/plan-management/computation-config';
-import ComputationHistoryPage from './pages/plan-management/computation-history';
-import ProductionPlansPage from './pages/plan-management/production-plans';
-import SchedulingPage from './pages/plan-management/scheduling';
-
-// 生产执行页面
-import WorkOrdersPage from './pages/production-execution/work-orders';
-import WorkOrdersTerminalPage from './pages/production-execution/work-orders/kiosk';
-import WorkOrderDetailKioskPage from './pages/production-execution/work-orders/detail-kiosk';
-import ReportingPage from './pages/production-execution/reporting';
-import ReportingKioskPage from './pages/production-execution/reporting/kiosk';
-import ReportingStatisticsPage from './pages/production-execution/reporting/statistics';
-import SOPViewerKioskPage from './pages/production-execution/sop-viewer/kiosk';
-import DrawingViewerKioskPage from './pages/production-execution/drawing-viewer/kiosk';
-import ProgramViewerKioskPage from './pages/production-execution/program-viewer/kiosk';
-import ReworkOrdersPage from './pages/production-execution/rework-orders';
-// 委外管理：已统一整合至 OutsourceManagementPage，包含工序委外(OutsourceOrder)与委外工单(OutsourceWorkOrder)功能
-// import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
-// import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
-import OutsourceManagementPage from './pages/production-execution/outsource-management';
-
-// 采购管理页面
-import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
-import PurchaseRequisitionsPage from './pages/purchase-management/purchase-requisitions';
-import ReceiptNoticesPage from './pages/purchase-management/receipt-notices';
-
-// 销售管理页面
-// 说明：销售预测数据已纳入统一需求管理(demand-management)，本页面为销售预测专用入口，与需求管理中的 demand_type=sales_forecast 数据一致
-import SalesForecastsPage from './pages/sales-management/sales-forecasts';
-import QuotationsPage from './pages/sales-management/quotations';
-import SalesOrdersPage from './pages/sales-management/sales-orders';
-import DeliveryNotesPage from './pages/warehouse-management/delivery-notes';
-import ShipmentNoticesPage from './pages/sales-management/shipment-notices';
-import SampleTrialsPage from './pages/sales-management/sample-trials';
-
-// 质量管理页面
-import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
-import ProcessInspectionPage from './pages/quality-management/process-inspection';
-import FinishedGoodsInspectionPage from './pages/quality-management/finished-goods-inspection';
-import TraceabilityPage from './pages/quality-management/traceability';
-import InspectionPlansPage from './pages/quality-management/inspection-plans';
-
-// 成本管理页面
-import CostRulesPage from './pages/cost-management/cost-rules';
-import CostCalculationsPage from './pages/cost-management/cost-calculations';
-import CostDetailsPage from './pages/cost-management/cost-details';
-import CostComparisonPage from './pages/cost-management/cost-comparison';
-import CostOptimizationPage from './pages/cost-management/cost-optimization';
-import CostReportPage from './pages/cost-management/cost-report';
-
-// 设备管理页面
-import EquipmentPage from './pages/equipment-management/equipment';
-import EquipmentFaultsPage from './pages/equipment-management/equipment-faults';
-import MaintenancePlansPage from './pages/equipment-management/maintenance-plans';
-import MoldsPage from './pages/equipment-management/molds';
-import ToolLedgerPage from './pages/equipment-management/tool-ledger';
-import EquipmentStatusPage from './pages/equipment-management/equipment-status';
-import MaintenanceRemindersPage from './pages/equipment-management/maintenance-reminders';
-import MoldUsagesPage from './pages/equipment-management/mold-usages';
-import MoldCalibrationsPage from './pages/equipment-management/mold-calibrations';
-import MoldMaintenanceRemindersPage from './pages/equipment-management/mold-maintenance-reminders';
-import ToolUsagesPage from './pages/equipment-management/tool-usages';
-import ToolMaintenancesPage from './pages/equipment-management/tool-maintenances';
-import ToolCalibrationsPage from './pages/equipment-management/tool-calibrations';
-import ToolMaintenanceRemindersPage from './pages/equipment-management/tool-maintenance-reminders';
-
-// 财务管理页面
-import InvoiceListPage from './pages/finance-management/invoices';
-import InvoiceDetailPage from './pages/finance-management/invoices/detail';
-import PayableListPage from './pages/finance-management/payables';
-import PayableDetailPage from './pages/finance-management/payables/detail';
-import ReceivableListPage from './pages/finance-management/receivables';
-import ReceivableDetailPage from './pages/finance-management/receivables/detail';
-
-// 仓储管理页面
-import InventoryPage from './pages/warehouse-management/inventory';
-import InboundPage from './pages/warehouse-management/inbound';
-import OtherInboundPage from './pages/warehouse-management/other-inbound';
-import OtherOutboundPage from './pages/warehouse-management/other-outbound';
-import MaterialBorrowsPage from './pages/warehouse-management/material-borrows';
-import MaterialReturnsPage from './pages/warehouse-management/material-returns';
-import InitialDataImportPage from './pages/warehouse-management/initial-data';
-import OutboundPage from './pages/warehouse-management/outbound';
-import CustomerMaterialRegistrationPage from './pages/warehouse-management/customer-material-registration';
-import BarcodeMappingRulesPage from './pages/warehouse-management/barcode-mapping-rules';
-import DocumentTimingPage from './pages/analysis-center/document-timing';
-import DocumentEfficiencyPage from './pages/analysis-center/document-efficiency';
-import MaterialShortageExceptionsPage from './pages/production-execution/material-shortage-exceptions';
-import DeliveryDelayExceptionsPage from './pages/production-execution/delivery-delay-exceptions';
-import QualityExceptionsPage from './pages/production-execution/quality-exceptions';
-import ExceptionStatisticsPage from './pages/production-execution/exception-statistics';
-import ExceptionProcessPage from './pages/production-execution/exception-process';
-import ReplenishmentSuggestionsPage from './pages/warehouse-management/replenishment-suggestions';
-import BatchInventoryQueryPage from './pages/warehouse-management/batch-inventory-query';
-import LineSideWarehousePage from './pages/warehouse-management/line-side-warehouse';
-import BackflushRecordsPage from './pages/warehouse-management/backflush-records';
-import StocktakingPage from './pages/warehouse-management/stocktaking';
-import InventoryTransferPage from './pages/warehouse-management/inventory-transfer';
-import AssemblyOrdersPage from './pages/warehouse-management/assembly-orders';
-import BatchingCenterPage from './pages/warehouse-management/batching-center';
-import DisassemblyOrdersPage from './pages/warehouse-management/disassembly-orders';
-import InventoryAlertPage from './pages/warehouse-management/inventory-alert';
-import PackingBindingPage from './pages/production-execution/packing-binding';
+import PageSkeleton from '../../components/page-skeleton';
 import PlaceholderPage from './components/PlaceholderPage';
 
+/** 页面懒加载包装：Suspense + PageSkeleton fallback */
+const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+);
+
+// 计划管理页面
+const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-management'));
+const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
+const ComputationConfigPage = lazy(() => import('./pages/plan-management/computation-config'));
+const ComputationHistoryPage = lazy(() => import('./pages/plan-management/computation-history'));
+const ProductionPlansPage = lazy(() => import('./pages/plan-management/production-plans'));
+const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
+
+// 生产执行页面
+const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
+const WorkOrdersTerminalPage = lazy(() => import('./pages/production-execution/work-orders/kiosk'));
+const WorkOrderDetailKioskPage = lazy(() => import('./pages/production-execution/work-orders/detail-kiosk'));
+const ReportingPage = lazy(() => import('./pages/production-execution/reporting'));
+const ReportingKioskPage = lazy(() => import('./pages/production-execution/reporting/kiosk'));
+const ReportingStatisticsPage = lazy(() => import('./pages/production-execution/reporting/statistics'));
+const SOPViewerKioskPage = lazy(() => import('./pages/production-execution/sop-viewer/kiosk'));
+const DrawingViewerKioskPage = lazy(() => import('./pages/production-execution/drawing-viewer/kiosk'));
+const ProgramViewerKioskPage = lazy(() => import('./pages/production-execution/program-viewer/kiosk'));
+const ReworkOrdersPage = lazy(() => import('./pages/production-execution/rework-orders'));
+const OutsourceManagementPage = lazy(() => import('./pages/production-execution/outsource-management'));
+
+// 采购管理页面
+const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
+const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
+const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
+
+// 销售管理页面
+const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
+const QuotationsPage = lazy(() => import('./pages/sales-management/quotations'));
+const SalesOrdersPage = lazy(() => import('./pages/sales-management/sales-orders'));
+const DeliveryNotesPage = lazy(() => import('./pages/warehouse-management/delivery-notes'));
+const ShipmentNoticesPage = lazy(() => import('./pages/sales-management/shipment-notices'));
+const SampleTrialsPage = lazy(() => import('./pages/sales-management/sample-trials'));
+
+// 质量管理页面
+const IncomingInspectionPage = lazy(() => import('./pages/quality-management/incoming-inspection'));
+const ProcessInspectionPage = lazy(() => import('./pages/quality-management/process-inspection'));
+const FinishedGoodsInspectionPage = lazy(() => import('./pages/quality-management/finished-goods-inspection'));
+const TraceabilityPage = lazy(() => import('./pages/quality-management/traceability'));
+const InspectionPlansPage = lazy(() => import('./pages/quality-management/inspection-plans'));
+
+// 成本管理页面
+const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
+const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
+const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
+const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
+const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
+const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
+
+// 设备管理页面
+const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'));
+const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
+const MaintenancePlansPage = lazy(() => import('./pages/equipment-management/maintenance-plans'));
+const MoldsPage = lazy(() => import('./pages/equipment-management/molds'));
+const ToolLedgerPage = lazy(() => import('./pages/equipment-management/tool-ledger'));
+const EquipmentStatusPage = lazy(() => import('./pages/equipment-management/equipment-status'));
+const MaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/maintenance-reminders'));
+const MoldUsagesPage = lazy(() => import('./pages/equipment-management/mold-usages'));
+const MoldCalibrationsPage = lazy(() => import('./pages/equipment-management/mold-calibrations'));
+const MoldMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/mold-maintenance-reminders'));
+const ToolUsagesPage = lazy(() => import('./pages/equipment-management/tool-usages'));
+const ToolMaintenancesPage = lazy(() => import('./pages/equipment-management/tool-maintenances'));
+const ToolCalibrationsPage = lazy(() => import('./pages/equipment-management/tool-calibrations'));
+const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/tool-maintenance-reminders'));
+
+// 财务管理页面
+const InvoiceListPage = lazy(() => import('./pages/finance-management/invoices'));
+const InvoiceDetailPage = lazy(() => import('./pages/finance-management/invoices/detail'));
+const PayableListPage = lazy(() => import('./pages/finance-management/payables'));
+const PayableDetailPage = lazy(() => import('./pages/finance-management/payables/detail'));
+const ReceivableListPage = lazy(() => import('./pages/finance-management/receivables'));
+const ReceivableDetailPage = lazy(() => import('./pages/finance-management/receivables/detail'));
+
+// 仓储管理页面
+const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
+const InboundPage = lazy(() => import('./pages/warehouse-management/inbound'));
+const OtherInboundPage = lazy(() => import('./pages/warehouse-management/other-inbound'));
+const OtherOutboundPage = lazy(() => import('./pages/warehouse-management/other-outbound'));
+const MaterialBorrowsPage = lazy(() => import('./pages/warehouse-management/material-borrows'));
+const MaterialReturnsPage = lazy(() => import('./pages/warehouse-management/material-returns'));
+const InitialDataImportPage = lazy(() => import('./pages/warehouse-management/initial-data'));
+const OutboundPage = lazy(() => import('./pages/warehouse-management/outbound'));
+const CustomerMaterialRegistrationPage = lazy(() => import('./pages/warehouse-management/customer-material-registration'));
+const BarcodeMappingRulesPage = lazy(() => import('./pages/warehouse-management/barcode-mapping-rules'));
+const DocumentTimingPage = lazy(() => import('./pages/analysis-center/document-timing'));
+const DocumentEfficiencyPage = lazy(() => import('./pages/analysis-center/document-efficiency'));
+const MaterialShortageExceptionsPage = lazy(() => import('./pages/production-execution/material-shortage-exceptions'));
+const DeliveryDelayExceptionsPage = lazy(() => import('./pages/production-execution/delivery-delay-exceptions'));
+const QualityExceptionsPage = lazy(() => import('./pages/production-execution/quality-exceptions'));
+const ExceptionStatisticsPage = lazy(() => import('./pages/production-execution/exception-statistics'));
+const ExceptionProcessPage = lazy(() => import('./pages/production-execution/exception-process'));
+const ReplenishmentSuggestionsPage = lazy(() => import('./pages/warehouse-management/replenishment-suggestions'));
+const BatchInventoryQueryPage = lazy(() => import('./pages/warehouse-management/batch-inventory-query'));
+const LineSideWarehousePage = lazy(() => import('./pages/warehouse-management/line-side-warehouse'));
+const BackflushRecordsPage = lazy(() => import('./pages/warehouse-management/backflush-records'));
+const StocktakingPage = lazy(() => import('./pages/warehouse-management/stocktaking'));
+const InventoryTransferPage = lazy(() => import('./pages/warehouse-management/inventory-transfer'));
+const AssemblyOrdersPage = lazy(() => import('./pages/warehouse-management/assembly-orders'));
+const BatchingCenterPage = lazy(() => import('./pages/warehouse-management/batching-center'));
+const DisassemblyOrdersPage = lazy(() => import('./pages/warehouse-management/disassembly-orders'));
+const InventoryAlertPage = lazy(() => import('./pages/warehouse-management/inventory-alert'));
+const PackingBindingPage = lazy(() => import('./pages/production-execution/packing-binding'));
+
 // 绩效管理页面
-import HolidaysPage from './pages/performance/holidays';
-import SkillsPage from './pages/performance/skills';
-import EmployeeConfigsPage from './pages/performance/employee-configs';
-import PieceRatesPage from './pages/performance/piece-rates';
-import HourlyRatesPage from './pages/performance/hourly-rates';
-import KpiDefinitionsPage from './pages/performance/kpi-definitions';
-import SummariesPage from './pages/performance/summaries';
+const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
+const SkillsPage = lazy(() => import('./pages/performance/skills'));
+const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
+const PieceRatesPage = lazy(() => import('./pages/performance/piece-rates'));
+const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
+const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
+const SummariesPage = lazy(() => import('./pages/performance/summaries'));
 
 const KuaizhizaoApp: React.FC = () => {
   return (
     <Routes>
       {/* 计划管理路由 */}
-      <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
-      <Route path="plan-management/demand-computation" element={<DemandComputationPage />} />
-      <Route path="plan-management/computation-config" element={<ComputationConfigPage />} />
-      <Route path="plan-management/computation-history" element={<ComputationHistoryPage />} />
-      <Route path="plan-management/production-plans" element={<ProductionPlansPage />} />
-      <Route path="plan-management/scheduling" element={<SchedulingPage />} />
+      <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
+      <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
+      <Route path="plan-management/computation-config" element={withPageSuspense(ComputationConfigPage)} />
+      <Route path="plan-management/computation-history" element={withPageSuspense(ComputationHistoryPage)} />
+      <Route path="plan-management/production-plans" element={withPageSuspense(ProductionPlansPage)} />
+      <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
 
       {/* 采购管理路由 */}
-      <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
-      <Route path="purchase-management/purchase-requisitions" element={<PurchaseRequisitionsPage />} />
-      <Route path="purchase-management/receipt-notices" element={<ReceiptNoticesPage />} />
+      <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
+      <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
+      <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
 
       {/* 生产执行路由 */}
-      <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
-      <Route path="production-execution/terminal" element={<WorkOrdersTerminalPage />} />
-      <Route path="production-execution/reporting" element={<ReportingPage />} />
-      <Route path="production-execution/reporting/kiosk" element={<ReportingKioskPage />} />
-      <Route path="production-execution/reporting/statistics" element={<ReportingStatisticsPage />} />
-      <Route path="production-execution/sop-viewer/kiosk" element={<SOPViewerKioskPage />} />
-      <Route path="production-execution/drawing-viewer/kiosk" element={<DrawingViewerKioskPage />} />
-      <Route path="production-execution/program-viewer/kiosk" element={<ProgramViewerKioskPage />} />
-      <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
-      {/* 委外管理：整合工序委外与委外工单，路由 /outsource-management */}
-      <Route path="production-execution/outsource-management" element={<OutsourceManagementPage />} />
-      <Route path="production-execution/packing-binding" element={<PackingBindingPage />} />
-      <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
-      <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />
-      <Route path="production-execution/quality-exceptions" element={<QualityExceptionsPage />} />
-      <Route path="production-execution/exception-statistics" element={<ExceptionStatisticsPage />} />
-      <Route path="production-execution/exception-process" element={<ExceptionProcessPage />} />
+      <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
+      <Route path="production-execution/terminal" element={withPageSuspense(WorkOrdersTerminalPage)} />
+      <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
+      <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
+      <Route path="production-execution/reporting/statistics" element={withPageSuspense(ReportingStatisticsPage)} />
+      <Route path="production-execution/sop-viewer/kiosk" element={withPageSuspense(SOPViewerKioskPage)} />
+      <Route path="production-execution/drawing-viewer/kiosk" element={withPageSuspense(DrawingViewerKioskPage)} />
+      <Route path="production-execution/program-viewer/kiosk" element={withPageSuspense(ProgramViewerKioskPage)} />
+      <Route path="production-execution/rework-orders" element={withPageSuspense(ReworkOrdersPage)} />
+      <Route path="production-execution/outsource-management" element={withPageSuspense(OutsourceManagementPage)} />
+      <Route path="production-execution/packing-binding" element={withPageSuspense(PackingBindingPage)} />
+      <Route path="production-execution/material-shortage-exceptions" element={withPageSuspense(MaterialShortageExceptionsPage)} />
+      <Route path="production-execution/delivery-delay-exceptions" element={withPageSuspense(DeliveryDelayExceptionsPage)} />
+      <Route path="production-execution/quality-exceptions" element={withPageSuspense(QualityExceptionsPage)} />
+      <Route path="production-execution/exception-statistics" element={withPageSuspense(ExceptionStatisticsPage)} />
+      <Route path="production-execution/exception-process" element={withPageSuspense(ExceptionProcessPage)} />
 
       {/* 销售管理路由 */}
-      <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
-      <Route path="sales-management/quotations" element={<QuotationsPage />} />
-      <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
-      <Route path="sales-management/shipment-notices" element={<ShipmentNoticesPage />} />
-      <Route path="sales-management/sample-trials" element={<SampleTrialsPage />} />
-      
-      <Route path="production-execution/work-orders/:id/kiosk" element={<WorkOrderDetailKioskPage />} />
+      <Route path="sales-management/sales-forecasts" element={withPageSuspense(SalesForecastsPage)} />
+      <Route path="sales-management/quotations" element={withPageSuspense(QuotationsPage)} />
+      <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
+      <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
+      <Route path="sales-management/sample-trials" element={withPageSuspense(SampleTrialsPage)} />
+
+      <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
 
       {/* 质量管理路由 */}
-      <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />
-      <Route path="quality-management/process-inspection" element={<ProcessInspectionPage />} />
-      <Route path="quality-management/finished-goods-inspection" element={<FinishedGoodsInspectionPage />} />
-      <Route path="quality-management/traceability" element={<TraceabilityPage />} />
-      <Route path="quality-management/inspection-plans" element={<InspectionPlansPage />} />
+      <Route path="quality-management/incoming-inspection" element={withPageSuspense(IncomingInspectionPage)} />
+      <Route path="quality-management/process-inspection" element={withPageSuspense(ProcessInspectionPage)} />
+      <Route path="quality-management/finished-goods-inspection" element={withPageSuspense(FinishedGoodsInspectionPage)} />
+      <Route path="quality-management/traceability" element={withPageSuspense(TraceabilityPage)} />
+      <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
 
       {/* 成本管理路由 */}
-      <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
-      <Route path="cost-management/cost-calculations" element={<CostCalculationsPage />} />
-      <Route path="cost-management/cost-details" element={<CostDetailsPage />} />
-      <Route path="cost-management/cost-comparison" element={<CostComparisonPage />} />
-      <Route path="cost-management/cost-optimization" element={<CostOptimizationPage />} />
-      <Route path="cost-management/cost-report" element={<CostReportPage />} />
+      <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
+      <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
+      <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
+      <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
+      <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
+      <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
 
       {/* 设备管理路由 */}
-      <Route path="equipment-management/equipment" element={<EquipmentPage />} />
-      <Route path="equipment-management/equipment-faults" element={<EquipmentFaultsPage />} />
-      <Route path="equipment-management/maintenance-plans" element={<MaintenancePlansPage />} />
-      <Route path="equipment-management/molds" element={<MoldsPage />} />
-      <Route path="equipment-management/tool-ledger" element={<ToolLedgerPage />} />
-      <Route path="equipment-management/equipment-status" element={<EquipmentStatusPage />} />
-      <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
-      <Route path="equipment-management/mold-usages" element={<MoldUsagesPage />} />
-      <Route path="equipment-management/mold-calibrations" element={<MoldCalibrationsPage />} />
-      <Route path="equipment-management/mold-maintenance-reminders" element={<MoldMaintenanceRemindersPage />} />
-      <Route path="equipment-management/tool-usages" element={<ToolUsagesPage />} />
-      <Route path="equipment-management/tool-maintenances" element={<ToolMaintenancesPage />} />
-      <Route path="equipment-management/tool-calibrations" element={<ToolCalibrationsPage />} />
-      <Route path="equipment-management/tool-maintenance-reminders" element={<ToolMaintenanceRemindersPage />} />
+      <Route path="equipment-management/equipment" element={withPageSuspense(EquipmentPage)} />
+      <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
+      <Route path="equipment-management/maintenance-plans" element={withPageSuspense(MaintenancePlansPage)} />
+      <Route path="equipment-management/molds" element={withPageSuspense(MoldsPage)} />
+      <Route path="equipment-management/tool-ledger" element={withPageSuspense(ToolLedgerPage)} />
+      <Route path="equipment-management/equipment-status" element={withPageSuspense(EquipmentStatusPage)} />
+      <Route path="equipment-management/maintenance-reminders" element={withPageSuspense(MaintenanceRemindersPage)} />
+      <Route path="equipment-management/mold-usages" element={withPageSuspense(MoldUsagesPage)} />
+      <Route path="equipment-management/mold-calibrations" element={withPageSuspense(MoldCalibrationsPage)} />
+      <Route path="equipment-management/mold-maintenance-reminders" element={withPageSuspense(MoldMaintenanceRemindersPage)} />
+      <Route path="equipment-management/tool-usages" element={withPageSuspense(ToolUsagesPage)} />
+      <Route path="equipment-management/tool-maintenances" element={withPageSuspense(ToolMaintenancesPage)} />
+      <Route path="equipment-management/tool-calibrations" element={withPageSuspense(ToolCalibrationsPage)} />
+      <Route path="equipment-management/tool-maintenance-reminders" element={withPageSuspense(ToolMaintenanceRemindersPage)} />
 
       {/* 财务管理路由 */}
-      <Route path="finance-management/invoices" element={<InvoiceListPage />} />
-      <Route path="finance-management/invoices/:code" element={<InvoiceDetailPage />} />
-      <Route path="finance-management/sales-invoices" element={<InvoiceListPage />} /> {/* Alias or same component with filter handled in URL/State */}
-      <Route path="finance-management/purchase-invoices" element={<InvoiceListPage />} />
+      <Route path="finance-management/invoices" element={withPageSuspense(InvoiceListPage)} />
+      <Route path="finance-management/invoices/:code" element={withPageSuspense(InvoiceDetailPage)} />
+      <Route path="finance-management/sales-invoices" element={withPageSuspense(InvoiceListPage)} />
+      <Route path="finance-management/purchase-invoices" element={withPageSuspense(InvoiceListPage)} />
 
-      <Route path="finance-management/payables" element={<PayableListPage />} />
-      <Route path="finance-management/payables/:id" element={<PayableDetailPage />} />
-      <Route path="finance-management/payments" element={<PayableListPage />} /> {/* Shortcut to payment records if needed, for now reuse list */}
+      <Route path="finance-management/payables" element={withPageSuspense(PayableListPage)} />
+      <Route path="finance-management/payables/:id" element={withPageSuspense(PayableDetailPage)} />
+      <Route path="finance-management/payments" element={withPageSuspense(PayableListPage)} />
 
-      <Route path="finance-management/receivables" element={<ReceivableListPage />} />
-      <Route path="finance-management/receivables/:id" element={<ReceivableDetailPage />} />
-      <Route path="finance-management/receipts" element={<ReceivableListPage />} />
+      <Route path="finance-management/receivables" element={withPageSuspense(ReceivableListPage)} />
+      <Route path="finance-management/receivables/:id" element={withPageSuspense(ReceivableDetailPage)} />
+      <Route path="finance-management/receipts" element={withPageSuspense(ReceivableListPage)} />
 
       {/* 绩效管理路由 */}
-      <Route path="performance/holidays" element={<HolidaysPage />} />
-      <Route path="performance/skills" element={<SkillsPage />} />
-      <Route path="performance/employee-configs" element={<EmployeeConfigsPage />} />
-      <Route path="performance/piece-rates" element={<PieceRatesPage />} />
-      <Route path="performance/hourly-rates" element={<HourlyRatesPage />} />
-      <Route path="performance/kpi-definitions" element={<KpiDefinitionsPage />} />
-      <Route path="performance/summaries" element={<SummariesPage />} />
+      <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
+      <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
+      <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
+      <Route path="performance/piece-rates" element={withPageSuspense(PieceRatesPage)} />
+      <Route path="performance/hourly-rates" element={withPageSuspense(HourlyRatesPage)} />
+      <Route path="performance/kpi-definitions" element={withPageSuspense(KpiDefinitionsPage)} />
+      <Route path="performance/summaries" element={withPageSuspense(SummariesPage)} />
 
       {/* 分析中心路由 */}
-      <Route path="analysis-center/document-timing" element={<DocumentTimingPage />} />
-      <Route path="analysis-center/document-efficiency" element={<DocumentEfficiencyPage />} />
+      <Route path="analysis-center/document-timing" element={withPageSuspense(DocumentTimingPage)} />
+      <Route path="analysis-center/document-efficiency" element={withPageSuspense(DocumentEfficiencyPage)} />
 
       {/* 仓储管理路由 */}
-      <Route path="warehouse-management/inventory" element={<InventoryPage />} />
-      <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
-      <Route path="warehouse-management/inbound" element={<InboundPage />} />
-      <Route path="warehouse-management/other-inbound" element={<OtherInboundPage />} />
-      <Route path="warehouse-management/other-outbound" element={<OtherOutboundPage />} />
-      <Route path="warehouse-management/material-borrows" element={<MaterialBorrowsPage />} />
-      <Route path="warehouse-management/material-returns" element={<MaterialReturnsPage />} />
-      <Route path="warehouse-management/outbound" element={<OutboundPage />} />
-      <Route path="warehouse-management/customer-material-registration" element={<CustomerMaterialRegistrationPage />} />
-      <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />
-      <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
-      <Route path="warehouse-management/stocktaking" element={<StocktakingPage />} />
-      <Route path="warehouse-management/inventory-transfer" element={<InventoryTransferPage />} />
-      <Route path="warehouse-management/delivery-notes" element={<DeliveryNotesPage />} />
-      <Route path="warehouse-management/batching-center" element={<BatchingCenterPage />} />
-      <Route path="warehouse-management/assembly-orders" element={<AssemblyOrdersPage />} />
-      <Route path="warehouse-management/disassembly-orders" element={<DisassemblyOrdersPage />} />
-      <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
-      <Route path="warehouse-management/inventory-alert" element={<InventoryAlertPage />} />
-      <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />
-      <Route path="warehouse-management/backflush-records" element={<BackflushRecordsPage />} />
+      <Route path="warehouse-management/inventory" element={withPageSuspense(InventoryPage)} />
+      <Route path="warehouse-management/replenishment-suggestions" element={withPageSuspense(ReplenishmentSuggestionsPage)} />
+      <Route path="warehouse-management/inbound" element={withPageSuspense(InboundPage)} />
+      <Route path="warehouse-management/other-inbound" element={withPageSuspense(OtherInboundPage)} />
+      <Route path="warehouse-management/other-outbound" element={withPageSuspense(OtherOutboundPage)} />
+      <Route path="warehouse-management/material-borrows" element={withPageSuspense(MaterialBorrowsPage)} />
+      <Route path="warehouse-management/material-returns" element={withPageSuspense(MaterialReturnsPage)} />
+      <Route path="warehouse-management/outbound" element={withPageSuspense(OutboundPage)} />
+      <Route path="warehouse-management/customer-material-registration" element={withPageSuspense(CustomerMaterialRegistrationPage)} />
+      <Route path="warehouse-management/barcode-mapping-rules" element={withPageSuspense(BarcodeMappingRulesPage)} />
+      <Route path="warehouse-management/initial-data" element={withPageSuspense(InitialDataImportPage)} />
+      <Route path="warehouse-management/stocktaking" element={withPageSuspense(StocktakingPage)} />
+      <Route path="warehouse-management/inventory-transfer" element={withPageSuspense(InventoryTransferPage)} />
+      <Route path="warehouse-management/delivery-notes" element={withPageSuspense(DeliveryNotesPage)} />
+      <Route path="warehouse-management/batching-center" element={withPageSuspense(BatchingCenterPage)} />
+      <Route path="warehouse-management/assembly-orders" element={withPageSuspense(AssemblyOrdersPage)} />
+      <Route path="warehouse-management/disassembly-orders" element={withPageSuspense(DisassemblyOrdersPage)} />
+      <Route path="warehouse-management/batch-inventory-query" element={withPageSuspense(BatchInventoryQueryPage)} />
+      <Route path="warehouse-management/inventory-alert" element={withPageSuspense(InventoryAlertPage)} />
+      <Route path="warehouse-management/line-side-warehouse" element={withPageSuspense(LineSideWarehousePage)} />
+      <Route path="warehouse-management/backflush-records" element={withPageSuspense(BackflushRecordsPage)} />
 
       {/* 报表路由（占位） */}
       <Route path="sales-management/reports/sales-order-query" element={<PlaceholderPage title="销售订单综合查询" />} />

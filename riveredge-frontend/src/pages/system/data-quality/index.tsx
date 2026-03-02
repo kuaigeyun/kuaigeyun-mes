@@ -7,13 +7,13 @@
  * @date 2026-01-27
  */
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, Tabs, Table, Tag, Space, Typography, Button, Progress, Alert, List, Empty } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { validateData, detectDataIssues, generateQualityReport, ValidationReport, DataCleaningSuggestion, DataQualityReport } from '../../../services/dataQuality';
-import { UniImport } from '../../../components';
+const LazyUniImport = lazy(() => import('../../../components/uni-import').then(m => ({ default: m.UniImport })));
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -432,13 +432,17 @@ const DataQualityPage: React.FC = () => {
         ]}
       />
 
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleImportConfirm}
-        title={t('pages.system.dataQuality.importModalTitle')}
-        headers={headers}
-      />
+      {importVisible && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importVisible}
+            onCancel={() => setImportVisible(false)}
+            onConfirm={handleImportConfirm}
+            title={t('pages.system.dataQuality.importModalTitle')}
+            headers={headers}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

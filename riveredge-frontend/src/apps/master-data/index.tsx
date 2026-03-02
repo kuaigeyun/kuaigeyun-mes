@@ -1,78 +1,86 @@
 /**
  * 主数据管理 APP 入口文件
+ *
+ * 路由级代码分割：各页面使用 React.lazy 按需加载
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import PageSkeleton from '../../components/page-skeleton';
+
+/** 页面懒加载包装：Suspense + PageSkeleton fallback */
+const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+);
 
 // 工厂建模页面
-import PlantsPage from './pages/factory/plants';
-import WorkshopsPage from './pages/factory/workshops';
-import ProductionLinesPage from './pages/factory/production-lines';
-import WorkstationsPage from './pages/factory/workstations';
-import WorkCentersPage from './pages/factory/work-centers';
+const PlantsPage = lazy(() => import('./pages/factory/plants'));
+const WorkshopsPage = lazy(() => import('./pages/factory/workshops'));
+const ProductionLinesPage = lazy(() => import('./pages/factory/production-lines'));
+const WorkstationsPage = lazy(() => import('./pages/factory/workstations'));
+const WorkCentersPage = lazy(() => import('./pages/factory/work-centers'));
 
 // 仓库管理页面
-import WarehousesPage from './pages/warehouse/warehouses';
-import StorageAreasPage from './pages/warehouse/storage-areas';
-import StorageLocationsPage from './pages/warehouse/storage-locations';
+const WarehousesPage = lazy(() => import('./pages/warehouse/warehouses'));
+const StorageAreasPage = lazy(() => import('./pages/warehouse/storage-areas'));
+const StorageLocationsPage = lazy(() => import('./pages/warehouse/storage-locations'));
 
 // 物料管理页面
-import MaterialsManagementPage from './pages/materials/management';
-import BOMPage from './pages/materials/bom';
-import BOMDesignerPage from './pages/materials/bom/designer';
-import VariantAttributesPage from './pages/materials/variant-attributes';
-import BatchRulesPage from './pages/materials/batch-rules';
-import SerialRulesPage from './pages/materials/serial-rules';
+const MaterialsManagementPage = lazy(() => import('./pages/materials/management'));
+const BOMPage = lazy(() => import('./pages/materials/bom'));
+const BOMDesignerPage = lazy(() => import('./pages/materials/bom/designer'));
+const VariantAttributesPage = lazy(() => import('./pages/materials/variant-attributes'));
+const BatchRulesPage = lazy(() => import('./pages/materials/batch-rules'));
+const SerialRulesPage = lazy(() => import('./pages/materials/serial-rules'));
 
 // 工艺管理页面
-import DefectTypesPage from './pages/process/defect-types';
-import OperationsPage from './pages/process/operations';
-import ProcessRoutesPage from './pages/process/routes';
-import SOPPage from './pages/process/sop';
-import SOPCreatePage from './pages/process/sop/create';
-import ESOPDesignerPage from './pages/process/sop/designer';
-import SOPExecutionPage from './pages/process/sop/execution';
+const DefectTypesPage = lazy(() => import('./pages/process/defect-types'));
+const OperationsPage = lazy(() => import('./pages/process/operations'));
+const ProcessRoutesPage = lazy(() => import('./pages/process/routes'));
+const SOPPage = lazy(() => import('./pages/process/sop'));
+const SOPCreatePage = lazy(() => import('./pages/process/sop/create'));
+const ESOPDesignerPage = lazy(() => import('./pages/process/sop/designer'));
+const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
 
 // 供应链页面
-import CustomersPage from './pages/supply-chain/customers';
-import SuppliersPage from './pages/supply-chain/suppliers';
+const CustomersPage = lazy(() => import('./pages/supply-chain/customers'));
+const SuppliersPage = lazy(() => import('./pages/supply-chain/suppliers'));
 
 const MasterDataApp: React.FC = () => {
   return (
     <Routes>
       {/* 工厂建模路由 */}
-      <Route path="factory/plants" element={<PlantsPage />} />
-      <Route path="factory/workshops" element={<WorkshopsPage />} />
-      <Route path="factory/production-lines" element={<ProductionLinesPage />} />
-      <Route path="factory/workstations" element={<WorkstationsPage />} />
-      <Route path="factory/work-centers" element={<WorkCentersPage />} />
+      <Route path="factory/plants" element={withPageSuspense(PlantsPage)} />
+      <Route path="factory/workshops" element={withPageSuspense(WorkshopsPage)} />
+      <Route path="factory/production-lines" element={withPageSuspense(ProductionLinesPage)} />
+      <Route path="factory/workstations" element={withPageSuspense(WorkstationsPage)} />
+      <Route path="factory/work-centers" element={withPageSuspense(WorkCentersPage)} />
 
       {/* 仓库管理路由 */}
-      <Route path="warehouse/warehouses" element={<WarehousesPage />} />
-      <Route path="warehouse/storage-areas" element={<StorageAreasPage />} />
-      <Route path="warehouse/storage-locations" element={<StorageLocationsPage />} />
+      <Route path="warehouse/warehouses" element={withPageSuspense(WarehousesPage)} />
+      <Route path="warehouse/storage-areas" element={withPageSuspense(StorageAreasPage)} />
+      <Route path="warehouse/storage-locations" element={withPageSuspense(StorageLocationsPage)} />
 
       {/* 物料管理路由 */}
-      <Route path="materials" element={<MaterialsManagementPage />} />
-      <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
-      <Route path="materials/batch-rules" element={<BatchRulesPage />} />
-      <Route path="materials/serial-rules" element={<SerialRulesPage />} />
+      <Route path="materials" element={withPageSuspense(MaterialsManagementPage)} />
+      <Route path="materials/variant-attributes" element={withPageSuspense(VariantAttributesPage)} />
+      <Route path="materials/batch-rules" element={withPageSuspense(BatchRulesPage)} />
+      <Route path="materials/serial-rules" element={withPageSuspense(SerialRulesPage)} />
 
       {/* 工艺管理路由 */}
-      <Route path="process/defect-types" element={<DefectTypesPage />} />
-      <Route path="process/operations" element={<OperationsPage />} />
-      <Route path="process/routes" element={<ProcessRoutesPage />} />
-      <Route path="process/engineering-bom" element={<BOMPage />} />
-      <Route path="process/engineering-bom/designer" element={<BOMDesignerPage />} />
-      <Route path="process/sop" element={<SOPPage />} />
-      <Route path="process/sop/create" element={<SOPCreatePage />} />
-      <Route path="process/sop/designer" element={<ESOPDesignerPage />} />
-      <Route path="process/sop/execution" element={<SOPExecutionPage />} />
+      <Route path="process/defect-types" element={withPageSuspense(DefectTypesPage)} />
+      <Route path="process/operations" element={withPageSuspense(OperationsPage)} />
+      <Route path="process/routes" element={withPageSuspense(ProcessRoutesPage)} />
+      <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
+      <Route path="process/engineering-bom/designer" element={withPageSuspense(BOMDesignerPage)} />
+      <Route path="process/sop" element={withPageSuspense(SOPPage)} />
+      <Route path="process/sop/create" element={withPageSuspense(SOPCreatePage)} />
+      <Route path="process/sop/designer" element={withPageSuspense(ESOPDesignerPage)} />
+      <Route path="process/sop/execution" element={withPageSuspense(SOPExecutionPage)} />
 
       {/* 供应链路由 */}
-      <Route path="supply-chain/customers" element={<CustomersPage />} />
-      <Route path="supply-chain/suppliers" element={<SuppliersPage />} />
+      <Route path="supply-chain/customers" element={withPageSuspense(CustomersPage)} />
+      <Route path="supply-chain/suppliers" element={withPageSuspense(SuppliersPage)} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
@@ -86,4 +94,3 @@ const MasterDataApp: React.FC = () => {
 };
 
 export default MasterDataApp;
-

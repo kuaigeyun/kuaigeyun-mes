@@ -9,14 +9,14 @@
  */
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
@@ -2268,14 +2268,18 @@ const SalesOrdersPage: React.FC = () => {
           />
         </ProForm>
 
-        <UniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleItemImport}
-          title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-          exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-        />
+        {importModalVisible && (
+          <Suspense fallback={null}>
+            <LazyUniImport
+              visible={importModalVisible}
+              onCancel={() => setImportModalVisible(false)}
+              onConfirm={handleItemImport}
+              title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
+              headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+              exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+            />
+          </Suspense>
+        )}
       </Modal>
 
       <CustomerFormModal

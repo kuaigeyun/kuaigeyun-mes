@@ -6,14 +6,12 @@
  * 与 Form.Item 配合使用：<Form.Item name="customer_id"><UniDropdown options={...} quickCreate={...} advancedSearch={...} /></Form.Item>
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Select, theme } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import type { SelectProps } from 'antd';
 import type { QuickCreateConfig, AdvancedSearchConfig } from './types';
 import { AdvancedSearchModal } from './AdvancedSearchModal';
-import { preloadPinyinLib } from '../../utils/pinyin';
-import { match as pinyinMatch } from 'pinyin-pro';
 
 export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender'> {
   /** 快速新建配置，不传则不显示 */
@@ -33,13 +31,14 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const pinyinMatchRef = useRef<((text: string, pattern: string) => any) | null>(null);
 
-  // 预加载拼音库，便于下拉内拼音搜索生效
+  // 动态加载 pinyin-pro，避免首屏同步引入
   useEffect(() => {
-    preloadPinyinLib().catch(() => {});
+    import('pinyin-pro').then(m => { pinyinMatchRef.current = m.match; }).catch(() => {});
   }, []);
 
-  // 模糊搜索：按 label 文案匹配 + 拼音/拼音首字母匹配（pinyin-pro）
+  // 模糊搜索：按 label 文案匹配 + 拼音/拼音首字母匹配（pinyin-pro 动态加载）
   const effectiveFilterOption =
     filterOption !== undefined
       ? filterOption
@@ -50,12 +49,16 @@ export const UniDropdown: React.FC<UniDropdownProps> = ({
           if (!inputTrim) return true;
           const inputLower = inputTrim.toLowerCase();
           if (labelStr.toLowerCase().includes(inputLower)) return true;
-          try {
-            const result = pinyinMatch(labelStr, inputTrim);
-            return result != null && result.length > 0;
-          } catch {
-            return false;
+          const matchFn = pinyinMatchRef.current;
+          if (matchFn) {
+            try {
+              const result = matchFn(labelStr, inputTrim);
+              return result != null && result.length > 0;
+            } catch {
+              return false;
+            }
           }
+          return false;
         };
   const effectiveOptionFilterProp = optionFilterProp ?? 'label';
 

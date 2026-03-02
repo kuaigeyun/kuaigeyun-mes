@@ -7,7 +7,7 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, Row, Col, DatePicker, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
@@ -16,7 +16,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
@@ -1001,14 +1001,18 @@ const QuotationsPage: React.FC = () => {
         title="从数据集同步报价单"
       />
 
-      <UniImport
-        visible={importModalVisible}
-        onCancel={() => setImportModalVisible(false)}
-        onConfirm={handleItemImport}
-        title="导入报价明细"
-        headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
-        exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-      />
+      {importModalVisible && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={handleItemImport}
+            title="导入报价明细"
+            headers={['物料编码', '规格', '单位', '数量', '单价', '交货日期']}
+            exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

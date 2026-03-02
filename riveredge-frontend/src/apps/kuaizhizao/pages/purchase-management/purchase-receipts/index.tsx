@@ -7,12 +7,12 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniImport } from '../../../../../components/uni-import';
+const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -567,22 +567,26 @@ const PurchaseReceiptsPage: React.FC = () => {
       />
 
       {/* 批量导入弹窗 */}
-      <UniImport
-        visible={importVisible}
-        onCancel={() => setImportVisible(false)}
-        onConfirm={handleImport}
-        title="批量导入采购入库单"
-        headers={[
-          '采购订单编号',
-          '供应商名称',
-          '仓库名称',
-          '入库时间',
-          '备注',
-        ]}
-        exampleRow={[
-          'PO20250115001', '供应商A', '主仓库', '2025-01-15 10:00:00', '备注信息'
-        ]}
-      />
+      {importVisible && (
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importVisible}
+            onCancel={() => setImportVisible(false)}
+            onConfirm={handleImport}
+            title="批量导入采购入库单"
+            headers={[
+              '采购订单编号',
+              '供应商名称',
+              '仓库名称',
+              '入库时间',
+              '备注',
+            ]}
+            exampleRow={[
+              'PO20250115001', '供应商A', '主仓库', '2025-01-15 10:00:00', '备注信息'
+            ]}
+          />
+        </Suspense>
+      )}
     </>
   );
 };
