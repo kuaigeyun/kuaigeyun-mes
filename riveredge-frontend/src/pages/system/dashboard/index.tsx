@@ -202,6 +202,9 @@ const getGreetingKey = (): string => {
 /**
  * 工作台页面组件
  */
+/** 视口高度阈值：小于此值视为小屏（如 1080p 含浏览器/任务栏后约 800px） */
+const VIEWPORT_HEIGHT_SMALL_THRESHOLD = 800;
+
 export default function DashboardPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -210,6 +213,17 @@ export default function DashboardPage() {
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const [configModalVisible, setConfigModalVisible] = useState(false);
+
+  // 小屏适配：视口高度 < 800 时使用紧凑布局
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight : 1080,
+  );
+  useEffect(() => {
+    const onResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isSmallScreen = viewportHeight < VIEWPORT_HEIGHT_SMALL_THRESHOLD;
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
@@ -616,22 +630,22 @@ export default function DashboardPage() {
       >
       {/* 欢迎条+指标条+4卡 占满 uni-tabs-content 高度，不滚动，布局固定 */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* 欢迎区域 - 增强设计 */}
+      {/* 欢迎区域 - 增强设计，小屏使用紧凑高度 */}
       <Card
         style={{
           marginTop: 0,
-          marginBottom: 22,
+          marginBottom: isSmallScreen ? 16 : 22,
           flexShrink: 0,
           background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary}dd 100%)`,
           border: 'none',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         }}
-        styles={{ body: { padding: '32px 24px' } }}
+        styles={{ body: { padding: isSmallScreen ? '20px 16px' : '32px 24px' } }}
         className="welcome-banner-card"
       >
         <Row align="middle" justify="space-between">
           <Col flex="auto">
-            <Space size="large">
+            <Space size={isSmallScreen ? 'middle' : 'large'}>
               <span
                 style={{
                   display: 'inline-flex',
@@ -642,7 +656,7 @@ export default function DashboardPage() {
                 }}
               >
                 <Avatar
-                  size={64}
+                  size={isSmallScreen ? 48 : 64}
                   src={avatarUrl}
                   style={{
                     backgroundColor: avatarUrl ? 'transparent' : '#ffffff',
@@ -656,10 +670,10 @@ export default function DashboardPage() {
               </span>
               <div>
                 <Title 
-                  level={3} 
+                  level={isSmallScreen ? 4 : 3} 
                   style={{ 
                     margin: 0, 
-                    marginBottom: 8,
+                    marginBottom: isSmallScreen ? 4 : 8,
                     color: '#ffffff',
                   }}
                 >
@@ -706,10 +720,10 @@ export default function DashboardPage() {
         </Row>
       </Card>
 
-      {/* 生产指标 - 参考设计 */}
-      <div style={{ marginBottom: 22, flexShrink: 0 }}>
+      {/* 生产指标 - 参考设计，小屏使用紧凑高度 */}
+      <div style={{ marginBottom: isSmallScreen ? 16 : 22, flexShrink: 0 }}>
         {/* 左侧 TIPS + 右侧时间范围筛选器 */}
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Row justify="space-between" align="middle" style={{ marginBottom: isSmallScreen ? 12 : 16 }}>
           <Col flex="1" style={{ minWidth: 0 }}>
             <Space size="small" style={{ color: token.colorTextSecondary, fontSize: 13 }} align="start">
               <BulbOutlined style={{ color: token.colorWarning, marginTop: 2 }} />
@@ -789,16 +803,16 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
+            styles={{ body: { padding: isSmallScreen ? '16px' : '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
             <FileTextOutlined 
               style={{ 
                 position: 'absolute',
-                right: 16,
-                top: 16,
-                fontSize: 80,
+                right: isSmallScreen ? 12 : 16,
+                top: isSmallScreen ? 12 : 16,
+                fontSize: isSmallScreen ? 56 : 80,
                 color: 'rgba(255, 255, 255, 0.15)',
                 zIndex: 0,
               }} 
@@ -832,16 +846,16 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
+            styles={{ body: { padding: isSmallScreen ? '16px' : '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
           >
             {/* 背景图标 */}
             <PlayCircleOutlined 
               style={{ 
                 position: 'absolute',
-                right: 16,
-                top: 16,
-                fontSize: 80,
+                right: isSmallScreen ? 12 : 16,
+                top: isSmallScreen ? 12 : 16,
+                fontSize: isSmallScreen ? 56 : 80,
                 color: 'rgba(255, 255, 255, 0.15)',
                 zIndex: 0,
               }} 
@@ -875,16 +889,16 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
+            styles={{ body: { padding: isSmallScreen ? '16px' : '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
           >
             {/* 背景图标 */}
             <CheckCircleOutlined 
               style={{ 
                 position: 'absolute',
-                right: 16,
-                top: 16,
-                fontSize: 80,
+                right: isSmallScreen ? 12 : 16,
+                top: isSmallScreen ? 12 : 16,
+                fontSize: isSmallScreen ? 56 : 80,
                 color: 'rgba(255, 255, 255, 0.15)',
                 zIndex: 0,
               }} 
@@ -917,16 +931,16 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
+            styles={{ body: { padding: isSmallScreen ? '16px' : '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
             <CheckCircleOutlined 
               style={{ 
                 position: 'absolute',
-                right: 16,
-                top: 16,
-                fontSize: 80,
+                right: isSmallScreen ? 12 : 16,
+                top: isSmallScreen ? 12 : 16,
+                fontSize: isSmallScreen ? 56 : 80,
                 color: 'rgba(255, 255, 255, 0.15)',
                 zIndex: 0,
               }} 
@@ -960,16 +974,16 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
+            styles={{ body: { padding: isSmallScreen ? '16px' : '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
             <BarChartOutlined 
               style={{ 
                 position: 'absolute',
-                right: 16,
-                top: 16,
-                fontSize: 80,
+                right: isSmallScreen ? 12 : 16,
+                top: isSmallScreen ? 12 : 16,
+                fontSize: isSmallScreen ? 56 : 80,
                 color: 'rgba(255, 255, 255, 0.15)',
                 zIndex: 0,
               }} 
@@ -988,12 +1002,14 @@ export default function DashboardPage() {
         </Row>
       </div>
 
-      {/* 快捷入口、生产实时播报、待办事项、消息通知 - calc 高度正好适配视口，无滚动 */}
+      {/* 快捷入口、生产实时播报、待办事项、消息通知 - calc 高度适配视口，小屏时使用紧凑布局预留高度 */}
       <Row 
         gutter={[16, 16]} 
         className="dashboard-four-cards-row"
         style={{ 
-          height: 'calc(100vh - 56px - 30px - 192px - 198px)',
+          height: isSmallScreen
+            ? 'calc(100vh - 56px - 30px - 144px - 168px)'
+            : 'calc(100vh - 56px - 30px - 192px - 198px)',
           minHeight: 0,
           display: 'flex',
           alignItems: 'stretch',
