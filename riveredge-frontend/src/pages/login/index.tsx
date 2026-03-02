@@ -25,6 +25,11 @@ import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/platformSettings';
 import { useQuery } from '@tanstack/react-query';
 import { getFilePreview } from '../../services/file';
+import wechatIcon from '../../assets/social/wechat.svg';
+import qqIcon from '../../assets/social/qq.svg';
+import qweiIcon from '../../assets/social/qwei.svg';
+import dingtalkIcon from '../../assets/social/dingtalk.svg';
+import feishuIcon from '../../assets/social/feishu.svg';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -1618,7 +1623,7 @@ export default function LoginPage() {
                       }}
                     >
                       <img 
-                        src="/social/wechat.svg" 
+                        src={wechatIcon} 
                         alt={t('pages.login.wechatLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
@@ -1654,7 +1659,7 @@ export default function LoginPage() {
                       }}
                     >
                       <img 
-                        src="/social/qq.svg" 
+                        src={qqIcon} 
                         alt={t('pages.login.qqLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
@@ -1690,7 +1695,7 @@ export default function LoginPage() {
                       }}
                     >
                       <img 
-                        src="/social/qwei.svg" 
+                        src={qweiIcon} 
                         alt={t('pages.login.wechatWorkLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
@@ -1726,7 +1731,7 @@ export default function LoginPage() {
                       }}
                     >
                       <img 
-                        src="/social/dingtalk.svg" 
+                        src={dingtalkIcon} 
                         alt={t('pages.login.dingtalkLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
@@ -1762,7 +1767,7 @@ export default function LoginPage() {
                       }}
                     >
                       <img 
-                        src="/social/feishu.svg" 
+                        src={feishuIcon} 
                         alt={t('pages.login.feishuLogin')} 
                         style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
