@@ -11,6 +11,7 @@ import json
 from core.models.menu import Menu
 from core.models.permission import Permission
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse
+from core.services.application.application_service import ApplicationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
@@ -351,17 +352,9 @@ class MenuService:
                     root_menus.append(menu_response)
         
         # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
-        # 需要导入 Application 模型
-        from core.models.application import Application
-        
-        # 获取所有应用及其 sort_order
-        applications = await Application.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        ).all()
-        
-        # 构建应用 UUID 到 sort_order 的映射
-        app_sort_order_map = {app.uuid: app.sort_order for app in applications}
+        # 使用 ApplicationService（raw SQL）避免 Tortoise 模型列与数据库不一致
+        applications = await ApplicationService.get_applications_uuid_sort_order(tenant_id)
+        app_sort_order_map = {a["uuid"]: a["sort_order"] for a in applications}
         
         # 按应用的 sort_order 排序根菜单（如果有关联应用）
         # 没有关联应用的菜单保持原顺序（按菜单的 sort_order）
@@ -660,9 +653,10 @@ class MenuService:
         ).all()
         
         # 获取应用信息，以确定是否需要使用应用名称作为根菜单名称
-        from core.models.application import Application
-        app = await Application.filter(uuid=application_uuid, tenant_id=tenant_id).first()
-        app_name = app.name if app else None
+        app = await ApplicationService.get_application_by_uuid_optional(
+            tenant_id, application_uuid
+        )
+        app_name = app.get("name") if app else None
 
         existing_menu_map = {menu.uuid: menu for menu in existing_menus}
         

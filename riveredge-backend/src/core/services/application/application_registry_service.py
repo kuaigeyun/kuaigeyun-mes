@@ -20,7 +20,6 @@ from loguru import logger
 
 from core.services.application.application_service import ApplicationService
 from core.services.application.application_route_manager import get_route_manager
-from core.models.application import Application
 
 
 class ApplicationRegistryService:

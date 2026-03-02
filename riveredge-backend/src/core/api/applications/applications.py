@@ -7,7 +7,6 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from core.models.application import Application
 from core.schemas.application import (
     ApplicationCreate,
     ApplicationUpdate,
@@ -102,6 +101,7 @@ async def list_applications(
                     app['menu_config'] = None
 
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
+            # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
                 'uuid': app.get('uuid'),
                 'tenant_id': app.get('tenant_id'),
@@ -118,6 +118,8 @@ async def list_applications(
                 'is_system': app.get('is_system', False),
                 'is_active': app.get('is_active', True),
                 'is_installed': app.get('is_installed', False),
+                'is_custom_name': app.get('is_custom_name', False),
+                'is_custom_sort': app.get('is_custom_sort', False),
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
@@ -165,6 +167,7 @@ async def list_installed_applications(
                     app['menu_config'] = None
 
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
+            # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
                 'uuid': app.get('uuid'),
                 'tenant_id': app.get('tenant_id'),
@@ -181,6 +184,8 @@ async def list_installed_applications(
                 'is_system': app.get('is_system', False),
                 'is_active': app.get('is_active', True),
                 'is_installed': app.get('is_installed', False),
+                'is_custom_name': app.get('is_custom_name', False),
+                'is_custom_sort': app.get('is_custom_sort', False),
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
@@ -429,6 +434,7 @@ async def scan_and_register_plugins(
                         app['menu_config'] = None
 
                 # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
+                # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
                 app_data = {
                     'uuid': app.get('uuid'),
                     'tenant_id': app.get('tenant_id'),
@@ -445,6 +451,8 @@ async def scan_and_register_plugins(
                     'is_system': app.get('is_system', False),
                     'is_active': app.get('is_active', True),
                     'is_installed': app.get('is_installed', False),
+                    'is_custom_name': app.get('is_custom_name', False),
+                    'is_custom_sort': app.get('is_custom_sort', False),
                     'sort_order': app.get('sort_order', 0),
                     'created_at': app.get('created_at'),
                     'updated_at': app.get('updated_at'),
@@ -461,9 +469,12 @@ async def scan_and_register_plugins(
 
         return result
     except Exception as e:
+        logger.exception("扫描插件失败")
+        plugins_dir = ApplicationService._get_plugins_directory()
+        detail = f"扫描插件失败: {str(e)}（manifest 目录: {plugins_dir}）"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"扫描插件失败: {str(e)}"
+            detail=detail
         )
 
 

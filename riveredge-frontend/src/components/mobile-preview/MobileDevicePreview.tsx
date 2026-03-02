@@ -155,6 +155,8 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
                                 scrollbarWidth: 'none',
                             }}
                             title="Mobile Preview"
+                            allow="fullscreen; clipboard-read; clipboard-write"
+                            referrerPolicy="strict-origin-when-cross-origin"
                         />
                         {/* Home Indicator */}
                         <div style={{

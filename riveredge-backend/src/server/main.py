@@ -182,10 +182,9 @@ async def lifespan(app: FastAPI):
 
     # 若数据库无应用记录，自动扫描 riveredge-backend/src/apps 并注册（manifest 以后端为单一来源）
     try:
-        from core.models.application import Application
         from core.services.application.application_service import ApplicationService
         from infra.models.tenant import Tenant
-        total_count = await Application.filter(deleted_at__isnull=True).count()
+        total_count = await ApplicationService.count_applications(deleted_at_is_null=True)
         if total_count == 0:
             logger.info("📋 数据库无应用记录，自动扫描并注册应用...")
             plugins_dir = ApplicationService._get_plugins_directory()

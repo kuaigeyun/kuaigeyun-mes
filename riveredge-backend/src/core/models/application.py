@@ -61,8 +61,11 @@ class Application(BaseModel):
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_installed = fields.BooleanField(default=False, description="是否已安装")
     
-    is_custom_name = fields.BooleanField(default=False, description="是否自定义名称")
-    is_custom_sort = fields.BooleanField(default=False, description="是否自定义排序")
+    # is_custom_name / is_custom_sort 已从 Tortoise 模型移除，兼容未执行迁移 127 的数据库
+    # 业务逻辑通过 ApplicationService（raw SQL）读写，API 通过 Pydantic schema 处理
+    # 执行迁移 127 后如需 Tortoise 支持，可恢复此两行
+    # is_custom_name = fields.BooleanField(default=False, description="是否自定义名称")
+    # is_custom_sort = fields.BooleanField(default=False, description="是否自定义排序")
     
     sort_order = fields.IntField(default=0, description="排序顺序")
     

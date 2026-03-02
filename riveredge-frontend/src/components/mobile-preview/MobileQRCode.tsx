@@ -32,10 +32,19 @@ export const MobileQRCode: React.FC = () => {
 
     const getMobileUrl = () => {
         const protocol = window.location.protocol;
-        const port = '8101'; // RiverEdge Mobile port
-        // Use user configured IP or fallback to window.location.hostname
-        const targetIp = ip || window.location.hostname;
-        return `${protocol}//${targetIp}:${port}`;
+        const hostname = window.location.hostname;
+        const port = window.location.port;
+        const targetIp = ip || hostname;
+
+        // 生产环境：Caddy 在同一域名下提供 /mobile，无独立端口
+        // 开发环境：手机端在 8101 独立进程（localhost）
+        const isProduction = hostname !== 'localhost' && hostname !== '127.0.0.1';
+
+        if (isProduction) {
+            const portPart = port ? `:${port}` : '';
+            return `${protocol}//${targetIp}${portPart}/mobile`;
+        }
+        return `${protocol}//${targetIp}:8101`;
     };
 
     const mobileUrl = getMobileUrl();

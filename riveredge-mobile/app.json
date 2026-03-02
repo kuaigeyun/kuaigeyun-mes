@@ -1,5 +1,8 @@
 {
   "expo": {
+    "experiments": {
+      "baseUrl": "/mobile"
+    },
     "name": "riveredge-mobile",
     "slug": "riveredge-mobile",
     "version": "1.0.0",

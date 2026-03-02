@@ -64,6 +64,10 @@ class ApplicationService:
             app_data['created_at'] = datetime.utcnow()
             app_data['updated_at'] = datetime.utcnow()
             
+            # 排除数据库可能不存在的列（兼容未执行迁移 127 的环境）
+            for key in ['is_custom_name', 'is_custom_sort']:
+                app_data.pop(key, None)
+            
             # 将 menu_config 字典转换为 JSON 字符串
             if 'menu_config' in app_data and app_data['menu_config'] is not None:
                 if isinstance(app_data['menu_config'], dict):
@@ -126,7 +130,20 @@ class ApplicationService:
             return app_dict
         finally:
             await conn.close()
-    
+
+    @staticmethod
+    async def get_application_by_uuid_optional(
+        tenant_id: int,
+        uuid: str
+    ) -> Optional[ApplicationDict]:
+        """
+        根据UUID获取应用（不存在时返回 None，不抛异常）
+        """
+        try:
+            return await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+        except NotFoundError:
+            return None
+
     @staticmethod
     async def get_application_by_code(
         tenant_id: int,
@@ -642,6 +659,42 @@ class ApplicationService:
         finally:
             await conn.close()
     
+    @staticmethod
+    async def count_applications(deleted_at_is_null: bool = True) -> int:
+        """
+        统计应用数量（使用 raw SQL，避免 Tortoise 模型列与数据库不一致）
+        """
+        conn = await get_db_connection()
+        try:
+            if deleted_at_is_null:
+                row = await conn.fetchrow(
+                    "SELECT COUNT(*) FROM core_applications WHERE deleted_at IS NULL"
+                )
+            else:
+                row = await conn.fetchrow("SELECT COUNT(*) FROM core_applications")
+            return row[0] or 0
+        finally:
+            await conn.close()
+
+    @staticmethod
+    async def get_applications_uuid_sort_order(tenant_id: int) -> List[Dict[str, Any]]:
+        """
+        获取应用的 uuid 与 sort_order（用于菜单排序，使用 raw SQL 避免 Tortoise 模型列与数据库不一致）
+        """
+        conn = await get_db_connection()
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT uuid, sort_order FROM core_applications
+                WHERE tenant_id = $1 AND deleted_at IS NULL
+                ORDER BY sort_order, id
+                """,
+                tenant_id,
+            )
+            return [{"uuid": str(r["uuid"]), "sort_order": r["sort_order"] or 0} for r in rows]
+        finally:
+            await conn.close()
+
     @staticmethod
     def _get_plugins_directory() -> Path:
         """
