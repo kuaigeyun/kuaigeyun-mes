@@ -49,6 +49,7 @@ riveredge-backend/backups/
 bin/
 deploy/
 scripts/
+!riveredge-frontend/scripts/
 riveredge-panel/diagnose.sh
 riveredge-panel/fix-and-start.sh
 
