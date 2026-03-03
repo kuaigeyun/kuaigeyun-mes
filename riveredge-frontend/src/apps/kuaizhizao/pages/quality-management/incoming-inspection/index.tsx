@@ -7,9 +7,12 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Card, Row, Col, Modal } from 'antd';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -54,9 +57,35 @@ interface IncomingInspection {
   updated_at?: string;
 }
 
+const DISPOSAL_METHOD_FALLBACK = [
+  { label: '退货', value: 'return' },
+  { label: '让步接收', value: 'accept' },
+  { label: '隔离', value: 'quarantine' },
+  { label: '其他', value: 'other' },
+];
+
 const IncomingInspectionPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
+  const [disposalLoading, setDisposalLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setDisposalLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('DISPOSAL_METHOD');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setDisposalOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setDisposalOptions(DISPOSAL_METHOD_FALLBACK);
+      } finally {
+        setDisposalLoading(false);
+      }
+    };
+    load();
+  }, []);
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<IncomingInspection | null>(null);
@@ -811,18 +840,16 @@ const IncomingInspectionPage: React.FC = () => {
           rules={[{ required: true, message: '请输入不合格原因' }]}
           fieldProps={{ rows: 3 }}
         />
-        <ProFormSelect
-          name="disposition"
-          label="处理方式"
-          placeholder="请选择处理方式"
-          rules={[{ required: true, message: '请选择处理方式' }]}
-          options={[
-            { label: '退货', value: 'return' },
-            { label: '让步接收', value: 'accept' },
-            { label: '隔离', value: 'quarantine' },
-            { label: '其他', value: 'other' },
-          ]}
-        />
+        <ProFormItem name="disposition" label="处理方式" rules={[{ required: true, message: '请选择处理方式' }]}>
+          <UniDropdown
+            placeholder="请选择处理方式"
+            showSearch
+            allowClear
+            loading={disposalLoading}
+            options={disposalOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
+        </ProFormItem>
         <ProFormTextArea
           name="remarks"
           label="备注"

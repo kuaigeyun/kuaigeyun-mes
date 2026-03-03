@@ -8,7 +8,8 @@
  * @date 2026-02-26
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -17,7 +18,10 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
+  ProFormItem,
 } from '@ant-design/pro-components';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Card, Table, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -50,15 +54,34 @@ interface InspectionPlan {
   steps?: InspectionPlanStepItem[];
 }
 
-const PLAN_TYPE_OPTIONS = [
+const PLAN_TYPE_FALLBACK = [
   { label: '来料检验', value: 'incoming' },
   { label: '过程检验', value: 'process' },
   { label: '成品检验', value: 'finished' },
 ];
 
 const InspectionPlansPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
+  const [planTypeLoading, setPlanTypeLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setPlanTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('INSPECTION_PLAN_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setPlanTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+      } finally {
+        setPlanTypeLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -295,13 +318,16 @@ const InspectionPlansPage: React.FC = () => {
         `}</style>
         <ProFormText name="plan_code" label="方案编码" placeholder="留空则自动生成" colProps={{ span: 12 }} />
         <ProFormText name="plan_name" label="方案名称" rules={[{ required: true, message: '请输入方案名称' }]} colProps={{ span: 12 }} />
-        <ProFormSelect
-          name="plan_type"
-          label="方案类型"
-          options={PLAN_TYPE_OPTIONS}
-          rules={[{ required: true, message: '请选择方案类型' }]}
-          colProps={{ span: 12 }}
-        />
+        <ProFormItem name="plan_type" label="方案类型" rules={[{ required: true, message: '请选择方案类型' }]} colProps={{ span: 12 }}>
+          <UniDropdown
+            placeholder="请选择方案类型"
+            showSearch
+            allowClear
+            loading={planTypeLoading}
+            options={planTypeOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
+        </ProFormItem>
         <ProFormSelect
           name="is_active"
           label="启用状态"

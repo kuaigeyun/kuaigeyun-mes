@@ -7,8 +7,11 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ModalForm, ProFormText, ProFormSelect, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ModalForm, ProFormText, ProFormSelect, ProFormDateRangePicker, ProFormList, ProFormGroup, ProFormDigit, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, theme } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, BarChartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -71,11 +74,36 @@ interface ProductionPlanItem {
 
 const { useToken } = theme;
 
+const PLAN_TYPE_FALLBACK = [
+  { label: 'MRP计划', value: 'MRP' },
+  { label: 'LRP计划', value: 'LRP' },
+  { label: '手动计划', value: 'MANUAL' },
+];
+
 const ProductionPlansPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
+  const [planTypeLoading, setPlanTypeLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setPlanTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('PRODUCTION_PLAN_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setPlanTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+      } finally {
+        setPlanTypeLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);
@@ -471,16 +499,16 @@ const ProductionPlansPage: React.FC = () => {
       >
         <ProFormGroup title="基本信息">
           <ProFormText name="plan_name" label="计划名称" rules={[{ required: true }]} />
-          <ProFormSelect 
-            name="plan_type" 
-            label="计划类型" 
-            options={[
-              { label: 'MRP计划', value: 'MRP' },
-              { label: 'LRP计划', value: 'LRP' },
-              { label: '手动计划', value: 'MANUAL' },
-            ]}
-            initialValue="MANUAL"
-          />
+          <ProFormItem name="plan_type" label="计划类型" initialValue="MANUAL">
+            <UniDropdown
+              placeholder="请选择计划类型"
+              showSearch
+              allowClear
+              loading={planTypeLoading}
+              options={planTypeOptions}
+              quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+            />
+          </ProFormItem>
           <ProFormDateRangePicker name="dateRange" label="计划期间" rules={[{ required: true }]} />
         </ProFormGroup>
         
