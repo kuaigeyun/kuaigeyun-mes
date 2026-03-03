@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useState, useEffect, lazy, Suspense } from 'react';
-import Lottie from 'lottie-react';
+const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { getInitSteps } from '../../services/init-wizard';
@@ -28,11 +28,6 @@ const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/platformSettings';
 import { useQuery } from '@tanstack/react-query';
-import wechatIcon from '../../assets/social/wechat.svg';
-import qqIcon from '../../assets/social/qq.svg';
-import qweiIcon from '../../assets/social/qwei.svg';
-import dingtalkIcon from '../../assets/social/dingtalk.svg';
-import feishuIcon from '../../assets/social/feishu.svg';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -115,10 +110,27 @@ export default function LoginPage() {
     return logoUrl !== '/img/logo.png';
   });
 
-  // Lottie 动画懒加载（避免 160KB+ JSON 阻塞首屏）
+  // 社交图标延后加载，减小登录 chunk 体积
+  const [socialIcons, setSocialIcons] = useState<Record<string, string>>({});
+  useEffect(() => {
+    Promise.all([
+      import('../../assets/social/wechat.svg').then((m) => m.default),
+      import('../../assets/social/qq.svg').then((m) => m.default),
+      import('../../assets/social/qwei.svg').then((m) => m.default),
+      import('../../assets/social/dingtalk.svg').then((m) => m.default),
+      import('../../assets/social/feishu.svg').then((m) => m.default),
+    ]).then(([w, q, qw, d, f]) => setSocialIcons({ wechat: w, qq: q, qwei: qw, dingtalk: d, feishu: f }));
+  }, []);
+
+  // Lottie 动画延后加载（requestIdleCallback 后加载，避免阻塞 FCP/LCP）
   const [animationData, setAnimationData] = useState<object | null>(null);
   useEffect(() => {
-    import('../../../static/lottie/login.json').then((m) => setAnimationData(m.default));
+    const loadLottie = () => import('../../../static/lottie/login.json').then((m) => setAnimationData(m.default));
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(() => loadLottie(), { timeout: 2000 });
+    } else {
+      setTimeout(loadLottie, 500);
+    }
   }, []);
 
   /**
@@ -1369,6 +1381,8 @@ export default function LoginPage() {
           src={logoUrl} 
           alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
           className="logo-img"
+          width={48}
+          height={48}
           style={{
             opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
             transition: 'opacity 0.3s ease-in-out',
@@ -1423,6 +1437,8 @@ export default function LoginPage() {
             src={logoUrl} 
             alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
             className="logo-img"
+            width={48}
+            height={48}
             style={{
               opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
               transition: 'opacity 0.3s ease-in-out',
@@ -1466,16 +1482,13 @@ export default function LoginPage() {
           {/* Lottie 动画装饰显示在左侧上方（懒加载，未加载时显示占位） */}
           <div className="login-decoration-lottie">
             {animationData ? (
-              <Lottie
-                animationData={animationData}
-                loop={true}
-                autoplay={true}
-                style={{
-                  width: '100%',
-                  maxWidth: '600px',
-                  height: 'auto',
-                }}
-              />
+              <Suspense fallback={<div style={{ width: '100%', maxWidth: '600px', aspectRatio: '1', background: 'rgba(255,255,255,0.1)', borderRadius: '16px' }} />}>
+                <LottiePlayer
+                  animationData={animationData}
+                  loop
+                  style={{ width: '100%', maxWidth: '600px', height: 'auto' }}
+                />
+              </Suspense>
             ) : (
               <div style={{ width: '100%', maxWidth: '600px', aspectRatio: '1', background: 'rgba(255,255,255,0.1)', borderRadius: '16px' }} />
             )}
@@ -1651,11 +1664,13 @@ export default function LoginPage() {
                         e.currentTarget.style.borderColor = 'rgba(7, 193, 96, 0.7)';
                       }}
                     >
-                      <img 
-                        src={wechatIcon} 
-                        alt={t('pages.login.wechatLogin')} 
-                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                      />
+                      {socialIcons.wechat && (
+                        <img 
+                          src={socialIcons.wechat} 
+                          alt={t('pages.login.wechatLogin')} 
+                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
+                        />
+                      )}
                     </Button>
                   </Tooltip>
                   {/* QQ登录 */}
@@ -1687,11 +1702,13 @@ export default function LoginPage() {
                         e.currentTarget.style.borderColor = 'rgba(18, 183, 245, 0.7)';
                       }}
                     >
-                      <img 
-                        src={qqIcon} 
-                        alt={t('pages.login.qqLogin')} 
-                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                      />
+                      {socialIcons.qq && (
+                        <img 
+                          src={socialIcons.qq} 
+                          alt={t('pages.login.qqLogin')} 
+                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
+                        />
+                      )}
                     </Button>
                   </Tooltip>
                   {/* 企业微信登录 */}
@@ -1723,11 +1740,13 @@ export default function LoginPage() {
                         e.currentTarget.style.borderColor = 'rgba(120, 195, 64, 0.7)';
                       }}
                     >
-                      <img 
-                        src={qweiIcon} 
-                        alt={t('pages.login.wechatWorkLogin')} 
-                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                      />
+                      {socialIcons.qwei && (
+                        <img 
+                          src={socialIcons.qwei} 
+                          alt={t('pages.login.wechatWorkLogin')} 
+                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
+                        />
+                      )}
                     </Button>
                   </Tooltip>
                   {/* 钉钉登录 */}
@@ -1759,11 +1778,13 @@ export default function LoginPage() {
                         e.currentTarget.style.borderColor = 'rgba(0, 117, 255, 0.5)';
                       }}
                     >
-                      <img 
-                        src={dingtalkIcon} 
-                        alt={t('pages.login.dingtalkLogin')} 
-                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                      />
+                      {socialIcons.dingtalk && (
+                        <img 
+                          src={socialIcons.dingtalk} 
+                          alt={t('pages.login.dingtalkLogin')} 
+                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
+                        />
+                      )}
                     </Button>
                   </Tooltip>
                   {/* 飞书登录 */}
@@ -1795,11 +1816,13 @@ export default function LoginPage() {
                         e.currentTarget.style.borderColor = 'rgba(51, 112, 255, 0.5)';
                       }}
                     >
-                      <img 
-                        src={feishuIcon} 
-                        alt={t('pages.login.feishuLogin')} 
-                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                      />
+                      {socialIcons.feishu && (
+                        <img 
+                          src={socialIcons.feishu} 
+                          alt={t('pages.login.feishuLogin')} 
+                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
+                        />
+                      )}
                     </Button>
                   </Tooltip>
                 </div>

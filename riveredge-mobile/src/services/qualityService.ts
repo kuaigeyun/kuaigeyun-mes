@@ -105,17 +105,18 @@ export async function getIncomingInspection(id: number): Promise<IncomingInspect
   return apiRequest<IncomingInspection>(`${BASE}/incoming-inspections/${id}`, { method: 'GET' });
 }
 
-/** 获取来料检验单列表 */
+/** 获取来料检验单列表（后端返回 { data: [], total } 分页格式） */
 export async function getIncomingInspections(params?: {
   skip?: number;
   limit?: number;
   status?: string;
 }): Promise<IncomingInspection[]> {
-  const res = await apiRequest<any[]>(`${BASE}/incoming-inspections`, {
+  const res = await apiRequest<any>(`${BASE}/incoming-inspections`, {
     method: 'GET',
     params,
   });
-  return res || [];
+  if (Array.isArray(res)) return res;
+  return Array.isArray(res?.data) ? res.data : [];
 }
 
 /** 执行来料检验 */
@@ -153,6 +154,18 @@ export async function getFinishedGoodsInspections(params?: {
     params,
   });
   return res || [];
+}
+
+/** 获取待检验数量（来料+过程+成品，单次请求，用于首屏徽标） */
+export async function getPendingInspectionCount(): Promise<number> {
+  try {
+    const res = await apiRequest<{ quality_inspection?: number }>(`${BASE}/dashboard/menu-badge-counts`, {
+      method: 'GET',
+    });
+    return typeof res?.quality_inspection === 'number' ? res.quality_inspection : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /** 执行成品检验 */

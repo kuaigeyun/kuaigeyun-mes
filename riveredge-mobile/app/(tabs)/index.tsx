@@ -22,7 +22,7 @@ import { getUserMessageStats, getUserMessages } from '../../src/services/message
 import { getUserProfile } from '../../src/services/userProfileService';
 import { getFilePreview } from '../../src/services/fileService';
 import { BASE_URL } from '../../src/services/api';
-import { getProcessInspections, getIncomingInspections, getFinishedGoodsInspections } from '../../src/services/qualityService';
+import { getPendingInspectionCount } from '../../src/services/qualityService';
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -58,18 +58,16 @@ export default function WorkbenchScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [statsRes, user, profile, msgStats, msgList, processList, incomingList, finishedList] = await Promise.all([
+      const [statsRes, user, profile, msgStats, msgList, pendingCount] = await Promise.all([
         getWorkOrderStatistics(),
         getStoredUser(),
         getUserProfile().catch(() => null),
         getUserMessageStats().catch(() => null),
         getUserMessages({ page: 1, page_size: 5, unread_only: true }).catch(() => null),
-        getProcessInspections({ status: '待检验', limit: 50 }).catch(() => []),
-        getIncomingInspections({ status: '待检验', limit: 50 }).catch(() => []),
-        getFinishedGoodsInspections({ status: '待检验', limit: 50 }).catch(() => []),
+        getPendingInspectionCount(),
       ]);
       setStats(statsRes);
-      setPendingInspectionCount((processList?.length || 0) + (incomingList?.length || 0) + (finishedList?.length || 0));
+      setPendingInspectionCount(pendingCount);
       
       let nameToSet = user?.full_name || user?.username || '操作员';
       if (profile?.full_name || profile?.username) {
@@ -79,33 +77,23 @@ export default function WorkbenchScreen() {
       setUserRole(user?.position?.name || user?.roles?.[0]?.name || (user ? '操作员' : ''));
       setUserDepartment(user?.department?.name || '');
       
+      // 头像异步加载，不阻塞首屏
       const avatarUuid = profile?.avatar || user?.avatar;
       if (avatarUuid && typeof avatarUuid === 'string' && avatarUuid.length > 0) {
-        try {
-          const previewInfo = await getFilePreview(avatarUuid, true);
-          if (previewInfo.preview_url) {
+        getFilePreview(avatarUuid, true).then((previewInfo) => {
+          if (previewInfo?.preview_url) {
             let processedUrl = previewInfo.preview_url;
-            
-            // 后端有可能返回带有 localhost 的绝对路径。在安卓模拟器或者真机上，需要将其转换为当前的真实 API BASE_URL
             if (processedUrl.includes('localhost') || processedUrl.includes('127.0.0.1')) {
               const match = processedUrl.match(/https?:\/\/[^\/]+(.*)/);
-              if (match && match[1]) {
-                processedUrl = match[1];
-              }
+              if (match?.[1]) processedUrl = match[1];
             }
-
             const base = BASE_URL.replace(/\/api\/v1\/?$/, '');
-            const url = processedUrl.startsWith('http') 
-              ? processedUrl 
-              : `${base}${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
-            
+            const url = processedUrl.startsWith('http') ? processedUrl : `${base}${processedUrl.startsWith('/') ? '' : '/'}${processedUrl}`;
             setUserAvatar(url);
           } else {
-             setUserAvatar(null);
+            setUserAvatar(null);
           }
-        } catch (error) {
-           setUserAvatar(null);
-        }
+        }).catch(() => setUserAvatar(null));
       } else {
         setUserAvatar(null);
       }

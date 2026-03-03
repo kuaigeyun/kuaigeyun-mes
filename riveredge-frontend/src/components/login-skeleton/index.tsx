@@ -14,7 +14,7 @@ const LoginSkeleton: React.FC = () => {
       style={{
         minHeight: '100vh',
         display: 'flex',
-        background: '#1890ff',
+        background: '#fff',
       }}
     >
       {/* 左侧品牌区占位（桌面端） */}

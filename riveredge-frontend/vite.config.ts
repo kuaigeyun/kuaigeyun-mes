@@ -152,6 +152,8 @@ export default defineConfig({
     minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
     // 代码分割配置（按依赖类型分割，不按路由分割，避免菜单加载慢）
     rollupOptions: {
+      // 多入口：登录页独立 bundle（login.html + login.tsx 已创建，需 build:login 单独构建后合并）
+      // 注：vite build src 时 root 覆盖可能导致多入口仅生成 index，故保留单入口
       output: {
         // 手动代码分割策略（顺序重要：优先匹配最具体的路径）
         manualChunks: (id) => {
@@ -217,6 +219,20 @@ export default defineConfig({
     } : undefined,
   },
   plugins: [
+    // 登录页 MPA：开发环境 /login 映射到 login.html（与 Caddy 生产配置一致）
+    {
+      name: 'login-mpa-rewrite',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '';
+          const pathname = url.split('?')[0];
+          if (pathname === '/login' || pathname === '/login/') {
+            req.url = '/login.html';
+          }
+          next();
+        });
+      },
+    },
     // React 插件 - 优化 Fast Refresh 和 HMR
     react({
       // 包含所有 React 文件进行 HMR

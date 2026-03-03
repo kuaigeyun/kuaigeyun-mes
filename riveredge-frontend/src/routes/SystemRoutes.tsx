@@ -23,11 +23,12 @@ import NotFoundPage from '../pages/404';
 
 // 登录页懒加载（第一印象页，按需加载以减小主包）
 const LoginPage = React.lazy(() => import('../pages/login'));
-import InfraLoginPage from '../pages/infra/login';
-import LockScreenPage from '../pages/lock-screen';
-import InitWizardPage from '../pages/init/wizard';
-import TemplateSelectPage from '../pages/init/template-select';
-import QRCodeScanPage from '../pages/qrcode/scan';
+// 公开页面按需懒加载，减小主包体积，加快登录首屏
+const InfraLoginPage = React.lazy(() => import('../pages/infra/login'));
+const LockScreenPage = React.lazy(() => import('../pages/lock-screen'));
+const InitWizardPage = React.lazy(() => import('../pages/init/wizard'));
+const TemplateSelectPage = React.lazy(() => import('../pages/init/template-select'));
+const QRCodeScanPage = React.lazy(() => import('../pages/qrcode/scan'));
 
 // 懒加载包装（默认骨架屏）
 const withSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -147,11 +148,11 @@ const SystemRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<IndexPage />} />
     <Route path="/login" element={withLoginSuspense(LoginPage)} />
-    <Route path="/infra/login" element={<InfraLoginPage />} />
-    <Route path="/lock-screen" element={<LockScreenPage />} />
-    <Route path="/init/wizard" element={<InitWizardPage />} />
-    <Route path="/init/template-select" element={<TemplateSelectPage />} />
-    <Route path="/qrcode/scan" element={<QRCodeScanPage />} />
+    <Route path="/infra/login" element={<Suspense fallback={<LoginSkeleton />}><InfraLoginPage /></Suspense>} />
+    <Route path="/lock-screen" element={<Suspense fallback={<PageSkeleton />}><LockScreenPage /></Suspense>} />
+    <Route path="/init/wizard" element={<Suspense fallback={<PageSkeleton />}><InitWizardPage /></Suspense>} />
+    <Route path="/init/template-select" element={<Suspense fallback={<PageSkeleton />}><TemplateSelectPage /></Suspense>} />
+    <Route path="/qrcode/scan" element={<Suspense fallback={<PageSkeleton />}><QRCodeScanPage /></Suspense>} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
