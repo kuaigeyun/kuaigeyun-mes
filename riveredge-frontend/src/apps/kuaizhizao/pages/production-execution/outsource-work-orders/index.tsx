@@ -948,11 +948,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               </div>
               {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
                 <div style={{ marginTop: 8 }}>
-                  {selectedMaterialSourceInfo.validationErrors.map((error, index) => (
-                    <div key={index} style={{ color: '#ff4d4f', marginBottom: 4 }}>
-                      ❌ {error}
-                    </div>
-                  ))}
+                    {selectedMaterialSourceInfo.validationErrors.map((err, index) => (
+                      <div key={index} style={{ color: '#ff4d4f', marginBottom: 4 }}>
+                        {`× ${err}`}
+                      </div>
+                    ))}
                 </div>
               )}
               {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
@@ -962,7 +962,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               )}
               {selectedMaterialSourceInfo.canCreateWorkOrder && (
                 <div style={{ marginTop: 8, color: '#52c41a' }}>
-                  ✓ 物料来源验证通过，可以创建工单委外
+                  √ 物料来源验证通过，可以创建工单委外
                   {selectedMaterialSourceInfo.supplierName && (
                     <span style={{ marginLeft: 16 }}>
                       默认供应商：{selectedMaterialSourceInfo.supplierName}

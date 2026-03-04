@@ -50,6 +50,7 @@ nul
 bin/
 deploy/
 scripts/
+build-web-h5.sh
 !riveredge-frontend/scripts/
 riveredge-panel/diagnose.sh
 riveredge-panel/fix-and-start.sh
