@@ -51,7 +51,7 @@ export default function RootLayout() {
                 <Stack.Screen name="performance" />
                 <Stack.Screen name="exception" />
                 <Stack.Screen name="(profile)" options={{ headerShown: false }} />
-                <Stack.Screen name="+not-found" />
+                {/* +not-found 由 expo-router 自动注入，显式声明会导致 "Too many screens" 警告 */}
             </Stack>
         </Provider>
     );
