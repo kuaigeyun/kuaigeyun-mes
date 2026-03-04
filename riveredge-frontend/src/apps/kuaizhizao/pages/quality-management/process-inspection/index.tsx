@@ -19,6 +19,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -73,8 +74,11 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const ProcessInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+
+  const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['process-inspection-statistics'] });
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
 
@@ -115,13 +119,18 @@ const ProcessInspectionPage: React.FC = () => {
   const [currentDefectInspection, setCurrentDefectInspection] = useState<ProcessInspection | null>(null);
   const defectFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
 
-  // 统计数据状态
-  const [stats] = useState({
-    pendingCount: 8,
-    qualifiedCount: 32,
-    unqualifiedCount: 2,
-    totalInspected: 42,
+  // 统计数据（从接口获取）
+  const { data: statsData } = useQuery({
+    queryKey: ['process-inspection-statistics'],
+    queryFn: () => qualityApi.processInspection.statistics(),
+    staleTime: 30 * 1000,
   });
+  const stats = {
+    pendingCount: statsData?.pending_count ?? 0,
+    qualifiedCount: statsData?.qualified_count ?? 0,
+    unqualifiedCount: statsData?.unqualified_count ?? 0,
+    totalInspected: statsData?.total_count ?? 0,
+  };
 
   // 处理详情查看
   const handleDetail = async (record: ProcessInspection) => {
@@ -171,6 +180,7 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.success('过程检验完成');
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
@@ -192,6 +202,7 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.success('成功创建过程检验单');
       setCreateFromWorkOrderModalVisible(false);
       createFromWorkOrderFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建过程检验单失败');
@@ -227,6 +238,7 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.success('不合格品记录创建成功');
       setCreateDefectModalVisible(false);
       defectFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建不合格品记录失败');
@@ -466,6 +478,7 @@ const ProcessInspectionPage: React.FC = () => {
                   await qualityApi.processInspection.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateStats();
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

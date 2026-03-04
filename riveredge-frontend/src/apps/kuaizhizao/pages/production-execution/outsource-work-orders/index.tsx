@@ -160,6 +160,69 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     loadPriority();
   }, []);
 
+  /** 产品选择变更：获取物料来源信息并自动填充 */
+  const handleProductChange = async (value: number | undefined) => {
+    if (value) {
+      const selectedMaterial = productList.find(p => p.id === value);
+      if (selectedMaterial) {
+        try {
+          const materialDetail = await materialApi.get(selectedMaterial.uuid);
+          const sourceType = materialDetail.sourceType || materialDetail.source_type;
+          const sourceConfig = materialDetail.sourceConfig || materialDetail.source_config || {};
+
+          const sourceTypeNames: Record<string, string> = {
+            Make: '自制件',
+            Buy: '采购件',
+            Phantom: '虚拟件',
+            Outsource: '委外件',
+            Configure: '配置件',
+          };
+
+          if (sourceType === 'Outsource') {
+            const supplierId = sourceConfig.outsource_supplier_id;
+            const supplierCode = sourceConfig.outsource_supplier_code;
+            const supplierName = sourceConfig.outsource_supplier_name;
+            const outsourceOperation = sourceConfig.outsource_operation;
+            const unitPrice = sourceConfig.outsource_price;
+
+            setSelectedMaterialSourceInfo({
+              sourceType,
+              sourceTypeName: sourceTypeNames[sourceType] || sourceType,
+              supplierId,
+              supplierCode,
+              supplierName,
+              outsourceOperation,
+              unitPrice,
+              canCreateWorkOrder: true,
+            });
+
+            if (supplierId) {
+              formRef.current?.setFieldsValue({
+                supplierId,
+                outsourceOperation,
+                unitPrice,
+              });
+            }
+          } else {
+            setSelectedMaterialSourceInfo({
+              sourceType,
+              sourceTypeName: sourceTypeNames[sourceType] || sourceType,
+              canCreateWorkOrder: false,
+              validationErrors: [`物料来源类型不是委外件（Outsource），当前类型：${sourceType}`],
+            });
+          }
+        } catch (error) {
+          console.error('获取物料详情失败:', error);
+          setSelectedMaterialSourceInfo(null);
+        }
+      } else {
+        setSelectedMaterialSourceInfo(null);
+      }
+    } else {
+      setSelectedMaterialSourceInfo(null);
+    }
+  };
+
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
@@ -463,7 +526,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       title: '委外数量',
       dataIndex: 'quantity',
       width: 100,
-      render: (_, record) => record.quantity?.toFixed(2),
+      render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
     },
     {
       title: '委外供应商',
@@ -636,7 +699,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     {
       title: '委外数量',
       dataIndex: 'quantity',
-      render: (_, record) => record.quantity?.toFixed(2),
+      render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
     },
     {
       title: '委外供应商',
@@ -870,70 +933,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               value: product.id,
             }))}
             quickCreate={{ label: '物料管理', onClick: () => navigate('/apps/master-data/materials') }}
-            onChange={async (value: number | undefined) => {
-              if (value) {
-                const selectedMaterial = productList.find(p => p.id === value);
-                if (selectedMaterial) {
-                  try {
-                    const materialDetail = await materialApi.get(selectedMaterial.uuid);
-                    const sourceType = materialDetail.sourceType || materialDetail.source_type;
-                    const sourceConfig = materialDetail.sourceConfig || materialDetail.source_config || {};
-
-                    const sourceTypeNames: Record<string, string> = {
-                      'Make': '自制件',
-                      'Buy': '采购件',
-                      'Phantom': '虚拟件',
-                      'Outsource': '委外件',
-                      'Configure': '配置件',
-                    };
-
-                    if (sourceType === 'Outsource') {
-                      // 委外件，获取委外配置
-                      const supplierId = sourceConfig.outsource_supplier_id;
-                      const supplierCode = sourceConfig.outsource_supplier_code;
-                      const supplierName = sourceConfig.outsource_supplier_name;
-                      const outsourceOperation = sourceConfig.outsource_operation;
-                      const unitPrice = sourceConfig.outsource_price;
-
-                      setSelectedMaterialSourceInfo({
-                        sourceType,
-                        sourceTypeName: sourceTypeNames[sourceType] || sourceType,
-                        supplierId,
-                        supplierCode,
-                        supplierName,
-                        outsourceOperation,
-                        unitPrice,
-                        canCreateWorkOrder: true,
-                      });
-
-                      // 自动填充表单
-                      if (supplierId) {
-                        formRef.current?.setFieldsValue({
-                          supplierId,
-                          outsourceOperation,
-                          unitPrice,
-                        });
-                      }
-                    } else {
-                      setSelectedMaterialSourceInfo({
-                        sourceType,
-                        sourceTypeName: sourceTypeNames[sourceType] || sourceType,
-                        canCreateWorkOrder: false,
-                        validationErrors: [`物料来源类型不是委外件（Outsource），当前类型：${sourceType}`],
-                      });
-                    }
-                  } catch (error) {
-                    console.error('获取物料详情失败:', error);
-                    setSelectedMaterialSourceInfo(null);
-                  }
-                } else {
-                  setSelectedMaterialSourceInfo(null);
-                }
-              } else {
-                setSelectedMaterialSourceInfo(null);
-              }
-            }
-          }}
+            onChange={handleProductChange}
           />
         </ProFormItem>
         {/* 物料来源信息显示 */}
@@ -950,7 +950,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 <div style={{ marginTop: 8 }}>
                     {selectedMaterialSourceInfo.validationErrors.map((err, index) => (
                       <div key={index} style={{ color: '#ff4d4f', marginBottom: 4 }}>
-                        {`× ${err}`}
+                        {'\u00D7 '}{err}
                       </div>
                     ))}
                 </div>
@@ -1133,8 +1133,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
               <div><strong>工单委外编码：</strong>{currentWorkOrderForIssue.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForIssue.productName || currentWorkOrderForIssue.product_name}</div>
-              <div><strong>委外数量：</strong>{currentWorkOrderForIssue.quantity?.toFixed(2)}</div>
-              <div><strong>已发料数量：</strong>{(currentWorkOrderForIssue.issuedQuantity || currentWorkOrderForIssue.issued_quantity || 0).toFixed(2)}</div>
+              <div><strong>委外数量：</strong>{currentWorkOrderForIssue.quantity != null ? Number(currentWorkOrderForIssue.quantity).toFixed(2) : '-'}</div>
+              <div><strong>已发料数量：</strong>{Number(currentWorkOrderForIssue.issuedQuantity ?? currentWorkOrderForIssue.issued_quantity ?? 0).toFixed(2)}</div>
             </div>
             <Divider>发料信息</Divider>
             <ProFormSelect
@@ -1252,9 +1252,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
               <div><strong>工单委外编码：</strong>{currentWorkOrderForReceipt.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForReceipt.productName || currentWorkOrderForReceipt.product_name}</div>
-              <div><strong>委外数量：</strong>{currentWorkOrderForReceipt.quantity?.toFixed(2)}</div>
-              <div><strong>已收货数量：</strong>{(currentWorkOrderForReceipt.receivedQuantity || currentWorkOrderForReceipt.received_quantity || 0).toFixed(2)}</div>
-              <div><strong>剩余数量：</strong>{(currentWorkOrderForReceipt.quantity! - (currentWorkOrderForReceipt.receivedQuantity || currentWorkOrderForReceipt.received_quantity || 0)).toFixed(2)}</div>
+              <div><strong>委外数量：</strong>{currentWorkOrderForReceipt.quantity != null ? Number(currentWorkOrderForReceipt.quantity).toFixed(2) : '-'}</div>
+              <div><strong>已收货数量：</strong>{Number(currentWorkOrderForReceipt.receivedQuantity ?? currentWorkOrderForReceipt.received_quantity ?? 0).toFixed(2)}</div>
+              <div><strong>剩余数量：</strong>{(Number(currentWorkOrderForReceipt.quantity ?? 0) - Number(currentWorkOrderForReceipt.receivedQuantity ?? currentWorkOrderForReceipt.received_quantity ?? 0)).toFixed(2)}</div>
             </div>
             <Divider>收货信息</Divider>
             <ProFormDigit

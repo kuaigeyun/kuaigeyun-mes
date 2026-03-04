@@ -30,6 +30,21 @@ import './index.less';
 
 const { Title, Text } = Typography;
 
+/** 带重试的 fetch，提高 LOGO 等资源加载成功率 */
+const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      if (i < retries - 1) await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw new Error('Fetch failed after retries');
+};
+
 /**
  * 登录表单数据接口
  */
@@ -102,11 +117,23 @@ export default function LoginPage() {
   });
 
   // 记录是否已加载LOGO，用于控制显示
-  // 初始值：如果logoUrl不是默认值，说明已经从缓存读取，应该立即显示
-  const [isLogoLoaded, setIsLogoLoaded] = useState<boolean>(() => {
-    // 如果logoUrl不是默认值，说明已经加载了（可能是从缓存读取的）
-    return logoUrl !== '/img/logo.png';
-  });
+  const [isLogoLoaded, setIsLogoLoaded] = useState<boolean>(() => logoUrl !== '/img/logo.png');
+
+  // 图片加载失败时的重试次数（提高加载成功率，最多重试 2 次）
+  const [logoRetryKey, setLogoRetryKey] = useState(0);
+  // logoUrl 变化时重置重试计数
+  useEffect(() => setLogoRetryKey(0), [logoUrl]);
+
+  // 预加载 LOGO 图片，提高首屏加载成功率
+  useEffect(() => {
+    if (!logoUrl || logoUrl.startsWith('blob:')) return;
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = logoUrl;
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, [logoUrl]);
 
   // 社交图标延后加载，减小登录 chunk 体积
   const [socialIcons, setSocialIcons] = useState<Record<string, string>>({});
@@ -162,34 +189,26 @@ export default function LoginPage() {
 
       const logoValue = platformSettings.platform_logo.trim();
       
-      // 如果是UUID格式，使用公开的文件预览接口
+      // 如果是UUID格式，使用公开的文件预览接口（带重试）
       if (isUUID(logoValue)) {
         try {
-          // 使用公开的文件预览接口（相对路径，便于局域网访问，避免 127.0.0.1 硬编码）
-          const response = await fetch(
+          const response = await fetchWithRetry(
             `/api/v1/core/files/${logoValue}/preview/public?category=platform-logo`
           );
-          
-          if (response.ok) {
-            const previewInfo = await response.json();
-            setLogoUrl(previewInfo.preview_url);
-            setIsLogoLoaded(true);
-            // 更新缓存
-            try {
-              localStorage.setItem('platformSettingsPublic', JSON.stringify({
-                platform_logo: logoValue,
-                platform_logo_url: previewInfo.preview_url,
-              }));
-            } catch (error) {
-              // 忽略存储错误
-            }
-          } else {
-            console.error('获取LOGO预览URL失败:', response.statusText);
-            setLogoUrl('/img/logo.png');
-            setIsLogoLoaded(true);
+          const previewInfo = await response.json();
+          setLogoUrl(previewInfo.preview_url);
+          setIsLogoLoaded(true);
+          // 更新缓存
+          try {
+            localStorage.setItem('platformSettingsPublic', JSON.stringify({
+              platform_logo: logoValue,
+              platform_logo_url: previewInfo.preview_url,
+            }));
+          } catch (error) {
+            // 忽略存储错误
           }
         } catch (error) {
-          console.error('获取LOGO预览URL失败:', error);
+          console.error('获取LOGO预览URL失败（已重试）:', error);
           setLogoUrl('/img/logo.png');
           setIsLogoLoaded(true);
         }
@@ -1378,17 +1397,23 @@ export default function LoginPage() {
         }}
       >
         <img 
+          key={logoRetryKey}
           src={logoUrl} 
           alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
           className="logo-img"
           width={48}
           height={48}
+          loading="eager"
           style={{
-            opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
+            opacity: 1,
             transition: 'opacity 0.3s ease-in-out',
           }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
+            if (logoRetryKey < 2) {
+              setLogoRetryKey((k) => k + 1);
+              return;
+            }
             target.style.display = 'none';
             const placeholder = target.parentElement?.querySelector('.logo-placeholder');
             if (!placeholder) {
@@ -1434,17 +1459,23 @@ export default function LoginPage() {
           transition: 'opacity 0.3s ease-in-out',
         }}>
           <img 
+            key={logoRetryKey}
             src={logoUrl} 
             alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
             className="logo-img"
             width={48}
             height={48}
+            loading="eager"
             style={{
-              opacity: 1, // 平台设置加载中时也显示 logo，避免 API 不可达时长期空白
+              opacity: 1,
               transition: 'opacity 0.3s ease-in-out',
             }}
             onError={(e) => {
               const target = e.target as HTMLImageElement;
+              if (logoRetryKey < 2) {
+                setLogoRetryKey((k) => k + 1);
+                return;
+              }
               target.style.display = 'none';
               const placeholder = target.parentElement?.querySelector('.logo-placeholder');
               if (!placeholder) {

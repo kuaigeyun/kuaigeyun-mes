@@ -10,7 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -462,82 +462,106 @@ const EquipmentFaultsPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormSelect
-          name="equipment_uuid"
-          label="关联设备"
-          placeholder="请选择设备"
-          request={async () => {
-            try {
-              const response = await equipmentApi.list({ limit: 1000 });
-              return (response.items || []).map((eq: any) => ({
-                label: `${eq.code} - ${eq.name}`,
-                value: eq.uuid,
-              }));
-            } catch (error) {
-              return [];
-            }
-          }}
-          rules={[{ required: true, message: '请选择设备' }]}
-        />
-        <ProFormDatePicker
-          name="fault_date"
-          label="故障日期"
-          placeholder="请选择故障日期"
-          rules={[{ required: true, message: '请选择故障日期' }]}
-        />
-        <ProFormSelect
-          name="fault_type"
-          label="故障类型"
-          placeholder="请选择故障类型"
-          options={[
-            { label: '机械故障', value: '机械故障' },
-            { label: '电气故障', value: '电气故障' },
-            { label: '软件故障', value: '软件故障' },
-            { label: '其他', value: '其他' },
-          ]}
-          rules={[{ required: true, message: '请选择故障类型' }]}
-        />
-        <ProFormSelect
-          name="fault_level"
-          label="故障级别"
-          placeholder="请选择故障级别"
-          options={[
-            { label: '轻微', value: '轻微' },
-            { label: '一般', value: '一般' },
-            { label: '严重', value: '严重' },
-          ]}
-          rules={[{ required: true, message: '请选择故障级别' }]}
-        />
-        <ProFormTextArea
-          name="fault_description"
-          label="故障描述"
-          placeholder="请输入故障描述"
-          rules={[{ required: true, message: '请输入故障描述' }]}
-          fieldProps={{ rows: 4 }}
-        />
-        <ProFormSelect
-          name="status"
-          label="状态"
-          placeholder="请选择状态"
-          options={[
-            { label: '待处理', value: '待处理' },
-            { label: '处理中', value: '处理中' },
-            { label: '已修复', value: '已修复' },
-            { label: '已关闭', value: '已关闭' },
-          ]}
-          rules={[{ required: true, message: '请选择状态' }]}
-        />
-        <ProFormSelect
-          name="repair_required"
-          label="需要维修"
-          placeholder="请选择是否需要维修"
-          options={[
-            { label: '是', value: true },
-            { label: '否', value: false },
-          ]}
-          rules={[{ required: true, message: '请选择是否需要维修' }]}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="equipment_uuid"
+              label="关联设备"
+              placeholder="请选择设备"
+              request={async () => {
+                try {
+                  const response = await equipmentApi.list({ limit: 1000 });
+                  return (response.items || []).map((eq: any) => ({
+                    label: `${eq.code} - ${eq.name}`,
+                    value: eq.uuid,
+                  }));
+                } catch (error) {
+                  return [];
+                }
+              }}
+              rules={[{ required: true, message: '请选择设备' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="fault_date"
+              label="故障日期"
+              placeholder="请选择故障日期"
+              rules={[{ required: true, message: '请选择故障日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="fault_type"
+              label="故障类型"
+              placeholder="请选择故障类型"
+              options={[
+                { label: '机械故障', value: '机械故障' },
+                { label: '电气故障', value: '电气故障' },
+                { label: '软件故障', value: '软件故障' },
+                { label: '其他', value: '其他' },
+              ]}
+              rules={[{ required: true, message: '请选择故障类型' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="fault_level"
+              label="故障级别"
+              placeholder="请选择故障级别"
+              options={[
+                { label: '轻微', value: '轻微' },
+                { label: '一般', value: '一般' },
+                { label: '严重', value: '严重' },
+              ]}
+              rules={[{ required: true, message: '请选择故障级别' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="fault_description"
+              label="故障描述"
+              placeholder="请输入故障描述"
+              rules={[{ required: true, message: '请输入故障描述' }]}
+              fieldProps={{ rows: 4 }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="status"
+              label="状态"
+              placeholder="请选择状态"
+              options={[
+                { label: '待处理', value: '待处理' },
+                { label: '处理中', value: '处理中' },
+                { label: '已修复', value: '已修复' },
+                { label: '已关闭', value: '已关闭' },
+              ]}
+              rules={[{ required: true, message: '请选择状态' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="repair_required"
+              label="需要维修"
+              placeholder="请选择是否需要维修"
+              options={[
+                { label: '是', value: true },
+                { label: '否', value: false },
+              ]}
+              rules={[{ required: true, message: '请选择是否需要维修' }]}
+            />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 创建维修记录 Modal */}
@@ -553,42 +577,58 @@ const EquipmentFaultsPage: React.FC = () => {
         isEdit={false}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={repairFormRef}
+        grid={false}
       >
-        <ProFormDatePicker
-          name="repair_date"
-          label="维修日期"
-          placeholder="请选择维修日期"
-          rules={[{ required: true, message: '请选择维修日期' }]}
-          fieldProps={{ showTime: true }}
-        />
-        <ProFormSelect
-          name="repair_type"
-          label="维修类型"
-          placeholder="请选择维修类型"
-          options={[
-            { label: '现场维修', value: '现场维修' },
-            { label: '返厂维修', value: '返厂维修' },
-            { label: '委外维修', value: '委外维修' },
-          ]}
-          rules={[{ required: true, message: '请选择维修类型' }]}
-        />
-        <ProFormTextArea
-          name="repair_description"
-          label="维修描述"
-          placeholder="请输入维修描述"
-          rules={[{ required: true, message: '请输入维修描述' }]}
-          fieldProps={{ rows: 4 }}
-        />
-        <ProFormSelect
-          name="status"
-          label="维修状态"
-          placeholder="请选择维修状态"
-          options={[
-            { label: '进行中', value: '进行中' },
-            { label: '已完成', value: '已完成' },
-            { label: '已取消', value: '已取消' },
-          ]}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="repair_date"
+              label="维修日期"
+              placeholder="请选择维修日期"
+              rules={[{ required: true, message: '请选择维修日期' }]}
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="repair_type"
+              label="维修类型"
+              placeholder="请选择维修类型"
+              options={[
+                { label: '现场维修', value: '现场维修' },
+                { label: '返厂维修', value: '返厂维修' },
+                { label: '委外维修', value: '委外维修' },
+              ]}
+              rules={[{ required: true, message: '请选择维修类型' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="repair_description"
+              label="维修描述"
+              placeholder="请输入维修描述"
+              rules={[{ required: true, message: '请输入维修描述' }]}
+              fieldProps={{ rows: 4 }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="status"
+              label="维修状态"
+              placeholder="请选择维修状态"
+              options={[
+                { label: '进行中', value: '进行中' },
+                { label: '已完成', value: '已完成' },
+                { label: '已取消', value: '已取消' },
+              ]}
+              rules={[{ required: true, message: '请选择维修状态' }]}
+            />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 故障记录详情 Drawer */}

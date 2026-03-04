@@ -4,9 +4,19 @@
 
 import { apiRequest } from '../../../services/api';
 
+/** 检验统计（用于指标卡片） */
+export interface InspectionStatistics {
+  pending_count: number;
+  qualified_count: number;
+  unqualified_count: number;
+  total_count: number;
+}
+
 export const qualityApi = {
   incomingInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/incoming-inspections', { method: 'GET', params }),
+    statistics: async () =>
+      apiRequest<InspectionStatistics>('/apps/kuaizhizao/incoming-inspections/statistics', { method: 'GET' }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/incoming-inspections', { method: 'POST', data }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}`, { method: 'DELETE' }),
@@ -26,6 +36,8 @@ export const qualityApi = {
   },
   processInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/process-inspections', { method: 'GET', params }),
+    statistics: async () =>
+      apiRequest<InspectionStatistics>('/apps/kuaizhizao/process-inspections/statistics', { method: 'GET' }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/process-inspections', { method: 'POST', data }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/process-inspections/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/process-inspections/${id}`, { method: 'DELETE' }),
@@ -48,6 +60,8 @@ export const qualityApi = {
   },
   finishedGoodsInspection: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/finished-goods-inspections', { method: 'GET', params }),
+    statistics: async () =>
+      apiRequest<InspectionStatistics>('/apps/kuaizhizao/finished-goods-inspections/statistics', { method: 'GET' }),
     create: async (data: any) => apiRequest('/apps/kuaizhizao/finished-goods-inspections', { method: 'POST', data }),
     update: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}`, { method: 'PUT', data }),

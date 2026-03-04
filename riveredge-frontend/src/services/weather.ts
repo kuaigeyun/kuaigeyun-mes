@@ -70,56 +70,86 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 }
 
 /**
+ * 通过 Open-Meteo 地理编码 API 将城市名解析为经纬度
+ */
+async function geocodeCity(cityName: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=zh`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.results;
+    if (Array.isArray(results) && results.length > 0) {
+      const r = results[0];
+      const lat = parseFloat(r.latitude);
+      const lon = parseFloat(r.longitude);
+      if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+    }
+  } catch {
+    // 静默失败
+  }
+  return null;
+}
+
+/**
+ * 通过 Open-Meteo 获取天气（经纬度）
+ */
+async function getWeatherByCoords(lat: number, lon: number, cityLabel?: string): Promise<WeatherData | null> {
+  try {
+    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`;
+    const res = await fetch(meteoUrl, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const current = data.current;
+    if (!current) return null;
+    const weatherCode = current.weather_code || 0;
+    return {
+      city: cityLabel ?? `${lat},${lon}`,
+      temperature: Math.round(current.temperature_2m ?? 0),
+      description: getWeatherDescription(weatherCode),
+      iconCode: weatherCode.toString(),
+      humidity: Math.round(current.relative_humidity_2m ?? 0),
+      windSpeed: Math.round((current.wind_speed_10m ?? 0) * 3.6),
+      feelsLike: Math.round(current.temperature_2m ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 获取天气信息
- * 经纬度时优先 Open-Meteo（国内可访问），城市名时尝试 wttr.in
- * 
+ * 优先使用 Open-Meteo（国内可访问）；城市名时先地理编码再取天气，避免依赖 wttr.in
+ *
  * @param city 城市名称或经纬度（格式：lat,lon）
  */
 export async function getWeather(city: string): Promise<WeatherData | null> {
   try {
-    // 若有经纬度，优先使用 Open-Meteo（国内可访问，wttr.in 在国内常超时）
+    // 1. 若有经纬度，直接使用 Open-Meteo
     if (city.includes(',')) {
-      const [lat, lon] = city.split(',').map(Number);
+      const parts = city.split(',');
+      const lat = parseFloat(parts[0]);
+      const lon = parseFloat(parts[1]);
       if (!isNaN(lat) && !isNaN(lon)) {
-        try {
-          const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`;
-          const meteoResponse = await fetch(meteoUrl, {
-            signal: AbortSignal.timeout(5000),
-          });
-          
-          if (meteoResponse.ok) {
-            const data = await meteoResponse.json();
-            const current = data.current;
-            
-            if (current) {
-              const weatherCode = current.weather_code || 0;
-              const description = getWeatherDescription(weatherCode);
-              
-              return {
-                city: city,
-                temperature: Math.round(current.temperature_2m || 0),
-                description: description,
-                iconCode: weatherCode.toString(),
-                humidity: Math.round(current.relative_humidity_2m || 0),
-                windSpeed: Math.round((current.wind_speed_10m || 0) * 3.6),
-                feelsLike: Math.round(current.temperature_2m || 0),
-              };
-            }
-          }
-        } catch (meteoError) {
-          console.warn('Open-Meteo API 请求失败:', meteoError);
-        }
+        const result = await getWeatherByCoords(lat, lon, city);
+        if (result) return result;
       }
     }
-    
-    // 城市名称：尝试 wttr.in（国内可能超时，失败则返回 null）
+
+    // 2. 城市名：通过 Open-Meteo 地理编码获取经纬度，再取天气
+    const coords = await geocodeCity(city);
+    if (coords) {
+      const result = await getWeatherByCoords(coords.lat, coords.lon, city);
+      if (result) return result;
+    }
+
+    // 3. 备选：wttr.in（国内可能超时）
     try {
       const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
       const wttrResponse = await fetch(wttrUrl, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(4000),
       });
-      
       if (wttrResponse.ok) {
         const data = await wttrResponse.json();
         if (data.current_condition?.[0]) {
@@ -140,7 +170,7 @@ export async function getWeather(city: string): Promise<WeatherData | null> {
     } catch {
       // wttr.in 失败静默跳过
     }
-    
+
     return null;
   } catch (error) {
     console.error('获取天气信息失败:', error);
@@ -193,26 +223,17 @@ function getWeatherDescription(code: number): string {
  */
 export async function getWeatherByIP(): Promise<WeatherData | null> {
   try {
-    // 1. 获取IP定位
     const location = await getLocationByIP();
-    if (!location || !location.city) {
-      console.warn('无法获取IP定位信息');
+    if (!location || (!location.city && (location.lat == null || location.lon == null))) {
       return null;
     }
-    
-    // 2. 优先使用经纬度，如果没有则使用城市名称
-    const locationParam = location.lat && location.lon 
+    const locationParam = location.lat != null && location.lon != null
       ? `${location.lat},${location.lon}`
       : location.city;
-    
-    // 3. 获取天气
     const weather = await getWeather(locationParam);
-    
     if (weather) {
-      // 使用定位获取的城市名称
-      weather.city = location.city;
+      weather.city = location.city || location.region || weather.city;
     }
-    
     return weather;
   } catch (error) {
     console.error('根据IP获取天气失败:', error);

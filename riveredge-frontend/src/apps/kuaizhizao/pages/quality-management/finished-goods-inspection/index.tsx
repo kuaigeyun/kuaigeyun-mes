@@ -19,6 +19,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -71,8 +72,11 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const FinishedGoodsInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+
+  const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['finished-goods-inspection-statistics'] });
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
 
@@ -110,13 +114,18 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [currentDefectInspection, setCurrentDefectInspection] = useState<FinishedGoodsInspection | null>(null);
   const defectFormRef = useRef<any>(null);
 
-  // 统计数据状态
-  const [stats] = useState({
-    pendingCount: 5,
-    qualifiedCount: 18,
-    unqualifiedCount: 1,
-    totalInspected: 24,
+  // 统计数据（从接口获取）
+  const { data: statsData } = useQuery({
+    queryKey: ['finished-goods-inspection-statistics'],
+    queryFn: () => qualityApi.finishedGoodsInspection.statistics(),
+    staleTime: 30 * 1000,
   });
+  const stats = {
+    pendingCount: statsData?.pending_count ?? 0,
+    qualifiedCount: statsData?.qualified_count ?? 0,
+    unqualifiedCount: statsData?.unqualified_count ?? 0,
+    totalInspected: statsData?.total_count ?? 0,
+  };
 
   // 处理详情查看
   const handleDetail = async (record: FinishedGoodsInspection) => {
@@ -159,6 +168,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.success('成品检验完成');
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
@@ -177,6 +187,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.success('成功创建成品检验单');
       setCreateFromWorkOrderModalVisible(false);
       createFromWorkOrderFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建成品检验单失败');
@@ -212,6 +223,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.success('不合格品记录创建成功');
       setCreateDefectModalVisible(false);
       defectFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建不合格品记录失败');
@@ -461,6 +473,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                   await qualityApi.finishedGoodsInspection.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateStats();
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

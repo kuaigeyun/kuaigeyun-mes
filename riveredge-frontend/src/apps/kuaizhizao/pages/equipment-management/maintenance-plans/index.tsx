@@ -10,7 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -451,94 +451,125 @@ const MaintenancePlansPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormText
-          name="plan_name"
-          label="计划名称"
-          placeholder="请输入计划名称"
-          rules={[{ required: true, message: '请输入计划名称' }]}
-        />
-        <ProFormSelect
-          name="plan_type"
-          label="计划类型"
-          placeholder="请选择计划类型"
-          options={[
-            { label: '定期维护', value: '定期维护' },
-            { label: '预防性维护', value: '预防性维护' },
-            { label: '故障后维护', value: '故障后维护' },
-          ]}
-          rules={[{ required: true, message: '请选择计划类型' }]}
-        />
-        <ProFormSelect
-          name="equipment_uuid"
-          label="关联设备"
-          placeholder="请选择设备"
-          request={async () => {
-            try {
-              const response = await equipmentApi.list({ limit: 1000 });
-              return (response.items || []).map((eq: any) => ({
-                label: `${eq.code} - ${eq.name}`,
-                value: eq.uuid,
-              }));
-            } catch (error) {
-              return [];
-            }
-          }}
-          rules={[{ required: true, message: '请选择设备' }]}
-        />
-        <ProFormSelect
-          name="maintenance_type"
-          label="维护类型"
-          placeholder="请选择维护类型"
-          options={[
-            { label: '日常保养', value: '日常保养' },
-            { label: '定期保养', value: '定期保养' },
-            { label: '大修', value: '大修' },
-            { label: '小修', value: '小修' },
-          ]}
-          rules={[{ required: true, message: '请选择维护类型' }]}
-        />
-        <ProFormDigit
-          name="maintenance_cycle"
-          label="维护周期"
-          placeholder="请输入维护周期"
-          min={1}
-          rules={[{ required: true, message: '请输入维护周期' }]}
-        />
-        <ProFormSelect
-          name="maintenance_cycle_unit"
-          label="周期单位"
-          placeholder="请选择周期单位"
-          options={[
-            { label: '天', value: '天' },
-            { label: '周', value: '周' },
-            { label: '月', value: '月' },
-            { label: '年', value: '年' },
-          ]}
-          rules={[{ required: true, message: '请选择周期单位' }]}
-        />
-        <ProFormDatePicker
-          name="planned_start_date"
-          label="计划开始日期"
-          placeholder="请选择计划开始日期"
-        />
-        <ProFormDatePicker
-          name="planned_end_date"
-          label="计划结束日期"
-          placeholder="请选择计划结束日期"
-        />
-        <ProFormSelect
-          name="status"
-          label="状态"
-          placeholder="请选择状态"
-          options={[
-            { label: '待执行', value: '待执行' },
-            { label: '执行中', value: '执行中' },
-            { label: '已完成', value: '已完成' },
-            { label: '已取消', value: '已取消' },
-          ]}
-          rules={[{ required: true, message: '请选择状态' }]}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="plan_name"
+              label="计划名称"
+              placeholder="请输入计划名称"
+              rules={[{ required: true, message: '请输入计划名称' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="plan_type"
+              label="计划类型"
+              placeholder="请选择计划类型"
+              options={[
+                { label: '定期维护', value: '定期维护' },
+                { label: '预防性维护', value: '预防性维护' },
+                { label: '故障后维护', value: '故障后维护' },
+              ]}
+              rules={[{ required: true, message: '请选择计划类型' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="equipment_uuid"
+              label="关联设备"
+              placeholder="请选择设备"
+              request={async () => {
+                try {
+                  const response = await equipmentApi.list({ limit: 1000 });
+                  return (response.items || []).map((eq: any) => ({
+                    label: `${eq.code} - ${eq.name}`,
+                    value: eq.uuid,
+                  }));
+                } catch (error) {
+                  return [];
+                }
+              }}
+              rules={[{ required: true, message: '请选择设备' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="maintenance_type"
+              label="维护类型"
+              placeholder="请选择维护类型"
+              options={[
+                { label: '日常保养', value: '日常保养' },
+                { label: '定期保养', value: '定期保养' },
+                { label: '大修', value: '大修' },
+                { label: '小修', value: '小修' },
+              ]}
+              rules={[{ required: true, message: '请选择维护类型' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDigit
+              name="maintenance_cycle"
+              label="维护周期"
+              placeholder="请输入维护周期"
+              min={1}
+              rules={[{ required: true, message: '请输入维护周期' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="maintenance_cycle_unit"
+              label="周期单位"
+              placeholder="请选择周期单位"
+              options={[
+                { label: '天', value: '天' },
+                { label: '周', value: '周' },
+                { label: '月', value: '月' },
+                { label: '年', value: '年' },
+              ]}
+              rules={[{ required: true, message: '请选择周期单位' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="planned_start_date"
+              label="计划开始日期"
+              placeholder="请选择计划开始日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="planned_end_date"
+              label="计划结束日期"
+              placeholder="请选择计划结束日期"
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="status"
+              label="状态"
+              placeholder="请选择状态"
+              options={[
+                { label: '待执行', value: '待执行' },
+                { label: '执行中', value: '执行中' },
+                { label: '已完成', value: '已完成' },
+                { label: '已取消', value: '已取消' },
+              ]}
+              rules={[{ required: true, message: '请选择状态' }]}
+            />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 执行维护保养 Modal */}
@@ -554,30 +585,42 @@ const MaintenancePlansPage: React.FC = () => {
         isEdit={false}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={executeFormRef}
+        grid={false}
       >
-        <ProFormDatePicker
-          name="execution_date"
-          label="执行日期"
-          placeholder="请选择执行日期"
-          rules={[{ required: true, message: '请选择执行日期' }]}
-          fieldProps={{ showTime: true }}
-        />
-        <ProFormSelect
-          name="execution_result"
-          label="执行结果"
-          placeholder="请选择执行结果"
-          options={[
-            { label: '正常', value: '正常' },
-            { label: '异常', value: '异常' },
-            { label: '待处理', value: '待处理' },
-          ]}
-        />
-        <ProFormTextArea
-          name="execution_content"
-          label="执行内容"
-          placeholder="请输入执行内容"
-          fieldProps={{ rows: 4 }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="execution_date"
+              label="执行日期"
+              placeholder="请选择执行日期"
+              rules={[{ required: true, message: '请选择执行日期' }]}
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="execution_result"
+              label="执行结果"
+              placeholder="请选择执行结果"
+              options={[
+                { label: '正常', value: '正常' },
+                { label: '异常', value: '异常' },
+                { label: '待处理', value: '待处理' },
+              ]}
+              rules={[{ required: true, message: '请选择执行结果' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="execution_content"
+              label="执行内容"
+              placeholder="请输入执行内容"
+              fieldProps={{ rows: 4 }}
+            />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 维护计划详情 Drawer */}

@@ -19,6 +19,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi, warehouseApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -66,8 +67,11 @@ const DISPOSAL_METHOD_FALLBACK = [
 
 const IncomingInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+
+  const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
 
@@ -106,13 +110,18 @@ const IncomingInspectionPage: React.FC = () => {
   const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
   const defectFormRef = useRef<any>(null);
 
-  // 统计数据状态
-  const [stats] = useState({
-    pendingCount: 12,
-    qualifiedCount: 45,
-    unqualifiedCount: 3,
-    totalInspected: 58,
+  // 统计数据（从接口获取）
+  const { data: statsData } = useQuery({
+    queryKey: ['incoming-inspection-statistics'],
+    queryFn: () => qualityApi.incomingInspection.statistics(),
+    staleTime: 30 * 1000,
   });
+  const stats = {
+    pendingCount: statsData?.pending_count ?? 0,
+    qualifiedCount: statsData?.qualified_count ?? 0,
+    unqualifiedCount: statsData?.unqualified_count ?? 0,
+    totalInspected: statsData?.total_count ?? 0,
+  };
 
   // 处理检验
   const handleInspect = (record: IncomingInspection) => {
@@ -140,6 +149,7 @@ const IncomingInspectionPage: React.FC = () => {
       messageApi.success('来料检验完成');
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error('检验提交失败');
@@ -173,6 +183,7 @@ const IncomingInspectionPage: React.FC = () => {
       messageApi.success('成功创建来料检验单');
       setCreateFromReceiptModalVisible(false);
       createFromReceiptFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建来料检验单失败');
@@ -208,6 +219,7 @@ const IncomingInspectionPage: React.FC = () => {
       messageApi.success('不合格品记录创建成功');
       setCreateDefectModalVisible(false);
       defectFormRef.current?.resetFields();
+      invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建不合格品记录失败');
@@ -451,6 +463,7 @@ const IncomingInspectionPage: React.FC = () => {
                   await qualityApi.incomingInspection.delete(String(id));
                 }
                 messageApi.success(`成功删除 ${keys.length} 条记录`);
+                invalidateStats();
                 actionRef.current?.reload();
               } catch (error: any) {
                 messageApi.error(error.message || '删除失败');

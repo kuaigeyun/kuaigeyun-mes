@@ -19,10 +19,11 @@ import {
   ProFormText,
   ProFormTextArea,
   ProFormItem,
+  ProFormSwitch,
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { App, Button, Tag, Space, Card, Table, Modal } from 'antd';
+import { App, Button, Tag, Space, Card, Table, Modal, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -311,43 +312,51 @@ const InspectionPlansPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         className="inspection-plan-modal"
+        grid={false}
       >
         <style>{`
           .inspection-plan-modal .inspection-steps-form-item .ant-form-item-label { display: none; }
           .inspection-plan-modal .inspection-steps-form-item .ant-form-item-control-input { width: 100%; min-width: 0; }
           .inspection-plan-modal .inspection-steps-form-item .ant-form-item-control-input-content { width: 100%; min-width: 0; }
         `}</style>
-        <ProFormText name="plan_code" label="方案编码" placeholder="留空则自动生成" colProps={{ span: 12 }} />
-        <ProFormText name="plan_name" label="方案名称" rules={[{ required: true, message: '请输入方案名称' }]} colProps={{ span: 12 }} />
-        <ProFormItem name="plan_type" label="方案类型" rules={[{ required: true, message: '请选择方案类型' }]} colProps={{ span: 12 }}>
-          <UniDropdown
-            placeholder="请选择方案类型"
-            showSearch
-            allowClear
-            loading={planTypeLoading}
-            options={planTypeOptions}
-            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
-          />
-        </ProFormItem>
-        <ProFormSelect
-          name="is_active"
-          label="启用状态"
-          options={[
-            { label: '启用', value: true },
-            { label: '停用', value: false },
-          ]}
-          initialValue={true}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText name="material_code" label="物料编码" placeholder="可选" colProps={{ span: 12 }} />
-        <ProFormText name="material_name" label="物料名称" placeholder="可选" colProps={{ span: 12 }} />
-        <ProFormText name="version" label="版本号" initialValue="1.0" colProps={{ span: 12 }} />
-        <ProFormTextArea name="remarks" label="备注" placeholder="可选" colProps={{ span: 24 }} />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="plan_code" label="方案编码" placeholder="留空则自动生成" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="plan_name" label="方案名称" rules={[{ required: true, message: '请输入方案名称' }]} placeholder="请输入" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="plan_type" label="方案类型" rules={[{ required: true, message: '请选择方案类型' }]}>
+              <UniDropdown
+                placeholder="请选择方案类型"
+                showSearch
+                allowClear
+                loading={planTypeLoading}
+                options={planTypeOptions}
+                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+                style={{ width: '100%' }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={12}>
+            <ProFormText name="material_code" label="物料编码" placeholder="可选" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="material_name" label="物料名称" placeholder="可选" />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="version" label="版本号" initialValue="1.0" />
+          </Col>
+        </Row>
 
         <ProForm.Item
           label={null}
           colon={false}
-          colProps={{ span: 24 }}
           className="inspection-steps-form-item"
           style={{ width: '100%' }}
         >
@@ -357,6 +366,17 @@ const InspectionPlansPage: React.FC = () => {
             </Card>
           </div>
         </ProForm.Item>
+
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea name="remarks" label="备注" placeholder="可选" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSwitch name="is_active" label="启用状态" initialValue={true} />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate<InspectionPlan>

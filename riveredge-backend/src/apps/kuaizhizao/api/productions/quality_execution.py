@@ -65,6 +65,50 @@ async def create_incoming_inspection(
     )
 
 
+@router.get("/incoming-inspections/statistics", summary="获取来料检验统计（用于指标卡片）")
+async def get_incoming_inspection_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """返回来料检验各维度数量，用于列表页指标卡片。"""
+    from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+    base = IncomingInspection.filter(tenant_id=tenant_id)
+    try:
+        pending_count = await base.filter(status__in=["待检验", "pending"]).count()
+    except Exception as e:
+        logger.warning(f"incoming-inspection-statistics pending_count: {e}")
+        pending_count = 0
+    try:
+        qualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["合格", "qualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"incoming-inspection-statistics qualified_count: {e}")
+        qualified_count = 0
+    try:
+        unqualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["不合格", "unqualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"incoming-inspection-statistics unqualified_count: {e}")
+        unqualified_count = 0
+    try:
+        total_count = await base.count()
+    except Exception as e:
+        logger.warning(f"incoming-inspection-statistics total_count: {e}")
+        total_count = 0
+
+    return {
+        "pending_count": pending_count,
+        "qualified_count": qualified_count,
+        "unqualified_count": unqualified_count,
+        "total_count": total_count,
+    }
+
+
 @router.get("/incoming-inspections", summary="获取来料检验单列表")
 async def list_incoming_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -284,6 +328,50 @@ async def create_process_inspection(
     )
 
 
+@router.get("/process-inspections/statistics", summary="获取过程检验统计（用于指标卡片）")
+async def get_process_inspection_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """返回过程检验各维度数量，用于列表页指标卡片。"""
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    base = ProcessInspection.filter(tenant_id=tenant_id)
+    try:
+        pending_count = await base.filter(status__in=["待检验", "pending"]).count()
+    except Exception as e:
+        logger.warning(f"process-inspection-statistics pending_count: {e}")
+        pending_count = 0
+    try:
+        qualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["合格", "qualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"process-inspection-statistics qualified_count: {e}")
+        qualified_count = 0
+    try:
+        unqualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["不合格", "unqualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"process-inspection-statistics unqualified_count: {e}")
+        unqualified_count = 0
+    try:
+        total_count = await base.count()
+    except Exception as e:
+        logger.warning(f"process-inspection-statistics total_count: {e}")
+        total_count = 0
+
+    return {
+        "pending_count": pending_count,
+        "qualified_count": qualified_count,
+        "unqualified_count": unqualified_count,
+        "total_count": total_count,
+    }
+
+
 @router.get("/process-inspections", response_model=List[ProcessInspectionListResponse], summary="获取过程检验单列表")
 async def list_process_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -491,6 +579,50 @@ async def create_finished_goods_inspection(
         inspection_data=inspection,
         created_by=current_user.id
     )
+
+
+@router.get("/finished-goods-inspections/statistics", summary="获取成品检验统计（用于指标卡片）")
+async def get_finished_goods_inspection_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """返回成品检验各维度数量，用于列表页指标卡片。"""
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+    base = FinishedGoodsInspection.filter(tenant_id=tenant_id)
+    try:
+        pending_count = await base.filter(status__in=["待检验", "pending"]).count()
+    except Exception as e:
+        logger.warning(f"finished-goods-inspection-statistics pending_count: {e}")
+        pending_count = 0
+    try:
+        qualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["合格", "qualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"finished-goods-inspection-statistics qualified_count: {e}")
+        qualified_count = 0
+    try:
+        unqualified_count = await base.filter(
+            status__in=["已检验", "待审核", "已审核", "inspected", "pending_review", "audited"],
+            quality_status__in=["不合格", "unqualified"]
+        ).count()
+    except Exception as e:
+        logger.warning(f"finished-goods-inspection-statistics unqualified_count: {e}")
+        unqualified_count = 0
+    try:
+        total_count = await base.count()
+    except Exception as e:
+        logger.warning(f"finished-goods-inspection-statistics total_count: {e}")
+        total_count = 0
+
+    return {
+        "pending_count": pending_count,
+        "qualified_count": qualified_count,
+        "unqualified_count": unqualified_count,
+        "total_count": total_count,
+    }
 
 
 @router.get("/finished-goods-inspections", response_model=List[FinishedGoodsInspectionListResponse], summary="获取成品检验单列表")
