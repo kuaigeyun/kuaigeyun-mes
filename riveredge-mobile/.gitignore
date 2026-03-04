@@ -5,7 +5,8 @@ node_modules/
 
 # Expo
 .expo/
-dist/
+# dist/ 允许提交，本地构建后推送，云服务器拉取后跳过构建（与 frontend 一致）
+# dist/
 web-build/
 expo-env.d.ts
 
