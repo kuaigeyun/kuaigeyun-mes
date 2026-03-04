@@ -307,7 +307,30 @@ class CodeRuleService:
         from datetime import datetime
         rule.deleted_at = datetime.now()
         await rule.save()
-    
+
+    @staticmethod
+    async def bulk_enable_all(tenant_id: int) -> int:
+        """
+        批量启用当前组织的所有编码规则
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            int: 被启用的规则数量
+        """
+        rules = await CodeRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=False,
+        ).all()
+        count = 0
+        for rule in rules:
+            rule.is_active = True
+            await rule.save()
+            count += 1
+        return count
+
     @staticmethod
     async def _notify_business_modules(
         tenant_id: int,

@@ -3751,6 +3751,16 @@ export default {
   'pages.system.codeRules.selectPageHint': 'Select a page on the left to configure',
   'pages.system.codeRules.ruleNameTemplate': '{{pageName}} code rule',
   'pages.system.codeRules.ruleDescTemplate': 'Auto-generate code for {{pageName}}',
+  'pages.system.codeRules.restoreAll': 'Restore all',
+  'pages.system.codeRules.enableAll': 'Enable all',
+  'pages.system.codeRules.restoreSingle': 'Restore current page',
+  'pages.system.codeRules.restorePresetSuccess': 'Preset rules restored for current page',
+  'pages.system.codeRules.restorePresetFailed': 'Failed to restore preset',
+  'pages.system.codeRules.enableAllSuccess': '{{count}} code rules enabled',
+  'pages.system.codeRules.enableAllFailed': 'Failed to enable all',
+  'pages.system.codeRules.restoreAllSuccess': 'Preset rules restored for {{count}} pages',
+  'pages.system.codeRules.restoreAllFailed': 'Failed to restore all',
+  'pages.system.codeRules.selectPageToRestore': 'Please select a page to restore first',
 
   // Plugin manager
   'pages.system.pluginManager.title': 'Plugin manager',

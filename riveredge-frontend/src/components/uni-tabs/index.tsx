@@ -836,8 +836,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return key.includes('production-execution/terminal') || key.includes('/kiosk');
   }, [activeKey]);
 
-  /** 是否为工作台/分析页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁） */
-  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/workplace' || location.pathname === '/system/dashboard/analysis';
+  /** 是否为工作台/分析页/角色权限页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁；角色权限页自身有 padding，需去除 UniTabs 的重复 padding） */
+  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/workplace' || location.pathname === '/system/dashboard/analysis' || location.pathname === '/system/roles';
 
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
@@ -1674,7 +1674,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           ) : (
             <div style={{
               /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
-              padding: 0,
+              padding:isDashboardOrAnalysisPage ?0:'0 16px 0 16px',
               width: '100%',
               flex: 1,
               minHeight: 0,

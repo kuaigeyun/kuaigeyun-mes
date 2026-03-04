@@ -3759,6 +3759,16 @@ export default {
   'pages.system.codeRules.selectPageHint': '请从左侧选择一个功能页面进行配置',
   'pages.system.codeRules.ruleNameTemplate': '{{pageName}}编码规则',
   'pages.system.codeRules.ruleDescTemplate': '自动为{{pageName}}生成编码',
+  'pages.system.codeRules.restoreAll': '恢复全部',
+  'pages.system.codeRules.enableAll': '启用全部',
+  'pages.system.codeRules.restoreSingle': '恢复当前页',
+  'pages.system.codeRules.restorePresetSuccess': '已恢复当前页面预设规则',
+  'pages.system.codeRules.restorePresetFailed': '恢复预设失败',
+  'pages.system.codeRules.enableAllSuccess': '已启用 {{count}} 个编码规则',
+  'pages.system.codeRules.enableAllFailed': '启用全部失败',
+  'pages.system.codeRules.restoreAllSuccess': '已恢复 {{count}} 个页面的预设规则',
+  'pages.system.codeRules.restoreAllFailed': '恢复全部失败',
+  'pages.system.codeRules.selectPageToRestore': '请先选择要恢复的页面',
 
   // 插件管理
   'pages.system.pluginManager.title': '插件管理',

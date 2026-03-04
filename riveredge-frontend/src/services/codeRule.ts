@@ -346,6 +346,15 @@ export async function restorePresetRules(scope: 'all' | 'page' = 'all', pageCode
 }
 
 /**
+ * 批量启用所有编码规则
+ */
+export async function enableAllRules(): Promise<{ enabled: number; message: string }> {
+  return apiRequest<{ enabled: number; message: string }>('/core/code-rules/enable-all', {
+    method: 'POST',
+  });
+}
+
+/**
  * 获取指定页面的编码规则配置
  * 
  * 根据页面代码获取编码规则配置，包括是否自动生成、是否允许手动填写等。

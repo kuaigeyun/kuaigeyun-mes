@@ -17,6 +17,7 @@ import {
   updateCodeRule,
   getCodeRulePages,
   restorePresetRules,
+  enableAllRules,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
@@ -52,6 +53,8 @@ const CodeRuleListPage: React.FC = () => {
   const [pageSearchValue, setPageSearchValue] = useState<string>('');
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
   const [restoreLoading, setRestoreLoading] = useState(false);
+  const [enableAllLoading, setEnableAllLoading] = useState(false);
+  const [restoreSingleLoading, setRestoreSingleLoading] = useState(false);
 
   // 页面规则配置表单状态
   const pageRuleFormRef = useRef<ProFormInstance>();
@@ -741,33 +744,9 @@ const CodeRuleListPage: React.FC = () => {
                 size="middle"
               />
             </div>
-            {/* 恢复预置、全部启用 按钮（参考角色管理设计） */}
+            {/* 恢复全部、启用全部 按钮 */}
             <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Button
-                  type="primary"
-                  block
-                  loading={restoreLoading}
-                  onClick={async () => {
-                    if (!selectedPageCode) {
-                      messageApi.warning('请先选择要恢复的页面');
-                      return;
-                    }
-                    try {
-                      setRestoreLoading(true);
-                      await restorePresetRules('page', selectedPageCode);
-                      messageApi.success('已恢复当前页面预设规则');
-                      await loadCodeRules(true);
-                      handleSelectPage(selectedPageCode);
-                    } catch (e: any) {
-                      messageApi.error(e?.message || '恢复预设失败');
-                    } finally {
-                      setRestoreLoading(false);
-                    }
-                  }}
-                >
-                  恢复预置
-                </Button>
                 <Button
                   type="primary"
                   block
@@ -776,17 +755,37 @@ const CodeRuleListPage: React.FC = () => {
                     try {
                       setRestoreLoading(true);
                       const res = await restorePresetRules('all');
-                      messageApi.success(res?.message || `已为 ${res?.restored?.length ?? 0} 个页面应用预设规则`);
+                      messageApi.success(t('pages.system.codeRules.restoreAllSuccess', { count: res?.restored?.length ?? 0 }));
                       await loadCodeRules(true);
                       if (selectedPageCode) handleSelectPage(selectedPageCode);
                     } catch (e: any) {
-                      messageApi.error(e?.message || '全部启用失败');
+                      messageApi.error(e?.message || t('pages.system.codeRules.restoreAllFailed'));
                     } finally {
                       setRestoreLoading(false);
                     }
                   }}
                 >
-                  全部启用
+                  {t('pages.system.codeRules.restoreAll')}
+                </Button>
+                <Button
+                  type="primary"
+                  block
+                  loading={enableAllLoading}
+                  onClick={async () => {
+                    try {
+                      setEnableAllLoading(true);
+                      const res = await enableAllRules();
+                      messageApi.success(t('pages.system.codeRules.enableAllSuccess', { count: res?.enabled ?? 0 }));
+                      await loadCodeRules(true);
+                      if (selectedPageCode) handleSelectPage(selectedPageCode);
+                    } catch (e: any) {
+                      messageApi.error(e?.message || t('pages.system.codeRules.enableAllFailed'));
+                    } finally {
+                      setEnableAllLoading(false);
+                    }
+                  }}
+                >
+                  {t('pages.system.codeRules.enableAll')}
                 </Button>
               </div>
             </div>
@@ -937,13 +936,37 @@ const CodeRuleListPage: React.FC = () => {
                       {selectedPage.pagePath}
                     </div>
                   </div>
-                  <Button
-                    type="primary"
-                    loading={pageRuleFormLoading}
-                    onClick={handleSavePageRule}
-                  >
-                    {t('pages.system.codeRules.saveRule')}
-                  </Button>
+                  <Space>
+                    <Button
+                      loading={restoreSingleLoading}
+                      onClick={async () => {
+                        if (!selectedPageCode) {
+                          messageApi.warning(t('pages.system.codeRules.selectPageToRestore'));
+                          return;
+                        }
+                        try {
+                          setRestoreSingleLoading(true);
+                          await restorePresetRules('page', selectedPageCode);
+                          messageApi.success(t('pages.system.codeRules.restorePresetSuccess'));
+                          await loadCodeRules(true);
+                          handleSelectPage(selectedPageCode);
+                        } catch (e: any) {
+                          messageApi.error(e?.message || t('pages.system.codeRules.restorePresetFailed'));
+                        } finally {
+                          setRestoreSingleLoading(false);
+                        }
+                      }}
+                    >
+                      {t('pages.system.codeRules.restoreSingle')}
+                    </Button>
+                    <Button
+                      type="primary"
+                      loading={pageRuleFormLoading}
+                      onClick={handleSavePageRule}
+                    >
+                      {t('pages.system.codeRules.saveRule')}
+                    </Button>
+                  </Space>
                 </div>
 
                 {/* 配置表单 */}

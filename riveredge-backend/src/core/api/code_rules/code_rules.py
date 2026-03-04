@@ -358,6 +358,19 @@ async def restore_preset_rules(
     return {"restored": restored, "message": f"已恢复 {len(restored)} 个页面的预设规则"}
 
 
+@router.post("/enable-all")
+async def enable_all_rules(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量启用所有编码规则
+
+    将当前组织下所有未启用的编码规则设置为启用状态。
+    """
+    count = await CodeRuleService.bulk_enable_all(tenant_id)
+    return {"enabled": count, "message": f"已启用 {count} 个编码规则"}
+
+
 @router.post("/test-generate", response_model=CodeGenerationResponse)
 async def test_generate_code(
     request: CodeGenerationRequest,
