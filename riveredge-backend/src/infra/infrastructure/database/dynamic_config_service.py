@@ -214,6 +214,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
                 f"apps.{module_code}.models.rework_order",  # 返工单模型
+                f"apps.{module_code}.models.rework_order_operation",  # 返工单关联工序
                 f"apps.{module_code}.models.outsource_order",  # 工序委外模型
                 f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
                 f"apps.{module_code}.models.scrap_record",  # 报废记录模型
@@ -258,6 +259,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.shipment_notice_item",
                 f"apps.{module_code}.models.receipt_notice",
                 f"apps.{module_code}.models.receipt_notice_item",
+                f"apps.{module_code}.models.purchase_logistics",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",
@@ -405,6 +407,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
                 f"apps.{module_code}.models.rework_order",  # 返工单模型
+                f"apps.{module_code}.models.rework_order_operation",  # 返工单关联工序
                 f"apps.{module_code}.models.outsource_order",  # 工序委外模型
                 f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
                 f"apps.{module_code}.models.scrap_record",  # 报废记录模型
@@ -449,6 +452,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.shipment_notice_item",
                 f"apps.{module_code}.models.receipt_notice",
                 f"apps.{module_code}.models.receipt_notice_item",
+                f"apps.{module_code}.models.purchase_logistics",
                 # 统一需求管理模块（第一阶段重构）
                 f"apps.{module_code}.models.demand",
                 f"apps.{module_code}.models.demand_item",

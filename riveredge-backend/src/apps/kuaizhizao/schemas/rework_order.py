@@ -57,6 +57,14 @@ class ReworkOrderBase(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
 
 
+class ReworkOrderOperationItem(BaseModel):
+    """返工单关联工序项（用于响应）"""
+    work_order_operation_id: int = Field(..., description="工单工序ID")
+    operation_code: Optional[str] = Field(None, description="工序编码")
+    operation_name: Optional[str] = Field(None, description="工序名称")
+    sequence: Optional[int] = Field(None, description="工序顺序")
+
+
 class ReworkOrderCreate(ReworkOrderBase):
     """
     返工单创建Schema
@@ -64,6 +72,7 @@ class ReworkOrderCreate(ReworkOrderBase):
     用于创建新返工单的数据验证。
     """
     code: Optional[str] = Field(None, description="返工单编码（可选，如果不提供则自动生成）")
+    work_order_operation_ids: Optional[List[int]] = Field(None, description="返工涉及的工单工序ID列表")
 
 
 class ReworkOrderUpdate(BaseModel):
@@ -93,6 +102,7 @@ class ReworkOrderUpdate(BaseModel):
     operator_name: Optional[str] = Field(None, max_length=100, description="操作员姓名")
     cost: Optional[Decimal] = Field(None, description="返工成本")
     remarks: Optional[str] = Field(None, description="备注")
+    work_order_operation_ids: Optional[List[int]] = Field(None, description="返工涉及的工单工序ID列表")
 
 
 class ReworkOrderResponse(ReworkOrderBase):
@@ -115,6 +125,7 @@ class ReworkOrderResponse(ReworkOrderBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    rework_operations: Optional[List[ReworkOrderOperationItem]] = Field(None, description="返工涉及的工序列表")
 
 
 class ReworkOrderListResponse(BaseModel):

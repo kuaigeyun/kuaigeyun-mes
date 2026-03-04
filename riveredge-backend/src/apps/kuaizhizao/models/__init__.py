@@ -8,6 +8,7 @@
 from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
+from .rework_order_operation import ReworkOrderOperation
 from .cost_rule import CostRule
 from .cost_calculation import CostCalculation
 from .outsource_order import OutsourceOrder
@@ -94,6 +95,7 @@ from .shipment_notice import ShipmentNotice
 from .shipment_notice_item import ShipmentNoticeItem
 from .receipt_notice import ReceiptNotice
 from .receipt_notice_item import ReceiptNoticeItem
+from .purchase_logistics import PurchaseLogistics
 from .sample_trial import SampleTrial
 from .sample_trial_item import SampleTrialItem
 # 统一需求模型（新设计）
@@ -136,6 +138,7 @@ __all__ = [
     'WorkOrder',
     'ReportingRecord',
     'ReworkOrder',
+    'ReworkOrderOperation',
     'CostRule',
     'CostCalculation',
     'OutsourceOrder',
@@ -223,6 +226,7 @@ __all__ = [
     'ShipmentNoticeItem',
     'ReceiptNotice',
     'ReceiptNoticeItem',
+    'PurchaseLogistics',
     'SampleTrial',
     'SampleTrialItem',
 

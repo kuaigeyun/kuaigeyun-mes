@@ -7,8 +7,9 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState, Suspense, lazy } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,6 +18,10 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawer
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { customerApi } from '../../../../master-data/services/supply-chain';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { warehouseApi } from '../../../services/production';
 import { getSalesDeliveryLifecycle } from '../../../utils/salesDeliveryLifecycle';
 import { getDocumentRelations } from '../../../services/document-relation';
@@ -67,7 +72,44 @@ interface SalesDeliveryItem {
 }
 
 const SalesDeliveriesPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+
+  const [customerList, setCustomerList] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      setCustomersLoading(true);
+      try {
+        const list = await customerApi.list({ limit: 1000, isActive: true });
+        setCustomerList(Array.isArray(list) ? list : []);
+      } catch {
+        setCustomerList([]);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+    loadCustomers();
+  }, []);
+
+  useEffect(() => {
+    const loadShippingMethod = async () => {
+      setShippingMethodLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('SHIPPING_METHOD');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setShippingMethodOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setShippingMethodOptions([{ label: '快递', value: '快递' }, { label: '物流', value: '物流' }, { label: '自提', value: '自提' }]);
+      } finally {
+        setShippingMethodLoading(false);
+      }
+    };
+    loadShippingMethod();
+  }, []);
   const actionRef = useRef<ActionType>(null);
 
   // Drawer 相关状态
@@ -311,12 +353,17 @@ const SalesDeliveriesPage: React.FC = () => {
   // 处理创建/编辑表单提交
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
+      const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
+      const submitValues = {
+        ...values,
+        customer_name: cust?.name ?? cust?.customer_name ?? values.customer_name ?? '',
+      };
       if (isEdit && currentDelivery?.id) {
-        await warehouseApi.salesDelivery.update(currentDelivery.id.toString(), values);
+        await warehouseApi.salesDelivery.update(currentDelivery.id.toString(), submitValues);
         messageApi.success('销售出库单更新成功');
       } else {
         await warehouseApi.salesDelivery.create({
-          ...values,
+          ...submitValues,
           items: [], // TODO: 后续需要实现明细项的编辑功能
         });
         messageApi.success('销售出库单创建成功');
@@ -695,6 +742,7 @@ const SalesDeliveriesPage: React.FC = () => {
         }}
         onFinish={handleFormSubmit}
         isEdit={isEdit}
+        initialValues={isEdit && currentDelivery ? { ...currentDelivery } : undefined}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid={true}
@@ -713,37 +761,61 @@ const SalesDeliveriesPage: React.FC = () => {
           placeholder="请输入销售订单编号（可选）"
           colProps={{ span: 12 }}
         />
-        <ProFormText
-          name="customer_name"
-          label="客户名称"
-          placeholder="请输入客户名称"
-          rules={[{ required: true, message: '请输入客户名称' }]}
+        <ProForm.Item
+          name="customer_id"
+          label={
+            <span>
+              客户
+              <a href="/apps/master-data/supply-chain/customers" onClick={(e) => { e.preventDefault(); navigate('/apps/master-data/supply-chain/customers'); }} style={{ marginLeft: 8, fontSize: 12 }}>客户信息管理</a>
+            </span>
+          }
+          rules={[{ required: true, message: '请选择客户' }]}
           colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="warehouse_name"
-          label="仓库名称"
-          placeholder="请输入仓库名称"
-          rules={[{ required: true, message: '请输入仓库名称' }]}
+        >
+          <UniDropdown
+            placeholder="请选择客户"
+            showSearch
+            allowClear
+            loading={customersLoading}
+            style={{ width: '100%' }}
+            options={customerList.map((c: any) => ({
+              value: c.id ?? c.customer_id,
+              label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
+            }))}
+            onChange={(v) => {
+              const c = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+              if (c) formRef.current?.setFieldsValue({ customer_name: c.name ?? c.customer_name });
+            }}
+            quickCreate={{ label: '客户信息管理', onClick: () => navigate('/apps/master-data/supply-chain/customers') }}
+          />
+        </ProForm.Item>
+        <ProFormText name="customer_name" hidden />
+        <UniWarehouseSelect
+          name="warehouse_id"
+          label="仓库"
+          placeholder="请选择仓库"
+          required
           colProps={{ span: 12 }}
+          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
         />
+        <ProFormText name="warehouse_name" hidden />
         <ProFormDatePicker
           name="delivery_time"
           label="出库时间"
           placeholder="请选择出库时间"
           colProps={{ span: 12 }}
         />
-        <ProFormSelect
-          name="shipping_method"
-          label="发货方式"
-          placeholder="请选择发货方式"
-          options={[
-            { label: '快递', value: '快递' },
-            { label: '物流', value: '物流' },
-            { label: '自提', value: '自提' },
-          ]}
-          colProps={{ span: 12 }}
-        />
+        <ProForm.Item name="shipping_method" label="发货方式" colProps={{ span: 12 }}>
+          <UniDropdown
+            placeholder="请选择发货方式"
+            showSearch
+            allowClear
+            loading={shippingMethodLoading}
+            style={{ width: '100%' }}
+            options={shippingMethodOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
+        </ProForm.Item>
         <ProFormText
           name="tracking_number"
           label="物流单号"

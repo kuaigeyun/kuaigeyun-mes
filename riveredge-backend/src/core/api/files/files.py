@@ -269,6 +269,7 @@ async def download_file(
     token: Optional[str] = Query(None, description="预览token（用于权限验证）"),
     access_token: Optional[str] = Query(None, description="标准访问令牌（Bearer Token），用于鉴权"),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+    size: Optional[int] = Query(None, ge=16, le=512, description="缩略图边长（像素），仅图片有效，用于头像等场景"),
 ):
     from loguru import logger
     logger.info(f"🔍 download_file 请求: uuid={uuid}, token={token[:50] if token else 'None'}..., access_token={access_token[:50] if access_token else 'None'}..., x_tenant_id={x_tenant_id}")
@@ -359,6 +360,42 @@ async def download_file(
         # 获取文件内容
         file_content = await FileService.get_file_content(tenant_id, uuid)
         
+        # 缩略图：仅图片且指定 size 时，返回缩放后的 JPEG
+        file_type = file.file_type or "application/octet-stream"
+        if size and file_type.startswith("image/"):
+            try:
+                from io import BytesIO
+                from PIL import Image
+                img = Image.open(BytesIO(file_content))
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGBA")
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == "RGBA":
+                        bg.paste(img, mask=img.split()[3])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                else:
+                    img = img.convert("RGB")
+                img.thumbnail((size, size), Image.Resampling.LANCZOS)
+                buf = BytesIO()
+                img.save(buf, format="JPEG", quality=85, optimize=True)
+                buf.seek(0)
+                thumb_bytes = buf.getvalue()
+                return StreamingResponse(
+                    iter([thumb_bytes]),
+                    media_type="image/jpeg",
+                    headers={
+                        "Content-Disposition": "inline; filename=\"avatar-thumb.jpg\"",
+                        "Content-Length": str(len(thumb_bytes)),
+                        "Cache-Control": "public, max-age=86400",
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"头像缩略图生成失败，回退原图: {e}")
+                # 回退到原图
+                pass
+        
         # 构建完整路径（用于获取文件类型）
         import os
         from core.services.file.file_service import FileService as FS
@@ -370,7 +407,6 @@ async def download_file(
         
         # 根据文件类型决定是预览（inline）还是下载（attachment）
         # 图片文件使用 inline，让浏览器直接预览；其他文件使用 attachment，触发下载
-        file_type = file.file_type or "application/octet-stream"
         disposition_type = "inline" if file_type.startswith("image/") else "attachment"
         
         # 检查文件名是否包含非 ASCII 字符

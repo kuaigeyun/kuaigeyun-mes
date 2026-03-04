@@ -8,12 +8,15 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker, Row, Col } from 'antd';
+import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, DatePicker, Row, Col, Select } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, ExportOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
@@ -58,6 +61,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const SampleTrialsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -73,11 +77,13 @@ const SampleTrialsPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const outboundFormRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
+      setCustomersLoading(true);
       try {
         const [cust, mat, wh] = await Promise.all([
           customerApi.list({ limit: 1000, isActive: true }),
@@ -91,6 +97,8 @@ const SampleTrialsPage: React.FC = () => {
         setCustomerList([]);
         setMaterialList([]);
         setWarehouseList([]);
+      } finally {
+        setCustomersLoading(false);
       }
     };
     load();
@@ -296,11 +304,20 @@ const SampleTrialsPage: React.FC = () => {
     }
   };
 
+  const defaultTrialItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', trial_quantity: 1, unit_price: 0 };
+
+  /**
+   * 处理新建样品试用单
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   */
   const handleCreate = async () => {
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ items: [] });
     setEditingId(null);
     setPreviewCode(null);
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ items: [defaultTrialItem] });
+    }, 100);
     if (isAutoGenerateEnabled('kuaizhizao-sample-trial')) {
       const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
       if (ruleCode) {
@@ -313,9 +330,12 @@ const SampleTrialsPage: React.FC = () => {
           console.warn('样品试用单编码预生成失败:', e);
           setPreviewCode(null);
         }
+      } else {
+        setPreviewCode(null);
       }
+    } else {
+      setPreviewCode(null);
     }
-    setModalVisible(true);
   };
 
   const getValidItems = (values: any) =>
@@ -412,20 +432,6 @@ const SampleTrialsPage: React.FC = () => {
     }
   };
 
-  const onMaterialSelectForItem = (index: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
-    const items = formRef.current?.getFieldValue('items') || [];
-    items[index] = {
-      ...items[index],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
-    };
-    formRef.current?.setFieldsValue({ items });
-  };
-
   const detailColumns: ProDescriptionsItemProps<SampleTrialDetail>[] = [
     { title: '试用单号', dataIndex: 'trial_code' },
     { title: '客户', dataIndex: 'customer_name' },
@@ -459,20 +465,45 @@ const SampleTrialsPage: React.FC = () => {
           />
         </Col>
         <Col span={12}>
-          <ProFormSelect
+          <ProForm.Item
             name="customer_id"
-            label="客户"
+            label={
+              <span>
+                客户
+                <a href="/apps/master-data/supply-chain/customers" onClick={(e) => { e.preventDefault(); navigate('/apps/master-data/supply-chain/customers'); }} style={{ marginLeft: 8, fontSize: 12 }}>客户信息管理</a>
+              </span>
+            }
             rules={[{ required: true, message: '请选择客户' }]}
-            placeholder="请选择客户"
-            fieldProps={{
-              style: { width: '100%' },
-              options: customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code })),
-              onChange: (v: number) => {
+          >
+            <UniDropdown
+              placeholder="请选择客户"
+              showSearch
+              allowClear
+              loading={customersLoading}
+              style={{ width: '100%' }}
+              options={customerList.map((c: any) => ({
+                value: c.id ?? c.customer_id,
+                label: `${c.code ?? c.customer_code ?? ''} - ${c.name ?? c.customer_name ?? ''}`.trim() || String(c.id ?? c.customer_id),
+              }))}
+              onChange={(v) => {
                 const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
-              },
-            }}
-          />
+                if (cust) formRef.current?.setFieldsValue({ customer_contact: cust.contactPerson ?? cust.contact ?? cust.customer_contact, customer_phone: cust.phone ?? cust.customer_phone });
+              }}
+              quickCreate={{ label: '客户信息管理', onClick: () => navigate('/apps/master-data/supply-chain/customers') }}
+              advancedSearch={{
+                label: '高级搜索',
+                fields: [{ name: 'code', label: '客户编码' }, { name: 'name', label: '客户名称' }],
+                onSearch: async (vals) => {
+                  const res = await customerApi.list({ limit: 200, skip: 0 });
+                  const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+                  let f = list;
+                  if (vals.code?.trim()) f = f.filter((c: any) => (c.code ?? '').toLowerCase().includes(vals.code.trim().toLowerCase()));
+                  if (vals.name?.trim()) f = f.filter((c: any) => (c.name ?? '').toLowerCase().includes(vals.name.trim().toLowerCase()));
+                  return f.map((c: any) => ({ value: c.id ?? c.uuid, label: `${c.code ?? ''} - ${c.name ?? ''}`.trim() || String(c.id ?? c.uuid) }));
+                },
+              }}
+            />
+          </ProForm.Item>
         </Col>
         <Col span={6}>
           <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
@@ -507,16 +538,35 @@ const SampleTrialsPage: React.FC = () => {
                 dataIndex: 'material_id',
                 width: 220,
                 render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
-                    <Select
-                      placeholder="请选择物料"
-                      style={{ width: '100%' }}
-                      showSearch
-                      allowClear
-                      size="small"
-                      options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} - ${m.name || ''}` }))}
-                      onChange={(id) => onMaterialSelectForItem(index, id as number)}
-                    />
+                  <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                    {({ getFieldValue }: any) => {
+                      const row = getFieldValue('items')?.[index];
+                      const mid = row?.material_id ? Number(row.material_id) : null;
+                      const fallback = mid && (row?.material_code || row?.material_name)
+                        ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                        : undefined;
+                      return (
+                        <UniMaterialSelect
+                          name={[index, 'material_id']}
+                          label=""
+                          placeholder="请选择物料（支持名称/编码搜索）"
+                          required
+                          size="small"
+                          listFieldKey={index}
+                          listFieldName="items"
+                          fillMapping={{
+                            material_code: 'mainCode',
+                            material_name: 'name',
+                            material_spec: 'specification',
+                            material_unit: 'baseUnit',
+                          }}
+                          fallbackOption={fallback}
+                          formItemProps={{ style: { margin: 0 } }}
+                          showQuickCreate
+                          showAdvancedSearch
+                        />
+                      );
+                    }}
                   </Form.Item>
                 ),
               },
@@ -564,7 +614,7 @@ const SampleTrialsPage: React.FC = () => {
                   .sample-trial-detail-table .ant-table { border-top: 1px solid var(--ant-color-border); }
                   .sample-trial-detail-table .ant-table-tbody > tr > td { border-bottom: 1px solid var(--ant-color-border); }
                 `}</style>
-                <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                <div style={{ width: '100%', overflowX: 'auto' }}>
                   <Table
                     className="sample-trial-detail-table"
                     size="small"

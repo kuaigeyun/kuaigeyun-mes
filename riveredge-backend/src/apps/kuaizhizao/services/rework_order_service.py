@@ -19,13 +19,16 @@ from infra.services.business_config_service import BusinessConfigService
 
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.rework_order import ReworkOrder
+from apps.kuaizhizao.models.rework_order_operation import ReworkOrderOperation
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
     ReworkOrderUpdate,
     ReworkOrderResponse,
     ReworkOrderListResponse,
     ReworkOrderFromWorkOrderRequest,
+    ReworkOrderOperationItem,
 )
 from loguru import logger
 
@@ -40,6 +43,32 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
     def __init__(self):
         super().__init__(ReworkOrder)
         self.business_config_service = BusinessConfigService()
+
+    async def _get_rework_operations(
+        self, tenant_id: int, rework_order_id: int
+    ) -> List[ReworkOrderOperationItem]:
+        """获取返工单关联的工序列表"""
+        links = await ReworkOrderOperation.filter(
+            tenant_id=tenant_id,
+            rework_order_id=rework_order_id,
+        ).order_by("sequence")
+        if not links:
+            return []
+        op_ids = [l.work_order_operation_id for l in links]
+        ops = await WorkOrderOperation.filter(id__in=op_ids).all()
+        op_map = {o.id: o for o in ops}
+        result = []
+        for l in links:
+            op = op_map.get(l.work_order_operation_id)
+            result.append(
+                ReworkOrderOperationItem(
+                    work_order_operation_id=l.work_order_operation_id,
+                    operation_code=op.operation_code if op else None,
+                    operation_name=op.operation_name if op else None,
+                    sequence=l.sequence,
+                )
+            )
+        return result
 
     async def create_rework_order(
         self,
@@ -162,7 +191,19 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 except Exception as e:
                     logger.warning("建立工单→返工单关联失败: %s", e)
 
-            return ReworkOrderResponse.model_validate(rework_order)
+            # 保存返工关联工序
+            if rework_order_data.work_order_operation_ids:
+                for seq, op_id in enumerate(rework_order_data.work_order_operation_ids):
+                    await ReworkOrderOperation.create(
+                        tenant_id=tenant_id,
+                        rework_order_id=rework_order.id,
+                        work_order_operation_id=op_id,
+                        sequence=seq,
+                    )
+
+            resp = ReworkOrderResponse.model_validate(rework_order)
+            resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order.id)
+            return resp
 
     async def create_rework_order_from_work_order(
         self,
@@ -268,6 +309,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         resp = ReworkOrderResponse.model_validate(rework_order)
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        resp.rework_operations = await self._get_rework_operations(tenant_id, rework_order_id)
         return resp
 
     async def get_rework_order_by_uuid(
@@ -406,6 +448,22 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 tenant_id=tenant_id,
                 id=rework_order_id
             ).update(**update_data)
+
+            # 更新返工关联工序
+            if "work_order_operation_ids" in update_data:
+                op_ids = update_data.pop("work_order_operation_ids")
+                await ReworkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    rework_order_id=rework_order_id,
+                ).delete()
+                if op_ids:
+                    for seq, op_id in enumerate(op_ids):
+                        await ReworkOrderOperation.create(
+                            tenant_id=tenant_id,
+                            rework_order_id=rework_order_id,
+                            work_order_operation_id=op_id,
+                            sequence=seq,
+                        )
 
             # 返回更新后的返工单
             updated_rework_order = await self.get_rework_order_by_id(tenant_id, rework_order_id)

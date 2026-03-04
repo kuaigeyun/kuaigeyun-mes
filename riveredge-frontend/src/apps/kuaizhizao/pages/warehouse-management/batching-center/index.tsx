@@ -76,13 +76,16 @@ const BatchingCenterPage: React.FC = () => {
     loadMaterials();
   }, []);
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      create_mode: 'from_work_order',
-      batching_date: dayjs(),
-    });
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        create_mode: 'from_work_order',
+        batching_date: dayjs(),
+      });
+    }, 0);
   };
 
   const handleCreateSubmit = async (values: any) => {

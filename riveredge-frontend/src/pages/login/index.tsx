@@ -6,8 +6,7 @@
  * 右侧：登录表单区
  */
 
-import { ProForm, ProFormText, ProFormGroup } from '@ant-design/pro-components';
-import { App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
+import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined } from '@ant-design/icons';
@@ -15,13 +14,12 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
-import { getInitSteps } from '../../services/init-wizard';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
-import { useGlobalStore } from '../../stores';
+import { useGlobalStore } from '../../stores/globalStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
-import TenantSelectionModal from '../../components/tenant-selection-modal';
-import TermsModal from '../../components/terms-modal';
-import LongPressVerify from '../../components/long-press-verify';
+const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
+const TermsModal = lazy(() => import('../../components/terms-modal'));
+const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
 import { Spin } from 'antd';
 
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
@@ -769,6 +767,7 @@ export default function LoginPage() {
       setTimeout(async () => {
         message.success(t('pages.login.success'));
         try {
+          const { getInitSteps } = await import('../../services/init-wizard');
           const stepsRes = await getInitSteps(selectedTenantId);
           if (stepsRes.init_completed === false) {
             navigate('/init/wizard', { replace: true });
@@ -1278,6 +1277,7 @@ export default function LoginPage() {
         setTimeout(async () => {
           message.success(t('pages.login.tenantSelected'));
           try {
+            const { getInitSteps } = await import('../../services/init-wizard');
             const stepsRes = await getInitSteps(selectedTenantId);
             if (stepsRes.init_completed === false) {
               navigate('/init/wizard', { replace: true });
@@ -1534,81 +1534,74 @@ export default function LoginPage() {
             <Text className="form-subtitle">{t('pages.login.formSubtitle')}</Text>
           </div>
 
-          <ProForm<LoginFormData>
+          <Form<LoginFormData>
             onFinish={handleSubmit}
-            submitter={{
-              searchConfig: {
-                submitText: t('pages.login.submit'),
-              },
-              submitButtonProps: {
-                size: 'large',
-                type: 'primary',
-                style: {
-                  width: '100%',
-                  height: '40px',
-                  backgroundColor: themeColor,
-                  borderColor: themeColor,
-                },
-              },
-            }}
             size="large"
+            layout="vertical"
           >
-            <ProFormText
+            <Form.Item
               name="username"
-              rules={[
-                {
-                  required: true,
-                  message: t('pages.login.usernameRequired'),
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-                prefix: <UserOutlined />,
-                placeholder: t('pages.login.usernamePlaceholder'),
-                autoComplete: 'username',
-              }}
-            />
+              rules={[{ required: true, message: t('pages.login.usernameRequired') }]}
+            >
+              <Input
+                size="large"
+                prefix={<UserOutlined />}
+                placeholder={t('pages.login.usernamePlaceholder')}
+                autoComplete="username"
+              />
+            </Form.Item>
 
-            <ProFormText.Password
+            <Form.Item
               name="password"
-              rules={[
-                {
-                  required: true,
-                  message: t('pages.login.passwordRequired'),
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-                prefix: <LockOutlined />,
-                placeholder: t('pages.login.passwordPlaceholder'),
-                autoComplete: 'current-password',
-              }}
-            />
+              rules={[{ required: true, message: t('pages.login.passwordRequired') }]}
+            >
+              <Input.Password
+                size="large"
+                prefix={<LockOutlined />}
+                placeholder={t('pages.login.passwordPlaceholder')}
+                autoComplete="current-password"
+              />
+            </Form.Item>
 
-            {/* 长按验证 - 仅在检测到频繁操作且未验证时显示 */}
-            {/* 如果验证令牌有效，说明已经完成验证，不需要再次显示验证按钮 */}
+            {/* 长按验证 - 仅在检测到频繁操作且未验证时显示，按需懒加载 */}
             {requireVerification && !isVerified && (() => {
               const verifyDuration = calculateVerifyDuration(loginFailTimes.length);
               return (
-                <div style={{  marginBottom: 24 }}>
-                  <Tooltip 
-                    title={t('pages.login.verifyTip', { seconds: verifyDuration / 1000 })} 
-                    placement="top"
-                  >
+                <div style={{ marginBottom: 24 }}>
+                  <Tooltip title={t('pages.login.verifyTip', { seconds: verifyDuration / 1000 })} placement="top">
                     <div>
-                      <LongPressVerify
-                        duration={verifyDuration}
-                        onVerify={handleVerify}
-                        text={t('pages.login.longPressVerify', { seconds: verifyDuration / 1000 })}
-                        size="large"
-                        disabled={false}
-                      />
+                      <Suspense fallback={<Button size="large" block loading>验证加载中...</Button>}>
+                        <LongPressVerify
+                          duration={verifyDuration}
+                          onVerify={handleVerify}
+                          text={t('pages.login.longPressVerify', { seconds: verifyDuration / 1000 })}
+                          size="large"
+                          disabled={false}
+                        />
+                      </Suspense>
                     </div>
                   </Tooltip>
                 </div>
               );
             })()}
-          </ProForm>
+
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                size="large"
+                block
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  backgroundColor: themeColor,
+                  borderColor: themeColor,
+                }}
+              >
+                {t('pages.login.submit')}
+              </Button>
+            </Form.Item>
+          </Form>
 
           <div className="login-form-footer">
             {/* 社交登录区域 */}
@@ -1902,28 +1895,33 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* 组织选择弹窗 */}
+      {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
       {loginResponse && (
-        <TenantSelectionModal
-          open={tenantSelectionVisible}
-          tenants={loginResponse.tenants || []}
-          defaultTenantId={loginResponse.default_tenant_id}
-          onSelect={handleTenantSelect}
-          onCancel={() => {
-            setTenantSelectionVisible(false);
-            // 取消选择时，清除 Token，返回登录页面
-            setToken('');
-            message.info(t('pages.login.pleaseLoginAgain'));
-          }}
-        />
+        <Suspense fallback={null}>
+          <TenantSelectionModal
+            open={tenantSelectionVisible}
+            tenants={loginResponse.tenants || []}
+            defaultTenantId={loginResponse.default_tenant_id}
+            onSelect={handleTenantSelect}
+            onCancel={() => {
+              setTenantSelectionVisible(false);
+              setToken('');
+              message.info(t('pages.login.pleaseLoginAgain'));
+            }}
+          />
+        </Suspense>
       )}
 
-      {/* 条款弹窗 */}
-      <TermsModal
-        open={termsModalVisible}
-        type={termsModalType}
-        onClose={() => setTermsModalVisible(false)}
-      />
+      {/* 条款弹窗 - 懒加载，仅点击条款链接时加载 */}
+      {termsModalVisible && (
+        <Suspense fallback={null}>
+          <TermsModal
+            open={termsModalVisible}
+            type={termsModalType}
+            onClose={() => setTermsModalVisible(false)}
+          />
+        </Suspense>
+      )}
 
       {/* 注册选择抽屉（按需懒加载） */}
       {registerDrawerVisible && (

@@ -1370,6 +1370,7 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-orders': 'Purchase Orders',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': 'Purchase Requisitions',
   'app.kuaizhizao.menu.purchase-management.receipt-notices': 'Receipt Notices',
+  'app.kuaizhizao.menu.purchase-management.logistics-tracking': 'Logistics Tracking',
   'app.kuaizhizao.menu.sales-management': 'Sales Management',
   'app.kuaizhizao.menu.sales-management.sales-forecasts': 'Sales Forecasts',
   'app.kuaizhizao.menu.sales-management.sales-orders': 'Sales Orders',

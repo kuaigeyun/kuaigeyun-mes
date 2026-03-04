@@ -268,6 +268,20 @@ async def delete_rule(
         )
 
 
+async def _ensure_code_rule_for_rule_code(tenant_id: int, rule_code: str) -> bool:
+    """根据 rule_code 查找对应 page_code 并补建编码规则，返回是否补建成功"""
+    page_config = next(
+        (p for p in CODE_RULE_PAGES if p.get("rule_code") == rule_code),
+        None,
+    )
+    if not page_config:
+        return False
+    from core.services.default.default_values_service import DefaultValuesService
+    return await DefaultValuesService.ensure_code_rule_for_page(
+        tenant_id, page_config["page_code"]
+    )
+
+
 @router.post("/generate", response_model=CodeGenerationResponse)
 async def generate_code(
     request: CodeGenerationRequest,
@@ -276,6 +290,7 @@ async def generate_code(
     """
     生成编码（会更新序号）
     使用请求中的 rule_code 精确查找规则，与编码规则配置一致。
+    若规则不存在，尝试根据配置补建后重试。
     """
     try:
         code = await CodeGenerationService.generate_code(
@@ -287,6 +302,20 @@ async def generate_code(
         rule_name = rule.name if rule else request.rule_code
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
+        if "不存在" in str(e) or "未启用" in str(e):
+            created = await _ensure_code_rule_for_rule_code(tenant_id, request.rule_code)
+            if created:
+                try:
+                    code = await CodeGenerationService.generate_code(
+                        tenant_id=tenant_id,
+                        rule_code=request.rule_code,
+                        context=request.context
+                    )
+                    rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+                    rule_name = rule.name if rule else request.rule_code
+                    return CodeGenerationResponse(code=code, rule_name=rule_name)
+                except ValidationError:
+                    pass
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
@@ -300,7 +329,7 @@ async def test_generate_code(
 ):
     """
     测试生成编码（不更新序号）。
-    使用请求中的 rule_code 精确查找规则；若规则不存在或未启用，返回空编码不抛错。
+    使用请求中的 rule_code 精确查找规则；若规则不存在则尝试补建后重试。
     """
     try:
         code = await CodeGenerationService.test_generate_code(
@@ -316,6 +345,21 @@ async def test_generate_code(
     except ValidationError as e:
         error_message = str(e)
         if "不存在" in error_message or "未启用" in error_message:
+            created = await _ensure_code_rule_for_rule_code(tenant_id, request.rule_code)
+            if created:
+                try:
+                    code = await CodeGenerationService.test_generate_code(
+                        tenant_id=tenant_id,
+                        rule_code=request.rule_code,
+                        context=request.context,
+                        check_duplicate=request.check_duplicate or False,
+                        entity_type=request.entity_type
+                    )
+                    rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
+                    rule_name = rule.name if rule else request.rule_code
+                    return CodeGenerationResponse(code=code, rule_name=rule_name)
+                except ValidationError:
+                    pass
             return CodeGenerationResponse(code="", rule_name=request.rule_code)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

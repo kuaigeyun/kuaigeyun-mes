@@ -78,7 +78,7 @@ export async function getAvatarUrl(avatarUuid: string | undefined): Promise<stri
   if (!promise) {
     promise = (async () => {
       try {
-        const previewInfo = await getFilePreview(avatarUuid);
+        const previewInfo = await getFilePreview(avatarUuid, { forAvatar: true });
         const previewUrl = previewInfo.preview_url;
         if (previewUrl) {
           const normalized = toRelativeIfLocalhost(previewUrl);

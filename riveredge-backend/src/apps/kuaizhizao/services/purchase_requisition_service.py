@@ -41,10 +41,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
     async def _generate_requisition_code(self, tenant_id: int) -> str:
         """生成采购申请编码"""
         try:
-            return await self.generate_code(tenant_id, "PURCHASE_ORDER_CODE", prefix="PR")
+            return await self.generate_code(tenant_id, "PURCHASE_REQUISITION_CODE", prefix="CGSQ")
         except Exception:
             import uuid
-            return f"PR{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+            return f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
     async def create_requisition(
         self,
@@ -60,7 +60,27 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         async with in_transaction():
             if not data.requisition_code:
-                data.requisition_code = await self._generate_requisition_code(tenant_id)
+                try:
+                    data.requisition_code = await self._generate_requisition_code(tenant_id)
+                except Exception as e:
+                    from infra.exceptions.exceptions import ValidationError
+                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
+                        from core.services.default.default_values_service import DefaultValuesService
+                        created = await DefaultValuesService.ensure_code_rule_for_page(
+                            tenant_id, "kuaizhizao-purchase-requisition"
+                        )
+                        if created:
+                            try:
+                                data.requisition_code = await self._generate_requisition_code(tenant_id)
+                            except Exception as e2:
+                                logger.warning("采购申请编码规则补建后生成仍失败: %s", e2)
+                        else:
+                            logger.warning("采购申请编码规则生成失败: %s", e)
+                    else:
+                        logger.warning("采购申请编码规则生成失败: %s", e)
+                if not data.requisition_code:
+                    import uuid
+                    data.requisition_code = f"CGSQ{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,

@@ -2,22 +2,27 @@
  * 收货通知单管理页面
  *
  * 采购通知仓库收货，不直接动库存。来源为采购订单。
+ * 行为与发货通知单对齐：ProForm、Row/Col、Form.List、编码规则、UniWarehouseSelect、UniMaterialSelect。
  *
  * @author RiverEdge Team
  * @date 2026-02-22
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
-import { materialApi } from '../../../../master-data/services/material';
+import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface ReceiptNotice {
   id?: number;
@@ -51,7 +56,10 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已入库: { text: '已入库', color: 'success' },
 };
 
+const defaultReceiptItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
+
 const ReceiptNoticesPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -62,21 +70,16 @@ const ReceiptNoticesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price: number }>>([]);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [mat, ordersRes] = await Promise.all([
-          materialApi.list({ limit: 2000, isActive: true }),
-          listPurchaseOrders({ limit: 500 }).catch(() => ({ data: [], total: 0 })),
-        ]);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        const ordersRes = await listPurchaseOrders({ limit: 500 }).catch(() => ({ data: [], total: 0 }));
         setPurchaseOrderList(ordersRes?.data || []);
       } catch (e) {
-        console.error('加载物料/采购订单失败', e);
+        console.error('加载采购订单失败', e);
       }
     };
     load();
@@ -133,14 +136,14 @@ const ReceiptNoticesPage: React.FC = () => {
   const handleEdit = async (record: ReceiptNotice) => {
     try {
       const detail = await receiptNoticeApi.get(record.id!.toString()) as ReceiptNoticeDetail;
-      setFormItems((detail.items || []).map((it: any) => ({
+      const itemsForm = (detail.items || []).map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
-        material_unit: it.material_unit || '',
+        material_unit: it.material_unit || '件',
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
-      })));
+      }));
       formRef.current?.setFieldsValue({
         purchase_order_id: detail.purchase_order_id,
         purchase_order_code: detail.purchase_order_code,
@@ -148,9 +151,11 @@ const ReceiptNoticesPage: React.FC = () => {
         supplier_name: detail.supplier_name,
         supplier_contact: detail.supplier_contact,
         supplier_phone: detail.supplier_phone,
+        warehouse_id: detail.warehouse_id,
         warehouse_name: detail.warehouse_name,
         planned_receipt_date: detail.planned_receipt_date ? dayjs(detail.planned_receipt_date) : undefined,
         notes: detail.notes,
+        items: itemsForm.length ? itemsForm : [defaultReceiptItem],
       });
       setEditingId(record.id!);
       setEditModalVisible(true);
@@ -212,10 +217,33 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
+    setPreviewCode(null);
     setEditingId(null);
     setCreateModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
+    }, 100);
+    if (isAutoGenerateEnabled('kuaizhizao-receipt-notice')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
+      if (ruleCode) {
+        testGenerateCode({ rule_code: ruleCode })
+          .then((res) => {
+            const preview = res.code;
+            setPreviewCode(preview ?? null);
+            setTimeout(() => {
+              formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
+            }, 100);
+          })
+          .catch((e) => {
+            console.warn('收货通知单编码预生成失败:', e);
+            setPreviewCode(null);
+          });
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   const onPurchaseOrderSelect = async (orderId: number) => {
@@ -236,19 +264,20 @@ const ReceiptNoticesPage: React.FC = () => {
       supplier_phone: order.supplier_phone,
     });
     if (order.items && order.items.length > 0) {
-      setFormItems(order.items.map((it: any) => ({
+      const items = order.items.map((it: any) => ({
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
         material_name: it.material_name || it.materialName || '',
-        material_unit: it.unit || it.material_unit || it.materialUnit || '',
+        material_unit: it.unit || it.material_unit || it.materialUnit || '件',
         notice_quantity: Number(it.ordered_quantity ?? it.quantity) || 0,
         unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
-      })));
+      }));
+      formRef.current?.setFieldsValue({ items });
     }
   };
 
   const handleCreateSubmit = async (values: any) => {
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -258,8 +287,21 @@ const ReceiptNoticesPage: React.FC = () => {
       throw new Error('请选择采购订单');
     }
     const supplier = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === values.purchase_order_id) || {};
+    let noticeCode = values.notice_code;
+    if (isAutoGenerateEnabled('kuaizhizao-receipt-notice')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
+      if (ruleCode && (noticeCode === previewCode || !noticeCode)) {
+        try {
+          const res = await generateCode({ rule_code: ruleCode });
+          noticeCode = res.code;
+        } catch (e) {
+          console.warn('收货通知单编码正式生成失败，使用当前值:', e);
+        }
+      }
+    }
     try {
       await receiptNoticeApi.create({
+        notice_code: noticeCode || undefined,
         purchase_order_id: values.purchase_order_id,
         purchase_order_code: values.purchase_order_code,
         supplier_id: values.supplier_id ?? supplier.supplier_id,
@@ -270,12 +312,12 @@ const ReceiptNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name,
         planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
           material_name: it.material_name,
-          material_unit: it.material_unit,
-          notice_quantity: it.notice_quantity,
+          material_unit: it.material_unit || '件',
+          notice_quantity: Number(it.notice_quantity) || 0,
           unit_price: it.unit_price || 0,
         })),
       });
@@ -290,11 +332,6 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const handleEditSubmit = async (values: any) => {
     if (!editingId) return;
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
-    if (!validItems.length) {
-      messageApi.error('请至少添加一条有效明细');
-      throw new Error('请至少添加一条有效明细');
-    }
     try {
       await receiptNoticeApi.update(editingId.toString(), {
         supplier_contact: values.supplier_contact,
@@ -311,24 +348,6 @@ const ReceiptNoticesPage: React.FC = () => {
       messageApi.error(error.message || '更新失败');
       throw error;
     }
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 }]);
-  };
-
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
-    };
-    setFormItems(updated);
   };
 
   const detailColumns: ProDescriptionsItemProps<ReceiptNoticeDetail>[] = [
@@ -351,64 +370,229 @@ const ReceiptNoticesPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
-  const renderForm = (onFinish: (values: any) => Promise<void>) => (
+  const renderCreateForm = () => (
     <>
-      <Form.Item name="purchase_order_id" label="采购订单" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择采购订单"
-          options={purchaseOrderList.map((o: any) => ({
-            value: o.id ?? o.purchase_order_id,
-            label: `${o.order_code || o.purchase_order_code || o.code || ''} - ${o.supplier_name || ''}`,
-          }))}
-          onChange={onPurchaseOrderSelect}
-        />
-      </Form.Item>
-      <Form.Item name="purchase_order_code" label="采购订单号" hidden>
-        <Input />
-      </Form.Item>
-      <Form.Item name="supplier_id" label="供应商ID" hidden>
-        <Input />
-      </Form.Item>
-      <Form.Item name="supplier_name" label="供应商" rules={[{ required: true }]}>
-        <Input placeholder="供应商名称" />
-      </Form.Item>
-      <Form.Item name="supplier_contact" label="联系人">
-        <Input placeholder="联系人" />
-      </Form.Item>
-      <Form.Item name="supplier_phone" label="电话">
-        <Input placeholder="电话" />
-      </Form.Item>
-      <Form.Item name="warehouse_name" label="入库仓库">
-        <Input placeholder="入库仓库名称" />
-      </Form.Item>
-      <Form.Item name="planned_receipt_date" label="计划收货日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item label="明细">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-          {formItems.map((it, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                placeholder="物料"
-                style={{ width: 200 }}
-                options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                onChange={(v) => onMaterialSelect(idx, v)}
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="notice_code"
+            label={
+              <span>
+                通知单号
+                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编码规则设置</a>
+              </span>
+            }
+            placeholder={isAutoGenerateEnabled('kuaizhizao-receipt-notice') ? '编码将根据编码规则自动生成，可修改' : '请输入通知单号'}
+            rules={[{ required: true, message: '请输入通知单号' }]}
+          />
+        </Col>
+        <Col span={12}>
+          <ProForm.Item name="purchase_order_id" label="采购订单" rules={[{ required: true, message: '请选择采购订单' }]}>
+            <Select
+              placeholder="请选择采购订单"
+              showSearch
+              optionFilterProp="label"
+              options={purchaseOrderList.map((o: any) => ({
+                value: o.id ?? o.purchase_order_id,
+                label: `${o.order_code || o.purchase_order_code || o.code || ''} - ${o.supplier_name || ''}`,
+              }))}
+              onChange={onPurchaseOrderSelect}
+            />
+          </ProForm.Item>
+        </Col>
+      </Row>
+      <ProFormText name="purchase_order_code" hidden />
+      <ProFormText name="supplier_id" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="supplier_name" label="供应商" placeholder="供应商名称" rules={[{ required: true, message: '请输入供应商' }]} />
+        </Col>
+        <Col span={12}>
+          <ProFormText name="supplier_contact" label="联系人" placeholder="联系人" />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="supplier_phone" label="电话" placeholder="电话" />
+        </Col>
+        <Col span={12}>
+          <UniWarehouseSelect
+            name="warehouse_id"
+            label="入库仓库"
+            placeholder="请选择入库仓库"
+            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="warehouse_name" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormDatePicker name="planned_receipt_date" label="计划收货日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <ProFormItem label="通知明细" required style={{ width: '100%' }}>
+        <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
+          <AntForm.List name="items">
+            {(fields, { add, remove }) => {
+              const cols = [
+                {
+                  title: '物料',
+                  dataIndex: 'material_id',
+                  width: 220,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                      {({ getFieldValue }: any) => {
+                        const row = getFieldValue('items')?.[index];
+                        const mid = row?.material_id ? Number(row.material_id) : null;
+                        const fallback = mid && (row?.material_code || row?.material_name)
+                          ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                          : undefined;
+                        return (
+                          <UniMaterialSelect
+                            name={[index, 'material_id']}
+                            label=""
+                            placeholder="请选择物料"
+                            required
+                            size="small"
+                            listFieldKey={index}
+                            listFieldName="items"
+                            fillMapping={{
+                              material_code: 'mainCode',
+                              material_name: 'name',
+                              material_unit: 'baseUnit',
+                            }}
+                            fallbackOption={fallback}
+                            formItemProps={{ style: { margin: 0 } }}
+                            showQuickCreate
+                            showAdvancedSearch
+                          />
+                        );
+                      }}
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单位',
+                  dataIndex: 'material_unit',
+                  width: 80,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                      <Input placeholder="单位" size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '数量',
+                  dataIndex: 'notice_quantity',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                      <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单价',
+                  dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                      <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 60,
+                  render: (_: any, __: any, index: number) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                  ),
+                },
+              ];
+              return (
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <Table
+                    size="small"
+                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                    rowKey="key"
+                    pagination={false}
+                    columns={cols}
+                    footer={() => (
+                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultReceiptItem)} block>添加明细</Button>
+                    )}
+                  />
+                </div>
+              );
+            }}
+          </AntForm.List>
+        </ProForm.Item>
+      </ProFormItem>
+      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+    </>
+  );
+
+  const renderEditForm = () => (
+    <>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="purchase_order_code" label="采购订单号" disabled />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="supplier_name" label="供应商" disabled />
+        </Col>
+        <Col span={12}>
+          <ProFormText name="supplier_contact" label="联系人" placeholder="联系人" />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="supplier_phone" label="电话" placeholder="电话" />
+        </Col>
+        <Col span={12}>
+          <UniWarehouseSelect
+            name="warehouse_id"
+            label="入库仓库"
+            placeholder="请选择入库仓库"
+            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="warehouse_name" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormDatePicker name="planned_receipt_date" label="计划收货日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <ProFormItem label="通知明细">
+        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+          {({ getFieldValue }: any) => {
+            const items = getFieldValue('items') ?? [];
+            return (
+              <Table
+                size="small"
+                dataSource={items.map((it: any, i: number) => ({ ...it, key: i }))}
+                rowKey="key"
+                pagination={false}
+                columns={[
+                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                  { title: '单位', dataIndex: 'material_unit', width: 60 },
+                  { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                  { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                ]}
               />
-              <InputNumber placeholder="数量" min={0.01} value={it.notice_quantity} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], notice_quantity: v ?? 0 }; setFormItems(u);
-              }} />
-              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-              }} />
-              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-            </div>
-          ))}
-        </Space>
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <Input.TextArea rows={2} />
-      </Form.Item>
+            );
+          }}
+        </AntForm.Item>
+      </ProFormItem>
+      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );
 
@@ -482,8 +666,10 @@ const ReceiptNoticesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        initialValues={{ items: [defaultReceiptItem] }}
       >
-        {renderForm(handleCreateSubmit)}
+        {renderCreateForm()}
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -493,8 +679,9 @@ const ReceiptNoticesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
-        {renderForm(handleEditSubmit)}
+        {renderEditForm()}
       </FormModalTemplate>
     </>
   );

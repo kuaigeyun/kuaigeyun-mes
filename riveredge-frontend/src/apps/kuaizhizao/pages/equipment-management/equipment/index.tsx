@@ -72,14 +72,12 @@ const EquipmentPage: React.FC = () => {
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
 
-  /**
-   * 处理新建设备
-   */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentEquipment(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**

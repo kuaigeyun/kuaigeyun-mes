@@ -7,18 +7,23 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import CodeField from '../../../../../components/code-field';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialApi } from '../../../../master-data/services/material';
 
-const REASON_TYPES = [
+const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
   { value: '样品', label: '样品' },
   { value: '报废', label: '报废' },
@@ -62,6 +67,7 @@ interface OtherOutboundItem {
 }
 
 const OtherOutboundPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -71,23 +77,36 @@ const OtherOutboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; outbound_quantity: number; unit_price: number }>>([]);
+  const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
+  const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const load = async () => {
       try {
-        const [wh, mat] = await Promise.all([
-          masterDataWarehouseApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
-        ]);
-        setWarehouseList(Array.isArray(wh) ? wh : wh?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        const wh = await masterDataWarehouseApi.list({ limit: 1000, isActive: true });
+        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
       } catch (e) {
-        console.error('加载仓库/物料失败', e);
+        console.error('加载仓库失败', e);
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const loadReasonType = async () => {
+      setReasonTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('OUTBOUND_REASON_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setReasonTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setReasonTypeOptions(REASON_TYPES_FALLBACK);
+      } finally {
+        setReasonTypeLoading(false);
+      }
+    };
+    loadReasonType();
   }, []);
 
   const columns: ProColumns<OtherOutbound>[] = [
@@ -173,10 +192,11 @@ const OtherOutboundPage: React.FC = () => {
     });
   };
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
     setCreateModalVisible(true);
+    setFormItems([]);
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
@@ -187,8 +207,9 @@ const OtherOutboundPage: React.FC = () => {
         throw new Error('请至少添加一条有效明细');
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = wh?.name || wh?.warehouse_name || '';
+      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
       await warehouseApi.otherOutbound.create({
+        outbound_code: values.outbound_code,
         reason_type: values.reason_type,
         reason_desc: values.reason_desc,
         warehouse_id: values.warehouse_id,
@@ -216,16 +237,15 @@ const OtherOutboundPage: React.FC = () => {
     setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', outbound_quantity: 1, unit_price: 0 }]);
   };
 
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
+  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
+    if (!material) return;
     const updated = [...formItems];
     updated[idx] = {
       ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
+      material_id: material.id ?? material.material_id,
+      material_code: material.mainCode ?? material.code ?? material.main_code ?? '',
+      material_name: material.name ?? material.material_name ?? '',
+      material_unit: material.baseUnit ?? material.base_unit ?? material.unit ?? '',
     };
     setFormItems(updated);
   };
@@ -342,14 +362,31 @@ const OtherOutboundPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
       >
-        <Form.Item name="warehouse_id" label="仓库" rules={[{ required: true }]}>
-          <Select
-            placeholder="请选择仓库"
-            options={warehouseList.map((w: any) => ({ value: w.id ?? w.warehouse_id, label: w.name || w.warehouse_name || w.code }))}
-          />
-        </Form.Item>
+        <CodeField
+          pageCode="kuaizhizao-warehouse-other-outbound"
+          name="outbound_code"
+          label="出库单编码"
+          autoGenerateOnCreate={true}
+          context={{}}
+        />
+        <UniWarehouseSelect
+          name="warehouse_id"
+          label="仓库"
+          placeholder="请选择仓库"
+          required
+          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+        />
+        <Form.Item name="warehouse_name" hidden />
         <Form.Item name="reason_type" label="原因类型" rules={[{ required: true }]}>
-          <Select options={REASON_TYPES} placeholder="请选择" />
+          <UniDropdown
+            placeholder="请选择原因类型"
+            showSearch
+            allowClear
+            loading={reasonTypeLoading}
+            style={{ width: '100%' }}
+            options={reasonTypeOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
         </Form.Item>
         <Form.Item name="reason_desc" label="原因说明">
           <Input.TextArea rows={2} placeholder="可选" />
@@ -359,12 +396,14 @@ const OtherOutboundPage: React.FC = () => {
             <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
             {formItems.map((it, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Select
-                  placeholder="物料"
-                  style={{ width: 200 }}
-                  options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                  onChange={(v) => onMaterialSelect(idx, v)}
-                />
+                <div style={{ flex: '1 1 250px' }}>
+                  <UniMaterialSelect
+                    name={['_form_items', idx, 'material_id']}
+                    label=""
+                    placeholder="请输入或选择物料"
+                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
+                  />
+                </div>
                 <InputNumber placeholder="数量" min={0.01} value={it.outbound_quantity} onChange={(v) => {
                   const u = [...formItems]; u[idx] = { ...u[idx], outbound_quantity: v ?? 0 }; setFormItems(u);
                 }} />

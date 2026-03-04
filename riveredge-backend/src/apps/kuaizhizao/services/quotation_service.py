@@ -108,8 +108,6 @@ class QuotationService:
         """生成报价单编码"""
         from core.config.code_rule_pages import CODE_RULE_PAGES
         from core.services.business.code_generation_service import CodeGenerationService
-        from pathlib import Path
-        import json
 
         rule_code = next(
             (
@@ -158,14 +156,6 @@ class QuotationService:
             today = datetime.now().strftime("%Y%m%d")
             import uuid
             generated = f"QT-{today}-{uuid.uuid4().hex[:6].upper()}"
-        # #region agent log
-        try:
-            log_path = Path(__file__).resolve().parents[5] / "debug-f6a036.log"
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "f6a036", "hypothesisId": "H4", "location": "quotation_service:_generate_quotation_code", "message": "backend generate code", "data": {"rule_code": rule_code, "generated": generated}, "timestamp": __import__("time").time() * 1000}, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         return generated
 
     async def create_quotation(
@@ -178,22 +168,10 @@ class QuotationService:
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "quotation")
         if not is_enabled:
             raise BusinessLogicError("报价单节点未启用，无法创建报价单")
-        from pathlib import Path
-        import json
-        received_code = getattr(quotation_data, "quotation_code", None) or (quotation_data.quotation_code if hasattr(quotation_data, "quotation_code") else None)
-        will_generate = not received_code
         if not quotation_data.quotation_code:
             quotation_data.quotation_code = await self._generate_quotation_code(
                 tenant_id, quotation_data.quotation_date
             )
-        # #region agent log
-        try:
-            log_path = Path(__file__).resolve().parents[5] / "debug-f6a036.log"
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "f6a036", "hypothesisId": "H3_H4", "location": "quotation_service:create_quotation", "message": "create_quotation code", "data": {"received_code": received_code, "will_generate": will_generate, "final_code": quotation_data.quotation_code}, "timestamp": __import__("time").time() * 1000}, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
 
         async with in_transaction():
             q_dict = quotation_data.model_dump(exclude={"items"})

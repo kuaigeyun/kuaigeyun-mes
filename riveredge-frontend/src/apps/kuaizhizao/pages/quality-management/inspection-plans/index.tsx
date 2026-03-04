@@ -92,12 +92,13 @@ const InspectionPlansPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [planDetail, setPlanDetail] = useState<InspectionPlan | null>(null);
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPlan(null);
     setSteps([]);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleEdit = async (record: InspectionPlan) => {

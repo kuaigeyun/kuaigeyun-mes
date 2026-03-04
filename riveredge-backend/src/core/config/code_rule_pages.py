@@ -31,6 +31,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-production-outsource-order": "WW",   # 委外
     "kuaizhizao-production-outsource-work-order": "WWGD",  # 委外工单
     "kuaizhizao-purchase-order": "CG",           # 采购
+    "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
     "kuaizhizao-sales-order": "XS",             # 销售
@@ -358,6 +359,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-purchase-requisition",
+        "page_name": "采购申请",
+        "page_path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
+        "code_field": "requisition_code",
+        "code_field_label": "采购申请编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_REQUISITION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-purchase-receipt",
         "page_name": "采购收货",
         "page_path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
@@ -458,12 +471,13 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "page_code": "kuaizhizao-sales-forecast",
         "page_name": "销售预测",
         "page_path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-        "code_field": "code",
+        "code_field": "forecast_code",
         "code_field_label": "销售预测编码",
         "module": "快格轻制造",
         "module_icon": "tool",
-        "auto_generate": False,
+        "auto_generate": True,
         "rule_code": "SALES_FORECAST_CODE",
+        "allow_manual_edit": True,
     },
     # 快格轻制造 - 仓储管理
     {

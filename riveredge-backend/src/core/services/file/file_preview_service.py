@@ -357,15 +357,18 @@ class FilePreviewService:
     async def generate_simple_preview_url(
         file_uuid: str,
         tenant_id: int,
+        size: Optional[int] = None,
     ) -> str:
         """
         生成简单预览URL（直接文件访问）
         
         简单预览通过直接访问文件URL实现，前端根据文件类型选择渲染方式。
+        size 参数用于头像等场景，请求缩略图以加快加载。
         
         Args:
             file_uuid: 文件UUID
             tenant_id: 组织ID
+            size: 缩略图边长（像素），仅图片有效，如 128 表示 128x128
             
         Returns:
             str: 预览URL
@@ -374,6 +377,8 @@ class FilePreviewService:
         base_url = settings.BASE_URL
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
         path = f"/api/v1/core/files/{file_uuid}/download?token={token}"
+        if size is not None:
+            path += f"&size={size}"
         return f"{base_url}{path}" if base_url else path
     
     @staticmethod
@@ -479,15 +484,17 @@ class FilePreviewService:
         # 2. 读取预览模式配置
         kkfileview_enabled = await FilePreviewService._get_kkfileview_enabled(tenant_id)
         
-        # 3. 头像等场景：图片强制使用简单预览，返回直接下载URL（移动端 Image 组件需要）
+        # 3. 头像等场景：图片强制使用简单预览，返回缩略图 URL 以加快加载
         use_simple = force_simple_for_image and FilePreviewService._is_simple_preview_supported(file.file_type)
+        avatar_thumbnail_size = 128  # 头像缩略图边长，适配 40-64px 显示 + 2x 屏
         
         # 4. 根据配置选择预览模式
         if use_simple or (not kkfileview_enabled):
-            # 使用简单预览（直接下载URL，移动端 Image 可加载）
+            # 使用简单预览；头像场景附加 size 参数请求缩略图
             preview_url = await FilePreviewService.generate_simple_preview_url(
                 file_uuid=file.uuid,
                 tenant_id=file.tenant_id,
+                size=avatar_thumbnail_size if force_simple_for_image else None,
             )
             return {
                 "preview_mode": "simple",

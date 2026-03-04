@@ -8,12 +8,14 @@
  */
 
 import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, Row, Col, DatePicker, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
@@ -33,6 +35,7 @@ import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -46,6 +49,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const QuotationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -58,11 +62,19 @@ const QuotationsPage: React.FC = () => {
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
+  /** 发货方式字典选项（数据字典 SHIPPING_METHOD） */
+  const [shippingMethodOptions, setShippingMethodOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [shippingMethodLoading, setShippingMethodLoading] = useState(false);
+  /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
+  const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [paymentTermsLoading, setPaymentTermsLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
+      setCustomersLoading(true);
       try {
         const [custRes, matRes] = await Promise.all([
           apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
@@ -75,9 +87,47 @@ const QuotationsPage: React.FC = () => {
       } catch {
         setCustomerList([]);
         setMaterialList([]);
+      } finally {
+        setCustomersLoading(false);
       }
     };
     load();
+  }, []);
+
+  /** 加载发货方式、付款条件数据字典 */
+  useEffect(() => {
+    const loadShippingMethod = async () => {
+      try {
+        setShippingMethodLoading(true);
+        const dict = await getDataDictionaryByCode('SHIPPING_METHOD');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setShippingMethodOptions(
+          items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
+        );
+      } catch (e: any) {
+        console.warn('发货方式字典未配置或加载失败:', e?.message || e);
+        setShippingMethodOptions([]);
+      } finally {
+        setShippingMethodLoading(false);
+      }
+    };
+    const loadPaymentTerms = async () => {
+      try {
+        setPaymentTermsLoading(true);
+        const dict = await getDataDictionaryByCode('PAYMENT_TERMS');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setPaymentTermsOptions(
+          items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }))
+        );
+      } catch (e: any) {
+        console.warn('付款条件字典未配置或加载失败:', e?.message || e);
+        setPaymentTermsOptions([]);
+      } finally {
+        setPaymentTermsLoading(false);
+      }
+    };
+    loadShippingMethod();
+    loadPaymentTerms();
   }, []);
 
   const columns: ProColumns<Quotation>[] = [
@@ -333,30 +383,35 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
+  /**
+   * 处理新建报价单
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   */
+  const defaultQuoteItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', quote_quantity: 1, unit_price: 0, delivery_date: undefined, notes: '' };
+
   const handleCreate = async () => {
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ items: [] });
     setEditingId(null);
     setPreviewCode(null);
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ items: [defaultQuoteItem] });
+    }, 100);
     const autoEnabled = isAutoGenerateEnabled('kuaizhizao-quotation');
     const ruleCode = getPageRuleCode('kuaizhizao-quotation');
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'handleCreate', hypothesisId: 'H1_H2', location: 'quotations/index.tsx:handleCreate', message: 'auto code config', data: { autoEnabled, ruleCode, pageCode: 'kuaizhizao-quotation' }, timestamp: Date.now() }) }).catch(() => {});
-    // #endregion
-    if (autoEnabled) {
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const preview = codeResponse.code;
-          setPreviewCode(preview ?? null);
-          formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
-        } catch (e) {
-          console.warn('报价单编码预生成失败:', e);
-          setPreviewCode(null);
-        }
+    if (autoEnabled && ruleCode) {
+      try {
+        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+        const preview = codeResponse.code;
+        setPreviewCode(preview ?? null);
+        formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
+      } catch (e) {
+        console.warn('报价单编码预生成失败:', e);
+        setPreviewCode(null);
       }
+    } else {
+      setPreviewCode(null);
     }
-    setModalVisible(true);
   };
 
   const submitCreate = async (values: any) => {
@@ -379,9 +434,6 @@ const QuotationsPage: React.FC = () => {
         }
       }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f6a036' }, body: JSON.stringify({ sessionId: 'f6a036', runId: 'submitCreate', hypothesisId: 'H3', location: 'quotations/index.tsx:submitCreate', message: 'quotation code before create', data: { quotationCode, previewCode, submitAutoEnabled, submitRuleCode, willCallGenerate, customerListLen: customerList.length, customer_id: values.customer_id }, timestamp: Date.now() }) }).catch(() => {});
-    // #endregion
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
     await createQuotation({
@@ -478,8 +530,24 @@ const QuotationsPage: React.FC = () => {
     },
     { title: '销售员', dataIndex: 'salesman_name' },
     { title: '收货地址', dataIndex: 'shipping_address', span: 2 },
-    { title: '发货方式', dataIndex: 'shipping_method' },
-    { title: '付款条件', dataIndex: 'payment_terms' },
+    {
+      title: '发货方式',
+      dataIndex: 'shipping_method',
+      render: (_, record) => {
+        const val = record.shipping_method;
+        const opt = shippingMethodOptions.find((o) => o.value === val);
+        return opt?.label ?? val ?? '-';
+      },
+    },
+    {
+      title: '付款条件',
+      dataIndex: 'payment_terms',
+      render: (_, record) => {
+        const val = record.payment_terms;
+        const opt = paymentTermsOptions.find((o) => o.value === val);
+        return opt?.label ?? val ?? '-';
+      },
+    },
     { title: '关联销售订单', dataIndex: 'sales_order_code' },
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
@@ -495,11 +563,30 @@ const QuotationsPage: React.FC = () => {
           />
         </Col>
         <Col span={12}>
-          <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
+          <ProForm.Item
+            name="customer_id"
+            label={
+              <span>
+                客户名称
+                <a
+                  href="/apps/master-data/supply-chain/customers"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate('/apps/master-data/supply-chain/customers');
+                  }}
+                  style={{ marginLeft: 8, fontSize: 12 }}
+                >
+                  客户信息管理
+                </a>
+              </span>
+            }
+            rules={[{ required: true, message: '请选择客户' }]}
+          >
             <UniDropdown
               placeholder="请选择客户"
               showSearch
               allowClear
+              loading={customersLoading}
               style={{ width: '100%' }}
               options={customerList.map((c: any) => ({
                 value: c.id ?? c.customer_id,
@@ -591,10 +678,36 @@ const QuotationsPage: React.FC = () => {
           <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
         </Col>
         <Col span={6}>
-          <ProFormText name="shipping_method" label="发货方式" />
+          <ProForm.Item name="shipping_method" label="发货方式">
+            <UniDropdown
+              placeholder="请选择发货方式"
+              showSearch
+              allowClear
+              loading={shippingMethodLoading}
+              style={{ width: '100%' }}
+              options={shippingMethodOptions}
+              quickCreate={{
+                label: '数据字典管理',
+                onClick: () => navigate('/system/data-dictionaries'),
+              }}
+            />
+          </ProForm.Item>
         </Col>
         <Col span={6}>
-          <ProFormText name="payment_terms" label="付款条件" />
+          <ProForm.Item name="payment_terms" label="付款条件">
+            <UniDropdown
+              placeholder="请选择付款条件"
+              showSearch
+              allowClear
+              loading={paymentTermsLoading}
+              style={{ width: '100%' }}
+              options={paymentTermsOptions}
+              quickCreate={{
+                label: '数据字典管理',
+                onClick: () => navigate('/system/data-dictionaries'),
+              }}
+            />
+          </ProForm.Item>
         </Col>
       </Row>
       <ProFormText name="customer_name" hidden />
@@ -622,34 +735,35 @@ const QuotationsPage: React.FC = () => {
                 dataIndex: 'material_id',
                 width: 200,
                 render: (_: any, __: any, index: number) => (
-                  <Form.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
-                    <Select
-                      placeholder="请选择物料"
-                      style={{ width: '100%' }}
-                      showSearch
-                      allowClear
-                      size="small"
-                      optionFilterProp="label"
-                      options={materialList.map((m: any) => ({
-                        value: m.id ?? m.material_id,
-                        label: `${m.main_code ?? m.mainCode ?? m.code ?? ''} - ${m.name ?? m.material_name ?? ''}`.trim() || String(m.id ?? m.material_id),
-                      }))}
-                      onChange={(v) => {
-                        const m = materialList.find((x: any) => (x.id ?? x.material_id) === v);
-                        if (m) {
-                          const items = formRef.current?.getFieldValue('items') || [];
-                          items[index] = {
-                            ...items[index],
-                            material_id: m.id ?? m.material_id,
-                            material_code: m.main_code ?? m.mainCode ?? m.code ?? m.material_code ?? '',
-                            material_name: m.name ?? m.material_name ?? '',
-                            material_spec: m.specification ?? m.material_spec ?? '',
-                            material_unit: m.base_unit ?? m.baseUnit ?? m.material_unit ?? '',
-                          };
-                          formRef.current?.setFieldsValue({ items });
-                        }
-                      }}
-                    />
+                  <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                    {({ getFieldValue }: any) => {
+                      const row = getFieldValue('items')?.[index];
+                      const mid = row?.material_id ? Number(row.material_id) : null;
+                      const fallback = mid && (row?.material_code || row?.material_name)
+                        ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                        : undefined;
+                      return (
+                        <UniMaterialSelect
+                          name={[index, 'material_id']}
+                          label=""
+                          placeholder="请选择物料（支持名称/编码搜索）"
+                          required
+                          size="small"
+                          listFieldKey={index}
+                          listFieldName="items"
+                          fillMapping={{
+                            material_code: 'mainCode',
+                            material_name: 'name',
+                            material_spec: 'specification',
+                            material_unit: 'baseUnit',
+                          }}
+                          fallbackOption={fallback}
+                          formItemProps={{ style: { margin: 0 } }}
+                          showQuickCreate
+                          showAdvancedSearch
+                        />
+                      );
+                    }}
                   </Form.Item>
                 ),
               },
@@ -756,7 +870,7 @@ const QuotationsPage: React.FC = () => {
                     border-bottom: 1px solid var(--ant-color-border);
                   }
                 `}</style>
-                <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                <div style={{ width: '100%', overflowX: 'auto' }}>
                   <Table
                     className="quotation-detail-table"
                     size="small"

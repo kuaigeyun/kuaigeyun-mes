@@ -9,11 +9,16 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import CodeField from '../../../../../components/code-field';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
@@ -21,8 +26,9 @@ import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
 
-const REASON_TYPES = [
+const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
+  { value: '调拨', label: '调拨' },
   { value: '样品', label: '样品' },
   { value: '报废', label: '报废' },
   { value: '其他', label: '其他' },
@@ -84,6 +90,7 @@ interface FormItemRow {
 }
 
 const OtherInboundPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -93,6 +100,8 @@ const OtherInboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
+  const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
   const [formItems, setFormItems] = useState<FormItemRow[]>([]);
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
@@ -115,6 +124,22 @@ const OtherInboundPage: React.FC = () => {
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const loadReasonType = async () => {
+      setReasonTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('INBOUND_REASON_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setReasonTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setReasonTypeOptions(REASON_TYPES_FALLBACK);
+      } finally {
+        setReasonTypeLoading(false);
+      }
+    };
+    loadReasonType();
   }, []);
 
   const columns: ProColumns<OtherInbound>[] = [
@@ -200,10 +225,11 @@ const OtherInboundPage: React.FC = () => {
     });
   };
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
     setCreateModalVisible(true);
+    setFormItems([]);
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
@@ -214,8 +240,9 @@ const OtherInboundPage: React.FC = () => {
         throw new Error('请至少添加一条有效明细');
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = wh?.name || wh?.warehouse_name || '';
+      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
       await warehouseApi.otherInbound.create({
+        inbound_code: values.inbound_code,
         reason_type: values.reason_type,
         reason_desc: values.reason_desc,
         warehouse_id: values.warehouse_id,
@@ -449,14 +476,31 @@ const OtherInboundPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
       >
-        <Form.Item name="warehouse_id" label="仓库" rules={[{ required: true }]}>
-          <Select
-            placeholder="请选择仓库"
-            options={warehouseList.map((w: any) => ({ value: w.id ?? w.warehouse_id, label: w.name || w.warehouse_name || w.code }))}
-          />
-        </Form.Item>
+        <CodeField
+          pageCode="kuaizhizao-warehouse-other-inbound"
+          name="inbound_code"
+          label="入库单编码"
+          autoGenerateOnCreate={true}
+          context={{}}
+        />
+        <UniWarehouseSelect
+          name="warehouse_id"
+          label="仓库"
+          placeholder="请选择仓库"
+          required
+          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+        />
+        <Form.Item name="warehouse_name" hidden />
         <Form.Item name="reason_type" label="原因类型" rules={[{ required: true }]}>
-          <Select options={REASON_TYPES} placeholder="请选择" />
+          <UniDropdown
+            placeholder="请选择原因类型"
+            showSearch
+            allowClear
+            loading={reasonTypeLoading}
+            style={{ width: '100%' }}
+            options={reasonTypeOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
         </Form.Item>
         <Form.Item name="reason_desc" label="原因说明">
           <Input.TextArea rows={2} placeholder="可选" />

@@ -14,8 +14,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import zhCNLocale from './locales/zh-CN';
-import LoginPage from './pages/login';
+import zhCNLocale from './locales/zh-CN.login';
+import { lazy, Suspense } from 'react';
+
+const LoginPage = lazy(() => import('./pages/login'));
 import './pages/login/index.less';
 
 // 登录页最小 i18n：仅加载 zh-CN，不请求后端
@@ -65,7 +67,20 @@ if (root) {
         <App>
           <MemoryRouter initialEntries={[initialPath]} initialIndex={0}>
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
+              <Route
+                path="/login"
+                element={
+                  <Suspense
+                    fallback={
+                      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', color: '#666' }}>
+                        加载中...
+                      </div>
+                    }
+                  >
+                    <LoginPage />
+                  </Suspense>
+                }
+              />
               <Route path="*" element={<RedirectToApp />} />
             </Routes>
           </MemoryRouter>

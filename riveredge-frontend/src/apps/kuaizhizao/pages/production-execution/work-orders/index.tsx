@@ -30,6 +30,7 @@ import {
 import {
   App,
   Button,
+  ConfigProvider,
   Tag,
   Space,
   Modal,
@@ -46,7 +47,6 @@ import {
   Input,
   Form,
   Segmented,
-  ConfigProvider,
   theme,
   Typography,
   Empty,
@@ -599,9 +599,7 @@ const WorkOrdersPage: React.FC = () => {
     }
   }
 
-  /**
-   * 处理新建工单
-   */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentWorkOrder(null)
@@ -609,7 +607,7 @@ const WorkOrdersPage: React.FC = () => {
     setSelectedOperations([]) // 清空选中的工序
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
     setModalVisible(true)
-    formRef.current?.resetFields()
+    setTimeout(() => formRef.current?.resetFields(), 0)
   }
 
   /**
@@ -2652,16 +2650,11 @@ const WorkOrdersPage: React.FC = () => {
               <ConfigProvider
                 theme={{
                   components: {
-                    Segmented: {
-                      trackBg: 'rgba(0, 0, 0, 0.06)',
-                      itemSelectedBg: token.colorPrimary,
-                      itemSelectedColor: '#fff',
-                    },
+                    Segmented: { trackBg: token.colorPrimaryBgHover},
                   },
                 }}
               >
                 <Segmented
-                  size="small"
                   value={onlyShowMake ? 'make' : 'all'}
                   onChange={v => setOnlyShowMake(v === 'make')}
                   options={[
@@ -2805,14 +2798,27 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
         <Form.Item name="operations" hidden />
-        <Form.Item label="工艺路线工序清单" colon style={{ gridColumn: '1 / -1', marginBottom: 24, paddingLeft: 8 }}>
-          <CreateWorkOrderOperationsList
+        <Form.Item
+          label="工艺路线工序清单"
+          colon
+          style={{
+            gridColumn: '1 / -1',
+            marginBottom: 24,
+            width: '100%',
+            minWidth: 0,
+            paddingLeft: 8,
+            paddingRight: 8,
+          }}
+        >
+          <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+            <CreateWorkOrderOperationsList
             selectedOperations={selectedOperations}
             setSelectedOperations={setSelectedOperations}
             operationList={operationList}
             formRef={formRef}
             disabled={isEdit}
           />
+          </div>
         </Form.Item>
 
         <ProFormSwitch
@@ -2820,13 +2826,6 @@ const WorkOrdersPage: React.FC = () => {
           label="允许跳转工序"
           extra="开启后允许自由报工；关闭后下一道工序报工数量不可超过上一道"
           initialValue={false}
-          colProps={{ span: 24 }}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label="备注"
-          placeholder="可选"
-          fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
         <ProFormUploadButton
@@ -2849,6 +2848,13 @@ const WorkOrdersPage: React.FC = () => {
               }
             }
           }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="可选"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
@@ -4163,6 +4169,8 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         </div>
         <div
           style={{
+            width: '100%',
+            boxSizing: 'border-box',
             padding: 24,
             background: '#fafafa',
             borderRadius: 4,
@@ -4244,13 +4252,15 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
           items={selectedOperations.map((_: any, i: number) => `op-${i}`)}
           strategy={verticalListSortingStrategy}
         >
-          <Table
-            columns={columns}
-            dataSource={selectedOperations}
-            rowKey={(_, i) => `op-${i}`}
-            pagination={false}
-            size="small"
-            components={{
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <Table
+              columns={columns}
+              dataSource={selectedOperations}
+              rowKey={(_, i) => `op-${i}`}
+              pagination={false}
+              size="small"
+              style={{ width: '100%', margin: 0 }}
+              components={{
               body: {
                 wrapper: (wrapperProps: any) => (
                   <tbody {...wrapperProps}>
@@ -4271,6 +4281,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
               },
             }}
           />
+          </div>
         </SortableContext>
       </DndContext>
       {!disabled && addableOptions.length > 0 && (

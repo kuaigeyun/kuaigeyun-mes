@@ -179,6 +179,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
                 "apps.kuaizhizao.models.reporting_record",  # 报工记录模型
                 "apps.kuaizhizao.models.rework_order",  # 返工单模型
+                "apps.kuaizhizao.models.rework_order_operation",  # 返工单关联工序
                 "apps.kuaizhizao.models.outsource_order",  # 委外单模型
                 "apps.kuaizhizao.models.scrap_record",  # 报废记录模型
                 "apps.kuaizhizao.models.defect_record",  # 不良品记录模型
@@ -227,6 +228,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
                 "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
                 "apps.kuaizhizao.models.document_relation",  # 单据关联模型
+                "apps.kuaizhizao.models.purchase_logistics",  # 采购物流记录模型
             ],
             "default_connection": "default",
         },

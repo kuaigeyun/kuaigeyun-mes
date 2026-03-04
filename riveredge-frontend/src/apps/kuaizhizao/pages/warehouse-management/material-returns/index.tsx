@@ -7,14 +7,15 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
-import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 
 interface MaterialReturn {
   id?: number;
@@ -68,30 +69,26 @@ const MaterialReturnsPage: React.FC = () => {
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [borrowList, setBorrowList] = useState<any[]>([]);
+  const [borrowLoading, setBorrowLoading] = useState(false);
   const [selectedBorrowDetail, setSelectedBorrowDetail] = useState<{ borrow_id: number; borrow_code: string; warehouse_id: number; warehouse_name: string; items: BorrowItemForReturn[] } | null>(null);
   const [returnQuantities, setReturnQuantities] = useState<Record<number, number>>({});
 
-  React.useEffect(() => {
+  useEffect(() => {
     const load = async () => {
+      if (!createModalVisible) return;
+      setBorrowLoading(true);
       try {
-        const wh = await masterDataWarehouseApi.list({ limit: 1000, isActive: true });
-        setWarehouseList(Array.isArray(wh) ? wh : wh?.items || []);
-      } catch (e) {
-        console.error('加载仓库失败', e);
+        const res = await warehouseApi.materialBorrow.list({ status: '已借出', limit: 500 });
+        const data = Array.isArray(res) ? res : (res as any)?.items || (res as any)?.data || [];
+        setBorrowList(data);
+      } catch {
+        setBorrowList([]);
+      } finally {
+        setBorrowLoading(false);
       }
     };
     load();
-  }, []);
-
-  React.useEffect(() => {
-    if (createModalVisible) {
-      warehouseApi.materialBorrow.list({ status: '已借出', limit: 500 }).then((res: any) => {
-        const data = Array.isArray(res) ? res : res?.items || res?.data || [];
-        setBorrowList(data);
-      }).catch(() => setBorrowList([]));
-    }
   }, [createModalVisible]);
 
   const onBorrowSelect = async (borrowId: number) => {
@@ -235,11 +232,12 @@ const MaterialReturnsPage: React.FC = () => {
     }
   };
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
+    setCreateModalVisible(true);
     setSelectedBorrowDetail(null);
     setReturnQuantities({});
-    formRef.current?.resetFields();
-    setCreateModalVisible(true);
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
@@ -265,6 +263,7 @@ const MaterialReturnsPage: React.FC = () => {
     }
     try {
       await warehouseApi.materialReturn.create({
+        return_code: values.return_code,
         borrow_id: selectedBorrowDetail.borrow_id,
         borrow_code: selectedBorrowDetail.borrow_code,
         warehouse_id: selectedBorrowDetail.warehouse_id,
@@ -389,11 +388,25 @@ const MaterialReturnsPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Form.Item name="borrow_id" label="借料单" rules={[{ required: true }]}>
-          <Select
+        <CodeField
+          pageCode="kuaizhizao-warehouse-material-return"
+          name="return_code"
+          label="还料单编码"
+          autoGenerateOnCreate={true}
+          context={{}}
+        />
+        <Form.Item name="borrow_id" label="借料单" rules={[{ required: true, message: '请选择借料单' }]}>
+          <UniDropdown
             placeholder="请选择借料单（仅显示已借出状态）"
-            options={borrowList.map((b: any) => ({ value: b.id, label: `${b.borrow_code} - ${b.warehouse_name || ''}` }))}
-            onChange={onBorrowSelect}
+            showSearch
+            allowClear
+            loading={borrowLoading}
+            style={{ width: '100%' }}
+            options={borrowList.map((b: any) => ({
+              value: b.id,
+              label: `${b.borrow_code ?? b.borrowCode ?? ''} - ${b.warehouse_name ?? b.warehouseName ?? ''}`.trim() || String(b.id),
+            }))}
+            onChange={(v) => onBorrowSelect(v as number)}
           />
         </Form.Item>
         {selectedBorrowDetail && (

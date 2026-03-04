@@ -12,10 +12,15 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, message, Divider, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import CodeField from '../../../../../components/code-field';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { outsourceWorkOrderApi, outsourceMaterialIssueApi, outsourceMaterialReceiptApi } from '../../../services/production';
 import { getOutsourceWorkOrderLifecycle } from '../../../utils/outsourceWorkOrderLifecycle';
@@ -59,7 +64,15 @@ interface OutsourceWorkOrder {
   updatedAt?: string;
 }
 
+const PRIORITY_FALLBACK = [
+  { label: '低', value: 'low' },
+  { label: '正常', value: 'normal' },
+  { label: '高', value: 'high' },
+  { label: '紧急', value: 'urgent' },
+];
+
 export const OutsourceWorkOrdersTable: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -69,6 +82,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [supplierList, setSupplierList] = useState<any[]>([]);
   // 仓库列表状态
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  const [priorityOptions, setPriorityOptions] = useState<Array<{ label: string; value: string }>>(PRIORITY_FALLBACK);
+  const [priorityLoading, setPriorityLoading] = useState(false);
 
   // Modal 相关状态（创建/编辑工单委外）
   const [modalVisible, setModalVisible] = useState(false);
@@ -109,7 +124,6 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       try {
         // 加载产品列表（只显示委外件）
         const products = await materialApi.list({ isActive: true });
-        // 过滤出委外件（sourceType === 'Outsource'）
         const outsourceProducts = products.filter((p: any) =>
           (p.sourceType === 'Outsource' || p.source_type === 'Outsource')
         );
@@ -130,15 +144,29 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     loadData();
   }, []);
 
-  /**
-   * 处理新建工单委外
-   */
+  useEffect(() => {
+    const loadPriority = async () => {
+      setPriorityLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('WORK_ORDER_PRIORITY');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setPriorityOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setPriorityOptions(PRIORITY_FALLBACK);
+      } finally {
+        setPriorityLoading(false);
+      }
+    };
+    loadPriority();
+  }, []);
+
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentWorkOrder(null);
     setSelectedMaterialSourceInfo(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**
@@ -791,7 +819,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       />
 
       {/* 创建/编辑工单委外 Modal */}
-      < FormModalTemplate
+      <FormModalTemplate
         title={isEdit ? '编辑工单委外' : '新建工单委外'}
         open={modalVisible}
         onClose={() => {
@@ -802,11 +830,22 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={isEdit && currentWorkOrder ? { ...currentWorkOrder, productId: currentWorkOrder.productId ?? currentWorkOrder.product_id, supplierId: currentWorkOrder.supplierId ?? currentWorkOrder.supplier_id } : undefined}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
       >
         {/* 基本信息组 */}
-        < Divider > 基本信息</Divider >
+        <Divider>基本信息</Divider>
+        {!isEdit && (
+          <CodeField
+            pageCode="kuaizhizao-production-outsource-work-order"
+            name="code"
+            label="工单委外编码"
+            autoGenerateOnCreate={true}
+            context={{}}
+            colProps={{ span: 12 }}
+          />
+        )}
         <ProFormText
           name="name"
           label="工单委外名称"
@@ -814,21 +853,24 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
-        <ProFormSelect
+        <ProFormItem
           name="productId"
           label="产品选择"
-          placeholder="请选择产品（委外件）"
-          options={productList.map(product => ({
-            label: `${product.code || product.mainCode} - ${product.name}`,
-            value: product.id,
-          }))}
           rules={[{ required: true, message: '请选择产品' }]}
-          disabled={isEdit}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            onChange: async (value: number | undefined) => {
+          colProps={{ span: 12 }}
+        >
+          <UniDropdown
+            placeholder="请选择产品（委外件）"
+            showSearch
+            allowClear
+            disabled={isEdit}
+            style={{ width: '100%' }}
+            options={productList.map((product: any) => ({
+              label: `${product.code || product.mainCode || ''} - ${product.name || ''}`.trim() || String(product.id),
+              value: product.id,
+            }))}
+            quickCreate={{ label: '物料管理', onClick: () => navigate('/apps/master-data/materials') }}
+            onChange={async (value: number | undefined) => {
               if (value) {
                 const selectedMaterial = productList.find(p => p.id === value);
                 if (selectedMaterial) {
@@ -892,8 +934,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               }
             }
           }}
-          colProps={{ span: 12 }}
-        />
+          />
+        </ProFormItem>
         {/* 物料来源信息显示 */}
         {
           selectedMaterialSourceInfo && (
@@ -962,23 +1004,25 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }}
           colProps={{ span: 12 }}
         />
-        <ProFormSelect
+        <ProFormItem
           name="supplierId"
           label="委外供应商"
-          placeholder="请选择委外供应商"
-          options={supplierList.map(supplier => ({
-            label: `${supplier.code} - ${supplier.name}`,
-            value: supplier.id,
-          }))}
           rules={[{ required: true, message: '请选择委外供应商' }]}
-          disabled={isEdit}
-          fieldProps={{
-            showSearch: true,
-            filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }}
           colProps={{ span: 12 }}
-        />
+        >
+          <UniDropdown
+            placeholder="请选择委外供应商"
+            showSearch
+            allowClear
+            disabled={isEdit}
+            style={{ width: '100%' }}
+            options={supplierList.map((supplier: any) => ({
+              label: `${supplier.code ?? supplier.supplier_code ?? ''} - ${supplier.name ?? supplier.supplier_name ?? ''}`.trim() || String(supplier.id),
+              value: supplier.id,
+            }))}
+            quickCreate={{ label: '供应商管理', onClick: () => navigate('/apps/master-data/supply-chain/suppliers') }}
+          />
+        </ProFormItem>
         <ProFormText
           name="outsourceOperation"
           label="委外工序"
@@ -1018,19 +1062,17 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         {/* 优先级和时间组 */}
         <Divider>优先级和时间</Divider>
-        <ProFormSelect
-          name="priority"
-          label="优先级"
-          placeholder="请选择优先级"
-          options={[
-            { label: '低', value: 'low' },
-            { label: '正常', value: 'normal' },
-            { label: '高', value: 'high' },
-            { label: '紧急', value: 'urgent' },
-          ]}
-          initialValue="normal"
-          colProps={{ span: 12 }}
-        />
+        <ProFormItem name="priority" label="优先级" initialValue="normal" colProps={{ span: 12 }}>
+          <UniDropdown
+            placeholder="请选择优先级"
+            showSearch
+            allowClear
+            loading={priorityLoading}
+            style={{ width: '100%' }}
+            options={priorityOptions}
+            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+          />
+        </ProFormItem>
         <ProFormDatePicker
           name="plannedStartDate"
           label="计划开始时间"
@@ -1158,30 +1200,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               disabled
               colProps={{ span: 12 }}
             />
-            <ProFormSelect
+            <UniWarehouseSelect
               name="warehouseId"
               label="仓库"
               placeholder="请选择仓库"
-              options={warehouseList.map(warehouse => ({
-                label: `${warehouse.code} - ${warehouse.name}`,
-                value: warehouse.id,
-              }))}
-              fieldProps={{
-                showSearch: true,
-                filterOption: (input: string, option: any) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                onChange: (value: number | undefined) => {
-                  if (value) {
-                    const warehouse = warehouseList.find(w => w.id === value);
-                    if (warehouse) {
-                      issueFormRef.current?.setFieldsValue({
-                        warehouseName: warehouse.name,
-                      });
-                    }
-                  }
-                }
-              }}
+              required
               colProps={{ span: 12 }}
+              onChange={(val, wh) => issueFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
             />
             <ProFormText
               name="warehouseName"
@@ -1266,30 +1291,13 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               disabled
               colProps={{ span: 12 }}
             />
-            <ProFormSelect
+            <UniWarehouseSelect
               name="warehouseId"
               label="仓库"
               placeholder="请选择仓库"
-              options={warehouseList.map(warehouse => ({
-                label: `${warehouse.code} - ${warehouse.name}`,
-                value: warehouse.id,
-              }))}
-              fieldProps={{
-                showSearch: true,
-                filterOption: (input: string, option: any) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                onChange: (value: number | undefined) => {
-                  if (value) {
-                    const warehouse = warehouseList.find(w => w.id === value);
-                    if (warehouse) {
-                      receiptFormRef.current?.setFieldsValue({
-                        warehouseName: warehouse.name,
-                      });
-                    }
-                  }
-                }
-              }}
+              required
               colProps={{ span: 12 }}
+              onChange={(val, wh) => receiptFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
             />
             <ProFormText
               name="warehouseName"

@@ -7,12 +7,15 @@ Author: RiverEdge Team
 Date: 2026-02-22
 """
 
+import logging
 from typing import List
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 
 from apps.base_service import AppBaseService
+
+logger = logging.getLogger(__name__)
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.schemas.shipment_notice import (
@@ -46,12 +49,31 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         if not is_enabled:
             raise BusinessLogicError("发货通知单节点未启用，无法创建发货通知单")
         async with in_transaction():
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix=f"SN{today}")
+            code = notice_data.notice_code
+            if not code:
+                try:
+                    code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
+                except Exception as e:
+                    from infra.exceptions.exceptions import ValidationError
+                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
+                        from core.services.default.default_values_service import DefaultValuesService
+                        created = await DefaultValuesService.ensure_code_rule_for_page(
+                            tenant_id, "kuaizhizao-shipment-notice"
+                        )
+                        if created:
+                            try:
+                                code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
+                            except Exception as e2:
+                                logger.warning("发货通知单编码规则补建后生成仍失败: %s", e2)
+                        else:
+                            logger.warning("发货通知单编码规则生成失败: %s", e)
+                    else:
+                        logger.warning("发货通知单编码规则生成失败: %s", e)
+                if not code:
+                    import uuid
+                    code = f"SN{datetime.now().strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
-            if notice_data.notice_code:
-                code = notice_data.notice_code
 
             notice = await ShipmentNotice.create(
                 tenant_id=tenant_id,

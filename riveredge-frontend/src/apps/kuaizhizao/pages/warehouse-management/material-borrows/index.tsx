@@ -7,18 +7,20 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, DatePicker } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialApi } from '../../../../master-data/services/material';
 
 interface MaterialBorrow {
   id?: number;
@@ -65,20 +67,15 @@ const MaterialBorrowsPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; borrow_quantity: number }>>([]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const load = async () => {
       try {
-        const [wh, mat] = await Promise.all([
-          masterDataWarehouseApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
-        ]);
-        setWarehouseList(Array.isArray(wh) ? wh : wh?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
+        const wh = await masterDataWarehouseApi.list({ limit: 1000, isActive: true });
+        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
       } catch (e) {
-        console.error('加载仓库/物料失败', e);
+        console.error('加载仓库失败', e);
       }
     };
     load();
@@ -225,10 +222,11 @@ const MaterialBorrowsPage: React.FC = () => {
     }
   };
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
     setCreateModalVisible(true);
+    setFormItems([]);
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
@@ -239,8 +237,9 @@ const MaterialBorrowsPage: React.FC = () => {
         throw new Error('请至少添加一条有效明细');
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = wh?.name || wh?.warehouse_name || '';
+      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
       await warehouseApi.materialBorrow.create({
+        borrow_code: values.borrow_code,
         warehouse_id: values.warehouse_id,
         warehouse_name: warehouseName,
         borrower_name: values.borrower_name,
@@ -270,16 +269,15 @@ const MaterialBorrowsPage: React.FC = () => {
     setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', borrow_quantity: 1 }]);
   };
 
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
+  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
+    if (!material) return;
     const updated = [...formItems];
     updated[idx] = {
       ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
+      material_id: material.id ?? material.material_id,
+      material_code: material.mainCode ?? material.code ?? material.main_code ?? '',
+      material_name: material.name ?? material.material_name ?? '',
+      material_unit: material.baseUnit ?? material.base_unit ?? material.unit ?? '',
     };
     setFormItems(updated);
   };
@@ -407,12 +405,21 @@ const MaterialBorrowsPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Form.Item name="warehouse_id" label="仓库" rules={[{ required: true }]}>
-          <Select
-            placeholder="请选择仓库"
-            options={warehouseList.map((w: any) => ({ value: w.id ?? w.warehouse_id, label: w.name || w.warehouse_name || w.code }))}
-          />
-        </Form.Item>
+        <CodeField
+          pageCode="kuaizhizao-warehouse-material-borrow"
+          name="borrow_code"
+          label="借料单编码"
+          autoGenerateOnCreate={true}
+          context={{}}
+        />
+        <UniWarehouseSelect
+          name="warehouse_id"
+          label="仓库"
+          placeholder="请选择仓库"
+          required
+          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+        />
+        <Form.Item name="warehouse_name" hidden />
         <Form.Item name="borrower_name" label="借料人">
           <Input placeholder="借料人姓名" />
         </Form.Item>
@@ -427,12 +434,14 @@ const MaterialBorrowsPage: React.FC = () => {
             <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
             {formItems.map((it, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Select
-                  placeholder="物料"
-                  style={{ width: 200 }}
-                  options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                  onChange={(v) => onMaterialSelect(idx, v)}
-                />
+                <div style={{ flex: '1 1 250px' }}>
+                  <UniMaterialSelect
+                    name={['_form_items', idx, 'material_id']}
+                    label=""
+                    placeholder="请输入或选择物料"
+                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
+                  />
+                </div>
                 <InputNumber placeholder="数量" min={0.01} value={it.borrow_quantity} onChange={(v) => {
                   const u = [...formItems]; u[idx] = { ...u[idx], borrow_quantity: v ?? 0 }; setFormItems(u);
                 }} />

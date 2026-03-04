@@ -39,6 +39,7 @@ const OutsourceManagementPage = lazy(() => import('./pages/production-execution/
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
+const LogisticsTrackingPage = lazy(() => import('./pages/purchase-management/logistics-tracking'));
 
 // 销售管理页面
 const SalesForecastsPage = lazy(() => import('./pages/sales-management/sales-forecasts'));
@@ -141,6 +142,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
+      <Route path="purchase-management/logistics-tracking" element={withPageSuspense(LogisticsTrackingPage)} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />

@@ -1376,6 +1376,7 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-orders': '采购订单',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': '采购申请',
   'app.kuaizhizao.menu.purchase-management.receipt-notices': '收货通知单',
+  'app.kuaizhizao.menu.purchase-management.logistics-tracking': '物流跟踪',
   'app.kuaizhizao.menu.sales-management': '销售管理',
   'app.kuaizhizao.menu.sales-management.sales-forecasts': '销售预测',
   'app.kuaizhizao.menu.sales-management.sales-orders': '销售订单',

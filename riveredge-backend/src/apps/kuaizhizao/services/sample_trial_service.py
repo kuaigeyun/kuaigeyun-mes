@@ -58,11 +58,33 @@ class SampleTrialService(AppBaseService[SampleTrial]):
             raise BusinessLogicError("样品试用单节点未启用，无法创建样品试用单")
         async with in_transaction():
             today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "SAMPLE_TRIAL_CODE", prefix=f"ST{today}")
-
-            dump = trial_data.model_dump(exclude_unset=True, exclude={"items", "trial_code"})
             if trial_data.trial_code:
                 code = trial_data.trial_code
+            else:
+                code = None
+                try:
+                    code = await self.generate_code(tenant_id, "SAMPLE_TRIAL_CODE", prefix=f"ST{today}")
+                except Exception as e:
+                    from infra.exceptions.exceptions import ValidationError
+                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
+                        from core.services.default.default_values_service import DefaultValuesService
+                        created = await DefaultValuesService.ensure_code_rule_for_page(
+                            tenant_id, "kuaizhizao-sample-trial"
+                        )
+                        if created:
+                            try:
+                                code = await self.generate_code(tenant_id, "SAMPLE_TRIAL_CODE", prefix=f"ST{today}")
+                            except Exception as e2:
+                                logger.warning("样品试用单编码规则补建后生成仍失败: %s", e2)
+                        else:
+                            logger.warning("样品试用单编码规则生成失败: %s", e)
+                    else:
+                        logger.warning("样品试用单编码规则生成失败: %s", e)
+                if code is None:
+                    import uuid
+                    code = f"ST{today}{uuid.uuid4().hex[:6].upper()}"
+
+            dump = trial_data.model_dump(exclude_unset=True, exclude={"items", "trial_code"})
 
             trial = await SampleTrial.create(
                 tenant_id=tenant_id,

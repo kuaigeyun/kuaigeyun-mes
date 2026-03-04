@@ -7,18 +7,23 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import dayjs from 'dayjs';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -31,12 +36,26 @@ import {
 } from '../../../constants/documentStatus';
 import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
 // PurchaseOrderItem 已在导入中定义
 
+const defaultOrderItem = {
+  material_id: undefined,
+  material_code: '',
+  material_name: '',
+  material_spec: '',
+  unit: '件',
+  ordered_quantity: 1,
+  unit_price: 0,
+  tax_rate: 0,
+  required_date: undefined,
+};
+
 const PurchaseOrdersPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
@@ -44,6 +63,52 @@ const PurchaseOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['purchaseOrderStatistics'] }); };
+
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      setSuppliersLoading(true);
+      try {
+        const res = await apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 1000, is_active: true } });
+        const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+        setSupplierList(Array.isArray(list) ? list : []);
+      } catch {
+        setSupplierList([]);
+      } finally {
+        setSuppliersLoading(false);
+      }
+    };
+    loadSuppliers();
+  }, []);
+
+  useEffect(() => {
+    const loadOrderType = async () => {
+      setOrderTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('ORDER_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setOrderTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setOrderTypeOptions([{ label: '标准采购', value: '标准采购' }, { label: '紧急采购', value: '紧急采购' }, { label: '框架协议', value: '框架协议' }]);
+      } finally {
+        setOrderTypeLoading(false);
+      }
+    };
+    const loadCurrency = async () => {
+      setCurrencyLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('CURRENCY');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setCurrencyOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setCurrencyOptions([{ label: '人民币(CNY)', value: 'CNY' }, { label: '美元(USD)', value: 'USD' }, { label: '欧元(EUR)', value: 'EUR' }]);
+      } finally {
+        setCurrencyLoading(false);
+      }
+    };
+    loadOrderType();
+    loadCurrency();
+  }, []);
+
   const { data: statistics } = useQuery({
     queryKey: ['purchaseOrderStatistics'],
     queryFn: getPurchaseOrderStatistics,
@@ -59,10 +124,19 @@ const PurchaseOrdersPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
 
+  // 供应商列表、订单类型、币种
+  const [supplierList, setSupplierList] = useState<any[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(false);
+  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [orderTypeLoading, setOrderTypeLoading] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [currencyLoading, setCurrencyLoading] = useState(false);
+
   // 审批流程相关状态
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatusResponse | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
@@ -315,9 +389,20 @@ const PurchaseOrdersPage: React.FC = () => {
       setIsEdit(true);
       setCurrentOrder(detail);
       setModalVisible(true);
-      // 延迟设置表单值
+      const items = (detail.items || []).map((it: any) => ({
+        material_id: it.material_id ?? it.materialId,
+        material_code: it.material_code || it.materialCode || '',
+        material_name: it.material_name || it.materialName || '',
+        material_spec: it.material_spec || '',
+        unit: it.unit || '件',
+        ordered_quantity: Number(it.ordered_quantity ?? it.orderedQuantity) || 0,
+        unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
+        tax_rate: 0,
+        required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
+      }));
       setTimeout(() => {
         formRef.current?.setFieldsValue({
+          order_code: detail.order_code,
           supplier_id: detail.supplier_id,
           supplier_name: detail.supplier_name,
           supplier_contact: detail.supplier_contact,
@@ -325,10 +410,10 @@ const PurchaseOrdersPage: React.FC = () => {
           order_date: detail.order_date,
           delivery_date: detail.delivery_date,
           order_type: detail.order_type || '标准采购',
-          tax_rate: detail.tax_rate,
-          currency: detail.currency || 'CNY',
+          price_type: 'tax_exclusive',
           notes: detail.notes,
           attachments: (detail as any).attachments || [],
+          items: items.length > 0 ? items : [defaultOrderItem],
         });
       }, 100);
     } catch (error) {
@@ -336,19 +421,29 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // 处理创建
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentOrder(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
+    }, 0);
   };
 
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
+      const validItems = (values.items ?? []).filter(
+        (it: any) => it.material_id && (Number(it.ordered_quantity) || 0) > 0
+      );
+      if (!validItems.length) {
+        messageApi.error('请至少添加一条有效采购明细（选择物料并填写数量）');
+        throw new Error('请至少添加一条有效采购明细');
+      }
+
       const data = { ...values };
-      
       // 处理附件
       const formAttachments = data.attachments || [];
       data.attachments = formAttachments.map((f: any) => {
@@ -363,23 +458,60 @@ const PurchaseOrdersPage: React.FC = () => {
         return { uid: f.uid, name: f.name, status: 'done', url: f.url };
       });
 
+      const priceType = data.price_type ?? 'tax_exclusive';
+      data.currency = data.currency || 'CNY';
+
+      const itemsPayload = validItems.map((it: any) => {
+        const qty = Number(it.ordered_quantity) || 0;
+        let price = Number(it.unit_price) || 0;
+        const taxRate = Number(it.tax_rate) || 0;
+        if (priceType === 'tax_inclusive' && price > 0 && taxRate >= 0) {
+          price = price / (1 + taxRate / 100);
+        }
+        const reqDate = it.required_date;
+        const dateStr = reqDate ? (dayjs.isDayjs(reqDate) ? reqDate.format('YYYY-MM-DD') : String(reqDate).slice(0, 10)) : undefined;
+        if (!dateStr) {
+          messageApi.error(`第 ${validItems.indexOf(it) + 1} 行：请选择要求到货日期`);
+          throw new Error('请填写要求到货日期');
+        }
+        const totalPrice = qty * price;
+        return {
+          material_id: Number(it.material_id),
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_spec: it.material_spec || null,
+          ordered_quantity: qty,
+          unit: it.unit || '件',
+          unit_price: price,
+          total_price: totalPrice,
+          received_quantity: 0,
+          outstanding_quantity: qty,
+          required_date: dateStr,
+          inspection_required: true,
+          notes: it.notes || null,
+        };
+      });
+
+      const totalAmount = itemsPayload.reduce((s: number, it: any) => s + Number(it.total_price), 0);
+      const firstTaxRate = validItems[0] ? Number(validItems[0].tax_rate) || 0 : 0;
+      data.tax_rate = priceType === 'tax_inclusive' ? (firstTaxRate > 1 ? firstTaxRate / 100 : firstTaxRate) : 0;
+      data.tax_amount = totalAmount * data.tax_rate;
+      data.net_amount = totalAmount + data.tax_amount;
+
       if (isEdit && currentOrder?.id) {
-        await updatePurchaseOrder(currentOrder.id, data);
+        await updatePurchaseOrder(currentOrder.id, { ...data, items: itemsPayload });
         messageApi.success('采购订单更新成功');
       } else {
-        // 创建时需要提供明细项，这里先创建一个空的明细数组
-        // TODO: 后续需要实现明细项的编辑功能
-        await createPurchaseOrder({
-          ...values,
-          items: [],
-        });
+        await createPurchaseOrder({ ...data, items: itemsPayload });
         messageApi.success('采购订单创建成功');
       }
       setModalVisible(false);
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      if (error?.message && !error.message.includes('请至少添加') && !error.message.includes('要求到货')) {
+        messageApi.error(error.message || '操作失败');
+      }
       throw error;
     }
   };
@@ -568,95 +700,374 @@ const PurchaseOrdersPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
-        grid={true}
+        grid={false}
+        initialValues={!isEdit ? { items: [defaultOrderItem] } : undefined}
       >
-        <CodeField
-          pageCode="kuaizhizao-purchase-order"
-          name="order_code"
-          label="采购订单编码"
-          required={true}
-          autoGenerateOnCreate={!isEdit}
-          context={{}}
-        />
-        <ProFormText
-          name="supplier_name"
-          label="供应商名称"
-          placeholder="请输入供应商名称"
-          rules={[{ required: true, message: '请输入供应商名称' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="supplier_contact"
-          label="联系人"
-          placeholder="请输入联系人"
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="supplier_phone"
-          label="联系电话"
-          placeholder="请输入联系电话"
-          colProps={{ span: 12 }}
-        />
-        <ProFormDatePicker
-          name="order_date"
-          label="订单日期"
-          placeholder="请选择订单日期"
-          rules={[{ required: true, message: '请选择订单日期' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDatePicker
-          name="delivery_date"
-          label="要求到货日期"
-          placeholder="请选择要求到货日期"
-          rules={[{ required: true, message: '请选择要求到货日期' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="order_type"
-          label="订单类型"
-          placeholder="请选择订单类型"
-          options={[
-            { label: '标准采购', value: '标准采购' },
-            { label: '紧急采购', value: '紧急采购' },
-            { label: '框架协议', value: '框架协议' },
-          ]}
-          initialValue="标准采购"
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="currency"
-          label="币种"
-          placeholder="请选择币种"
-          options={[
-            { label: '人民币(CNY)', value: 'CNY' },
-            { label: '美元(USD)', value: 'USD' },
-            { label: '欧元(EUR)', value: 'EUR' },
-          ]}
-          initialValue="CNY"
-          colProps={{ span: 12 }}
-        />
-        <ProFormDigit
-          name="tax_rate"
-          label="税率(%)"
-          placeholder="请输入税率"
-          min={0}
-          max={100}
-          precision={2}
-          initialValue={0}
-          colProps={{ span: 12 }}
-        />
-        <ProFormTextArea
-          name="notes"
-          label="备注"
-          placeholder="请输入备注信息"
-          fieldProps={{ rows: 3 }}
-          colProps={{ span: 24 }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-purchase-order"
+              name="order_code"
+              label="采购订单编码"
+              required={true}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              disabled={isEdit}
+              context={{}}
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormDatePicker
+              name="order_date"
+              label="订单日期"
+              placeholder="请选择订单日期"
+              rules={[{ required: true, message: '请选择订单日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormDatePicker
+              name="delivery_date"
+              label="要求到货日期"
+              placeholder="请选择要求到货日期"
+              rules={[{ required: true, message: '请选择要求到货日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProForm.Item
+              name="supplier_id"
+              label={
+                <span>
+                  供应商
+                  <a href="/apps/master-data/supply-chain/suppliers" onClick={(e) => { e.preventDefault(); navigate('/apps/master-data/supply-chain/suppliers'); }} style={{ marginLeft: 8, fontSize: 12 }}>供应商管理</a>
+                </span>
+              }
+              rules={[{ required: true, message: '请选择供应商' }]}
+            >
+              <UniDropdown
+                placeholder="请选择供应商"
+                showSearch
+                allowClear
+                loading={suppliersLoading}
+                style={{ width: '100%' }}
+                options={supplierList.map((s: any) => ({
+                  value: s.id ?? s.supplier_id,
+                  label: `${s.code ?? s.supplier_code ?? ''} - ${s.name ?? s.supplier_name ?? ''}`.trim() || String(s.id ?? s.supplier_id),
+                }))}
+                onChange={(v) => {
+                  const s = supplierList.find((x: any) => (x.id ?? x.supplier_id) === v);
+                  if (s) {
+                    formRef.current?.setFieldsValue({
+                      supplier_name: s.name ?? s.supplier_name,
+                      supplier_contact: s.contact_person ?? s.contactPerson ?? s.supplier_contact,
+                      supplier_phone: s.phone ?? s.supplier_phone,
+                    });
+                  }
+                }}
+                quickCreate={{
+                  label: '快速新建',
+                  onClick: () => setSupplierCreateVisible(true),
+                }}
+              />
+            </ProForm.Item>
+          </Col>
+          <Col span={6}>
+            <ProFormText
+              name="supplier_contact"
+              label="联系人"
+              placeholder="请输入联系人"
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormText
+              name="supplier_phone"
+              label="联系电话"
+              placeholder="请输入联系电话"
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProForm.Item name="order_type" label="订单类型" initialValue="标准采购">
+              <UniDropdown
+                placeholder="请选择订单类型"
+                showSearch
+                allowClear={false}
+                loading={orderTypeLoading}
+                style={{ width: '100%' }}
+                options={orderTypeOptions}
+                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+              />
+            </ProForm.Item>
+          </Col>
+          <Col span={12} />
+        </Row>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 12 }}>
+            <Space align="center" size={12}>
+              <span style={{ fontWeight: 600, color: 'rgba(0, 0, 0, 0.88)' }}>
+                <span style={{ color: '#ff4d4f', marginRight: 4, fontFamily: 'SimSun, sans-serif' }}>*</span>
+                采购明细
+              </span>
+              <ProForm.Item
+                name="price_type"
+                initialValue="tax_exclusive"
+                noStyle
+                valuePropName="checked"
+                getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
+                getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
+              >
+                <Switch checkedChildren="含税" unCheckedChildren="不含税" />
+              </ProForm.Item>
+            </Space>
+          </div>
+          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+            {({ getFieldValue: getFormValue }: any) => {
+              const priceType = getFormValue('price_type') ?? 'tax_exclusive';
+              const showTaxColumns = priceType === 'tax_inclusive';
+              return (
+        <ProFormItem required style={{ width: '100%' }}>
+          <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条采购明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const orderDetailColumns = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 220,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: any) => {
+                          const row = getFieldValue('items')?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder="请选择物料"
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                                material_spec: 'specification',
+                                unit: 'baseUnit',
+                              }}
+                              fallbackOption={fallback}
+                              formItemProps={{ style: { margin: 0 } }}
+                              showQuickCreate
+                              showAdvancedSearch
+                            />
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '规格',
+                    dataIndex: 'material_spec',
+                    width: 120,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                        <Input placeholder="规格" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单位',
+                    dataIndex: 'unit',
+                    width: 80,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
+                        <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'ordered_quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: showTaxColumns ? '含税单价' : '单价',
+                    dataIndex: 'unit_price',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder={showTaxColumns ? '含税单价' : '单价'} min={0} precision={4} prefix="¥" style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  ...(showTaxColumns
+                    ? [
+                        {
+                          title: '不含税金额',
+                          width: 110,
+                          align: 'right' as const,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                              {({ getFieldValue }: any) => {
+                                const items = getFieldValue('items') ?? [];
+                                const row = items[index];
+                                const qty = Number(row?.ordered_quantity) || 0;
+                                const price = Number(row?.unit_price) || 0;
+                                const taxRate = Number(row?.tax_rate) || 0;
+                                const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
+                                return <span>¥{exclAmt.toFixed(2)}</span>;
+                              }}
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: (
+                            <span>
+                              税率(%)
+                              <Button
+                                type="link"
+                                size="small"
+                                style={{ padding: '0 4px', height: 'auto' }}
+                                onClick={() => {
+                                  const items = formRef.current?.getFieldValue('items') ?? [];
+                                  if (items.length === 0) return;
+                                  const rate = prompt('批量设置税率', '13');
+                                  if (rate != null && rate !== '') {
+                                    const num = parseFloat(rate);
+                                    if (!isNaN(num) && num >= 0 && num <= 100) {
+                                      const next = items.map((it: any) => ({ ...it, tax_rate: num }));
+                                      formRef.current?.setFieldsValue({ items: next });
+                                    }
+                                  }
+                                }}
+                              >
+                                批量
+                              </Button>
+                            </span>
+                          ),
+                          dataIndex: 'tax_rate',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
+                              <InputNumber placeholder="0" min={0} max={100} precision={2} addonAfter="%" style={{ width: '100%' }} size="small" />
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: '税额',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                              {({ getFieldValue }: any) => {
+                                const items = getFieldValue('items') ?? [];
+                                const row = items[index];
+                                const qty = Number(row?.ordered_quantity) || 0;
+                                const price = Number(row?.unit_price) || 0;
+                                const taxRate = Number(row?.tax_rate) || 0;
+                                const exclAmt = price > 0 ? (qty * price) / (1 + taxRate / 100) : 0;
+                                const taxAmt = exclAmt * (taxRate / 100);
+                                return <span>¥{taxAmt.toFixed(2)}</span>;
+                              }}
+                            </AntForm.Item>
+                          ),
+                        },
+                      ]
+                    : []),
+                  {
+                    title: showTaxColumns ? '价税合计' : '总价',
+                    width: 120,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                        {({ getFieldValue }: any) => {
+                          const items = getFieldValue('items') ?? [];
+                          const row = items[index];
+                          const qty = Number(row?.ordered_quantity) || 0;
+                          const price = Number(row?.unit_price) || 0;
+                          const taxRate = Number(row?.tax_rate) || 0;
+                          const exclAmt = showTaxColumns && price > 0 ? (qty * price) / (1 + taxRate / 100) : qty * price;
+                          const taxAmt = showTaxColumns ? exclAmt * (taxRate / 100) : 0;
+                          const totalIncl = exclAmt + taxAmt;
+                          return <span>¥{totalIncl.toFixed(2)}</span>;
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '要求到货',
+                    dataIndex: 'required_date',
+                    width: 120,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'required_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
+                        <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: any, __: any, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                    ),
+                  },
+                ];
+                return (
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <Table
+                      size="small"
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      rowKey="key"
+                      pagination={false}
+                      columns={orderDetailColumns}
+                      footer={() => (
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={() => {
+                            const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                            const defaultDate = mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+                            add({
+                              ...defaultOrderItem,
+                              tax_rate: 0,
+                              required_date: defaultDate,
+                            });
+                          }}
+                          block
+                        >
+                          添加明细
+                        </Button>
+                      )}
+                    />
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </ProForm.Item>
+        </ProFormItem>
+              );
+            }}
+          </AntForm.Item>
+        </div>
+        <ProFormText name="supplier_name" hidden />
         <ProFormUploadButton
           name="attachments"
           label="附件"
           max={10}
-          colProps={{ span: 24 }}
           fieldProps={{
             multiple: true,
             customRequest: async (options) => {
@@ -673,12 +1084,29 @@ const PurchaseOrdersPage: React.FC = () => {
             }
           }}
         />
-        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
-          <p style={{ margin: 0, color: '#999' }}>
-            注意：采购订单明细项功能开发中，当前版本仅支持基本信息的创建和编辑。
-          </p>
-        </div>
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+        />
       </FormModalTemplate>
+
+      <SupplierFormModal
+        open={supplierCreateVisible}
+        onClose={() => setSupplierCreateVisible(false)}
+        editUuid={null}
+        onSuccess={(supplier) => {
+          setSupplierList((prev) => [...prev, supplier]);
+          formRef.current?.setFieldsValue({
+            supplier_id: supplier.id,
+            supplier_name: supplier.name,
+            supplier_contact: supplier.contactPerson,
+            supplier_phone: supplier.phone,
+          });
+          setSupplierCreateVisible(false);
+        }}
+      />
 
       {/* 采购订单详情 Drawer */}
       <DetailDrawerTemplate<PurchaseOrderDetail>
@@ -700,7 +1128,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   key: 'edit',
                   visible: isDraftStatus(orderDetail.status),
                   render: () => (
-                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit([orderDetail.id!]); }}>
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(orderDetail); }}>
                       编辑
                     </Button>
                   ),

@@ -23,6 +23,17 @@ export default defineConfig({
         entryFileNames: 'assets/js/login-[hash].js',
         chunkFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('react/')) return 'vendor-react';
+            if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
+            if (id.includes('@ant-design/pro-components')) return 'vendor-pro';
+            if (id.includes('@tanstack/react-query')) return 'vendor-query';
+            if (id.includes('react-router')) return 'vendor-router';
+            if (id.includes('i18next') || id.includes('react-i18next')) return 'vendor-i18n';
+            return 'vendor-other';
+          }
+        },
       },
     },
     minify: 'esbuild',

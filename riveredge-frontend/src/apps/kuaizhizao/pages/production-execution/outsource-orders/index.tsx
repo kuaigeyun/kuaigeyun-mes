@@ -10,10 +10,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi } from '../../../services/production';
@@ -61,6 +63,7 @@ interface Supplier {
 }
 
 export const OutsourceOrdersTable: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -405,14 +408,12 @@ export const OutsourceOrdersTable: React.FC = () => {
     });
   };
 
-  /**
-   * 处理创建
-   */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentOutsourceOrder(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**
@@ -487,7 +488,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         <FormModalTemplate
           title="编辑工序委外"
           open={modalVisible}
-          onCancel={() => setModalVisible(false)}
+          onClose={() => setModalVisible(false)}
           onFinish={handleSubmitForm}
           formRef={formRef}
           {...MODAL_CONFIG}
@@ -501,21 +502,23 @@ export const OutsourceOrdersTable: React.FC = () => {
             context={{}}
             disabled={isEdit}
           />
-          <ProFormSelect
+          <ProFormItem
             name="supplier_id"
             label="供应商"
-            placeholder="请选择供应商"
             rules={[{ required: true, message: '请选择供应商' }]}
-            options={supplierList.map(s => ({
-              label: `${s.code} - ${s.name}`,
-              value: s.id,
-            }))}
-            fieldProps={{
-              showSearch: true,
-              filterOption: (input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            }}
-          />
+          >
+            <UniDropdown
+              placeholder="请选择供应商"
+              showSearch
+              allowClear
+              style={{ width: '100%' }}
+              options={supplierList.map((s: Supplier) => ({
+                label: `${s.code} - ${s.name}`,
+                value: s.id,
+              }))}
+              quickCreate={{ label: '供应商管理', onClick: () => navigate('/apps/master-data/supply-chain/suppliers') }}
+            />
+          </ProFormItem>
           <ProFormDigit
             name="outsource_quantity"
             label="工序委外数量"

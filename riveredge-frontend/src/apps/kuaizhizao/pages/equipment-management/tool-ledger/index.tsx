@@ -128,11 +128,12 @@ const ToolLedgerPage: React.FC = () => {
     }
   };
 
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentTool(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleEdit = async (record: Tool) => {

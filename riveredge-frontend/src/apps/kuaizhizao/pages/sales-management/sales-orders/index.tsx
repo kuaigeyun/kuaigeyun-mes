@@ -298,13 +298,17 @@ const SalesOrdersPage: React.FC = () => {
    * 处理新建销售订单
    * 若启用编码规则，用 testGenerateCode 预填订单编码（不占用序号）
    */
+  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0 };
+
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
     setLegacySalesmanName(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ price_type: 'tax_exclusive' });
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ price_type: 'tax_exclusive', items: [defaultOrderItem] });
+    }, 100);
     if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
       const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
       if (ruleCode) {
@@ -1916,7 +1920,7 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
-                      width: 200,
+                      width: 260,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                           {({ getFieldValue }: any) => {
@@ -1926,31 +1930,33 @@ const SalesOrdersPage: React.FC = () => {
                               ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
                               : undefined;
                             return (
-                              <Space size={0} align="center" style={{ display: 'flex', width: '100%' }}>
+                              <div className="sales-order-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
                                 <MaterialInventoryIndicator
                                   materialId={mid}
                                   requiredQuantity={Number(row?.required_quantity) || 0}
                                 />
-                                <UniMaterialSelect
-                                  name={[index, 'material_id']}
-                                  label=""
-                                  placeholder="请选择物料"
-                                  required
-                                  size="small"
-                                  listFieldKey={index}
-                                  listFieldName="items"
-                                  fillMapping={{
-                                    material_code: 'mainCode',
-                                    material_name: 'name',
-                                    material_spec: 'specification',
-                                    material_unit: 'baseUnit',
-                                  }}
-                                  fallbackOption={fallback}
-                                  formItemProps={{ style: { margin: 0, flex: 1 } }}
-                                  showQuickCreate
-                                  showAdvancedSearch
-                                />
-                              </Space>
+                                <div style={{ flex: 1, minWidth: 200 }}>
+                                  <UniMaterialSelect
+                                    name={[index, 'material_id']}
+                                    label=""
+                                    placeholder="请选择物料"
+                                    required
+                                    size="small"
+                                    listFieldKey={index}
+                                    listFieldName="items"
+                                    fillMapping={{
+                                      material_code: 'mainCode',
+                                      material_name: 'name',
+                                      material_spec: 'specification',
+                                      material_unit: 'baseUnit',
+                                    }}
+                                    fallbackOption={fallback}
+                                    formItemProps={{ style: { margin: 0 } }}
+                                    showQuickCreate
+                                    showAdvancedSearch
+                                  />
+                                </div>
+                              </div>
                             );
                           }}
                         </AntForm.Item>
@@ -2164,6 +2170,14 @@ const SalesOrdersPage: React.FC = () => {
                           border-bottom: 1px solid var(--ant-color-border);
                           overflow: visible !important;
                         }
+                        /* 物料列：确保 Select 占满可用宽度 */
+                        .sales-order-detail-table .sales-order-material-cell .ant-form-item,
+                        .sales-order-detail-table .sales-order-material-cell .ant-form-item-control,
+                        .sales-order-detail-table .sales-order-material-cell .ant-form-item-control-input,
+                        .sales-order-detail-table .sales-order-material-cell .ant-select {
+                          width: 100% !important;
+                          min-width: 0;
+                        }
                         /* 明细行验证错误：仅红色边框提示，不显示文字 */
                         .sales-order-detail-table .ant-form-item-explain,
                         .sales-order-detail-table .ant-form-item-explain-error {
@@ -2177,7 +2191,7 @@ const SalesOrdersPage: React.FC = () => {
                           border-radius: 0;
                         }
                       `}</style>
-                      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                      <div style={{ width: '100%', overflowX: 'auto' }}>
                         <Table
                           className="sales-order-detail-table"
                           size="small"

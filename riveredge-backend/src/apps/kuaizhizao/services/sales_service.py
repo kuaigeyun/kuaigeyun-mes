@@ -50,7 +50,26 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             code = (code.strip() if isinstance(code, str) else "") or None
             if not code or code == "AUTO":
                 today = datetime.now().strftime("%Y%m%d")
-                code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
+                try:
+                    code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
+                except Exception as e:
+                    if isinstance(e, ValidationError) and ("不存在" in str(e) or "未启用" in str(e)):
+                        from core.services.default.default_values_service import DefaultValuesService
+                        created = await DefaultValuesService.ensure_code_rule_for_page(
+                            tenant_id, "kuaizhizao-sales-forecast"
+                        )
+                        if created:
+                            try:
+                                code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
+                            except Exception as e2:
+                                logger.warning("销售预测编码规则补建后生成仍失败: %s", e2)
+                        else:
+                            logger.warning("销售预测编码规则生成失败: %s", e)
+                    else:
+                        logger.warning("销售预测编码规则生成失败: %s", e)
+                if not code:
+                    import uuid
+                    code = f"SF{today}{uuid.uuid4().hex[:6].upper()}"
 
             # 准备创建数据，排除 forecast_code 后统一写入
             create_data = forecast_data.model_dump(exclude_unset=True, exclude={'created_by', 'forecast_code'})

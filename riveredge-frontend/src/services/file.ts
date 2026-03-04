@@ -231,13 +231,22 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
  * 获取文件预览信息
  * 
  * 根据配置返回简单预览或 kkFileView 预览URL。
+ * forAvatar=true 时返回缩略图 URL（128x128），加快头像加载。
  * 
  * @param fileUuid - 文件 UUID
+ * @param options - 可选，forAvatar 为头像场景时请求缩略图
  * @returns 预览信息
  */
-export async function getFilePreview(fileUuid: string): Promise<FilePreviewResponse> {
+export async function getFilePreview(
+  fileUuid: string,
+  options?: { forAvatar?: boolean }
+): Promise<FilePreviewResponse> {
   try {
-    const result = await apiRequest<FilePreviewResponse>(`/core/files/${fileUuid}/preview`);
+    const params = new URLSearchParams();
+    if (options?.forAvatar) params.set('for_avatar', 'true');
+    const qs = params.toString();
+    const url = qs ? `/core/files/${fileUuid}/preview?${qs}` : `/core/files/${fileUuid}/preview`;
+    const result = await apiRequest<FilePreviewResponse>(url);
     return result;
   } catch (error) {
     console.error('获取文件预览失败:', error);

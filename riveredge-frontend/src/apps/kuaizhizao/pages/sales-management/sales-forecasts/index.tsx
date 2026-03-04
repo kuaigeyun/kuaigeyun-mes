@@ -9,9 +9,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Select, Form as AntForm, DatePicker, Row, Col } from 'antd';
+import { App, Button, Space, Modal, Drawer, Table, Input, InputNumber, Form as AntForm, DatePicker, Row, Col } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
@@ -121,28 +122,21 @@ const SalesForecastsPage: React.FC = () => {
     load();
   }, []);
 
-  const handleMaterialSelectForForecastItem = (index: number, materialId: number | undefined) => {
-    const items = formRef.current?.getFieldValue('items') ?? [];
-    const next = [...items];
-    if (next[index]) {
-      const m = materials.find((mo) => mo.id === materialId);
-      next[index] = {
-        ...next[index],
-        material_id: materialId,
-        material_code: m ? (m.mainCode || m.code || '') : '',
-        material_name: m ? m.name || '' : '',
-        material_spec: m ? (m.specification || '') : '',
-        material_unit: m ? (m.baseUnit || '') : '',
-      };
-      formRef.current?.setFieldsValue({ items: next });
-    }
-  };
+  /**
+   * 处理新建销售预测
+   * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
+   */
+  const defaultForecastItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', forecast_quantity: 1, forecast_date: dayjs(), historical_sales: undefined, notes: '' };
 
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
     setPreviewCode(null);
     formRef.current?.resetFields();
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ items: [defaultForecastItem] });
+    }, 100);
     if (isAutoGenerateEnabled('kuaizhizao-sales-forecast')) {
       const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
       if (ruleCode) {
@@ -155,9 +149,12 @@ const SalesForecastsPage: React.FC = () => {
           console.warn('销售预测编码预生成失败:', e);
           setPreviewCode(null);
         }
+      } else {
+        setPreviewCode(null);
       }
+    } else {
+      setPreviewCode(null);
     }
-    setModalVisible(true);
   };
 
   const handleEdit = async (keys: React.Key[]) => {
@@ -496,18 +493,35 @@ const SalesForecastsPage: React.FC = () => {
                       dataIndex: 'material_id',
                       width: 200,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
-                          <Select
-                            placeholder="请选择物料"
-                            showSearch
-                            allowClear
-                            size="small"
-                            style={{ width: '100%' }}
-                            loading={materialsLoading}
-                            filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
-                            options={materials.map((m) => ({ label: `${m.mainCode || m.code || ''} - ${m.name || ''}`, value: m.id }))}
-                            onChange={(id) => handleMaterialSelectForForecastItem(index, id as number)}
-                          />
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                          {({ getFieldValue }: any) => {
+                            const row = getFieldValue('items')?.[index];
+                            const mid = row?.material_id ? Number(row.material_id) : null;
+                            const fallback = mid && (row?.material_code || row?.material_name)
+                              ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                              : undefined;
+                            return (
+                              <UniMaterialSelect
+                                name={[index, 'material_id']}
+                                label=""
+                                placeholder="请选择物料（支持名称/编码搜索）"
+                                required
+                                size="small"
+                                listFieldKey={index}
+                                listFieldName="items"
+                                fillMapping={{
+                                  material_code: 'mainCode',
+                                  material_name: 'name',
+                                  material_spec: 'specification',
+                                  material_unit: 'baseUnit',
+                                }}
+                                fallbackOption={fallback}
+                                formItemProps={{ style: { margin: 0 } }}
+                                showQuickCreate
+                                showAdvancedSearch
+                              />
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -595,7 +609,7 @@ const SalesForecastsPage: React.FC = () => {
                         .sales-forecast-detail-table .ant-table { border-top: 1px solid var(--ant-color-border); }
                         .sales-forecast-detail-table .ant-table-tbody > tr > td { border-bottom: 1px solid var(--ant-color-border); }
                       `}</style>
-                      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                      <div style={{ width: '100%', overflowX: 'auto' }}>
                         <Table
                           className="sales-forecast-detail-table"
                           size="small"

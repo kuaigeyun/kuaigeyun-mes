@@ -3,12 +3,14 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Table, Form, Input, Select, Dropdown, Row, Col } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col } from 'antd';
 import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { materialApi } from '../../../../master-data/services/material';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
@@ -35,10 +37,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const createFormRef = useRef<any>(null);
-  const [materialList, setMaterialList] = useState<Array<{ id: number; mainCode?: string; code?: string; name: string; specification?: string; baseUnit?: string }>>([]);
-  const [createItems, setCreateItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_spec?: string; unit: string; quantity: number; suggested_unit_price: number; required_date?: string }>>([
-    { material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
-  ]);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+
+  const initialCreateItems = [
+    { material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
+  ];
 
   useEffect(() => {
     supplierApi.list?.({ isActive: true } as any).then((res: any) => {
@@ -46,15 +49,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setSupplierList(list);
     }).catch(() => setSupplierList([]));
   }, []);
-
-  useEffect(() => {
-    if (createModalVisible) {
-      materialApi.list({ isActive: true, limit: 500 }).then((res: any) => {
-        const raw = Array.isArray(res) ? res : res?.data || res?.items || [];
-        setMaterialList(raw);
-      }).catch(() => setMaterialList([]));
-    }
-  }, [createModalVisible]);
 
   const columns: ProColumns<PurchaseRequisition>[] = [
     { title: '申请编码', dataIndex: 'requisition_code', width: 150, fixed: 'left' },
@@ -141,20 +135,58 @@ const PurchaseRequisitionsPage: React.FC = () => {
     },
   ];
 
+  /** 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码 */
   const handleCreate = () => {
-    setCreateItems([{ material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 }]);
+    setPreviewCode(null);
     setCreateModalVisible(true);
+    if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
+      if (ruleCode) {
+        testGenerateCode({ rule_code: ruleCode })
+          .then((res) => {
+            const preview = res.code;
+            setPreviewCode(preview ?? null);
+            setTimeout(() => {
+              createFormRef.current?.setFieldsValue({
+                requisition_code: preview ?? '',
+                items: initialCreateItems,
+              });
+            }, 100);
+          })
+          .catch((e) => {
+            console.warn('采购申请编码预生成失败:', e);
+            setPreviewCode(null);
+          });
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
-  const handleCreateSubmit = async (values: { requisition_name?: string; required_date?: any; notes?: string }) => {
+  const handleCreateSubmit = async (values: { requisition_code?: string; requisition_name?: string; required_date?: any; notes?: string; items?: Array<{ material_id?: number; material_code?: string; material_name?: string; material_spec?: string; unit?: string; quantity?: number; suggested_unit_price?: number }> }) => {
     const requiredDate = values.required_date?.format?.('YYYY-MM-DD') ?? values.required_date;
-    const validItems = createItems.filter((i) => i.material_id && i.quantity > 0);
+    const validItems = (values.items ?? []).filter((i) => i.material_id && (Number(i.quantity) || 0) > 0);
     if (validItems.length === 0) {
       messageApi.error('请至少添加一条有效的申请明细');
       return;
     }
+    let requisitionCode = values.requisition_code;
+    if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
+      if (ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
+        try {
+          const res = await generateCode({ rule_code: ruleCode });
+          requisitionCode = res.code;
+        } catch (e) {
+          console.warn('采购申请编码正式生成失败，使用当前值:', e);
+        }
+      }
+    }
     try {
       await createPurchaseRequisition({
+        requisition_code: requisitionCode || undefined,
         requisition_name: values.requisition_name,
         required_date: requiredDate,
         notes: values.notes,
@@ -164,9 +196,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
           material_name: i.material_name,
           material_spec: i.material_spec,
           unit: i.unit || '件',
-          quantity: i.quantity,
-          suggested_unit_price: i.suggested_unit_price || 0,
-          required_date: i.required_date,
+          quantity: Number(i.quantity) || 0,
+          suggested_unit_price: Number(i.suggested_unit_price) || 0,
         })),
       });
       messageApi.success('创建成功');
@@ -177,36 +208,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       messageApi.error(e?.response?.data?.detail || '创建失败');
       throw e;
     }
-  };
-
-  const addCreateItem = () => {
-    setCreateItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', unit: '件', quantity: 1, suggested_unit_price: 0 }]);
-  };
-
-  const removeCreateItem = (idx: number) => {
-    setCreateItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
-  };
-
-  const onCreateItemMaterialSelect = (idx: number, materialId: number | undefined) => {
-    if (!materialId) {
-      const updated = [...createItems];
-      updated[idx] = { ...updated[idx], material_id: 0, material_code: '', material_name: '', unit: '件' };
-      setCreateItems(updated);
-      return;
-    }
-    const material = materialList.find((m: any) => (m.id ?? m.material_id) === materialId);
-    if (!material) return;
-    const m = material as any;
-    const updated = [...createItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: m.id ?? m.material_id,
-      material_code: m.mainCode || m.main_code || m.code || '',
-      material_name: m.name || '',
-      material_spec: m.specification || m.spec || '',
-      unit: m.baseUnit || m.base_unit || '件',
-    };
-    setCreateItems(updated);
   };
 
   const handleDetail = async (record: PurchaseRequisition) => {
@@ -387,89 +388,141 @@ const PurchaseRequisitionsPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         formRef={createFormRef}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        initialValues={{ items: initialCreateItems }}
       >
-        <ProFormText name="requisition_name" label="申请名称" placeholder="请输入申请名称" colProps={{ span: 12 }} />
-        <ProFormDatePicker name="required_date" label="要求到货日期" colProps={{ span: 12 }} />
-        <ProFormTextArea name="notes" label="备注" placeholder="备注" colProps={{ span: 24 }} />
-        <div style={{ width: '100%', marginBottom: 16 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>申请明细 <span style={{ color: 'red' }}>*</span></div>
-          <div>
-            <Button type="dashed" icon={<PlusOutlined />} onClick={addCreateItem} style={{ marginBottom: 8 }}>
-              添加明细
-            </Button>
-            <Table
-              size="small"
-              dataSource={createItems}
-              rowKey={(_, i) => String(i)}
-              pagination={false}
-              columns={[
-                {
-                  title: '物料',
-                  width: 220,
-                  render: (_, __, idx) => (
-                    <Select
-                      placeholder="请选择物料"
-                      style={{ width: '100%' }}
-                      showSearch
-                      optionFilterProp="label"
-                      value={createItems[idx]?.material_id || undefined}
-                      onChange={(v) => onCreateItemMaterialSelect(idx, v)}
-                      options={materialList.map((m: any) => ({
-                        value: m.id ?? m.material_id,
-                        label: `${m.mainCode || m.main_code || m.code || ''} ${m.name || ''}`.trim(),
-                      }))}
-                    />
-                  ),
-                },
-                {
-                  title: '数量',
-                  width: 100,
-                  render: (_, __, idx) => (
-                    <InputNumber
-                      min={0.0001}
-                      value={createItems[idx]?.quantity}
-                      onChange={(v) => {
-                        const u = [...createItems];
-                        u[idx] = { ...u[idx], quantity: Number(v) || 1 };
-                        setCreateItems(u);
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  ),
-                },
-                {
-                  title: '单位',
-                  width: 80,
-                  dataIndex: 'unit',
-                  render: (v) => v || '-',
-                },
-                {
-                  title: '建议单价',
-                  width: 100,
-                  render: (_, __, idx) => (
-                    <InputNumber
-                      min={0}
-                      value={createItems[idx]?.suggested_unit_price}
-                      onChange={(v) => {
-                        const u = [...createItems];
-                        u[idx] = { ...u[idx], suggested_unit_price: Number(v) || 0 };
-                        setCreateItems(u);
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  ),
-                },
-                {
-                  title: '操作',
-                  width: 60,
-                  render: (_, __, idx) => (
-                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeCreateItem(idx)} />
-                  ),
-                },
-              ]}
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="requisition_code"
+              label="采购申请编号"
+              placeholder={isAutoGenerateEnabled('kuaizhizao-purchase-requisition') ? '编码将根据编码规则自动生成，可修改' : '请输入采购申请编号'}
+              rules={[{ required: true, message: '请输入采购申请编号' }]}
             />
-          </div>
-        </div>
+          </Col>
+          <Col span={12}>
+            <ProFormText name="requisition_name" label="申请名称" placeholder="请输入申请名称" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker name="required_date" label="要求到货日期" />
+          </Col>
+          <Col span={12} />
+        </Row>
+        <ProFormItem label="申请明细" required style={{ width: '100%' }}>
+          <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条申请明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const reqDetailColumns = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 220,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: any) => {
+                          const row = getFieldValue('items')?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder="请选择物料"
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                                material_spec: 'specification',
+                                unit: 'baseUnit',
+                              }}
+                              fallbackOption={fallback}
+                              formItemProps={{ style: { margin: 0, flex: 1 } }}
+                              showQuickCreate
+                              showAdvancedSearch
+                            />
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '规格',
+                    dataIndex: 'material_spec',
+                    width: 120,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                        <Input placeholder="规格" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单位',
+                    dataIndex: 'unit',
+                    width: 80,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
+                        <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '建议单价',
+                    dataIndex: 'suggested_unit_price',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
+                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: any, __: any, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                    ),
+                  },
+                ];
+                return (
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <Table
+                      size="small"
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      rowKey="key"
+                      pagination={false}
+                      columns={reqDetailColumns}
+                      footer={() => (
+                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 })} block>
+                          添加明细
+                        </Button>
+                      )}
+                    />
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </ProForm.Item>
+        </ProFormItem>
+        <ProFormTextArea name="notes" label="备注" placeholder="备注" />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

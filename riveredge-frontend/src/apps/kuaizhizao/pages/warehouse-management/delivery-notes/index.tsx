@@ -267,11 +267,12 @@ const DeliveryNotesPage: React.FC = () => {
     }
   };
 
+  /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
-    setEditingId(null);
     setCreateModalVisible(true);
+    setFormItems([]);
+    setEditingId(null);
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {

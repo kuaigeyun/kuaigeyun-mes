@@ -2,23 +2,28 @@
  * 发货通知单管理页面
  *
  * 销售通知仓库发货，不直接动库存。来源为销售订单。
+ * 参考销售订单排版布局，支持单据编码自动生成。
  *
  * @author RiverEdge Team
  * @date 2026-02-22
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface ShipmentNotice {
   id?: number;
@@ -44,7 +49,7 @@ interface ShipmentNotice {
 }
 
 interface ShipmentNoticeDetail extends ShipmentNotice {
-  items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
+  items?: { id?: number; material_id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
@@ -53,7 +58,10 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
   已出库: { text: '已出库', color: 'success' },
 };
 
+const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
+
 const ShipmentNoticesPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -65,23 +73,20 @@ const ShipmentNoticesPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price: number }>>([]);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [cust, mat, ordersRes] = await Promise.all([
+        const [cust, ordersRes] = await Promise.all([
           customerApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
           listSalesOrders({ limit: 500 }).catch(() => ({ data: [], total: 0, success: false })),
         ]);
         setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
-        console.error('加载客户/物料/销售订单失败', e);
+        console.error('加载客户/销售订单失败', e);
       }
     };
     load();
@@ -138,14 +143,15 @@ const ShipmentNoticesPage: React.FC = () => {
   const handleEdit = async (record: ShipmentNotice) => {
     try {
       const detail = await shipmentNoticeApi.get(record.id!.toString()) as ShipmentNoticeDetail;
-      setFormItems((detail.items || []).map((it: any) => ({
+      const itemsForm = (detail.items || []).map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
+        material_spec: it.material_spec || '',
         material_unit: it.material_unit || '',
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
-      })));
+      }));
       formRef.current?.setFieldsValue({
         sales_order_id: detail.sales_order_id,
         sales_order_code: detail.sales_order_code,
@@ -153,10 +159,12 @@ const ShipmentNoticesPage: React.FC = () => {
         customer_name: detail.customer_name,
         customer_contact: detail.customer_contact,
         customer_phone: detail.customer_phone,
+        warehouse_id: detail.warehouse_id,
         warehouse_name: detail.warehouse_name,
         planned_ship_date: detail.planned_ship_date ? dayjs(detail.planned_ship_date) : undefined,
         shipping_address: detail.shipping_address,
         notes: detail.notes,
+        items: itemsForm.length ? itemsForm : [defaultNoticeItem],
       });
       setEditingId(record.id!);
       setEditModalVisible(true);
@@ -218,10 +226,33 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setFormItems([]);
-    formRef.current?.resetFields();
+    setPreviewCode(null);
     setEditingId(null);
     setCreateModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({ items: [defaultNoticeItem] });
+    }, 100);
+    if (isAutoGenerateEnabled('kuaizhizao-shipment-notice')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
+      if (ruleCode) {
+        testGenerateCode({ rule_code: ruleCode })
+          .then((res) => {
+            const preview = res.code;
+            setPreviewCode(preview ?? null);
+            setTimeout(() => {
+              formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultNoticeItem] });
+            }, 100);
+          })
+          .catch((e) => {
+            console.warn('发货通知单编码预生成失败:', e);
+            setPreviewCode(null);
+          });
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   const onSalesOrderSelect = async (orderId: number) => {
@@ -235,27 +266,31 @@ const ShipmentNoticesPage: React.FC = () => {
     }
     const code = order.order_code || order.sales_order_code || order.code;
     const custId = order.customer_id ?? order.customerId;
+    const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === custId);
+    const custName = cust?.name || cust?.customer_name || order.customer_name || order.customerName || '';
     formRef.current?.setFieldsValue({
       sales_order_code: code,
       customer_id: custId,
       customer_name: custName,
-      customer_contact: order.customer_contact,
-      customer_phone: order.customer_phone,
+      customer_contact: order.customer_contact || cust?.contactPerson || (cust as any)?.contact,
+      customer_phone: order.customer_phone || cust?.phone,
     });
     if (order.items && order.items.length > 0) {
-      setFormItems(order.items.map((it: any) => ({
+      const items = order.items.map((it: any) => ({
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
         material_name: it.material_name || it.materialName || '',
-        material_unit: it.material_unit || it.materialUnit || '',
+        material_spec: it.material_spec || '',
+        material_unit: it.material_unit || it.materialUnit || '件',
         notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
         unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
-      })));
+      }));
+      formRef.current?.setFieldsValue({ items });
     }
   };
 
   const handleCreateSubmit = async (values: any) => {
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -265,8 +300,21 @@ const ShipmentNoticesPage: React.FC = () => {
       throw new Error('请选择销售订单');
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id) || { name: values.customer_name };
+    let noticeCode = values.notice_code;
+    if (isAutoGenerateEnabled('kuaizhizao-shipment-notice')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
+      if (ruleCode && (noticeCode === previewCode || !noticeCode)) {
+        try {
+          const res = await generateCode({ rule_code: ruleCode });
+          noticeCode = res.code;
+        } catch (e) {
+          console.warn('发货通知单编码正式生成失败，使用当前值:', e);
+        }
+      }
+    }
     try {
       await shipmentNoticeApi.create({
+        notice_code: noticeCode || undefined,
         sales_order_id: values.sales_order_id,
         sales_order_code: values.sales_order_code,
         customer_id: values.customer_id,
@@ -278,13 +326,14 @@ const ShipmentNoticesPage: React.FC = () => {
         planned_ship_date: values.planned_ship_date ? dayjs(values.planned_ship_date).format('YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
           material_name: it.material_name,
-          material_unit: it.material_unit,
-          notice_quantity: it.notice_quantity,
-          unit_price: it.unit_price || 0,
+          material_spec: it.material_spec,
+          material_unit: it.material_unit || '件',
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
         })),
       });
       messageApi.success('创建成功');
@@ -298,11 +347,6 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handleEditSubmit = async (values: any) => {
     if (!editingId) return;
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
-    if (!validItems.length) {
-      messageApi.error('请至少添加一条有效明细');
-      throw new Error('请至少添加一条有效明细');
-    }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     try {
       await shipmentNoticeApi.update(editingId.toString(), {
@@ -323,24 +367,6 @@ const ShipmentNoticesPage: React.FC = () => {
       messageApi.error(error.message || '更新失败');
       throw error;
     }
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 }]);
-  };
-
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
-    };
-    setFormItems(updated);
   };
 
   const detailColumns: ProDescriptionsItemProps<ShipmentNoticeDetail>[] = [
@@ -364,71 +390,273 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 2 },
   ];
 
-  const renderForm = (onFinish: (values: any) => Promise<void>) => (
+  const renderCreateForm = () => (
     <>
-      <Form.Item name="sales_order_id" label="销售订单" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择销售订单"
-          options={salesOrderList.map((o: any) => ({
-            value: o.id ?? o.sales_order_id,
-            label: `${o.order_code || o.sales_order_code || o.code || ''} - ${o.customer_name || o.customerName || ''}`,
-          }))}
-          onChange={onSalesOrderSelect}
-        />
-      </Form.Item>
-      <Form.Item name="sales_order_code" label="销售订单号" hidden>
-        <Input />
-      </Form.Item>
-      <Form.Item name="customer_id" label="客户" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择客户"
-          options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
-          onChange={(v) => {
-            const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-            if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
-          }}
-        />
-      </Form.Item>
-      <Form.Item name="customer_contact" label="联系人">
-        <Input placeholder="联系人" />
-      </Form.Item>
-      <Form.Item name="customer_phone" label="电话">
-        <Input placeholder="电话" />
-      </Form.Item>
-      <Form.Item name="warehouse_name" label="出库仓库">
-        <Input placeholder="出库仓库名称" />
-      </Form.Item>
-      <Form.Item name="planned_ship_date" label="计划发货日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="shipping_address" label="收货地址">
-        <Input.TextArea rows={2} placeholder="收货地址" />
-      </Form.Item>
-      <Form.Item label="明细">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-          {formItems.map((it, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                placeholder="物料"
-                style={{ width: 200 }}
-                options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                onChange={(v) => onMaterialSelect(idx, v)}
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="notice_code"
+            label={
+              <span>
+                通知单号
+                <a href="/system/code-rules" onClick={(e) => { e.preventDefault(); navigate('/system/code-rules'); }} style={{ marginLeft: 8, fontSize: 12 }}>编码规则设置</a>
+              </span>
+            }
+            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? '编码将根据编码规则自动生成，可修改' : '请输入通知单号'}
+            rules={[{ required: true, message: '请输入通知单号' }]}
+          />
+        </Col>
+        <Col span={12}>
+          <ProForm.Item name="sales_order_id" label="销售订单" rules={[{ required: true, message: '请选择销售订单' }]}>
+            <Select
+              placeholder="请选择销售订单"
+              showSearch
+              optionFilterProp="label"
+              options={salesOrderList.map((o: any) => ({
+                value: o.id ?? o.sales_order_id,
+                label: `${o.order_code || o.sales_order_code || o.code || ''} - ${o.customer_name || o.customerName || ''}`.trim(),
+              }))}
+              onChange={onSalesOrderSelect}
+            />
+          </ProForm.Item>
+        </Col>
+      </Row>
+      <ProFormText name="sales_order_code" hidden />
+      <ProFormText name="customer_name" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+            <Select
+              placeholder="请选择客户"
+              showSearch
+              optionFilterProp="label"
+              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+              onChange={(v) => {
+                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                if (cust) formRef.current?.setFieldsValue({
+                  customer_name: cust.name || cust.customer_name,
+                  customer_contact: cust.contactPerson ?? (cust as any)?.contact,
+                  customer_phone: cust.phone,
+                });
+              }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col span={12}>
+          <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="customer_phone" label="电话" placeholder="电话" />
+        </Col>
+        <Col span={12}>
+          <UniWarehouseSelect
+            name="warehouse_id"
+            label="出库仓库"
+            placeholder="请选择出库仓库"
+            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="warehouse_name" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
+      <ProFormItem label="通知明细" required style={{ width: '100%' }}>
+        <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条通知明细' }]}>
+          <AntForm.List name="items">
+            {(fields, { add, remove }) => {
+              const cols = [
+                {
+                  title: '物料',
+                  dataIndex: 'material_id',
+                  width: 220,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                      {({ getFieldValue }: any) => {
+                        const row = getFieldValue('items')?.[index];
+                        const mid = row?.material_id ? Number(row.material_id) : null;
+                        const fallback = mid && (row?.material_code || row?.material_name)
+                          ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                          : undefined;
+                        return (
+                          <UniMaterialSelect
+                            name={[index, 'material_id']}
+                            label=""
+                            placeholder="请选择物料"
+                            required
+                            size="small"
+                            listFieldKey={index}
+                            listFieldName="items"
+                            fillMapping={{
+                              material_code: 'mainCode',
+                              material_name: 'name',
+                              material_spec: 'specification',
+                              material_unit: 'baseUnit',
+                            }}
+                            fallbackOption={fallback}
+                            formItemProps={{ style: { margin: 0 } }}
+                            showQuickCreate
+                            showAdvancedSearch
+                          />
+                        );
+                      }}
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '规格',
+                  dataIndex: 'material_spec',
+                  width: 120,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                      <Input placeholder="规格" size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单位',
+                  dataIndex: 'material_unit',
+                  width: 80,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                      <Input placeholder="单位" size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '数量',
+                  dataIndex: 'notice_quantity',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                      <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单价',
+                  dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                      <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 60,
+                  render: (_: any, __: any, index: number) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                  ),
+                },
+              ];
+              return (
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <Table
+                    size="small"
+                    dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                    rowKey="key"
+                    pagination={false}
+                    columns={cols}
+                    footer={() => (
+                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultNoticeItem)} block>添加明细</Button>
+                    )}
+                  />
+                </div>
+              );
+            }}
+          </AntForm.List>
+        </ProForm.Item>
+      </ProFormItem>
+      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+    </>
+  );
+
+  const renderEditForm = () => (
+    <>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="sales_order_code" label="销售订单号" disabled />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+            <Select
+              placeholder="请选择客户"
+              showSearch
+              optionFilterProp="label"
+              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+              onChange={(v) => {
+                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                if (cust) formRef.current?.setFieldsValue({
+                  customer_name: cust.name || cust.customer_name,
+                  customer_contact: cust.contactPerson ?? (cust as any)?.contact,
+                  customer_phone: cust.phone,
+                });
+              }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col span={12}>
+          <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText name="customer_phone" label="电话" placeholder="电话" />
+        </Col>
+        <Col span={12}>
+          <UniWarehouseSelect
+            name="warehouse_id"
+            label="出库仓库"
+            placeholder="请选择出库仓库"
+            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="warehouse_name" hidden />
+      <ProFormText name="customer_name" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
+        </Col>
+        <Col span={12} />
+      </Row>
+      <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
+      <ProFormItem label="通知明细">
+        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+          {({ getFieldValue }: any) => {
+            const items = getFieldValue('items') ?? [];
+            return (
+              <Table
+                size="small"
+                dataSource={items.map((it: any, i: number) => ({ ...it, key: i }))}
+                rowKey="key"
+                pagination={false}
+                columns={[
+                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                  { title: '单位', dataIndex: 'material_unit', width: 60 },
+                  { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                  { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                ]}
               />
-              <InputNumber placeholder="数量" min={0.01} value={it.notice_quantity} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], notice_quantity: v ?? 0 }; setFormItems(u);
-              }} />
-              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-              }} />
-              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-            </div>
-          ))}
-        </Space>
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <Input.TextArea rows={2} />
-      </Form.Item>
+            );
+          }}
+        </AntForm.Item>
+      </ProFormItem>
+      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
     </>
   );
 
@@ -502,8 +730,10 @@ const ShipmentNoticesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        initialValues={{ items: [defaultNoticeItem] }}
       >
-        {renderForm(handleCreateSubmit)}
+        {renderCreateForm()}
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -513,8 +743,9 @@ const ShipmentNoticesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
-        {renderForm(handleEditSubmit)}
+        {renderEditForm()}
       </FormModalTemplate>
     </>
   );

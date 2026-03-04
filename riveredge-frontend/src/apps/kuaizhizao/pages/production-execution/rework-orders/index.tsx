@@ -8,14 +8,18 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message } from 'antd';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
-import { reworkOrderApi } from '../../../services/production';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { reworkOrderApi, workOrderApi } from '../../../services/production';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -49,15 +53,44 @@ interface ReworkOrder {
   updated_at?: string;
 }
 
+const REWORK_TYPE_FALLBACK = [
+  { label: '返工', value: '返工' },
+  { label: '返修', value: '返修' },
+  { label: '报废', value: '报废' },
+];
+
 const ReworkOrdersPage: React.FC = () => {
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+
+  const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(REWORK_TYPE_FALLBACK);
+  const [reworkTypeLoading, setReworkTypeLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setReworkTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('REWORK_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setReworkTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+      } catch {
+        setReworkTypeOptions(REWORK_TYPE_FALLBACK);
+      } finally {
+        setReworkTypeLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentReworkOrder, setCurrentReworkOrder] = useState<ReworkOrder | null>(null);
   const formRef = useRef<any>(null);
+  /** 选择原工单后，产品仅限该工单的产品 */
+  const [workOrderProduct, setWorkOrderProduct] = useState<{ id: number; code: string; name: string } | null>(null);
+  const [workOrderProductLoading, setWorkOrderProductLoading] = useState(false);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -107,18 +140,13 @@ const ReworkOrdersPage: React.FC = () => {
       span: 2,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      render: (status) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          'draft': { text: '草稿', color: 'default' },
-          'released': { text: '已下达', color: 'processing' },
-          'in_progress': { text: '执行中', color: 'blue' },
-          'completed': { text: '已完成', color: 'success' },
-          'cancelled': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+      title: '返工工序',
+      dataIndex: 'rework_operations',
+      span: 2,
+      render: (_: any, record: any) => {
+        const ops = record.rework_operations || [];
+        if (ops.length === 0) return '-';
+        return ops.map((o: any) => `${o.operation_code || ''} ${o.operation_name || ''}`.trim() || `工序#${o.work_order_operation_id}`).join('、');
       },
     },
     {
@@ -270,23 +298,28 @@ const ReworkOrdersPage: React.FC = () => {
       valueType: 'option',
       width: 200,
       fixed: 'right',
-      render: (_text, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            disabled={record.status === 'completed' || record.status === 'cancelled'}
-          >
-            编辑
-          </Button>
-          {record.status === 'draft' && (
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-          )}
-        </Space>
-      ),
+      render: (_text, record) => {
+        const lifecycle = getReworkOrderLifecycle(record);
+        const canEdit = lifecycle.stageName !== '已完成' && lifecycle.stageName !== '已取消';
+        const canDelete = lifecycle.stageName === '草稿';
+        return (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+              disabled={!canEdit}
+            >
+              编辑
+            </Button>
+            {canDelete && (
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -313,16 +346,30 @@ const ReworkOrdersPage: React.FC = () => {
       setCurrentReworkOrder(detail);
       setModalVisible(true);
       setTimeout(() => {
+        if (detail.original_work_order_id && detail.product_id) {
+          setWorkOrderProduct({
+            id: detail.product_id,
+            code: detail.product_code || '',
+            name: detail.product_name || '',
+          });
+        } else {
+          setWorkOrderProduct(null);
+        }
         formRef.current?.setFieldsValue({
+          code: detail.code,
+          original_work_order_id: detail.original_work_order_id,
+          product_id: detail.product_id,
+          product_code: detail.product_code,
+          product_name: detail.product_name,
           quantity: detail.quantity,
           rework_reason: detail.rework_reason,
           rework_type: detail.rework_type,
-          status: detail.status,
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           completed_quantity: detail.completed_quantity,
           qualified_quantity: detail.qualified_quantity,
           unqualified_quantity: detail.unqualified_quantity,
+          work_order_operation_ids: (detail.rework_operations || []).map((o: any) => o.work_order_operation_id),
           remarks: detail.remarks,
         });
       }, 100);
@@ -352,14 +399,13 @@ const ReworkOrdersPage: React.FC = () => {
     });
   };
 
-  /**
-   * 处理创建
-   */
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentReworkOrder(null);
+    setWorkOrderProduct(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
+    setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   /**
@@ -422,16 +468,30 @@ const ReworkOrdersPage: React.FC = () => {
         setCurrentReworkOrder(detail);
         setModalVisible(true);
         setTimeout(() => {
+          if (detail.original_work_order_id && detail.product_id) {
+            setWorkOrderProduct({
+              id: detail.product_id,
+              code: detail.product_code || '',
+              name: detail.product_name || '',
+            });
+          } else {
+            setWorkOrderProduct(null);
+          }
           formRef.current?.setFieldsValue({
+            code: detail.code,
+            original_work_order_id: detail.original_work_order_id,
+            product_id: detail.product_id,
+            product_code: detail.product_code,
+            product_name: detail.product_name,
             quantity: detail.quantity,
             rework_reason: detail.rework_reason,
             rework_type: detail.rework_type,
-            status: detail.status,
             planned_start_date: detail.planned_start_date,
             planned_end_date: detail.planned_end_date,
             completed_quantity: detail.completed_quantity,
             qualified_quantity: detail.qualified_quantity,
             unqualified_quantity: detail.unqualified_quantity,
+            work_order_operation_ids: (detail.rework_operations || []).map((o: any) => o.work_order_operation_id),
             remarks: detail.remarks,
           });
         }, 100);
@@ -492,117 +552,235 @@ const ReworkOrdersPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑返工单' : '新建返工单'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
         onFinish={handleSubmitForm}
         formRef={formRef}
         {...MODAL_CONFIG}
+        grid={false}
       >
-        <CodeField
-          pageCode="kuaizhizao-production-rework-order"
-          name="code"
-          label="返工单编码"
-          required={true}
-          autoGenerateOnCreate={!isEdit}
-          context={{}}
-        />
-        <ProFormText
-          name="original_work_order_uuid"
-          label="原工单UUID"
-          placeholder="请输入原工单UUID"
-          rules={[{ required: false }]}
-        />
-        <ProFormText
-          name="product_id"
-          label="产品ID"
-          placeholder="请输入产品ID"
-          rules={[{ required: true, message: '请输入产品ID' }]}
-        />
-        <ProFormText
-          name="product_code"
-          label="产品编码"
-          placeholder="请输入产品编码"
-          rules={[{ required: true, message: '请输入产品编码' }]}
-        />
-        <ProFormText
-          name="product_name"
-          label="产品名称"
-          placeholder="请输入产品名称"
-          rules={[{ required: true, message: '请输入产品名称' }]}
-        />
-        <ProFormDigit
-          name="quantity"
-          label="返工数量"
-          placeholder="请输入返工数量"
-          rules={[{ required: true, message: '请输入返工数量' }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormSelect
-          name="rework_type"
-          label="返工类型"
-          placeholder="请选择返工类型"
-          rules={[{ required: true, message: '请选择返工类型' }]}
-          options={[
-            { label: '返工', value: '返工' },
-            { label: '返修', value: '返修' },
-            { label: '报废', value: '报废' },
-          ]}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-production-rework-order"
+              name="code"
+              label="返工单编码"
+              required={true}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              disabled={isEdit}
+              context={{}}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="original_work_order_id"
+              label="原工单"
+              placeholder="请选择原工单"
+              rules={[{ required: false }]}
+              disabled={isEdit}
+              fieldProps={{
+                showSearch: true,
+                filterOption: (input: string, option: any) =>
+                  option?.label?.toLowerCase().includes(input.toLowerCase()),
+                onChange: async (value: number) => {
+                  if (value) {
+                    setWorkOrderProductLoading(true);
+                    try {
+                      const wo = await workOrderApi.get(String(value));
+                      setWorkOrderProduct({
+                        id: wo.product_id,
+                        code: wo.product_code || '',
+                        name: wo.product_name || '',
+                      });
+                      formRef.current?.setFieldsValue({
+                        product_id: wo.product_id,
+                        product_code: wo.product_code,
+                        product_name: wo.product_name,
+                        quantity: wo.quantity ?? undefined,
+                      });
+                    } catch {
+                      messageApi.error('获取工单详情失败');
+                      setWorkOrderProduct(null);
+                    } finally {
+                      setWorkOrderProductLoading(false);
+                    }
+                  } else {
+                    setWorkOrderProduct(null);
+                    formRef.current?.setFieldsValue({
+                      product_id: undefined,
+                      product_code: undefined,
+                      product_name: undefined,
+                      quantity: undefined,
+                    });
+                  }
+                },
+              }}
+              request={async () => {
+                const res = await workOrderApi.list({ limit: 200 });
+                const items = res?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
+                return items.map((wo: any) => ({
+                  label: `${wo.code || ''} - ${wo.name || wo.product_name || ''}`,
+                  value: wo.id,
+                }));
+              }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDependency name={['original_work_order_id']}>
+              {({ original_work_order_id }) =>
+                original_work_order_id ? (
+                  workOrderProduct ? (
+                    <ProFormSelect
+                      name="product_id"
+                      label="产品"
+                      placeholder="请选择产品"
+                      required
+                      options={[
+                        {
+                          value: workOrderProduct.id,
+                          label: `${workOrderProduct.code} - ${workOrderProduct.name}`.trim() || String(workOrderProduct.id),
+                        },
+                      ]}
+                      fieldProps={{ disabled: true }}
+                    />
+                  ) : (
+                    <ProFormSelect
+                      name="product_id"
+                      label="产品"
+                      placeholder={workOrderProductLoading ? '加载中...' : '请选择产品'}
+                      required
+                      options={[]}
+                      fieldProps={{ disabled: true, loading: workOrderProductLoading }}
+                    />
+                  )
+                ) : (
+                  <UniMaterialSelect
+                    name="product_id"
+                    label="产品"
+                    placeholder="请选择产品"
+                    required
+                    fillMapping={{
+                      product_code: 'mainCode',
+                      product_name: 'name',
+                    }}
+                    showQuickCreate
+                    showAdvancedSearch
+                  />
+                )
+              }
+            </ProFormDependency>
+          </Col>
+          <Col span={12}>
+            <ProFormDigit
+              name="quantity"
+              label="返工数量"
+              placeholder="请输入返工数量"
+              rules={[{ required: true, message: '请输入返工数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+        </Row>
+        <ProFormText name="product_code" hidden />
+        <ProFormText name="product_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="rework_type" label="返工类型" rules={[{ required: true, message: '请选择返工类型' }]}>
+              <UniDropdown
+                placeholder="请选择返工类型"
+                showSearch
+                allowClear
+                loading={reworkTypeLoading}
+                style={{ width: '100%' }}
+                options={reworkTypeOptions}
+                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={12} />
+        </Row>
+        <ProFormDependency name={['original_work_order_id']}>
+          {({ original_work_order_id }) =>
+            original_work_order_id ? (
+              <ProFormSelect
+                name="work_order_operation_ids"
+                label="返工工序"
+                placeholder="请选择需要返工的工序"
+                mode="multiple"
+                fieldProps={{
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    option?.label?.toLowerCase().includes(input.toLowerCase()),
+                }}
+                request={async () => {
+                  const ops = await workOrderApi.getOperations(String(original_work_order_id));
+                  return (ops || []).map((op: any) => ({
+                    label: `工序${op.sequence || ''} - ${op.operation_name || op.operation_code || ''}`,
+                    value: op.id,
+                  }));
+                }}
+              />
+            ) : null
+          }
+        </ProFormDependency>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="planned_start_date"
+              label="计划开始时间"
+              placeholder="请选择计划开始时间"
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="planned_end_date"
+              label="计划结束时间"
+              placeholder="请选择计划结束时间"
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormDigit
+              name="completed_quantity"
+              label="已完成数量"
+              placeholder="请输入已完成数量"
+              initialValue={0}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit
+              name="qualified_quantity"
+              label="合格数量"
+              placeholder="请输入合格数量"
+              initialValue={0}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit
+              name="unqualified_quantity"
+              label="不合格数量"
+              placeholder="请输入不合格数量"
+              initialValue={0}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+        </Row>
         <ProFormTextArea
           name="rework_reason"
           label="返工原因"
           placeholder="请输入返工原因"
           rules={[{ required: true, message: '请输入返工原因' }]}
           fieldProps={{ rows: 3 }}
-        />
-        <ProFormSelect
-          name="status"
-          label="状态"
-          placeholder="请选择状态"
-          initialValue="draft"
-          options={[
-            { label: '草稿', value: 'draft' },
-            { label: '已下达', value: 'released' },
-            { label: '执行中', value: 'in_progress' },
-            { label: '已完成', value: 'completed' },
-            { label: '已取消', value: 'cancelled' },
-          ]}
-        />
-        <ProFormDatePicker
-          name="planned_start_date"
-          label="计划开始时间"
-          placeholder="请选择计划开始时间"
-          fieldProps={{ showTime: true }}
-        />
-        <ProFormDatePicker
-          name="planned_end_date"
-          label="计划结束时间"
-          placeholder="请选择计划结束时间"
-          fieldProps={{ showTime: true }}
-        />
-        <ProFormDigit
-          name="completed_quantity"
-          label="已完成数量"
-          placeholder="请输入已完成数量"
-          initialValue={0}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormDigit
-          name="qualified_quantity"
-          label="合格数量"
-          placeholder="请输入合格数量"
-          initialValue={0}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormDigit
-          name="unqualified_quantity"
-          label="不合格数量"
-          placeholder="请输入不合格数量"
-          initialValue={0}
-          min={0}
-          fieldProps={{ precision: 2 }}
         />
         <ProFormTextArea
           name="remarks"
@@ -621,14 +799,18 @@ const ReworkOrdersPage: React.FC = () => {
         columns={detailColumns}
         width={DRAWER_CONFIG.HALF_WIDTH}
         extra={
-          reworkOrderDetail && (
-            <DetailDrawerActions
-              items={[
-                { key: 'edit', visible: reworkOrderDetail.status === 'draft', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
-                { key: 'delete', visible: reworkOrderDetail.status === 'draft', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(reworkOrderDetail)}>删除</Button> },
-              ]}
-            />
-          )
+          reworkOrderDetail && (() => {
+            const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
+            const canEdit = lifecycle.stageName === '草稿';
+            return (
+              <DetailDrawerActions
+                items={[
+                  { key: 'edit', visible: canEdit, render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(reworkOrderDetail); }}>编辑</Button> },
+                  { key: 'delete', visible: canEdit, render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(reworkOrderDetail)}>删除</Button> },
+                ]}
+              />
+            );
+          })()
         }
       >
         {reworkOrderDetail && (() => {

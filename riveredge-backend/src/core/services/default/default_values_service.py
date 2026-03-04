@@ -326,6 +326,7 @@ class DefaultValuesService:
         "kuaizhizao-production-outsource-work-order": "OWO",
         # 快格轻制造 - 采购管理
         "kuaizhizao-purchase-order": "PO",
+        "kuaizhizao-purchase-requisition": "CGSQ",  # 采购申请
         "kuaizhizao-receipt-notice": "RN",
         "kuaizhizao-purchase-receipt": "PREC",
         "kuaizhizao-purchase-return": "PRT",
