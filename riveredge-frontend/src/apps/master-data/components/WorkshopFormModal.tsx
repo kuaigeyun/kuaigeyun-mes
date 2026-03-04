@@ -14,6 +14,7 @@ import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../services/customField';
+import { AssociatedObjectSelect } from '../../../components/custom-fields/AssociatedObjectSelect';
 import type { Workshop, WorkshopCreate, WorkshopUpdate, Plant } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workshopFormSchema } from '../schemas/workshop';
@@ -292,6 +293,19 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
                 colProps={{ span: 24 }}
                 rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
                 fieldProps={{ rows: field.config?.rows || 4 }}
+                initialValue={customFieldValues[field.code] ?? field.config?.default}
+              />
+            );
+          case 'associated_object':
+            return (
+              <AssociatedObjectSelect
+                key={field.uuid}
+                field={field}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                required={field.is_required}
+                colProps={{ span: 12 }}
                 initialValue={customFieldValues[field.code] ?? field.config?.default}
               />
             );

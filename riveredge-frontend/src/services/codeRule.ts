@@ -291,6 +291,8 @@ export interface CodeRulePageConfig {
   autoGenerate?: boolean;
   ruleCode?: string;
   allowManualEdit?: boolean;
+  /** 预设固定字符（拼音缩写），后端唯一数据源 */
+  fixedTextPreset?: string;
   availableFields?: Array<{
     fieldName: string;
     fieldLabel: string;
@@ -320,6 +322,7 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
     autoGenerate: page.auto_generate ?? false,
     ruleCode: page.rule_code,
     allowManualEdit: page.allow_manual_edit ?? true,
+    fixedTextPreset: page.fixed_text_preset,
     availableFields: page.available_fields?.map(field => ({
       fieldName: field.field_name,
       fieldLabel: field.field_label,
@@ -327,6 +330,19 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
       description: field.description,
     })),
   }));
+}
+
+/**
+ * 恢复预置编码规则
+ *
+ * @param scope - 'all' 全部页面 | 'page' 当前页面
+ * @param pageCode - scope='page' 时必填
+ */
+export async function restorePresetRules(scope: 'all' | 'page' = 'all', pageCode?: string): Promise<{ restored: string[]; message: string }> {
+  return apiRequest<{ restored: string[]; message: string }>('/core/code-rules/restore-preset', {
+    method: 'POST',
+    data: { scope, page_code: pageCode },
+  });
 }
 
 /**
@@ -350,17 +366,18 @@ export async function getCodeRulePageConfig(pageCode: string): Promise<CodeRuleP
       module: page.module,
       moduleIcon: page.module_icon,
       autoGenerate: page.auto_generate ?? false,
-      ruleCode: page.rule_code,
-      allowManualEdit: page.allow_manual_edit ?? true,
-      availableFields: page.available_fields?.map(field => ({
-        fieldName: field.field_name,
-        fieldLabel: field.field_label,
-        fieldType: field.field_type,
-        description: field.description,
-      })),
-    };
-  } catch (error) {
-    console.error('获取页面编码规则配置失败:', error);
-    return null;
-  }
+    ruleCode: page.rule_code,
+    allowManualEdit: page.allow_manual_edit ?? true,
+    fixedTextPreset: page.fixed_text_preset,
+    availableFields: page.available_fields?.map(field => ({
+      fieldName: field.field_name,
+      fieldLabel: field.field_label,
+      fieldType: field.field_type,
+      description: field.description,
+    })),
+  };
+} catch (error) {
+  console.error('获取页面编码规则配置失败:', error);
+  return null;
+}
 }

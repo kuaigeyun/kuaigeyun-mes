@@ -62,6 +62,7 @@ from core.api.positions.positions import router as positions_router
 from core.api.data_dictionaries.data_dictionaries import router as data_dictionaries_router
 from core.api.system_parameters.system_parameters import router as system_parameters_router
 from core.api.code_rules.code_rules import router as code_rules_router
+from core.api.enums.enums import router as enums_router
 from core.api.code_rules.material_code_rules import router as material_code_rules_router
 from core.api.variant_attributes.variant_attributes import router as variant_attributes_router
 from core.api.custom_fields.custom_fields import router as custom_fields_router
@@ -660,6 +661,7 @@ app.include_router(positions_router, prefix="/api/v1/core")
 app.include_router(data_dictionaries_router, prefix="/api/v1/core")
 app.include_router(system_parameters_router, prefix="/api/v1/core")
 app.include_router(code_rules_router, prefix="/api/v1/core")
+app.include_router(enums_router, prefix="/api/v1/core")
 app.include_router(material_code_rules_router, prefix="/api/v1/core")
 app.include_router(variant_attributes_router, prefix="/api/v1/core")
 app.include_router(custom_fields_router, prefix="/api/v1/core")

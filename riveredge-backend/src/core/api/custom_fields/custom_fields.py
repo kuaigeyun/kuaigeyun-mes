@@ -96,6 +96,30 @@ async def list_fields(
     )
 
 
+@router.get("/associated-options", response_model=List[Dict[str, Any]])
+async def get_associated_options(
+    table: str = Query(..., description="关联表名"),
+    display_field: str = Query("name", description="显示字段（id/name/code/title/label/description）"),
+    limit: int = Query(500, ge=1, le=1000, description="最大返回数量"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取关联对象类型的下拉选项
+
+    根据 table_name 和 display_field 查询关联表数据，返回 { value, label } 列表。
+    用于自定义字段「关联对象」类型的选项加载。
+    """
+    from core.config.associated_table_registry import get_associated_options as _get_options
+
+    options = await _get_options(
+        table_name=table,
+        display_field=display_field,
+        tenant_id=tenant_id,
+        limit=limit,
+    )
+    return options
+
+
 @router.get("/pages", response_model=List[CustomFieldPageConfigResponse])
 async def list_custom_field_pages():
     """

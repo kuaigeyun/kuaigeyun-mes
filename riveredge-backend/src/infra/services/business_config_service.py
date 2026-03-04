@@ -87,6 +87,22 @@ ALL_NODES = [
 ]
 
 
+def _build_parameter_keys_schema() -> Dict[str, List[str]]:
+    """从 PARAMETER_KEYS 和 PROCESS_KEYS 构建按 category 分组的参数键 schema"""
+    result: Dict[str, List[str]] = {}
+    for full_key in PARAMETER_KEYS | PROCESS_KEYS:
+        if not full_key.startswith("parameters."):
+            continue
+        parts = full_key.replace("parameters.", "").split(".", 1)
+        if len(parts) == 2:
+            category, key = parts
+            if category not in result:
+                result[category] = []
+            if key not in result[category]:
+                result[category].append(key)
+    return result
+
+
 class BusinessConfigService:
     """
     业务配置服务类

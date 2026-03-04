@@ -14,7 +14,7 @@ from core.services.business.code_rule_service import CodeRuleService
 from core.services.system.system_parameter_service import SystemParameterService
 from core.schemas.code_rule import CodeRuleCreate
 from core.schemas.system_parameter import SystemParameterCreate
-from core.config.code_rule_pages import CODE_RULE_PAGES
+from core.config.code_rule_pages import CODE_RULE_PAGES, PAGE_CODE_TO_FIXED_TEXT_PRESET
 
 
 class DefaultValuesService:
@@ -295,64 +295,9 @@ class DefaultValuesService:
         },
     ]
     
-    # 页面功能缩写映射表
-    PAGE_CODE_ABBREVIATIONS = {
-        # 主数据管理 - 工厂建模
-        "master-data-factory-plant": "PLANT",
-        "master-data-factory-workshop": "WS",
-        "master-data-factory-production-line": "PL",
-        "master-data-factory-workstation": "WST",
-        "master-data-factory-work-center": "GZZX",
-        # 主数据管理 - 仓库管理
-        "master-data-warehouse-warehouse": "WH",
-        "master-data-warehouse-storage-area": "SA",
-        "master-data-warehouse-storage-location": "SL",
-        # 主数据管理 - 物料管理
-        "master-data-material-group": "MG",
-        "master-data-material": "MAT",
-        # 主数据管理 - 工艺管理
-        "master-data-process-operation": "OP",
-        "master-data-process-route": "PR",
-        "master-data-defect-type": "DF",
-        # 主数据管理 - 供应链
-        "master-data-supply-chain-customer": "CUST",
-        "master-data-supply-chain-supplier": "SUP",
-        # 主数据管理 - 绩效管理
-        "master-data-performance-skill": "SK",
-        # 快格轻制造 - 生产执行
-        "kuaizhizao-production-work-order": "WO",
-        "kuaizhizao-production-rework-order": "RWO",
-        "kuaizhizao-production-outsource-order": "OO",
-        "kuaizhizao-production-outsource-work-order": "OWO",
-        # 快格轻制造 - 采购管理
-        "kuaizhizao-purchase-order": "PO",
-        "kuaizhizao-purchase-requisition": "CGSQ",  # 采购申请
-        "kuaizhizao-receipt-notice": "RN",
-        "kuaizhizao-purchase-receipt": "PREC",
-        "kuaizhizao-purchase-return": "PRT",
-        # 快格轻制造 - 销售管理
-        "kuaizhizao-quotation": "BJ",  # 报价单
-        "kuaizhizao-sales-order": "SO",
-        "kuaizhizao-sales-delivery": "SD",
-        "kuaizhizao-shipment-notice": "SN",
-        "kuaizhizao-sales-forecast": "SF",
-        "kuaizhizao-sales-return": "SRT",
-        # 快格轻制造 - 仓储管理
-        "kuaizhizao-warehouse-inbound": "PM",  # Production Material (生产领料)
-        "kuaizhizao-warehouse-finished-goods-inbound": "FGR",  # Finished Goods Receipt (成品入库)
-        # 快格轻制造 - 质量管理
-        "kuaizhizao-quality-incoming-inspection": "II",
-        "kuaizhizao-quality-process-inspection": "QI",  # Quality Inspection (过程检验)
-        "kuaizhizao-quality-finished-goods-inspection": "FGI",  # Finished Goods Inspection (成品检验)
-        # 快格轻制造 - 计划管理
-        "kuaizhizao-plan-production-plan": "PP",
-        # 快格轻制造 - 设备管理（EQ+4位流水、MOLD+4位流水、TOOL+4位流水）
-        "kuaizhizao-equipment-management-equipment": "EQ",
-        "kuaizhizao-equipment-management-mold": "MOLD",
-        "kuaizhizao-equipment-management-tool": "TOOL",
-        "kuaizhizao-warehouse-assembly-order": "ZZD",   # 组装单
-        "kuaizhizao-warehouse-disassembly-order": "CXD",  # 拆卸单
-    }
+    # 页面功能缩写映射表（统一使用 code_rule_pages 的拼音缩写，确保主数据=拼音+4位流水，快格=拼音+YYYYMMDD+4位流水）
+    # 与 PAGE_CODE_TO_FIXED_TEXT_PRESET 保持一致，单据缩写不重复
+    PAGE_CODE_ABBREVIATIONS = PAGE_CODE_TO_FIXED_TEXT_PRESET
     
     @staticmethod
     def _is_business_document(page_code: str) -> bool:
@@ -381,9 +326,26 @@ class DefaultValuesService:
         Returns:
             List[Dict[str, Any]]: 规则组件列表
         """
+        # 物料主编码：分组编码 + 4位流水（不自动重置）
+        if page_code == "master-data-material":
+            return [
+                {"type": "form_field", "order": 0, "field_name": "group_code"},
+                {"type": "auto_counter", "order": 1, "digits": 4, "fixed_width": True, "reset_cycle": "never", "initial_value": 1},
+            ]
+
+        # BOM编码：BOM-物料编码-版本号
+        if page_code == "master-data-engineering-bom":
+            return [
+                {"type": "fixed_text", "order": 0, "text": "BOM"},
+                {"type": "fixed_text", "order": 1, "text": "-"},
+                {"type": "form_field", "order": 2, "field_name": "material_code"},
+                {"type": "fixed_text", "order": 3, "text": "-"},
+                {"type": "form_field", "order": 4, "field_name": "version"},
+            ]
+
         components = []
         order = 0
-        
+
         # 1. 固定文本（功能缩写）
         components.append({
             "type": "fixed_text",
@@ -391,7 +353,7 @@ class DefaultValuesService:
             "text": abbreviation,
         })
         order += 1
-        
+
         # 2. 如果是业务单据且未配置 skip_date，添加日期组件
         # 设备/模具/工装使用 skip_date=True，格式为：EQ+4位、MOLD+4位、TOOL+4位
         use_date = DefaultValuesService._is_business_document(page_code) and not (page_config or {}).get("skip_date", False)
@@ -403,8 +365,9 @@ class DefaultValuesService:
                 "preset_format": "YYYYMMDD",
             })
             order += 1
-        
+
         # 3. 自动计数组件（必选）
+        # 规则：基础数据类流水不重置；快格轻制造带日期字段的流水每日重置；设备/模具/工装（skip_date）不重置
         reset_cycle = "daily" if use_date else "never"
         components.append({
             "type": "auto_counter",
@@ -414,7 +377,7 @@ class DefaultValuesService:
             "reset_cycle": reset_cycle,
             "initial_value": 1,
         })
-        
+
         return components
     
     @staticmethod
@@ -473,10 +436,14 @@ class DefaultValuesService:
             # 判断是否为业务单据（设备/模具/工装配置 skip_date 时按基础数据处理）
             skip_date = page_config.get("skip_date", False)
             is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
-            
-            # 构建规则名称和描述
+
+            # 构建规则名称和描述（物料、BOM 使用自定义描述）
             rule_name = f"{page_name}编码规则"
-            if is_business:
+            if page_code == "master-data-material":
+                description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
+            elif page_code == "master-data-engineering-bom":
+                description = "BOM编码规则，格式：BOM-物料编码-版本号"
+            elif is_business:
                 description = f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
             else:
                 description = f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
@@ -530,11 +497,16 @@ class DefaultValuesService:
         skip_date = page_config.get("skip_date", False)
         is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
         rule_name = f"{page_name}编码规则"
-        description = (
-            f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
-            if is_business
-            else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
-        )
+        if page_code == "master-data-material":
+            description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
+        elif page_code == "master-data-engineering-bom":
+            description = "BOM编码规则，格式：BOM-物料编码-版本号"
+        else:
+            description = (
+                f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
+                if is_business
+                else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
+            )
         try:
             rule_data = CodeRuleCreate(
                 name=rule_name,
@@ -550,6 +522,63 @@ class DefaultValuesService:
         except Exception as e:
             logger.warning(f"为组织 {tenant_id} 补建编码规则 {rule_code} 失败: {e}")
             return False
+
+    @staticmethod
+    async def restore_preset_for_page(tenant_id: int, page_code: str) -> bool:
+        """
+        恢复指定页面的预设编码规则（创建或更新为预设格式）。
+        主数据：拼音缩写+4位流水；快格轻制造：拼音缩写+YYYYMMDD+4位流水。
+        
+        Returns:
+            True 表示创建或更新成功，False 表示页面不存在或失败。
+        """
+        from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
+
+        page_config = next((p for p in CODE_RULE_PAGES if p.get("page_code") == page_code), None)
+        if not page_config:
+            return False
+        rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+        page_name = page_config.get("page_name", page_code)
+        abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(
+            page_code
+        ) or "".join([p[0].upper() for p in page_code.split("-")[-2:]])[:4]
+        rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation, page_config)
+        skip_date = page_config.get("skip_date", False)
+        is_business = DefaultValuesService._is_business_document(page_code) and not skip_date
+        rule_name = f"{page_name}编码规则"
+        # 物料、BOM 使用自定义描述
+        if page_code == "master-data-material":
+            description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
+        elif page_code == "master-data-engineering-bom":
+            description = "BOM编码规则，格式：BOM-物料编码-版本号"
+        else:
+            description = (
+                f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
+                if is_business
+                else f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
+            )
+        existing = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
+        if existing:
+            update_data = CodeRuleUpdate(
+                name=rule_name,
+                rule_components=rule_components,
+                description=description,
+                is_active=True,
+            )
+            await CodeRuleService.update_rule(tenant_id, existing.uuid, update_data)
+            logger.info(f"为组织 {tenant_id} 恢复预设编码规则: {rule_code} ({page_name})")
+        else:
+            rule_data = CodeRuleCreate(
+                name=rule_name,
+                code=rule_code,
+                rule_components=rule_components,
+                description=description,
+                is_system=True,
+                is_active=True,
+            )
+            await CodeRuleService.create_rule(tenant_id, rule_data)
+            logger.info(f"为组织 {tenant_id} 创建预设编码规则: {rule_code} ({page_name})")
+        return True
 
     @staticmethod
     async def create_default_system_parameters(tenant_id: int) -> List[Dict[str, Any]]:

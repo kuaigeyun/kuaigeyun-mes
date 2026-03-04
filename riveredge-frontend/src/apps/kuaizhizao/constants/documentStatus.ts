@@ -1,12 +1,14 @@
 /**
  * 业务单据状态枚举与展示标签
  *
- * 统一管理 status/review_status，以枚举为 canonical，存量中文通过别名归一化。
+ * 优先从后端 API 缓存读取（单一数据源），缓存未就绪时使用内置 fallback。
  * @author RiverEdge
  * @date 2026-02-20
  */
 
-/** 单据主状态枚举 */
+import { getDocumentStatusCache } from '../../../services/enums';
+
+/** 单据主状态枚举（fallback，与后端 constants.py 对齐） */
 export const DocumentStatus = {
   DRAFT: 'DRAFT',
   PENDING_REVIEW: 'PENDING_REVIEW',
@@ -21,15 +23,14 @@ export const DocumentStatus = {
   FULL_CONVERTED: 'FULL_CONVERTED',
 } as const;
 
-/** 审核状态枚举 */
+/** 审核状态枚举（fallback） */
 export const ReviewStatusEnum = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
 } as const;
 
-// ========== 存量中文 -> 枚举（统一归一化入口） ==========
-const STATUS_ALIASES: Record<string, string> = {
+const FALLBACK_STATUS_ALIASES: Record<string, string> = {
   草稿: DocumentStatus.DRAFT,
   待审核: DocumentStatus.PENDING_REVIEW,
   已审核: DocumentStatus.AUDITED,
@@ -43,7 +44,7 @@ const STATUS_ALIASES: Record<string, string> = {
   全部转单: DocumentStatus.FULL_CONVERTED,
 };
 
-const REVIEW_STATUS_ALIASES: Record<string, string> = {
+const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
   待审核: ReviewStatusEnum.PENDING,
   审核通过: ReviewStatusEnum.APPROVED,
   审核驳回: ReviewStatusEnum.REJECTED,
@@ -52,16 +53,7 @@ const REVIEW_STATUS_ALIASES: Record<string, string> = {
   已通过: ReviewStatusEnum.APPROVED,
 };
 
-function normalizeStatus(status: string): string {
-  return STATUS_ALIASES[status] ?? status;
-}
-
-function normalizeReviewStatus(status: string): string {
-  return REVIEW_STATUS_ALIASES[status] ?? status;
-}
-
-// ========== 枚举 -> 展示配置（唯一数据源） ==========
-const STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
+const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
   [DocumentStatus.DRAFT]: { text: '草稿', color: 'default' },
   [DocumentStatus.PENDING_REVIEW]: { text: '待审核', color: 'processing' },
   [DocumentStatus.AUDITED]: { text: '已审核', color: 'processing' },
@@ -75,11 +67,23 @@ const STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
   [DocumentStatus.FULL_CONVERTED]: { text: '全部转单', color: 'success' },
 };
 
-const REVIEW_STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
+const FALLBACK_REVIEW_DISPLAY: Record<string, { text: string; color: string }> = {
   [ReviewStatusEnum.PENDING]: { text: '待审核', color: 'default' },
   [ReviewStatusEnum.APPROVED]: { text: '审核通过', color: 'success' },
   [ReviewStatusEnum.REJECTED]: { text: '审核驳回', color: 'error' },
 };
+
+function normalizeStatus(status: string): string {
+  const cache = getDocumentStatusCache();
+  const aliases = cache?.documentStatus?.aliases ?? FALLBACK_STATUS_ALIASES;
+  return aliases[status] ?? status;
+}
+
+function normalizeReviewStatus(status: string): string {
+  const cache = getDocumentStatusCache();
+  const aliases = cache?.reviewStatus?.aliases ?? FALLBACK_REVIEW_ALIASES;
+  return aliases[status] ?? status;
+}
 
 /** 判断是否为草稿状态 */
 export function isDraftStatus(status: string | undefined): boolean {
@@ -103,25 +107,33 @@ export function isAuditedStatus(status: string | undefined): boolean {
 /** 获取 status 展示文本 */
 export function getStatusLabel(status: string | undefined): string {
   if (!status) return '-';
-  const config = STATUS_DISPLAY[normalizeStatus(String(status).trim())];
+  const cache = getDocumentStatusCache();
+  const display = cache?.documentStatus?.display ?? FALLBACK_STATUS_DISPLAY;
+  const config = display[normalizeStatus(String(status).trim())];
   return config?.text ?? status;
 }
 
 /** 获取 review_status 展示文本 */
 export function getReviewStatusLabel(status: string | undefined): string {
   if (!status) return '-';
-  const config = REVIEW_STATUS_DISPLAY[normalizeReviewStatus(String(status).trim())];
+  const cache = getDocumentStatusCache();
+  const display = cache?.reviewStatus?.display ?? FALLBACK_REVIEW_DISPLAY;
+  const config = display[normalizeReviewStatus(String(status).trim())];
   return config?.text ?? status;
 }
 
 /** 获取 status 展示配置（用于 Tag） */
 export function getStatusDisplay(status: string | undefined): { text: string; color: string } {
   if (!status) return { text: '-', color: 'default' };
-  return STATUS_DISPLAY[normalizeStatus(String(status).trim())] ?? { text: status, color: 'default' };
+  const cache = getDocumentStatusCache();
+  const display = cache?.documentStatus?.display ?? FALLBACK_STATUS_DISPLAY;
+  return display[normalizeStatus(String(status).trim())] ?? { text: status, color: 'default' };
 }
 
 /** 获取 review_status 展示配置 */
 export function getReviewStatusDisplay(status: string | undefined): { text: string; color: string } {
   if (!status) return { text: '-', color: 'default' };
-  return REVIEW_STATUS_DISPLAY[normalizeReviewStatus(String(status).trim())] ?? { text: status, color: 'default' };
+  const cache = getDocumentStatusCache();
+  const display = cache?.reviewStatus?.display ?? FALLBACK_REVIEW_DISPLAY;
+  return display[normalizeReviewStatus(String(status).trim())] ?? { text: status, color: 'default' };
 }

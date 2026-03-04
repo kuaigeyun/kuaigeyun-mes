@@ -15,7 +15,7 @@ from core.schemas.code_rule import (
     CodeGenerationResponse,
     CodeRulePageConfigResponse,
 )
-from core.config.code_rule_pages import CODE_RULE_PAGES
+from core.config.code_rule_pages import CODE_RULE_PAGES, PAGE_CODE_TO_FIXED_TEXT_PRESET
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
@@ -100,8 +100,13 @@ async def list_code_rule_pages():
         List[CodeRulePageConfigResponse]: 功能页面配置列表
     """
     # 使用后端完整配置作为唯一数据源，确保编码规则页面列表完整
-    pages = CODE_RULE_PAGES
-    return [CodeRulePageConfigResponse(**page) for page in pages]
+    # 为每个页面附加 fixed_text_preset（拼音缩写），前端无需维护重复配置
+    result = []
+    for page in CODE_RULE_PAGES:
+        p = dict(page)
+        p["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(p.get("page_code", ""))
+        result.append(CodeRulePageConfigResponse(**p))
+    return result
 
 
 @router.get("/pages/{page_code}", response_model=CodeRulePageConfigResponse)
@@ -137,6 +142,7 @@ async def get_page_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"页面配置不存在: {page_code}"
         )
+    page_config["fixed_text_preset"] = PAGE_CODE_TO_FIXED_TEXT_PRESET.get(page_code)
     
     # 获取规则代码：优先使用配置的 rule_code，否则由 page_code 派生（如 master-data-factory-workshop -> MASTER_DATA_FACTORY_WORKSHOP）
     rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
@@ -320,6 +326,36 @@ async def generate_code(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
+
+
+@router.post("/restore-preset")
+async def restore_preset_rules(
+    scope: str = Body("all", embed=True),  # 'all' | 'page'
+    page_code: Optional[str] = Body(None, embed=True),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    恢复预置编码规则
+    
+    - scope='all': 为所有页面恢复/创建预设规则（拼音缩写+4位流水 或 拼音缩写+YYYYMMDD+4位流水）
+    - scope='page': 为指定 page_code 恢复预设规则
+    """
+    from core.services.default.default_values_service import DefaultValuesService
+    
+    restored = []
+    if scope == "all":
+        for p in CODE_RULE_PAGES:
+            pc = p.get("page_code")
+            if pc:
+                ok = await DefaultValuesService.restore_preset_for_page(tenant_id, pc)
+                if ok:
+                    restored.append(pc)
+    elif scope == "page" and page_code:
+        ok = await DefaultValuesService.restore_preset_for_page(tenant_id, page_code)
+        if ok:
+            restored.append(page_code)
+    
+    return {"restored": restored, "message": f"已恢复 {len(restored)} 个页面的预设规则"}
 
 
 @router.post("/test-generate", response_model=CodeGenerationResponse)

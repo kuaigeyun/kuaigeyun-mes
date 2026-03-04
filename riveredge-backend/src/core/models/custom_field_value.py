@@ -97,9 +97,11 @@ class CustomFieldValue(BaseModel):
         if value is None:
             return
         
-        if field_type in ("text", "textarea", "select"):
+        if field_type in ("text", "textarea", "select", "multiselect"):
             self.value_text = str(value)
-        elif field_type == "number":
+        elif field_type in ("number", "associated_object"):
+            # associated_object 存储关联记录的 ID（数值）
+            self.value_number = Decimal(str(value))
             self.value_number = Decimal(str(value))
         elif field_type == "date":
             if isinstance(value, date):

@@ -1408,6 +1408,10 @@ export default function LoginPage() {
             opacity: 1,
             transition: 'opacity 0.3s ease-in-out',
           }}
+          onLoad={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.parentElement?.querySelector('.logo-placeholder')?.remove();
+          }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             if (logoRetryKey < 2) {
@@ -1469,6 +1473,10 @@ export default function LoginPage() {
             style={{
               opacity: 1,
               transition: 'opacity 0.3s ease-in-out',
+            }}
+            onLoad={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.parentElement?.querySelector('.logo-placeholder')?.remove();
             }}
             onError={(e) => {
               const target = e.target as HTMLImageElement;

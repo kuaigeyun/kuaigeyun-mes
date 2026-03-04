@@ -37,19 +37,27 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-sales-order": "XS",             # 销售
     "kuaizhizao-quotation": "BJ",              # 报价
     "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
+    "kuaizhizao-delivery-notice": "SHD",        # 送货单
+    "kuaizhizao-shipment-notice": "FHTZ",       # 发货通知单
+    "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
     "kuaizhizao-sample-trial": "ST",           # 样品试用
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
+    "kuaizhizao-warehouse-production-return": "TL",       # 生产退料
+    "kuaizhizao-warehouse-other-inbound": "QTRK",         # 其他入库
+    "kuaizhizao-warehouse-other-outbound": "QTCK",        # 其他出库
+    "kuaizhizao-warehouse-material-borrow": "JL",        # 借料单
+    "kuaizhizao-warehouse-material-return": "HL",        # 还料单
     "kuaizhizao-warehouse-finished-goods-inbound": "CPRK",  # 成品入库
     "kuaizhizao-quality-incoming-inspection": "LLJY",   # 来料检验
     "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
     "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
     "kuaizhizao-plan-production-plan": "SCJH",  # 生产计划
-    "kuaizhizao-equipment-management-equipment": "EQ",   # 设备
-    "kuaizhizao-equipment-management-mold": "MOLD",      # 模具
-    "kuaizhizao-equipment-management-tool": "TOOL",     # 工装
+    "kuaizhizao-equipment-management-equipment": "EQ",    # 设备（仅此一处使用英文缩写，其余均为汉语拼音）
+    "kuaizhizao-equipment-management-mold": "MJ",        # 模具（拼音 muju）
+    "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
     "kuaizhizao-warehouse-assembly-order": "ZZD",        # 组装单
     "kuaizhizao-warehouse-disassembly-order": "CXD",    # 拆卸单
     "kuaizhizao-warehouse-batching-order": "PL",        # 配料单

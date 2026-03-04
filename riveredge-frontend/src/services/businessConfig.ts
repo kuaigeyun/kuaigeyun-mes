@@ -66,6 +66,25 @@ export interface NodesUpdateRequest {
 }
 
 /**
+ * 业务配置 schema 响应
+ */
+export interface BusinessConfigSchema {
+  parameterKeys: Record<string, string[]>;
+  allNodes: string[];
+}
+
+/**
+ * 获取业务配置 schema（参数键、节点列表）
+ *
+ * 供前端动态渲染配置项，单一数据源。
+ */
+export async function getBusinessConfigSchema(): Promise<BusinessConfigSchema> {
+  return apiRequest<BusinessConfigSchema>('/infra/business-config/schema', {
+    method: 'GET',
+  });
+}
+
+/**
  * 获取业务配置
  *
  * @returns 业务配置

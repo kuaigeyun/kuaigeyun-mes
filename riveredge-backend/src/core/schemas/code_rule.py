@@ -204,6 +204,7 @@ class CodeRulePageConfigResponse(BaseModel):
     rule_code: Optional[str] = Field(None, description="关联的编码规则代码")
     allow_manual_edit: bool = Field(default=True, description="允许手动填写（如果为True，用户可以手动修改自动生成的编码）")
     available_fields: Optional[list[CodeRulePageFieldConfig]] = Field(None, description="可用字段列表（用于字段引用）")
+    fixed_text_preset: Optional[str] = Field(None, description="预设固定字符（拼音缩写），用于恢复预置时生成默认规则")
 
 
 # ==================== 规则组件相关 Schema ====================

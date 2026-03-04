@@ -210,6 +210,30 @@ export async function getFieldValues(recordTable: string, recordId: number): Pro
 }
 
 /**
+ * 获取关联对象类型的下拉选项
+ *
+ * 用于自定义字段「关联对象」类型，根据关联表和显示字段加载选项。
+ *
+ * @param tableName - 关联表名（config.associatedTable）
+ * @param displayField - 显示字段（config.associatedField，如 name、code）
+ * @param limit - 最大返回数量
+ * @returns 选项列表 [{ value, label }]
+ */
+export async function getAssociatedTableOptions(
+  tableName: string,
+  displayField: string = 'name',
+  limit: number = 500,
+): Promise<Array<{ value: number | string; label: string }>> {
+  const result = await apiRequest<Array<{ value: number | string; label: string }>>(
+    '/core/custom-fields/associated-options',
+    {
+      params: { table: tableName, display_field: displayField, limit },
+    },
+  );
+  return Array.isArray(result) ? result : [];
+}
+
+/**
  * 自定义字段页面配置接口
  */
 export interface CustomFieldPageConfig {

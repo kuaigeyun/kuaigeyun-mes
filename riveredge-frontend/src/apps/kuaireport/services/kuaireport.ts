@@ -1,5 +1,10 @@
 import { apiRequest } from '../../../services/api';
 
+/** 获取图表类型列表（单一数据源，与后端 ChartType 对齐） */
+export async function getChartTypes(): Promise<string[]> {
+    return apiRequest<string[]>('/apps/kuaireport/chart-types', { method: 'GET' });
+}
+
 /**
  * 报表相关 API
  */

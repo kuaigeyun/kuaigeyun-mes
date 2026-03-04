@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getReport, createReport, updateReport } from '../services/kuaireport';
+import { getReport, createReport, updateReport, getChartTypes } from '../services/kuaireport';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -111,8 +111,38 @@ const StepDataConfig: React.FC<{ config: any; onChange: (v: any) => void }> = ({
     );
 };
 
+const CHART_TYPE_LABELS: Record<string, string> = {
+    table: '基础表格',
+    line: '折线图',
+    bar: '柱状图',
+    column: '柱状图(垂直)',
+    pie: '饼图',
+    area: '面积图',
+    scatter: '散点图',
+    card: '指标卡',
+    radar: '雷达图',
+    gauge: '仪表盘',
+    liquid: '水球图',
+    dualAxes: '双轴图',
+};
+
 // ── 步骤3：可视化设计 ────────────────────────────────────────
-const StepVisualDesign: React.FC<{ config: any; onChange: (v: any) => void }> = ({ config, onChange }) => (
+const StepVisualDesign: React.FC<{ config: any; onChange: (v: any) => void }> = ({ config, onChange }) => {
+    const [chartTypeOptions, setChartTypeOptions] = useState<{ label: string; value: string }[]>([
+        { label: '基础表格', value: 'table' },
+        { label: '柱状图', value: 'bar' },
+        { label: '折线图', value: 'line' },
+        { label: '饼图', value: 'pie' },
+        { label: '指标卡', value: 'card' },
+    ]);
+
+    React.useEffect(() => {
+        getChartTypes()
+            .then((types) => setChartTypeOptions(types.map((v) => ({ label: CHART_TYPE_LABELS[v] ?? v, value: v }))))
+            .catch(() => {});
+    }, []);
+
+    return (
     <Row gutter={24}>
         <Col span={8}>
             <Title level={5}>配置选项</Title>
@@ -121,13 +151,7 @@ const StepVisualDesign: React.FC<{ config: any; onChange: (v: any) => void }> = 
                     <Select
                         value={config.chart_type ?? 'table'}
                         onChange={val => onChange({ ...config, chart_type: val })}
-                        options={[
-                            { label: '基础表格', value: 'table' },
-                            { label: '柱状图', value: 'bar' },
-                            { label: '折线图', value: 'line' },
-                            { label: '饼图', value: 'pie' },
-                            { label: '指标卡', value: 'card' },
-                        ]}
+                        options={chartTypeOptions}
                     />
                 </Form.Item>
                 <Form.Item label="X轴 / 分组字段">
@@ -167,7 +191,8 @@ const StepVisualDesign: React.FC<{ config: any; onChange: (v: any) => void }> = 
             </div>
         </Col>
     </Row>
-);
+    );
+};
 
 // ── 主组件 ──────────────────────────────────────────────────────
 const ReportDesigner: React.FC = () => {

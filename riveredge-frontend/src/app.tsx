@@ -27,6 +27,7 @@ import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
 import { updateLastActivity, getLastActivityTime } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
+import { initDocumentStatusCache } from './services/enums';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
@@ -147,8 +148,17 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       setUserInfo(userData);
       // 尽早预取头像 URL，与 BasicLayout 的请求复用，缩短顶栏头像显示延迟
       if (userData.avatar) prefetchAvatarUrl(userData.avatar);
+      // 预加载单据状态枚举（单一数据源）
+      initDocumentStatusCache().catch(() => {});
     }
   }, [userData, setCurrentUser]);
+
+  // 从 localStorage 恢复用户时也预加载枚举
+  useEffect(() => {
+    if (currentUser && !isPublicPath) {
+      initDocumentStatusCache().catch(() => {});
+    }
+  }, [currentUser, isPublicPath]);
 
   // 处理用户信息加载失败
   useEffect(() => {

@@ -1673,7 +1673,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             </div>
           ) : (
             <div style={{
-              padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
+              /* 左右边距由各页面/组件（UniTable、PAGE_SPACING 等）统一管理，避免与 UniTabs 重复导致双 16px */
+              padding: 0,
               width: '100%',
               flex: 1,
               minHeight: 0,

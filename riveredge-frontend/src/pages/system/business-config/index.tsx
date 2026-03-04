@@ -15,6 +15,7 @@ import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import BusinessFlowConfig from './BusinessFlowConfig';
 import {
   getBusinessConfig,
+  getBusinessConfigSchema,
   batchUpdateProcessParameters,
   getConfigTemplates,
   saveConfigTemplate,
@@ -27,8 +28,8 @@ const { Title, Text, Paragraph } = Typography;
 
 
 
-/** 流程参数配置：仅保留 category 与 param key，文案通过 t() 获取 */
-const PARAMETER_KEYS: Record<string, string[]> = {
+/** 流程参数配置：从 API 获取，fallback 仅用于 API 未就绪时 */
+const FALLBACK_PARAMETER_KEYS: Record<string, string[]> = {
   work_order: ['auto_generate', 'priority', 'split', 'merge', 'allow_production_without_material'],
   reporting: ['quick_reporting', 'parameter_reporting', 'auto_fill', 'data_correction', 'auto_approve'],
   warehouse: ['batch_management', 'serial_management', 'multi_unit', 'fifo', 'lifo'],
@@ -49,6 +50,7 @@ const BusinessConfigPage: React.FC = () => {
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [templateForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('graphical');
+  const [parameterKeys, setParameterKeys] = useState<Record<string, string[]>>(FALLBACK_PARAMETER_KEYS);
 
 
   /**
@@ -75,6 +77,12 @@ const BusinessConfigPage: React.FC = () => {
 
   useEffect(() => {
     loadConfig();
+  }, []);
+
+  useEffect(() => {
+    getBusinessConfigSchema()
+      .then((schema) => setParameterKeys(schema.parameterKeys))
+      .catch(() => {});
   }, []);
 
   /**
@@ -282,7 +290,7 @@ const BusinessConfigPage: React.FC = () => {
             </Paragraph>
           </div>
 
-          {Object.entries(PARAMETER_KEYS).map(([category, keys]) => (
+          {Object.entries(parameterKeys).map(([category, keys]) => (
             <Card key={category} title={t(`pages.system.businessConfig.paramCategory.${category}`)} size="small">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                 {keys.map((key) => (

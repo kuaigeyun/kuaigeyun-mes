@@ -31,6 +31,25 @@ from infra.exceptions.exceptions import ValidationError, NotFoundError, Business
 router = APIRouter(prefix="/business-config", tags=["Business Config"])
 
 
+@router.get("/schema", summary="获取业务配置 schema")
+async def get_config_schema(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    获取业务配置 schema（参数键、节点列表）
+
+    返回可配置的参数分类及键、全部业务节点，供前端动态渲染，避免前后端重复维护。
+    """
+    from infra.services.business_config_service import (
+        _build_parameter_keys_schema,
+        ALL_NODES,
+    )
+    return {
+        "parameterKeys": _build_parameter_keys_schema(),
+        "allNodes": ALL_NODES,
+    }
+
+
 @router.get("", response_model=BusinessConfigResponse, summary="获取业务配置")
 async def get_business_config(
     current_user: User = Depends(get_current_user),

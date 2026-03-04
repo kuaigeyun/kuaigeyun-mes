@@ -14,8 +14,8 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin, Form } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -267,6 +267,10 @@ const CustomFieldListPage: React.FC = () => {
         datetime_format: detail.config?.format || 'YYYY-MM-DD HH:mm:ss',
         textarea_rows: detail.config?.rows || 4,
         select_options: detail.config?.options ? JSON.stringify(detail.config.options, null, 2) : '',
+        select_options_list: detail.config?.options?.map((o: { label?: string; value?: string }) => ({
+          label: o?.label ?? '',
+          value: o?.value ?? '',
+        })) || [{ label: '', value: '' }],
         image_max_size: detail.config?.maxSize || '',
         image_allowed_types: detail.config?.allowedTypes ? detail.config.allowedTypes.join(',') : '',
         file_max_size: detail.config?.maxSize || '',
@@ -403,23 +407,15 @@ const CustomFieldListPage: React.FC = () => {
       } else if (fieldType === 'datetime') {
         if (values.default_value) config.default = values.default_value;
         if (values.datetime_format) config.format = values.datetime_format;
-      } else if (fieldType === 'select') {
-        if (values.select_options) {
-          try {
-            config.options = JSON.parse(values.select_options);
-          } catch (e) {
-            messageApi.error(t('field.customField.optionsJsonInvalid'));
-            return;
-          }
-        }
-      } else if (fieldType === 'multiselect') {
-        if (values.select_options) {
-          try {
-            config.options = JSON.parse(values.select_options);
-          } catch (e) {
-            messageApi.error(t('field.customField.optionsJsonInvalid'));
-            return;
-          }
+      } else if (fieldType === 'select' || fieldType === 'multiselect') {
+        const list = values.select_options_list as Array<{ label?: string; value?: string }> | undefined;
+        if (list && Array.isArray(list) && list.length > 0) {
+          config.options = list
+            .filter((item) => item?.label?.trim() || item?.value?.trim())
+            .map((item) => ({
+              label: String(item?.label ?? '').trim() || String(item?.value ?? ''),
+              value: String(item?.value ?? '').trim() || String(item?.label ?? ''),
+            }));
         }
       } else if (fieldType === 'image') {
         if (values.image_max_size) config.maxSize = parseInt(values.image_max_size);
@@ -450,7 +446,7 @@ const CustomFieldListPage: React.FC = () => {
       const {
         default_value, max_length, min_value, max_value,
         date_format, time_format, datetime_format,
-        textarea_rows, select_options,
+        textarea_rows, select_options, select_options_list,
         image_max_size, image_allowed_types,
         file_max_size, file_allowed_types,
         associated_table, associated_field,
@@ -599,52 +595,52 @@ const CustomFieldListPage: React.FC = () => {
           </>
         );
       case 'select':
-        return (
-          <>
-            <div style={{ gridColumn: 'span 2' }}>
-              <ProFormTextArea
-                name="select_options"
-                label={t('field.customField.selectOptions')}
-                placeholder={t('field.customField.selectOptionsPlaceholder')}
-                fieldProps={{ rows: 6 }}
-                extra={
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    {t('field.customField.formatExampleLabel')}
-                    <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
-                      {`[
-  {"label": "${t('field.customField.exampleOption1')}", "value": "1"},
-  {"label": "${t('field.customField.exampleOption2')}", "value": "2"}
-]`}
-                    </pre>
-                  </div>
-                }
-              />
-            </div>
-          </>
-        );
       case 'multiselect':
         return (
-          <>
-            <div style={{ gridColumn: 'span 2' }}>
-              <ProFormTextArea
-                name="select_options"
-                label={t('field.customField.selectOptions')}
-                placeholder={t('field.customField.selectOptionsPlaceholder')}
-                fieldProps={{ rows: 6 }}
-                extra={
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                    {t('field.customField.formatExampleLabel')}
-                    <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
-                      {`[
-  {"label": "${t('field.customField.exampleOption1')}", "value": "1"},
-  {"label": "${t('field.customField.exampleOption2')}", "value": "2"}
-]`}
-                    </pre>
-                  </div>
-                }
-              />
+          <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('field.customField.selectOptions')}</div>
+            <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 8 }}>
+              {t('field.customField.selectOptionsHint')}
             </div>
-          </>
+            <Form.List name="select_options_list">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <Space key={key} style={{ display: 'flex', marginBottom: 8, alignItems: 'flex-start' }} align="baseline">
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'label']}
+                        rules={[{ required: true, message: t('field.customField.optionLabelRequired') }]}
+                        style={{ marginBottom: 0, flex: 1, minWidth: 120 }}
+                      >
+                        <Input placeholder={t('field.customField.optionLabelPlaceholder')} size="small" />
+                      </Form.Item>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'value']}
+                        rules={[{ required: true, message: t('field.customField.optionValueRequired') }]}
+                        style={{ marginBottom: 0, flex: 1, minWidth: 100 }}
+                      >
+                        <Input placeholder={t('field.customField.optionValuePlaceholder')} size="small" />
+                      </Form.Item>
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<MinusCircleOutlined />}
+                        onClick={() => remove(name)}
+                        disabled={fields.length <= 1}
+                        style={{ flexShrink: 0 }}
+                      />
+                    </Space>
+                  ))}
+                  <Button type="dashed" onClick={() => add()} block size="small" icon={<PlusOutlined />}>
+                    {t('field.customField.addOption')}
+                  </Button>
+                </>
+              )}
+            </Form.List>
+          </div>
         );
       case 'image':
         return (
@@ -731,7 +727,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'formula':
         return (
           <>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: 'span 1' }}>
               <ProFormTextArea
                 name="formula_expression"
                 label={t('field.customField.formulaExpression')}
@@ -767,7 +763,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'json':
         return (
           <>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ gridColumn: 'span 1' }}>
               <ProFormTextArea
                 name="default_value"
                 label={t('field.customField.defaultValueJson')}
@@ -1347,52 +1343,68 @@ const CustomFieldListPage: React.FC = () => {
             name="label"
             label={t('field.customField.label')}
             placeholder={t('field.customField.labelPlaceholder')}
-            colProps={{ span: 12 }}
+            colProps={{ span: 8 }}
           />
           <ProFormText
             name="placeholder"
             label={t('field.customField.placeholder')}
             placeholder={t('field.customField.placeholderPlaceholder')}
-            colProps={{ span: 12 }}
-          />
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#fafafa',
-            borderRadius: '4px',
-            border: '1px solid #d9d9d9',
-            marginBottom: 16,
-            gridColumn: '1 / -1',
-          }}>
-            <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              {renderConfigFields()}
-            </div>
-          </div>
-          <ProFormSwitch
-            name="is_required"
-            label={t('field.customField.isRequired')}
-            colProps={{ span: 8 }}
-          />
-          <ProFormSwitch
-            name="is_searchable"
-            label={t('field.customField.isSearchable')}
-            colProps={{ span: 8 }}
-          />
-          <ProFormSwitch
-            name="is_sortable"
-            label={t('field.customField.isSortable')}
             colProps={{ span: 8 }}
           />
           <ProFormDigit
             name="sort_order"
             label={t('field.customField.sortOrderLabel')}
             fieldProps={{ min: 0 }}
-            colProps={{ span: 12 }}
+            colProps={{ span: 8 }}
+          />
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              width: '100%',
+              minWidth: 0,
+              marginBottom: 16,
+              paddingLeft: 8,
+              paddingRight: 8,
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              style={{
+                padding: '16px',
+                backgroundColor: token.colorFillAlter || '#fafafa',
+                borderRadius: token.borderRadius,
+                border: `1px solid ${token.colorBorder}`,
+                width: '100%',
+                minWidth: 0,
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', width: '100%' }}>
+                {renderConfigFields()}
+              </div>
+            </div>
+          </div>
+          <ProFormSwitch
+            name="is_required"
+            label={t('field.customField.isRequired')}
+            colProps={{ span: 6 }}
+          />
+          <ProFormSwitch
+            name="is_searchable"
+            label={t('field.customField.isSearchable')}
+            colProps={{ span: 6 }}
+          />
+          <ProFormSwitch
+            name="is_sortable"
+            label={t('field.customField.isSortable')}
+            colProps={{ span: 6 }}
           />
           <ProFormSwitch
             name="is_active"
             label={t('field.customField.isActiveLabel')}
-            colProps={{ span: 12 }}
+            colProps={{ span: 6 }}
           />
       </FormModalTemplate>
 

@@ -16,12 +16,12 @@ import {
   createCodeRule,
   updateCodeRule,
   getCodeRulePages,
+  restorePresetRules,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
   CodeRulePageConfig,
 } from '../../../../services/codeRule';
-import { PAGE_CODE_TO_FIXED_TEXT_PRESET } from '../../../../config/codeRulePages';
 import { apiRequest } from '../../../../services/api';
 import CodeRuleComponentBuilder from '../../../../components/code-rule-component-builder';
 import {
@@ -51,6 +51,7 @@ const CodeRuleListPage: React.FC = () => {
   const [selectedPageCode, setSelectedPageCode] = useState<string | null>(null);
   const [pageSearchValue, setPageSearchValue] = useState<string>('');
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   // 页面规则配置表单状态
   const pageRuleFormRef = useRef<ProFormInstance>();
@@ -393,15 +394,16 @@ const CodeRuleListPage: React.FC = () => {
             const isBusinessDocument = pageCode.startsWith('kuaizhizao-');
             let defaultComponents: CodeRuleComponent[];
 
+            const abbreviation = pageConfig?.fixedTextPreset ?? 'ZM';
             if (isBusinessDocument) {
-              // 业务单据：功能缩写+年月日+流水号
+              // 业务单据：拼音缩写+YYYYMMDD+4位流水
               defaultComponents = [
-                createDefaultDateComponent(0, 'YYYYMMDD'),
-                createDefaultAutoCounterComponent(1, 4, 'daily'),
+                { type: 'fixed_text', order: 0, text: abbreviation } as FixedTextComponent,
+                createDefaultDateComponent(1, 'YYYYMMDD'),
+                createDefaultAutoCounterComponent(2, 4, 'daily'),
               ];
             } else {
-              // 基础数据：汉语拼音缩写+流水号
-              const abbreviation = PAGE_CODE_TO_FIXED_TEXT_PRESET[pageCode] ?? 'ZM';
+              // 基础数据：拼音缩写+4位流水
               defaultComponents = [
                 {
                   type: 'fixed_text',
@@ -579,9 +581,9 @@ const CodeRuleListPage: React.FC = () => {
       // 重新加载规则列表（不重新加载页面，避免循环）
       await loadCodeRules(false);
 
-      // 更新页面配置，关联规则代码并启用自动编码
+      // 更新页面配置，关联规则代码，并根据用户保存的 is_active 同步启用状态
       handleUpdatePageConfig(selectedPageCode, {
-        autoGenerate: true,
+        autoGenerate: values.is_active ?? true,
         ruleCode: values.code,
       });
 
@@ -738,6 +740,55 @@ const CodeRuleListPage: React.FC = () => {
                 allowClear
                 size="middle"
               />
+            </div>
+            {/* 恢复预置、全部启用 按钮（参考角色管理设计） */}
+            <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  type="primary"
+                  block
+                  loading={restoreLoading}
+                  onClick={async () => {
+                    if (!selectedPageCode) {
+                      messageApi.warning('请先选择要恢复的页面');
+                      return;
+                    }
+                    try {
+                      setRestoreLoading(true);
+                      await restorePresetRules('page', selectedPageCode);
+                      messageApi.success('已恢复当前页面预设规则');
+                      await loadCodeRules(true);
+                      handleSelectPage(selectedPageCode);
+                    } catch (e: any) {
+                      messageApi.error(e?.message || '恢复预设失败');
+                    } finally {
+                      setRestoreLoading(false);
+                    }
+                  }}
+                >
+                  恢复预置
+                </Button>
+                <Button
+                  type="primary"
+                  block
+                  loading={restoreLoading}
+                  onClick={async () => {
+                    try {
+                      setRestoreLoading(true);
+                      const res = await restorePresetRules('all');
+                      messageApi.success(res?.message || `已为 ${res?.restored?.length ?? 0} 个页面应用预设规则`);
+                      await loadCodeRules(true);
+                      if (selectedPageCode) handleSelectPage(selectedPageCode);
+                    } catch (e: any) {
+                      messageApi.error(e?.message || '全部启用失败');
+                    } finally {
+                      setRestoreLoading(false);
+                    }
+                  }}
+                >
+                  全部启用
+                </Button>
+              </div>
             </div>
 
             {/* 功能页面列表 */}
