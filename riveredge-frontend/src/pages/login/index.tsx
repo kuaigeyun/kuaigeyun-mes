@@ -930,7 +930,7 @@ export default function LoginPage() {
         }
       }
     } catch (error) {
-      console.error('加载登录失败记录失败:', error);
+      console.error(t('ui.error.loadFailTimes'), error);
       localStorage.removeItem(STORAGE_KEY);
     }
   };
@@ -946,7 +946,7 @@ export default function LoginPage() {
         localStorage.removeItem(STORAGE_KEY);
       }
     } catch (error) {
-      console.error('保存登录失败记录失败:', error);
+      console.error(t('ui.error.saveFailTimes'), error);
     }
   };
 
@@ -1601,7 +1601,7 @@ export default function LoginPage() {
                 <div style={{ marginBottom: 24 }}>
                   <Tooltip title={t('pages.login.verifyTip', { seconds: verifyDuration / 1000 })} placement="top">
                     <div>
-                      <Suspense fallback={<Button size="large" block loading>验证加载中...</Button>}>
+                      <Suspense fallback={<Button size="large" block loading>{t('pages.login.verifyLoading')}</Button>}>
                         <LongPressVerify
                           duration={verifyDuration}
                           onVerify={handleVerify}

@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, Tag, Button, Space, Typography, Modal, message, Spin, Descriptions, Empty, App, theme } from 'antd';
+import { Card, Tag, Button, Space, Typography, Modal, Spin, Descriptions, Empty, App, theme } from 'antd';
 import { FileTextOutlined, CheckCircleOutlined, EyeOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { getIndustryTemplateList, getIndustryTemplateById, applyIndustryTemplate, type IndustryTemplate } from '../../../services/industryTemplate';
@@ -130,14 +130,14 @@ const TemplateSelectPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handlePreview(template)}
           >
-            预览
+            {t('pages.init.templateSelect.preview')}
           </Button>,
           <Button
             type="primary"
             icon={<ThunderboltOutlined />}
             onClick={() => handleApply(template)}
           >
-            应用模板
+            {t('pages.init.templateSelect.applyTemplate')}
           </Button>,
         ]}
       >
@@ -149,7 +149,7 @@ const TemplateSelectPage: React.FC = () => {
               </Title>
               {template.is_default && (
                 <Tag color="processing" icon={<CheckCircleOutlined />} style={{ marginLeft: 8 }}>
-                  推荐
+                  {t('pages.init.templateSelect.recommended')}
                 </Tag>
               )}
             </div>
@@ -170,13 +170,13 @@ const TemplateSelectPage: React.FC = () => {
           <div style={{ paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
             <Space orientation="vertical" size="small" style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.init.templateSelect.usageCount')}：</Text>
                 <Text strong>{template.usage_count}</Text>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.init.templateSelect.enabledStatus')}：</Text>
                 <Tag color={template.is_active ? 'success' : 'default'}>
-                  {template.is_active ? '启用' : '禁用'}
+                  {template.is_active ? t('pages.init.templateSelect.enabled') : t('pages.init.templateSelect.disabled')}
                 </Tag>
               </div>
             </Space>
@@ -199,15 +199,15 @@ const TemplateSelectPage: React.FC = () => {
       <div style={{ marginBottom: 24 }}>
         <Title level={2}>
           <FileTextOutlined style={{ marginRight: 8 }} />
-          选择行业模板
+          {t('pages.init.templateSelect.title')}
         </Title>
         <Paragraph type="secondary">
-          选择一个适合您行业的模板，一键完成基础配置，包括编码规则、系统参数等。
+          {t('pages.init.templateSelect.subtitle')}
         </Paragraph>
       </div>
 
       {templates.length === 0 ? (
-        <Empty description="暂无可用模板" />
+        <Empty description={t('pages.init.templateSelect.noTemplates')} />
       ) : (
         <div
           style={{
@@ -222,7 +222,7 @@ const TemplateSelectPage: React.FC = () => {
 
       {/* 预览Modal */}
       <Modal
-        title="模板预览"
+        title={t('pages.init.templateSelect.previewTitle')}
         open={previewVisible}
         onCancel={() => {
           setPreviewVisible(false);
@@ -242,7 +242,7 @@ const TemplateSelectPage: React.FC = () => {
                 handleApply(selectedTemplate);
               }}
             >
-              应用模板
+              {t('pages.init.templateSelect.applyTemplate')}
             </Button>
           ),
         ]}
@@ -250,34 +250,34 @@ const TemplateSelectPage: React.FC = () => {
       >
         {selectedTemplate && (
           <Descriptions bordered column={2}>
-            <Descriptions.Item label="模板名称" span={2}>
+            <Descriptions.Item label={t('pages.init.templateSelect.templateName')} span={2}>
               {selectedTemplate.name}
               {selectedTemplate.is_default && (
                 <Tag color="processing" style={{ marginLeft: 8 }}>
-                  推荐
+                  {t('pages.init.templateSelect.recommended')}
                 </Tag>
               )}
             </Descriptions.Item>
-            <Descriptions.Item label="模板代码">
+            <Descriptions.Item label={t('pages.init.templateSelect.templateCode')}>
               {selectedTemplate.code}
             </Descriptions.Item>
-            <Descriptions.Item label="行业类型">
+            <Descriptions.Item label={t('pages.init.templateSelect.industryType')}>
               <Tag color={getIndustryTagColor(selectedTemplate.industry)}>
                 {selectedTemplate.industry}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="描述" span={2}>
-              {selectedTemplate.description || '无'}
+            <Descriptions.Item label={t('pages.init.templateSelect.description')} span={2}>
+              {selectedTemplate.description || t('pages.init.templateSelect.none')}
             </Descriptions.Item>
-            <Descriptions.Item label="使用次数">
+            <Descriptions.Item label={t('pages.init.templateSelect.usageCountLabel')}>
               {selectedTemplate.usage_count}
             </Descriptions.Item>
-            <Descriptions.Item label="启用状态">
+            <Descriptions.Item label={t('pages.init.templateSelect.enabledStatusLabel')}>
               <Tag color={selectedTemplate.is_active ? 'success' : 'default'}>
-                {selectedTemplate.is_active ? '启用' : '禁用'}
+                {selectedTemplate.is_active ? t('pages.init.templateSelect.enabled') : t('pages.init.templateSelect.disabled')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="模板配置" span={2}>
+            <Descriptions.Item label={t('pages.init.templateSelect.templateConfig')} span={2}>
               <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', maxHeight: '300px', overflow: 'auto' }}>
                 {JSON.stringify(selectedTemplate.config, null, 2)}
               </pre>
@@ -288,7 +288,7 @@ const TemplateSelectPage: React.FC = () => {
 
       {/* 应用确认Modal */}
       <Modal
-        title="应用行业模板"
+        title={t('pages.init.templateSelect.applyIndustryTemplate')}
         open={applyVisible}
         onCancel={() => {
           setApplyVisible(false);
@@ -296,14 +296,14 @@ const TemplateSelectPage: React.FC = () => {
         }}
         onOk={handleConfirmApply}
         confirmLoading={applying}
-        okText="确认应用"
-        cancelText="取消"
+        okText={t('pages.init.templateSelect.confirmApply')}
+        cancelText={t('pages.init.templateSelect.cancel')}
       >
         {selectedTemplate && (
           <div>
-            <p>确定要应用模板 <strong>{selectedTemplate.name}</strong> 吗？</p>
+            <p>{t('pages.init.templateSelect.confirmApplyTitle', { name: selectedTemplate.name })}</p>
             <p style={{ color: '#999', fontSize: '12px' }}>
-              应用模板后，将自动配置编码规则、系统参数等基础设置。
+              {t('pages.init.templateSelect.confirmApplyDesc')}
             </p>
           </div>
         )}

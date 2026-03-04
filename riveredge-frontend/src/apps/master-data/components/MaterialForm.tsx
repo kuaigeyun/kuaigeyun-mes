@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton } from '@ant-design/pro-components';
-import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit, MaterialCodeMapping } from '../types/material';
+import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialUnit, MaterialCodeMapping } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -154,7 +154,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await customerApi.list({ limit: 1000, isActive: true });
       setCustomers(result);
     } catch (error: any) {
-      console.error('加载客户列表失败:', error);
+      console.error(t('app.master-data.materialForm.fetchCustomersFailed'), error);
     } finally {
       setCustomersLoading(false);
     }
@@ -169,7 +169,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await supplierApi.list({ limit: 1000, isActive: true });
       setSuppliers(result);
     } catch (error: any) {
-      console.error('加载供应商列表失败:', error);
+      console.error(t('app.master-data.materialForm.fetchSuppliersFailed'), error);
     } finally {
       setSuppliersLoading(false);
     }
@@ -184,7 +184,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await warehouseApi.list({ limit: 1000, isActive: true });
       setWarehouses(result);
     } catch (error: any) {
-      console.error('加载仓库列表失败:', error);
+      console.error(t('app.master-data.materialForm.fetchWarehousesFailed'), error);
     } finally {
       setWarehousesLoading(false);
     }
@@ -196,10 +196,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const loadProcessRoutes = async () => {
     try {
       setProcessRoutesLoading(true);
-      const result = await processRouteApi.list({ limit: 1000, isActive: true });
+      const result = await processRouteApi.list({ limit: 1000, is_active: true });
       setProcessRoutes(result);
     } catch (error: any) {
-      console.error('加载工艺路线列表失败:', error);
+      console.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'), error);
     } finally {
       setProcessRoutesLoading(false);
     }
@@ -214,7 +214,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await operationApi.list({ limit: 1000, is_active: true });
       setOperations(result);
     } catch (error: any) {
-      console.error('加载工序列表失败:', error);
+      console.error(t('app.master-data.materialForm.fetchOperationsFailed'), error);
     } finally {
       setOperationsLoading(false);
     }
@@ -229,7 +229,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const result = await materialCodeMappingApi.list({ materialUuid, page: 1, pageSize: 1000 });
       setExternalSystemCodes(result.items || []);
     } catch (error: any) {
-      console.error('加载外部系统编码映射失败:', error);
+      console.error(t('app.master-data.materialForm.fetchExternalMappingsFailed'), error);
     } finally {
       setExternalSystemCodesLoading(false);
     }
@@ -304,13 +304,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
     const ruleCode = getPageRuleCode('master-data-material');
     if (!ruleCode) {
-      console.warn('物料编码规则未配置');
+      console.warn(t('app.master-data.materialForm.codeRuleNotConfigured'));
       return;
     }
     
-    // 调试信息：检查规则代码是否正确
     if (ruleCode === 'PROCESS_ROUTE_CODE') {
-      console.error('错误：物料页面使用了工艺路线的编码规则！请检查 localStorage 中的 codeRulePageConfigs 配置。');
+      console.error('Error: Material page is using process route code rule! Check codeRulePageConfigs in localStorage.');
       messageApi.error(t('app.master-data.materialForm.codeRuleConfigError'));
       return;
     }
@@ -354,7 +353,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         });
       }
     } catch (error) {
-      console.warn('自动生成编码失败:', error);
+      console.warn(t('app.master-data.materialForm.autoGenerateCodeFailed'), error);
     }
   }, [isEdit, materialGroups]);
 
@@ -1023,6 +1022,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                     suppliersLoading={suppliersLoading}
                     processRoutesLoading={processRoutesLoading}
                     operationsLoading={operationsLoading}
+                    sourceTypeOptions={sourceTypeOptions}
                     onValidate={validateSourceConfig}
                     onCheckCompleteness={checkCompleteness}
                   />
@@ -1094,7 +1094,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
  * 多单位管理组件
  */
 interface MaterialUnitsManagerProps {
-  formRef: React.RefObject<ProFormInstance>;
+  formRef: any;
   onMessagesChange?: (messages: Array<{ text: string; title?: string }>) => void;
 }
 
@@ -1371,7 +1371,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
     } else if (units.length > 0 && baseUnit) {
       const baseLabel = unitValueToLabel[baseUnit] || baseUnit;
       const unitLines = units
-        .map((unit, i) => {
+        .map((unit) => {
           const n = unit.numerator || 1;
           const d = unit.denominator || 1;
           const rate = n / d;
@@ -1407,7 +1407,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
             fontSize: '12px',
             color: '#1890ff'
           }}>
-            基础单位：<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
+            {t('app.master-data.materialForm.baseUnitColon')}<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
           </div>
         )}
       </div>
@@ -1425,19 +1425,19 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
             onClick={handleAddUnit}
             block
           >
-            添加辅助单位
+            {t('app.master-data.materialForm.addAuxiliaryUnit')}
           </Button>
         )}
       />
       {units.length > 0 && allUnits.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>场景单位映射（可选）</div>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.materialForm.scenarioUnitMappingOptional')}</div>
           <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>
-            为不同业务场景指定默认使用的单位，如果不指定，则使用基础单位
+            {t('app.master-data.materialForm.scenarioUnitMappingHint')}
           </div>
           <Row gutter={16}>
             <Col span={6}>
-              <div style={{ marginBottom: 8 }}>采购单位</div>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.purchaseUnit')}</div>
               <Select
                 value={scenarios.purchase}
                 onChange={(value: string) => handleScenarioChange('purchase', value)}
@@ -1453,7 +1453,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               />
             </Col>
             <Col span={6}>
-              <div style={{ marginBottom: 8 }}>销售单位</div>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.saleUnit')}</div>
               <Select
                 value={scenarios.sale}
                 onChange={(value: string) => handleScenarioChange('sale', value)}
@@ -1469,7 +1469,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               />
             </Col>
             <Col span={6}>
-              <div style={{ marginBottom: 8 }}>生产单位</div>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.productionUnit')}</div>
               <Select
                 value={scenarios.production}
                 onChange={(value: string) => handleScenarioChange('production', value)}
@@ -1485,7 +1485,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
               />
             </Col>
             <Col span={6}>
-              <div style={{ marginBottom: 8 }}>库存单位</div>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.inventoryUnit')}</div>
               <Input
                 value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
                 disabled
@@ -1504,7 +1504,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
  */
 interface BasicInfoTabProps {
   part: 1 | 2;
-  formRef: React.RefObject<ProFormInstance>;
+  formRef: any;
   materialGroups: Array<{ id: number; code: string; name: string }>;
   variantManaged?: boolean;
   onVariantManagedChange?: (checked: boolean) => void;
@@ -1515,7 +1515,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   part,
   formRef,
   materialGroups,
-  variantManaged,
   onVariantManagedChange,
   isEdit,
 }) => {
@@ -2070,7 +2069,6 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   onDepartmentCodesChange,
   onCustomerCodesChange,
   onSupplierCodesChange,
-  onExternalSystemCodesChange,
   onReloadExternalSystemCodes,
 }) => {
   const { t } = useTranslation();
@@ -2116,7 +2114,7 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         sourceIndex: i,
         typeLabel: t('app.master-data.codeMapping.department'),
         code: r.code,
-        relation: departmentCodeTypeLabels[r.code_type] ?? r.code_type,
+        relation: (departmentCodeTypeLabels as any)[r.code_type] ?? r.code_type,
         name: r.name,
         description: r.description,
         extra: r.department,
@@ -2694,7 +2692,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
  * 物料来源配置标签页
  */
 interface MaterialSourceTabProps {
-  formRef: React.RefObject<ProFormInstance>;
+  formRef: any;
   material?: Material;
   suppliers: Supplier[];
   processRoutes: ProcessRoute[];
@@ -2725,9 +2723,9 @@ const MaterialSourceTab = forwardRef<
     };
 
   /**
-   * 处理物料来源类型变化
-   * @param value 来源类型
-   * @param manufacturingMode 制造模式（仅 Make 时有效，应用建议时可选传入）
+   * Handle material source type change
+   * @param value Source type
+   * @param manufacturingMode Manufacturing mode (only for 'Make', optional when applying suggestion)
    */
   const handleSourceTypeChange = (value: string, manufacturingMode?: string) => {
     setSourceType(value);
@@ -2736,12 +2734,12 @@ const MaterialSourceTab = forwardRef<
       source_type: value, // 向后兼容
     });
     
-    // 根据来源类型初始化配置
+    // Initialize config based on source type
     const currentConfig = formRef.current?.getFieldValue('sourceConfig') || formRef.current?.getFieldValue('source_config') || {};
     let newConfig = { ...currentConfig };
     
     if (value === 'Make') {
-      // 自制件：保留BOM和工艺路线配置，支持制造模式（加工型/装配型）
+      // Made items: keep BOM and route config, support manufacturing mode (fabrication/assembly)
       newConfig = {
         ...newConfig,
         manufacturing_mode: manufacturingMode ?? newConfig.manufacturing_mode,
@@ -2750,7 +2748,7 @@ const MaterialSourceTab = forwardRef<
         production_waste_rate: newConfig.production_waste_rate,
       };
     } else if (value === 'Buy') {
-      // 采购件：初始化采购相关配置
+      // Purchased items: initialize purchase config
       newConfig = {
         ...newConfig,
         default_supplier_id: newConfig.default_supplier_id,
@@ -2759,7 +2757,7 @@ const MaterialSourceTab = forwardRef<
         purchase_price: newConfig.purchase_price,
       };
     } else if (value === 'Outsource') {
-      // 委外件：初始化委外相关配置
+      // Outsourced items: initialize outsource config
       newConfig = {
         ...newConfig,
         outsource_supplier_id: newConfig.outsource_supplier_id,
@@ -2769,7 +2767,7 @@ const MaterialSourceTab = forwardRef<
         material_provided_by: newConfig.material_provided_by || 'enterprise',
       };
     } else if (value === 'Configure') {
-      // 配置件：保留变体相关配置
+      // Configurable items: keep variant config
       newConfig = {
         ...newConfig,
         bom_variants: newConfig.bom_variants,
@@ -2779,7 +2777,7 @@ const MaterialSourceTab = forwardRef<
     
     formRef.current?.setFieldsValue({
       sourceConfig: newConfig,
-      source_config: newConfig, // 向后兼容
+      source_config: newConfig, // backward compatibility
     });
 
     if (material?.uuid) {
@@ -2804,15 +2802,15 @@ const MaterialSourceTab = forwardRef<
             options={sourceTypeOptions}
             fieldProps={{
               value: sourceType,
-              onChange: handleSourceTypeChange,
+              onChange: (val: string) => handleSourceTypeChange(val),
             }}
             extra={t('app.master-data.materialForm.sourceTypeExtra')}
           />
         </Col>
       </Row>
 
-      <ProFormDependency name={['sourceType', 'sourceConfig']}>
-        {({ sourceType: currentSourceType, sourceConfig }) => {
+      <ProFormDependency name={['sourceType']}>
+        {({ sourceType: currentSourceType }) => {
           if (currentSourceType === 'Make') {
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>

@@ -489,7 +489,7 @@ const MaterialsManagementPage: React.FC = () => {
           try {
             return await materialApi.get(key as string)
           } catch (error) {
-            console.error(`获取物料失败: ${key}`, error)
+            console.error(`Failed to get material: ${key}`, error)
             return null
           }
         })
@@ -568,7 +568,7 @@ const MaterialsManagementPage: React.FC = () => {
             messageApi.success(t('common.batchDeleteSuccess', { count: successCount }))
           }
           if (failCount > 0) {
-            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }))
+            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? ': ' + errors.join('; ') : '' }))
           }
 
           setSelectedRowKeys([])
@@ -614,7 +614,7 @@ const MaterialsManagementPage: React.FC = () => {
   const getMaterialGroupName = (groupId?: number): string => {
     if (!groupId) return '-'
     const group = materialGroups.find(g => g.id === groupId)
-    return group ? `${group.code} - ${group.name}` : `分组ID: ${groupId}`
+    return group ? `${group.code} - ${group.name}` : `${t('app.master-data.materials.materialGroup')} ID: ${groupId}`
   }
 
   /**
@@ -847,7 +847,7 @@ const MaterialsManagementPage: React.FC = () => {
                 style={{ flex: 1 }}
                 onClick={handleCreateGroup}
               >
-                新建分组
+                {t('app.master-data.materials.createGroup')}
               </Button>
               <Button
                 icon={expandedKeys.length > 1 ? <CompressOutlined /> : <ExpandOutlined />}
@@ -891,14 +891,14 @@ const MaterialsManagementPage: React.FC = () => {
               headerActions={
                 <Space>
                   <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
-                    新建物料
+                    {t('app.master-data.materials.createMaterial')}
                   </Button>
                   <Button
                     icon={<QrcodeOutlined />}
                     disabled={selectedRowKeys.length === 0}
                     onClick={handleBatchGenerateQRCode}
                   >
-                    批量生成二维码
+                    {t('app.master-data.materials.batchGenerateQRCode')}
                   </Button>
                   <Button
                     danger
@@ -906,11 +906,11 @@ const MaterialsManagementPage: React.FC = () => {
                     icon={<DeleteOutlined />}
                     onClick={handleBatchDelete}
                   >
-                    批量删除
+                    {t('app.master-data.materials.batchDelete')}
                   </Button>
                 </Space>
               }
-              request={async (params, sort, filter, searchFormValues) => {
+              request={async (params, _sort, _filter, searchFormValues) => {
                 const apiParams: any = {
                   skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                   limit: params.pageSize || 20,
@@ -992,7 +992,7 @@ const MaterialsManagementPage: React.FC = () => {
                     total: result.length,
                   }
                 } catch (error: any) {
-                  console.error('获取物料列表失败:', error)
+                  console.error(t('app.master-data.materials.getListFailed'), error)
                   messageApi.error(error?.message || t('app.master-data.materials.getListFailed'))
                   return {
                     data: [],
@@ -1066,10 +1066,8 @@ const MaterialsManagementPage: React.FC = () => {
               loading: materialGroupsLoading,
               showSearch: true,
               allowClear: true,
-              filterOption: (input, option) => {
-                const label = (option?.label as string) || ''
-                return label.toLowerCase().includes(input.toLowerCase())
-              },
+              filterOption: (input: string, option: any) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
             }}
           />
           <ProFormText
@@ -1308,15 +1306,15 @@ const MaterialsManagementPage: React.FC = () => {
             }}
           >
             <Menu.Item key="create" icon={<PlusOutlined />}>
-              新建分组
+              {t('app.master-data.materials.createGroup')}
             </Menu.Item>
             {contextMenuGroup && (
               <>
                 <Menu.Item key="edit" icon={<EditOutlined />}>
-                  编辑分组
+                  {t('app.master-data.materials.editGroup')}
                 </Menu.Item>
                 <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
-                  删除分组
+                  {t('app.master-data.materials.deleteGroup')}
                 </Menu.Item>
               </>
             )}

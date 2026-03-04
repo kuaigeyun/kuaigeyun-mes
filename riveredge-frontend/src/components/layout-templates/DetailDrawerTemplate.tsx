@@ -30,8 +30,10 @@ export interface DetailDrawerTemplateProps<T = any> {
   dataSource?: T;
   /** ProDescriptions 列配置 */
   columns?: ProDescriptionsItemProps<T>[];
-  /** Drawer 宽度（默认：标准宽度） */
+  /** Drawer 宽度（默认：标准宽度），Ant Design 5+ 使用 size 替代 width */
   width?: number | string;
+  /** Drawer 尺寸（Ant Design 5+ 推荐），支持 'default' | 'large' 或自定义 number/string */
+  size?: number | string;
   /** 加载状态 */
   loading?: boolean;
   /** 列数（默认：2） */
@@ -71,6 +73,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   dataSource,
   columns = [],
   width = DRAWER_CONFIG.HALF_WIDTH,
+  size,
   loading = false,
   column = 2,
   customContent,
@@ -78,13 +81,15 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   className,
   children,
 }: DetailDrawerTemplateProps<T>) => {
+  // Ant Design 5+ 推荐使用 size，width 已废弃
+  const drawerSize = size ?? width;
 
   return (
     <Drawer
       title={title}
       open={open ?? visible}
       onClose={onClose}
-      width={width}
+      size={drawerSize}
       loading={loading}
       className={className}
       extra={extra}

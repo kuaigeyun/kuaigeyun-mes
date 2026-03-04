@@ -190,6 +190,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.production_return_item",  # 生产退料明细模型
                 "apps.kuaizhizao.models.finished_goods_receipt",  # 成品入库模型
                 "apps.kuaizhizao.models.finished_goods_receipt_item",  # 成品入库明细模型
+                "apps.kuaizhizao.models.packing_binding",  # 装箱绑定模型
                 "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
                 "apps.kuaizhizao.models.sales_delivery_item",  # 销售发货明细模型
                 "apps.kuaizhizao.models.sales_return",  # 销售退货模型

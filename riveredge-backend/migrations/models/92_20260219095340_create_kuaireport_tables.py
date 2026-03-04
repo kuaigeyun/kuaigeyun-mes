@@ -41,6 +41,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaireport_reports_tenant_code" ON "apps_kuaireport_reports" ("tenant_id", "code");
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaireport_reports_tenant_status" ON "apps_kuaireport_reports" ("tenant_id", "status");
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaireport_reports_tenant_category" ON "apps_kuaireport_reports" ("tenant_id", "category");
+        ALTER TABLE "apps_kuaireport_reports" ADD COLUMN IF NOT EXISTS "owner_id" INT;
         CREATE INDEX IF NOT EXISTS "idx_apps_kuaireport_reports_tenant_owner" ON "apps_kuaireport_reports" ("tenant_id", "owner_id");
 
         CREATE TABLE IF NOT EXISTS "apps_kuaireport_dashboards" (

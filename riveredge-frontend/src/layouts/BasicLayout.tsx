@@ -836,7 +836,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           if (DirectIcon && DirectIcon !== React.Fragment && typeof DirectIcon === 'function') {
             iconElement = React.createElement(DirectIcon, { size: 16 });
           } else if (process.env.NODE_ENV === 'development') {
-            console.warn(`图标未找到: ${menu.icon}，菜单: ${menu.name || menu.path}。提示：可以直接使用 Lucide 图标名（PascalCase），如 "Factory", "Home" 等`);
+            console.warn(`Icon not found: ${menu.icon} for menu: ${menu.name || menu.path}. Tip: You can use Lucide icon names (PascalCase) directly, such as "Factory", "Home", etc.`);
           }
         }
       }
@@ -1341,6 +1341,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       type: 'divider',
     },
     {
+      key: 'lock-screen',
+      icon: <LockOutlined />,
+      label: t('ui.lock.screen'),
+      onClick: handleLockScreen,
+    },
+    {
+      type: 'divider',
+    },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: t('ui.logout'),
@@ -1364,6 +1373,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
         refetchApplicationMenus();
         message.success(t('ui.clearCacheSuccess'));
+        break;
+      case 'lock-screen':
+        handleLockScreen();
         break;
       case 'logout':
         logout();
@@ -1678,12 +1690,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       try {
         await updatePreferences({ language: languageCode });
       } catch (error) {
-        console.warn('更新用户偏好设置失败:', error);
+        console.warn(t('ui.error.updatePreferences'), error);
       }
 
       message.success(t('common.switchLanguageSuccess', { language: LANGUAGE_MAP[languageCode] || languageCode }));
     } catch (error: any) {
-      console.error('切换语言失败:', error);
+      console.error(t('common.switchLanguageFailed'), error);
       message.error(error?.message || t('common.switchLanguageFailed'));
     }
   }, [updatePreferences]);
@@ -3655,7 +3667,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 className="go-live-assistant-btn"
               >
                 <RocketOutlined />
-                {t('goLiveAssistant.title') || '上线助手'}
+                {t('goLiveAssistant.title')}
               </span>
             </span>
           );

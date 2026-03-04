@@ -151,6 +151,12 @@ const PlantsPage: React.FC = () => {
     // 表头字段映射（支持中英文，支持带*号的必填项标识）
     // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
     const headerMap: Record<string, string> = {
+      [t('app.master-data.plants.code')]: 'code',
+      [`*${t('app.master-data.plants.code')}`]: 'code',
+      [t('app.master-data.plants.name')]: 'name',
+      [`*${t('app.master-data.plants.name')}`]: 'name',
+      [t('app.master-data.plants.address')]: 'address',
+      [t('app.master-data.plants.description')]: 'description',
       '厂区编码': 'code',
       '*厂区编码': 'code',
       '编码': 'code',
@@ -402,7 +408,7 @@ const PlantsPage: React.FC = () => {
           item.address || '',
           item.description || '',
           item.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled'),
-          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+          item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
         // 处理包含逗号、引号或换行符的字段
         csvRows.push(row.map(cell => {
@@ -582,7 +588,7 @@ const PlantsPage: React.FC = () => {
                 total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
               };
             } catch (error: any) {
-              console.error('获取厂区列表失败:', error);
+              console.error('Failed to fetch plant list:', error);
               messageApi.error(error?.message || t('app.master-data.plants.listFetchFailed'));
               return {
                 data: [],
@@ -631,24 +637,25 @@ const PlantsPage: React.FC = () => {
           }}
           showImportButton={true}
           onImport={handleImport}
-          importHeaders={['*厂区编码', '*厂区名称', '地址', '描述']}
-          importExampleRow={['PLANT001', '无锡生产基地', '江苏省无锡市新吴区太湖国际科技园', '主要生产电子产品的生产基地，占地面积约50000平方米']}
+          importHeaders={[
+            `*${t('app.master-data.plants.code')}`,
+            `*${t('app.master-data.plants.name')}`,
+            t('app.master-data.plants.address'),
+            t('app.master-data.plants.description')
+          ]}
+          importExampleRow={['PLANT001', 'Plant A', 'Address A', 'Description A']}
           importFieldMap={{
-            '厂区编码': 'code',
-            '*厂区编码': 'code',
-            '编码': 'code',
-            '*编码': 'code',
+            [t('app.master-data.plants.code')]: 'code',
+            [`*${t('app.master-data.plants.code')}`]: 'code',
+            [t('app.master-data.plants.name')]: 'name',
+            [`*${t('app.master-data.plants.name')}`]: 'name',
+            [t('app.master-data.plants.address')]: 'address',
+            [t('app.master-data.plants.description')]: 'description',
             'code': 'code',
             '*code': 'code',
-            '厂区名称': 'name',
-            '*厂区名称': 'name',
-            '名称': 'name',
-            '*名称': 'name',
             'name': 'name',
             '*name': 'name',
-            '地址': 'address',
             'address': 'address',
-            '描述': 'description',
             'description': 'description',
           }}
           importFieldRules={{

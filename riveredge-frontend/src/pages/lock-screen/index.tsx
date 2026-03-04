@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { App, Input, Button, Form, Typography, Avatar, ConfigProvider } from 'antd';
 import { LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../stores';
 import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
 import { login } from '../../services/auth';
@@ -26,6 +27,7 @@ const { Title, Text } = Typography;
  * 锁屏页面组件
  */
 export default function LockScreenPage() {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const currentUser = useGlobalStore((s) => s.currentUser);
@@ -83,7 +85,7 @@ export default function LockScreenPage() {
     // 使用真实密码值（如果表单值为空，使用状态中的值）
     const password = values.password || realPassword;
     if (!currentUser) {
-      message.error('用户信息不存在，请重新登录');
+      message.error(t('pages.lockScreen.userInfoNotFound'));
       navigate('/login');
       return;
     }
@@ -147,7 +149,7 @@ export default function LockScreenPage() {
         // 解锁屏幕
         unlockScreen();
 
-        message.success('解锁成功');
+        message.success(t('pages.lockScreen.unlockSuccess'));
 
         // 获取锁屏前的路径并导航回去
         if (lockedPath && lockedPath !== '/lock-screen') {
@@ -161,12 +163,12 @@ export default function LockScreenPage() {
           }
         }
       } else {
-        message.error('密码错误，请重新输入');
+        message.error(t('pages.lockScreen.passwordError'));
         form.setFieldsValue({ password: '' });
       }
     } catch (error: any) {
       console.error('解锁失败:', error);
-      message.error(error?.response?.data?.detail || '解锁失败，请检查密码');
+      message.error(error?.response?.data?.detail || t('pages.lockScreen.unlockFailed'));
       form.setFieldsValue({ password: '' });
     } finally {
       setLoading(false);
@@ -180,8 +182,7 @@ export default function LockScreenPage() {
   }
 
   // 获取用户显示名称
-  const displayName = currentUser?.full_name || currentUser?.username || '用户';
-  const userInitial = displayName[0]?.toUpperCase() || 'U';
+  const displayName = currentUser?.full_name || currentUser?.username || t('pages.lockScreen.defaultUser');
   
   // 判断是否是体验用户
   const isGuestUser = currentUser?.username === 'guest';
@@ -266,9 +267,17 @@ export default function LockScreenPage() {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const weekdays = [
+      t('common.weekdays.sunday'),
+      t('common.weekdays.monday'),
+      t('common.weekdays.tuesday'),
+      t('common.weekdays.wednesday'),
+      t('common.weekdays.thursday'),
+      t('common.weekdays.friday'),
+      t('common.weekdays.saturday')
+    ];
     const weekday = weekdays[date.getDay()];
-    return `${year}年${month}月${day}日 ${weekday}`;
+    return t('pages.lockScreen.dateFormat', { year, month, day, weekday });
   };
 
   /**
@@ -487,13 +496,13 @@ export default function LockScreenPage() {
                 }}
               >
                 {/* 显示首字母（优先全名，否则用户名） */}
-                {getAvatarText(currentUser.full_name, currentUser.username)}
+                {getAvatarText(currentUser?.full_name, currentUser?.username)}
               </Avatar>
             )}
             <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
               {displayName}
             </Title>
-            <Text type="secondary">屏幕已锁定</Text>
+            <Text type="secondary">{t('pages.lockScreen.screenLocked')}</Text>
           </div>
 
           {/* 解锁表单 */}
@@ -525,8 +534,8 @@ export default function LockScreenPage() {
             <Form.Item
               name="password"
               rules={[
-                { required: true, message: '请输入密码' },
-                { min: 6, message: '密码至少6位' },
+                { required: true, message: t('pages.lockScreen.passwordRequired') },
+                { min: 6, message: t('pages.lockScreen.passwordMinLength') },
               ]}
             >
               <div style={{ position: 'relative' }}>
@@ -589,7 +598,7 @@ export default function LockScreenPage() {
                 <Input
                   type="text"
                   prefix={<LockOutlined />}
-                  placeholder="请输入密码解锁"
+                  placeholder={t('pages.lockScreen.passwordPlaceholder')}
                   autoFocus
                   autoComplete="off"
                   data-form-type="other"
@@ -641,7 +650,7 @@ export default function LockScreenPage() {
                 loading={loading}
                 icon={<LockOutlined />}
               >
-                解锁
+                {t('pages.lockScreen.unlock')}
               </Button>
             </Form.Item>
           </Form>
@@ -651,15 +660,15 @@ export default function LockScreenPage() {
             {isGuestUser ? (
               <div>
                 <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  体验用户解锁密码：<Text strong style={{ color: FIXED_THEME_COLOR }}>guest123</Text>
+                  {t('pages.lockScreen.guestPasswordHint')}：<Text strong style={{ color: FIXED_THEME_COLOR }}>guest123</Text>
                 </Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  输入密码以解锁屏幕
+                  {t('pages.lockScreen.unlockHint')}
                 </Text>
               </div>
             ) : (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                输入您的密码以解锁屏幕
+                {t('pages.lockScreen.unlockHint')}
               </Text>
             )}
           </div>

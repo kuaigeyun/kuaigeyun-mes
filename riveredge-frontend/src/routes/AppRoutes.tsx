@@ -228,7 +228,10 @@ const AppRoutes: React.FC = () => {
   }
 
   if (appRoutes.length === 0) {
-    console.warn('⚠️ [AppRoutes] 没有应用路由，可能应用未加载');
+    // 仅在 applications 有数据但路由为空时警告（可能是配置问题）；applications 为空时可能是加载中
+    if (applications.length > 0) {
+      console.warn('⚠️ [AppRoutes] 没有应用路由，可能应用未加载或配置异常');
+    }
     return (
       <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7' }}>
         <h3>⚠️ {t('appRoutes.noAppRoutes')}</h3>

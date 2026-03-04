@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { ProForm, ProFormSelect, ProFormGroup } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { WizardTemplate } from '../layout-templates/WizardTemplate';
 import { getInitSteps, completeStep, completeInitWizard, type InitWizardData, type Step2DefaultSettings } from '../../services/init-wizard';
 import { getTenantId } from '../../utils/auth';
@@ -36,6 +37,7 @@ export interface InitWizardProps {
  * 初始化向导组件
  */
 const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -126,7 +128,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       }
     } catch (error: any) {
       console.error('加载初始化步骤失败:', error);
-      messageApi.error(error?.message || '加载初始化步骤失败');
+      messageApi.error(error?.message || t('pages.init.wizard.loadStepsFailed'));
     }
   };
 
@@ -155,11 +157,11 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       await completeStep(stepId, data);
       saveStepData(stepId, data);
       await loadInitSteps();
-      messageApi.success('步骤完成');
+      messageApi.success(t('pages.init.wizard.stepComplete'));
       if (stepId === 'step2') setCurrentStep(1);
     } catch (error: any) {
       console.error('完成步骤失败:', error);
-      messageApi.error(error?.message || '完成步骤失败');
+      messageApi.error(error?.message || t('pages.init.wizard.stepCompleteFailed'));
       throw error;
     } finally {
       setLoading(false);
@@ -175,7 +177,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
     try {
       setLoading(true);
       await completeInitWizard(currentTenantId, initData);
-      messageApi.success('初始化完成');
+      messageApi.success(t('pages.init.wizard.initComplete'));
 
       // 清除 initSteps 缓存，使工作台等页面的初始化提示条立即消失
       queryClient.invalidateQueries({ queryKey: ['initSteps', currentTenantId] });
@@ -194,7 +196,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       }
     } catch (error: any) {
       console.error('完成初始化失败:', error);
-      messageApi.error(error?.message || '完成初始化失败');
+      messageApi.error(error?.message || t('pages.init.wizard.initFailed'));
     } finally {
       setLoading(false);
     }
@@ -250,29 +252,29 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
             await handleStepComplete('step2', values);
           }}
         >
-          <ProFormGroup title="默认设置">
+          <ProFormGroup title={t('pages.init.wizard.defaultSettings')}>
             <ProFormSelect
               name="timezone"
-              label="时区"
-              rules={[{ required: true, message: '请选择时区' }]}
+              label={t('pages.init.wizard.timezone')}
+              rules={[{ required: true, message: t('pages.init.wizard.selectTimezone') }]}
               options={timezoneOptions.length > 0 ? timezoneOptions : defaultTimezoneOptions}
             />
             <ProFormSelect
               name="default_currency"
-              label="默认货币"
-              rules={[{ required: true, message: '请选择默认货币' }]}
+              label={t('pages.init.wizard.defaultCurrency')}
+              rules={[{ required: true, message: t('pages.init.wizard.selectCurrency') }]}
               options={currencyOptions.length > 0 ? currencyOptions : defaultCurrencyOptions}
             />
             <ProFormSelect
               name="default_language"
-              label="默认语言"
-              rules={[{ required: true, message: '请选择默认语言' }]}
+              label={t('pages.init.wizard.defaultLanguage')}
+              rules={[{ required: true, message: t('pages.init.wizard.selectLanguage') }]}
               options={languageOptions.length > 0 ? languageOptions : defaultLanguageOptions}
             />
             <ProFormSelect
               name="date_format"
-              label="日期格式"
-              rules={[{ required: true, message: '请选择日期格式' }]}
+              label={t('pages.init.wizard.dateFormat')}
+              rules={[{ required: true, message: t('pages.init.wizard.selectDateFormat') }]}
               options={dateFormatOptions}
             />
           </ProFormGroup>
@@ -288,19 +290,19 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
     return (
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
         <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 24 }} />
-        <h2>初始化配置完成</h2>
+        <h2>{t('pages.init.wizard.configComplete')}</h2>
         <p style={{ color: '#666', marginTop: 16, marginBottom: 32 }}>
-          请确认所有信息无误，点击"完成"按钮完成初始化
+          {t('pages.init.wizard.configConfirm')}
         </p>
         {initData.step2_default_settings && (
           <div style={{ textAlign: 'left', maxWidth: 600, margin: '0 auto' }}>
-            <h3>配置摘要：</h3>
+            <h3>{t('pages.init.wizard.configSummary')}</h3>
             <div style={{ marginBottom: 16 }}>
-              <strong>基础设置：</strong>
-              <div>时区：{initData.step2_default_settings.timezone}</div>
-              <div>默认货币：{initData.step2_default_settings.default_currency}</div>
-              <div>默认语言：{initData.step2_default_settings.default_language}</div>
-              <div>日期格式：{initData.step2_default_settings.date_format}</div>
+              <strong>{t('pages.init.wizard.basicSettings')}</strong>
+              <div>{t('pages.init.wizard.summaryTimezone')}{initData.step2_default_settings.timezone}</div>
+              <div>{t('pages.init.wizard.summaryCurrency')}{initData.step2_default_settings.default_currency}</div>
+              <div>{t('pages.init.wizard.summaryLanguage')}{initData.step2_default_settings.default_language}</div>
+              <div>{t('pages.init.wizard.summaryDateFormat')}{initData.step2_default_settings.date_format}</div>
             </div>
           </div>
         )}
@@ -311,21 +313,21 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   // 构建步骤列表（精简：仅基础设置 + 完成）
   const steps = [
     {
-      title: '基础设置',
-      description: '配置时区、货币、语言等核心设置',
+      title: t('pages.init.wizard.tabBasic'),
+      description: t('pages.init.wizard.tabBasicDesc'),
       content: renderStep2(),
       icon: <SettingOutlined />,
     },
     {
-      title: '完成',
-      description: '确认并完成初始化',
+      title: t('pages.init.wizard.tabFinish'),
+      description: t('pages.init.wizard.tabFinishDesc'),
       content: renderStep5(),
       icon: <CheckCircleOutlined />,
     },
   ];
 
   if (!currentTenantId) {
-    return <div>无法获取组织ID，请先登录</div>;
+    return <div>{t('pages.init.wizard.noTenantId')}</div>;
   }
 
   return (

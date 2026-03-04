@@ -5,6 +5,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Routes, Route } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 
@@ -47,6 +48,8 @@ const CustomersPage = lazy(() => import('./pages/supply-chain/customers'));
 const SuppliersPage = lazy(() => import('./pages/supply-chain/suppliers'));
 
 const MasterDataApp: React.FC = () => {
+  const { t } = useTranslation();
+
   return (
     <Routes>
       {/* 工厂建模路由 */}
@@ -85,8 +88,8 @@ const MasterDataApp: React.FC = () => {
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
         <div style={{ padding: '24px', textAlign: 'center' }}>
-          <h2>主数据管理应用</h2>
-          <p>欢迎使用主数据管理系统，请从左侧菜单选择功能模块。</p>
+          <h2>{t('app.master-data.title', '主数据管理应用')}</h2>
+          <p>{t('app.master-data.welcome', '欢迎使用主数据管理系统，请从左侧菜单选择功能模块。')}</p>
         </div>
       } />
     </Routes>
