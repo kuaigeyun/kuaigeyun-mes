@@ -479,7 +479,14 @@ const ProcessRoutesPage: React.FC = () => {
                   return <span style={{ color: '#999' }}>暂无工序</span>;
                 }
 
-                // 显示工序列表
+                // 显示工序列表（op 可能是 {uuid, code, name} 或 {sequence, operation_id, operation_uuid}，不可直接渲染对象）
+                const getOpLabel = (op: any, index: number) => {
+                  if (op?.code != null) return `${op.code} - ${op?.name ?? '未知工序'}`;
+                  if (op?.name != null) return op.name;
+                  if (op?.operation_uuid) return `工序 ${index + 1} (${String(op.operation_uuid).slice(0, 8)}...)`;
+                  if (op?.operation_id) return `工序 ${index + 1} (ID: ${op.operation_id})`;
+                  return `工序 ${index + 1}`;
+                };
                 return (
                   <div>
                     <div style={{ marginBottom: 8, fontWeight: 500 }}>
@@ -487,8 +494,8 @@ const ProcessRoutesPage: React.FC = () => {
                     </div>
                     <Space wrap>
                       {operations.map((op: any, index: number) => (
-                        <Tag key={op?.uuid || op || index} color="blue">
-                          {op?.code || op || `工序${index + 1}`} - {op?.name || '未知工序'}
+                        <Tag key={op?.uuid ?? op?.operation_uuid ?? index} color="blue">
+                          {getOpLabel(op, index)}
                         </Tag>
                       ))}
                     </Space>

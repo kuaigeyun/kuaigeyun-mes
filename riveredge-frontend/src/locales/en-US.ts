@@ -6384,6 +6384,8 @@ export default {
   'app.kuaireport.name': 'Reports & Dashboards',
   'app.kuaireport.menu.reports': 'Report Center',
   'app.kuaireport.menu.dashboards': 'Dashboard Center',
+  'app.kuaireport.menu.dashboard-designer': 'Dashboard Designer',
+  'app.kuaireport.menu.dashboard-view': 'Dashboard Preview',
 
   // Approval Designer translations
   'pages.approval.designer.title': 'Approval Process Designer',

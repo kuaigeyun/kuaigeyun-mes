@@ -4,26 +4,70 @@
  * 路由复用：/finance-management/receivables、/finance-management/receipts 均使用本组件，
  * 展示应收账款列表。回款菜单作为应收管理的快捷入口。
  */
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space } from 'antd';
+import { App, Button, Modal, Space } from 'antd';
+import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
+import { apiRequest } from '../../../../../services/api';
 import { receivableService } from '../../../services/finance/receivable';
-import { Receivable, ReceivableListParams } from '../../../types/finance/receivable';
+import { Receivable, ReceivableCreateData, ReceivableListParams } from '../../../types/finance/receivable';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import dayjs from 'dayjs';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
+    const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const isReceiptsPage = location.pathname.includes('/receipts');
     const headerTitle = isReceiptsPage ? '收款单' : '应收账款';
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const res = await apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } });
+                const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
+                setCustomerOptions((Array.isArray(list) ? list : []).map((c: any) => ({
+                    label: c.name || c.customer_name || c.code || String(c.id),
+                    value: c.id,
+                })));
+            } catch {
+                setCustomerOptions([]);
+            }
+        };
+        load();
+    }, []);
+
+    const handleCreate = async (values: any) => {
+        const today = dayjs().format('YYYY-MM-DD');
+        const data: ReceivableCreateData = {
+            source_type: '手工',
+            source_id: 0,
+            source_code: '手工',
+            customer_id: values.customer_id,
+            customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
+            total_amount: values.total_amount,
+            received_amount: 0,
+            remaining_amount: values.total_amount,
+            due_date: values.due_date || today,
+            business_date: values.business_date || today,
+            status: '未收款',
+            review_status: '待审核',
+            notes: values.notes,
+        };
+        await receivableService.createReceivable(data);
+        messageApi.success('创建成功');
+        setCreateModalVisible(false);
+        actionRef.current?.reload();
+    };
 
     const columns: ProColumns<Receivable>[] = [
         {
@@ -153,7 +197,29 @@ const ReceivableList: React.FC = () => {
                     }
                 }}
                 rowKey="id"
-                showCreateButton={false}
+                showCreateButton
+                createButtonText="新建应收单"
+                onCreate={() => setCreateModalVisible(true)}
+                enableRowSelection
+                showDeleteButton
+                deleteButtonText="批量删除"
+                onDelete={async (keys) => {
+                    Modal.confirm({
+                        title: '确认批量删除',
+                        content: `确定要删除选中的 ${keys.length} 条应收单吗？仅待审核且无收款记录的应收单可删除。`,
+                        onOk: async () => {
+                            try {
+                                for (const id of keys) {
+                                    await receivableService.deleteReceivable(Number(id));
+                                }
+                                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                                actionRef.current?.reload();
+                            } catch (error: any) {
+                                messageApi.error(error?.message || '删除失败');
+                            }
+                        },
+                    });
+                }}
                 showAdvancedSearch={true}
                 showExportButton
                 onExport={async (type, keys, pageData) => {
@@ -182,6 +248,26 @@ const ReceivableList: React.FC = () => {
                     }
                 }}
             />
+
+            <ModalForm
+                title="新建应收单"
+                open={createModalVisible}
+                onOpenChange={setCreateModalVisible}
+                onFinish={handleCreate}
+                width={480}
+            >
+                <ProFormSelect
+                    name="customer_id"
+                    label="客户"
+                    options={customerOptions}
+                    rules={[{ required: true, message: '请选择客户' }]}
+                    placeholder="请选择客户"
+                />
+                <ProFormMoney name="total_amount" label="应收金额" min={0.01} rules={[{ required: true }]} />
+                <ProFormDatePicker name="due_date" label="到期日期" rules={[{ required: true }]} />
+                <ProFormDatePicker name="business_date" label="业务日期" />
+                <ProFormTextArea name="notes" label="备注" />
+            </ModalForm>
         </ListPageTemplate>
     );
 };

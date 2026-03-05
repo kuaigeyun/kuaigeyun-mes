@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm } from 'antd';
+import { App, Button, Space, Popconfirm, Row, Col } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -339,80 +339,111 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
-        {...MODAL_CONFIG}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid={false}
       >
-        <ProFormText
-          name="customer_id"
-          label="客户ID"
-          placeholder="请输入客户ID"
-          rules={[{ required: true, message: '请输入客户ID' }]}
-        />
-        <ProFormText
-          name="customer_name"
-          label="客户名称"
-          placeholder="请输入客户名称"
-          rules={[{ required: true, message: '请输入客户名称' }]}
-        />
-        <ProFormText
-          name="barcode"
-          label="客户条码"
-          placeholder="请扫描或输入客户条码（一维码或二维码）"
-          rules={[{ required: true, message: '请输入客户条码' }]}
-          fieldProps={{
-            onBlur: (e: any) => {
-              if (e.target.value) {
-                handleBarcodeChange(e.target.value);
-              }
-            },
-            suffix: scanning ? <ScanOutlined spin /> : null,
-          }}
-        />
-        <ProFormSelect
-          name="barcode_type"
-          label="条码类型"
-          options={[
-            { label: '一维码', value: '1d' },
-            { label: '二维码', value: '2d' },
-          ]}
-          rules={[{ required: true, message: '请选择条码类型' }]}
-        />
-        <ProFormText
-          name="mapped_material_code"
-          label="映射物料编码"
-          placeholder="条码解析后自动填充"
-          disabled
-        />
-        <ProFormText
-          name="mapped_material_name"
-          label="映射物料名称"
-          placeholder="条码解析后自动填充"
-          disabled
-        />
-        <ProFormDigit
-          name="quantity"
-          label="来料数量"
-          placeholder="请输入来料数量"
-          rules={[{ required: true, message: '请输入来料数量' }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
-        />
-        <ProFormDatePicker
-          name="registration_date"
-          label="登记日期"
-          placeholder="请选择登记日期"
-          rules={[{ required: true, message: '请选择登记日期' }]}
-          fieldProps={{ showTime: true }}
-        />
-        <ProFormText
-          name="warehouse_id"
-          label="入库仓库ID"
-          placeholder="请输入入库仓库ID（可选）"
-        />
-        <ProFormText
-          name="warehouse_name"
-          label="入库仓库名称"
-          placeholder="请输入入库仓库名称（可选）"
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="customer_id"
+              label="客户ID"
+              placeholder="请输入客户ID"
+              rules={[{ required: true, message: '请输入客户ID' }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="customer_name"
+              label="客户名称"
+              placeholder="请输入客户名称"
+              rules={[{ required: true, message: '请输入客户名称' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="barcode"
+              label="客户条码"
+              placeholder="请扫描或输入客户条码（一维码或二维码）"
+              rules={[{ required: true, message: '请输入客户条码' }]}
+              fieldProps={{
+                onBlur: (e: any) => {
+                  if (e.target.value) {
+                    handleBarcodeChange(e.target.value);
+                  }
+                },
+                suffix: scanning ? <ScanOutlined spin /> : null,
+              }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="barcode_type"
+              label="条码类型"
+              options={[
+                { label: '一维码', value: '1d' },
+                { label: '二维码', value: '2d' },
+              ]}
+              rules={[{ required: true, message: '请选择条码类型' }]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="mapped_material_code"
+              label="映射物料编码"
+              placeholder="条码解析后自动填充"
+              disabled
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="mapped_material_name"
+              label="映射物料名称"
+              placeholder="条码解析后自动填充"
+              disabled
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDigit
+              name="quantity"
+              label="来料数量"
+              placeholder="请输入来料数量"
+              rules={[{ required: true, message: '请输入来料数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="registration_date"
+              label="登记日期"
+              placeholder="请选择登记日期"
+              rules={[{ required: true, message: '请选择登记日期' }]}
+              fieldProps={{ showTime: true }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="warehouse_id"
+              label="入库仓库ID"
+              placeholder="请输入入库仓库ID（可选）"
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="warehouse_name"
+              label="入库仓库名称"
+              placeholder="请输入入库仓库名称（可选）"
+            />
+          </Col>
+        </Row>
         <ProFormTextArea
           name="remarks"
           label="备注"

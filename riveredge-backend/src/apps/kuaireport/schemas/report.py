@@ -71,6 +71,8 @@ class ReportResponse(ReportBase):
     updated_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    # 响应时 report_config 使用宽松类型，避免旧数据/非标准结构导致 500
+    report_config: Optional[Dict[str, Any]] = Field(None, description="报表配置（原始 JSON）")
 
     class Config:
         from_attributes = True

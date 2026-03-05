@@ -43,7 +43,7 @@ export async function deleteReport(id: string | number) {
 
 /** 获取系统报表列表 */
 export async function getSystemReports(params?: { skip?: number; limit?: number }) {
-    return apiRequest<{ data: any[]; total: number; success: boolean }>('/apps/kuaireport/reports/system', {
+    return apiRequest<{ data: any[]; total: number; success: boolean }>('/apps/kuaireport/reports/system-reports', {
         method: 'GET',
         params: { skip: params?.skip ?? 0, limit: params?.limit ?? 50 },
     });

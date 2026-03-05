@@ -150,6 +150,15 @@ class PayableService(AppBaseService[Payable]):
             updated_payable = await self.get_payable_by_id(tenant_id, payable_id)
             return updated_payable
 
+    async def delete_payable(self, tenant_id: int, payable_id: int) -> None:
+        """删除应付单（仅待审核状态可删，已审核/通过或已有付款的不可删）"""
+        payable = await self.get_payable_by_id(tenant_id, payable_id)
+        if str(payable.review_status or '') in ('已审核', '通过'):
+            raise BusinessLogicError("已审核的应付单不能删除")
+        if payable.paid_amount > 0:
+            raise BusinessLogicError("已有付款记录的应付单不能删除")
+        await Payable.filter(tenant_id=tenant_id, id=payable_id).delete()
+
 
 class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     """采购发票服务"""
@@ -334,4 +343,13 @@ class ReceivableService(AppBaseService[Receivable]):
 
             updated_receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
             return updated_receivable
+
+    async def delete_receivable(self, tenant_id: int, receivable_id: int) -> None:
+        """删除应收单（仅待审核状态可删，已审核/通过或已有收款的不可删）"""
+        receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
+        if str(receivable.review_status or '') in ('已审核', '通过'):
+            raise BusinessLogicError("已审核的应收单不能删除")
+        if receivable.received_amount > 0:
+            raise BusinessLogicError("已有收款记录的应收单不能删除")
+        await Receivable.filter(tenant_id=tenant_id, id=receivable_id).delete()
 

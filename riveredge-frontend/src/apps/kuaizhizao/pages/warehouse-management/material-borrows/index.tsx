@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, DatePicker } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, DatePicker, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,7 +17,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -67,7 +67,7 @@ const MaterialBorrowsPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; borrow_quantity: number }>>([]);
+  const defaultBorrowItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', borrow_quantity: 1 };
 
   useEffect(() => {
     const load = async () => {
@@ -225,13 +225,12 @@ const MaterialBorrowsPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    setFormItems([]);
     setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
     try {
-      const validItems = formItems.filter((it) => it.material_id && it.borrow_quantity > 0);
+      const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.borrow_quantity) || 0) > 0);
       if (!validItems.length) {
         messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
         throw new Error('请至少添加一条有效明细');
@@ -246,12 +245,12 @@ const MaterialBorrowsPage: React.FC = () => {
         department: values.department,
         expected_return_date: values.expected_return_date ? dayjs(values.expected_return_date).format('YYYY-MM-DD') : undefined,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          material_unit: it.material_unit,
-          borrow_quantity: it.borrow_quantity,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          borrow_quantity: Number(it.borrow_quantity) || 0,
           warehouse_id: values.warehouse_id,
           warehouse_name: warehouseName,
         })),
@@ -263,23 +262,6 @@ const MaterialBorrowsPage: React.FC = () => {
       if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');
       throw error;
     }
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', borrow_quantity: 1 }]);
-  };
-
-  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
-    if (!material) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: material.id ?? material.material_id,
-      material_code: material.mainCode ?? material.code ?? material.main_code ?? '',
-      material_name: material.name ?? material.material_name ?? '',
-      material_unit: material.baseUnit ?? material.base_unit ?? material.unit ?? '',
-    };
-    setFormItems(updated);
   };
 
   const detailColumns: ProDescriptionsItemProps<MaterialBorrowDetail>[] = [
@@ -380,9 +362,12 @@ const MaterialBorrowsPage: React.FC = () => {
         dataSource={borrowDetail || {}}
       >
         {borrowDetail?.items && borrowDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey="id"
+          <>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <Table
+              className="warehouse-detail-table"
+              size="small"
+              rowKey="id"
             columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -394,6 +379,7 @@ const MaterialBorrowsPage: React.FC = () => {
             dataSource={borrowDetail.items}
             pagination={false}
           />
+          </>
         )}
       </DetailDrawerTemplate>
 
@@ -404,55 +390,148 @@ const MaterialBorrowsPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
-        <CodeField
-          pageCode="kuaizhizao-warehouse-material-borrow"
-          name="borrow_code"
-          label="借料单编码"
-          autoGenerateOnCreate={true}
-          context={{}}
-        />
-        <UniWarehouseSelect
-          name="warehouse_id"
-          label="仓库"
-          placeholder="请选择仓库"
-          required
-          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-        />
-        <Form.Item name="warehouse_name" hidden />
-        <Form.Item name="borrower_name" label="借料人">
-          <Input placeholder="借料人姓名" />
-        </Form.Item>
-        <Form.Item name="department" label="部门">
-          <Input placeholder="部门" />
-        </Form.Item>
-        <Form.Item name="expected_return_date" label="预计归还日期">
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item label="明细">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-            {formItems.map((it, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 250px' }}>
-                  <UniMaterialSelect
-                    name={['_form_items', idx, 'material_id']}
-                    label=""
-                    placeholder="请输入或选择物料"
-                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
-                  />
-                </div>
-                <InputNumber placeholder="数量" min={0.01} value={it.borrow_quantity} onChange={(v) => {
-                  const u = [...formItems]; u[idx] = { ...u[idx], borrow_quantity: v ?? 0 }; setFormItems(u);
-                }} />
-                <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-              </div>
-            ))}
-          </Space>
-        </Form.Item>
-        <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={2} />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-warehouse-material-borrow"
+              name="borrow_code"
+              label="借料单编码"
+              autoGenerateOnCreate={true}
+              showGenerateButton={false}
+              context={{}}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="仓库"
+              placeholder="请选择仓库"
+              required
+              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            />
+          </Col>
+        </Row>
+        <AntForm.Item name="warehouse_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="borrower_name" label="借料人">
+              <Input placeholder="借料人姓名" />
+            </ProFormItem>
+          </Col>
+          <Col span={12}>
+            <ProFormItem name="department" label="部门">
+              <Input placeholder="部门" />
+            </ProFormItem>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="expected_return_date" label="预计归还日期">
+              <DatePicker style={{ width: '100%' }} />
+            </ProFormItem>
+          </Col>
+          <Col span={12} />
+        </Row>
+        <ProFormItem label="明细" required style={{ width: '100%' }}>
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const cols = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 260,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: any) => {
+                          const row = getFieldValue('items')?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <div className="warehouse-detail-material-cell">
+                              <UniMaterialSelect
+                                name={[index, 'material_id']}
+                                label=""
+                                placeholder="请选择物料"
+                                required
+                                size="small"
+                                listFieldKey={index}
+                                listFieldName="items"
+                                fillMapping={{
+                                  material_code: 'mainCode',
+                                  material_name: 'name',
+                                  material_unit: 'baseUnit',
+                                }}
+                                fallbackOption={fallback}
+                                formItemProps={{ style: { margin: 0 } }}
+                                showQuickCreate
+                                showAdvancedSearch
+                              />
+                            </div>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单位',
+                    dataIndex: 'material_unit',
+                    width: 80,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                        <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'borrow_quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: any, __: any, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                    ),
+                  },
+                ];
+                const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                return (
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="warehouse-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={cols}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        footer={() => (
+                          <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultBorrowItem)} block>添加明细</Button>
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </AntForm.Item>
+        </ProFormItem>
+        <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <SyncFromDatasetModal

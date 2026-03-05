@@ -33,6 +33,24 @@ export interface PayableListParams {
     supplier_id?: number;
 }
 
+export interface PayableCreateData {
+    source_type: string;
+    source_id: number;
+    source_code: string;
+    supplier_id: number;
+    supplier_name: string;
+    total_amount: number;
+    paid_amount?: number;
+    remaining_amount: number;
+    due_date: string;
+    business_date: string;
+    status?: string;
+    review_status?: string;
+    payment_terms?: string;
+    invoice_received?: boolean;
+    notes?: string;
+}
+
 export interface PaymentRecordCreate {
     payment_amount: number;
     payment_method?: string;

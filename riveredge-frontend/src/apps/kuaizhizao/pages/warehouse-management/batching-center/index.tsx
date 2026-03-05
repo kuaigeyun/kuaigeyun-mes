@@ -9,16 +9,16 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormDigit, ProFormRadio, ProFormDependency, ProFormList, ProFormGroup } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { workOrderApi } from '../../../services/production';
-import { materialApi } from '../../../../master-data/services/material';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
 
 interface BatchingOrder {
@@ -61,20 +61,8 @@ const BatchingCenterPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<BatchingOrder | null>(null);
-  const [materialList, setMaterialList] = useState<any[]>([]);
   const formRef = useRef<any>(null);
-
-  React.useEffect(() => {
-    const loadMaterials = async () => {
-      try {
-        const materials = await materialApi.list({ isActive: true });
-        setMaterialList(materials?.data || materials?.items || materials || []);
-      } catch (error) {
-        console.error('加载物料列表失败:', error);
-      }
-    };
-    loadMaterials();
-  }, []);
+  const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
@@ -84,6 +72,7 @@ const BatchingCenterPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         create_mode: 'from_work_order',
         batching_date: dayjs(),
+        items: [defaultBatchingItem],
       });
     }, 0);
   };
@@ -117,18 +106,15 @@ const BatchingCenterPage: React.FC = () => {
           batching_date: values.batching_date?.toISOString?.() || new Date().toISOString(),
           remarks: values.remarks,
         };
-        const itemPayload = items.map((it: any) => {
-          const mat = materialList.find((m: any) => m.id === it.material_id);
-          return {
-            material_id: it.material_id,
-            material_code: mat?.code || '',
-            material_name: mat?.name || '',
-            unit: mat?.unit || '',
-            required_quantity: it.required_quantity,
-            warehouse_id: values.warehouse_id,
-            warehouse_name: values._warehouse_name || '',
-          };
-        });
+        const itemPayload = items.map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          unit: it.material_unit || '',
+          required_quantity: Number(it.required_quantity) || 0,
+          warehouse_id: values.warehouse_id,
+          warehouse_name: values._warehouse_name || '',
+        }));
         await batchingOrderApi.create({ ...orderData, items: itemPayload });
         messageApi.success('配料单创建成功');
       }
@@ -308,6 +294,7 @@ const BatchingCenterPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         formRef={formRef}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid={false}
       >
         <ProFormRadio.Group
           name="create_mode"
@@ -346,57 +333,126 @@ const BatchingCenterPage: React.FC = () => {
         <ProFormDependency name={['create_mode']}>
           {({ create_mode }) =>
             create_mode === 'manual' ? (
-              <ProFormList
-                name="items"
-                label="配料明细"
-                creatorButtonProps={{ creatorButtonText: '添加明细' }}
-                min={1}
-                colProps={{ span: 24 }}
-              >
-                <ProFormGroup>
-                  <ProFormSelect
-                    name="material_id"
-                    label="物料"
-                    placeholder="请选择物料"
-                    rules={[{ required: true, message: '请选择物料' }]}
-                    options={materialList.map((m: any) => ({
-                      label: `${m.code || ''} - ${m.name || ''}`,
-                      value: m.id,
-                    }))}
-                    fieldProps={{ showSearch: true }}
-                  />
-                  <ProFormDigit
-                    name="required_quantity"
-                    label="需求数量"
-                    placeholder="请输入数量"
-                    rules={[{ required: true, message: '请输入数量' }]}
-                    min={0.0001}
-                    fieldProps={{ precision: 4 }}
-                  />
-                </ProFormGroup>
-              </ProFormList>
+              <ProFormItem label="配料明细" required style={{ width: '100%' }}>
+                <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条配料明细' }]}>
+                  <AntForm.List name="items">
+                    {(fields, { add, remove }) => {
+                      const cols = [
+                        {
+                          title: '物料',
+                          dataIndex: 'material_id',
+                          width: 260,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                              {({ getFieldValue }: any) => {
+                                const row = getFieldValue('items')?.[index];
+                                const mid = row?.material_id ? Number(row.material_id) : null;
+                                const fallback = mid && (row?.material_code || row?.material_name)
+                                  ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                                  : undefined;
+                                return (
+                                  <div className="warehouse-detail-material-cell">
+                                    <UniMaterialSelect
+                                      name={[index, 'material_id']}
+                                      label=""
+                                      placeholder="请选择物料"
+                                      required
+                                      size="small"
+                                      listFieldKey={index}
+                                      listFieldName="items"
+                                      fillMapping={{
+                                        material_code: 'mainCode',
+                                        material_name: 'name',
+                                        material_unit: 'baseUnit',
+                                      }}
+                                      fallbackOption={fallback}
+                                      formItemProps={{ style: { margin: 0 } }}
+                                      showQuickCreate
+                                      showAdvancedSearch
+                                    />
+                                  </div>
+                                );
+                              }}
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: '需求数量',
+                          dataIndex: 'required_quantity',
+                          width: 120,
+                          align: 'right' as const,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.0001, message: '>0' }]} style={{ margin: 0 }}>
+                              <InputNumber placeholder="数量" min={0} precision={4} style={{ width: '100%' }} size="small" />
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: '操作',
+                          width: 60,
+                          render: (_: any, __: any, index: number) => (
+                            <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                          ),
+                        },
+                      ];
+                      const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                      return (
+                        <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                          <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                          <div style={{ width: '100%', overflowX: 'auto' }}>
+                            <Table
+                              className="warehouse-detail-table"
+                              size="small"
+                              dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                              rowKey="key"
+                              pagination={false}
+                              columns={cols}
+                              scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                              style={{ width: '100%', margin: 0 }}
+                              footer={() => (
+                                <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultBatchingItem)} block>添加明细</Button>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </AntForm.List>
+                </AntForm.Item>
+              </ProFormItem>
             ) : null
           }
         </ProFormDependency>
-        <UniWarehouseSelect
-          name="warehouse_id"
-          label="拣选仓库"
-          placeholder="请选择拣选源仓库"
-          required
-          onChange={(val, wh) => formRef.current?.setFieldsValue({ _warehouse_name: wh?.name })}
-        />
-        <UniWarehouseSelect
-          name="target_warehouse_id"
-          label="目标线边仓（可选）"
-          placeholder="请选择目标线边仓"
-          onChange={(val, wh) => formRef.current?.setFieldsValue({ _target_warehouse_name: wh?.name })}
-        />
-        <ProFormDatePicker
-          name="batching_date"
-          label="配料日期"
-          rules={[{ required: true, message: '请选择配料日期' }]}
-          fieldProps={{ style: { width: '100%' } }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="拣选仓库"
+              placeholder="请选择拣选源仓库"
+              required
+              onChange={(val, wh) => formRef.current?.setFieldsValue({ _warehouse_name: wh?.name })}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="target_warehouse_id"
+              label="目标线边仓（可选）"
+              placeholder="请选择目标线边仓"
+              onChange={(val, wh) => formRef.current?.setFieldsValue({ _target_warehouse_name: wh?.name })}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="batching_date"
+              label="配料日期"
+              rules={[{ required: true, message: '请选择配料日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12} />
+        </Row>
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -438,7 +494,9 @@ const BatchingCenterPage: React.FC = () => {
       >
         {currentOrder?.items && currentOrder.items.length > 0 && (
           <Card title="配料明细" style={{ marginTop: 16 }}>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             <Table
+              className="warehouse-detail-table"
               columns={[
                 { title: '物料编码', dataIndex: 'material_code', width: 120 },
                 { title: '物料名称', dataIndex: 'material_name', width: 150 },

@@ -8,13 +8,13 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 
 interface MaterialReturn {
@@ -364,9 +364,12 @@ const MaterialReturnsPage: React.FC = () => {
         dataSource={returnDetail || {}}
       >
         {returnDetail?.items && returnDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey="id"
+          <>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <Table
+              className="warehouse-detail-table"
+              size="small"
+              rowKey="id"
             columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -377,6 +380,7 @@ const MaterialReturnsPage: React.FC = () => {
             dataSource={returnDetail.items}
             pagination={false}
           />
+          </>
         )}
       </DetailDrawerTemplate>
 
@@ -387,35 +391,46 @@ const MaterialReturnsPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
-        <CodeField
-          pageCode="kuaizhizao-warehouse-material-return"
-          name="return_code"
-          label="还料单编码"
-          autoGenerateOnCreate={true}
-          context={{}}
-        />
-        <Form.Item name="borrow_id" label="借料单" rules={[{ required: true, message: '请选择借料单' }]}>
-          <UniDropdown
-            placeholder="请选择借料单（仅显示已借出状态）"
-            showSearch
-            allowClear
-            loading={borrowLoading}
-            style={{ width: '100%' }}
-            options={borrowList.map((b: any) => ({
-              value: b.id,
-              label: `${b.borrow_code ?? b.borrowCode ?? ''} - ${b.warehouse_name ?? b.warehouseName ?? ''}`.trim() || String(b.id),
-            }))}
-            onChange={(v) => onBorrowSelect(v as number)}
-          />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-warehouse-material-return"
+              name="return_code"
+              label="还料单编码"
+              autoGenerateOnCreate={true}
+              showGenerateButton={false}
+              context={{}}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormItem name="borrow_id" label="借料单" rules={[{ required: true, message: '请选择借料单' }]}>
+              <UniDropdown
+                placeholder="请选择借料单（仅显示已借出状态）"
+                showSearch
+                allowClear
+                loading={borrowLoading}
+                style={{ width: '100%' }}
+                options={borrowList.map((b: any) => ({
+                  value: b.id,
+                  label: `${b.borrow_code ?? b.borrowCode ?? ''} - ${b.warehouse_name ?? b.warehouseName ?? ''}`.trim() || String(b.id),
+                }))}
+                onChange={(v) => onBorrowSelect(v as number)}
+              />
+            </ProFormItem>
+          </Col>
+        </Row>
         {selectedBorrowDetail && (
           <>
-            <Form.Item label="归还明细">
-              <Table
-                size="small"
-                rowKey="id"
-                pagination={false}
+            <ProFormItem label="归还明细" style={{ width: '100%' }}>
+              <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                <Table
+                  className="warehouse-detail-table"
+                  size="small"
+                  rowKey="id"
+                  pagination={false}
                 columns={[
                   { title: '物料编码', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -440,16 +455,20 @@ const MaterialReturnsPage: React.FC = () => {
                   },
                 ]}
                 dataSource={selectedBorrowDetail.items}
-              />
-            </Form.Item>
+                />
+              </div>
+            </ProFormItem>
           </>
         )}
-        <Form.Item name="returner_name" label="归还人">
-          <Input placeholder="归还人姓名" />
-        </Form.Item>
-        <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={2} />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="returner_name" label="归还人">
+              <Input placeholder="归还人姓名" />
+            </ProFormItem>
+          </Col>
+          <Col span={12} />
+        </Row>
+        <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

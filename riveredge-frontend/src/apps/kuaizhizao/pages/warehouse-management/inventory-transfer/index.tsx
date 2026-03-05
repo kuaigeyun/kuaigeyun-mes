@@ -9,11 +9,11 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
@@ -416,30 +416,40 @@ showCreateButton={true}
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
+        grid={false}
         {...MODAL_CONFIG}
       >
-        <UniWarehouseSelect
-          name="from_warehouse_id"
-          label="调出仓库"
-          placeholder="请选择调出仓库"
-          required
-          onChange={(_, option) => formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name })}
-        />
-        <UniWarehouseSelect
-          name="to_warehouse_id"
-          label="调入仓库"
-          placeholder="请选择调入仓库"
-          required
-          onChange={(_, option) => formRef.current?.setFieldsValue({ _to_warehouse_name: option?.name })}
-        />
-        <ProFormDatePicker
-          name="transfer_date"
-          label="调拨日期"
-          rules={[{ required: true, message: '请选择调拨日期' }]}
-          fieldProps={{
-            style: { width: '100%' },
-          }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="from_warehouse_id"
+              label="调出仓库"
+              placeholder="请选择调出仓库"
+              required
+              onChange={(_, option) => formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name })}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="to_warehouse_id"
+              label="调入仓库"
+              placeholder="请选择调入仓库"
+              required
+              onChange={(_, option) => formRef.current?.setFieldsValue({ _to_warehouse_name: option?.name })}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="transfer_date"
+              label="调拨日期"
+              rules={[{ required: true, message: '请选择调拨日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12} />
+        </Row>
         <ProFormTextArea
           name="transfer_reason"
           label="调拨原因"
@@ -583,7 +593,9 @@ showCreateButton={true}
       >
         {currentTransfer && currentTransfer.items && currentTransfer.items.length > 0 && (
           <Card title="调拨明细" style={{ marginTop: 16 }}>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             <Table
+              className="warehouse-detail-table"
               columns={[
                 {
                   title: '物料编码',

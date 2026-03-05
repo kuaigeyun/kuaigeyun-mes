@@ -6,10 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, theme } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
@@ -54,11 +54,8 @@ interface OutboundOrderItem {
   notes?: string;
 }
 
-const { useToken } = theme;
-
 const OutboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   // Modal 相关状态（创建出库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -362,78 +359,93 @@ const OutboundPage: React.FC = () => {
         onFinish={handleFormFinish}
         isEdit={false}
         initialValues={{ type: 'production' }}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormSelect
-          name="type"
-          label="出库类型"
-          placeholder="请选择出库类型"
-          rules={[{ required: true, message: '请选择出库类型' }]}
-          options={[
-            { label: '生产领料', value: 'production' },
-            { label: '销售出库', value: 'sales' },
-            { label: '退货出库', value: 'return' },
-          ]}
-          fieldProps={{
-            onChange: (value: string) => setOutboundType(value),
-          }}
-        />
-        {/* 根据出库类型显示不同的编码字段 */}
-        {outboundType === 'production' && (
-          <CodeField
-            pageCode="kuaizhizao-warehouse-inbound"
-            name="picking_code"
-            label="生产领料单编码"
-            required={true}
-            autoGenerateOnCreate={true}
-            context={{}}
-          />
-        )}
-        {outboundType === 'sales' && (
-          <CodeField
-            pageCode="kuaizhizao-sales-delivery"
-            name="delivery_code"
-            label="销售出库单编码"
-            required={true}
-            autoGenerateOnCreate={true}
-            context={{}}
-          />
-        )}
-        <ProFormSelect
-          name="warehouse"
-          label="出库仓库"
-          placeholder="请选择出库仓库"
-          rules={[{ required: true, message: '请选择出库仓库' }]}
-          options={[
-            { label: '原材料仓库', value: 'raw-materials' },
-            { label: '半成品仓库', value: 'semi-finished' },
-            { label: '成品仓库', value: 'finished-goods' },
-          ]}
-        />
-        <ProFormText
-          name="customer"
-          label="客户"
-          placeholder="选择客户"
-        />
-        <ProFormText
-          name="workOrder"
-          label="关联工单"
-          placeholder="选择工单"
-        />
-        <ProFormText
-          name="batch_number"
-          label="批号"
-          placeholder="请输入批号（批号管理物料必填）"
-          tooltip="如果所选物料启用了批号管理，此字段为必填"
-        />
-        <ProFormTextArea
-          name="serial_numbers"
-          label="序列号"
-          placeholder="请输入序列号，多个序列号用逗号分隔（序列号管理物料必填）"
-          tooltip="如果所选物料启用了序列号管理，此字段为必填"
-          fieldProps={{ rows: 2 }}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="type"
+              label="出库类型"
+              placeholder="请选择出库类型"
+              rules={[{ required: true, message: '请选择出库类型' }]}
+              options={[
+                { label: '生产领料', value: 'production' },
+                { label: '销售出库', value: 'sales' },
+                { label: '退货出库', value: 'return' },
+              ]}
+              fieldProps={{
+                onChange: (value: string) => setOutboundType(value),
+              }}
+            />
+          </Col>
+          <Col span={12}>
+            {outboundType === 'production' && (
+              <CodeField
+                pageCode="kuaizhizao-warehouse-inbound"
+                name="picking_code"
+                label="生产领料单编码"
+                required={true}
+                autoGenerateOnCreate={true}
+                context={{}}
+              />
+            )}
+            {outboundType === 'sales' && (
+              <CodeField
+                pageCode="kuaizhizao-sales-delivery"
+                name="delivery_code"
+                label="销售出库单编码"
+                required={true}
+                autoGenerateOnCreate={true}
+                context={{}}
+              />
+            )}
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="warehouse"
+              label="出库仓库"
+              placeholder="请选择出库仓库"
+              rules={[{ required: true, message: '请选择出库仓库' }]}
+              options={[
+                { label: '原材料仓库', value: 'raw-materials' },
+                { label: '半成品仓库', value: 'semi-finished' },
+                { label: '成品仓库', value: 'finished-goods' },
+              ]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="customer" label="客户" placeholder="选择客户" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="workOrder" label="关联工单" placeholder="选择工单" />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="batch_number"
+              label="批号"
+              placeholder="请输入批号（批号管理物料必填）"
+              tooltip="如果所选物料启用了批号管理，此字段为必填"
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormTextArea
+              name="serial_numbers"
+              label="序列号"
+              placeholder="请输入序列号，多个序列号用逗号分隔（序列号管理物料必填）"
+              tooltip="如果所选物料启用了序列号管理，此字段为必填"
+              fieldProps={{ rows: 2 }}
+            />
+          </Col>
+          <Col span={12} />
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -512,19 +524,21 @@ const OutboundPage: React.FC = () => {
               {/* 出库单明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
                 <Card title="出库明细">
-                  {currentOrder.items.map((item) => (
-                    <div key={item.id} style={{
-                      padding: '12px',
-                      marginBottom: '8px',
-                      border: `1px solid ${token.colorBorder}`,
-                      borderRadius: '4px'
-                    }}>
-                      <p><strong>物料编码：</strong>{item.material_code}</p>
-                      <p><strong>物料名称：</strong>{item.material_name}</p>
-                      <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
-                      {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
-                    </div>
-                  ))}
+                  <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                  <Table
+                    className="warehouse-detail-table"
+                    size="small"
+                    rowKey={(_, idx) => (currentOrder?.items?.[idx] as any)?.id ?? idx}
+                    pagination={false}
+                    columns={[
+                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                      { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' },
+                      { title: '单位', dataIndex: 'unit', width: 60 },
+                      { title: '备注', dataIndex: 'notes' },
+                    ]}
+                    dataSource={currentOrder.items}
+                  />
                 </Card>
               )}
 

@@ -9,11 +9,11 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
@@ -492,36 +492,45 @@ const StocktakingPage: React.FC = () => {
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
+        grid={false}
         {...MODAL_CONFIG}
       >
-        <UniWarehouseSelect
-          name="warehouse_id"
-          label="仓库"
-          placeholder="请选择仓库"
-          required
-          onChange={(_, option) => {
-             // 如果 stocktakingApi.create 确实需要 name，可以在这里附加上一个隐藏字段
-             formRef.current?.setFieldsValue({ _warehouse_name: option?.name });
-          }}
-        />
-        <ProFormDatePicker
-          name="stocktaking_date"
-          label="盘点日期"
-          rules={[{ required: true, message: '请选择盘点日期' }]}
-          fieldProps={{
-            style: { width: '100%' },
-          }}
-        />
-        <ProFormSelect
-          name="stocktaking_type"
-          label="盘点类型"
-          rules={[{ required: true, message: '请选择盘点类型' }]}
-          options={[
-            { label: '全盘', value: 'full' },
-            { label: '抽盘', value: 'partial' },
-            { label: '循环盘点', value: 'cycle' },
-          ]}
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="仓库"
+              placeholder="请选择仓库"
+              required
+              onChange={(_, option) => {
+                formRef.current?.setFieldsValue({ _warehouse_name: option?.name });
+              }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="stocktaking_date"
+              label="盘点日期"
+              rules={[{ required: true, message: '请选择盘点日期' }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="stocktaking_type"
+              label="盘点类型"
+              rules={[{ required: true, message: '请选择盘点类型' }]}
+              options={[
+                { label: '全盘', value: 'full' },
+                { label: '抽盘', value: 'partial' },
+                { label: '循环盘点', value: 'cycle' },
+              ]}
+            />
+          </Col>
+          <Col span={12} />
+        </Row>
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -688,7 +697,9 @@ const StocktakingPage: React.FC = () => {
         customContent={
           currentStocktaking && currentStocktaking.items && currentStocktaking.items.length > 0 && (
             <Card title="盘点明细" style={{ marginTop: 16 }}>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
               <Table
+                className="warehouse-detail-table"
                 columns={[
                   {
                     title: '物料编码',

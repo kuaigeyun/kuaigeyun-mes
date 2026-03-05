@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, Query, Body
+from fastapi import APIRouter, Depends, Query, Body, HTTPException
 from typing import Optional, Dict, Any
+from loguru import logger
+from infra.models.user import User
 from core.api.deps import get_current_user, get_current_tenant
 from core.services.application.application_service import ApplicationService
 from core.services.system.menu_service import MenuService
@@ -16,16 +18,20 @@ report_service = ReportService()
 
 # ── 系统报表 ─────────────────────────────────────────────────────
 
-@router.get("/system", response_model=ReportListResponse, summary="获取系统报表列表")
+@router.get("/system-reports", response_model=ReportListResponse, summary="获取系统报表列表")
 async def list_system_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await report_service.list_system_reports(
-        tenant_id=tenant_id, skip=skip, limit=limit
-    )
+    try:
+        return await report_service.list_system_reports(
+            tenant_id=tenant_id, skip=skip, limit=limit
+        )
+    except Exception as e:
+        logger.exception(f"list_system_reports 失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── 用户自制报表 ───────────────────────────────────────────────
@@ -34,11 +40,11 @@ async def list_system_reports(
 async def list_my_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await report_service.list_user_reports(
-        tenant_id=tenant_id, user_id=current_user["id"], skip=skip, limit=limit
+        tenant_id=tenant_id, user_id=current_user.id, skip=skip, limit=limit
     )
 
 
@@ -71,7 +77,7 @@ async def execute_report_by_share_token_route(
 async def list_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await report_service.list(tenant_id=tenant_id, skip=skip, limit=limit)
@@ -80,18 +86,18 @@ async def list_reports(
 @router.post("", response_model=ReportResponse, summary="创建报表")
 async def create_report(
     data: ReportCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await report_service.create(
-        tenant_id=tenant_id, data=data, created_by=current_user["id"]
+        tenant_id=tenant_id, data=data, created_by=current_user.id
     )
 
 
 @router.get("/{id}", response_model=ReportResponse, summary="获取报表详情")
 async def get_report(
     id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await report_service.get_by_id(tenant_id=tenant_id, id=id)
@@ -101,26 +107,26 @@ async def get_report(
 async def update_report(
     id: int,
     data: ReportUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await report_service.update(
         tenant_id=tenant_id,
         id=id,
         data=data,
-        updated_by=current_user["id"],
-        user_id=current_user["id"],
+        updated_by=current_user.id,
+        user_id=current_user.id,
     )
 
 
 @router.delete("/{id}", summary="删除报表")
 async def delete_report(
     id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     await report_service.delete(
-        tenant_id=tenant_id, id=id, user_id=current_user["id"]
+        tenant_id=tenant_id, id=id, user_id=current_user.id
     )
     return {"success": True}
 
@@ -131,7 +137,7 @@ async def delete_report(
 async def execute_report(
     id: int,
     filters: Dict[str, Any] = {},
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """根据报表配置执行动态查询并返回数据"""
@@ -146,7 +152,7 @@ async def execute_report(
 async def share_report(
     id: int,
     expires_days: Optional[int] = Body(30, embed=True),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """生成报表分享链接，返回 share_token 和 share_expires_at"""
@@ -157,7 +163,7 @@ async def share_report(
 @router.post("/{id}/unshare", summary="取消分享")
 async def unshare_report(
     id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """取消报表分享"""
@@ -170,7 +176,7 @@ async def mount_report_to_menu(
     id: int,
     menu_name: Optional[str] = Body(None, embed=True),
     parent_uuid: Optional[str] = Body(None, embed=True),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """将报表挂载到侧边栏菜单"""

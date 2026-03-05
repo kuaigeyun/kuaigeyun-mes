@@ -1295,6 +1295,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             </div>
             {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}
             <Modal
+                className="modal-no-limit-height"
                 title="选择不良品类型"
                 open={defectModalVisible}
                 rootClassName="kiosk-modal-terminal-bg"
@@ -1353,6 +1354,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             </Modal>
             {/* 作业指导书弹窗 */}
             <Modal
+                className="modal-no-limit-height"
                 title="作业指导书"
                 open={sopModalVisible}
                 rootClassName="kiosk-modal-terminal-bg"
@@ -1399,6 +1401,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             </Modal>
             {/* 报工参数弹窗 */}
             <Modal
+                className="modal-no-limit-height"
                 title="报工参数采集"
                 open={paramModalVisible}
                 rootClassName="kiosk-modal-terminal-bg"

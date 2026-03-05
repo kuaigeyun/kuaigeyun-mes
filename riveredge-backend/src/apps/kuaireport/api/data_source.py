@@ -42,7 +42,7 @@ async def create_data_source(
         
     record = await DataSource.create(
         tenant_id=tenant_id,
-        created_by=current_user["id"],
+        created_by=current_user.id,
         **data
     )
     return record

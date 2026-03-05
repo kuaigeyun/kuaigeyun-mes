@@ -1,9 +1,16 @@
 import { apiRequest } from '../../../../services/api';
-import { Payable, PayableListParams, PaymentRecordCreate } from '../../types/finance/payable';
+import { Payable, PayableCreateData, PayableListParams, PaymentRecordCreate } from '../../types/finance/payable';
 
 const PAYABLE_API = '/apps/kuaizhizao/payables';
 
 export const payableService = {
+  createPayable: (data: PayableCreateData) => {
+    return apiRequest<Payable>(PAYABLE_API, {
+      method: 'POST',
+      data,
+    });
+  },
+
   listPayables: (params: PayableListParams) => {
     return apiRequest<{ items: Payable[]; total: number }>(PAYABLE_API, {
       method: 'GET',
@@ -28,6 +35,12 @@ export const payableService = {
     return apiRequest<Payable>(`${PAYABLE_API}/${id}/approve`, {
       method: 'POST',
       params: { rejection_reason },
+    });
+  },
+
+  deletePayable: (id: number) => {
+    return apiRequest<void>(`${PAYABLE_API}/${id}`, {
+      method: 'DELETE',
     });
   },
 };

@@ -13,6 +13,11 @@ import { Modal, theme } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 
+/** Modal body 限高样式，避免整页出现滚动条 */
+const MODAL_BODY_LIMIT_STYLES = {
+  body: { maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT, overflowY: 'auto' as const },
+};
+
 const { useToken } = theme;
 
 /**
@@ -103,6 +108,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       destroyOnHidden
       className={className}
       modalRender={modalRender}
+      styles={MODAL_BODY_LIMIT_STYLES}
     >
       <ProForm
         formRef={formRef}

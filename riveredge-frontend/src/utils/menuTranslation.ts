@@ -201,16 +201,19 @@ export function translateAppMenuItemName(
 export function translatePathTitle(path: string, t: any): string {
   if (!path || path === '/') return '';
 
+  // 去除查询参数，避免 dashboard-designer?id=xxx 等无法匹配翻译 key
+  const pathname = path.split('?')[0];
+
   // 处理 UUID（不显示在面包屑中）
-  const segment = path.split('/').filter(Boolean).pop() || '';
+  const segment = pathname.split('/').filter(Boolean).pop() || '';
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment)) {
     return '';
   }
 
   // 1. 优先尝试应用菜单翻译（针对 /apps/{app-code}/... 格式的路径）
-  const appCode = extractAppCodeFromPath(path);
+  const appCode = extractAppCodeFromPath(pathname);
   if (appCode) {
-    const relativePath = path.replace(`/apps/${appCode}/`, '');
+    const relativePath = pathname.replace(`/apps/${appCode}/`, '');
     const menuKey = `app.${appCode}.menu.${relativePath.replace(/\//g, '.')}`;
     let translated = t(menuKey, { defaultValue: '' });
     if (translated && translated !== menuKey) return translated;
@@ -229,7 +232,7 @@ export function translatePathTitle(path: string, t: any): string {
   }
 
   // 2. 尝试多种前缀的翻译 (path.*, menu.*)
-  const dotPath = path.replace(/^\//, '').replace(/\//g, '.');
+  const dotPath = pathname.replace(/^\//, '').replace(/\//g, '.');
   const translationKeys = [
     `path.${dotPath}`,
     `menu.${dotPath}`, 
@@ -290,6 +293,10 @@ export function findMenuTitleWithTranslation(
 
   const title = findInMenu(menuConfig);
   if (title) return title;
+
+  // 尝试路径翻译（如 dashboard-designer → 大屏设计器，未在菜单中注册的页面）
+  const pathTitle = translatePathTitle(path, t);
+  if (pathTitle && pathTitle.trim() !== '') return pathTitle;
 
   // 如果没匹配到，向上溯源（解决从列表跳到未注册详情页的问题）
   const segments = path.split('/').filter(Boolean);

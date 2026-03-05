@@ -6,7 +6,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 
 /** 页面懒加载包装：Suspense + PageSkeleton fallback */
@@ -39,7 +39,6 @@ const DefectTypesPage = lazy(() => import('./pages/process/defect-types'));
 const OperationsPage = lazy(() => import('./pages/process/operations'));
 const ProcessRoutesPage = lazy(() => import('./pages/process/routes'));
 const SOPPage = lazy(() => import('./pages/process/sop'));
-const SOPCreatePage = lazy(() => import('./pages/process/sop/create'));
 const ESOPDesignerPage = lazy(() => import('./pages/process/sop/designer'));
 const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
 
@@ -77,7 +76,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
       <Route path="process/engineering-bom/designer" element={withPageSuspense(BOMDesignerPage)} />
       <Route path="process/sop" element={withPageSuspense(SOPPage)} />
-      <Route path="process/sop/create" element={withPageSuspense(SOPCreatePage)} />
+      <Route path="process/sop/create" element={<Navigate to="../sop?create=1" replace />} />
       <Route path="process/sop/designer" element={withPageSuspense(ESOPDesignerPage)} />
       <Route path="process/sop/execution" element={withPageSuspense(SOPExecutionPage)} />
 

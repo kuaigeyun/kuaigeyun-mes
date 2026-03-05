@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Row, Col, Button, List, Space, Typography, Tag, Divider, Tabs, Input } from 'antd';
+import { Row, Col, Button, List, Space, Typography, Tag, Divider, Tabs, Input, theme } from 'antd';
 import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
 import {
     DeleteOutlined,
@@ -30,6 +30,14 @@ const DashboardDesigner: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id');
+    const { token } = theme.useToken();
+    const borderRadius = typeof token.borderRadius === 'number' ? token.borderRadius : 8;
+    /** 深色主题下的次要按钮样式：灰色背景，提升可读性 */
+    const darkBtnStyle: React.CSSProperties = {
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        color: 'rgba(255,255,255,0.85)',
+        borderColor: 'rgba(255,255,255,0.25)',
+    };
 
     const [name, setName] = useState('新建看板');
     const [layout, setLayout] = useState<any[]>([]);
@@ -148,7 +156,7 @@ const DashboardDesigner: React.FC = () => {
     };
 
     return (
-        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0a1120', color: '#fff' }}>
+        <div className="dashboard-designer" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#0a1120', color: '#fff' }}>
             {/* 顶栏 */}
             <div style={{
                 height: '50px',
@@ -176,7 +184,7 @@ const DashboardDesigner: React.FC = () => {
                         icon={<PlayCircleOutlined />}
                         onClick={() => id && navigate(`../dashboard-view?id=${id}`)}
                         disabled={!id}
-                        ghost
+                        style={darkBtnStyle}
                     >
                         预览
                     </Button>
@@ -204,20 +212,20 @@ const DashboardDesigner: React.FC = () => {
             }}>
                 <Space split={<Divider orientation="vertical" style={{ borderColor: '#303030' }} />}>
                     <Space>
-                        <Button size="small" ghost icon={<AreaChartOutlined />} title="对齐" />
-                        <Button size="small" ghost icon={<TableOutlined />} title="辅助网格" />
+                        <Button size="small" icon={<AreaChartOutlined />} title="对齐" style={darkBtnStyle} />
+                        <Button size="small" icon={<TableOutlined />} title="辅助网格" style={darkBtnStyle} />
                     </Space>
                     <Space>
-                        <Button size="small" ghost onClick={() => { }} disabled>撤销</Button>
-                        <Button size="small" ghost onClick={() => { }} disabled>恢复</Button>
+                        <Button size="small" onClick={() => { }} disabled style={{ ...darkBtnStyle, opacity: 0.6 }}>撤销</Button>
+                        <Button size="small" onClick={() => { }} disabled style={{ ...darkBtnStyle, opacity: 0.6 }}>恢复</Button>
                     </Space>
                     <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>画布比例: 100%</Text>
                 </Space>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
                 {/* 左侧组件库 */}
-                <div style={{ width: '260px', background: '#141414', borderRight: '1px solid #303030', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: '260px', flexShrink: 0, background: '#141414', borderRight: '1px solid #303030', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     <Tabs
                         defaultActiveKey="widgets"
                         centered
@@ -226,7 +234,7 @@ const DashboardDesigner: React.FC = () => {
                                 key: 'widgets',
                                 label: '组件',
                                 children: (
-                                    <div style={{ padding: '0 12px', overflowY: 'auto', height: 'calc(100vh - 100px)' }}>
+                                    <div style={{ padding: '0 12px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                                         {WIDGET_CATEGORIES.map(cat => (
                                             <div key={cat.key} style={{ marginBottom: '16px' }}>
                                                 <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginBottom: '8px', padding: '0 4px' }}>
@@ -297,16 +305,23 @@ const DashboardDesigner: React.FC = () => {
                     />
                 </div>
 
-                {/* 中间画布区域 */}
-                <div style={{ flex: 1, position: 'relative', overflow: 'auto', background: '#050a0f' }} onClick={() => setSelectedId(null)}>
-                    <div ref={containerRef as any} style={{
-                        minHeight: '100%',
-                        width: '100%',
-                        position: 'absolute',
-                        padding: '24px',
-                        backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 0)',
-                        backgroundSize: '30px 30px',
-                    }}>
+                {/* 中间画布区域：高度适配 + 系统圆角 */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '16px', overflow: 'hidden' }} onClick={() => setSelectedId(null)}>
+                    <div
+                        ref={containerRef as any}
+                        style={{
+                            flex: 1,
+                            minHeight: 0,
+                            width: '100%',
+                            position: 'relative',
+                            overflow: 'auto',
+                            background: '#050a0f',
+                            borderRadius: borderRadius,
+                            padding: '24px',
+                            backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 0)',
+                            backgroundSize: '30px 30px',
+                        }}
+                    >
                         {mounted && (
                             <ResponsiveGridLayout
                                 className="layout"
@@ -367,7 +382,7 @@ const DashboardDesigner: React.FC = () => {
                 </div>
 
                 {/* 右侧属性面板 */}
-                <div style={{ width: '300px', background: '#141414', borderLeft: '1px solid #303030', overflowY: 'auto' }}>
+                <div style={{ width: '300px', flexShrink: 0, background: '#141414', borderLeft: '1px solid #303030', overflowY: 'auto', minHeight: 0 }}>
                     <div style={{ padding: '16px' }}>
                         <Title level={5} style={{ color: '#fff', marginBottom: '16px' }}>
                             {selectedId ? '组件属性' : '大屏配置'}
@@ -416,9 +431,23 @@ const DashboardDesigner: React.FC = () => {
                 .layer-item.active {
                     background: #111b26;
                 }
-                .ant-tabs-tab { color: rgba(255,255,255,0.45) !important; }
-                .ant-tabs-tab-active .ant-tabs-tab-btn { color: #1890ff !important; }
-                
+                .dashboard-designer .ant-tabs-tab {
+                    background: rgba(255,255,255,0.08) !important;
+                    color: rgba(255,255,255,0.85) !important;
+                    border-radius: 4px;
+                    min-width: 80px !important;
+                    padding: 6px 20px !important;
+                    justify-content: center;
+                }
+                .dashboard-designer .ant-tabs-tab-active {
+                    background: rgba(255,255,255,0.12) !important;
+                }
+                .dashboard-designer .ant-tabs-tab-active .ant-tabs-tab-btn { color: #1890ff !important; }
+                .dashboard-designer .ant-btn:not(.ant-btn-primary):not(:disabled):hover {
+                    background: rgba(255,255,255,0.18) !important;
+                    border-color: rgba(255,255,255,0.35) !important;
+                    color: rgba(255,255,255,0.95) !important;
+                }
                 .dashboard-table .ant-table {
                     background: transparent !important;
                     color: #fff !important;

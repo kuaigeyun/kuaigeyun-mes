@@ -102,3 +102,15 @@ async def approve_payable(
         return payable
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payable(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        await payable_service.delete_payable(tenant_id, id)
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))

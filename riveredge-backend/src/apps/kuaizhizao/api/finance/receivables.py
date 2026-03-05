@@ -90,3 +90,15 @@ async def approve_receivable(
         return receivable
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_receivable(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    try:
+        await receivable_service.delete_receivable(tenant_id, id)
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))

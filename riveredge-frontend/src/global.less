@@ -58,6 +58,18 @@
   scrollbar-color: var(--ant-colorFillSecondary) transparent;
 }
 
+/* Modal body 限高：避免整页出现滚动条，滚动仅发生在 Modal 内部 */
+.ant-modal-body {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
+/* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */
+.ant-modal.modal-no-limit-height .ant-modal-body {
+  max-height: none;
+  overflow-y: visible;
+}
+
 /* ant-pro-layout-container：隐藏滚动条且不占宽度 */
 .ant-pro-layout-container {
   scrollbar-width: none;

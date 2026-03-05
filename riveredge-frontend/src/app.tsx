@@ -268,6 +268,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     const checkInterval = getConfig('security.token_check_interval', 60) * 1000;
     const inactivityTimeout = getConfig('security.inactivity_timeout', 1800) * 1000; // 默认30分钟
 
+    // 定时器 ref 需在 handleLogout 之前声明，避免 handleLogout 被首次检查调用时访问未初始化变量
+    const checkTimerRef = { current: null as NodeJS.Timeout | null };
+
     // 检查 TOKEN 是否过期
     const checkAuthStatus = () => {
       const currentToken = getToken();
@@ -321,7 +324,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     }
 
     // 设置定时器
-    const checkTimerRef = { current: null as NodeJS.Timeout | null };
     checkTimerRef.current = setInterval(() => {
       if (!checkAuthStatus()) {
         if (checkTimerRef.current) {

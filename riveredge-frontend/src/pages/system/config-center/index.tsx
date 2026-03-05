@@ -207,7 +207,7 @@ const ConfigCenterPage: React.FC = () => {
       <Sider
         width={200}
         style={{
-          background: '#fafafa',
+          background: token.colorBgContainer,
           borderRadius: 8,
           padding: '16px 0',
         }}
@@ -316,7 +316,7 @@ const ConfigCenterPage: React.FC = () => {
       <Sider
         width={200}
         style={{
-          background: '#fafafa',
+          background: token.colorBgContainer,
           borderRadius: 8,
           padding: '16px 0',
         }}
@@ -399,11 +399,21 @@ const ConfigCenterPage: React.FC = () => {
   );
 
   return (
-    <div className="config-center-page">
+    <div className="config-center-page" style={{ background: token.colorBgContainer, minHeight: '100%' }}>
       <style>{`
         /* 修正 ant-card-body 多出的 16px 高度：将 padding 从默认 24px 调整为 16px */
         .config-center-page .ant-card .ant-card-body {
           padding: 16px !important;
+        }
+        /* 隔离左侧 Sider 背景，避免继承主菜单深色，强制使用浅色 */
+        .config-center-page .ant-layout-sider,
+        .config-center-page .ant-layout-sider .ant-layout-sider-children,
+        .config-center-page .ant-layout .ant-layout-sider {
+          background: ${token.colorBgContainer} !important;
+        }
+        /* 确保卡片主体也有背景，与内容区隔离 */
+        .config-center-page .ant-card {
+          background: ${token.colorBgContainer} !important;
         }
       `}</style>
       <MultiTabListPageTemplate

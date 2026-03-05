@@ -19,7 +19,7 @@ async def create_dashboard(
     current_user: dict = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    return await dashboard_service.create(tenant_id=tenant_id, data=data, created_by=current_user["id"])
+    return await dashboard_service.create(tenant_id=tenant_id, data=data, created_by=current_user.id)
 
 @router.get("", response_model=DashboardListResponse, summary="获取看板列表")
 async def list_dashboards(
@@ -58,7 +58,7 @@ async def update_dashboard(
     current_user: dict = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
-    return await dashboard_service.update(tenant_id=tenant_id, id=id, data=data, updated_by=current_user["id"])
+    return await dashboard_service.update(tenant_id=tenant_id, id=id, data=data, updated_by=current_user.id)
 
 @router.delete("/{id}", summary="删除看板")
 async def delete_dashboard(

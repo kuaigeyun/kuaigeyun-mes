@@ -10,8 +10,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -19,7 +19,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -70,24 +70,23 @@ interface OtherInboundItem {
   notes?: string;
 }
 
-/** 表单行项（含批号/序列号规则相关） */
-interface FormItemRow {
-  material_id: number;
-  material_code: string;
-  material_name: string;
-  material_unit: string;
-  material_uuid?: string;
-  inbound_quantity: number;
-  unit_price: number;
-  batch_number?: string;
-  batch_managed?: boolean;
-  batch_rule_id?: number; // 可选覆盖，不填则用物料默认
-  default_batch_rule_id?: number;
-  serial_managed?: boolean;
-  serial_rule_id?: number; // 可选覆盖
-  default_serial_rule_id?: number;
-  serial_numbers?: string[];
-}
+const defaultInboundItem = {
+  material_id: undefined,
+  material_code: '',
+  material_name: '',
+  material_unit: '',
+  inbound_quantity: 1,
+  unit_price: 0,
+  material_uuid: undefined,
+  batch_managed: false,
+  serial_managed: false,
+  batch_rule_id: undefined,
+  default_batch_rule_id: undefined,
+  serial_rule_id: undefined,
+  default_serial_rule_id: undefined,
+  batch_number: undefined,
+  serial_numbers: undefined,
+};
 
 const OtherInboundPage: React.FC = () => {
   const navigate = useNavigate();
@@ -102,7 +101,6 @@ const OtherInboundPage: React.FC = () => {
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
-  const [formItems, setFormItems] = useState<FormItemRow[]>([]);
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
@@ -228,13 +226,15 @@ const OtherInboundPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    setFormItems([]);
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({ items: [defaultInboundItem] });
+    }, 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
     try {
-      const validItems = formItems.filter((it) => it.material_id && it.inbound_quantity > 0);
+      const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.inbound_quantity) || 0) > 0);
       if (!validItems.length) {
         messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
         throw new Error('请至少添加一条有效明细');
@@ -248,14 +248,15 @@ const OtherInboundPage: React.FC = () => {
         warehouse_id: values.warehouse_id,
         warehouse_name: warehouseName,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          material_unit: it.material_unit,
-          inbound_quantity: it.inbound_quantity,
-          unit_price: it.unit_price || 0,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          inbound_quantity: Number(it.inbound_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
           batch_number: it.batch_number || undefined,
+          serial_numbers: it.serial_numbers || undefined,
         })),
       });
       messageApi.success('创建成功');
@@ -267,21 +268,54 @@ const OtherInboundPage: React.FC = () => {
     }
   };
 
-  const addItem = () => {
-    setFormItems((prev) => [
-      ...prev,
-      {
-        material_id: 0,
-        material_code: '',
-        material_name: '',
-        material_unit: '',
-        inbound_quantity: 1,
-        unit_price: 0,
-      },
-    ]);
+  const handleGenerateBatch = async (idx: number) => {
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const row = items[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    setGeneratingBatchIdx(idx);
+    try {
+      const res = await materialBatchApi.generate(row.material_uuid, {
+        ruleId: row.batch_rule_id ?? row.default_batch_rule_id,
+      });
+      formRef.current?.setFieldValue(['items', idx, 'batch_number'], res.batch_no);
+      messageApi.success('批号生成成功');
+    } catch (e: any) {
+      messageApi.error(e?.message || '批号生成失败');
+    } finally {
+      setGeneratingBatchIdx(null);
+    }
   };
 
-  const onMaterialSelect = async (idx: number, _val: number | undefined, material: any | undefined) => {
+  const handleGenerateSerials = async (idx: number) => {
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const row = items[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    const count = Math.max(1, Math.floor(Number(row.inbound_quantity) || 1));
+    if (count > 100) {
+      messageApi.warning('单次最多生成100个序列号');
+      return;
+    }
+    setGeneratingSerialIdx(idx);
+    try {
+      const res = await materialSerialApi.generate(row.material_uuid, count, {
+        ruleId: row.serial_rule_id ?? row.default_serial_rule_id,
+      });
+      formRef.current?.setFieldValue(['items', idx, 'serial_numbers'], res.serial_nos);
+      messageApi.success(`已生成 ${res.count} 个序列号`);
+    } catch (e: any) {
+      messageApi.error(e?.message || '序列号生成失败');
+    } finally {
+      setGeneratingSerialIdx(null);
+    }
+  };
+
+  const onMaterialSelectForBatchSerial = async (idx: number, _val: number | undefined, material: any | undefined) => {
     if (!material) return;
     const uuid = material.uuid || material.UUID;
     let batchManaged = material.batchManaged ?? material.batch_managed ?? false;
@@ -299,69 +333,11 @@ const OtherInboundPage: React.FC = () => {
         // 使用列表返回的字段
       }
     }
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: material.id,
-      material_code: material.mainCode || material.code || material.main_code || '',
-      material_name: material.name || '',
-      material_unit: material.baseUnit || material.base_unit || '',
-      material_uuid: uuid,
-      batch_managed: batchManaged,
-      serial_managed: serialManaged,
-      default_batch_rule_id: defaultBatchRuleId,
-      default_serial_rule_id: defaultSerialRuleId,
-    };
-    setFormItems(updated);
-  };
-
-  const handleGenerateBatch = async (idx: number) => {
-    const row = formItems[idx];
-    if (!row?.material_uuid) {
-      messageApi.warning('请先选择物料');
-      return;
-    }
-    setGeneratingBatchIdx(idx);
-    try {
-      const res = await materialBatchApi.generate(row.material_uuid, {
-        ruleId: row.batch_rule_id ?? row.default_batch_rule_id,
-      });
-      const updated = [...formItems];
-      updated[idx] = { ...updated[idx], batch_number: res.batch_no };
-      setFormItems(updated);
-      messageApi.success('批号生成成功');
-    } catch (e: any) {
-      messageApi.error(e?.message || '批号生成失败');
-    } finally {
-      setGeneratingBatchIdx(null);
-    }
-  };
-
-  const handleGenerateSerials = async (idx: number) => {
-    const row = formItems[idx];
-    if (!row?.material_uuid) {
-      messageApi.warning('请先选择物料');
-      return;
-    }
-    const count = Math.max(1, Math.floor(Number(row.inbound_quantity) || 1));
-    if (count > 100) {
-      messageApi.warning('单次最多生成100个序列号');
-      return;
-    }
-    setGeneratingSerialIdx(idx);
-    try {
-      const res = await materialSerialApi.generate(row.material_uuid, count, {
-        ruleId: row.serial_rule_id ?? row.default_serial_rule_id,
-      });
-      const updated = [...formItems];
-      updated[idx] = { ...updated[idx], serial_numbers: res.serial_nos };
-      setFormItems(updated);
-      messageApi.success(`已生成 ${res.count} 个序列号`);
-    } catch (e: any) {
-      messageApi.error(e?.message || '序列号生成失败');
-    } finally {
-      setGeneratingSerialIdx(null);
-    }
+    formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
+    formRef.current?.setFieldValue(['items', idx, 'batch_managed'], batchManaged);
+    formRef.current?.setFieldValue(['items', idx, 'serial_managed'], serialManaged);
+    formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
+    formRef.current?.setFieldValue(['items', idx, 'default_serial_rule_id'], defaultSerialRuleId);
   };
 
   const detailColumns: ProDescriptionsItemProps<OtherInboundDetail>[] = [
@@ -448,10 +424,13 @@ const OtherInboundPage: React.FC = () => {
         dataSource={inboundDetail || {}}
       >
         {inboundDetail?.items && inboundDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey="id"
-            columns={[
+          <>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <Table
+              className="warehouse-detail-table"
+              size="small"
+              rowKey="id"
+              columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
               { title: '单位', dataIndex: 'material_unit', width: 60 },
@@ -464,6 +443,7 @@ const OtherInboundPage: React.FC = () => {
             dataSource={inboundDetail.items}
             pagination={false}
           />
+          </>
         )}
       </DetailDrawerTemplate>
 
@@ -475,128 +455,229 @@ const OtherInboundPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
+        grid={false}
       >
-        <CodeField
-          pageCode="kuaizhizao-warehouse-other-inbound"
-          name="inbound_code"
-          label="入库单编码"
-          autoGenerateOnCreate={true}
-          context={{}}
-        />
-        <UniWarehouseSelect
-          name="warehouse_id"
-          label="仓库"
-          placeholder="请选择仓库"
-          required
-          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-        />
-        <Form.Item name="warehouse_name" hidden />
-        <Form.Item name="reason_type" label="原因类型" rules={[{ required: true }]}>
-          <UniDropdown
-            placeholder="请选择原因类型"
-            showSearch
-            allowClear
-            loading={reasonTypeLoading}
-            style={{ width: '100%' }}
-            options={reasonTypeOptions}
-            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
-          />
-        </Form.Item>
-        <Form.Item name="reason_desc" label="原因说明">
-          <Input.TextArea rows={2} placeholder="可选" />
-        </Form.Item>
-        <Form.Item label="明细">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-            {formItems.map((it, idx) => (
-              <div key={idx} style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fafafa' }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-                  <div style={{ flex: '1 1 250px' }}>
-                    <UniMaterialSelect
-                      name={['items', idx, 'material_id']}
-                      label=""
-                      placeholder="请输入或选择物料"
-                      onChange={(v, option) => onMaterialSelect(idx, v, option)}
-                    />
-                  </div>
-                  <InputNumber placeholder="数量" min={0.01} value={it.inbound_quantity} onChange={(v) => {
-                    const u = [...formItems]; u[idx] = { ...u[idx], inbound_quantity: v ?? 0 }; setFormItems(u);
-                  }} />
-                  <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                    const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-                  }} />
-                  <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-                </div>
-                {(it.batch_managed || it.serial_managed) && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-                    {it.batch_managed && (
-                      <>
-                        <Select
-                          placeholder="批号规则（可选）"
-                          allowClear
-                          style={{ width: 160 }}
-                          value={it.batch_rule_id ?? it.default_batch_rule_id ?? undefined}
-                          onChange={(v) => {
-                            const u = [...formItems]; u[idx] = { ...u[idx], batch_rule_id: v ?? undefined }; setFormItems(u);
-                          }}
-                          options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                        />
-                        <Input
-                          placeholder="批号（可手动输入或生成）"
-                          value={it.batch_number ?? ''}
-                          onChange={(e) => {
-                            const u = [...formItems]; u[idx] = { ...u[idx], batch_number: e.target.value }; setFormItems(u);
-                          }}
-                          style={{ width: 160 }}
-                        />
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<ThunderboltOutlined />}
-                          loading={generatingBatchIdx === idx}
-                          onClick={() => handleGenerateBatch(idx)}
-                        >
-                          生成批号
-                        </Button>
-                      </>
-                    )}
-                    {it.serial_managed && (
-                      <>
-                        <Select
-                          placeholder="序列号规则（可选）"
-                          allowClear
-                          style={{ width: 160 }}
-                          value={it.serial_rule_id ?? it.default_serial_rule_id ?? undefined}
-                          onChange={(v) => {
-                            const u = [...formItems]; u[idx] = { ...u[idx], serial_rule_id: v ?? undefined }; setFormItems(u);
-                          }}
-                          options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                        />
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<ThunderboltOutlined />}
-                          loading={generatingSerialIdx === idx}
-                          onClick={() => handleGenerateSerials(idx)}
-                        >
-                          生成序列号
-                        </Button>
-                        {it.serial_numbers && it.serial_numbers.length > 0 && (
-                          <span style={{ color: '#52c41a', fontSize: 12 }}>
-                            已生成 {it.serial_numbers.length} 个
-                          </span>
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-warehouse-other-inbound"
+              name="inbound_code"
+              label="入库单编码"
+              autoGenerateOnCreate={true}
+              showGenerateButton={false}
+              context={{}}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="仓库"
+              placeholder="请选择仓库"
+              required
+              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            />
+          </Col>
+        </Row>
+        <AntForm.Item name="warehouse_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="reason_type" label="原因类型" rules={[{ required: true }]}>
+              <UniDropdown
+                placeholder="请选择原因类型"
+                showSearch
+                allowClear
+                loading={reasonTypeLoading}
+                style={{ width: '100%' }}
+                options={reasonTypeOptions}
+                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={12}>
+            <ProFormItem name="reason_desc" label="原因说明">
+              <Input.TextArea rows={2} placeholder="可选" />
+            </ProFormItem>
+          </Col>
+        </Row>
+        <ProFormItem label="明细" required style={{ width: '100%' }}>
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const cols = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 260,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: any) => {
+                          const row = getFieldValue('items')?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <div className="warehouse-detail-material-cell">
+                              <UniMaterialSelect
+                                name={[index, 'material_id']}
+                                label=""
+                                placeholder="请选择物料"
+                                required
+                                size="small"
+                                listFieldKey={index}
+                                listFieldName="items"
+                                fillMapping={{
+                                  material_code: 'mainCode',
+                                  material_name: 'name',
+                                  material_unit: 'baseUnit',
+                                }}
+                                fallbackOption={fallback}
+                                formItemProps={{ style: { margin: 0 } }}
+                                showQuickCreate
+                                showAdvancedSearch
+                                onChange={(v, m) => onMaterialSelectForBatchSerial(index, v, m)}
+                              />
+                            </div>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单位',
+                    dataIndex: 'material_unit',
+                    width: 80,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                        <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'inbound_quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'inbound_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单价',
+                    dataIndex: 'unit_price',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: any, __: any, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                    ),
+                  },
+                ];
+                const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                const expandedRowRender = (record: any, index: number) => {
+                  const row = formRef.current?.getFieldValue('items')?.[index];
+                  const batchManaged = row?.batch_managed;
+                  const serialManaged = row?.serial_managed;
+                  if (!batchManaged && !serialManaged) return null;
+                  return (
+                    <div style={{ padding: '8px 0', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {batchManaged && (
+                        <>
+                          <Select
+                            placeholder="批号规则（可选）"
+                            allowClear
+                            style={{ width: 160 }}
+                            value={row?.batch_rule_id ?? row?.default_batch_rule_id ?? undefined}
+                            onChange={(v) => formRef.current?.setFieldValue(['items', index, 'batch_rule_id'], v ?? undefined)}
+                            options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                          />
+                          <AntForm.Item name={['items', index, 'batch_number']} style={{ margin: 0, width: 160 }}>
+                            <Input placeholder="批号（可手动输入或生成）" size="small" />
+                          </AntForm.Item>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<ThunderboltOutlined />}
+                            loading={generatingBatchIdx === index}
+                            onClick={() => handleGenerateBatch(index)}
+                          >
+                            生成批号
+                          </Button>
+                        </>
+                      )}
+                      {serialManaged && (
+                        <>
+                          <Select
+                            placeholder="序列号规则（可选）"
+                            allowClear
+                            style={{ width: 160 }}
+                            value={row?.serial_rule_id ?? row?.default_serial_rule_id ?? undefined}
+                            onChange={(v) => formRef.current?.setFieldValue(['items', index, 'serial_rule_id'], v ?? undefined)}
+                            options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                          />
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<ThunderboltOutlined />}
+                            loading={generatingSerialIdx === index}
+                            onClick={() => handleGenerateSerials(index)}
+                          >
+                            生成序列号
+                          </Button>
+                          <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}>
+                            {({ getFieldValue }: any) => {
+                              const sn = getFieldValue(['items', index, 'serial_numbers']);
+                              const count = Array.isArray(sn) ? sn.length : 0;
+                              return count > 0 ? <span style={{ color: '#52c41a', fontSize: 12 }}>已生成 {count} 个</span> : null;
+                            }}
+                          </AntForm.Item>
+                        </>
+                      )}
+                    </div>
+                  );
+                };
+                return (
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="warehouse-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={cols}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        expandable={{
+                          expandedRowRender: (record, idx) => expandedRowRender(record, idx),
+                          rowExpandable: (record, idx) => {
+                            const row = formRef.current?.getFieldValue('items')?.[idx];
+                            return !!(row?.batch_managed || row?.serial_managed);
+                          },
+                        }}
+                        footer={() => (
+                          <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultInboundItem)} block>添加明细</Button>
                         )}
-                      </>
-                    )}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </Space>
-        </Form.Item>
-        <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={2} />
-        </Form.Item>
+                );
+              }}
+            </AntForm.List>
+          </AntForm.Item>
+        </ProFormItem>
+        <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

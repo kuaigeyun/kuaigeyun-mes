@@ -100,3 +100,4 @@ export type { IframePageTemplateProps } from './IframePageTemplate'
 
 // 布局常量配置
 export * from './constants'
+export { WAREHOUSE_DETAIL_TABLE_STYLES } from './warehouse-detail-table-styles'

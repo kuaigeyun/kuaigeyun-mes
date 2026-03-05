@@ -132,6 +132,7 @@ const ESOPDesignerPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sopUuid = searchParams.get('uuid');
+  const fromEdit = searchParams.get('from') === 'edit';
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -357,10 +358,14 @@ const ESOPDesignerPage: React.FC = () => {
   };
 
   /**
-   * 返回列表
+   * 返回列表或编辑页（若从编辑页进入）
    */
   const handleCancel = () => {
-    navigate('/apps/master-data/process/sop');
+    if (fromEdit && sopUuid) {
+      navigate(`/apps/master-data/process/sop?editUuid=${sopUuid}&tab=workflow`);
+    } else {
+      navigate('/apps/master-data/process/sop');
+    }
   };
 
   /**
@@ -384,7 +389,7 @@ const ESOPDesignerPage: React.FC = () => {
   return (
     <>
       <CanvasPageTemplate
-      functionalTitle="SOP设计"
+      functionalTitle="SOP 流程设计"
       toolbar={
         <Space style={{ width: '100%' }}>
           <Button
@@ -396,7 +401,7 @@ const ESOPDesignerPage: React.FC = () => {
             保存
           </Button>
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
-            返回
+            {fromEdit ? '返回编辑' : '返回列表'}
           </Button>
           <Button
             icon={<PlusOutlined />}

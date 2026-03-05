@@ -6392,6 +6392,8 @@ export default {
   'app.kuaireport.name': '自制报表',
   'app.kuaireport.menu.reports': '报表中心',
   'app.kuaireport.menu.dashboards': '大屏中心',
+  'app.kuaireport.menu.dashboard-designer': '大屏设计器',
+  'app.kuaireport.menu.dashboard-view': '大屏预览',
 
   // 审批设计器翻译
   'pages.approval.designer.title': '审批流设计器',

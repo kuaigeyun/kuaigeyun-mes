@@ -1,9 +1,16 @@
 import { apiRequest } from '../../../../services/api';
-import { Receivable, ReceivableListParams, ReceiptRecordCreate } from '../../types/finance/receivable';
+import { Receivable, ReceivableCreateData, ReceivableListParams, ReceiptRecordCreate } from '../../types/finance/receivable';
 
 const RECEIVABLE_API = '/apps/kuaizhizao/receivables';
 
 export const receivableService = {
+  createReceivable: (data: ReceivableCreateData) => {
+    return apiRequest<Receivable>(RECEIVABLE_API, {
+      method: 'POST',
+      data,
+    });
+  },
+
   listReceivables: (params: ReceivableListParams) => {
     return apiRequest<{ items: Receivable[]; total: number }>(RECEIVABLE_API, {
       method: 'GET',
@@ -28,6 +35,12 @@ export const receivableService = {
     return apiRequest<Receivable>(`${RECEIVABLE_API}/${id}/approve`, {
       method: 'POST',
       params: { rejection_reason },
+    });
+  },
+
+  deleteReceivable: (id: number) => {
+    return apiRequest<void>(`${RECEIVABLE_API}/${id}`, {
+      method: 'DELETE',
     });
   },
 };

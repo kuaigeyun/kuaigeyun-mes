@@ -151,14 +151,37 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             }
           }
           if (sequenceData.length > 0) {
-            const ops: OperationItem[] = sequenceData.map((item: any) =>
-              typeof item === 'string'
-                ? { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence') }
-                : item?.uuid
-                  ? { uuid: item.uuid, code: item.code || '', name: item.name || '', description: item.description }
-                  : null
-            ).filter(Boolean) as OperationItem[];
-            setOperationSequence(ops);
+            const { operationApi } = await import('../services/process');
+            const allOps = await operationApi.list({ limit: 1000 });
+            const ops: OperationItem[] = [];
+            for (const item of sequenceData) {
+              let opItem: OperationItem | null = null;
+              if (typeof item === 'string') {
+                const op = allOps.find((o) => o.uuid === item);
+                opItem = op
+                  ? { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description }
+                  : { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence') };
+              } else if (item && typeof item === 'object') {
+                const uuid = item.uuid ?? item.operation_uuid;
+                const code = item.code ?? '';
+                const name = item.name ?? '';
+                if (uuid) {
+                  if (code || name) {
+                    opItem = { uuid, code: code || uuid.substring(0, 8), name: name || t('field.route.operationSequence'), description: item.description };
+                  } else {
+                    const op = allOps.find((o) => o.uuid === uuid);
+                    opItem = op
+                      ? { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description }
+                      : { uuid, code: uuid.substring(0, 8), name: t('field.route.operationSequence') };
+                  }
+                } else if (item.operation_id && allOps.length > 0) {
+                  const op = allOps.find((o) => o.id === item.operation_id);
+                  if (op) opItem = { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description };
+                }
+              }
+              if (opItem) ops.push(opItem);
+            }
+            if (ops.length > 0) setOperationSequence(ops);
           }
         }
       })

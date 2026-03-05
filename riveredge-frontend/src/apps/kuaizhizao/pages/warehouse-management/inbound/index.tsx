@@ -6,10 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
@@ -407,78 +407,95 @@ const InboundPage: React.FC = () => {
         onFinish={handleFormFinish}
         isEdit={false}
         initialValues={{ type: 'purchase' }}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid={false}
       >
-        <ProFormSelect
-          name="type"
-          label="入库类型"
-          placeholder="请选择入库类型"
-          rules={[{ required: true, message: '请选择入库类型' }]}
-          options={[
-            { label: '采购入库', value: 'purchase' },
-            { label: '生产入库', value: 'production' },
-            { label: '退货入库', value: 'return' },
-            { label: '初始入库', value: 'initial' },
-          ]}
-          fieldProps={{
-            onChange: (value: string) => setInboundType(value),
-          }}
-        />
-        {/* 根据入库类型显示不同的编码字段 */}
-        {inboundType === 'purchase' && (
-          <CodeField
-            pageCode="kuaizhizao-purchase-receipt"
-            name="receipt_code"
-            label="采购入库单编码"
-            required={true}
-            autoGenerateOnCreate={true}
-            context={{}}
-          />
-        )}
-        {(inboundType === 'production' || inboundType === 'initial') && (
-          <CodeField
-            pageCode="kuaizhizao-warehouse-finished-goods-inbound"
-            name="receipt_code"
-            label="成品入库单编码"
-            required={true}
-            autoGenerateOnCreate={true}
-            context={{}}
-          />
-        )}
-        <ProFormSelect
-          name="warehouse"
-          label="入库仓库"
-          placeholder="请选择入库仓库"
-          rules={[{ required: true, message: '请选择入库仓库' }]}
-          options={[
-            { label: '原材料仓库', value: 'raw-materials' },
-            { label: '半成品仓库', value: 'semi-finished' },
-            { label: '成品仓库', value: 'finished-goods' },
-          ]}
-        />
-        <ProFormText
-          name="supplier"
-          label="供应商"
-          placeholder="选择供应商"
-        />
-        <ProFormText
-          name="workOrder"
-          label="关联工单"
-          placeholder="选择工单"
-        />
-        <ProFormText
-          name="batch_number"
-          label="批号"
-          placeholder="请输入批号（批号管理物料必填）"
-          tooltip="如果所选物料启用了批号管理，此字段为必填"
-        />
-        <ProFormDatePicker
-          name="expiry_date"
-          label="有效期"
-          placeholder="请选择有效期"
-          tooltip="有保质期要求的物料需要填写有效期"
-        />
+        <Row gutter={16}>
+          <Col span={12}>
+            {inboundType === 'purchase' && (
+              <CodeField
+                pageCode="kuaizhizao-purchase-receipt"
+                name="receipt_code"
+                label="采购入库单编码"
+                required={true}
+                autoGenerateOnCreate={true}
+                showGenerateButton={false}
+                context={{}}
+              />
+            )}
+            {(inboundType === 'production' || inboundType === 'initial') && (
+              <CodeField
+                pageCode="kuaizhizao-warehouse-finished-goods-inbound"
+                name="receipt_code"
+                label="成品入库单编码"
+                required={true}
+                autoGenerateOnCreate={true}
+                showGenerateButton={false}
+                context={{}}
+              />
+            )}
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="type"
+              label="入库类型"
+              placeholder="请选择入库类型"
+              rules={[{ required: true, message: '请选择入库类型' }]}
+              options={[
+                { label: '采购入库', value: 'purchase' },
+                { label: '生产入库', value: 'production' },
+                { label: '退货入库', value: 'return' },
+                { label: '初始入库', value: 'initial' },
+              ]}
+              fieldProps={{
+                onChange: (value: string) => setInboundType(value),
+              }}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSelect
+              name="warehouse"
+              label="入库仓库"
+              placeholder="请选择入库仓库"
+              rules={[{ required: true, message: '请选择入库仓库' }]}
+              options={[
+                { label: '原材料仓库', value: 'raw-materials' },
+                { label: '半成品仓库', value: 'semi-finished' },
+                { label: '成品仓库', value: 'finished-goods' },
+              ]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="supplier" label="供应商" placeholder="选择供应商" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="workOrder" label="关联工单" placeholder="选择工单" />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="batch_number"
+              label="批号"
+              placeholder="请输入批号（批号管理物料必填）"
+              tooltip="如果所选物料启用了批号管理，此字段为必填"
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="expiry_date"
+              label="有效期"
+              placeholder="请选择有效期"
+              tooltip="有保质期要求的物料需要填写有效期"
+            />
+          </Col>
+          <Col span={12} />
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -562,7 +579,9 @@ const InboundPage: React.FC = () => {
               {/* 入库/退料明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
                 <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
+                  <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                   <Table
+                    className="warehouse-detail-table"
                     size="small"
                     rowKey="id"
                     pagination={false}

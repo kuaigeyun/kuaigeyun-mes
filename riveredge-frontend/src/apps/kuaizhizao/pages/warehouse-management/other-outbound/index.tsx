@@ -9,8 +9,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -18,7 +18,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -77,8 +77,9 @@ const OtherOutboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; outbound_quantity: number; unit_price: number }>>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
+
+  const defaultOutboundItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', outbound_quantity: 1, unit_price: 0 };
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
 
   useEffect(() => {
@@ -195,13 +196,12 @@ const OtherOutboundPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    setFormItems([]);
     setTimeout(() => formRef.current?.resetFields(), 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
     try {
-      const validItems = formItems.filter((it) => it.material_id && it.outbound_quantity > 0);
+      const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.outbound_quantity) || 0) > 0);
       if (!validItems.length) {
         messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
         throw new Error('请至少添加一条有效明细');
@@ -215,13 +215,13 @@ const OtherOutboundPage: React.FC = () => {
         warehouse_id: values.warehouse_id,
         warehouse_name: warehouseName,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          material_unit: it.material_unit,
-          outbound_quantity: it.outbound_quantity,
-          unit_price: it.unit_price || 0,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          outbound_quantity: Number(it.outbound_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
         })),
       });
       messageApi.success('创建成功');
@@ -231,23 +231,6 @@ const OtherOutboundPage: React.FC = () => {
       if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');
       throw error;
     }
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', outbound_quantity: 1, unit_price: 0 }]);
-  };
-
-  const onMaterialSelect = (idx: number, _val: number | undefined, material: any | undefined) => {
-    if (!material) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: material.id ?? material.material_id,
-      material_code: material.mainCode ?? material.code ?? material.main_code ?? '',
-      material_name: material.name ?? material.material_name ?? '',
-      material_unit: material.baseUnit ?? material.base_unit ?? material.unit ?? '',
-    };
-    setFormItems(updated);
   };
 
   const detailColumns: ProDescriptionsItemProps<OtherOutboundDetail>[] = [
@@ -334,9 +317,12 @@ const OtherOutboundPage: React.FC = () => {
         dataSource={outboundDetail || {}}
       >
         {outboundDetail?.items && outboundDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey="id"
+          <>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <Table
+              className="warehouse-detail-table"
+              size="small"
+              rowKey="id"
             columns={[
               { title: '物料编码', dataIndex: 'material_code', width: 120 },
               { title: '物料名称', dataIndex: 'material_name', width: 150 },
@@ -350,6 +336,7 @@ const OtherOutboundPage: React.FC = () => {
             dataSource={outboundDetail.items}
             pagination={false}
           />
+          </>
         )}
       </DetailDrawerTemplate>
 
@@ -361,63 +348,159 @@ const OtherOutboundPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
+        grid={false}
       >
-        <CodeField
-          pageCode="kuaizhizao-warehouse-other-outbound"
-          name="outbound_code"
-          label="出库单编码"
-          autoGenerateOnCreate={true}
-          context={{}}
-        />
-        <UniWarehouseSelect
-          name="warehouse_id"
-          label="仓库"
-          placeholder="请选择仓库"
-          required
-          onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-        />
-        <Form.Item name="warehouse_name" hidden />
-        <Form.Item name="reason_type" label="原因类型" rules={[{ required: true }]}>
-          <UniDropdown
-            placeholder="请选择原因类型"
-            showSearch
-            allowClear
-            loading={reasonTypeLoading}
-            style={{ width: '100%' }}
-            options={reasonTypeOptions}
-            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
-          />
-        </Form.Item>
-        <Form.Item name="reason_desc" label="原因说明">
-          <Input.TextArea rows={2} placeholder="可选" />
-        </Form.Item>
-        <Form.Item label="明细">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-            {formItems.map((it, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 250px' }}>
-                  <UniMaterialSelect
-                    name={['_form_items', idx, 'material_id']}
-                    label=""
-                    placeholder="请输入或选择物料"
-                    onChange={(v, option) => onMaterialSelect(idx, v, option)}
-                  />
-                </div>
-                <InputNumber placeholder="数量" min={0.01} value={it.outbound_quantity} onChange={(v) => {
-                  const u = [...formItems]; u[idx] = { ...u[idx], outbound_quantity: v ?? 0 }; setFormItems(u);
-                }} />
-                <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                  const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-                }} />
-                <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-              </div>
-            ))}
-          </Space>
-        </Form.Item>
-        <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={2} />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <CodeField
+              pageCode="kuaizhizao-warehouse-other-outbound"
+              name="outbound_code"
+              label="出库单编码"
+              autoGenerateOnCreate={true}
+              showGenerateButton={false}
+              context={{}}
+            />
+          </Col>
+          <Col span={12}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label="仓库"
+              placeholder="请选择仓库"
+              required
+              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            />
+          </Col>
+        </Row>
+        <AntForm.Item name="warehouse_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormItem name="reason_type" label="原因类型" rules={[{ required: true }]}>
+              <UniDropdown
+                placeholder="请选择原因类型"
+                showSearch
+                allowClear
+                loading={reasonTypeLoading}
+                style={{ width: '100%' }}
+                options={reasonTypeOptions}
+                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+              />
+            </ProFormItem>
+          </Col>
+          <Col span={12}>
+            <ProFormItem name="reason_desc" label="原因说明">
+              <Input.TextArea rows={2} placeholder="可选" />
+            </ProFormItem>
+          </Col>
+        </Row>
+        <ProFormItem label="明细" required style={{ width: '100%' }}>
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const cols = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 260,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: any) => {
+                          const row = getFieldValue('items')?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <div className="warehouse-detail-material-cell">
+                              <UniMaterialSelect
+                                name={[index, 'material_id']}
+                                label=""
+                                placeholder="请选择物料"
+                                required
+                                size="small"
+                                listFieldKey={index}
+                                listFieldName="items"
+                                fillMapping={{
+                                  material_code: 'mainCode',
+                                  material_name: 'name',
+                                  material_unit: 'baseUnit',
+                                }}
+                                fallbackOption={fallback}
+                                formItemProps={{ style: { margin: 0 } }}
+                                showQuickCreate
+                                showAdvancedSearch
+                              />
+                            </div>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单位',
+                    dataIndex: 'material_unit',
+                    width: 80,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                        <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'outbound_quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'outbound_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '单价',
+                    dataIndex: 'unit_price',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: any, __: any, index: number) => (
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                    ),
+                  },
+                ];
+                const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                return (
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="warehouse-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={cols}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        footer={() => (
+                          <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultOutboundItem)} block>添加明细</Button>
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </AntForm.Item>
+        </ProFormItem>
+        <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

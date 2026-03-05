@@ -967,7 +967,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    // 批量删除按钮（第二位）
+    // 处理用户自定义的toolBarRender（新建等按钮，排在批量删除前）
+    if (restProps.toolBarRender) {
+      const mockAction = { reload: actionRef.current?.reload } as any
+      const mockSelectedRowKeys = selectedRowKeys as any
+      const userResult = restProps.toolBarRender(mockAction, {
+        selectedRowKeys: mockSelectedRowKeys,
+      })
+
+      if (Array.isArray(userResult)) {
+        actions.push(...userResult)
+      } else if (userResult) {
+        actions.push(userResult)
+      }
+    }
+
+    // 合并 toolBarActions（兼容历史用法，与 toolBarRender 等效）
+    if (toolBarActions.length > 0) {
+      actions.push(...toolBarActions)
+    }
+
+    // 批量删除按钮（排在新建/自定义按钮后）
     if (showDeleteButton && onDelete) {
       actions.push(
         <Button
@@ -1004,27 +1024,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           {t('components.uniTable.edit')}
         </Button>
       )
-    }
-
-    // 处理用户自定义的toolBarRender（其它按钮）
-    if (restProps.toolBarRender) {
-      // 这里需要模拟toolBarRender的参数
-      const mockAction = { reload: actionRef.current?.reload } as any
-      const mockSelectedRowKeys = selectedRowKeys as any
-      const userResult = restProps.toolBarRender(mockAction, {
-        selectedRowKeys: mockSelectedRowKeys,
-      })
-
-      if (Array.isArray(userResult)) {
-        actions.push(...userResult)
-      } else if (userResult) {
-        actions.push(userResult)
-      }
-    }
-
-    // 合并 toolBarActions（兼容历史用法，与 toolBarRender 等效）
-    if (toolBarActions.length > 0) {
-      actions.push(...toolBarActions)
     }
 
     return actions.length > 0 ? <Space>{actions}</Space> : undefined

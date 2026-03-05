@@ -1628,7 +1628,6 @@ const SalesOrdersPage: React.FC = () => {
         width={1200}
         footer={null}
         destroyOnHidden
-        styles={{ body: { maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' } }}
       >
         <ProForm
           formRef={formRef}

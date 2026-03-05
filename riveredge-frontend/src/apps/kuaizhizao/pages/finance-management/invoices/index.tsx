@@ -8,7 +8,7 @@
  */
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, message, Popconfirm, Space } from 'antd';
+import { App, Button, Modal, Popconfirm, Space } from 'antd';
 import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice } from '../../../types/finance/invoice';
@@ -19,6 +19,7 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,7 +121,7 @@ const InvoiceList: React.FC = () => {
             title="确定要删除吗？"
             onConfirm={async () => {
               await invoiceService.deleteInvoice(record.invoice_code);
-              message.success('删除成功');
+              messageApi.success('删除成功');
               actionRef.current?.reload();
             }}
           >
@@ -166,22 +167,33 @@ const InvoiceList: React.FC = () => {
       <UniTable<Invoice>
         headerTitle={headerTitle}
         actionRef={actionRef}
-        rowKey="id"
+        rowKey="invoice_code"
         search={{
           labelWidth: 120,
         }}
-        toolBarRender={() => [
-          <Button
-            key="button"
-            icon={<PlusOutlined />}
-            type="primary"
-            onClick={() => {
-              navigate('/apps/kuaizhizao/finance-management/invoices/new');
-            }}
-          >
-            新建发票
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText="新建发票"
+        onCreate={() => navigate('/apps/kuaizhizao/finance-management/invoices/new')}
+        enableRowSelection
+        showDeleteButton
+        deleteButtonText="批量删除"
+        onDelete={async (keys) => {
+          Modal.confirm({
+            title: '确认批量删除',
+            content: `确定要删除选中的 ${keys.length} 张发票吗？`,
+            onOk: async () => {
+              try {
+                for (const code of keys) {
+                  await invoiceService.deleteInvoice(String(code));
+                }
+                messageApi.success(`成功删除 ${keys.length} 张发票`);
+                actionRef.current?.reload();
+              } catch (error: any) {
+                messageApi.error(error?.message || '删除失败');
+              }
+            },
+          });
+        }}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;
           const res = await invoiceService.listInvoices({

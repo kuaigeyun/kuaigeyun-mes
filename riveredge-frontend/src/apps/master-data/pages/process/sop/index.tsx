@@ -6,29 +6,27 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Divider, theme } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Dropdown, Tooltip } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutlined, DownOutlined } from '@ant-design/icons';
+import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { sopApi, operationApi, processRouteApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
-import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/core';
 
 /**
  * 标准操作SOP管理列表页面组件
  */
-const { useToken } = theme;
-
 const SOPPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = useToken();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
@@ -47,6 +45,9 @@ const SOPPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formConfig, setFormConfig] = useState<ISchema | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>('basic');
+
+  // 新建 Modal 状态（仅批量创建时使用）
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   
   // 工序列表（用于下拉选择）
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -57,17 +58,30 @@ const SOPPage: React.FC = () => {
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
 
   /**
-   * 从 URL 参数打开编辑弹窗（支持 editUuid + tab=formConfig）
+   * 从 URL 参数打开编辑弹窗（支持 editUuid + tab=formConfig）或新建弹窗（create=1）
    */
   useEffect(() => {
     const editUuid = searchParams.get('editUuid');
     const tab = searchParams.get('tab');
+    const create = searchParams.get('create');
     if (editUuid) {
-      handleEdit({ uuid: editUuid } as SOP, tab === 'formConfig' ? 'formConfig' : undefined).then(() => {
+      const tabMap: Record<string, 'basic' | 'workflow' | 'formConfig' | 'scope'> = {
+        basic: 'basic', formConfig: 'formConfig', workflow: 'workflow', scope: 'scope',
+      };
+      const initialTab = tab && tabMap[tab] ? tabMap[tab] : undefined;
+      handleEdit({ uuid: editUuid } as SOP, initialTab).then(() => {
         setSearchParams({}, { replace: true });
       });
+    } else if (create === '1') {
+      setIsEdit(false);
+      setCurrentSOPUuid(null);
+      formRef.current?.resetFields();
+      setFormConfig(undefined);
+      setActiveTab('basic');
+      setModalVisible(true);
+      setSearchParams({}, { replace: true });
     }
-  }, [searchParams.get('editUuid')]);
+  }, [searchParams.get('editUuid'), searchParams.get('create')]);
 
   /**
    * 加载工序、物料组、物料、工艺路线列表
@@ -96,18 +110,34 @@ const SOPPage: React.FC = () => {
   }, []);
 
   /**
-   * 处理新建SOP（跳转到创建向导）
+   * 处理关闭新建 Modal
    */
-  const handleCreate = () => {
-    navigate('/apps/master-data/process/sop/create');
+  const handleCloseCreateModal = () => {
+    setCreateModalVisible(false);
+    actionRef.current?.reload();
+  };
+
+  /**
+   * 批量创建完成后，关闭新建 Modal 并打开编辑（可选）
+   */
+  const handleBatchCreateSuccess = () => {
+    handleCloseCreateModal();
+  };
+
+  /**
+   * 批量创建中点击某条 SOP 的编辑，关闭新建 Modal 并打开编辑 Modal
+   */
+  const handleBatchCreateEditSop = async (uuid: string, tab?: 'formConfig') => {
+    handleCloseCreateModal();
+    await handleEdit({ uuid } as SOP, tab);
   };
 
   /**
    * 处理编辑SOP
    * @param record SOP 记录
-   * @param initialTab 初始激活的 Tab（'basic' | 'formConfig'）
+   * @param initialTab 初始激活的 Tab（'basic' | 'workflow' | 'formConfig' | 'scope'）
    */
-  const handleEdit = async (record: SOP, initialTab?: 'basic' | 'formConfig') => {
+  const handleEdit = async (record: SOP, initialTab?: 'basic' | 'workflow' | 'formConfig' | 'scope') => {
     try {
       setIsEdit(true);
       setCurrentSOPUuid(record.uuid);
@@ -266,13 +296,28 @@ const SOPPage: React.FC = () => {
   };
 
   /**
-   * 处理关闭 Modal
+   * 处理关闭 Modal（编辑/单个新建）
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setIsEdit(false);
+    setCurrentSOPUuid(null);
     formRef.current?.resetFields();
     setFormConfig(undefined);
     setActiveTab('basic');
+  };
+
+  /**
+   * 选择单个新建：关闭新建 Modal，打开编辑 Modal 用于创建
+   */
+  const handleSelectSingleCreate = () => {
+    setCreateModalVisible(false);
+    setIsEdit(false);
+    setCurrentSOPUuid(null);
+    formRef.current?.resetFields();
+    setFormConfig(undefined);
+    setActiveTab('basic');
+    setModalVisible(true);
   };
 
   /**
@@ -397,15 +442,11 @@ const SOPPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 280,
+      width: 240,
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
+          <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
             详情
           </Button>
           <Button
@@ -415,22 +456,6 @@ const SOPPage: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ApartmentOutlined />}
-            onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
-          >
-            设计流程
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<FormOutlined />}
-            onClick={() => handleEdit(record, 'formConfig')}
-          >
-            添加数据采集项
           </Button>
           <Popconfirm
             title="确定要删除这个SOP吗？"
@@ -452,9 +477,6 @@ const SOPPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f', fontSize: 12, color: '#389e0d' }}>
-        物料绑定用于区分不同产品的 SOP；未绑定时按工序匹配。报工时系统按「物料+工序」优先匹配。
-      </div>
       <UniTable<SOP>
         actionRef={actionRef}
         columns={columns}
@@ -503,14 +525,24 @@ const SOPPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建SOP
-          </Button>,
+          <Button.Group key="create">
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleSelectSingleCreate}>
+              新建SOP
+            </Button>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'batch',
+                    label: '按工艺路线批量创建',
+                  onClick: () => setCreateModalVisible(true),
+                  },
+                ],
+              }}
+            >
+              <Button type="primary" icon={<DownOutlined />} />
+            </Dropdown>
+          </Button.Group>,
           <Button
             key="batch-delete"
             danger
@@ -557,6 +589,23 @@ const SOPPage: React.FC = () => {
         ]}
       />
 
+      {/* 新建 SOP Modal：按工艺路线批量创建 */}
+      <Modal
+        className="modal-no-limit-height"
+        title="按工艺路线批量创建 SOP"
+        open={createModalVisible}
+        onCancel={handleCloseCreateModal}
+        footer={null}
+        width={900}
+        destroyOnClose
+      >
+        <SOPBatchCreateSteps
+          onSuccess={handleBatchCreateSuccess}
+          onCancel={handleCloseCreateModal}
+          onEditSop={handleBatchCreateEditSop}
+        />
+      </Modal>
+
       <FormModalTemplate
         title={isEdit ? '编辑SOP' : '新建SOP'}
         open={modalVisible}
@@ -565,6 +614,7 @@ const SOPPage: React.FC = () => {
         isEdit={isEdit}
         loading={formLoading}
         width={960}
+        grid={false}
         formRef={formRef}
         initialValues={{ isActive: true }}
       >
@@ -576,148 +626,168 @@ const SOPPage: React.FC = () => {
               key: 'basic',
               label: '基本信息',
               children: (
-                <div style={{ padding: '4px 0' }}>
-                  {/* 核心信息 */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 14, paddingLeft: 8, borderLeft: '3px solid #1890ff' }}>核心信息</div>
-                    <Row gutter={[20, 0]}>
-                      <Col span={12}>
-                        <ProFormText
-                          name="code"
-                          label="SOP编码"
-                          placeholder="请输入SOP编码"
-                          rules={[
-                            { required: true, message: '请输入SOP编码' },
-                            { max: 50, message: 'SOP编码不能超过50个字符' },
-                          ]}
-                          fieldProps={{
-                            style: { textTransform: 'uppercase' },
-                          }}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <ProFormText
-                          name="name"
-                          label="SOP名称"
-                          placeholder="请输入SOP名称"
-                          rules={[
-                            { required: true, message: '请输入SOP名称' },
-                            { max: 200, message: 'SOP名称不能超过200个字符' },
-                          ]}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <SafeProFormSelect
-                          name="operationId"
-                          label="关联工序"
-                          placeholder="请选择关联工序（可选）"
-                          options={operations.map(o => ({
-                            label: `${o.code} - ${o.name}`,
-                            value: o.id,
-                          }))}
-                          fieldProps={{
-                            loading: operationsLoading,
-                            showSearch: true,
-                            allowClear: true,
-                            filterOption: (input, option) => {
-                              const label = option?.label as string || '';
-                              return label.toLowerCase().includes(input.toLowerCase());
-                            },
-                          }}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <ProFormText
-                          name="version"
-                          label="版本号"
-                          placeholder="请输入版本号（如：v1.0）"
-                          rules={[{ max: 20, message: '版本号不能超过20个字符' }]}
-                        />
-                      </Col>
-                    </Row>
+                <div style={{ padding: '16px 0', minWidth: 0 }}>
+                  <Row gutter={[16, 16]}>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText
+                        name="code"
+                        label="SOP编码"
+                        placeholder="请输入SOP编码"
+                        rules={[
+                          { required: true, message: '请输入SOP编码' },
+                          { max: 50, message: 'SOP编码不能超过50个字符' },
+                        ]}
+                        fieldProps={{ style: { textTransform: 'uppercase' } }}
+                      />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText
+                        name="name"
+                        label="SOP名称"
+                        placeholder="请输入SOP名称"
+                        rules={[
+                          { required: true, message: '请输入SOP名称' },
+                          { max: 200, message: 'SOP名称不能超过200个字符' },
+                        ]}
+                      />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <SafeProFormSelect
+                        name="operationId"
+                        label="关联工序"
+                        placeholder="请选择关联工序（可选）"
+                        options={operations.map(o => ({ label: `${o.code} - ${o.name}`, value: o.id }))}
+                        fieldProps={{
+                          loading: operationsLoading,
+                          showSearch: true,
+                          allowClear: true,
+                          filterOption: (input: string, option: { label?: React.ReactNode }) =>
+                            (String(option?.label ?? '')).toLowerCase().includes(input.toLowerCase()),
+                        }}
+                      />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormText
+                        name="version"
+                        label="版本号"
+                        placeholder="请输入版本号（如：v1.0）"
+                        rules={[{ max: 20, message: '版本号不能超过20个字符' }]}
+                      />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <ProFormSwitch name="isActive" label="是否启用" />
+                    </Col>
+                  </Row>
+                </div>
+              ),
+            },
+            {
+              key: 'workflow',
+              label: (
+                <span>
+                  <ApartmentOutlined /> 作业指导
+                </span>
+              ),
+              children: (
+                <div style={{ padding: '16px 0', minWidth: 0 }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <Button
+                      type="primary"
+                      icon={<ApartmentOutlined />}
+                      onClick={() => currentSOPUuid && navigate(`/apps/master-data/process/sop/designer?uuid=${currentSOPUuid}&from=edit`)}
+                      disabled={!currentSOPUuid}
+                    >
+                      打开流程设计器
+                    </Button>
+                    <span style={{ marginLeft: 12, fontSize: 12, color: '#8c8c8c' }}>
+                      流程定义步骤顺序，下方文字用于补充注意事项
+                    </span>
                   </div>
-
-                  <Divider style={{ margin: '20px 0' }} />
-
-                  {/* SOP内容 */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 14, paddingLeft: 8, borderLeft: '3px solid #1890ff' }}>SOP 内容</div>
-                    <ProFormTextArea
-                      name="content"
-                      label="SOP内容"
-                      placeholder="请输入SOP内容（支持富文本）"
-                      colProps={{ span: 24 }}
-                      fieldProps={{
-                        rows: 5,
-                        maxLength: 5000,
-                      }}
-                    />
-                  </div>
-
-                  <Divider style={{ margin: '20px 0' }} />
-
-                  {/* 绑定与载入 */}
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 14, paddingLeft: 8, borderLeft: '3px solid #1890ff' }}>绑定与载入</div>
-                    <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f', fontSize: 12, color: '#389e0d' }}>
-                      物料绑定用于区分不同产品的 SOP；未绑定时按工序匹配。产品专用 SOP 建议绑定具体物料。
+                  <ProFormTextArea
+                    name="content"
+                    label="文字说明 / 注意事项"
+                    placeholder="补充说明、注意事项、易错点等（流程步骤在流程设计器中配置）"
+                    colProps={{ span: 24 }}
+                    fieldProps={{ rows: 5, maxLength: 5000 }}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: 'formConfig',
+              label: (
+                <span>
+                  <FormOutlined /> 报工采集配置
+                </span>
+              ),
+              children: (
+                <div style={{ padding: '16px 0', minWidth: 0 }}>
+                  <Tooltip title="配置报工需收集的数据项，开工单以 SOP 为依据时按此处配置渲染表单。支持数字、选择、文本、日期时间等类型。">
+                    <div style={{ marginBottom: 12, fontSize: 12, color: '#8c8c8c' }}>
+                      配置报工数据采集项，支持数字、选择、文本、日期时间及必填校验
                     </div>
-                    <Row gutter={[20, 0]}>
-                      <Col span={12}>
-                        <SafeProFormSelect
-                          name="material_group_uuids"
-                          label="绑定物料组"
-                          placeholder="请选择物料组（可选，可多选）"
-                          mode="multiple"
-                          options={materialGroups.map(g => ({ label: `${g.code} - ${g.name}`, value: g.uuid }))}
-                          fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <SafeProFormSelect
-                          name="material_uuids"
-                          label="绑定物料"
-                          placeholder="请选择物料（可选，可多选；优先于物料组）"
-                          mode="multiple"
-                          options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
-                          fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
-                        />
-                      </Col>
-                    </Row>
+                  </Tooltip>
+                  <FormSchemaEditor
+                    value={formConfig}
+                    onChange={(schema) => setFormConfig(schema)}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: 'scope',
+              label: '适用范围',
+              children: (
+                <div style={{ padding: '16px 0', minWidth: 0 }}>
+                  <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f', fontSize: 12, color: '#389e0d' }}>
+                    物料绑定用于区分不同产品的 SOP；未绑定时按工序匹配。
                   </div>
-
-                  <Divider style={{ margin: '20px 0' }} />
-
-                  {/* 其他 */}
-                  <div style={{ marginBottom: 20 }}>
-                    <Row gutter={[20, 0]}>
-                      <Col span={12}>
-                        <ProFormSwitch name="isActive" label="是否启用" />
-                      </Col>
-                    </Row>
-                  </div>
-
-                  {/* 高级配置：工艺路线、BOM 载入 */}
+                  <Row gutter={[16, 16]}>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <SafeProFormSelect
+                        name="material_group_uuids"
+                        label="绑定物料组"
+                        placeholder="请选择物料组（可选，可多选）"
+                        mode="multiple"
+                        options={materialGroups.map(g => ({ label: `${g.code} - ${g.name}`, value: g.uuid }))}
+                        fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                      />
+                    </Col>
+                    <Col span={12} style={{ minWidth: 0 }}>
+                      <SafeProFormSelect
+                        name="material_uuids"
+                        label="绑定物料"
+                        placeholder="请选择物料（可选，可多选；优先于物料组）"
+                        mode="multiple"
+                        options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
+                        fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                      />
+                    </Col>
+                  </Row>
                   <Collapse
                     ghost
+                    style={{ marginTop: 16 }}
                     items={[
                       {
                         key: 'advanced',
-                        label: '高级配置（工艺路线、BOM 载入）',
+                        label: '高级配置（预留）',
                         children: (
                           <div style={{ padding: '8px 0' }}>
-                            <Row gutter={[20, 0]}>
-                              <Col span={24}>
+                            <div style={{ marginBottom: 12, fontSize: 12, color: '#8c8c8c' }}>
+                              当前版本仅作记录，融合逻辑后续实现。
+                            </div>
+                            <Row gutter={[16, 16]}>
+                              <Col span={24} style={{ minWidth: 0 }}>
                                 <SafeProFormSelect
                                   name="route_uuids"
                                   label="载入工艺路线"
-                                  placeholder="请选择工艺路线（可选，可多选，作为融合输入）"
+                                  placeholder="请选择工艺路线（可选，可多选）"
                                   mode="multiple"
                                   options={routes.map(r => ({ label: `${(r as any).code ?? r.code} - ${(r as any).name ?? r.name}`, value: r.uuid }))}
                                   fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
                                 />
                               </Col>
-                              <Col span={12}>
+                              <Col span={12} style={{ minWidth: 0 }}>
                                 <SafeProFormSelect
                                   name="bom_load_mode"
                                   label="BOM 载入方式"
@@ -729,7 +799,7 @@ const SOPPage: React.FC = () => {
                                   ]}
                                 />
                               </Col>
-                              <Col span={12}>
+                              <Col span={12} style={{ minWidth: 0 }}>
                                 <ProFormText
                                   name="specific_bom_uuid"
                                   label="指定 BOM UUID"
@@ -741,41 +811,6 @@ const SOPPage: React.FC = () => {
                         ),
                       },
                     ]}
-                  />
-
-                  <div style={{ marginTop: 16, padding: '10px 12px', background: '#fafafa', borderRadius: 6, border: `1px solid ${token.colorBorder}` }}>
-                    <div style={{ color: '#8c8c8c', fontSize: 12 }}>
-                      提示：附件字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
-                    </div>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: 'formConfig',
-              label: (
-                <span>
-                  <FormOutlined /> 报工数据采集项
-                </span>
-              ),
-              children: (
-                <div style={{ padding: '16px 0' }}>
-                  <div style={{ marginBottom: 16, padding: 12, background: '#e6f7ff', borderRadius: 4, border: '1px solid #91d5ff' }}>
-                    <div style={{ color: '#1890ff', fontSize: 13, lineHeight: 1.6 }}>
-                      <strong>说明：</strong>
-                      <div style={{ marginTop: 8 }}>
-                        配置报工时需要收集的数据项（参数收集器）。开工单以 SOP 为依据时，报工界面将按此处配置渲染表单并校验。
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        支持类型：数字（单位、范围、默认值）、选择、文本、日期时间；可配置必填与校验。
-                      </div>
-                    </div>
-                  </div>
-                  <FormSchemaEditor
-                    value={formConfig}
-                    onChange={(schema) => {
-                      setFormConfig(schema);
-                    }}
                   />
                 </div>
               ),

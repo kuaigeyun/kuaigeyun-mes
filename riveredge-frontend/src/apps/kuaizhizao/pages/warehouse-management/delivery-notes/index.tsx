@@ -9,17 +9,17 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, Select, InputNumber, Input, DatePicker, Dropdown } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 
 interface DeliveryNotice {
   id?: number;
@@ -67,20 +67,15 @@ const DeliveryNotesPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [materialList, setMaterialList] = useState<any[]>([]);
-  const [formItems, setFormItems] = useState<Array<{ material_id: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price: number }>>([]);
+  const defaultDeliveryItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 };
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [cust, mat] = await Promise.all([
-          customerApi.list({ limit: 1000, isActive: true }),
-          materialApi.list({ limit: 2000, isActive: true }),
-        ]);
+        const cust = await customerApi.list({ limit: 1000, isActive: true });
         setCustomerList(Array.isArray(cust) ? cust : cust?.items || []);
-        setMaterialList(Array.isArray(mat) ? mat : mat?.items || []);
       } catch (e) {
-        console.error('加载客户/物料失败', e);
+        console.error('加载客户失败', e);
       }
     };
     load();
@@ -148,14 +143,14 @@ const DeliveryNotesPage: React.FC = () => {
   const handleEdit = async (record: DeliveryNotice) => {
     try {
       const detail = await deliveryNoticeApi.get(record.id!.toString()) as DeliveryNoticeDetail;
-      setFormItems((detail.items || []).map((it: any) => ({
+      const items = (detail.items || []).map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_unit: it.material_unit || '',
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
-      })));
+      }));
       formRef.current?.setFieldsValue({
         sales_delivery_code: detail.sales_delivery_code,
         sales_order_code: detail.sales_order_code,
@@ -168,6 +163,7 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: detail.tracking_number,
         shipping_address: detail.shipping_address,
         notes: detail.notes,
+        items: items.length > 0 ? items : [defaultDeliveryItem],
       });
       setEditingId(record.id!);
       setEditModalVisible(true);
@@ -270,13 +266,15 @@ const DeliveryNotesPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    setFormItems([]);
     setEditingId(null);
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({ items: [defaultDeliveryItem] });
+    }, 0);
   };
 
   const handleCreateSubmit = async (values: any) => {
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -301,13 +299,13 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
         notes: values.notes,
-        items: validItems.map((it) => ({
+        items: validItems.map((it: any) => ({
           material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          material_unit: it.material_unit,
-          notice_quantity: it.notice_quantity,
-          unit_price: it.unit_price || 0,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
         })),
       });
       messageApi.success('创建成功');
@@ -321,7 +319,7 @@ const DeliveryNotesPage: React.FC = () => {
 
   const handleEditSubmit = async (values: any) => {
     if (!editingId) return;
-    const validItems = formItems.filter((it) => it.material_id && it.notice_quantity > 0);
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
     if (!validItems.length) {
       messageApi.error('请至少添加一条有效明细');
       throw new Error('请至少添加一条有效明细');
@@ -338,6 +336,14 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
         notes: values.notes,
+        items: validItems.map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+        })),
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
@@ -346,24 +352,6 @@ const DeliveryNotesPage: React.FC = () => {
       messageApi.error(error.message || '更新失败');
       throw error;
     }
-  };
-
-  const addItem = () => {
-    setFormItems((prev) => [...prev, { material_id: 0, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 }]);
-  };
-
-  const onMaterialSelect = (idx: number, materialId: number) => {
-    const m = materialList.find((x: any) => (x.id || x.material_id) === materialId);
-    if (!m) return;
-    const updated = [...formItems];
-    updated[idx] = {
-      ...updated[idx],
-      material_id: m.id || m.material_id,
-      material_code: m.mainCode || m.code || m.material_code || '',
-      material_name: m.name || m.material_name || '',
-      material_unit: m.baseUnit || m.material_unit || m.unit || '',
-    };
-    setFormItems(updated);
   };
 
   const detailColumns: ProDescriptionsItemProps<DeliveryNoticeDetail>[] = [
@@ -391,65 +379,178 @@ const DeliveryNotesPage: React.FC = () => {
 
   const renderForm = (onFinish: (values: any) => Promise<void>) => (
     <>
-      <Form.Item name="customer_id" label="客户" rules={[{ required: true }]}>
-        <Select
-          placeholder="请选择客户"
-          options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
-          onChange={(v) => {
-            const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-            if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
-          }}
-        />
-      </Form.Item>
-      <Form.Item name="customer_contact" label="联系人">
-        <Input placeholder="联系人" />
-      </Form.Item>
-      <Form.Item name="customer_phone" label="电话">
-        <Input placeholder="电话" />
-      </Form.Item>
-      <Form.Item name="sales_delivery_code" label="销售出库单号">
-        <Input placeholder="可选，关联出库单" />
-      </Form.Item>
-      <Form.Item name="sales_order_code" label="销售订单号">
-        <Input placeholder="可选" />
-      </Form.Item>
-      <Form.Item name="planned_delivery_date" label="预计送达日期">
-        <DatePicker style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item name="carrier" label="承运商/物流">
-        <Input placeholder="如：顺丰、德邦" />
-      </Form.Item>
-      <Form.Item name="tracking_number" label="运单号">
-        <Input placeholder="物流单号" />
-      </Form.Item>
-      <Form.Item name="shipping_address" label="收货地址">
-        <Input.TextArea rows={2} placeholder="收货地址" />
-      </Form.Item>
-      <Form.Item label="明细">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Button type="dashed" onClick={addItem} icon={<PlusOutlined />}>添加明细</Button>
-          {formItems.map((it, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                placeholder="物料"
-                style={{ width: 200 }}
-                options={materialList.map((m: any) => ({ value: m.id ?? m.material_id, label: `${m.mainCode || m.code || ''} ${m.name || ''}` }))}
-                onChange={(v) => onMaterialSelect(idx, v)}
-              />
-              <InputNumber placeholder="数量" min={0.01} value={it.notice_quantity} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], notice_quantity: v ?? 0 }; setFormItems(u);
-              }} />
-              <InputNumber placeholder="单价" min={0} value={it.unit_price} onChange={(v) => {
-                const u = [...formItems]; u[idx] = { ...u[idx], unit_price: v ?? 0 }; setFormItems(u);
-              }} />
-              <Button type="link" danger size="small" onClick={() => setFormItems(formItems.filter((_, i) => i !== idx))}>删除</Button>
-            </div>
-          ))}
-        </Space>
-      </Form.Item>
-      <Form.Item name="notes" label="备注">
-        <Input.TextArea rows={2} />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="customer_id" label="客户" rules={[{ required: true }]}>
+            <Select
+              placeholder="请选择客户"
+              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+              onChange={(v) => {
+                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
+              }}
+            />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="customer_contact" label="联系人">
+            <Input placeholder="联系人" />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="customer_phone" label="电话">
+            <Input placeholder="电话" />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="sales_delivery_code" label="销售出库单号">
+            <Input placeholder="可选，关联出库单" />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="sales_order_code" label="销售订单号">
+            <Input placeholder="可选" />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="planned_delivery_date" label="预计送达日期">
+            <DatePicker style={{ width: '100%' }} />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="carrier" label="承运商/物流">
+            <Input placeholder="如：顺丰、德邦" />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="tracking_number" label="运单号">
+            <Input placeholder="物流单号" />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="shipping_address" label="收货地址">
+            <Input.TextArea rows={2} placeholder="收货地址" />
+          </ProFormItem>
+        </Col>
+        <Col span={12} />
+      </Row>
+      <ProFormItem label="明细" required style={{ width: '100%' }}>
+        <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+          <AntForm.List name="items">
+            {(fields, { add, remove }) => {
+              const cols = [
+                {
+                  title: '物料',
+                  dataIndex: 'material_id',
+                  width: 260,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                      {({ getFieldValue }: any) => {
+                        const row = getFieldValue('items')?.[index];
+                        const mid = row?.material_id ? Number(row.material_id) : null;
+                        const fallback = mid && (row?.material_code || row?.material_name)
+                          ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                          : undefined;
+                        return (
+                          <div className="warehouse-detail-material-cell">
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder="请选择物料"
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                                material_unit: 'baseUnit',
+                              }}
+                              fallbackOption={fallback}
+                              formItemProps={{ style: { margin: 0 } }}
+                              showQuickCreate
+                              showAdvancedSearch
+                            />
+                          </div>
+                        );
+                      }}
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单位',
+                  dataIndex: 'material_unit',
+                  width: 80,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                      <Input placeholder="单位" size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '数量',
+                  dataIndex: 'notice_quantity',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                      <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '单价',
+                  dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                      <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 60,
+                  render: (_: any, __: any, index: number) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                  ),
+                },
+              ];
+              const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+              return (
+                <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                  <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <Table
+                      className="warehouse-detail-table"
+                      size="small"
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      rowKey="key"
+                      pagination={false}
+                      columns={cols}
+                      scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                      style={{ width: '100%', margin: 0 }}
+                      footer={() => (
+                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultDeliveryItem)} block>添加明细</Button>
+                      )}
+                    />
+                  </div>
+                </div>
+              );
+            }}
+          </AntForm.List>
+        </AntForm.Item>
+      </ProFormItem>
+      <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
     </>
   );
 
@@ -528,20 +629,24 @@ const DeliveryNotesPage: React.FC = () => {
         dataSource={noticeDetail || {}}
       >
         {noticeDetail?.items && noticeDetail.items.length > 0 && (
-          <Table
-            size="small"
-            rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
-            columns={[
-              { title: '物料编码', dataIndex: 'material_code', width: 120 },
-              { title: '物料名称', dataIndex: 'material_name', width: 150 },
-              { title: '单位', dataIndex: 'material_unit', width: 60 },
-              { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
-              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
-              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
-            ]}
-            dataSource={noticeDetail.items}
-            pagination={false}
-          />
+          <>
+            <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+            <Table
+              className="warehouse-detail-table"
+              size="small"
+              rowKey={(_, idx) => (noticeDetail?.items?.[idx] as any)?.id ?? idx}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '单位', dataIndex: 'material_unit', width: 60 },
+                { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+              ]}
+              dataSource={noticeDetail.items}
+              pagination={false}
+            />
+          </>
         )}
       </DetailDrawerTemplate>
 
@@ -552,6 +657,7 @@ const DeliveryNotesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
         {renderForm(handleCreateSubmit)}
       </FormModalTemplate>
@@ -563,6 +669,7 @@ const DeliveryNotesPage: React.FC = () => {
         formRef={formRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
       >
         {renderForm(handleEditSubmit)}
       </FormModalTemplate>

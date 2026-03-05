@@ -89,6 +89,7 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
 
     return (
         <Modal
+            className="modal-no-limit-height"
             open={open}
             onCancel={onClose}
             width={Math.min(Math.max(displayWidth * currentScale + 80, 560), windowSize.width - 20)} // Min 560px for header controls

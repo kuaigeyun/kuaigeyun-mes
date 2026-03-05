@@ -33,6 +33,24 @@ export interface ReceivableListParams {
     customer_id?: number;
 }
 
+export interface ReceivableCreateData {
+    source_type: string;
+    source_id: number;
+    source_code: string;
+    customer_id: number;
+    customer_name: string;
+    total_amount: number;
+    received_amount?: number;
+    remaining_amount: number;
+    due_date: string;
+    business_date: string;
+    status?: string;
+    review_status?: string;
+    payment_terms?: string;
+    invoice_issued?: boolean;
+    notes?: string;
+}
+
 export interface ReceiptRecordCreate {
     receipt_amount: number;
     receipt_method?: string;
