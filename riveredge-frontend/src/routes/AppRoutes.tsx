@@ -11,7 +11,7 @@
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, useRef, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -143,16 +143,18 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
  */
 const AppRoutes: React.FC = () => {
   const { t } = useTranslation();
-  const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
+
+  // 缓存每个 app 的 React.lazy 实例，防止 useMemo 重算时重建 lazy 组件导致子树重新挂载
+  const lazyAppsCache = useRef<Map<string, React.ComponentType>>(new Map());
 
   // 检查用户是否已登录（与 useUnifiedMenuData 并行发起请求）
   const [token, setToken] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   useEffect(() => {
     import('../utils/auth').then(({ getToken, getTenantId }) => {
-      setToken(getToken());
-      setTenantId(getTenantId());
+      setToken(getToken() ?? null);
+      setTenantId(getTenantId()?.toString() ?? null);
     });
   }, []);
 
@@ -179,9 +181,10 @@ const AppRoutes: React.FC = () => {
     gcTime: 10 * 60 * 1000,
   });
 
-  // 根据应用列表创建路由
-  useEffect(() => {
-    if (!applications.length) return;
+  // 同步计算路由节点（useMemo 在渲染阶段执行，applications 可用时路由立即就绪，
+  // 彻底消除 useEffect 异步延迟造成的"空路由"竞态窗口，无需任何延迟兜底）
+  const appRoutes = useMemo<React.ReactNode[]>(() => {
+    if (!applications.length) return [];
     const routes: React.ReactNode[] = [];
     for (const app of applications) {
       if (!app.entry_point || !app.route_path) {
@@ -191,7 +194,11 @@ const AppRoutes: React.FC = () => {
       const relativePath = app.route_path.startsWith('/apps/')
         ? app.route_path.replace('/apps/', '')
         : app.route_path;
-      const LazyApp = createLazyApp(app);
+      // 复用已有的 lazy 实例，避免重新创建导致子树重新挂载
+      if (!lazyAppsCache.current.has(app.code)) {
+        lazyAppsCache.current.set(app.code, createLazyApp(app));
+      }
+      const LazyApp = lazyAppsCache.current.get(app.code)!;
       routes.push(
         <Route
           key={`app-${app.code}-${relativePath}`}
@@ -206,7 +213,7 @@ const AppRoutes: React.FC = () => {
         />
       );
     }
-    setAppRoutes(routes);
+    return routes;
   }, [applications]);
 
   // 加载中状态（认证检查中或应用列表加载中）
@@ -219,11 +226,8 @@ const AppRoutes: React.FC = () => {
     return <AppLoadError error={error as Error} onRetry={() => refetch()} />;
   }
 
-  // 正常状态：渲染应用路由
-
-  // 如果用户未登录，不显示"没有应用路由"的警告
+  // 如果用户未登录，不渲染任何内容（应用路由应该在登录后才可用）
   if (!isAuthenticated) {
-    // 用户未登录时，不渲染任何内容（应用路由应该在登录后才可用）
     return null;
   }
 

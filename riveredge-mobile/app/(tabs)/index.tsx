@@ -156,7 +156,7 @@ export default function WorkbenchScreen() {
         <View style={styles.bannerWrapper}>
           <View style={[styles.bannerContent, { paddingTop: Math.max(insets.top, 10), paddingBottom: isSmallScreen ? 28 : 36 }]}>
             <Image
-              source={require('../../assets/images/mobile_bannert.png')}
+              source={require('../../assets/images/mobile_banner.png')}
               style={styles.bannerBgImage}
               resizeMode="contain"
             />
@@ -336,8 +336,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: '85%',
-    height: '100%',
+    width: 360,
+    height: 240,
   },
   headerWelcomeText: {
     fontSize: 18,
