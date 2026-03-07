@@ -32,6 +32,7 @@ export interface UserStatistics {
   new_week: number;
   new_month: number;
   by_source: Record<string, number>;
+  by_region?: Record<string, number>;
   registration_trend: Array<{ date: string; count: number }>;
   updated_at: string;
 }
@@ -47,6 +48,7 @@ export interface AccessStatistics {
   dau_today: number;
   login_trend: Array<{ date: string; count: number }>;
   dau_trend: Array<{ date: string; count: number }>;
+  by_region?: Record<string, number>;
   updated_at: string;
 }
 

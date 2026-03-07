@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -258,7 +258,7 @@ async def get_users_statistics(
         new_week = await User.filter(base_q & Q(created_at__gte=week_start)).count()
         new_month = await User.filter(base_q & Q(created_at__gte=month_start)).count()
 
-        # 按 source 分组统计
+        # 按 source 分组统计（保留兼容）
         source_stats = await User.filter(base_q).group_by("source").annotate(
             cnt=Count("id")
         ).values("source", "cnt")
@@ -266,6 +266,27 @@ async def get_users_statistics(
         for s in source_stats:
             key = s["source"] if s["source"] else "unknown"
             by_source[key] = s["cnt"]
+
+        # 注册地区分布：按用户首次登录地点分组，TOP 10（无登录记录归入「未知」）
+        conn = Tortoise.get_connection("default")
+        region_sql = """
+            WITH first_login AS (
+                SELECT DISTINCT ON (user_id) user_id,
+                    COALESCE(NULLIF(TRIM(login_location), ''), '未知') AS loc
+                FROM core_login_logs
+                WHERE login_status = 'success' AND user_id IS NOT NULL
+                ORDER BY user_id, created_at ASC
+            )
+            SELECT COALESCE(fl.loc, '未知') AS region, COUNT(*) AS count
+            FROM core_users u
+            LEFT JOIN first_login fl ON u.id = fl.user_id
+            WHERE u.tenant_id IS NOT NULL AND u.deleted_at IS NULL
+            GROUP BY COALESCE(fl.loc, '未知')
+            ORDER BY count DESC
+            LIMIT 10
+        """
+        region_rows = await conn.execute_query_dict(region_sql)
+        by_region: Dict[str, int] = {str(row["region"]): row["count"] for row in (region_rows or [])}
 
         # 注册趋势：按日分组（使用时间范围参数，默认最近 30 天）
         start_dt, end_dt = _parse_date_range(start, end)
@@ -277,7 +298,6 @@ async def get_users_statistics(
         if (end_dt - start_dt).days > 90:
             start_dt = end_dt - timedelta(days=90)
 
-        conn = Tortoise.get_connection("default")
         trend_sql = """
             SELECT (created_at AT TIME ZONE 'UTC')::date AS date, COUNT(*) AS count
             FROM core_users
@@ -301,6 +321,7 @@ async def get_users_statistics(
             "new_week": new_week,
             "new_month": new_month,
             "by_source": by_source,
+            "by_region": by_region,
             "registration_trend": registration_trend,
             "updated_at": datetime.now().isoformat(),
         }
@@ -329,33 +350,39 @@ async def get_access_statistics(
         success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
         failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
 
-        now = datetime.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # 今日登录数、今日 DAU
-        today_q = base_q & Q(created_at__gte=today_start)
-        logins_today = await LoginLog.filter(today_q).count()
-        # DAU: 今日成功登录的去重 user_id 数
-        conn = Tortoise.get_connection("default")
-        dau_sql = """
-            SELECT COUNT(DISTINCT user_id) AS cnt
-            FROM core_login_logs
-            WHERE login_status = 'success' AND user_id IS NOT NULL
-              AND created_at >= $1
-        """
-        dau_rows = await conn.execute_query_dict(dau_sql, [today_start])
-        dau_today = dau_rows[0].get("cnt", 0) or 0 if dau_rows else 0
-
-        # 登录趋势、DAU 趋势：按日分组
+        now = datetime.now(timezone.utc)
         start_dt, end_dt = _parse_date_range(start, end)
         if not end_dt:
             end_dt = now
         if not start_dt:
             start_dt = end_dt - timedelta(days=30)
+
+        # 今日登录数、今日 DAU：使用前端传入的时间范围
+        # 当范围为「今日」时，start/end 即用户本地今日；否则用 end 所在 UTC 日
+        if (end_dt - start_dt).days < 1:
+            today_start, today_end = start_dt, end_dt
+        else:
+            today_end = end_dt
+            today_start = end_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            if today_end.tzinfo is None:
+                today_start = today_start.replace(tzinfo=timezone.utc)
+                today_end = today_end.replace(tzinfo=timezone.utc)
+        today_q = base_q & Q(created_at__gte=today_start) & Q(created_at__lte=today_end)
+        logins_today = await LoginLog.filter(today_q).count()
+        conn = Tortoise.get_connection("default")
+        dau_sql = """
+            SELECT COUNT(DISTINCT user_id) AS cnt
+            FROM core_login_logs
+            WHERE login_status = 'success' AND user_id IS NOT NULL
+              AND created_at >= $1 AND created_at <= $2
+        """
+        dau_rows = await conn.execute_query_dict(dau_sql, [today_start, today_end])
+        dau_today = dau_rows[0].get("cnt", 0) or 0 if dau_rows else 0
+
+        # 登录趋势、DAU 趋势：按日分组
         if (end_dt - start_dt).days > 90:
             start_dt = end_dt - timedelta(days=90)
 
-        conn = Tortoise.get_connection("default")
         login_trend_sql = """
             SELECT (created_at AT TIME ZONE 'UTC')::date AS date, COUNT(*) AS count
             FROM core_login_logs
@@ -389,6 +416,18 @@ async def get_access_statistics(
             for row in (dau_trend_rows or [])
         ]
 
+        # 登录地区分布：按 login_location 分组统计（成功登录），TOP 10
+        region_sql = """
+            SELECT COALESCE(NULLIF(TRIM(login_location), ''), '未知') AS region, COUNT(*) AS count
+            FROM core_login_logs
+            WHERE login_status = 'success'
+            GROUP BY COALESCE(NULLIF(TRIM(login_location), ''), '未知')
+            ORDER BY count DESC
+            LIMIT 10
+        """
+        region_rows = await conn.execute_query_dict(region_sql)
+        by_region: Dict[str, int] = {str(row["region"]): row["count"] for row in (region_rows or [])}
+
         return {
             "total_logins": total_logins,
             "success_count": success_count,
@@ -397,6 +436,7 @@ async def get_access_statistics(
             "dau_today": dau_today,
             "login_trend": login_trend,
             "dau_trend": dau_trend,
+            "by_region": by_region,
             "updated_at": datetime.now().isoformat(),
         }
     except Exception as e:

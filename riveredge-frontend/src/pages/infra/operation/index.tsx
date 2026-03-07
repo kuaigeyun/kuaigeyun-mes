@@ -22,9 +22,9 @@ import {
   Empty,
   theme,
   Tooltip,
-  App
+  App,
 } from 'antd';
-import { ListPageTemplate, STAT_CARD_CONFIG } from '../../../components/layout-templates';
+import { ListPageTemplate, MultiTabListPageTemplate, STAT_CARD_CONFIG } from '../../../components/layout-templates';
 import {
   ApartmentOutlined,
   UserOutlined,
@@ -91,6 +91,9 @@ export default function OperationsDashboard() {
   // 自动刷新状态
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(30000); // 默认30秒
+
+  // Tab 切换状态
+  const [activeTabKey, setActiveTabKey] = useState<string>('organization');
   
   /**
    * 计算时间范围
@@ -126,6 +129,16 @@ export default function OperationsDashboard() {
   
   const dateRange = getDateRange();
 
+  // 稳定的 queryKey：避免 dateRange.end 含毫秒导致每帧变化，引发无限请求
+  const userStatsQueryKey = useMemo(
+    () => ['userStatistics', timeRangeType, customDateRange?.[0]?.format('YYYY-MM-DD'), customDateRange?.[1]?.format('YYYY-MM-DD')],
+    [timeRangeType, customDateRange],
+  );
+  const accessStatsQueryKey = useMemo(
+    () => ['accessStatistics', timeRangeType, customDateRange?.[0]?.format('YYYY-MM-DD'), customDateRange?.[1]?.format('YYYY-MM-DD')],
+    [timeRangeType, customDateRange],
+  );
+
   /**
    * 使用 React Query 获取统计数据（支持缓存和自动刷新）
    * 包含降级方案：API 失败时显示缓存数据
@@ -152,22 +165,24 @@ export default function OperationsDashboard() {
   });
 
   const { data: userStats, isLoading: loadingUser, refetch: refetchUser } = useQuery({
-    queryKey: ['userStatistics', dateRange.start, dateRange.end],
+    queryKey: userStatsQueryKey,
     queryFn: async () => getUserStatistics({ start: dateRange.start, end: dateRange.end }),
     enabled: hasToken && isInfraSuperAdmin,
     staleTime: 60000,
     gcTime: 300000,
     retry: false,
+    refetchOnWindowFocus: false,
     throwOnError: false,
   });
 
   const { data: accessStats, isLoading: loadingAccess, refetch: refetchAccess } = useQuery({
-    queryKey: ['accessStatistics', dateRange.start, dateRange.end],
+    queryKey: accessStatsQueryKey,
     queryFn: async () => getAccessStatistics({ start: dateRange.start, end: dateRange.end }),
     enabled: hasToken && isInfraSuperAdmin,
     staleTime: 60000,
     gcTime: 300000,
     retry: false,
+    refetchOnWindowFocus: false,
     throwOnError: false,
   });
   
@@ -247,20 +262,15 @@ export default function OperationsDashboard() {
     ].filter(item => item.value > 0);
   }, [displayStatistics, t]);
 
-  const sourceChartData = useMemo(() => {
-    if (!userStats?.by_source) return [];
-    const labelMap: Record<string, string> = {
-      personal: t('pages.infra.operation.sourcePersonal'),
-      organization: t('pages.infra.operation.sourceOrganization'),
-      invite_code: t('pages.infra.operation.sourceInvite'),
-      unknown: t('pages.infra.operation.sourceUnknown'),
-    };
-    return Object.entries(userStats.by_source).map(([key, value]) => ({
-      name: labelMap[key] || key,
+  const registrationRegionChartData = useMemo(() => {
+    if (!userStats?.by_region) return [];
+    const colors = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#13c2c2', '#eb2f96', '#fa8c16', '#a0d911', '#2f54eb', '#8c8c8c'];
+    return Object.entries(userStats.by_region).map(([region, value], i) => ({
+      name: region,
       value,
-      color: key === 'personal' ? '#1890ff' : key === 'organization' ? '#52c41a' : key === 'invite_code' ? '#722ed1' : '#8c8c8c',
+      color: colors[i % colors.length],
     })).filter(item => item.value > 0);
-  }, [userStats?.by_source, t]);
+  }, [userStats?.by_region]);
 
   const registrationTrendData = useMemo(() => {
     if (!userStats?.registration_trend?.length) return [];
@@ -271,6 +281,16 @@ export default function OperationsDashboard() {
     if (!accessStats?.login_trend?.length) return [];
     return accessStats.login_trend.map((d) => ({ date: d.date, count: d.count }));
   }, [accessStats?.login_trend]);
+
+  const loginRegionChartData = useMemo(() => {
+    if (!accessStats?.by_region) return [];
+    const colors = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#13c2c2', '#eb2f96', '#fa8c16', '#a0d911', '#2f54eb', '#8c8c8c'];
+    return Object.entries(accessStats.by_region).map(([region, value], i) => ({
+      name: region,
+      value,
+      color: colors[i % colors.length],
+    })).filter(item => item.value > 0);
+  }, [accessStats?.by_region]);
   
   /**
    * 处理数据导出（CSV 格式）
@@ -349,25 +369,27 @@ export default function OperationsDashboard() {
           exportData.push(['Success logins', String(accessStats.success_count || 0)]);
           exportData.push(['Failed logins', String(accessStats.failed_count || 0)]);
         }
-        if (userStats?.by_source && Object.keys(userStats.by_source).length > 0) {
+        if (userStats?.by_region && Object.keys(userStats.by_region).length > 0) {
           exportData.push([]);
-          exportData.push([t('pages.infra.operation.registrationSource'), '']);
+          exportData.push([t('pages.infra.operation.registrationRegion'), '']);
           exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
-          Object.entries(userStats.by_source).forEach(([k, v]) => {
-            const labelMap: Record<string, string> = {
-              personal: t('pages.infra.operation.sourcePersonal'),
-              organization: t('pages.infra.operation.sourceOrganization'),
-              invite_code: t('pages.infra.operation.sourceInvite'),
-              unknown: t('pages.infra.operation.sourceUnknown'),
-            };
-            exportData.push([labelMap[k] || k, String(v)]);
+          Object.entries(userStats.by_region).forEach(([region, v]) => {
+            exportData.push([region, String(v)]);
+          });
+        }
+        if (accessStats?.by_region && Object.keys(accessStats.by_region).length > 0) {
+          exportData.push([]);
+          exportData.push([t('pages.infra.operation.loginRegion'), '']);
+          exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
+          Object.entries(accessStats.by_region).forEach(([region, v]) => {
+            exportData.push([region, String(v)]);
           });
         }
         exportData.push([]); // 空行
       }
 
       // 数据更新时间（使用国际化格式）
-      if (displayStatistics.updated_at) {
+      if (displayStatistics?.updated_at) {
         exportData.push([t('pages.infra.operation.dataUpdatedAt'), dayjs(displayStatistics.updated_at).format('llll')]);
       } else if (dataUpdatedAt) {
         exportData.push([t('pages.infra.operation.dataUpdatedAt'), dayjs(dataUpdatedAt).format('llll') + t('pages.infra.operation.cachedLabel')]);
@@ -406,411 +428,330 @@ export default function OperationsDashboard() {
     }
   }, [displayStatistics, userStats, accessStats, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi, t]);
 
-  return (
-    <ListPageTemplate>
-      {/* 页面头部工具栏 */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0, marginBottom: 4 }}>{t('pages.infra.operation.title')}</h2>
-          <Text type="secondary">{t('pages.infra.operation.subtitle')}</Text>
-        </div>
-        <Space size="middle">
-          {/* 时间范围筛选 */}
-          <Space>
-            <Text type="secondary">{t('pages.infra.operation.timeRange')}</Text>
-            <Radio.Group
-              value={timeRangeType}
-              onChange={(e) => {
-                setTimeRangeType(e.target.value);
-                if (e.target.value !== 'custom') {
-                  setCustomDateRange(null);
-                }
-              }}
-            >
-              <Radio.Button value="today">{t('pages.infra.operation.today')}</Radio.Button>
-              <Radio.Button value="week">{t('pages.infra.operation.week')}</Radio.Button>
-              <Radio.Button value="month">{t('pages.infra.operation.month')}</Radio.Button>
-              <Radio.Button value="custom">{t('pages.infra.operation.custom')}</Radio.Button>
-            </Radio.Group>
-            {timeRangeType === 'custom' && (
-              <RangePicker
-                value={customDateRange}
-                onChange={(dates) => setCustomDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
-                style={{ width: 240 }}
-              />
-            )}
-          </Space>
-          
-          {/* 操作按钮 */}
-          <Space>
-            <Tooltip title={autoRefresh ? t('pages.infra.operation.autoRefreshTooltipOn') : t('pages.infra.operation.autoRefreshTooltipOff')}>
-              <Button
-                type={autoRefresh ? 'primary' : 'default'}
-                icon={<ReloadOutlined spin={autoRefresh} />}
-                onClick={() => setAutoRefresh(!autoRefresh)}
-              >
-                {autoRefresh ? t('pages.infra.operation.autoRefreshOn') : t('pages.infra.operation.autoRefresh')}
-              </Button>
-            </Tooltip>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={handleRefresh}
-              loading={loading}
-            >
-              {t('pages.infra.operation.refresh')}
-            </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              {t('pages.infra.operation.export')}
-            </Button>
-          </Space>
-        </Space>
+  /** 数据更新时间展示 */
+  const dataUpdateFooter = hasToken && isInfraSuperAdmin && (displayStatistics?.updated_at || dataUpdatedAt || userStats?.updated_at || accessStats?.updated_at) && (
+    <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+      <Space>
+        <Text type="secondary">
+          {t('pages.infra.operation.dataUpdatedAt')}：{displayStatistics?.updated_at
+            ? dayjs(displayStatistics.updated_at).format('llll')
+            : userStats?.updated_at
+              ? dayjs(userStats.updated_at).format('llll')
+              : dataUpdatedAt
+                ? dayjs(dataUpdatedAt).format('llll')
+                : t('pages.infra.monitoring.unknown')}
+          {hasCachedData && <Text type="warning" style={{ marginLeft: 8 }}>{t('pages.infra.operation.cachedLabel')}</Text>}
+        </Text>
+        {autoRefresh && !error && <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{t('pages.infra.operation.autoRefreshing')}</Text>}
+      </Space>
+    </div>
+  );
+
+  /** 页面头部：标题 + 工具栏 */
+  const pageHeader = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+      <div>
+        <h2 style={{ margin: 0, marginBottom: 4 }}>{t('pages.infra.operation.title')}</h2>
+        <Text type="secondary">{t('pages.infra.operation.subtitle')}</Text>
       </div>
+      <Space size="middle" wrap>
+        <Space>
+          <Text type="secondary">{t('pages.infra.operation.timeRange')}</Text>
+          <Radio.Group
+            value={timeRangeType}
+            onChange={(e) => {
+              setTimeRangeType(e.target.value);
+              if (e.target.value !== 'custom') {
+                setCustomDateRange(null);
+              }
+            }}
+          >
+            <Radio.Button value="today">{t('pages.infra.operation.today')}</Radio.Button>
+            <Radio.Button value="week">{t('pages.infra.operation.week')}</Radio.Button>
+            <Radio.Button value="month">{t('pages.infra.operation.month')}</Radio.Button>
+            <Radio.Button value="custom">{t('pages.infra.operation.custom')}</Radio.Button>
+          </Radio.Group>
+          {timeRangeType === 'custom' && (
+            <RangePicker
+              value={customDateRange}
+              onChange={(dates) => setCustomDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
+              style={{ width: 240 }}
+            />
+          )}
+        </Space>
+        <Space>
+          <Tooltip title={autoRefresh ? t('pages.infra.operation.autoRefreshTooltipOn') : t('pages.infra.operation.autoRefreshTooltipOff')}>
+            <Button
+              type={autoRefresh ? 'primary' : 'default'}
+              icon={<ReloadOutlined spin={autoRefresh} />}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+            >
+              {autoRefresh ? t('pages.infra.operation.autoRefreshOn') : t('pages.infra.operation.autoRefresh')}
+            </Button>
+          </Tooltip>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
+            {t('pages.infra.operation.refresh')}
+          </Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExport}>
+            {t('pages.infra.operation.export')}
+          </Button>
+        </Space>
+      </Space>
+    </div>
+  );
 
-      {/* 统计卡片区域 - 手动渲染以确保在标题下方 */}
-      {displayStatistics && hasToken && isInfraSuperAdmin && (
-        <div style={{ marginBottom: 24 }}>
-          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
-            <Col span={6}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.totalTenants')}
-                  value={displayStatistics.total || 0}
-                  prefix={<ApartmentOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.activeTenants')}
-                  value={displayStatistics.by_status?.active || 0}
-                  prefix={<RiseOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.inactiveTenants')}
-                  value={displayStatistics.by_status?.inactive || 0}
-                  prefix={<FallOutlined />}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.suspendedTenants')}
-                  value={displayStatistics.by_status?.suspended || 0}
-                  prefix={<ApartmentOutlined />}
-                  valueStyle={{ color: '#ff4d4f' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-      )}
-
-      {/* 用户与访问统计卡片 */}
-      {(userStats || accessStats) && hasToken && isInfraSuperAdmin && (
-        <div style={{ marginBottom: 24 }}>
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.infra.operation.userStats')}</Typography.Title>
-          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
-            <Col span={4}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.totalUsers')}
-                  value={userStats?.total_users ?? 0}
-                  prefix={<UserOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.newRegistrationsToday')}
-                  value={userStats?.new_today ?? 0}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.loginsToday')}
-                  value={accessStats?.logins_today ?? 0}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
-                <Statistic
-                  title={t('pages.infra.operation.dauToday')}
-                  value={accessStats?.dau_today ?? 0}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-      )}
-
-      {/* 未登录或权限不足提示 */}
-      {(!hasToken || !isInfraSuperAdmin) && (
-        <Card style={{ marginBottom: 24 }}>
-          <Empty
-            description={
-              <Space direction="vertical" size="small" align="center">
-                <Text type="warning" strong>
-                  {!hasToken ? t('pages.infra.operation.loginFirst') : t('pages.infra.operation.noPermission')}
-                </Text>
-                <Text type="secondary">
-                  {!hasToken 
-                    ? t('pages.infra.operation.loginHint') 
-                    : t('pages.infra.operation.noPermissionHint')}
-                </Text>
-                {!hasToken && (
-                  <Button type="primary" href="/platform">
-                    {t('pages.infra.operation.goLogin')}
-                  </Button>
-                )}
-              </Space>
-            }
-          />
-        </Card>
-      )}
-      
-      {/* 错误提示（如果有缓存数据，显示警告而不是错误） */}
-      {error && hasToken && isInfraSuperAdmin && (
-        <Card style={{ marginBottom: 24 }}>
-          {hasCachedData ? (
-            <Space direction="vertical" size="small" align="center" style={{ width: '100%' }}>
-              <Text type="warning" strong>
-                ⚠️ {t('pages.infra.operation.loadFailedCached')}
-              </Text>
-              <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                {t('pages.infra.operation.dataUpdatedAt')}：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : t('pages.infra.monitoring.unknown')}
-              </Text>
-              <Button size="small" onClick={() => refetch()}>
-                {t('pages.infra.operation.reload')}
-              </Button>
-            </Space>
-          ) : (
+  // 未登录或权限不足：使用 ListPageTemplate 展示提示
+  if (!hasToken || !isInfraSuperAdmin) {
+    return (
+      <ListPageTemplate>
+        {pageHeader}
+        <div style={{ marginTop: 24 }}>
+          <Card>
             <Empty
               description={
                 <Space direction="vertical" size="small" align="center">
-                  <Text type="danger" strong>{t('pages.infra.operation.loadFailed')}</Text>
-                  <Text type="secondary">
-                    {error instanceof Error ? error.message : t('pages.infra.operation.networkError')}
+                  <Text type="warning" strong>
+                    {!hasToken ? t('pages.infra.operation.loginFirst') : t('pages.infra.operation.noPermission')}
                   </Text>
-                  <Button size="small" onClick={() => refetch()}>
-                    {t('pages.infra.operation.retry')}
-                  </Button>
+                  <Text type="secondary">
+                    {!hasToken ? t('pages.infra.operation.loginHint') : t('pages.infra.operation.noPermissionHint')}
+                  </Text>
+                  {!hasToken && (
+                    <Button type="primary" href="/platform">
+                      {t('pages.infra.operation.goLogin')}
+                    </Button>
+                  )}
                 </Space>
               }
             />
-          )}
-        </Card>
-      )}
-      
-      {/* 加载状态 */}
-      {loading && !displayStatistics && hasToken && isInfraSuperAdmin ? (
-        <Row gutter={[16, 16]}>
-          {[1, 2, 3, 4].map((i) => (
-            <Col xs={24} sm={12} lg={6} key={i}>
-              <Card>
-                <Skeleton active paragraph={{ rows: 1 }} />
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      ) : (
+          </Card>
+        </div>
+      </ListPageTemplate>
+    );
+  }
+
+  return (
+    <MultiTabListPageTemplate
+      header={
         <>
-        {/* 组织状态分布 - 使用图表 */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} lg={12}>
-            <Card 
-              title={
-                <Space>
-                  <PieChartOutlined />
-                  <span>{t('pages.infra.operation.statusDistribution')}</span>
-                </Space>
-              }
-              loading={loading}
-            >
-              {statusChartData.length > 0 ? (
-                <div style={{ height: 300 }}>
-                  <Pie
-                    data={statusChartData}
-                    angleField="value"
-                    colorField="name"
-                    color={(datum: { name: string }) => statusChartData.find((d) => d.name === datum.name)?.color ?? '#1890ff'}
-                    radius={0.8}
-                    label={{ type: 'outer', formatter: (_: any, item: any) => `${item.name}: ${((item.value / (statusChartData.reduce((s, d) => s + d.value, 0) || 1)) * 100).toFixed(0)}%` }}
-                    tooltip={{ fields: ['name', 'value'] }}
-                  />
-                </div>
-              ) : (
-                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-          </Col>
-          <Col xs={24} lg={12}>
-            <Card 
-              title={
-                <Space>
-                  <BarChartOutlined />
-                  <span>{t('pages.infra.operation.planDistribution')}</span>
-                </Space>
-              }
-              loading={loading}
-            >
-              {planChartData.length > 0 ? (
-                <div style={{ height: 300 }}>
-                  <Column
-                    data={planChartData}
-                    xField="name"
-                    yField="value"
-                    color={(datum: { color?: string }) => datum.color ?? '#1890ff'}
-                    columnStyle={{ radius: [0, 4, 4, 0] }}
-                    xAxis={{ label: { autoRotate: true } }}
-                    tooltip={{ fields: ['name', 'value'] }}
-                  />
-                </div>
-              ) : (
-                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-          </Col>
-        </Row>
-
-        {/* 用户与访问图表 */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} lg={12}>
-            <Card
-              title={
-                <Space>
-                  <LineChartOutlined />
-                  <span>{t('pages.infra.operation.registrationTrend')}</span>
-                </Space>
-              }
-              loading={loadingUser}
-            >
-              {registrationTrendData.length > 0 ? (
-                <div style={{ height: 300 }}>
-                  <Line
-                    data={registrationTrendData}
-                    xField="date"
-                    yField="count"
-                    smooth
-                    xAxis={{ label: { autoRotate: true } }}
-                    tooltip={{ fields: ['date', 'count'] }}
-                  />
-                </div>
-              ) : (
-                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-          </Col>
-          <Col xs={24} lg={12}>
-            <Card
-              title={
-                <Space>
-                  <LineChartOutlined />
-                  <span>{t('pages.infra.operation.loginTrend')}</span>
-                </Space>
-              }
-              loading={loadingAccess}
-            >
-              {loginTrendData.length > 0 ? (
-                <div style={{ height: 300 }}>
-                  <Line
-                    data={loginTrendData}
-                    xField="date"
-                    yField="count"
-                    smooth
-                    xAxis={{ label: { autoRotate: true } }}
-                    tooltip={{ fields: ['date', 'count'] }}
-                  />
-                </div>
-              ) : (
-                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-          </Col>
-        </Row>
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col xs={24} lg={12}>
-            <Card
-              title={
-                <Space>
-                  <PieChartOutlined />
-                  <span>{t('pages.infra.operation.registrationSource')}</span>
-                </Space>
-              }
-              loading={loadingUser}
-            >
-              {sourceChartData.length > 0 ? (
-                <div style={{ height: 300 }}>
-                  <Pie
-                    data={sourceChartData}
-                    angleField="value"
-                    colorField="name"
-                    color={(datum: { name: string }) => sourceChartData.find((d) => d.name === datum.name)?.color ?? '#1890ff'}
-                    radius={0.8}
-                    label={{ type: 'outer', formatter: (_: any, item: any) => `${item.name}: ${((item.value / (sourceChartData.reduce((s, d) => s + d.value, 0) || 1)) * 100).toFixed(0)}%` }}
-                    tooltip={{ fields: ['name', 'value'] }}
-                  />
-                </div>
-              ) : (
-                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-          </Col>
-        </Row>
-
-            {/* 数据更新时间 */}
-            {(displayStatistics?.updated_at || dataUpdatedAt) && (
-              <Card style={{ marginTop: 24 }}>
-                <Space>
-                  <Text type="secondary">
-                    {t('pages.infra.operation.dataUpdatedAt')}：{displayStatistics?.updated_at 
-                      ? dayjs(displayStatistics.updated_at).format('llll')
-                      : dataUpdatedAt 
-                        ? dayjs(dataUpdatedAt).format('llll')
-                        : t('pages.infra.monitoring.unknown')}
-                    {hasCachedData && (
-                      <Text type="warning" style={{ marginLeft: 8 }}>
-                        {t('pages.infra.operation.cachedLabel')}
-                      </Text>
-                    )}
+          {pageHeader}
+          {error && (
+            <Card style={{ marginTop: 24 }}>
+              {hasCachedData ? (
+                <Space direction="vertical" size="small" align="center" style={{ width: '100%' }}>
+                  <Text type="warning" strong>⚠️ {t('pages.infra.operation.loadFailedCached')}</Text>
+                  <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                    {t('pages.infra.operation.dataUpdatedAt')}：{dataUpdatedAt ? dayjs(dataUpdatedAt).format('llll') : t('pages.infra.monitoring.unknown')}
                   </Text>
-                  {autoRefresh && !error && (
-                    <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                      {t('pages.infra.operation.autoRefreshing')}
-                    </Text>
-                  )}
+                  <Button size="small" onClick={() => refetch()}>{t('pages.infra.operation.reload')}</Button>
                 </Space>
-              </Card>
-            )}
+              ) : (
+                <Empty
+                  description={
+                    <Space direction="vertical" size="small" align="center">
+                      <Text type="danger" strong>{t('pages.infra.operation.loadFailed')}</Text>
+                      <Text type="secondary">{error instanceof Error ? error.message : t('pages.infra.operation.networkError')}</Text>
+                      <Button size="small" onClick={() => refetch()}>{t('pages.infra.operation.retry')}</Button>
+                    </Space>
+                  }
+                />
+              )}
+            </Card>
+          )}
         </>
-      )}
-      
-      {/* 有权限但无数据 */}
-      {!loading && !error && !displayStatistics && hasToken && isInfraSuperAdmin && (
-        <Card>
-          <Empty description={t('pages.infra.operation.noData')} />
-        </Card>
-      )}
-    </ListPageTemplate>
+      }
+      activeTabKey={activeTabKey}
+      onTabChange={setActiveTabKey}
+      padding={24}
+      tabs={[
+        {
+          key: 'organization',
+          label: (
+            <Space>
+              <ApartmentOutlined />
+              {t('pages.infra.operation.tabOrganization')}
+            </Space>
+          ),
+          children: (
+                <>
+                  {loading && !displayStatistics ? (
+                    <Row gutter={[16, 16]}>
+                      {[1, 2, 3, 4].map((i) => (
+                        <Col xs={24} sm={12} lg={6} key={i}>
+                          <Card><Skeleton active paragraph={{ rows: 1 }} /></Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  ) : (
+                    <>
+                      {displayStatistics && (
+                        <div style={{ marginBottom: 24 }}>
+                          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
+                            <Col span={6}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.totalTenants')} value={displayStatistics.total || 0} prefix={<ApartmentOutlined />} styles={{ content: { color: '#1890ff' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={6}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.activeTenants')} value={displayStatistics.by_status?.active || 0} prefix={<RiseOutlined />} styles={{ content: { color: '#52c41a' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={6}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.inactiveTenants')} value={displayStatistics.by_status?.inactive || 0} prefix={<FallOutlined />} styles={{ content: { color: '#faad14' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={6}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.suspendedTenants')} value={displayStatistics.by_status?.suspended || 0} prefix={<ApartmentOutlined />} styles={{ content: { color: '#ff4d4f' } }} />
+                              </Card>
+                            </Col>
+                          </Row>
+                        </div>
+                      )}
+                      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><PieChartOutlined /><span>{t('pages.infra.operation.statusDistribution')}</span></Space>} loading={loading}>
+                            {statusChartData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Pie data={statusChartData} angleField="value" colorField="name" color={(d: { name: string }) => statusChartData.find((x) => x.name === d.name)?.color ?? '#1890ff'} radius={0.8}
+                                  tooltip={{ fields: ['name', 'value'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><BarChartOutlined /><span>{t('pages.infra.operation.planDistribution')}</span></Space>} loading={loading}>
+                            {planChartData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Column data={planChartData} xField="name" yField="value" color={(d: { color?: string }) => d.color ?? '#1890ff'} columnStyle={{ radius: [0, 4, 4, 0] }} xAxis={{ label: { autoRotate: true } }} tooltip={{ fields: ['name', 'value'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                      </Row>
+                      {!loading && !displayStatistics && !error && <Empty description={t('pages.infra.operation.noData')} />}
+                    </>
+                  )}
+                  {dataUpdateFooter}
+                </>
+              ),
+        },
+        {
+          key: 'user',
+          label: (
+            <Space>
+              <UserOutlined />
+              {t('pages.infra.operation.tabUser')}
+            </Space>
+          ),
+          children: (
+                <>
+                  {(loadingUser || loadingAccess) && !userStats && !accessStats ? (
+                    <Row gutter={[16, 16]}>
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <Col xs={24} sm={12} lg={6} key={i}>
+                          <Card><Skeleton active paragraph={{ rows: 1 }} /></Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  ) : (
+                    <>
+                      {(userStats || accessStats) && (
+                        <div style={{ marginBottom: 24 }}>
+                          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
+                            <Col span={5}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.totalUsers')} value={userStats?.total_users ?? 0} prefix={<UserOutlined />} styles={{ content: { color: '#1890ff' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={5}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.newRegistrationsToday')} value={userStats?.new_today ?? 0} styles={{ content: { color: '#52c41a' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={5}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.loginsToday')} value={accessStats?.logins_today ?? 0} styles={{ content: { color: '#722ed1' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={5}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.dauToday')} value={accessStats?.dau_today ?? 0} styles={{ content: { color: '#faad14' } }} />
+                              </Card>
+                            </Col>
+                            <Col span={4}>
+                              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                                <Statistic title={t('pages.infra.operation.totalLogins')} value={accessStats?.total_logins ?? 0} styles={{ content: { color: '#13c2c2' } }} />
+                              </Card>
+                            </Col>
+                          </Row>
+                        </div>
+                      )}
+                      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><LineChartOutlined /><span>{t('pages.infra.operation.registrationTrend')}</span></Space>} loading={loadingUser}>
+                            {registrationTrendData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Line data={registrationTrendData} xField="date" yField="count" smooth xAxis={{ label: { autoRotate: true } }} tooltip={{ fields: ['date', 'count'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><LineChartOutlined /><span>{t('pages.infra.operation.loginTrend')}</span></Space>} loading={loadingAccess}>
+                            {loginTrendData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Line data={loginTrendData} xField="date" yField="count" smooth xAxis={{ label: { autoRotate: true } }} tooltip={{ fields: ['date', 'count'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                      </Row>
+                      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><PieChartOutlined /><span>{t('pages.infra.operation.registrationRegion')}</span></Space>} loading={loadingUser}>
+                            {registrationRegionChartData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Pie data={registrationRegionChartData} angleField="value" colorField="name" color={(d: { name: string }) => registrationRegionChartData.find((x) => x.name === d.name)?.color ?? '#1890ff'} radius={0.8}
+                                  tooltip={{ fields: ['name', 'value'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                        <Col xs={24} lg={12}>
+                          <Card title={<Space><PieChartOutlined /><span>{t('pages.infra.operation.loginRegion')}</span></Space>} loading={loadingAccess}>
+                            {loginRegionChartData.length > 0 ? (
+                              <div style={{ height: 300 }}>
+                                <Pie data={loginRegionChartData} angleField="value" colorField="name" color={(d: { name: string }) => loginRegionChartData.find((x) => x.name === d.name)?.color ?? '#1890ff'} radius={0.8}
+                                  tooltip={{ fields: ['name', 'value'] }} />
+                              </div>
+                            ) : (
+                              <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            )}
+                          </Card>
+                        </Col>
+                      </Row>
+                      {!loadingUser && !loadingAccess && !userStats && !accessStats && <Empty description={t('pages.infra.operation.noData')} />}
+                    </>
+                  )}
+                  {dataUpdateFooter}
+                </>
+              ),
+        },
+      ]}
+    />
   );
 }
 
