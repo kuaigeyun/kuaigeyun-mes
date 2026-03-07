@@ -89,7 +89,6 @@ import {
   FormModalTemplate,
   DetailDrawerTemplate,
   MODAL_CONFIG,
-  DRAWER_CONFIG,
   TOUCH_SCREEN_CONFIG,
   type StatCard,
 } from '../../../../../components/layout-templates'
@@ -2998,7 +2997,8 @@ const WorkOrdersPage: React.FC = () => {
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        width="50%"
+        styles={{ wrapper: { width: '50%' } }}
         extra={
           workOrderDetail && (
             <Space wrap>

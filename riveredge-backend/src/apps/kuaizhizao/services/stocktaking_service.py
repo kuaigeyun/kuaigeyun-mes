@@ -139,8 +139,11 @@ class StocktakingService(AppBaseService[Stocktaking]):
         ).order_by('id')
 
         # 构建响应
+        from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle
+
         response = StocktakingWithItemsResponse.model_validate(stocktaking)
         response.items = [StocktakingItemResponse.model_validate(item) for item in items]
+        response.lifecycle = get_stocktaking_lifecycle(stocktaking)
 
         return response
 

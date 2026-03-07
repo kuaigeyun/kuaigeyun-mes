@@ -2975,8 +2975,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             raise NotFoundError(f"其他入库单不存在: {inbound_id}")
 
         items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
         response = OtherInboundWithItemsResponse.model_validate(inbound)
         response.items = [OtherInboundItemResponse.model_validate(i) for i in items]
+        response.lifecycle = get_other_inbound_lifecycle(inbound)
         return response
 
     async def list_other_inbounds(
@@ -3130,8 +3133,11 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             raise NotFoundError(f"其他出库单不存在: {outbound_id}")
 
         items = await OtherOutboundItem.filter(tenant_id=tenant_id, outbound_id=outbound_id).all()
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
+
         response = OtherOutboundWithItemsResponse.model_validate(outbound)
         response.items = [OtherOutboundItemResponse.model_validate(i) for i in items]
+        response.lifecycle = get_other_outbound_lifecycle(outbound)
         return response
 
     async def list_other_outbounds(
@@ -3272,8 +3278,11 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             raise NotFoundError(f"借料单不存在: {borrow_id}")
 
         items = await MaterialBorrowItem.filter(tenant_id=tenant_id, borrow_id=borrow_id).all()
+        from apps.kuaizhizao.services.document_lifecycle_service import get_material_borrow_lifecycle
+
         response = MaterialBorrowWithItemsResponse.model_validate(borrow)
         response.items = [MaterialBorrowItemResponse.model_validate(i) for i in items]
+        response.lifecycle = get_material_borrow_lifecycle(borrow)
         return response
 
     async def list_material_borrows(

@@ -869,3 +869,358 @@ def get_quotation_lifecycle(quotation: Any) -> Dict[str, Any]:
         "sub_stages": None,
         "next_step_suggestions": [],
     }
+
+
+# ---------------------------------------------------------------------------
+# 入库单生命周期（草稿→已确认/待退料→已退料/已完成）
+# ---------------------------------------------------------------------------
+INBOUND_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "confirmed", "label": "已确认"},
+    {"key": "completed", "label": "已完成"},
+]
+
+
+def get_inbound_lifecycle(record: Any) -> Dict[str, Any]:
+    """入库单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "已确认": "confirmed", "confirmed": "confirmed",
+        "待退料": "confirmed", "pending_return": "confirmed",
+        "已完成": "completed", "completed": "completed",
+        "已退料": "completed", "returned": "completed",
+        "已取消": "draft", "cancelled": "draft",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "confirmed": "已确认", "completed": "已完成"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    if status in ("待退料", "pending_return"):
+        stage_name = "待退料"
+    elif status in ("已退料", "returned"):
+        stage_name = "已退料"
+    elif status in ("已取消", "cancelled"):
+        stage_name = "已取消"
+    is_exception = stage_name == "已取消"
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if is_exception else "success" if stage_name in ("已完成", "已退料") else "normal",
+        "main_stages": _build_main_stages(INBOUND_MAIN_STAGES, key, is_exception=is_exception),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认"] if stage_name == "草稿" else ["完成"] if stage_name in ("已确认", "待退料") else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 出库单生命周期（草稿→已确认→已完成→已取消）
+# ---------------------------------------------------------------------------
+OUTBOUND_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "confirmed", "label": "已确认"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_outbound_lifecycle(record: Any) -> Dict[str, Any]:
+    """出库单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "已确认": "confirmed", "confirmed": "confirmed",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "confirmed": "已确认", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(OUTBOUND_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认"] if key == "draft" else ["完成"] if key == "confirmed" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 配料单生命周期（草稿→配料中→已完成→已取消）
+# ---------------------------------------------------------------------------
+BATCHING_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "picking", "label": "配料中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_batching_order_lifecycle(record: Any) -> Dict[str, Any]:
+    """配料单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "配料中": "picking", "picking": "picking",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "picking": "配料中", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(BATCHING_ORDER_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认配料"] if key == "draft" else ["完成配料"] if key == "picking" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 调拨单生命周期（草稿→调拨中→已完成→已取消）
+# ---------------------------------------------------------------------------
+INVENTORY_TRANSFER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "in_progress", "label": "调拨中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_inventory_transfer_lifecycle(record: Any) -> Dict[str, Any]:
+    """调拨单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "调拨中": "in_progress", "in_progress": "in_progress",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "in_progress": "调拨中", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(INVENTORY_TRANSFER_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["执行调拨"] if key == "draft" else ["完成"] if key == "in_progress" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 盘点单生命周期（草稿→盘点中→已完成→已取消）
+# ---------------------------------------------------------------------------
+STOCKTAKING_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "in_progress", "label": "盘点中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_stocktaking_lifecycle(record: Any) -> Dict[str, Any]:
+    """盘点单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "盘点中": "in_progress", "in_progress": "in_progress",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "in_progress": "盘点中", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(STOCKTAKING_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["开始盘点"] if key == "draft" else ["完成盘点"] if key == "in_progress" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 借料单生命周期（待借出→已借出→已取消）
+# ---------------------------------------------------------------------------
+MATERIAL_BORROW_MAIN_STAGES = [
+    {"key": "pending", "label": "待借出"},
+    {"key": "borrowed", "label": "已借出"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_material_borrow_lifecycle(record: Any) -> Dict[str, Any]:
+    """借料单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "待借出": "pending", "pending": "pending",
+        "已借出": "borrowed", "borrowed": "borrowed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "pending")
+    stage_name_map = {"pending": "待借出", "borrowed": "已借出", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "待借出")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "borrowed" else "normal",
+        "main_stages": _build_main_stages(MATERIAL_BORROW_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认借出"] if key == "pending" else ["归还"] if key == "borrowed" else [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 其他入库/出库、委外单、委外工单、装配/拆解、异常处理（与工单或现有逻辑类似，复用或简化）
+# ---------------------------------------------------------------------------
+OTHER_INBOUND_MAIN_STAGES = [
+    {"key": "pending", "label": "待入库"},
+    {"key": "received", "label": "已入库"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_other_inbound_lifecycle(record: Any) -> Dict[str, Any]:
+    """其他入库单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {"待入库": "pending", "已入库": "received", "已取消": "cancelled"}
+    key = status_map.get(status, "pending")
+    stage_name_map = {"pending": "待入库", "received": "已入库", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "待入库")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "received" else "normal",
+        "main_stages": _build_main_stages(OTHER_INBOUND_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认入库"] if key == "pending" else [],
+    }
+
+
+OTHER_OUTBOUND_MAIN_STAGES = [
+    {"key": "pending", "label": "待出库"},
+    {"key": "delivered", "label": "已出库"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_other_outbound_lifecycle(record: Any) -> Dict[str, Any]:
+    """其他出库单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {"待出库": "pending", "已出库": "delivered", "已取消": "cancelled"}
+    key = status_map.get(status, "pending")
+    stage_name_map = {"pending": "待出库", "delivered": "已出库", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "待出库")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "delivered" else "normal",
+        "main_stages": _build_main_stages(OTHER_OUTBOUND_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认出库"] if key == "pending" else [],
+    }
+
+
+def get_outsource_work_order_lifecycle(record: Any) -> Dict[str, Any]:
+    """委外工单生命周期（复用工单逻辑）"""
+    return get_work_order_lifecycle(record)
+
+
+def get_outsource_order_lifecycle(record: Any) -> Dict[str, Any]:
+    """委外单生命周期（复用工单逻辑）"""
+    return get_work_order_lifecycle(record)
+
+
+ASSEMBLY_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "in_progress", "label": "组装中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_assembly_order_lifecycle(record: Any) -> Dict[str, Any]:
+    """组装单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "组装中": "in_progress", "in_progress": "in_progress",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "in_progress": "组装中", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(ASSEMBLY_ORDER_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["执行组装"] if key == "draft" else ["完成"] if key == "in_progress" else [],
+    }
+
+
+DISASSEMBLY_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "in_progress", "label": "拆卸中"},
+    {"key": "completed", "label": "已完成"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_disassembly_order_lifecycle(record: Any) -> Dict[str, Any]:
+    """拆卸单生命周期计算"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "草稿": "draft", "draft": "draft",
+        "拆卸中": "in_progress", "in_progress": "in_progress",
+        "已完成": "completed", "completed": "completed",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_name_map = {"draft": "草稿", "in_progress": "拆卸中", "completed": "已完成", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, status or "草稿")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "completed" else "normal",
+        "main_stages": _build_main_stages(DISASSEMBLY_ORDER_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["执行拆卸"] if key == "draft" else ["完成"] if key == "in_progress" else [],
+    }
+
+
+EXCEPTION_PROCESS_MAIN_STAGES = [
+    {"key": "pending", "label": "待处理"},
+    {"key": "processing", "label": "处理中"},
+    {"key": "resolved", "label": "已解决"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_exception_process_lifecycle(record: Any) -> Dict[str, Any]:
+    """异常处理生命周期计算"""
+    process_status = _norm(getattr(record, "process_status", None))
+    status_map = {
+        "待处理": "pending", "pending": "pending",
+        "处理中": "processing", "processing": "processing",
+        "已解决": "resolved", "resolved": "resolved",
+        "已取消": "cancelled", "cancelled": "cancelled",
+    }
+    key = status_map.get(process_status, "pending")
+    stage_name_map = {"pending": "待处理", "processing": "处理中", "resolved": "已解决", "cancelled": "已取消"}
+    stage_name = stage_name_map.get(key, process_status or "待处理")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "resolved" else "normal",
+        "main_stages": _build_main_stages(EXCEPTION_PROCESS_MAIN_STAGES, key, is_exception=(key == "cancelled")),
+        "sub_stages": None,
+        "next_step_suggestions": ["分配"] if key == "pending" else ["流转", "解决"] if key == "processing" else [],
+    }

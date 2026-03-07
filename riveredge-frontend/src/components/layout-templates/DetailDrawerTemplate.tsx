@@ -8,6 +8,7 @@
  * Date: 2025-12-26
  */
 
+import type { CSSProperties } from 'react';
 import { ReactNode } from 'react';
 import { Drawer, Descriptions } from 'antd';
 import { ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -46,6 +47,8 @@ export interface DetailDrawerTemplateProps<T = any> {
   children?: ReactNode;
   /** 自定义样式类名 */
   className?: string;
+  /** Drawer 语义化结构的样式（如 styles.wrapper 用于百分比宽度） */
+  styles?: Partial<Record<'root' | 'mask' | 'header' | 'title' | 'extra' | 'section' | 'body' | 'footer' | 'wrapper' | 'dragger' | 'close', CSSProperties>>;
 }
 
 /**
@@ -79,6 +82,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   customContent,
   extra,
   className,
+  styles,
   children,
 }: DetailDrawerTemplateProps<T>) => {
   // Ant Design 5+ 推荐使用 size，width 已废弃
@@ -93,6 +97,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       loading={loading}
       className={className}
       extra={extra}
+      styles={styles}
     >
       {customContent || (columns && columns.length > 0 && (
         <Descriptions

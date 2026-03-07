@@ -13,10 +13,11 @@ import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDatePick
 import { App, Button, Tag, Space, Modal, message, Card, Table, Form as AntForm, InputNumber, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
-import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
+import { getBatchingOrderStageName, getBatchingOrderLifecycle } from '../../../utils/batchingOrderLifecycle';
 import { workOrderApi } from '../../../services/production';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
@@ -492,6 +493,21 @@ const BatchingCenterPage: React.FC = () => {
           { title: '执行时间', dataIndex: 'executed_at', valueType: 'dateTime' },
         ]}
       >
+        <DetailDrawerSection title="生命周期">
+          {(() => {
+            const lifecycle = getBatchingOrderLifecycle(currentOrder ?? undefined);
+            const mainStages = lifecycle.mainStages ?? [];
+            if (mainStages.length === 0) return null;
+            return (
+              <UniLifecycleStepper
+                steps={mainStages}
+                status={lifecycle.status}
+                showLabels
+                nextStepSuggestions={lifecycle.nextStepSuggestions}
+              />
+            );
+          })()}
+        </DetailDrawerSection>
         {currentOrder?.items && currentOrder.items.length > 0 && (
           <Card title="配料明细" style={{ marginTop: 16 }}>
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>

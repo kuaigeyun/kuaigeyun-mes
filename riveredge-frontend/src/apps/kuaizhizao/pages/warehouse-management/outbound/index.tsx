@@ -15,7 +15,6 @@ import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { parseBackendLifecycle } from '../../../utils/backendLifecycle';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -505,9 +504,7 @@ const OutboundPage: React.FC = () => {
               {/* 生命周期 */}
               <DetailDrawerSection title="生命周期">
                 {(() => {
-                  const lifecycle = (currentOrder as any).lifecycle?.main_stages?.length
-                    ? parseBackendLifecycle((currentOrder as any).lifecycle)
-                    : getOutboundLifecycle(currentOrder);
+                  const lifecycle = getOutboundLifecycle(currentOrder);
                   const mainStages = lifecycle.mainStages ?? [];
                   if (mainStages.length === 0) return null;
                   return (

@@ -21,6 +21,14 @@ import {
   ThunderboltOutlined,
   CarOutlined,
   FileOutlined,
+  SwapOutlined,
+  SearchOutlined,
+  LoadingOutlined,
+  DollarOutlined,
+  BellOutlined,
+  ExportOutlined,
+  ImportOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { SubStage } from './types';
@@ -45,8 +53,9 @@ const LINE_MIN_WIDTH = 8;
 const LINE_HEIGHT = 2;
 const INNER_FONT_SIZE = 9;
 
-/** 按阶段 key 映射默认图标 */
+/** 按阶段 key 映射默认图标（审核类、仓储类、生产类等） */
 const STAGE_KEY_ICONS: Record<string, React.ReactNode> = {
+  // 生产/工单类
   bom_check: <ApartmentOutlined />,
   demand_compute: <CalculatorOutlined />,
   material_ready: <InboxOutlined />,
@@ -58,14 +67,42 @@ const STAGE_KEY_ICONS: Record<string, React.ReactNode> = {
   released: <ThunderboltOutlined />,
   in_progress: <PlayCircleOutlined />,
   cancelled: <CloseCircleOutlined />,
+  completed: <CheckCircleOutlined />,
+  executed: <PlayCircleOutlined />,
+  running: <LoadingOutlined />,
+  failed: <CloseCircleOutlined />,
+  // 审核类
   pending_review: <ClockCircleOutlined />,
   rejected: <CloseCircleOutlined />,
   audited: <CheckCircleOutlined />,
+  approved: <CheckCircleOutlined />,
   effective: <ThunderboltOutlined />,
   executing: <PlayCircleOutlined />,
   delivered: <CarOutlined />,
-  completed: <CheckCircleOutlined />,
   pushed: <CheckCircleOutlined />,
+  // 仓储/出入库类
+  confirmed: <CheckCircleOutlined />,
+  pending: <ClockCircleOutlined />,
+  inspected: <SearchOutlined />,
+  picking: <InboxOutlined />,
+  notified: <BellOutlined />,
+  shipped: <CarOutlined />,
+  received: <InboxOutlined />,
+  signed: <FileTextOutlined />,
+  borrowed: <ImportOutlined />,
+  pending_outbound: <ExportOutlined />,
+  outbound: <SendOutlined />,
+  // 采购申请/报价类
+  partial: <SwapOutlined />,
+  full: <CheckCircleOutlined />,
+  sent: <SendOutlined />,
+  accepted: <CheckCircleOutlined />,
+  converted: <SwapOutlined />,
+  // 财务类
+  settled: <DollarOutlined />,
+  // 异常处理类
+  processing: <SyncOutlined />,
+  resolved: <CheckCircleOutlined />,
 };
 
 function getIconForStage(step: SubStage): React.ReactNode {
