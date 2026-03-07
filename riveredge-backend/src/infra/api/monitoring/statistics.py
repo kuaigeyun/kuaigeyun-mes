@@ -7,16 +7,19 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from datetime import datetime
-from typing import Dict, Any
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from tortoise.functions import Count
 from tortoise.expressions import Q
+from tortoise import Tortoise
 
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
+from infra.models.user import User
+from core.models.login_log import LoginLog
 import psutil
 import sys
 import platform as std_platform  # 使用标准库的 platform，避免与项目模块冲突
@@ -208,4 +211,196 @@ async def get_tenant_statistics(
         raise HTTPException(
             status_code=500,
             detail=f"获取组织统计信息失败: {str(e)}"
+        )
+
+
+def _parse_date_range(start: Optional[str], end: Optional[str]) -> tuple[Optional[datetime], Optional[datetime]]:
+    """解析时间范围参数，返回 (start_dt, end_dt)"""
+    start_dt = None
+    end_dt = None
+    if start:
+        try:
+            start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    if end:
+        try:
+            end_dt = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            pass
+    return start_dt, end_dt
+
+
+@router.get("/users/statistics")
+async def get_users_statistics(
+    start: Optional[str] = Query(None, description="开始时间（ISO 格式）"),
+    end: Optional[str] = Query(None, description="结束时间（ISO 格式）"),
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+):
+    """
+    获取用户注册统计信息（平台级）
+
+    统计业务用户（排除平台管理员、软删除）的注册数据。
+    包含：总用户数、今日/本周/本月新注册、注册来源分布、注册趋势。
+    """
+    try:
+        # 业务用户条件：tenant_id 不为空（排除平台管理员）、未软删除
+        base_q = Q(tenant_id__not_isnull=True) & Q(deleted_at__isnull=True)
+
+        total_users = await User.filter(base_q).count()
+
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
+        month_start = today_start.replace(day=1)
+
+        new_today = await User.filter(base_q & Q(created_at__gte=today_start)).count()
+        new_week = await User.filter(base_q & Q(created_at__gte=week_start)).count()
+        new_month = await User.filter(base_q & Q(created_at__gte=month_start)).count()
+
+        # 按 source 分组统计
+        source_stats = await User.filter(base_q).group_by("source").annotate(
+            cnt=Count("id")
+        ).values("source", "cnt")
+        by_source: Dict[str, int] = {}
+        for s in source_stats:
+            key = s["source"] if s["source"] else "unknown"
+            by_source[key] = s["cnt"]
+
+        # 注册趋势：按日分组（使用时间范围参数，默认最近 30 天）
+        start_dt, end_dt = _parse_date_range(start, end)
+        if not end_dt:
+            end_dt = now
+        if not start_dt:
+            start_dt = end_dt - timedelta(days=30)
+        # 限制最多 90 天
+        if (end_dt - start_dt).days > 90:
+            start_dt = end_dt - timedelta(days=90)
+
+        conn = Tortoise.get_connection("default")
+        trend_sql = """
+            SELECT (created_at AT TIME ZONE 'UTC')::date AS date, COUNT(*) AS count
+            FROM core_users
+            WHERE tenant_id IS NOT NULL AND (deleted_at IS NULL)
+              AND created_at >= $1 AND created_at <= $2
+            GROUP BY (created_at AT TIME ZONE 'UTC')::date
+            ORDER BY date
+        """
+        trend_rows = await conn.execute_query_dict(
+            trend_sql,
+            [start_dt, end_dt],
+        )
+        registration_trend: List[Dict[str, Any]] = [
+            {"date": str(row["date"]), "count": row["count"]}
+            for row in (trend_rows or [])
+        ]
+
+        return {
+            "total_users": total_users,
+            "new_today": new_today,
+            "new_week": new_week,
+            "new_month": new_month,
+            "by_source": by_source,
+            "registration_trend": registration_trend,
+            "updated_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取用户统计信息失败: {str(e)}",
+        )
+
+
+@router.get("/access/statistics")
+async def get_access_statistics(
+    start: Optional[str] = Query(None, description="开始时间（ISO 格式）"),
+    end: Optional[str] = Query(None, description="结束时间（ISO 格式）"),
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+):
+    """
+    获取访问/登录统计信息（平台级）
+
+    统计全平台登录日志，包含：总登录数、成功/失败、登录趋势、日活跃用户数（DAU）。
+    """
+    try:
+        base_q = Q()
+
+        total_logins = await LoginLog.filter(base_q).count()
+        success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
+        failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
+
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 今日登录数、今日 DAU
+        today_q = base_q & Q(created_at__gte=today_start)
+        logins_today = await LoginLog.filter(today_q).count()
+        # DAU: 今日成功登录的去重 user_id 数
+        conn = Tortoise.get_connection("default")
+        dau_sql = """
+            SELECT COUNT(DISTINCT user_id) AS cnt
+            FROM core_login_logs
+            WHERE login_status = 'success' AND user_id IS NOT NULL
+              AND created_at >= $1
+        """
+        dau_rows = await conn.execute_query_dict(dau_sql, [today_start])
+        dau_today = dau_rows[0].get("cnt", 0) or 0 if dau_rows else 0
+
+        # 登录趋势、DAU 趋势：按日分组
+        start_dt, end_dt = _parse_date_range(start, end)
+        if not end_dt:
+            end_dt = now
+        if not start_dt:
+            start_dt = end_dt - timedelta(days=30)
+        if (end_dt - start_dt).days > 90:
+            start_dt = end_dt - timedelta(days=90)
+
+        conn = Tortoise.get_connection("default")
+        login_trend_sql = """
+            SELECT (created_at AT TIME ZONE 'UTC')::date AS date, COUNT(*) AS count
+            FROM core_login_logs
+            WHERE created_at >= $1 AND created_at <= $2
+            GROUP BY (created_at AT TIME ZONE 'UTC')::date
+            ORDER BY date
+        """
+        login_trend_rows = await conn.execute_query_dict(
+            login_trend_sql,
+            [start_dt, end_dt],
+        )
+        login_trend: List[Dict[str, Any]] = [
+            {"date": str(row["date"]), "count": row["count"]}
+            for row in (login_trend_rows or [])
+        ]
+
+        dau_trend_sql = """
+            SELECT (created_at AT TIME ZONE 'UTC')::date AS date, COUNT(DISTINCT user_id) AS count
+            FROM core_login_logs
+            WHERE login_status = 'success' AND user_id IS NOT NULL
+              AND created_at >= $1 AND created_at <= $2
+            GROUP BY (created_at AT TIME ZONE 'UTC')::date
+            ORDER BY date
+        """
+        dau_trend_rows = await conn.execute_query_dict(
+            dau_trend_sql,
+            [start_dt, end_dt],
+        )
+        dau_trend: List[Dict[str, Any]] = [
+            {"date": str(row["date"]), "count": row["count"]}
+            for row in (dau_trend_rows or [])
+        ]
+
+        return {
+            "total_logins": total_logins,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "logins_today": logins_today,
+            "dau_today": dau_today,
+            "login_trend": login_trend,
+            "dau_trend": dau_trend,
+            "updated_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取访问统计信息失败: {str(e)}",
         )

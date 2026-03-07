@@ -27,22 +27,20 @@ import {
 import { ListPageTemplate, STAT_CARD_CONFIG } from '../../../components/layout-templates';
 import {
   ApartmentOutlined,
-  // UserOutlined,
-  // DatabaseOutlined,
-  // CloudServerOutlined,
+  UserOutlined,
   RiseOutlined,
   FallOutlined,
   ReloadOutlined,
   DownloadOutlined,
   PieChartOutlined,
   BarChartOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { Pie, Column } from '@ant-design/charts';
+import { Pie, Column, Line } from '@ant-design/charts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTenantStatistics } from '../../../services/superadmin';
-// import type { TenantStatistics } from '../../../services/superadmin';
+import { getTenantStatistics, getUserStatistics, getAccessStatistics } from '../../../services/superadmin';
 import { getToken, getUserInfo } from '../../../utils/auth';
 import { useTranslation } from 'react-i18next';
 import 'dayjs/locale/zh-cn';
@@ -126,6 +124,8 @@ export default function OperationsDashboard() {
     };
   }, [timeRangeType, customDateRange]);
   
+  const dateRange = getDateRange();
+
   /**
    * 使用 React Query 获取统计数据（支持缓存和自动刷新）
    * 包含降级方案：API 失败时显示缓存数据
@@ -139,20 +139,36 @@ export default function OperationsDashboard() {
   } = useQuery({
     queryKey: ['tenantStatistics', timeRangeType, customDateRange],
     queryFn: async () => {
-      // const dateRange = getDateRange();
-      // 注意：当前后端 API 不支持时间范围参数，这里先预留接口
-      // 后续后端支持时，可以传递 dateRange 参数
       const data = await getTenantStatistics();
       return data;
     },
-    enabled: hasToken && isInfraSuperAdmin, // 只有登录的平台超级管理员才能获取数据
-    staleTime: 60000, // 数据在 60 秒内视为新鲜
-    gcTime: 300000, // 缓存保留 5 分钟
-    retry: false, // 401 错误不重试
-    refetchOnWindowFocus: false, // 避免未登录时频繁请求
-    throwOnError: false, // 不抛出错误，由组件处理
-    // 降级方案：即使 API 失败，也返回缓存数据（如果有）
-    placeholderData: (previousData) => previousData, // 使用缓存数据作为占位符
+    enabled: hasToken && isInfraSuperAdmin,
+    staleTime: 60000,
+    gcTime: 300000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    throwOnError: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const { data: userStats, isLoading: loadingUser, refetch: refetchUser } = useQuery({
+    queryKey: ['userStatistics', dateRange.start, dateRange.end],
+    queryFn: async () => getUserStatistics({ start: dateRange.start, end: dateRange.end }),
+    enabled: hasToken && isInfraSuperAdmin,
+    staleTime: 60000,
+    gcTime: 300000,
+    retry: false,
+    throwOnError: false,
+  });
+
+  const { data: accessStats, isLoading: loadingAccess, refetch: refetchAccess } = useQuery({
+    queryKey: ['accessStatistics', dateRange.start, dateRange.end],
+    queryFn: async () => getAccessStatistics({ start: dateRange.start, end: dateRange.end }),
+    enabled: hasToken && isInfraSuperAdmin,
+    staleTime: 60000,
+    gcTime: 300000,
+    retry: false,
+    throwOnError: false,
   });
   
   // 降级方案：如果 API 失败但有缓存数据，使用缓存数据
@@ -181,21 +197,25 @@ export default function OperationsDashboard() {
    */
   useEffect(() => {
     if (!autoRefresh) return;
-    
+
     const interval = setInterval(() => {
       refetch();
+      refetchUser();
+      refetchAccess();
     }, autoRefreshInterval);
-    
+
     return () => clearInterval(interval);
-  }, [autoRefresh, autoRefreshInterval, refetch]);
+  }, [autoRefresh, autoRefreshInterval, refetch, refetchUser, refetchAccess]);
   
   /**
    * 处理手动刷新
    */
   const handleRefresh = useCallback(() => {
     refetch();
+    refetchUser();
+    refetchAccess();
     messageApi.success(t('pages.infra.operation.refreshSuccess'));
-  }, [refetch, messageApi, t]);
+  }, [refetch, refetchUser, refetchAccess, messageApi, t]);
   
   /**
    * 准备图表数据
@@ -213,12 +233,12 @@ export default function OperationsDashboard() {
   
   const planChartData = useMemo(() => {
     if (!displayStatistics) return [];
-    
-    const trial = (displayStatistics.total || 0) - 
-                  (displayStatistics.by_plan?.basic || 0) - 
-                  (displayStatistics.by_plan?.professional || 0) - 
+
+    const trial = (displayStatistics.total || 0) -
+                  (displayStatistics.by_plan?.basic || 0) -
+                  (displayStatistics.by_plan?.professional || 0) -
                   (displayStatistics.by_plan?.enterprise || 0);
-    
+
     return [
       { name: t('pages.infra.operation.planBasic'), value: displayStatistics.by_plan?.basic || 0, color: '#1890ff' },
       { name: t('pages.infra.operation.planProfessional'), value: displayStatistics.by_plan?.professional || 0, color: '#722ed1' },
@@ -226,12 +246,37 @@ export default function OperationsDashboard() {
       { name: t('pages.infra.operation.planTrial'), value: trial, color: '#faad14' },
     ].filter(item => item.value > 0);
   }, [displayStatistics, t]);
+
+  const sourceChartData = useMemo(() => {
+    if (!userStats?.by_source) return [];
+    const labelMap: Record<string, string> = {
+      personal: t('pages.infra.operation.sourcePersonal'),
+      organization: t('pages.infra.operation.sourceOrganization'),
+      invite_code: t('pages.infra.operation.sourceInvite'),
+      unknown: t('pages.infra.operation.sourceUnknown'),
+    };
+    return Object.entries(userStats.by_source).map(([key, value]) => ({
+      name: labelMap[key] || key,
+      value,
+      color: key === 'personal' ? '#1890ff' : key === 'organization' ? '#52c41a' : key === 'invite_code' ? '#722ed1' : '#8c8c8c',
+    })).filter(item => item.value > 0);
+  }, [userStats?.by_source, t]);
+
+  const registrationTrendData = useMemo(() => {
+    if (!userStats?.registration_trend?.length) return [];
+    return userStats.registration_trend.map((d) => ({ date: d.date, count: d.count }));
+  }, [userStats?.registration_trend]);
+
+  const loginTrendData = useMemo(() => {
+    if (!accessStats?.login_trend?.length) return [];
+    return accessStats.login_trend.map((d) => ({ date: d.date, count: d.count }));
+  }, [accessStats?.login_trend]);
   
   /**
    * 处理数据导出（CSV 格式）
    */
   const handleExport = useCallback(() => {
-    if (!displayStatistics) {
+    if (!displayStatistics && !userStats && !accessStats) {
       messageApi.warning(t('pages.infra.operation.noDataExport'));
       return;
     }
@@ -254,40 +299,73 @@ export default function OperationsDashboard() {
         exportData.push([t('pages.infra.operation.exportDataStatus'), t('pages.infra.operation.cachedData')]);
       }
       exportData.push([]); // 空行
-      
-      // 核心指标
-      exportData.push([t('pages.infra.operation.coreMetrics'), '']);
-      exportData.push([t('pages.infra.operation.totalTenants'), String(displayStatistics.total || 0)]);
-      exportData.push([t('pages.infra.operation.activeTenants'), String(displayStatistics.by_status?.active || 0)]);
-      exportData.push([t('pages.infra.operation.inactiveTenants'), String(displayStatistics.by_status?.inactive || 0)]);
-      exportData.push([t('pages.infra.operation.expiredTenants'), String(displayStatistics.by_status?.expired || 0)]);
-      exportData.push([t('pages.infra.operation.suspendedTenants'), String(displayStatistics.by_status?.suspended || 0)]);
-      exportData.push([]); // 空行
-      
-      // 组织状态分布
-      exportData.push([t('pages.infra.operation.statusDistribution'), '']);
-      exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
-      if (statusChartData.length > 0) {
-        statusChartData.forEach(item => {
-          exportData.push([item.name, String(item.value)]);
-        });
-      } else {
-        exportData.push([t('pages.infra.operation.noData'), '0']);
+
+      // 组织核心指标
+      if (displayStatistics) {
+        exportData.push([t('pages.infra.operation.coreMetrics'), '']);
+        exportData.push([t('pages.infra.operation.totalTenants'), String(displayStatistics.total || 0)]);
+        exportData.push([t('pages.infra.operation.activeTenants'), String(displayStatistics.by_status?.active || 0)]);
+        exportData.push([t('pages.infra.operation.inactiveTenants'), String(displayStatistics.by_status?.inactive || 0)]);
+        exportData.push([t('pages.infra.operation.expiredTenants'), String(displayStatistics.by_status?.expired || 0)]);
+        exportData.push([t('pages.infra.operation.suspendedTenants'), String(displayStatistics.by_status?.suspended || 0)]);
+        exportData.push([]); // 空行
+
+        exportData.push([t('pages.infra.operation.statusDistribution'), '']);
+        exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
+        if (statusChartData.length > 0) {
+          statusChartData.forEach(item => {
+            exportData.push([item.name, String(item.value)]);
+          });
+        } else {
+          exportData.push([t('pages.infra.operation.noData'), '0']);
+        }
+        exportData.push([]); // 空行
+
+        exportData.push([t('pages.infra.operation.planDistribution'), '']);
+        exportData.push([t('pages.infra.tenant.plan'), t('pages.infra.operation.countLabel')]);
+        if (planChartData.length > 0) {
+          planChartData.forEach(item => {
+            exportData.push([item.name, String(item.value)]);
+          });
+        } else {
+          exportData.push([t('pages.infra.operation.noData'), '0']);
+        }
+        exportData.push([]); // 空行
       }
-      exportData.push([]); // 空行
-      
-      // 组织套餐分布
-      exportData.push([t('pages.infra.operation.planDistribution'), '']);
-      exportData.push([t('pages.infra.tenant.plan'), t('pages.infra.operation.countLabel')]);
-      if (planChartData.length > 0) {
-        planChartData.forEach(item => {
-          exportData.push([item.name, String(item.value)]);
-        });
-      } else {
-        exportData.push([t('pages.infra.operation.noData'), '0']);
+
+      // 用户与访问统计
+      if (userStats || accessStats) {
+        exportData.push([t('pages.infra.operation.userStats'), '']);
+        if (userStats) {
+          exportData.push([t('pages.infra.operation.totalUsers'), String(userStats.total_users || 0)]);
+          exportData.push([t('pages.infra.operation.newRegistrationsToday'), String(userStats.new_today || 0)]);
+          exportData.push([t('pages.infra.operation.newRegistrationsWeek'), String(userStats.new_week || 0)]);
+          exportData.push([t('pages.infra.operation.newRegistrationsMonth'), String(userStats.new_month || 0)]);
+        }
+        if (accessStats) {
+          exportData.push([t('pages.infra.operation.loginsToday'), String(accessStats.logins_today || 0)]);
+          exportData.push([t('pages.infra.operation.dauToday'), String(accessStats.dau_today || 0)]);
+          exportData.push(['Total logins', String(accessStats.total_logins || 0)]);
+          exportData.push(['Success logins', String(accessStats.success_count || 0)]);
+          exportData.push(['Failed logins', String(accessStats.failed_count || 0)]);
+        }
+        if (userStats?.by_source && Object.keys(userStats.by_source).length > 0) {
+          exportData.push([]);
+          exportData.push([t('pages.infra.operation.registrationSource'), '']);
+          exportData.push([t('pages.infra.operation.statusLabel'), t('pages.infra.operation.countLabel')]);
+          Object.entries(userStats.by_source).forEach(([k, v]) => {
+            const labelMap: Record<string, string> = {
+              personal: t('pages.infra.operation.sourcePersonal'),
+              organization: t('pages.infra.operation.sourceOrganization'),
+              invite_code: t('pages.infra.operation.sourceInvite'),
+              unknown: t('pages.infra.operation.sourceUnknown'),
+            };
+            exportData.push([labelMap[k] || k, String(v)]);
+          });
+        }
+        exportData.push([]); // 空行
       }
-      exportData.push([]); // 空行
-      
+
       // 数据更新时间（使用国际化格式）
       if (displayStatistics.updated_at) {
         exportData.push([t('pages.infra.operation.dataUpdatedAt'), dayjs(displayStatistics.updated_at).format('llll')]);
@@ -326,7 +404,7 @@ export default function OperationsDashboard() {
       console.error('导出失败:', error);
       messageApi.error(t('pages.infra.operation.exportFailed', { message: error.message || t('pages.infra.operation.unknownError') }));
     }
-  }, [displayStatistics, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi, t]);
+  }, [displayStatistics, userStats, accessStats, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi, t]);
 
   return (
     <ListPageTemplate>
@@ -438,6 +516,53 @@ export default function OperationsDashboard() {
           </Row>
         </div>
       )}
+
+      {/* 用户与访问统计卡片 */}
+      {(userStats || accessStats) && hasToken && isInfraSuperAdmin && (
+        <div style={{ marginBottom: 24 }}>
+          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.infra.operation.userStats')}</Typography.Title>
+          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
+            <Col span={4}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title={t('pages.infra.operation.totalUsers')}
+                  value={userStats?.total_users ?? 0}
+                  prefix={<UserOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col span={4}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title={t('pages.infra.operation.newRegistrationsToday')}
+                  value={userStats?.new_today ?? 0}
+                  valueStyle={{ color: '#52c41a' }}
+                />
+              </Card>
+            </Col>
+            <Col span={4}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title={t('pages.infra.operation.loginsToday')}
+                  value={accessStats?.logins_today ?? 0}
+                  valueStyle={{ color: '#722ed1' }}
+                />
+              </Card>
+            </Col>
+            <Col span={4}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title={t('pages.infra.operation.dauToday')}
+                  value={accessStats?.dau_today ?? 0}
+                  valueStyle={{ color: '#faad14' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      )}
+
       {/* 未登录或权限不足提示 */}
       {(!hasToken || !isInfraSuperAdmin) && (
         <Card style={{ marginBottom: 24 }}>
@@ -557,6 +682,91 @@ export default function OperationsDashboard() {
                     color={(datum: { color?: string }) => datum.color ?? '#1890ff'}
                     columnStyle={{ radius: [0, 4, 4, 0] }}
                     xAxis={{ label: { autoRotate: true } }}
+                    tooltip={{ fields: ['name', 'value'] }}
+                  />
+                </div>
+              ) : (
+                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+            </Card>
+          </Col>
+        </Row>
+
+        {/* 用户与访问图表 */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} lg={12}>
+            <Card
+              title={
+                <Space>
+                  <LineChartOutlined />
+                  <span>{t('pages.infra.operation.registrationTrend')}</span>
+                </Space>
+              }
+              loading={loadingUser}
+            >
+              {registrationTrendData.length > 0 ? (
+                <div style={{ height: 300 }}>
+                  <Line
+                    data={registrationTrendData}
+                    xField="date"
+                    yField="count"
+                    smooth
+                    xAxis={{ label: { autoRotate: true } }}
+                    tooltip={{ fields: ['date', 'count'] }}
+                  />
+                </div>
+              ) : (
+                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card
+              title={
+                <Space>
+                  <LineChartOutlined />
+                  <span>{t('pages.infra.operation.loginTrend')}</span>
+                </Space>
+              }
+              loading={loadingAccess}
+            >
+              {loginTrendData.length > 0 ? (
+                <div style={{ height: 300 }}>
+                  <Line
+                    data={loginTrendData}
+                    xField="date"
+                    yField="count"
+                    smooth
+                    xAxis={{ label: { autoRotate: true } }}
+                    tooltip={{ fields: ['date', 'count'] }}
+                  />
+                </div>
+              ) : (
+                <Empty description={t('pages.infra.operation.noData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+            </Card>
+          </Col>
+        </Row>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} lg={12}>
+            <Card
+              title={
+                <Space>
+                  <PieChartOutlined />
+                  <span>{t('pages.infra.operation.registrationSource')}</span>
+                </Space>
+              }
+              loading={loadingUser}
+            >
+              {sourceChartData.length > 0 ? (
+                <div style={{ height: 300 }}>
+                  <Pie
+                    data={sourceChartData}
+                    angleField="value"
+                    colorField="name"
+                    color={(datum: { name: string }) => sourceChartData.find((d) => d.name === datum.name)?.color ?? '#1890ff'}
+                    radius={0.8}
+                    label={{ type: 'outer', formatter: (_: any, item: any) => `${item.name}: ${((item.value / (sourceChartData.reduce((s, d) => s + d.value, 0) || 1)) * 100).toFixed(0)}%` }}
                     tooltip={{ fields: ['name', 'value'] }}
                   />
                 </div>
