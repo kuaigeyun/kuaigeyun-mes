@@ -434,12 +434,18 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"域名 {tenant_domain} 已被使用"
             )
-        
-        # 创建组织（状态为 INACTIVE，需要管理员审核）
+
+        # 检查平台是否开启自动审核
+        from infra.models.platform_settings import PlatformSettings
+        platform = await PlatformSettings.first()
+        auto_approve = platform and getattr(platform, "tenant_auto_approve", False)
+
+        # 创建组织（自动审核时直接 ACTIVE，否则 INACTIVE 需管理员审核）
+        # 组织名称唯一性校验在 tenant_service.create_tenant 中统一处理
         tenant_data = TenantCreate(
-            name=data.tenant_name,
+            name=(data.tenant_name or "").strip() or data.tenant_name,
             domain=tenant_domain,
-            status=TenantStatus.INACTIVE,  # 新注册的组织需要审核
+            status=TenantStatus.ACTIVE if auto_approve else TenantStatus.INACTIVE,
             plan=TenantPlan.TRIAL,  # 默认体验套餐
             settings={
                 "description": f"组织注册：{data.tenant_name}",
@@ -471,11 +477,11 @@ class AuthService:
         )
         user = await user_service.create_user(user_data, tenant_id=tenant.id)
         
-        logger.info(f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), 管理员: {user.username} (ID: {user.id})")
+        logger.info(f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), 管理员: {user.username} (ID: {user.id}), 自动审核: {auto_approve}")
         
         return {
             "success": True,
-            "message": "注册成功，等待管理员审核",
+            "message": "注册成功，等待管理员审核" if not auto_approve else "注册成功",
             "tenant_id": tenant.id,
             "user_id": user.id
         }
@@ -521,6 +527,21 @@ class AuthService:
         # 如果提供了 tenant_id，同时过滤组织，避免多组织用户名冲突
         # 注意：使用 register_tortoise 后，连接池会自动管理，直接使用 Tortoise ORM 原生查询
 
+        # 若指定了 tenant_id，先校验组织状态（已暂停/未激活/已过期的组织禁止登录）
+        if data.tenant_id is not None:
+            from infra.models.tenant import Tenant, TenantStatus
+            target_tenant = await Tenant.get_or_none(id=data.tenant_id)
+            if not target_tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="组织不存在"
+                )
+            if target_tenant.status != TenantStatus.ACTIVE:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="组织已暂停或未激活，无法登录"
+                )
+
         # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
         # 平台管理不需要 tenant_id，可以跨组织访问
         user = await User.get_or_none(
@@ -538,10 +559,33 @@ class AuthService:
                     tenant_id=data.tenant_id
                 ).first()
             else:
-                # 没有提供 tenant_id，查找任意组织的用户（可能多个组织有相同用户名/手机号）
-                user = await User.filter(
-                    Q(username=data.username) | Q(phone=data.username)
-                ).first()
+                # 没有提供 tenant_id：可能多个用户匹配（同手机号不同组织、同用户名不同组织等）
+                # 逐个验证密码，找到第一个密码匹配的用户（支持手机号登录时，同一手机号可能对应多个用户、多个密码）
+                candidates = await User.filter(
+                    Q(username=data.username) | Q(phone=data.username),
+                    is_active=True
+                ).all()
+                user = None
+                for u in candidates:
+                    if verify_password(data.password, u.password_hash):
+                        user = u
+                        break
+                if not user and candidates:
+                    # 有匹配用户但密码都不对，统一返回密码错误（不泄露是哪个用户）
+                    u = candidates[0]
+                    if request:
+                        asyncio.create_task(self._log_login_attempt(
+                            tenant_id=u.tenant_id,
+                            user_id=u.id,
+                            username=data.username,
+                            login_status="failed",
+                            failure_reason="用户名或密码错误",
+                            request=request
+                        ))
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="用户名或密码错误"
+                    )
         
         if not user:
             # 记录登录失败日志（用户不存在）
@@ -643,11 +687,12 @@ class AuthService:
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
         # 查询用户所属的所有组织列表（用于多组织登录选择）
-        # 查询所有具有相同 username 的用户（不同组织），获取他们的 tenant_id
+        # 查询所有具有相同 username 或相同 phone 的用户（不同组织），用于多组织切换
+        # 注：手机号相同时可能对应不同用户名（不同组织独立注册），此时仅返回当前用户的组织
         user_tenants_list = []
         if not is_infra_admin:
-            # 组织管理员和普通用户：查询所有具有相同 username 的用户（不同组织）
-            from infra.models.tenant import Tenant
+            # 组织管理员和普通用户：按 username 查（同一人在多组织的账号用户名相同）
+            from infra.models.tenant import Tenant, TenantStatus
             users_with_same_username = await User.filter(
                 username=user.username,
                 is_active=True
@@ -656,9 +701,9 @@ class AuthService:
             # 获取所有有效的组织 ID（排除 None）
             tenant_ids = [u.tenant_id for u in users_with_same_username if u.tenant_id is not None]
             
-            # 查询组织信息
+            # 查询组织信息（仅返回激活状态的组织，已暂停/未激活的组织不可选）
             if tenant_ids:
-                tenants_queryset = await Tenant.filter(id__in=tenant_ids).all()
+                tenants_queryset = await Tenant.filter(id__in=tenant_ids, status=TenantStatus.ACTIVE).all()
                 user_tenants_list = [
                     {
                         "id": tenant.id,
@@ -671,8 +716,8 @@ class AuthService:
                 ]
             # ⚠️ 关键修复：如果用户只有一个组织，确保也返回该组织信息（用于前端显示组织名称）
             elif final_tenant_id:
-                # 如果用户只有一个组织，直接查询该组织信息
-                tenant = await Tenant.get_or_none(id=final_tenant_id)
+                # 如果用户只有一个组织，直接查询该组织信息（仅当激活时返回）
+                tenant = await Tenant.get_or_none(id=final_tenant_id, status=TenantStatus.ACTIVE)
                 if tenant:
                     user_tenants_list = [
                         {
@@ -683,6 +728,51 @@ class AuthService:
                             "status": tenant.status.value,
                         }
                     ]
+
+            # 若用户所属组织均非激活状态，拒绝登录
+            if not user_tenants_list:
+                if request:
+                    asyncio.create_task(self._log_login_attempt(
+                        tenant_id=user.tenant_id,
+                        user_id=user.id,
+                        username=data.username,
+                        login_status="failed",
+                        failure_reason="用户所属组织均已暂停或未激活",
+                        request=request
+                    ))
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="您所属的组织均已暂停或未激活，无法登录"
+                )
+
+            # 若当前用户所属组织未激活，需在激活组织中查找密码匹配的用户（同一账号在不同组织有独立 User 记录）
+            if final_tenant_id and not any(t["id"] == final_tenant_id for t in user_tenants_list):
+                switched = False
+                for t in user_tenants_list:
+                    switch_user = await User.filter(
+                        username=user.username,
+                        tenant_id=t["id"],
+                        is_active=True
+                    ).first()
+                    if switch_user and verify_password(data.password, switch_user.password_hash):
+                        user = switch_user
+                        final_tenant_id = t["id"]
+                        switched = True
+                        break
+                if not switched:
+                    if request:
+                        asyncio.create_task(self._log_login_attempt(
+                            tenant_id=user.tenant_id,
+                            user_id=user.id,
+                            username=data.username,
+                            login_status="failed",
+                            failure_reason="用户所属组织均已暂停或未激活",
+                            request=request
+                        ))
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="您所属的组织均已暂停或未激活，无法登录"
+                    )
         
         # 判断是否需要组织选择
         requires_tenant_selection = len(user_tenants_list) > 1

@@ -16,6 +16,7 @@ from infra.models.tenant_activity_log import TenantActivityLog
 from infra.schemas.tenant import TenantCreate, TenantUpdate
 from infra.domain.query_filter import get_tenant_queryset
 from infra.domain.package_config import get_package_config
+from infra.exceptions.exceptions import tenant_name_already_exists, TenantError
 
 
 class TenantService:
@@ -51,6 +52,13 @@ class TenantService:
             ...     )
             ... )
         """
+        # 检查组织名称是否已存在（名称不能重复）
+        tenant_name = (data.name or "").strip()
+        if not tenant_name:
+            raise TenantError("组织名称不能为空")
+        if await Tenant.filter(name__iexact=tenant_name).exists():
+            raise tenant_name_already_exists(tenant_name)
+
         try:
             # 如果未指定 max_users 或 max_storage，根据套餐配置自动设置
             max_users = data.max_users
@@ -67,7 +75,7 @@ class TenantService:
             # 创建组织（组织表本身不包含 tenant_id，所以设置为 None）
             tenant = await Tenant.create(
                 tenant_id=None,  # 组织表本身不需要 tenant_id
-                name=data.name,
+                name=tenant_name,
                 domain=data.domain,
                 status=data.status,
                 plan=data.plan,
@@ -240,7 +248,17 @@ class TenantService:
         
         # 更新字段（只更新提供的字段）
         update_data = data.model_dump(exclude_unset=True)
-        
+
+        # 若更新了组织名称，检查名称是否与其他组织重复
+        if "name" in update_data:
+            new_name = (update_data["name"] or "").strip()
+            if not new_name:
+                raise TenantError("组织名称不能为空")
+            existing = await Tenant.filter(name__iexact=new_name).exclude(id=tenant_id).exists()
+            if existing:
+                raise tenant_name_already_exists(new_name)
+            update_data["name"] = new_name
+
         # 记录变更信息（用于日志）
         changes = []
         old_plan = tenant.plan
@@ -565,6 +583,16 @@ class TenantService:
             logger.info(f"组织 {tenant_id} 系统语言初始化完成")
         except Exception as e:
             logger.error(f"组织 {tenant_id} 系统语言初始化失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        try:
+            # 扫描并注册应用，新租户应用默认全部开启（is_active=True）
+            from core.services.application.application_service import ApplicationService
+            apps = await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)
+            logger.info(f"组织 {tenant_id} 应用初始化完成，共注册 {len(apps)} 个应用（默认全部开启）")
+        except Exception as e:
+            logger.error(f"组织 {tenant_id} 应用初始化失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
             

@@ -9,7 +9,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Card, Button, Space, Upload, message, Form, ColorPicker } from 'antd';
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
@@ -163,6 +163,7 @@ export default function PlatformSettingsPage() {
         login_content: settings.login_content,
         icp_license: settings.icp_license,
         theme_color: settings.theme_color || '#1890ff',
+        tenant_auto_approve: settings.tenant_auto_approve ?? false,
       });
       
       // 加载LOGO预览
@@ -540,6 +541,14 @@ export default function PlatformSettingsPage() {
               maxLength: 500,
             }}
           />
+
+          <Card type="inner" title={t('pages.infra.platform.tenantConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
+            <ProFormSwitch
+              name="tenant_auto_approve"
+              label={t('pages.infra.platform.tenantAutoApprove')}
+              tooltip={t('pages.infra.platform.tenantAutoApproveTooltip')}
+            />
+          </Card>
 
           <Card type="inner" title={t('pages.infra.platform.loginConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
             <ProFormText

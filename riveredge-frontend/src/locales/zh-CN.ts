@@ -279,6 +279,7 @@ export default {
   'pages.personal.preferences.updateSuccess': '偏好设置更新成功',
   'pages.personal.preferences.updateFailed': '更新失败',
   'pages.personal.preferences.themeAndAppearance': '主题与外观',
+  'pages.personal.preferences.otherSettings': '语言、通知与界面',
   'pages.personal.preferences.colorMode': '颜色模式',
   'pages.personal.preferences.light': '亮色',
   'pages.personal.preferences.dark': '暗色',
@@ -6412,6 +6413,9 @@ export default {
   'pages.infra.platform.icpLicenseMax': 'ICP备案信息不能超过100个字符',
   'pages.infra.platform.cropLogoTitle': '剪裁平台Logo',
   'pages.infra.platform.cropFaviconTitle': '剪裁 Favicon（建议正方形）',
+  'pages.infra.platform.tenantConfig': '组织注册配置',
+  'pages.infra.platform.tenantAutoApprove': '自动审核组织注册',
+  'pages.infra.platform.tenantAutoApproveTooltip': '开启后，新注册的租户组织将自动通过审核，无需管理员手动审核',
 
   // 报表与看板应用
   'app.kuaireport.name': '自制报表',

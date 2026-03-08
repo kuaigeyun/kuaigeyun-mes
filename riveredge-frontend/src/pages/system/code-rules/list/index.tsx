@@ -777,6 +777,26 @@ const CodeRuleListPage: React.FC = () => {
                       const res = await enableAllRules();
                       messageApi.success(t('pages.system.codeRules.enableAllSuccess', { count: res?.enabled ?? 0 }));
                       await loadCodeRules(true);
+                      // 同步页面配置：启用全部后，将所有有规则关联的页面的 autoGenerate 设为 true
+                      const allRules = await getAllCodeRules();
+                      const activeRuleCodes = new Set(allRules.filter(r => r.is_active).map(r => r.code));
+                      setPageConfigs(prev => {
+                        const updated = prev.map(page => {
+                          const ruleCode = page.ruleCode ?? page.pageCode.toUpperCase().replace(/-/g, '_');
+                          const hasActiveRule = activeRuleCodes.has(ruleCode);
+                          return hasActiveRule ? { ...page, autoGenerate: true } : page;
+                        });
+                        const configsToSave = updated.map(p => {
+                          const ruleCode = p.ruleCode ?? p.pageCode.toUpperCase().replace(/-/g, '_');
+                          return {
+                            pageCode: p.pageCode,
+                            ruleCode: p.ruleCode ?? ruleCode,
+                            autoGenerate: p.autoGenerate,
+                          };
+                        });
+                        localStorage.setItem(getCodeRulePageConfigsKey(), JSON.stringify(configsToSave));
+                        return updated;
+                      });
                       if (selectedPageCode) handleSelectPage(selectedPageCode);
                     } catch (e: any) {
                       messageApi.error(e?.message || t('pages.system.codeRules.enableAllFailed'));

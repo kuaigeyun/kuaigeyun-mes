@@ -279,6 +279,7 @@ export default {
   'pages.personal.preferences.updateSuccess': 'Preferences updated',
   'pages.personal.preferences.updateFailed': 'Update failed',
   'pages.personal.preferences.themeAndAppearance': 'Theme & appearance',
+  'pages.personal.preferences.otherSettings': 'Language, notifications & interface',
   'pages.personal.preferences.colorMode': 'Color mode',
   'pages.personal.preferences.light': 'Light',
   'pages.personal.preferences.dark': 'Dark',
@@ -6404,6 +6405,9 @@ export default {
   'pages.infra.platform.icpLicenseMax': 'ICP cannot exceed 100 characters',
   'pages.infra.platform.cropLogoTitle': 'Crop Platform Logo',
   'pages.infra.platform.cropFaviconTitle': 'Crop Favicon (square recommended)',
+  'pages.infra.platform.tenantConfig': 'Tenant Registration',
+  'pages.infra.platform.tenantAutoApprove': 'Auto Approve Tenant Registration',
+  'pages.infra.platform.tenantAutoApproveTooltip': 'When enabled, newly registered tenant organizations will be automatically approved without manual review',
 
   // Report & Dashboard application
   'app.kuaireport.name': 'Reports & Dashboards',

@@ -170,6 +170,11 @@ def tenant_domain_already_exists(domain: str) -> ConflictError:
     return ConflictError(f"域名 '{domain}' 已被使用", {"domain": domain})
 
 
+def tenant_name_already_exists(name: str) -> ConflictError:
+    """组织名称已存在异常"""
+    return ConflictError(f"组织名称「{name}」已被使用，请使用其他名称", {"name": name})
+
+
 def invalid_credentials() -> AuthenticationError:
     """无效凭据异常"""
     return AuthenticationError("用户名或密码错误")

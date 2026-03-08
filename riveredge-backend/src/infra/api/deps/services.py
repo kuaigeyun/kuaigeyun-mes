@@ -163,6 +163,12 @@ def get_tenant_service_with_fallback() -> Any:
         
         async def delete_tenant(self, tenant_id: int, **kwargs) -> bool:
             return await self._tenant_service.delete_tenant(tenant_id, **kwargs)
+
+        async def activate_tenant(self, tenant_id: int, skip_tenant_filter: bool = True):
+            return await self._tenant_service.activate_tenant(tenant_id, skip_tenant_filter=skip_tenant_filter)
+
+        async def deactivate_tenant(self, tenant_id: int, skip_tenant_filter: bool = True):
+            return await self._tenant_service.deactivate_tenant(tenant_id, skip_tenant_filter=skip_tenant_filter)
     
     return TenantServiceAdapter()
 

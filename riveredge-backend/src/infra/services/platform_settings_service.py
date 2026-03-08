@@ -112,6 +112,7 @@ class PlatformSettingsService:
                 login_content=data.login_content,
                 icp_license=data.icp_license,
                 theme_color=data.theme_color,
+                tenant_auto_approve=data.tenant_auto_approve if data.tenant_auto_approve is not None else False,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:

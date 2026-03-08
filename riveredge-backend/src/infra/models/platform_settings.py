@@ -102,6 +102,12 @@ class PlatformSettings(Model):
         default="#1890ff",
         description="主题颜色"
     )
+
+    # 组织注册审核
+    tenant_auto_approve = fields.BooleanField(
+        default=False,
+        description="是否自动审核：开启后，新注册的租户组织自动通过审核"
+    )
     
     # 时间字段
     created_at = fields.DatetimeField(

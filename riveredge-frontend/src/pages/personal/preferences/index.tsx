@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, ColorPicker, Slider, Form, Row, Col, Divider, Typography } from 'antd';
+import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography } from 'antd';
 import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
 import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
@@ -201,162 +201,169 @@ const UserPreferencesPage: React.FC = () => {
           }}
           layout="vertical"
         >
-          {/* 主题与外观 */}
-          <Typography.Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>{t('pages.personal.preferences.themeAndAppearance')}</Typography.Title>
-          <div style={sectionMargin}>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={24} md={8}>
-                <SafeProFormSelect
-                  name="theme"
-                  label={t('pages.personal.preferences.colorMode')}
-                  valueEnum={{ light: t('pages.personal.preferences.light'), dark: t('pages.personal.preferences.dark'), auto: t('pages.personal.preferences.auto') }}
-                  placeholder={t('pages.personal.preferences.pleaseSelect')}
-                />
-              </Col>
-            </Row>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={12}>
-                <Form.Item name={['theme_config', 'fontSize']} label={t('pages.personal.preferences.fontSize')}>
-                  <Slider min={12} max={20} marks={{ 12: t('pages.personal.preferences.fontSmall'), 14: t('pages.personal.preferences.fontStandard'), 16: t('pages.personal.preferences.fontLarge'), 18: t('pages.personal.preferences.fontXl'), 20: t('pages.personal.preferences.fontXxl') }} />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name={['theme_config', 'borderRadius']} label={t('pages.personal.preferences.borderRadius')}>
-                  <Slider min={0} max={16} marks={{ 0: t('pages.personal.preferences.square'), 6: t('pages.personal.preferences.medium'), 12: t('pages.personal.preferences.round'), 16: t('pages.personal.preferences.rounder') }} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  name={['theme_config', 'colorPrimary']}
-                  label={t('pages.personal.preferences.themeColor')}
-                  getValueFromEvent={(c: any) => normalizeColor(c, '#1890ff')}
-                  normalize={(v: any) => normalizeColor(v, '#1890ff')}
-                >
-                  <ColorPicker showText format="hex" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  name={['theme_config', 'siderBgColor']}
-                  label={t('pages.personal.preferences.siderBgColor')}
-                  extra={t('pages.personal.preferences.siderBgExtra')}
-                  getValueFromEvent={(c: any) => normalizeColor(c, '')}
-                  normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
-                >
-                  <ColorPicker showText format="hex" allowClear />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  name={['theme_config', 'headerBgColor']}
-                  label={t('pages.personal.preferences.headerBgColor')}
-                  getValueFromEvent={(c: any) => normalizeColor(c, '')}
-                  normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
-                >
-                  <ColorPicker showText format="hex" allowClear />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  name={['theme_config', 'tabsBgColor']}
-                  label={t('pages.personal.preferences.tabsBgColor')}
-                  getValueFromEvent={(c: any) => normalizeColor(c, '')}
-                  normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
-                >
-                  <ColorPicker showText format="hex" allowClear />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name={['theme_config', 'compact']} label={t('pages.personal.preferences.compactMode')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name="tabs_persistence" label={t('pages.personal.preferences.tabsPersistence')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-            </Row>
-          </div>
+          <Row gutter={[24, 24]} style={{ alignItems: 'flex-start' }}>
+            {/* 左栏：主题与外观 */}
+            <Col xs={24} lg={12}>
+              <Card type="inner" title={t('pages.personal.preferences.themeAndAppearance')} styles={{ body: { padding: '20px 24px' } }}>
+              <div style={sectionMargin}>
+                <Row gutter={rowGutter}>
+                  <Col xs={24}>
+                    <SafeProFormSelect
+                      name="theme"
+                      label={t('pages.personal.preferences.colorMode')}
+                      valueEnum={{ light: t('pages.personal.preferences.light'), dark: t('pages.personal.preferences.dark'), auto: t('pages.personal.preferences.auto') }}
+                      placeholder={t('pages.personal.preferences.pleaseSelect')}
+                    />
+                  </Col>
+                </Row>
+                <Row gutter={rowGutter}>
+                  <Col xs={24}>
+                    <Form.Item name={['theme_config', 'fontSize']} label={t('pages.personal.preferences.fontSize')}>
+                      <Slider min={12} max={20} marks={{ 12: t('pages.personal.preferences.fontSmall'), 14: t('pages.personal.preferences.fontStandard'), 16: t('pages.personal.preferences.fontLarge'), 18: t('pages.personal.preferences.fontXl'), 20: t('pages.personal.preferences.fontXxl') }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24}>
+                    <Form.Item name={['theme_config', 'borderRadius']} label={t('pages.personal.preferences.borderRadius')}>
+                      <Slider min={0} max={16} marks={{ 0: t('pages.personal.preferences.square'), 6: t('pages.personal.preferences.medium'), 12: t('pages.personal.preferences.round'), 16: t('pages.personal.preferences.rounder') }} />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Row gutter={rowGutter}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item
+                      name={['theme_config', 'colorPrimary']}
+                      label={t('pages.personal.preferences.themeColor')}
+                      getValueFromEvent={(c: any) => normalizeColor(c, '#1890ff')}
+                      normalize={(v: any) => normalizeColor(v, '#1890ff')}
+                    >
+                      <ColorPicker showText format="hex" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item
+                      name={['theme_config', 'siderBgColor']}
+                      label={t('pages.personal.preferences.siderBgColor')}
+                      extra={t('pages.personal.preferences.siderBgExtra')}
+                      getValueFromEvent={(c: any) => normalizeColor(c, '')}
+                      normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
+                    >
+                      <ColorPicker showText format="hex" allowClear />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item
+                      name={['theme_config', 'headerBgColor']}
+                      label={t('pages.personal.preferences.headerBgColor')}
+                      getValueFromEvent={(c: any) => normalizeColor(c, '')}
+                      normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
+                    >
+                      <ColorPicker showText format="hex" allowClear />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item
+                      name={['theme_config', 'tabsBgColor']}
+                      label={t('pages.personal.preferences.tabsBgColor')}
+                      getValueFromEvent={(c: any) => normalizeColor(c, '')}
+                      normalize={(v: any) => (v == null || v === '') ? '' : normalizeColor(v, '')}
+                    >
+                      <ColorPicker showText format="hex" allowClear />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Row gutter={rowGutter}>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['theme_config', 'compact']} label={t('pages.personal.preferences.compactMode')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name="tabs_persistence" label={t('pages.personal.preferences.tabsPersistence')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                </Row>
+              </div>
+              </Card>
+            </Col>
 
-          {/* 语言 */}
-          <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.language')}</Typography.Title>
-          <div style={sectionMargin}>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={24} md={8}>
-                <SafeProFormSelect
-                  name="language"
-                  label={t('pages.personal.preferences.interfaceLanguage')}
-                  valueEnum={
-                    languages.length > 0
-                      ? languages.reduce((acc, lang) => {
-                          acc[lang.code] = lang.native_name || lang.name;
-                          return acc;
-                        }, {} as Record<string, string>)
-                      : { 'zh-CN': '简体中文', 'en-US': 'English' }
-                  }
-                  placeholder={t('pages.personal.preferences.pleaseSelectLanguage')}
-                />
-              </Col>
-            </Row>
-          </div>
+            {/* 右栏：语言、通知、界面 */}
+            <Col xs={24} lg={12}>
+              <Card type="inner" title={t('pages.personal.preferences.otherSettings')} styles={{ body: { padding: '20px 24px' } }}>
+              {/* 语言 */}
+              <Typography.Title level={5} style={{ marginBottom: 16, marginTop: 0 }}>{t('pages.personal.preferences.language')}</Typography.Title>
+              <div style={sectionMargin}>
+                <Row gutter={rowGutter}>
+                  <Col xs={24}>
+                    <SafeProFormSelect
+                      name="language"
+                      label={t('pages.personal.preferences.interfaceLanguage')}
+                      valueEnum={
+                        languages.length > 0
+                          ? languages.reduce((acc, lang) => {
+                              acc[lang.code] = lang.native_name || lang.name;
+                              return acc;
+                            }, {} as Record<string, string>)
+                          : { 'zh-CN': '简体中文', 'en-US': 'English' }
+                      }
+                      placeholder={t('pages.personal.preferences.pleaseSelectLanguage')}
+                    />
+                  </Col>
+                </Row>
+              </div>
 
-          {/* 通知 */}
-          <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.notifications')}</Typography.Title>
-          <div style={sectionMargin}>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'email']} label={t('pages.personal.preferences.emailNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'sms']} label={t('pages.personal.preferences.smsNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'internal']} label={t('pages.personal.preferences.internalNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-              <Col xs={24} sm={12}>
-                <ProFormSwitch name={['notifications', 'push']} label={t('pages.personal.preferences.pushNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
-              </Col>
-            </Row>
-          </div>
+              {/* 通知 */}
+              <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.notifications')}</Typography.Title>
+              <div style={sectionMargin}>
+                <Row gutter={rowGutter}>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['notifications', 'email']} label={t('pages.personal.preferences.emailNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['notifications', 'sms']} label={t('pages.personal.preferences.smsNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['notifications', 'internal']} label={t('pages.personal.preferences.internalNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['notifications', 'push']} label={t('pages.personal.preferences.pushNotify')} fieldProps={{ checkedChildren: t('pages.personal.preferences.on'), unCheckedChildren: t('pages.personal.preferences.off') }} />
+                  </Col>
+                </Row>
+              </div>
 
-          {/* 界面 */}
-          <Divider style={{ marginTop: 8 }} />
-          <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.interface')}</Typography.Title>
-          <div style={{ marginBottom: 8 }}>
-            <Row gutter={rowGutter}>
-              <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'layout']} label={t('pages.personal.preferences.layout')} valueEnum={{ default: t('pages.personal.preferences.layoutDefault'), compact: t('pages.personal.preferences.layoutCompact'), wide: t('pages.personal.preferences.layoutWide') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
-              </Col>
-              <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'font_size']} label={t('pages.personal.preferences.fontSize')} valueEnum={{ small: t('pages.personal.preferences.fontSmall'), medium: t('pages.personal.preferences.fontStandard'), large: t('pages.personal.preferences.fontLarge') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
-              </Col>
-              <Col xs={24} sm={12} md={8}>
-                <ProFormSwitch name={['ui', 'sidebar_collapsed']} label={t('pages.personal.preferences.sidebarCollapsed')} fieldProps={{ checkedChildren: t('pages.personal.preferences.yes'), unCheckedChildren: t('pages.personal.preferences.no') }} />
-              </Col>
-              <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'default_page_size']} label={t('pages.personal.preferences.tablePageSize')} valueEnum={{ 10: t('pages.personal.preferences.perPage10'), 20: t('pages.personal.preferences.perPage20'), 50: t('pages.personal.preferences.perPage50'), 100: t('pages.personal.preferences.perPage100') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
-              </Col>
-              <Col xs={24} sm={12} md={8}>
-                <SafeProFormSelect name={['ui', 'default_table_density']} label={t('pages.personal.preferences.tableDensity')} valueEnum={{ default: t('pages.personal.preferences.densityDefault'), middle: t('pages.personal.preferences.densityMiddle'), small: t('pages.personal.preferences.densitySmall') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
-              </Col>
-              <Col xs={24} sm={12} md={8}>
-                <ProFormSelect
-                  name={['ui', 'max_tabs']}
-                  label={t('pages.personal.preferences.maxTabs')}
-                  options={[
-                    { label: '10', value: 10 },
-                    { label: '20', value: 20 },
-                    { label: '30', value: 30 },
-                    { label: '50', value: 50 },
-                  ]}
-                  placeholder={t('pages.personal.preferences.pleaseSelect')}
-                />
-              </Col>
-            </Row>
-          </div>
+              {/* 界面 */}
+              <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.interface')}</Typography.Title>
+              <div style={{ marginBottom: 8 }}>
+                <Row gutter={rowGutter}>
+                  <Col xs={24} sm={12}>
+                    <SafeProFormSelect name={['ui', 'layout']} label={t('pages.personal.preferences.layout')} valueEnum={{ default: t('pages.personal.preferences.layoutDefault'), compact: t('pages.personal.preferences.layoutCompact'), wide: t('pages.personal.preferences.layoutWide') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <SafeProFormSelect name={['ui', 'font_size']} label={t('pages.personal.preferences.fontSize')} valueEnum={{ small: t('pages.personal.preferences.fontSmall'), medium: t('pages.personal.preferences.fontStandard'), large: t('pages.personal.preferences.fontLarge') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSwitch name={['ui', 'sidebar_collapsed']} label={t('pages.personal.preferences.sidebarCollapsed')} fieldProps={{ checkedChildren: t('pages.personal.preferences.yes'), unCheckedChildren: t('pages.personal.preferences.no') }} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <SafeProFormSelect name={['ui', 'default_page_size']} label={t('pages.personal.preferences.tablePageSize')} valueEnum={{ 10: t('pages.personal.preferences.perPage10'), 20: t('pages.personal.preferences.perPage20'), 50: t('pages.personal.preferences.perPage50'), 100: t('pages.personal.preferences.perPage100') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <SafeProFormSelect name={['ui', 'default_table_density']} label={t('pages.personal.preferences.tableDensity')} valueEnum={{ default: t('pages.personal.preferences.densityDefault'), middle: t('pages.personal.preferences.densityMiddle'), small: t('pages.personal.preferences.densitySmall') }} placeholder={t('pages.personal.preferences.pleaseSelect')} />
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <ProFormSelect
+                      name={['ui', 'max_tabs']}
+                      label={t('pages.personal.preferences.maxTabs')}
+                      options={[
+                        { label: '10', value: 10 },
+                        { label: '20', value: 20 },
+                        { label: '30', value: 30 },
+                        { label: '50', value: 50 },
+                      ]}
+                      placeholder={t('pages.personal.preferences.pleaseSelect')}
+                    />
+                  </Col>
+                </Row>
+              </div>
+              </Card>
+            </Col>
+          </Row>
         </ProForm>
       </Card>
     </div>

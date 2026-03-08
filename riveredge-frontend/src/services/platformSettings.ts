@@ -25,6 +25,7 @@ export interface PlatformSettings {
   login_content?: string;
   icp_license?: string;
   theme_color?: string;
+  tenant_auto_approve?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -41,6 +42,7 @@ export interface PlatformSettingsUpdateRequest {
   login_content?: string;
   icp_license?: string;
   theme_color?: string;
+  tenant_auto_approve?: boolean;
 }
 
 /**

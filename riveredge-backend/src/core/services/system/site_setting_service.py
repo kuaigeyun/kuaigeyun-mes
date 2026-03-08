@@ -16,6 +16,12 @@ _PLATFORM_FALLBACK_KEYS = {
     "site_logo": "platform_logo",
 }
 
+# 平台未配置时的默认值（新租户未设置时使用）
+_PLATFORM_DEFAULT_VALUES = {
+    "site_name": "RiverEdge SaaS",
+    "site_logo": "",  # 无默认 logo 时留空
+}
+
 
 class SiteSettingService:
     """
@@ -61,17 +67,19 @@ class SiteSettingService:
         site_settings = await SiteSettingService.get_settings(tenant_id)
         tenant_settings = dict(site_settings.settings or {})
         
-        # 获取平台设置用于回退
+        # 获取平台设置用于回退（新租户未设置时显示平台级默认）
         from infra.models.platform_settings import PlatformSettings
         platform = await PlatformSettings.first()
-        if platform:
-            for site_key, platform_attr in _PLATFORM_FALLBACK_KEYS.items():
-                tenant_val = tenant_settings.get(site_key)
-                if not tenant_val or (isinstance(tenant_val, str) and not tenant_val.strip()):
-                    platform_val = getattr(platform, platform_attr, None)
-                    if platform_val:
-                        tenant_settings[site_key] = platform_val
-        
+        for site_key, platform_attr in _PLATFORM_FALLBACK_KEYS.items():
+            tenant_val = tenant_settings.get(site_key)
+            if not tenant_val or (isinstance(tenant_val, str) and not tenant_val.strip()):
+                # 优先使用平台配置，其次使用系统默认
+                platform_val = getattr(platform, platform_attr, None) if platform else None
+                if platform_val and (not isinstance(platform_val, str) or platform_val.strip()):
+                    tenant_settings[site_key] = platform_val
+                elif site_key in _PLATFORM_DEFAULT_VALUES and _PLATFORM_DEFAULT_VALUES[site_key]:
+                    tenant_settings[site_key] = _PLATFORM_DEFAULT_VALUES[site_key]
+
         return tenant_settings
     
     @staticmethod

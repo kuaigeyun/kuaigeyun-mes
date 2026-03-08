@@ -26,6 +26,7 @@ class PlatformSettingsBase(BaseSchema):
     login_content: Optional[str] = Field(None, description="登录页内容描述")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
     theme_color: Optional[str] = Field("#1890ff", max_length=20, description="主题颜色")
+    tenant_auto_approve: Optional[bool] = Field(False, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
 
 
 class PlatformSettingsCreate(PlatformSettingsBase):
@@ -46,6 +47,7 @@ class PlatformSettingsUpdate(BaseSchema):
     login_content: Optional[str] = Field(None, description="登录页内容描述")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
     theme_color: Optional[str] = Field(None, max_length=20, description="主题颜色")
+    tenant_auto_approve: Optional[bool] = Field(None, description="是否自动审核：开启后，新注册的租户组织自动通过审核")
 
 
 class PlatformSettingsResponse(PlatformSettingsBase):

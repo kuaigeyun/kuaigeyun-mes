@@ -102,3 +102,25 @@ class TenantServiceImpl(TenantServiceInterface):
             skip_tenant_filter=skip_tenant_filter
         )
 
+    async def activate_tenant(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """激活组织（审核通过）"""
+        return await self._tenant_service.activate_tenant(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+
+    async def deactivate_tenant(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """停用组织"""
+        return await self._tenant_service.deactivate_tenant(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+
