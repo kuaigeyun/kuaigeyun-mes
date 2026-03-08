@@ -3,22 +3,49 @@
  *
  * 展示系统迭代提示、版本信息及意见反馈入口。
  * 是否显示由平台设置 float_button_enabled 控制。
+ * 时间按系统设置的时区统一格式化显示。
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FloatButton, Modal, Typography, Spin } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getPlatformSettingsPublic, getPlatformVersion, type PlatformVersion } from '../../services/platformSettings';
+import { useConfigStore } from '../../stores/configStore';
 
 const { Paragraph, Text } = Typography;
 
 const GIT_REPO_URL = 'https://gitee.com/kuaigeyun/kuaigeyun';
 
+/** 将 ISO 8601 UTC 时间按指定时区格式化为 YYYY-MM-DD HH:mm */
+function formatTimeInTimezone(isoUtc: string | undefined, timezone: string): string {
+  if (!isoUtc || isoUtc === '暂无') return isoUtc ?? '-';
+  try {
+    const d = new Date(isoUtc);
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+  } catch {
+    return isoUtc;
+  }
+}
+
 export default function IterationFloatButton() {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
+  const displayTimezone =
+    useConfigStore((s) => s.configs?.timezone) ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    'Asia/Shanghai';
 
   const { data: settings } = useQuery({
     queryKey: ['platformSettingsPublic'],
@@ -36,6 +63,15 @@ export default function IterationFloatButton() {
   });
 
   const handleOpen = () => setVisible(true);
+
+  const buildTimeDisplay = useMemo(
+    () => formatTimeInTimezone(version?.build_time, displayTimezone),
+    [version?.build_time, displayTimezone]
+  );
+  const gitTimeDisplay = useMemo(
+    () => formatTimeInTimezone(version?.git_latest_commit_time, displayTimezone),
+    [version?.git_latest_commit_time, displayTimezone]
+  );
 
   if (!enabled) return null;
 
@@ -62,10 +98,10 @@ export default function IterationFloatButton() {
               {t('components.iterationFloatButton.iterationNotice')}
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 4, fontSize: 13 }}>
-              {t('components.iterationFloatButton.buildTime')}: {version?.build_time ?? '-'}
+              {t('components.iterationFloatButton.buildTime')}: {buildTimeDisplay}
             </Paragraph>
             <Paragraph type="secondary" style={{ marginBottom: 4, fontSize: 13 }}>
-              {t('components.iterationFloatButton.gitLatestTime')}: {version?.git_latest_commit_time ?? '-'}
+              {t('components.iterationFloatButton.gitLatestTime')}: {gitTimeDisplay}
             </Paragraph>
             <Text
               type="link"

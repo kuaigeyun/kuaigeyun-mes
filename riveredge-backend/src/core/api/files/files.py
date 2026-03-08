@@ -360,39 +360,53 @@ async def download_file(
         # 获取文件内容
         file_content = await FileService.get_file_content(tenant_id, uuid)
         
-        # 缩略图：仅图片且指定 size 时，返回缩放后的 JPEG
+        # 缩略图：仅图片且指定 size 时，返回缩放后的图片
+        # PNG 透明图保留透明通道输出 PNG，避免白底；其他输出 JPEG
         file_type = file.file_type or "application/octet-stream"
         if size and file_type.startswith("image/"):
             try:
                 from io import BytesIO
                 from PIL import Image
                 img = Image.open(BytesIO(file_content))
-                if img.mode in ("RGBA", "P"):
+                # RGBA/LA 有透明通道；P 模式（调色板）可能含透明，统一按透明处理以保留 Logo 透明底
+                has_alpha = img.mode in ("RGBA", "LA", "P")
+                if has_alpha:
                     img = img.convert("RGBA")
-                    bg = Image.new("RGB", img.size, (255, 255, 255))
-                    if img.mode == "RGBA":
-                        bg.paste(img, mask=img.split()[3])
-                    else:
-                        bg.paste(img)
-                    img = bg
+                    img.thumbnail((size, size), Image.Resampling.LANCZOS)
+                    buf = BytesIO()
+                    img.save(buf, format="PNG", optimize=True)
+                    buf.seek(0)
+                    thumb_bytes = buf.getvalue()
+                    return StreamingResponse(
+                        iter([thumb_bytes]),
+                        media_type="image/png",
+                        headers={
+                            "Content-Disposition": "inline; filename=\"thumb.png\"",
+                            "Content-Length": str(len(thumb_bytes)),
+                            "Cache-Control": "public, max-age=86400",
+                        },
+                    )
                 else:
-                    img = img.convert("RGB")
-                img.thumbnail((size, size), Image.Resampling.LANCZOS)
-                buf = BytesIO()
-                img.save(buf, format="JPEG", quality=85, optimize=True)
-                buf.seek(0)
-                thumb_bytes = buf.getvalue()
-                return StreamingResponse(
-                    iter([thumb_bytes]),
-                    media_type="image/jpeg",
-                    headers={
-                        "Content-Disposition": "inline; filename=\"avatar-thumb.jpg\"",
-                        "Content-Length": str(len(thumb_bytes)),
-                        "Cache-Control": "public, max-age=86400",
-                    },
-                )
+                    if img.mode == "P":
+                        img = img.convert("RGB")
+                    elif img.mode not in ("RGB", "L"):
+                        img = img.convert("RGB")
+                    img.thumbnail((size, size), Image.Resampling.LANCZOS)
+                    buf = BytesIO()
+                    img.save(buf, format="JPEG", quality=85, optimize=True)
+                    buf.seek(0)
+                    thumb_bytes = buf.getvalue()
+                    return StreamingResponse(
+                        iter([thumb_bytes]),
+                        media_type="image/jpeg",
+                        headers={
+                            "Content-Disposition": "inline; filename=\"avatar-thumb.jpg\"",
+                            "Content-Length": str(len(thumb_bytes)),
+                            "Cache-Control": "public, max-age=86400",
+                        },
+                    )
             except Exception as e:
-                logger.warning(f"头像缩略图生成失败，回退原图: {e}")
+                logger.warning(f"缩略图生成失败，回退原图: {e}")
                 # 回退到原图
                 pass
         
