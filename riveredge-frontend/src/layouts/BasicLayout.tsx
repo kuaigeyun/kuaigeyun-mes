@@ -62,6 +62,7 @@ import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
 import ThemeEditor from '../components/theme-editor';
+import IterationFloatButton from '../components/iteration-float-button';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
@@ -4234,6 +4235,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         open={goLiveAssistantOpen}
         onClose={() => setGoLiveAssistantOpen(false)}
       />
+
+      {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
+      <IterationFloatButton />
     </>
   );
 }

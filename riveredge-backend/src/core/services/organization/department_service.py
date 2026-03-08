@@ -650,3 +650,39 @@ class DepartmentService:
             "errors": errors,
         }
 
+    # 中国中小制造业极简部门预设（扁平结构）
+    PRESET_DEPARTMENTS = [
+        {"name": "总经办", "code": "ZJB", "sort_order": 10},
+        {"name": "生产部", "code": "SCB", "sort_order": 20},
+        {"name": "采购部", "code": "CGB", "sort_order": 30},
+        {"name": "销售部", "code": "XSB", "sort_order": 40},
+        {"name": "仓储部", "code": "CCB", "sort_order": 50},
+        {"name": "质量部", "code": "ZLB", "sort_order": 60},
+        {"name": "财务部", "code": "CWB", "sort_order": 70},
+        {"name": "行政人事部", "code": "XZRSB", "sort_order": 80},
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+        """
+        加载中国中小制造业极简部门预设数据。
+        仅创建不存在的部门（按 code 去重）。
+        """
+        created = 0
+        for item in DepartmentService.PRESET_DEPARTMENTS:
+            exists = await Department.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                await Department.create(
+                    tenant_id=tenant_id,
+                    name=item["name"],
+                    code=item["code"],
+                    sort_order=item["sort_order"],
+                    is_active=True,
+                )
+                created += 1
+        return created
+

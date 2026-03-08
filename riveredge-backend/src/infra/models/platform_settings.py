@@ -108,6 +108,12 @@ class PlatformSettings(Model):
         default=False,
         description="是否自动审核：开启后，新注册的租户组织自动通过审核"
     )
+
+    # 右下角悬浮按钮（迭代提示、意见反馈）
+    float_button_enabled = fields.BooleanField(
+        default=True,
+        description="是否显示右下角悬浮按钮：包含系统迭代提示与意见反馈入口"
+    )
     
     # 时间字段
     created_at = fields.DatetimeField(

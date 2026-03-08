@@ -19,6 +19,7 @@ import {
   getDepartmentByUuid,
   deleteDepartment,
   importDepartments,
+  loadPresetDepartments,
   Department,
   DepartmentTreeItem,
 } from '../../../../services/department';
@@ -41,6 +42,7 @@ const DepartmentListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Department | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   const getAllKeys = (data: DepartmentTreeItem[]): string[] => {
     let keys: string[] = [];
@@ -400,6 +402,24 @@ const DepartmentListPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.batchDelete')}
         toolBarRender={() => [
+          <Button
+            key="loadPreset"
+            loading={loadPresetLoading}
+            onClick={async () => {
+              try {
+                setLoadPresetLoading(true);
+                const res = await loadPresetDepartments();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setLoadPresetLoading(false);
+              }
+            }}
+          >
+            {t('field.department.loadPreset')}
+          </Button>,
           <Button
             key="toggleExpand"
             onClick={() => {

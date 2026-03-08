@@ -21,6 +21,7 @@ import {
   getRolePermissions,
   assignPermissions,
   getAllPermissions,
+  loadPresetRoles,
   Role,
   Permission,
 } from '../../../../services/role';
@@ -40,6 +41,7 @@ const RoleListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<Role | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   // 权限分配 Modal 状态
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
@@ -347,6 +349,26 @@ const RoleListPage: React.FC = () => {
           showCreateButton
           createButtonText={t('field.role.createTitle')}
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <Button
+              key="loadPreset"
+              loading={loadPresetLoading}
+              onClick={async () => {
+                try {
+                  setLoadPresetLoading(true);
+                  const res = await loadPresetRoles();
+                  messageApi.success(res.message);
+                  actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setLoadPresetLoading(false);
+                }
+              }}
+            >
+              {t('field.role.loadPreset')}
+            </Button>,
+          ]}
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.batchDelete')}

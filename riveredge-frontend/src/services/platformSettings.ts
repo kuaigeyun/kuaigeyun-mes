@@ -26,6 +26,7 @@ export interface PlatformSettings {
   icp_license?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
+  float_button_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -43,6 +44,7 @@ export interface PlatformSettingsUpdateRequest {
   icp_license?: string;
   theme_color?: string;
   tenant_auto_approve?: boolean;
+  float_button_enabled?: boolean;
 }
 
 /**
@@ -91,4 +93,34 @@ export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
   } catch {
     return DEFAULT_PLATFORM_SETTINGS;
   }
+}
+
+/** 平台版本信息（用于悬浮按钮） */
+export interface PlatformVersion {
+  build_time: string;
+  git_latest_commit_time: string;
+  git_repo_url: string;
+  iteration_notice?: string;
+}
+
+/**
+ * 获取平台版本与迭代信息（公开接口）
+ * 用于右下角悬浮按钮展示
+ */
+export async function getPlatformVersion(): Promise<PlatformVersion> {
+  try {
+    const response = await fetch('/api/v1/infra/platform/version');
+    if (!response.ok) return getDefaultVersion();
+    return response.json();
+  } catch {
+    return getDefaultVersion();
+  }
+}
+
+function getDefaultVersion(): PlatformVersion {
+  return {
+    build_time: '-',
+    git_latest_commit_time: '-',
+    git_repo_url: 'https://gitee.com/kuaigeyun/kuaigeyun',
+  };
 }

@@ -406,3 +406,19 @@ async def import_departments(
             detail=f"导入失败: {str(e)}"
         )
 
+
+@router.post("/load-preset")
+async def load_preset_departments(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载中国中小制造业极简部门预设数据。
+    仅创建不存在的部门（按 code 去重）。
+    """
+    count = await DepartmentService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+    )
+    return {"created": count, "message": f"已加载 {count} 个部门"}
+

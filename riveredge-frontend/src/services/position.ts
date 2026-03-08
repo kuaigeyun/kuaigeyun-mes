@@ -147,3 +147,12 @@ export async function deletePosition(positionUuid: string): Promise<void> {
   });
 }
 
+/**
+ * 加载中国中小制造业极简职位预设数据
+ */
+export async function loadPresetPositions(): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/positions/load-preset', {
+    method: 'POST',
+  });
+}
+

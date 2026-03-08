@@ -479,3 +479,37 @@ class RoleService:
                 permissions = []
         
         return list(permissions)
+
+    # 中国中小制造业极简角色预设（不含系统管理员，避免与已有系统角色冲突）
+    PRESET_ROLES = [
+        {"name": "部门经理", "code": "DEPT_MANAGER", "description": "部门负责人"},
+        {"name": "普通员工", "code": "EMPLOYEE", "description": "普通员工"},
+        {"name": "财务", "code": "FINANCE", "description": "财务相关"},
+        {"name": "采购员", "code": "BUYER", "description": "采购相关"},
+        {"name": "销售员", "code": "SALES", "description": "销售相关"},
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+        """
+        加载中国中小制造业极简角色预设数据。
+        仅创建不存在的角色（按 code 去重）。
+        """
+        created = 0
+        for item in RoleService.PRESET_ROLES:
+            exists = await Role.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                await Role.create(
+                    tenant_id=tenant_id,
+                    name=item["name"],
+                    code=item["code"],
+                    description=item.get("description"),
+                    is_active=True,
+                    is_system=False,
+                )
+                created += 1
+        return created

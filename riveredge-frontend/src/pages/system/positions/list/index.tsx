@@ -18,6 +18,7 @@ import {
   getPositionList,
   getPositionByUuid,
   deletePosition,
+  loadPresetPositions,
   Position,
 } from '../../../../services/position';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
@@ -44,6 +45,7 @@ const PositionListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Position | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   useEffect(() => {
     getDepartmentTree()
@@ -270,6 +272,26 @@ const PositionListPage: React.FC = () => {
           showCreateButton
           createButtonText={t('field.position.createTitle')}
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <Button
+              key="loadPreset"
+              loading={loadPresetLoading}
+              onClick={async () => {
+                try {
+                  setLoadPresetLoading(true);
+                  const res = await loadPresetPositions();
+                  messageApi.success(res.message);
+                  actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setLoadPresetLoading(false);
+                }
+              }}
+            >
+              {t('field.position.loadPreset')}
+            </Button>,
+          ]}
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.batchDelete')}

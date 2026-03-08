@@ -24,6 +24,22 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Authoriz
 router = APIRouter(prefix="/positions", tags=["Core Positions"])
 
 
+@router.post("/load-preset")
+async def load_preset_positions(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载中国中小制造业极简职位预设数据。
+    仅创建不存在的职位（按 code 去重）。
+    """
+    count = await PositionService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+    )
+    return {"created": count, "message": f"已加载 {count} 个职位"}
+
+
 @router.post("", response_model=PositionResponse, status_code=status.HTTP_201_CREATED)
 async def create_position(
     data: PositionCreate,

@@ -1115,6 +1115,16 @@ export default {
   'goLiveAssistant.allCompleted': '恭喜！所有上线准备项已完成',
   'goLiveAssistant.allCompletedDesc': '您可以开始正式使用系统了。',
 
+  // 迭代悬浮按钮
+  'components.iterationFloatButton.tooltip': '系统说明与反馈',
+  'components.iterationFloatButton.modalTitle': '系统说明与反馈',
+  'components.iterationFloatButton.iterationNotice': '本系统持续迭代优化中，如有意见或需求反馈，欢迎通过下方入口联系。',
+  'components.iterationFloatButton.buildTime': '当前部署版本更新时间',
+  'components.iterationFloatButton.gitLatestTime': '代码仓库最新提交时间',
+  'components.iterationFloatButton.viewRepo': '查看代码仓库',
+  'components.iterationFloatButton.feedbackTitle': '意见与需求反馈',
+  'components.iterationFloatButton.feedbackDesc': '请扫码添加微信，我们将及时响应您的反馈。',
+
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',
   'components.uniTable.searchError': '搜索组件错误',
@@ -3093,6 +3103,7 @@ export default {
   'field.role.codePattern': '角色代码只能包含字母、数字和下划线',
   'field.role.descriptionPlaceholder': '请输入角色描述',
   'field.role.createTitle': '新建角色',
+  'field.role.loadPreset': '加载初始',
   'field.role.editTitle': '编辑角色',
   'field.role.detailTitle': '角色详情',
   'field.role.assignPermissions': '分配权限',
@@ -3124,6 +3135,7 @@ export default {
   'field.department.parentIdPlaceholder': '请选择父部门（可选，不选则为顶级）',
   'field.department.descriptionPlaceholder': '请输入部门描述',
   'field.department.createTitle': '新建部门',
+  'field.department.loadPreset': '加载初始',
   'field.department.editTitle': '编辑部门',
   'field.department.detailTitle': '部门详情',
   'field.department.view': '查看',
@@ -3165,6 +3177,7 @@ export default {
   'field.position.departmentUuidPlaceholder': '请选择所属部门（可选）',
   'field.position.descriptionPlaceholder': '请输入职位描述',
   'field.position.createTitle': '新建职位',
+  'field.position.loadPreset': '加载初始',
   'field.position.editTitle': '编辑职位',
   'field.position.detailTitle': '职位详情',
   'field.position.view': '查看',
@@ -6416,6 +6429,8 @@ export default {
   'pages.infra.platform.tenantConfig': '组织注册配置',
   'pages.infra.platform.tenantAutoApprove': '自动审核组织注册',
   'pages.infra.platform.tenantAutoApproveTooltip': '开启后，新注册的租户组织将自动通过审核，无需管理员手动审核',
+  'pages.infra.platform.floatButtonEnabled': '显示右下角悬浮按钮',
+  'pages.infra.platform.floatButtonEnabledTooltip': '开启后，系统主界面右下角将显示悬浮按钮，用于展示迭代说明、版本信息及意见反馈入口',
 
   // 报表与看板应用
   'app.kuaireport.name': '自制报表',

@@ -113,6 +113,7 @@ class PlatformSettingsService:
                 icp_license=data.icp_license,
                 theme_color=data.theme_color,
                 tenant_auto_approve=data.tenant_auto_approve if data.tenant_auto_approve is not None else False,
+                float_button_enabled=data.float_button_enabled if data.float_button_enabled is not None else True,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:

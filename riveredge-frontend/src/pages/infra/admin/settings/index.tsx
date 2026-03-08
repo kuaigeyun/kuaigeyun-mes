@@ -164,6 +164,7 @@ export default function PlatformSettingsPage() {
         icp_license: settings.icp_license,
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
+        float_button_enabled: settings.float_button_enabled ?? true,
       });
       
       // 加载LOGO预览
@@ -547,6 +548,11 @@ export default function PlatformSettingsPage() {
               name="tenant_auto_approve"
               label={t('pages.infra.platform.tenantAutoApprove')}
               tooltip={t('pages.infra.platform.tenantAutoApproveTooltip')}
+            />
+            <ProFormSwitch
+              name="float_button_enabled"
+              label={t('pages.infra.platform.floatButtonEnabled')}
+              tooltip={t('pages.infra.platform.floatButtonEnabledTooltip')}
             />
           </Card>
 

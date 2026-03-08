@@ -1108,6 +1108,16 @@ export default {
   'goLiveAssistant.allCompleted': 'Congratulations! All go-live items are completed',
   'goLiveAssistant.allCompletedDesc': 'You can start using the system.',
 
+  // Iteration Float Button
+  'components.iterationFloatButton.tooltip': 'System info & feedback',
+  'components.iterationFloatButton.modalTitle': 'System info & feedback',
+  'components.iterationFloatButton.iterationNotice': 'This system is under continuous iteration. For feedback or feature requests, please contact us via the channel below.',
+  'components.iterationFloatButton.buildTime': 'Current deployment update time',
+  'components.iterationFloatButton.gitLatestTime': 'Latest commit time (repository)',
+  'components.iterationFloatButton.viewRepo': 'View repository',
+  'components.iterationFloatButton.feedbackTitle': 'Feedback & feature requests',
+  'components.iterationFloatButton.feedbackDesc': 'Scan the QR code to add WeChat. We will respond to your feedback promptly.',
+
   // UniTable component
   'components.uniTable.fuzzySearch': 'Fuzzy search',
   'components.uniTable.searchError': 'Search component error',
@@ -3086,6 +3096,7 @@ export default {
   'field.role.codePattern': 'Role code can only contain letters, numbers and underscores',
   'field.role.descriptionPlaceholder': 'Enter role description',
   'field.role.createTitle': 'Create Role',
+  'field.role.loadPreset': 'Load Initial',
   'field.role.editTitle': 'Edit Role',
   'field.role.detailTitle': 'Role Details',
   'field.role.assignPermissions': 'Assign Permissions',
@@ -3117,6 +3128,7 @@ export default {
   'field.department.parentIdPlaceholder': 'Select parent department (optional, leave empty for top-level)',
   'field.department.descriptionPlaceholder': 'Enter department description',
   'field.department.createTitle': 'Create Department',
+  'field.department.loadPreset': 'Load Initial',
   'field.department.editTitle': 'Edit Department',
   'field.department.detailTitle': 'Department Details',
   'field.department.view': 'View',
@@ -3158,6 +3170,7 @@ export default {
   'field.position.departmentUuidPlaceholder': 'Select department (optional)',
   'field.position.descriptionPlaceholder': 'Enter position description',
   'field.position.createTitle': 'Create Position',
+  'field.position.loadPreset': 'Load Initial',
   'field.position.editTitle': 'Edit Position',
   'field.position.detailTitle': 'Position Details',
   'field.position.view': 'View',
@@ -6408,6 +6421,8 @@ export default {
   'pages.infra.platform.tenantConfig': 'Tenant Registration',
   'pages.infra.platform.tenantAutoApprove': 'Auto Approve Tenant Registration',
   'pages.infra.platform.tenantAutoApproveTooltip': 'When enabled, newly registered tenant organizations will be automatically approved without manual review',
+  'pages.infra.platform.floatButtonEnabled': 'Show floating button',
+  'pages.infra.platform.floatButtonEnabledTooltip': 'When enabled, a floating button will appear at the bottom-right of the main interface for iteration info, version details, and feedback',
 
   // Report & Dashboard application
   'app.kuaireport.name': 'Reports & Dashboards',

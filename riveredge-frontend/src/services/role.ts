@@ -216,3 +216,12 @@ export interface PermissionListResponse {
   page_size: number;
 }
 
+/**
+ * 加载中国中小制造业极简角色预设数据
+ */
+export async function loadPresetRoles(): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/roles/load-preset', {
+    method: 'POST',
+  });
+}
+

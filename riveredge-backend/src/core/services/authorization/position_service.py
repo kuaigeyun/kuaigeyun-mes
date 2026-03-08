@@ -333,3 +333,42 @@ class PositionService:
         position.deleted_at = datetime.now()
         await position.save()
 
+    # 中国中小制造业极简职位预设（不关联部门，用户可后续分配）
+    PRESET_POSITIONS = [
+        {"name": "总经理", "code": "ZJL", "sort_order": 10},
+        {"name": "生产经理", "code": "SCJL", "sort_order": 20},
+        {"name": "采购经理", "code": "CGJL", "sort_order": 30},
+        {"name": "销售经理", "code": "XSJL", "sort_order": 40},
+        {"name": "仓库主管", "code": "CKZG", "sort_order": 50},
+        {"name": "质检员", "code": "ZJY", "sort_order": 60},
+        {"name": "会计", "code": "KJ", "sort_order": 70},
+        {"name": "出纳", "code": "CN", "sort_order": 80},
+        {"name": "行政专员", "code": "XZZY", "sort_order": 90},
+        {"name": "人事专员", "code": "RSZY", "sort_order": 100},
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int, current_user_id: int) -> int:
+        """
+        加载中国中小制造业极简职位预设数据。
+        仅创建不存在的职位（按 code 去重）。
+        """
+        created = 0
+        for item in PositionService.PRESET_POSITIONS:
+            exists = await Position.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                await Position.create(
+                    tenant_id=tenant_id,
+                    name=item["name"],
+                    code=item["code"],
+                    department_id=None,
+                    sort_order=item["sort_order"],
+                    is_active=True,
+                )
+                created += 1
+        return created
+

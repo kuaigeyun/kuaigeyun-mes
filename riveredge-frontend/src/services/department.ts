@@ -179,3 +179,12 @@ export async function importDepartments(data: any[][]): Promise<{
   });
 }
 
+/**
+ * 加载中国中小制造业极简部门预设数据
+ */
+export async function loadPresetDepartments(): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/departments/load-preset', {
+    method: 'POST',
+  });
+}
+

@@ -57,6 +57,23 @@ def model_to_response(model_obj, response_class, **extra_fields):
 router = APIRouter(prefix="/roles", tags=["Core Roles"])
 
 
+@router.post("/load-preset")
+async def load_preset_roles(
+    _auth: object = Depends(require_access("system.role", "create")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载中国中小制造业极简角色预设数据。
+    仅创建不存在的角色（按 code 去重）。
+    """
+    count = await RoleService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+    )
+    return {"created": count, "message": f"已加载 {count} 个角色"}
+
+
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     data: RoleCreate,

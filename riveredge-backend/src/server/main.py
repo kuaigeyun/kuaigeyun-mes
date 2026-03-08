@@ -42,6 +42,7 @@ from infra.api.init.init_wizard import router as init_wizard_router
 from infra.api.templates.templates import router as industry_template_router
 from infra.api.platform_settings.platform_settings import router as platform_settings_router
 from infra.api.platform_settings.public import router as platform_settings_public_router
+from infra.api.platform_settings.version import router as platform_version_router
 from infra.api.business_config.business_config import router as business_config_router
 
 # 导入所有系统级 API 路由（core）
@@ -629,6 +630,8 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tenants_public_router, prefix="/api/v1")
 # 公开的平台设置接口（不需要认证，用于登录页等）
 app.include_router(platform_settings_public_router, prefix="/api/v1/infra")
+# 公开的平台版本接口（用于悬浮按钮展示迭代信息）
+app.include_router(platform_version_router, prefix="/api/v1/infra")
 # 公开的文件接口（不需要认证，用于平台LOGO等公开资源）
 app.include_router(files_public_router, prefix="/api/v1/core")
 
