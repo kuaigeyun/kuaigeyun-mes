@@ -22,6 +22,7 @@ import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { downloadFile } from '../../../../../utils';
 
 /**
  * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
@@ -1709,6 +1710,31 @@ const BOMPage: React.FC = () => {
           '损耗率': 'wasteRate',
           '是否必选': 'isRequired',
           '备注': 'remark',
+        }}
+        showExportButton={true}
+        onExport={async (type, selectedRowKeys, currentPageData) => {
+          try {
+            let toExport: BOMGroupRow[] = [];
+            if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+              toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.groupKey));
+            } else if (type === 'currentPage' && currentPageData) {
+              toExport = currentPageData;
+            } else {
+              const result = await bomApi.list({ skip: 0, limit: 10000 });
+              const { groupRows } = groupBomsByCode(result);
+              toExport = groupRows;
+            }
+            if (toExport.length === 0) {
+              messageApi.warning(t('app.master-data.noExportData'));
+              return;
+            }
+            const blob = new Blob(['\ufeff' + JSON.stringify(toExport, null, 2)], { type: 'application/json;charset=utf-8' });
+            const filename = `BOM_${new Date().toISOString().slice(0, 10)}.json`;
+            downloadFile(blob, filename);
+            messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+          } catch (error: any) {
+            messageApi.error(error?.message || t('app.master-data.exportFailed'));
+          }
         }}
         rowSelection={{
           selectedRowKeys,

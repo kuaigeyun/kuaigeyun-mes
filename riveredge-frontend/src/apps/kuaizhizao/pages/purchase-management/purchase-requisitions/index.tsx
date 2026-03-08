@@ -11,6 +11,7 @@ import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDraw
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { downloadFile } from '../../../../../utils';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
@@ -406,6 +407,27 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 }
               },
             });
+          }}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await listPurchaseRequisitions({ skip: 0, limit: 10000 });
+              let items = res.data || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: PurchaseRequisition) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              downloadFile(blob, `purchase-requisitions-${new Date().toISOString().slice(0, 10)}.json`);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
           }}
         />
       </ListPageTemplate>

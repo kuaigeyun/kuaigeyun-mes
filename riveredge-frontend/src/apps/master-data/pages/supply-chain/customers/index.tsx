@@ -7,13 +7,15 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerApi } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
-import type { Customer } from '../../../types/supply-chain';
+import type { Customer, CustomerCreate } from '../../../types/supply-chain';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { downloadFile } from '../../../../../utils';
 
 /**
  * 客户管理列表页面组件
@@ -140,6 +142,283 @@ const CustomersPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     setEditUuid(null);
+  };
+
+  /**
+   * 处理批量导入客户（batchImport + customerApi.create 循环）
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2);
+
+    const nonEmptyRows = rows.filter((row: any[]) => {
+      if (!row || row.length === 0) return false;
+      return row.some((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value !== '';
+      });
+    });
+
+    if (nonEmptyRows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'));
+      return;
+    }
+
+    const headerMap: Record<string, string> = {
+      [t('field.customer.code')]: 'code',
+      [`*${t('field.customer.code')}`]: 'code',
+      [t('field.customer.name')]: 'name',
+      [`*${t('field.customer.name')}`]: 'name',
+      [t('field.customer.shortName')]: 'shortName',
+      [t('field.customer.contactPerson')]: 'contactPerson',
+      [t('field.customer.phone')]: 'phone',
+      [t('field.customer.email')]: 'email',
+      [t('field.customer.address')]: 'address',
+      [t('field.customer.category')]: 'category',
+      '编码': 'code', '*编码': 'code', 'code': 'code', '*code': 'code',
+      '名称': 'name', '*名称': 'name', 'name': 'name', '*name': 'name',
+      '简称': 'shortName', '联系人': 'contactPerson', '电话': 'phone',
+      '邮箱': 'email', '地址': 'address', '分类': 'category',
+    };
+
+    const headerIndexMap: Record<string, number> = {};
+    headers.forEach((header, index) => {
+      const normalizedHeader = String(header || '').trim();
+      if (headerMap[normalizedHeader]) {
+        headerIndexMap[headerMap[normalizedHeader]] = index;
+      } else {
+        const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
+        if (headerMap[withoutStar]) {
+          headerIndexMap[headerMap[withoutStar]] = index;
+        }
+      }
+    });
+
+    if (headerIndexMap['code'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: t('field.customer.code'), headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['name'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: t('field.customer.name'), headers: headers.join(', ') }));
+      return;
+    }
+
+    const importData: CustomerCreate[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+
+    nonEmptyRows.forEach((row: any[], rowIndex: number) => {
+      const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value === '';
+      });
+      if (isEmptyRow) return;
+
+      let actualRowIndex = rowIndex + 3;
+      for (let i = 2; i < data.length; i++) {
+        if (data[i] === row) {
+          actualRowIndex = i + 1;
+          break;
+        }
+      }
+
+      try {
+        const codeIndex = headerIndexMap['code'];
+        const nameIndex = headerIndexMap['name'];
+        const shortNameIndex = headerIndexMap['shortName'];
+        const contactPersonIndex = headerIndexMap['contactPerson'];
+        const phoneIndex = headerIndexMap['phone'];
+        const emailIndex = headerIndexMap['email'];
+        const addressIndex = headerIndexMap['address'];
+        const categoryIndex = headerIndexMap['category'];
+
+        if (codeIndex === undefined || nameIndex === undefined) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
+          return;
+        }
+
+        const codeValue = row[codeIndex] !== null && row[codeIndex] !== undefined ? String(row[codeIndex]).trim() : '';
+        const nameValue = row[nameIndex] !== null && row[nameIndex] !== undefined ? String(row[nameIndex]).trim() : '';
+
+        if (!codeValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.customers.codeRequired') });
+          return;
+        }
+        if (!nameValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.customers.nameRequired') });
+          return;
+        }
+
+        const customerData: CustomerCreate = {
+          code: codeValue.toUpperCase(),
+          name: nameValue,
+          shortName: shortNameIndex !== undefined && row[shortNameIndex] ? String(row[shortNameIndex]).trim() : undefined,
+          contactPerson: contactPersonIndex !== undefined && row[contactPersonIndex] ? String(row[contactPersonIndex]).trim() : undefined,
+          phone: phoneIndex !== undefined && row[phoneIndex] ? String(row[phoneIndex]).trim() : undefined,
+          email: emailIndex !== undefined && row[emailIndex] ? String(row[emailIndex]).trim() : undefined,
+          address: addressIndex !== undefined && row[addressIndex] ? String(row[addressIndex]).trim() : undefined,
+          category: categoryIndex !== undefined && row[categoryIndex] ? String(row[categoryIndex]).trim() : undefined,
+          isActive: true,
+        };
+        importData.push(customerData);
+      } catch (error: any) {
+        errors.push({ row: actualRowIndex, message: error.message || t('app.master-data.dataParseFailed') });
+      }
+    });
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    if (importData.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'));
+      return;
+    }
+
+    try {
+      const result = await batchImport({
+        items: importData,
+        importFn: async (item: CustomerCreate) => customerApi.create(item),
+        title: t('app.master-data.customers.importTitle'),
+        concurrency: 5,
+      });
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.master-data.importPartialResultTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(t('app.master-data.customers.importSuccess', { count: result.successCount }));
+      }
+
+      if (result.successCount > 0) {
+        actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.importFailed'));
+    }
+  };
+
+  /**
+   * 处理批量导出客户
+   */
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Customer[]
+  ) => {
+    try {
+      let exportData: Customer[] = [];
+      let filename = '';
+
+      if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
+        if (!currentPageData) {
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
+          return;
+        }
+        exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
+        filename = `${t('app.master-data.customers.exportFilenameSelected', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+      } else if (type === 'currentPage' && currentPageData) {
+        exportData = currentPageData;
+        filename = `${t('app.master-data.customers.exportFilenameCurrentPage', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+      } else {
+        exportData = await customerApi.list({ skip: 0, limit: 10000 });
+        filename = `${t('app.master-data.customers.exportFilenameAll', { date: new Date().toISOString().slice(0, 10) })}.csv`;
+      }
+
+      if (exportData.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+
+      const headers = [
+        t('field.customer.code'),
+        t('field.customer.name'),
+        t('field.customer.shortName'),
+        t('field.customer.contactPerson'),
+        t('field.customer.phone'),
+        t('field.customer.email'),
+        t('field.customer.address'),
+        t('field.customer.category'),
+        t('app.master-data.warehouses.status'),
+        t('common.createdAt'),
+      ];
+      const csvRows: string[] = [headers.join(',')];
+
+      exportData.forEach((item) => {
+        const row = [
+          item.code || '',
+          item.name || '',
+          item.shortName || '',
+          item.contactPerson || '',
+          item.phone || '',
+          item.email || '',
+          item.address || '',
+          item.category || '',
+          (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
+          item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
+        ];
+        csvRows.push(row.map(cell => {
+          const cellStr = String(cell || '');
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      downloadFile(blob, filename);
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.exportFailed'));
+    }
   };
 
   /**
@@ -375,6 +654,40 @@ const CustomersPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={[
+          `*${t('field.customer.code')}`,
+          `*${t('field.customer.name')}`,
+          t('field.customer.shortName'),
+          t('field.customer.contactPerson'),
+          t('field.customer.phone'),
+          t('field.customer.email'),
+          t('field.customer.address'),
+          t('field.customer.category'),
+        ]}
+        importExampleRow={['CUST001', '客户A', '客A', '张三', '13800138000', 'a@b.com', '北京市朝阳区', 'VIP']}
+        importFieldMap={{
+          [t('field.customer.code')]: 'code',
+          [`*${t('field.customer.code')}`]: 'code',
+          [t('field.customer.name')]: 'name',
+          [`*${t('field.customer.name')}`]: 'name',
+          [t('field.customer.shortName')]: 'shortName',
+          [t('field.customer.contactPerson')]: 'contactPerson',
+          [t('field.customer.phone')]: 'phone',
+          [t('field.customer.email')]: 'email',
+          [t('field.customer.address')]: 'address',
+          [t('field.customer.category')]: 'category',
+          'code': 'code', '*code': 'code', 'name': 'name', '*name': 'name',
+          'shortName': 'shortName', 'contactPerson': 'contactPerson', 'phone': 'phone',
+          'email': 'email', 'address': 'address', 'category': 'category',
+        }}
+        importFieldRules={{
+          code: { required: true },
+          name: { required: true },
+        }}
+        showExportButton={true}
+        onExport={handleExport}
       />
       </ListPageTemplate>
 

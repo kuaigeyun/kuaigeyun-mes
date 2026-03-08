@@ -16,6 +16,7 @@ import { defectTypeApi } from '../../../services/process';
 import type { DefectType, DefectTypeCreate } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode } from '../../../../../services/codeRule';
+import { downloadFile } from '../../../../../utils';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/import';
 
@@ -296,6 +297,38 @@ const DefectTypesPage: React.FC = () => {
   };
 
   /**
+   * 处理批量导出
+   */
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: DefectType[]
+  ) => {
+    try {
+      let exportData: DefectType[] = [];
+      if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+        exportData = currentPageData.filter((item) => selectedRowKeys.includes(item.uuid));
+      } else if (type === 'currentPage' && currentPageData) {
+        exportData = currentPageData;
+      } else {
+        const result = await defectTypeApi.list({ skip: 0, limit: 10000 });
+        const list = result?.data ?? result;
+        exportData = Array.isArray(list) ? list : [];
+      }
+      if (exportData.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+      const blob = new Blob(['\ufeff' + JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
+      const filename = `不良品项_${new Date().toISOString().slice(0, 10)}.json`;
+      downloadFile(blob, filename);
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.exportFailed'));
+    }
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<DefectType>[] = [
@@ -473,6 +506,8 @@ const DefectTypesPage: React.FC = () => {
           '分类': 'category', 'category': 'category',
           '描述': 'description', 'description': 'description',
         }}
+        showExportButton={true}
+        onExport={handleExport}
       />
 
       <DetailDrawerTemplate<DefectType>

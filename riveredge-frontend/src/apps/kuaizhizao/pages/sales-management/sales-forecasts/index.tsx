@@ -25,6 +25,8 @@ import {
   submitSalesForecast,
   approveSalesForecast,
   pushSalesForecastToMrp,
+  importSalesForecasts,
+  exportSalesForecasts,
   type SalesForecast,
   type SalesForecastItem,
 } from '../../../services/sales-forecast';
@@ -36,6 +38,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { downloadFile } from '../../../services/common';
 
 /** 销售预测状态 */
 const SalesForecastStatus = {
@@ -217,6 +220,51 @@ const SalesForecastsPage: React.FC = () => {
       setDrawerVisible(true);
     } catch (e: any) {
       messageApi.error(e?.message || '获取详情失败');
+    }
+  };
+
+  // 处理批量导入（UniTable 内置）
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await importSalesForecasts(data);
+      if (result.failure_count > 0) {
+        messageApi.warning(`导入完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
+      } else {
+        messageApi.success(`导入成功：成功 ${result.success_count} 条`);
+      }
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出（UniTable 内置）
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: SalesForecast[]) => {
+    try {
+      if (type === 'all') {
+        const blob = await exportSalesForecasts();
+        const filename = `销售预测_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        downloadFile(blob, filename);
+        messageApi.success('导出成功');
+      } else {
+        const toExport = type === 'selected' && selectedRowKeys?.length
+          ? (currentPageData || []).filter((r) => r.id != null && selectedRowKeys.includes(r.id))
+          : currentPageData || [];
+        if (toExport.length === 0) {
+          messageApi.warning('暂无数据可导出');
+          return;
+        }
+        const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `销售预测_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        messageApi.success(`已导出 ${toExport.length} 条记录`);
+      }
+    } catch (e: any) {
+      messageApi.error((e as Error).message || '导出失败');
     }
   };
 
@@ -451,6 +499,12 @@ const SalesForecastsPage: React.FC = () => {
           showCreateButton={true}
           createButtonText="新建销售预测"
           onCreate={handleCreate}
+          showImportButton={true}
+          onImport={handleImport}
+          importHeaders={['*预测名称', '预测类型', '*预测周期', '*开始日期', '*结束日期', '备注']}
+          importExampleRow={['2026年1月预测', 'MTS', '2026-01', '2026-01-01', '2026-01-31', '']}
+          showExportButton={true}
+          onExport={handleExport}
           showDeleteButton={true}
           onDelete={handleDelete}
         />

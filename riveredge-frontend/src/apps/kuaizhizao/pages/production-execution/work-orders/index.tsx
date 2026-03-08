@@ -51,6 +51,7 @@ import {
   Typography,
   Empty,
   Dropdown,
+  List,
 } from 'antd'
 import {
   PlusOutlined,
@@ -121,6 +122,7 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
+import { batchImport } from '../../../../../utils/batchOperations'
 
 interface WorkOrder {
   id?: number
@@ -1144,6 +1146,134 @@ const WorkOrdersPage: React.FC = () => {
       invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败')
+    }
+  }
+
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning('导入数据为空或格式不正确')
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+
+    if (rows.length === 0) {
+      messageApi.warning('没有可导入的数据行（请从第3行开始填写）')
+      return
+    }
+
+    const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name)
+    const idx = {
+      code: col('工单编号') >= 0 ? col('工单编号') : col('编号'),
+      product: col('产品编码') >= 0 ? col('产品编码') : col('物料编码'),
+      qty: col('计划数量') >= 0 ? col('计划数量') : col('数量'),
+      workshop: col('车间编码') >= 0 ? col('车间编码') : col('车间'),
+    }
+
+    if (idx.product < 0 || idx.qty < 0) {
+      messageApi.error('缺少必需列：产品编码、计划数量')
+      return
+    }
+
+    const [materials, workshops] = await Promise.all([
+      materialApi.list({ limit: 5000, isActive: true }),
+      workshopApi.list({ limit: 1000 }),
+    ])
+
+    const errors: Array<{ row: number; message: string }> = []
+    const toImport: any[] = []
+
+    rows.forEach((row: any[], i: number) => {
+      const rowNum = i + 3
+      const productCode = (row[idx.product] ?? '').toString().trim()
+      const qtyVal = Number(row[idx.qty])
+      if (!productCode) {
+        errors.push({ row: rowNum, message: '产品编码不能为空' })
+        return
+      }
+      if (isNaN(qtyVal) || qtyVal <= 0) {
+        errors.push({ row: rowNum, message: '计划数量必须大于0' })
+        return
+      }
+
+      const mat = materials.find((m: any) => (m.mainCode || m.code || '').toUpperCase() === productCode.toUpperCase())
+      if (!mat) {
+        errors.push({ row: rowNum, message: `未找到产品：${productCode}` })
+        return
+      }
+
+      const woCode = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : undefined
+      const workshopCode = idx.workshop >= 0 ? (row[idx.workshop] ?? '').toString().trim() : undefined
+      let workshopId: number | undefined
+      if (workshopCode) {
+        const ws = workshops.find((w: any) => (w.code || '').toUpperCase() === workshopCode.toUpperCase())
+        workshopId = ws?.id
+      }
+
+      toImport.push({
+        code: woCode || undefined,
+        product_id: mat.id,
+        product_code: mat.mainCode || mat.code,
+        product_name: mat.name,
+        quantity: qtyVal,
+        production_mode: 'MTS',
+        workshop_id: workshopId,
+      })
+    })
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: '数据验证失败',
+        width: 600,
+        content: (
+          <div>
+            <p>以下行存在错误，请修正后重新导入：</p>
+            <List size="small" dataSource={errors} renderItem={(item) => (
+              <List.Item><Typography.Text type="danger">第 {item.row} 行：{item.message}</Typography.Text></List.Item>
+            )} />
+          </div>
+        ),
+      })
+      return
+    }
+
+    if (toImport.length === 0) {
+      messageApi.warning('没有可导入的数据')
+      return
+    }
+
+    try {
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) => workOrderApi.create(item),
+        title: '正在导入工单',
+        concurrency: 3,
+      })
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: '导入完成（部分失败）',
+          width: 600,
+          content: (
+            <div>
+              <p><strong>导入结果：成功 {result.successCount} 条，失败 {result.failureCount} 条</strong></p>
+              {result.errors.length > 0 && (
+                <List size="small" dataSource={result.errors} renderItem={(e) => (
+                  <List.Item><Typography.Text type="danger">第 {e.row} 行：{e.error}</Typography.Text></List.Item>
+                )} />
+              )}
+            </div>
+          ),
+        })
+      } else {
+        messageApi.success(`成功导入 ${result.successCount} 条工单`)
+      }
+      if (result.successCount > 0) {
+        invalidateStatistics()
+        actionRef.current?.reload()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || '导入失败')
     }
   }
 
@@ -2416,7 +2546,22 @@ const WorkOrdersPage: React.FC = () => {
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
-          showImportButton={false}
+          showImportButton={true}
+          onImport={handleListImport}
+          importHeaders={['工单编号', '*产品编码', '*计划数量', '车间编码']}
+          importExampleRow={['WO001', 'PROD-A001', '100', 'WS001']}
+          importFieldMap={{
+            '工单编号': 'code',
+            '产品编码': 'product_code',
+            '*产品编码': 'product_code',
+            '计划数量': 'quantity',
+            '*计划数量': 'quantity',
+            '车间编码': 'workshop_code',
+          }}
+          importFieldRules={{
+            product_code: { required: true },
+            quantity: { required: true },
+          }}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

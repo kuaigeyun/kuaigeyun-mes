@@ -24,6 +24,7 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityApi, warehouseApi } from '../../../services/production';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
+import { downloadFile } from '../../../services/common';
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -169,6 +170,54 @@ const IncomingInspectionPage: React.FC = () => {
       setDocumentRelations(relations);
     } catch (error) {
       messageApi.error('获取检验单详情失败');
+    }
+  };
+
+  // 处理批量导入（UniTable 内置）
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await qualityApi.incomingInspection.import(data) as any;
+      const successCount = result?.success_count ?? result?.data?.success_count ?? 0;
+      const failureCount = result?.failure_count ?? result?.data?.failure_count ?? 0;
+      if (failureCount > 0) {
+        messageApi.warning(`导入完成：成功 ${successCount} 条，失败 ${failureCount} 条`);
+      } else {
+        messageApi.success(`导入成功：成功 ${successCount} 条`);
+      }
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出（UniTable 内置）
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: IncomingInspection[]) => {
+    try {
+      if (type === 'all') {
+        const blob = await qualityApi.incomingInspection.export();
+        const filename = `来料检验单_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        downloadFile(blob, filename);
+        messageApi.success('导出成功');
+      } else {
+        const toExport = type === 'selected' && selectedRowKeys?.length
+          ? (currentPageData || []).filter((r) => r.id != null && selectedRowKeys.includes(r.id))
+          : currentPageData || [];
+        if (toExport.length === 0) {
+          messageApi.warning('暂无数据可导出');
+          return;
+        }
+        const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `来料检验单_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        messageApi.success(`已导出 ${toExport.length} 条记录`);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || '导出失败');
     }
   };
 
@@ -452,6 +501,12 @@ const IncomingInspectionPage: React.FC = () => {
         createButtonText="从采购入库单创建"
         onCreate={handleCreateFromReceipt}
         enableRowSelection={true}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={['采购入库单号', '物料编码', '检验数量', '合格数量', '不合格数量', '备注']}
+        importExampleRow={['PR20250115001', 'MAT001', '100', '95', '5', '']}
+        showExportButton={true}
+        onExport={handleExport}
         showDeleteButton={true}
         onDelete={async (keys) => {
           Modal.confirm({

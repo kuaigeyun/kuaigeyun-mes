@@ -10,6 +10,8 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, BranchesOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { downloadFile } from '../../../../../utils';
+import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { RouteFormModal } from '../../../components/RouteFormModal';
 import { processRouteApi } from '../../../services/process';
@@ -118,6 +120,126 @@ const ProcessRoutesPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'));
+      return;
+    }
+    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
+    const idxCode = col('工艺路线编码') >= 0 ? col('工艺路线编码') : col('编码');
+    const idxName = col('工艺路线名称') >= 0 ? col('工艺路线名称') : col('名称');
+    const idxDesc = col('描述') >= 0 ? col('描述') : -1;
+    if (idxCode < 0 || idxName < 0) {
+      messageApi.error(t('app.master-data.importMissingField', { field: '工艺路线编码/名称', headers: headers.join(', ') }));
+      return;
+    }
+    const items: { code: string; name: string; description?: string }[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+    rows.forEach((row: any[], i: number) => {
+      const code = (row[idxCode] ?? '').toString().trim();
+      const name = (row[idxName] ?? '').toString().trim();
+      const desc = idxDesc >= 0 ? (row[idxDesc] ?? '').toString().trim() : undefined;
+      if (!code) {
+        errors.push({ row: i + 3, message: t('app.master-data.routes.codeRequired') });
+        return;
+      }
+      if (!name) {
+        errors.push({ row: i + 3, message: t('app.master-data.routes.nameRequired') });
+        return;
+      }
+      items.push({ code, name, description: desc || undefined });
+    });
+    if (errors.length > 0) {
+      Modal.warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List size="small" dataSource={errors} renderItem={(e) => (
+              <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.message })}</Typography.Text></List.Item>
+            )} />
+          </div>
+        ),
+      });
+      return;
+    }
+    try {
+      const result = await batchImport({
+        items,
+        importFn: async (item) => processRouteApi.create(item),
+        title: '正在导入工艺路线',
+        concurrency: 5,
+      });
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.master-data.importPartialResultTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p><strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong></p>
+              {result.errors.length > 0 && (
+                <List size="small" dataSource={result.errors} renderItem={(e) => (
+                  <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.error })}</Typography.Text></List.Item>
+                )} />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+      }
+      if (result.successCount > 0) actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed'));
+    }
+  };
+
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: ProcessRoute[]) => {
+    try {
+      let toExport: ProcessRoute[] = [];
+      if (type === 'all') {
+        toExport = await processRouteApi.list({ skip: 0, limit: 10000 });
+      } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+        toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
+      } else if (type === 'currentPage' && currentPageData) {
+        toExport = currentPageData;
+      } else {
+        toExport = await processRouteApi.list({ skip: 0, limit: 10000 });
+      }
+      if (toExport.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+      const headers = ['工艺路线编码', '工艺路线名称', '描述', '启用状态', '创建时间'];
+      const csvRows = [headers.join(',')];
+      toExport.forEach((r) => {
+        const isActive = r?.is_active ?? (r as any)?.isActive;
+        csvRows.push([
+          r.code || '',
+          r.name || '',
+          (r as any).description || '',
+          isActive ? '启用' : '禁用',
+          r.created_at ? new Date(r.created_at).toLocaleString() : '',
+        ].map((c) => {
+          const s = String(c ?? '');
+          return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(','));
+      });
+      const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+      downloadFile(blob, `process-routes_${new Date().toISOString().slice(0, 10)}.csv`);
+      messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.exportFailed'));
+    }
   };
 
   /**
@@ -399,6 +521,20 @@ const ProcessRoutesPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={['*工艺路线编码', '*工艺路线名称', '描述']}
+        importExampleRow={['ROUTE001', '装配工艺', '产品装配工艺路线']}
+        importFieldMap={{
+          '工艺路线编码': 'code',
+          '*工艺路线编码': 'code',
+          '工艺路线名称': 'name',
+          '*工艺路线名称': 'name',
+          '描述': 'description',
+        }}
+        importFieldRules={{ code: { required: true }, name: { required: true } }}
+        showExportButton={true}
+        onExport={handleExport}
       />
 
       <DetailDrawerTemplate<ProcessRoute>

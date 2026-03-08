@@ -19,6 +19,8 @@ import {
   theme,
   Menu,
   Image,
+  List,
+  Typography,
 } from 'antd'
 import {
   EditOutlined,
@@ -62,6 +64,8 @@ import type {
 import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
 import { getFileDownloadUrl } from '../../../../services/file'
+import { batchImport } from '../../../../utils/batchOperations'
+import { downloadFile } from '../../../../utils'
 
 
 /**
@@ -580,6 +584,178 @@ const MaterialsManagementPage: React.FC = () => {
     })
   }, [selectedRowKeys, messageApi])
 
+  const handleMaterialImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'))
+      return
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim())
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''))
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'))
+      return
+    }
+
+    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n || (h || '').trim() === n)
+    const idx = {
+      code: col('物料编码') >= 0 ? col('物料编码') : col('编码'),
+      name: col('物料名称') >= 0 ? col('物料名称') : col('名称'),
+      unit: col('基础单位') >= 0 ? col('基础单位') : col('单位'),
+      spec: col('规格') >= 0 ? col('规格') : -1,
+      type: col('物料类型') >= 0 ? col('物料类型') : -1,
+      group: col('分组编码') >= 0 ? col('分组编码') : col('分组') >= 0 ? col('分组') : col(t('app.master-data.materials.materialGroup')) >= 0 ? col(t('app.master-data.materials.materialGroup')) : -1,
+    }
+
+    if (idx.name < 0 || idx.unit < 0) {
+      messageApi.error(t('app.master-data.importMissingField', { field: '物料名称、基础单位', headers: headers.join(', ') }))
+      return
+    }
+
+    const groups = await materialGroupApi.list({ limit: 1000 })
+    const errors: Array<{ row: number; message: string }> = []
+    const toImport: MaterialCreate[] = []
+
+    rows.forEach((row: any[], i: number) => {
+      const rowNum = i + 3
+      const name = (row[idx.name] ?? '').toString().trim()
+      const unit = (row[idx.unit] ?? '').toString().trim()
+      if (!name) {
+        errors.push({ row: rowNum, message: t('app.master-data.materials.nameRequired', { defaultValue: '物料名称不能为空' }) })
+        return
+      }
+      if (!unit) {
+        errors.push({ row: rowNum, message: '基础单位不能为空' })
+        return
+      }
+
+      const code = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : undefined
+      const spec = idx.spec >= 0 ? (row[idx.spec] ?? '').toString().trim() : undefined
+      const matType = idx.type >= 0 ? (row[idx.type] ?? '').toString().trim() : undefined
+      const groupCode = idx.group >= 0 ? (row[idx.group] ?? '').toString().trim() : undefined
+      let groupId: number | undefined
+      if (groupCode) {
+        const g = (Array.isArray(groups) ? groups : []).find((x: any) => (x.code || '').trim() === groupCode.trim())
+        groupId = g?.id
+      }
+
+      toImport.push({
+        mainCode: code || undefined,
+        name,
+        baseUnit: unit,
+        specification: spec || undefined,
+        materialType: matType || undefined,
+        groupId,
+        isActive: true,
+      })
+    })
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List size="small" dataSource={errors} renderItem={(e) => (
+              <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.message })}</Typography.Text></List.Item>
+            )} />
+          </div>
+        ),
+      })
+      return
+    }
+
+    if (toImport.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'))
+      return
+    }
+
+    try {
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) => materialApi.create(item),
+        title: t('app.master-data.materials.importTitle', { defaultValue: '正在导入物料' }),
+        concurrency: 5,
+      })
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.master-data.importPartialResultTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p><strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong></p>
+              {result.errors.length > 0 && (
+                <List size="small" dataSource={result.errors} renderItem={(e) => (
+                  <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.error })}</Typography.Text></List.Item>
+                )} />
+              )}
+            </div>
+          ),
+        })
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }))
+      }
+      if (result.successCount > 0) {
+        actionRef.current?.reload()
+        loadMaterialGroups()
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed'))
+    }
+  }
+
+  const handleMaterialExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: Material[]) => {
+    try {
+      let toExport: Material[] = []
+      if (type === 'all') {
+        toExport = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+      } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+        toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid))
+      } else if (type === 'currentPage' && currentPageData) {
+        toExport = currentPageData
+      } else {
+        toExport = await materialApi.list({ skip: 0, limit: 10000, groupId: selectedGroupId ?? undefined })
+      }
+      if (toExport.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'))
+        return
+      }
+      const headers = [
+        t('app.master-data.materials.materialCode'),
+        t('app.master-data.materials.materialName'),
+        t('app.master-data.materials.specification'),
+        t('app.master-data.materials.baseUnit'),
+        t('app.master-data.materials.materialType'),
+        t('app.master-data.warehouses.status'),
+        t('common.createdAt'),
+      ]
+      const csvRows = [headers.join(',')]
+      toExport.forEach((r) => {
+        const code = (r as any).mainCode || (r as any).code || ''
+        const name = r.name || ''
+        const spec = (r as any).specification || ''
+        const unit = (r as any).baseUnit || ''
+        const matType = (r as any).materialType || ''
+        const isActive = r?.isActive ?? (r as any)?.is_active
+        const status = isActive ? t('common.enabled') : t('common.disabled')
+        const createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : ''
+        csvRows.push(
+          [code, name, spec, unit, matType, status, createdAt]
+            .map((c) => {
+              const s = String(c ?? '')
+              return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+            })
+            .join(',')
+        )
+      })
+      const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' })
+      downloadFile(blob, `materials_${new Date().toISOString().slice(0, 10)}.csv`)
+      messageApi.success(t('common.exportSuccess', { count: toExport.length }))
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.exportFailed'))
+    }
+  }
+
   const handleMaterialSubmit = async (values: any) => {
     try {
       setMaterialFormLoading(true)
@@ -1012,6 +1188,31 @@ const MaterialsManagementPage: React.FC = () => {
                 selectedRowKeys,
                 onChange: setSelectedRowKeys,
               }}
+              showImportButton={true}
+              onImport={handleMaterialImport}
+              importHeaders={[
+                t('app.master-data.materials.materialCode'),
+                `*${t('app.master-data.materials.materialName')}`,
+                `*${t('app.master-data.materials.baseUnit')}`,
+                t('app.master-data.materials.specification'),
+                t('app.master-data.materials.materialType'),
+                t('app.master-data.materials.materialGroup'),
+              ]}
+              importExampleRow={['MAT001', '产品A', '个', '规格A', 'FIN', '']}
+              importFieldMap={{
+                [t('app.master-data.materials.materialCode')]: 'mainCode',
+                [t('app.master-data.materials.materialName')]: 'name',
+                [t('app.master-data.materials.baseUnit')]: 'baseUnit',
+                [t('app.master-data.materials.specification')]: 'specification',
+                [t('app.master-data.materials.materialType')]: 'materialType',
+                [t('app.master-data.materials.materialGroup')]: 'groupCode',
+              }}
+              importFieldRules={{
+                name: { required: true },
+                baseUnit: { required: true },
+              }}
+              showExportButton={true}
+              onExport={handleMaterialExport}
             />
           ),
         }}

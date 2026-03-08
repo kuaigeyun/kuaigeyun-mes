@@ -23,6 +23,7 @@ import {
   Department,
   DepartmentTreeItem,
 } from '../../../../services/department';
+import { downloadFile } from '../../../../utils';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -53,6 +54,75 @@ const DepartmentListPage: React.FC = () => {
       }
     });
     return keys;
+  };
+
+  const flattenTree = (nodes: DepartmentTreeItem[]): Department[] => {
+    const result: Department[] = [];
+    const traverse = (items: DepartmentTreeItem[]) => {
+      items.forEach((node) => {
+        const { children, ...rest } = node;
+        result.push(rest as Department);
+        if (children?.length) traverse(children);
+      });
+    };
+    traverse(nodes);
+    return result;
+  };
+
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: DepartmentTreeItem[]
+  ) => {
+    try {
+      let toExport: Department[] = [];
+      if (type === 'all') {
+        const res = await getDepartmentTree();
+        toExport = flattenTree(res.items);
+      } else if (type === 'selected' && selectedRowKeys?.length) {
+        const flat = flattenTree(deptTreeData);
+        toExport = flat.filter((d) => selectedRowKeys.includes(d.uuid));
+      } else if (type === 'currentPage' && currentPageData?.length) {
+        toExport = flattenTree(currentPageData);
+      } else {
+        const flat = flattenTree(deptTreeData);
+        toExport = flat;
+      }
+      if (toExport.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+      const headers = [
+        t('field.department.code'),
+        t('field.department.name'),
+        t('field.department.parentName'),
+        t('field.role.status'),
+        t('field.department.sortOrder'),
+        t('common.createdAt'),
+      ];
+      const csvRows = [headers.join(',')];
+      toExport.forEach((d) => {
+        const row = [
+          d.code || '',
+          d.name || '',
+          (d as any).parent_name || '-',
+          d.is_active ? t('field.role.enabled') : t('field.role.disabled'),
+          String(d.sort_order ?? ''),
+          d.created_at ? new Date(d.created_at).toLocaleString() : '',
+        ];
+        csvRows.push(
+          row.map((c) => {
+            const s = String(c ?? '');
+            return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+          }).join(',')
+        );
+      });
+      const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+      downloadFile(blob, `departments_${new Date().toISOString().slice(0, 10)}.csv`);
+      messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.exportFailed'));
+    }
   };
 
   const loadData = async (params: any, _sort: any, _filter: any, searchFormValues?: any) => {
@@ -435,6 +505,8 @@ const DepartmentListPage: React.FC = () => {
         ]}
         showImportButton={true}
         onImport={handleImport}
+        showExportButton={true}
+        onExport={handleExport}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

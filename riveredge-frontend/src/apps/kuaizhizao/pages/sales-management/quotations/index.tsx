@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, Dropdown, List, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, MoreOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -39,6 +39,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { batchImport } from '../../../../../utils/batchOperations';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   草稿: { text: '草稿', color: 'default' },
@@ -340,6 +341,175 @@ const QuotationsPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
+    }
+  };
+
+  /**
+   * 处理列表页批量导入报价单
+   * 导入格式：报价单编号, 客户名称, 报价日期, 物料编码, 数量, 单价, 交货日期, 备注
+   * 同一报价单编号的多行会合并为一条报价单的多个明细
+   */
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning('导入数据为空或格式不正确');
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
+
+    if (rows.length === 0) {
+      messageApi.warning('没有可导入的数据行（请从第3行开始填写）');
+      return;
+    }
+
+    const col = (name: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === name || (h || '').trim() === name);
+    const idx = {
+      code: col('报价单编号') >= 0 ? col('报价单编号') : col('编号'),
+      customer: col('客户名称') >= 0 ? col('客户名称') : col('客户'),
+      date: col('报价日期') >= 0 ? col('报价日期') : col('日期'),
+      material: col('物料编码') >= 0 ? col('物料编码') : col('物料'),
+      qty: col('数量') >= 0 ? col('数量') : -1,
+      price: col('单价') >= 0 ? col('单价') : -1,
+      delivery: col('交货日期') >= 0 ? col('交货日期') : -1,
+      notes: col('备注') >= 0 ? col('备注') : -1,
+    };
+
+    if (idx.customer < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
+      messageApi.error('缺少必需列：客户名称、报价日期、物料编码、数量');
+      return;
+    }
+
+    const errors: Array<{ row: number; message: string }> = [];
+    const groupMap = new Map<string, { code?: string; customer: string; date: string; items: any[] }>();
+
+    rows.forEach((row: any[], i: number) => {
+      const rowNum = i + 3;
+      const customerName = (row[idx.customer] ?? '').toString().trim();
+      const dateVal = (row[idx.date] ?? '').toString().trim();
+      const materialCode = (row[idx.material] ?? '').toString().trim();
+      const qtyVal = row[idx.qty];
+      const qty = Number(qtyVal);
+      if (!customerName) {
+        errors.push({ row: rowNum, message: '客户名称不能为空' });
+        return;
+      }
+      if (!dateVal) {
+        errors.push({ row: rowNum, message: '报价日期不能为空' });
+        return;
+      }
+      if (!materialCode) {
+        errors.push({ row: rowNum, message: '物料编码不能为空' });
+        return;
+      }
+      if (isNaN(qty) || qty <= 0) {
+        errors.push({ row: rowNum, message: '数量必须大于0' });
+        return;
+      }
+
+      const mat = materialList.find((m: any) => (m.mainCode || m.code || '').toUpperCase() === materialCode.toUpperCase());
+      if (!mat) {
+        errors.push({ row: rowNum, message: `未找到物料：${materialCode}` });
+        return;
+      }
+
+      const code = idx.code >= 0 ? (row[idx.code] ?? '').toString().trim() : '';
+      const price = idx.price >= 0 ? (Number(row[idx.price]) || 0) : 0;
+      const delivery = idx.delivery >= 0 ? (row[idx.delivery] ?? '').toString().trim() : undefined;
+      const notes = idx.notes >= 0 ? (row[idx.notes] ?? '').toString().trim() : undefined;
+
+      const groupKey = code || `${customerName}|${dateVal}`;
+      if (!groupMap.has(groupKey)) {
+        groupMap.set(groupKey, { code: code || undefined, customer: customerName, date: dateVal, items: [] });
+      }
+      const g = groupMap.get(groupKey)!;
+      g.items.push({
+        material_id: mat.id,
+        material_code: mat.mainCode || mat.code,
+        material_name: mat.name,
+        material_spec: mat.specification || '',
+        material_unit: mat.baseUnit || '件',
+        quote_quantity: qty,
+        unit_price: price,
+        delivery_date: delivery || undefined,
+        notes: notes || undefined,
+      });
+    });
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: '数据验证失败',
+        width: 600,
+        content: (
+          <div>
+            <p>以下行存在错误，请修正后重新导入：</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">第 {item.row} 行：{item.message}</Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    const toImport: Partial<Quotation>[] = [];
+    groupMap.forEach((g) => {
+      const cust = customerList.find((c: any) => ((c.name || c.code || '').trim() === g.customer.trim()) || ((c.customer_name || '').trim() === g.customer.trim()));
+      toImport.push({
+        quotation_code: g.code,
+        quotation_date: g.date,
+        customer_id: cust?.id,
+        customer_name: g.customer,
+        status: '草稿',
+        items: g.items,
+      });
+    });
+
+    if (toImport.length === 0) {
+      messageApi.warning('没有可导入的数据');
+      return;
+    }
+
+    try {
+      const result = await batchImport({
+        items: toImport,
+        importFn: async (item) => createQuotation(item),
+        title: '正在导入报价单',
+        concurrency: 3,
+      });
+
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: '导入完成（部分失败）',
+          width: 600,
+          content: (
+            <div>
+              <p><strong>导入结果：成功 {result.successCount} 条，失败 {result.failureCount} 条</strong></p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(e) => (
+                    <List.Item><Typography.Text type="danger">第 {e.row} 行：{e.error}</Typography.Text></List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(`成功导入 ${result.successCount} 条报价单`);
+      }
+      if (result.successCount > 0) {
+        actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || '导入失败');
     }
   };
 
@@ -956,7 +1126,26 @@ const QuotationsPage: React.FC = () => {
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
-          showImportButton={false}
+          showImportButton={true}
+          onImport={handleListImport}
+          importHeaders={['报价单编号', '客户名称', '报价日期', '物料编码', '数量', '单价', '交货日期', '备注']}
+          importExampleRow={['QT001', '客户A', '2025-03-08', 'MAT001', '10', '100', '2025-04-01', '']}
+          importFieldMap={{
+            '报价单编号': 'quotation_code',
+            '客户名称': 'customer_name',
+            '报价日期': 'quotation_date',
+            '物料编码': 'material_code',
+            '数量': 'quote_quantity',
+            '单价': 'unit_price',
+            '交货日期': 'delivery_date',
+            '备注': 'notes',
+          }}
+          importFieldRules={{
+            customer_name: { required: true },
+            quotation_date: { required: true },
+            material_code: { required: true },
+            quote_quantity: { required: true },
+          }}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

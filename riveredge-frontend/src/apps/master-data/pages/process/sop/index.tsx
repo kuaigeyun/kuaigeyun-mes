@@ -8,11 +8,13 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Dropdown, Tooltip } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Tabs, Modal, Collapse, Row, Col, Dropdown, Tooltip, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutlined, DownOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { downloadFile } from '../../../../../utils';
+import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { sopApi, operationApi, processRouteApi } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
@@ -295,6 +297,126 @@ const SOPPage: React.FC = () => {
     }
   };
 
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'));
+      return;
+    }
+    const col = (n: string) => headers.findIndex((h: string) => (h || '').replace(/\*+/, '').trim() === n);
+    const idxCode = col('SOP编码') >= 0 ? col('SOP编码') : col('编码');
+    const idxName = col('SOP名称') >= 0 ? col('SOP名称') : col('名称');
+    const idxVersion = col('版本') >= 0 ? col('版本') : -1;
+    if (idxCode < 0 || idxName < 0) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'SOP编码/名称', headers: headers.join(', ') }));
+      return;
+    }
+    const items: SOPCreate[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+    rows.forEach((row: any[], i: number) => {
+      const code = (row[idxCode] ?? '').toString().trim();
+      const name = (row[idxName] ?? '').toString().trim();
+      const version = idxVersion >= 0 ? (row[idxVersion] ?? '').toString().trim() : undefined;
+      if (!code) {
+        errors.push({ row: i + 3, message: 'SOP编码不能为空' });
+        return;
+      }
+      if (!name) {
+        errors.push({ row: i + 3, message: 'SOP名称不能为空' });
+        return;
+      }
+      items.push({ code, name, version: version || undefined, isActive: true });
+    });
+    if (errors.length > 0) {
+      Modal.warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List size="small" dataSource={errors} renderItem={(e) => (
+              <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.message })}</Typography.Text></List.Item>
+            )} />
+          </div>
+        ),
+      });
+      return;
+    }
+    try {
+      const result = await batchImport({
+        items,
+        importFn: async (item) => sopApi.create(item),
+        title: '正在导入SOP',
+        concurrency: 5,
+      });
+      if (result.failureCount > 0) {
+        Modal.warning({
+          title: t('app.master-data.importPartialResultTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p><strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong></p>
+              {result.errors.length > 0 && (
+                <List size="small" dataSource={result.errors} renderItem={(e) => (
+                  <List.Item><Typography.Text type="danger">{t('app.master-data.rowError', { row: e.row, message: e.error })}</Typography.Text></List.Item>
+                )} />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+      }
+      if (result.successCount > 0) actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.importFailed'));
+    }
+  };
+
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: SOP[]) => {
+    try {
+      let toExport: SOP[] = [];
+      if (type === 'all') {
+        toExport = await sopApi.list({ skip: 0, limit: 10000 });
+      } else if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+        toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.uuid));
+      } else if (type === 'currentPage' && currentPageData) {
+        toExport = currentPageData;
+      } else {
+        toExport = await sopApi.list({ skip: 0, limit: 10000 });
+      }
+      if (toExport.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+      const headers = ['SOP编码', 'SOP名称', '版本', '启用状态', '创建时间'];
+      const csvRows = [headers.join(',')];
+      toExport.forEach((r) => {
+        const isActive = r?.isActive ?? (r as any)?.is_active;
+        csvRows.push([
+          r.code || '',
+          r.name || '',
+          r.version || '',
+          isActive ? '启用' : '禁用',
+          r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : '',
+        ].map((c) => {
+          const s = String(c ?? '');
+          return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(','));
+      });
+      const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+      downloadFile(blob, `sop_${new Date().toISOString().slice(0, 10)}.csv`);
+      messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.exportFailed'));
+    }
+  };
+
   /**
    * 处理关闭 Modal（编辑/单个新建）
    */
@@ -557,6 +679,20 @@ const SOPPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={['*SOP编码', '*SOP名称', '版本']}
+        importExampleRow={['SOP001', '装配作业指导', 'v1.0']}
+        importFieldMap={{
+          'SOP编码': 'code',
+          '*SOP编码': 'code',
+          'SOP名称': 'name',
+          '*SOP名称': 'name',
+          '版本': 'version',
+        }}
+        importFieldRules={{ code: { required: true }, name: { required: true } }}
+        showExportButton={true}
+        onExport={handleExport}
       />
 
       <DetailDrawerTemplate<SOP>
