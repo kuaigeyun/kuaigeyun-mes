@@ -87,7 +87,9 @@ async def get_platform_version():
                     if raw_date:
                         try:
                             dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                            git_latest = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                            # Gitee 返回的时间已带时区（如 +08:00），需转为 UTC 再输出，否则前端会重复加时区
+                            dt_utc = dt.astimezone(timezone.utc)
+                            git_latest = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
                         except Exception:
                             git_latest = _normalize_to_iso_utc(raw_date[:19]) if len(raw_date) >= 16 else raw_date
     except Exception as e:

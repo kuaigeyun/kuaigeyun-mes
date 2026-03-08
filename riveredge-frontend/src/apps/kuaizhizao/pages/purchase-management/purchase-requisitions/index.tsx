@@ -9,7 +9,7 @@ import { EyeOutlined, SendOutlined, SwapOutlined, ThunderboltOutlined, MoreOutli
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import {
   listPurchaseRequisitions,
@@ -38,6 +38,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const createFormRef = useRef<any>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
 
   const initialCreateItems = [
     { material_id: undefined, material_code: '', material_name: '', material_spec: '', unit: '件', quantity: 1, suggested_unit_price: 0 },
@@ -135,13 +137,41 @@ const PurchaseRequisitionsPage: React.FC = () => {
     },
   ];
 
-  /** 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码 */
-  const handleCreate = () => {
+  /** 参考销售订单：先打开弹窗，再请求 getCodeRulePageConfig + testGenerateCode 预填编码 */
+  const handleCreate = async () => {
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     setCreateModalVisible(true);
-    if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition')) {
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-purchase-requisition');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
+        try {
+          const res = await testGenerateCode({ rule_code: ruleCode });
+          const preview = res.code;
+          setPreviewCode(preview ?? null);
+          setTimeout(() => {
+            createFormRef.current?.setFieldsValue({
+              requisition_code: preview ?? '',
+              items: initialCreateItems,
+            });
+          }, 100);
+        } catch (e) {
+          console.warn('采购申请编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
+    } catch {
       const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
-      if (ruleCode) {
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-purchase-requisition'));
+      if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition') && ruleCode) {
         testGenerateCode({ rule_code: ruleCode })
           .then((res) => {
             const preview = res.code;
@@ -160,8 +190,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
       } else {
         setPreviewCode(null);
       }
-    } else {
-      setPreviewCode(null);
     }
   };
 
@@ -173,15 +201,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
       return;
     }
     let requisitionCode = values.requisition_code;
-    if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
-      if (ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
-        try {
-          const res = await generateCode({ rule_code: ruleCode });
-          requisitionCode = res.code;
-        } catch (e) {
-          console.warn('采购申请编码正式生成失败，使用当前值:', e);
-        }
+    const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-purchase-requisition');
+    const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
+    if (autoGen && ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
+      try {
+        const res = await generateCode({ rule_code: ruleCode });
+        requisitionCode = res.code;
+      } catch (e) {
+        console.warn('采购申请编码正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -202,6 +229,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
       createFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (e: any) {
@@ -384,7 +413,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       <FormModalTemplate
         title="新建采购申请"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
         onFinish={handleCreateSubmit}
         formRef={createFormRef}
         width={MODAL_CONFIG.LARGE_WIDTH}

@@ -31,7 +31,7 @@ import {
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import dayjs from 'dayjs';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -100,6 +100,8 @@ const SalesForecastsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentForecast, setCurrentForecast] = useState<SalesForecast | null>(null);
@@ -132,14 +134,20 @@ const SalesForecastsPage: React.FC = () => {
     setIsEdit(false);
     setCurrentId(null);
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     formRef.current?.resetFields();
     setModalVisible(true);
     setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultForecastItem] });
     }, 100);
-    if (isAutoGenerateEnabled('kuaizhizao-sales-forecast')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
-      if (ruleCode) {
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-sales-forecast');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-sales-forecast');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-sales-forecast');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
         try {
           const codeResponse = await testGenerateCode({ rule_code: ruleCode });
           const preview = codeResponse.code;
@@ -152,8 +160,23 @@ const SalesForecastsPage: React.FC = () => {
       } else {
         setPreviewCode(null);
       }
-    } else {
-      setPreviewCode(null);
+    } catch {
+      const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-sales-forecast'));
+      if (isAutoGenerateEnabled('kuaizhizao-sales-forecast') && ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ forecast_code: preview ?? '' });
+        } catch (e) {
+          console.warn('销售预测编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
     }
   };
 
@@ -257,15 +280,14 @@ const SalesForecastsPage: React.FC = () => {
       let forecastCode: string | undefined;
       if (!isEdit) {
         forecastCode = values.forecast_code;
-        if (isAutoGenerateEnabled('kuaizhizao-sales-forecast')) {
-          const ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
-          if (ruleCode && (forecastCode === previewCode || !forecastCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              forecastCode = codeResponse.code;
-            } catch (e) {
-              console.warn('销售预测编码正式生成失败，使用当前值:', e);
-            }
+        const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-forecast');
+        const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-forecast');
+        if (autoGen && ruleCode && (forecastCode === previewCode || !forecastCode)) {
+          try {
+            const codeResponse = await generateCode({ rule_code: ruleCode });
+            forecastCode = codeResponse.code;
+          } catch (e) {
+            console.warn('销售预测编码正式生成失败，使用当前值:', e);
           }
         }
         if (!forecastCode) forecastCode = undefined;
@@ -287,6 +309,8 @@ const SalesForecastsPage: React.FC = () => {
         messageApi.success('创建成功');
       }
       setModalVisible(false);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(e?.message || '保存失败');
@@ -434,7 +458,7 @@ const SalesForecastsPage: React.FC = () => {
 
       <Modal
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => { setModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
         title={isEdit ? '编辑销售预测' : '新建销售预测'}
         width={1200}
         footer={null}
@@ -446,7 +470,7 @@ const SalesForecastsPage: React.FC = () => {
           layout="vertical"
           submitter={{
             searchConfig: { submitText: isEdit ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => setModalVisible(false) },
+            resetButtonProps: { onClick: () => { setModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
             render: (_, dom) => (
               <div style={{ textAlign: 'left', marginTop: 16 }}>
                 <Space>{dom}</Space>

@@ -78,7 +78,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '厂区编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_FACTORY_PLANT',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-factory-workshop',
@@ -88,7 +90,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '车间编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_FACTORY_WORKSHOP',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-factory-production-line',
@@ -98,7 +102,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '产线编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_FACTORY_PRODUCTION_LINE',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-factory-workstation',
@@ -108,7 +114,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '工位编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_FACTORY_WORKSTATION',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-factory-work-center',
@@ -132,7 +140,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '仓库编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_WAREHOUSE_WAREHOUSE',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-warehouse-storage-area',
@@ -142,7 +152,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '库区编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_WAREHOUSE_STORAGE_AREA',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-warehouse-storage-location',
@@ -152,7 +164,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '库位编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_WAREHOUSE_STORAGE_LOCATION',
+    allowManualEdit: true,
   },
   // 主数据管理 - 物料管理
   {
@@ -163,7 +177,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '分组编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'MASTER_DATA_MATERIAL_GROUP',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-material',
@@ -276,8 +292,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '不良品编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
     ruleCode: 'DEFECT_TYPE_CODE',
+    allowManualEdit: true,
   },
   // 主数据管理 - 供应链
   {

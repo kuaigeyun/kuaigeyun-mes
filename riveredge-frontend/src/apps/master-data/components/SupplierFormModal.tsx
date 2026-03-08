@@ -9,7 +9,7 @@ import { App } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { supplierApi } from '../services/supply-chain';
-import { testGenerateCode, generateCode } from '../../../services/codeRule';
+import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import type { Supplier, SupplierCreate, SupplierUpdate } from '../types/supply-chain';
 import { SchemaFormRenderer } from '../../../components/schema-form';
@@ -37,6 +37,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
 
   const isEdit = Boolean(editUuid);
 
@@ -45,24 +46,37 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true });
     if (!editUuid) {
-      if (isAutoGenerateEnabled(PAGE_CODE)) {
-        const ruleCode = getPageRuleCode(PAGE_CODE);
-        if (ruleCode) {
+      (async () => {
+        let ruleCode = getPageRuleCode(PAGE_CODE);
+        let autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
+        try {
+          const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
+          if (pageConfig?.ruleCode) {
+            ruleCode = pageConfig.ruleCode;
+            autoGenerate = !!pageConfig.autoGenerate;
+          }
+        } catch {}
+        if (autoGenerate && ruleCode) {
+          setEffectiveRuleCode(ruleCode);
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code });
+              formRef.current?.setFieldsValue({ code: res.code, isActive: true });
             })
-            .catch(() => setPreviewCode(null));
+            .catch(() => {
+              setPreviewCode(null);
+              formRef.current?.setFieldsValue({ isActive: true });
+            });
         } else {
           setPreviewCode(null);
+          setEffectiveRuleCode(null);
+          formRef.current?.setFieldsValue({ isActive: true });
         }
-      } else {
-        setPreviewCode(null);
-      }
+      })();
       return;
     }
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
     supplierApi
       .get(editUuid)
       .then((detail) => {
@@ -92,16 +106,17 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
         const updated = await supplierApi.get(editUuid);
         onSuccess(updated);
       } else {
-        if (isAutoGenerateEnabled(PAGE_CODE)) {
-          const ruleCode = getPageRuleCode(PAGE_CODE);
-          const currentCode = values.code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
-            } catch {
-              // keep form code
-            }
+        const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
+        if (
+          ruleCodeToUse &&
+          (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
+          (values.code === previewCode || !values.code)
+        ) {
+          try {
+            const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
+            values.code = codeResponse.code;
+          } catch {
+            // keep form code
           }
         }
         if (values.isActive === undefined) {

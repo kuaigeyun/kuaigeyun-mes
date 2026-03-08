@@ -37,7 +37,7 @@ import DocumentTrackingPanel from '../../../../../components/document-tracking-p
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import dayjs from 'dayjs';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
@@ -60,6 +60,8 @@ const QuotationsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const formRef = useRef<any>(null);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -393,24 +395,48 @@ const QuotationsPage: React.FC = () => {
     formRef.current?.resetFields();
     setEditingId(null);
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     setModalVisible(true);
     setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultQuoteItem] });
     }, 100);
-    const autoEnabled = isAutoGenerateEnabled('kuaizhizao-quotation');
-    const ruleCode = getPageRuleCode('kuaizhizao-quotation');
-    if (autoEnabled && ruleCode) {
-      try {
-        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-        const preview = codeResponse.code;
-        setPreviewCode(preview ?? null);
-        formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
-      } catch (e) {
-        console.warn('报价单编码预生成失败:', e);
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-quotation');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-quotation');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-quotation');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
+        } catch (e) {
+          console.warn('报价单编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      } else {
         setPreviewCode(null);
       }
-    } else {
-      setPreviewCode(null);
+    } catch {
+      const ruleCode = getPageRuleCode('kuaizhizao-quotation');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-quotation'));
+      if (isAutoGenerateEnabled('kuaizhizao-quotation') && ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ quotation_code: preview ?? '' });
+        } catch (e) {
+          console.warn('报价单编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
     }
   };
 
@@ -421,17 +447,14 @@ const QuotationsPage: React.FC = () => {
       throw new Error('请至少添加一条有效明细');
     }
     let quotationCode = values.quotation_code;
-    const submitAutoEnabled = isAutoGenerateEnabled('kuaizhizao-quotation');
-    const submitRuleCode = getPageRuleCode('kuaizhizao-quotation');
-    const willCallGenerate = submitAutoEnabled && submitRuleCode && (quotationCode === previewCode || !quotationCode);
-    if (submitAutoEnabled) {
-      if (submitRuleCode && (quotationCode === previewCode || !quotationCode)) {
-        try {
-          const codeResponse = await generateCode({ rule_code: submitRuleCode });
-          quotationCode = codeResponse.code;
-        } catch (e) {
-          console.warn('报价单编码正式生成失败，使用当前值:', e);
-        }
+    const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-quotation');
+    const submitAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-quotation');
+    if (submitAutoEnabled && submitRuleCode && (quotationCode === previewCode || !quotationCode)) {
+      try {
+        const codeResponse = await generateCode({ rule_code: submitRuleCode });
+        quotationCode = codeResponse.code;
+      } catch (e) {
+        console.warn('报价单编码正式生成失败，使用当前值:', e);
       }
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
@@ -464,6 +487,8 @@ const QuotationsPage: React.FC = () => {
     });
     messageApi.success('创建成功');
     setModalVisible(false);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     actionRef.current?.reload();
   };
 
@@ -504,6 +529,8 @@ const QuotationsPage: React.FC = () => {
     messageApi.success('更新成功');
     setModalVisible(false);
     setEditingId(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     actionRef.current?.reload();
   };
 
@@ -1052,7 +1079,7 @@ const QuotationsPage: React.FC = () => {
 
       <Modal
         open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEditingId(null); }}
+        onCancel={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
         title={editingId != null ? '编辑报价单' : '新建报价单'}
         width={1200}
         footer={null}
@@ -1080,7 +1107,7 @@ const QuotationsPage: React.FC = () => {
           }}
           submitter={{
             searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); } },
+            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
             render: (_, dom) => (
               <div style={{ textAlign: 'left', marginTop: 16 }}>
                 <Space>{dom}</Space>

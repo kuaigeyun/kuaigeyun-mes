@@ -66,7 +66,7 @@ import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import dayjs from 'dayjs';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
@@ -178,6 +178,8 @@ const SalesOrdersPage: React.FC = () => {
   const [usersLoading, setUsersLoading] = useState(false);
   // 新建时预览的订单编码（用于提交时判断是否需正式占号）
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  /** 从 API 获取的编码规则代码（新建时使用，避免本地配置与后端不一致） */
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [customerCreateVisible, setCustomerCreateVisible] = useState(false);
   /** 编辑时若销售员姓名不在用户列表中，用于下拉展示 */
@@ -309,23 +311,29 @@ const SalesOrdersPage: React.FC = () => {
     setTimeout(() => {
       formRef.current?.setFieldsValue({ price_type: 'tax_exclusive', items: [defaultOrderItem] });
     }, 100);
-    if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const preview = codeResponse.code;
-          setPreviewCode(preview ?? null);
-          formRef.current?.setFieldsValue({ order_code: preview ?? '' });
-        } catch (error: any) {
-          console.warn('销售订单编码预生成失败:', error);
-          setPreviewCode(null);
-        }
-      } else {
+    let ruleCode = getPageRuleCode('kuaizhizao-sales-order');
+    let autoGenerate = isAutoGenerateEnabled('kuaizhizao-sales-order');
+    try {
+      const pageConfig = await getCodeRulePageConfig('kuaizhizao-sales-order');
+      if (pageConfig?.ruleCode) {
+        ruleCode = pageConfig.ruleCode;
+        autoGenerate = !!pageConfig.autoGenerate;
+      }
+    } catch {}
+    if (autoGenerate && ruleCode) {
+      setEffectiveRuleCode(ruleCode);
+      try {
+        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+        const preview = codeResponse.code;
+        setPreviewCode(preview ?? null);
+        formRef.current?.setFieldsValue({ order_code: preview ?? '' });
+      } catch (error: any) {
+        console.warn('销售订单编码预生成失败:', error);
         setPreviewCode(null);
       }
     } else {
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
     }
   };
 
@@ -596,16 +604,19 @@ const SalesOrdersPage: React.FC = () => {
       });
 
       // 如果是直接提交，先生成正式编码（如果配置了规则）
-      if (!isDraft && !isEdit && isAutoGenerateEnabled('kuaizhizao-sales-order')) {
-        const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
-        const currentCode = values.order_code;
-        if (ruleCode && (currentCode === previewCode || !currentCode)) {
-          try {
-            const codeResponse = await generateCode({ rule_code: ruleCode });
-            values.order_code = codeResponse.code;
-          } catch (error: any) {
-            console.warn('正式生成订单编码失败，使用预览编码:', error);
-          }
+      const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-order');
+      if (
+        !isDraft &&
+        !isEdit &&
+        ruleCodeToUse &&
+        (isAutoGenerateEnabled('kuaizhizao-sales-order') || effectiveRuleCode) &&
+        (values.order_code === previewCode || !values.order_code)
+      ) {
+        try {
+          const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
+          values.order_code = codeResponse.code;
+        } catch (error: any) {
+          console.warn('正式生成订单编码失败，使用预览编码:', error);
         }
       }
 
@@ -643,6 +654,7 @@ const SalesOrdersPage: React.FC = () => {
 
       setModalVisible(false);
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
@@ -1623,6 +1635,7 @@ const SalesOrdersPage: React.FC = () => {
         onCancel={() => {
           setModalVisible(false);
           setPreviewCode(null);
+          setEffectiveRuleCode(null);
         }}
         title={isEdit ? t('app.kuaizhizao.salesOrder.edit') : t('app.kuaizhizao.salesOrder.create')}
         width={1200}

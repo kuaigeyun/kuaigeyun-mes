@@ -15,7 +15,11 @@ from core.schemas.code_rule import (
     CodeGenerationResponse,
     CodeRulePageConfigResponse,
 )
-from core.config.code_rule_pages import CODE_RULE_PAGES, PAGE_CODE_TO_FIXED_TEXT_PRESET
+from core.config.code_rule_pages import (
+    CODE_RULE_PAGES,
+    PAGE_CODE_TO_FIXED_TEXT_PRESET,
+    get_rule_code_to_page_code,
+)
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
@@ -276,16 +280,24 @@ async def delete_rule(
 
 async def _ensure_code_rule_for_rule_code(tenant_id: int, rule_code: str) -> bool:
     """根据 rule_code 查找对应 page_code 并补建编码规则，返回是否补建成功"""
+    # 1) 优先从显式配置的 rule_code 查找
     page_config = next(
         (p for p in CODE_RULE_PAGES if p.get("rule_code") == rule_code),
         None,
     )
-    if not page_config:
-        return False
-    from core.services.default.default_values_service import DefaultValuesService
-    return await DefaultValuesService.ensure_code_rule_for_page(
-        tenant_id, page_config["page_code"]
-    )
+    if page_config:
+        from core.services.default.default_values_service import DefaultValuesService
+        return await DefaultValuesService.ensure_code_rule_for_page(
+            tenant_id, page_config["page_code"]
+        )
+    # 2) 支持派生规则代码（如 MASTER_DATA_FACTORY_PLANT 对应 master-data-factory-plant）
+    page_code = get_rule_code_to_page_code().get(rule_code)
+    if page_code:
+        from core.services.default.default_values_service import DefaultValuesService
+        return await DefaultValuesService.ensure_code_rule_for_page(
+            tenant_id, page_code
+        )
+    return False
 
 
 @router.post("/generate", response_model=CodeGenerationResponse)

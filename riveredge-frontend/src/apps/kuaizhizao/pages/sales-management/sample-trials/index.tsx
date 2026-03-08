@@ -23,7 +23,7 @@ import { sampleTrialApi } from '../../../services/sample-trial';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface SampleTrial {
@@ -70,6 +70,8 @@ const SampleTrialsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [createOutboundModalVisible, setCreateOutboundModalVisible] = useState(false);
   const [createOutboundTrialId, setCreateOutboundTrialId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -314,13 +316,19 @@ const SampleTrialsPage: React.FC = () => {
     formRef.current?.resetFields();
     setEditingId(null);
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     setModalVisible(true);
     setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultTrialItem] });
     }, 100);
-    if (isAutoGenerateEnabled('kuaizhizao-sample-trial')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
-      if (ruleCode) {
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-sample-trial');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-sample-trial');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-sample-trial');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
         try {
           const codeResponse = await testGenerateCode({ rule_code: ruleCode });
           const preview = codeResponse.code;
@@ -333,8 +341,23 @@ const SampleTrialsPage: React.FC = () => {
       } else {
         setPreviewCode(null);
       }
-    } else {
-      setPreviewCode(null);
+    } catch {
+      const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-sample-trial'));
+      if (isAutoGenerateEnabled('kuaizhizao-sample-trial') && ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ trial_code: preview ?? '' });
+        } catch (e) {
+          console.warn('样品试用单编码预生成失败:', e);
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
     }
   };
 
@@ -353,15 +376,14 @@ const SampleTrialsPage: React.FC = () => {
       throw new Error('请选择客户');
     }
     let trialCode = values.trial_code;
-    if (isAutoGenerateEnabled('kuaizhizao-sample-trial')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-sample-trial');
-      if (ruleCode && (trialCode === previewCode || !trialCode)) {
-        try {
-          const codeResponse = await generateCode({ rule_code: ruleCode });
-          trialCode = codeResponse.code;
-        } catch (e) {
-          console.warn('样品试用单编码正式生成失败，使用当前值:', e);
-        }
+    const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-sample-trial');
+    const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sample-trial');
+    if (autoGen && ruleCode && (trialCode === previewCode || !trialCode)) {
+      try {
+        const codeResponse = await generateCode({ rule_code: ruleCode });
+        trialCode = codeResponse.code;
+      } catch (e) {
+        console.warn('样品试用单编码正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -387,6 +409,8 @@ const SampleTrialsPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setModalVisible(false);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -425,6 +449,8 @@ const SampleTrialsPage: React.FC = () => {
       messageApi.success('更新成功');
       setModalVisible(false);
       setEditingId(null);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '更新失败');
@@ -740,7 +766,7 @@ const SampleTrialsPage: React.FC = () => {
 
       <Modal
         open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEditingId(null); }}
+        onCancel={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
         title={editingId != null ? '编辑样品试用单' : '新建样品试用单'}
         width={1200}
         footer={null}
@@ -755,7 +781,7 @@ const SampleTrialsPage: React.FC = () => {
           }}
           submitter={{
             searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); } },
+            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
             render: (_, dom) => (
               <div style={{ textAlign: 'left', marginTop: 16 }}>
                 <Space>{dom}</Space>

@@ -22,7 +22,7 @@ import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface ShipmentNotice {
@@ -75,6 +75,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -225,31 +226,37 @@ const ShipmentNoticesPage: React.FC = () => {
     });
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
     setEditingId(null);
     setCreateModalVisible(true);
     setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultNoticeItem] });
     }, 100);
-    if (isAutoGenerateEnabled('kuaizhizao-shipment-notice')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
-      if (ruleCode) {
-        testGenerateCode({ rule_code: ruleCode })
-          .then((res) => {
-            const preview = res.code;
-            setPreviewCode(preview ?? null);
-            setTimeout(() => {
-              formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultNoticeItem] });
-            }, 100);
-          })
-          .catch((e) => {
-            console.warn('发货通知单编码预生成失败:', e);
-            setPreviewCode(null);
-          });
-      } else {
-        setPreviewCode(null);
+    let ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
+    let autoGenerate = isAutoGenerateEnabled('kuaizhizao-shipment-notice');
+    try {
+      const pageConfig = await getCodeRulePageConfig('kuaizhizao-shipment-notice');
+      if (pageConfig?.ruleCode) {
+        ruleCode = pageConfig.ruleCode;
+        autoGenerate = !!pageConfig.autoGenerate;
       }
+    } catch {}
+    if (autoGenerate && ruleCode) {
+      setEffectiveRuleCode(ruleCode);
+      testGenerateCode({ rule_code: ruleCode })
+        .then((res) => {
+          const preview = res.code;
+          setPreviewCode(preview ?? null);
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultNoticeItem] });
+          }, 100);
+        })
+        .catch((e) => {
+          console.warn('发货通知单编码预生成失败:', e);
+          setPreviewCode(null);
+        });
     } else {
       setPreviewCode(null);
     }
@@ -301,15 +308,17 @@ const ShipmentNoticesPage: React.FC = () => {
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id) || { name: values.customer_name };
     let noticeCode = values.notice_code;
-    if (isAutoGenerateEnabled('kuaizhizao-shipment-notice')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
-      if (ruleCode && (noticeCode === previewCode || !noticeCode)) {
-        try {
-          const res = await generateCode({ rule_code: ruleCode });
-          noticeCode = res.code;
-        } catch (e) {
-          console.warn('发货通知单编码正式生成失败，使用当前值:', e);
-        }
+    const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-shipment-notice');
+    if (
+      ruleCodeToUse &&
+      (isAutoGenerateEnabled('kuaizhizao-shipment-notice') || effectiveRuleCode) &&
+      (noticeCode === previewCode || !noticeCode)
+    ) {
+      try {
+        const res = await generateCode({ rule_code: ruleCodeToUse });
+        noticeCode = res.code;
+      } catch (e) {
+        console.warn('发货通知单编码正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -338,6 +347,7 @@ const ShipmentNoticesPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      setEffectiveRuleCode(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -726,7 +736,7 @@ const ShipmentNoticesPage: React.FC = () => {
       <FormModalTemplate
         title="新建发货通知单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}

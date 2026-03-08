@@ -21,7 +21,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { getReceiptNoticeLifecycle } from '../../../utils/receiptNoticeLifecycle';
 import { listPurchaseOrders, getPurchaseOrder } from '../../../services/purchase';
-import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
+import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 interface ReceiptNotice {
@@ -72,6 +72,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -216,31 +217,37 @@ const ReceiptNoticesPage: React.FC = () => {
     });
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
     setEditingId(null);
     setCreateModalVisible(true);
     setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
     }, 100);
-    if (isAutoGenerateEnabled('kuaizhizao-receipt-notice')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
-      if (ruleCode) {
-        testGenerateCode({ rule_code: ruleCode })
-          .then((res) => {
-            const preview = res.code;
-            setPreviewCode(preview ?? null);
-            setTimeout(() => {
-              formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
-            }, 100);
-          })
-          .catch((e) => {
-            console.warn('收货通知单编码预生成失败:', e);
-            setPreviewCode(null);
-          });
-      } else {
-        setPreviewCode(null);
+    let ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
+    let autoGenerate = isAutoGenerateEnabled('kuaizhizao-receipt-notice');
+    try {
+      const pageConfig = await getCodeRulePageConfig('kuaizhizao-receipt-notice');
+      if (pageConfig?.ruleCode) {
+        ruleCode = pageConfig.ruleCode;
+        autoGenerate = !!pageConfig.autoGenerate;
       }
+    } catch {}
+    if (autoGenerate && ruleCode) {
+      setEffectiveRuleCode(ruleCode);
+      testGenerateCode({ rule_code: ruleCode })
+        .then((res) => {
+          const preview = res.code;
+          setPreviewCode(preview ?? null);
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
+          }, 100);
+        })
+        .catch((e) => {
+          console.warn('收货通知单编码预生成失败:', e);
+          setPreviewCode(null);
+        });
     } else {
       setPreviewCode(null);
     }
@@ -288,15 +295,17 @@ const ReceiptNoticesPage: React.FC = () => {
     }
     const supplier = purchaseOrderList.find((o: any) => (o.id ?? o.purchase_order_id) === values.purchase_order_id) || {};
     let noticeCode = values.notice_code;
-    if (isAutoGenerateEnabled('kuaizhizao-receipt-notice')) {
-      const ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
-      if (ruleCode && (noticeCode === previewCode || !noticeCode)) {
-        try {
-          const res = await generateCode({ rule_code: ruleCode });
-          noticeCode = res.code;
-        } catch (e) {
-          console.warn('收货通知单编码正式生成失败，使用当前值:', e);
-        }
+    const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-receipt-notice');
+    if (
+      ruleCodeToUse &&
+      (isAutoGenerateEnabled('kuaizhizao-receipt-notice') || effectiveRuleCode) &&
+      (noticeCode === previewCode || !noticeCode)
+    ) {
+      try {
+        const res = await generateCode({ rule_code: ruleCodeToUse });
+        noticeCode = res.code;
+      } catch (e) {
+        console.warn('收货通知单编码正式生成失败，使用当前值:', e);
       }
     }
     try {
@@ -323,6 +332,7 @@ const ReceiptNoticesPage: React.FC = () => {
       });
       messageApi.success('创建成功');
       setCreateModalVisible(false);
+      setEffectiveRuleCode(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
@@ -662,7 +672,7 @@ const ReceiptNoticesPage: React.FC = () => {
       <FormModalTemplate
         title="新建收货通知单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
