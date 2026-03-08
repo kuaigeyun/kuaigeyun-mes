@@ -74,8 +74,41 @@ import { MenuTree } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
-import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl } from '../utils/avatar';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
 import { getFilePreview } from '../services/file';
+
+/** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
+const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
+
+function getCachedSiteLogoUrl(logoUuid: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(`siteLogoUrlCache_${logoUuid}`);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    const { url, ts } = typeof parsed === 'object' ? parsed : { url: raw, ts: 0 };
+    if (!url || typeof url !== 'string') return undefined;
+    if (typeof ts === 'number' && Date.now() - ts > SITE_LOGO_CACHE_TTL_MS) return undefined;
+    return toRelativeIfLocalhost(url);
+  } catch {
+    return undefined;
+  }
+}
+
+function setCachedSiteLogoUrl(logoUuid: string, url: string): void {
+  try {
+    localStorage.setItem(`siteLogoUrlCache_${logoUuid}`, JSON.stringify({ url, ts: Date.now() }));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearCachedSiteLogoUrl(logoUuid: string): void {
+  try {
+    localStorage.removeItem(`siteLogoUrlCache_${logoUuid}`);
+  } catch {
+    /* ignore */
+  }
+}
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { useConfigStore } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -684,20 +717,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
     const logoValue = (useConfigStore.getState().getConfig('site_logo', '') as string)?.trim() || '';
 
-    // 如果有 logo 配置
     if (logoValue) {
-      // 如果是 UUID，尝试从专门的 logo URL 缓存中读取
       if (isUUID(logoValue)) {
-        try {
-          const cachedLogoUrl = localStorage.getItem(`siteLogoUrlCache_${logoValue}`);
-          if (cachedLogoUrl) {
-            return cachedLogoUrl;
-          }
-        } catch (e) {
-          // ignore
-        }
+        const cached = getCachedSiteLogoUrl(logoValue);
+        if (cached) return cached;
       } else {
-        // 如果是 URL，直接返回
         return logoValue;
       }
     }
@@ -705,8 +729,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return '/img/logo.png';
   });
 
-  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
-  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
+  // 处理LOGO URL（UUID 需通过 getFilePreview 获取，带 TTL 缓存并转为相对路径）
   useEffect(() => {
     const loadSiteLogo = async () => {
       if (!siteLogoValue) {
@@ -714,30 +737,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      // 如果是UUID格式，获取文件预览URL
       if (isUUID(siteLogoValue)) {
-        // 先检查缓存，避免重复请求导致的闪烁
-        const cacheKey = `siteLogoUrlCache_${siteLogoValue}`;
-        const cachedUrl = localStorage.getItem(cacheKey);
-
-        // 如果当前显示的已经是缓存的 URL，且没有强制刷新，可以暂不更新
-        // 但为了确保 URL 有效性（例如签名过期），还是建议请求，但不要先重置为默认 logo
-        
         try {
-          const previewInfo = await getFilePreview(siteLogoValue);
-          const newUrl = previewInfo.preview_url;
+          const previewInfo = await getFilePreview(siteLogoValue, { forAvatar: true });
+          const rawUrl = previewInfo.preview_url;
+          const newUrl = toRelativeIfLocalhost(rawUrl);
           setSiteLogoUrl(newUrl);
-          // 缓存解析后的 URL
-          localStorage.setItem(cacheKey, newUrl);
+          setCachedSiteLogoUrl(siteLogoValue, newUrl);
         } catch (error) {
           console.error('获取站点LOGO预览URL失败:', error);
-          // 只有在没有缓存的情况下降级，避免将正确的缓存覆盖为默认图
-          if (!cachedUrl) {
-            setSiteLogoUrl('/img/logo.png');
-          }
+          clearCachedSiteLogoUrl(siteLogoValue);
+          setSiteLogoUrl('/img/logo.png');
         }
       } else {
-        // 如果是URL格式，直接使用
         setSiteLogoUrl(siteLogoValue);
       }
     };

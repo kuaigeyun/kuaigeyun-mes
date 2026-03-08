@@ -7,7 +7,7 @@ Author: Auto (AI Assistant)
 Date: 2026-01-06
 """
 
-from datetime import datetime
+from core.timezone_utils import now_utc
 from tortoise import fields
 from tortoise.models import Model
 
@@ -117,11 +117,11 @@ class PlatformSettings(Model):
     
     # 时间字段
     created_at = fields.DatetimeField(
-        default=datetime.utcnow,
+        default=now_utc,
         description="创建时间"
     )
     updated_at = fields.DatetimeField(
-        default=datetime.utcnow,
+        default=now_utc,
         description="更新时间"
     )
     

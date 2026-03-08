@@ -8,6 +8,7 @@ from typing import Optional, List
 from tortoise.expressions import Q
 
 from core.models.role import Role
+from core.timezone_utils import now_utc
 from core.models.permission import Permission
 from core.models.user_role import UserRole
 from core.schemas.role import RoleCreate, RoleUpdate
@@ -302,7 +303,7 @@ class RoleService:
         
         # 软删除
         from datetime import datetime
-        role.deleted_at = datetime.now()
+        role.deleted_at = now_utc()
         await role.save()
     
     @staticmethod
@@ -378,7 +379,7 @@ class RoleService:
                 RolePermission(
                     role_id=role.id,
                     permission_id=permission_id,
-                    created_at=datetime.now()
+                    created_at=now_utc()
                 )
                 for permission_id in to_add
             ]
@@ -484,6 +485,7 @@ class RoleService:
     PRESET_ROLES = [
         {"name": "部门经理", "code": "DEPT_MANAGER", "description": "部门负责人"},
         {"name": "普通员工", "code": "EMPLOYEE", "description": "普通员工"},
+        {"name": "生产人员", "code": "PRODUCTION_WORKER", "description": "生产相关执行人员"},
         {"name": "财务", "code": "FINANCE", "description": "财务相关"},
         {"name": "采购员", "code": "BUYER", "description": "采购相关"},
         {"name": "销售员", "code": "SALES", "description": "销售相关"},
@@ -503,6 +505,7 @@ class RoleService:
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
+                now = now_utc()
                 await Role.create(
                     tenant_id=tenant_id,
                     name=item["name"],
@@ -510,6 +513,8 @@ class RoleService:
                     description=item.get("description"),
                     is_active=True,
                     is_system=False,
+                    created_at=now,
+                    updated_at=now,
                 )
                 created += 1
         return created

@@ -14,6 +14,7 @@ from datetime import datetime
 import asyncpg
 
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
+from core.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import get_db_connection
 from loguru import logger
@@ -61,8 +62,8 @@ class ApplicationService:
             app_data = data.model_dump()
             app_data['tenant_id'] = tenant_id
             app_data['uuid'] = str(uuid4())  # 生成UUID
-            app_data['created_at'] = datetime.utcnow()
-            app_data['updated_at'] = datetime.utcnow()
+            app_data['created_at'] = now_utc()
+            app_data['updated_at'] = now_utc()
             
             # 排除数据库可能不存在的列（兼容未执行迁移 127 的环境）
             for key in ['is_custom_name', 'is_custom_sort']:
@@ -386,8 +387,7 @@ class ApplicationService:
             raise ValidationError("系统应用不可删除")
         
         # 软删除
-        from datetime import datetime
-        application.deleted_at = datetime.now()
+        application.deleted_at = now_utc()
         await application.save()
     
     @staticmethod
@@ -470,12 +470,11 @@ class ApplicationService:
         
         # 自动删除关联菜单（软删除）
         from core.models.menu import Menu
-        from datetime import datetime
         await Menu.filter(
             tenant_id=tenant_id,
             application_uuid=str(uuid),
             deleted_at__isnull=True
-        ).update(deleted_at=datetime.now())
+        ).update(deleted_at=now_utc())
         
         return application
     

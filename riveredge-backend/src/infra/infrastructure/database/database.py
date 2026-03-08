@@ -55,7 +55,7 @@ async def get_dynamic_tortoise_config() -> dict:
                     "command_timeout": 60,  # 命令超时（秒）
                     "server_settings": {
                         "application_name": "riveredge_asyncpg",
-                        "timezone": settings.TIMEZONE
+                        "timezone": dynamic_config.get("timezone", "UTC")
                     }
                 }
             },

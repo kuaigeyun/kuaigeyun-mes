@@ -9,6 +9,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from core.models.department import Department
+from core.timezone_utils import now_utc
 from core.models.user_role import UserRole
 from core.schemas.department import DepartmentCreate, DepartmentUpdate
 from infra.models.user import User
@@ -413,8 +414,7 @@ class DepartmentService:
             ).update(department_id=None)
         
         # 软删除
-        from datetime import datetime
-        department.deleted_at = datetime.now()
+        department.deleted_at = now_utc()
         await department.save()
     
     @staticmethod
@@ -676,12 +676,15 @@ class DepartmentService:
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
+                now = now_utc()
                 await Department.create(
                     tenant_id=tenant_id,
                     name=item["name"],
                     code=item["code"],
                     sort_order=item["sort_order"],
                     is_active=True,
+                    created_at=now,
+                    updated_at=now,
                 )
                 created += 1
         return created

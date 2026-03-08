@@ -8,6 +8,8 @@ Date: 2026-01-06
 """
 
 from typing import Optional
+
+from core.timezone_utils import now_utc
 from infra.models.platform_settings import PlatformSettings
 from infra.schemas.platform_settings import (
     PlatformSettingsCreate,
@@ -122,7 +124,7 @@ class PlatformSettingsService:
             update_data = data.model_dump(exclude_unset=True)
             for key, value in update_data.items():
                 setattr(settings, key, value)
-            settings.updated_at = datetime.utcnow()
+            settings.updated_at = now_utc()
             await settings.save()
         
         return PlatformSettingsResponse.model_validate(settings)

@@ -3,9 +3,12 @@
 
 提供动态生成Tortoise ORM配置的功能，不再依赖硬编码的应用模型列表。
 通过查询数据库中活跃的应用来动态决定需要加载的模型模块。
+时区配置统一从 infra.config.infra_config 读取。
 """
 
 from typing import Dict, Any, List
+
+from infra.config.infra_config import infra_settings as settings
 import json
 import asyncpg
 from loguru import logger
@@ -50,8 +53,8 @@ class DynamicDatabaseConfigService:
                     "default_connection": "default",
                 }
             },
-            "use_tz": True,  # 从Settings中读取
-            "timezone": "Asia/Shanghai",  # 从Settings中读取
+            "use_tz": settings.USE_TZ,
+            "timezone": settings.TIMEZONE,
         }
 
         logger.info("✅ 动态数据库配置生成完成")

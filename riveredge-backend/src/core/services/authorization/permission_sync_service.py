@@ -17,8 +17,9 @@ from __future__ import annotations
 import json
 import re
 import time
-from datetime import datetime
 from pathlib import Path
+
+from core.timezone_utils import now_utc
 from typing import Any
 from uuid import uuid4
 
@@ -90,7 +91,7 @@ class PermissionSyncService:
                 cls._last_sync_ts[tenant_id] = now
                 return {"created": 0, "scanned": len(candidate_codes)}
 
-            created_at = datetime.utcnow()
+            created_at = now_utc()
             rows: list[tuple[Any, ...]] = []
             for code in to_create:
                 resource, action = cls._split_code(code)
@@ -191,7 +192,7 @@ class PermissionSyncService:
 
             updates: list[tuple[str, datetime, int, int]] = []
             generated: set[str] = set()
-            now = datetime.utcnow()
+            now = now_utc()
 
             for row in rows:
                 permission_code = (row.get("permission_code") or "").strip()

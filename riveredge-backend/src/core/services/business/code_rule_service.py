@@ -10,6 +10,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.code_rule import CodeRule
 from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
+from core.timezone_utils import now_utc
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -305,7 +306,7 @@ class CodeRuleService:
         
         # 软删除
         from datetime import datetime
-        rule.deleted_at = datetime.now()
+        rule.deleted_at = now_utc()
         await rule.save()
 
     @staticmethod

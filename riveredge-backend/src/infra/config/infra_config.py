@@ -201,9 +201,11 @@ class InfraSettings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")
     LOG_FILE: str = Field(default="logs/riveredge.log", description="日志文件路径（相对于项目根目录）")
     
-    # 时区配置 - 最终解决方案：禁用Tortoise ORM时区支持，使用原生datetime
+    # 时区配置（全局统一）
+    # USE_TZ=False：Tortoise 使用 naive datetime，与 PostgreSQL TIMESTAMPTZ 配合，避免 naive/aware 混用
+    # TIMEZONE：数据库连接时区，建议 UTC；业务展示可用 Asia/Shanghai
     USE_TZ: bool = Field(default=False, description="是否启用时区支持（Tortoise ORM）")
-    TIMEZONE: str = Field(default="UTC", description="默认时区（Tortoise ORM）")
+    TIMEZONE: str = Field(default="UTC", description="默认时区（Tortoise ORM / 数据库连接）")
     
     # 平台超级管理员配置（兼容 PLATFORM_SUPERADMIN_* 与 INFRA_SUPERADMIN_*）
     infra_superadmin_USERNAME: str = Field(

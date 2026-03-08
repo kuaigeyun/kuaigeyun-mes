@@ -11,8 +11,8 @@ import { getFilePreview } from '../services/file';
 
 const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
 
-/** 将 127.0.0.1/localhost 绝对 URL 转为相对路径，便于局域网访问 */
-function toRelativeIfLocalhost(url: string): string {
+/** 将 127.0.0.1/localhost 绝对 URL 转为相对路径，便于局域网访问（导出供 LOGO 等复用） */
+export function toRelativeIfLocalhost(url: string): string {
   if (!url || typeof url !== 'string') return url;
   try {
     const u = new URL(url, 'http://dummy');
@@ -88,6 +88,7 @@ export async function getAvatarUrl(avatarUuid: string | undefined): Promise<stri
         return undefined;
       } catch (error) {
         console.error('获取头像预览 URL 失败:', error);
+        setCachedAvatarUrl(avatarUuid, undefined);
         return undefined;
       } finally {
         inFlightMap.delete(avatarUuid);

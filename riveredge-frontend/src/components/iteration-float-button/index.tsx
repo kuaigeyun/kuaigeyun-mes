@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { FloatButton, Modal, Typography, Image, Spin } from 'antd';
+import { FloatButton, Modal, Typography, Spin } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -43,7 +43,7 @@ export default function IterationFloatButton() {
     <>
       <FloatButton
         icon={<InfoCircleOutlined />}
-        type="default"
+        type="primary"
         tooltip={t('components.iterationFloatButton.tooltip')}
         onClick={handleOpen}
         style={{ right: 24, bottom: 24 }}
@@ -83,12 +83,16 @@ export default function IterationFloatButton() {
             <Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 13 }}>
               {t('components.iterationFloatButton.feedbackDesc')}
             </Paragraph>
-            <Image
+            <img
               src="/img/qr_code.png"
               alt="WeChat QR"
               width={160}
               height={160}
-              fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect fill='%23f5f5f5' width='160' height='160'/%3E%3Ctext x='50%25' y='50%25' fill='%23999' text-anchor='middle' dy='.3em' font-size='14'%3EQR%3C/text%3E%3C/svg%3E"
+              style={{ display: 'block' }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect fill='%23f5f5f5' width='160' height='160'/%3E%3Ctext x='50%25' y='50%25' fill='%23999' text-anchor='middle' dy='.3em' font-size='14'%3EQR%3C/text%3E%3C/svg%3E";
+              }}
             />
           </div>
         </Spin>

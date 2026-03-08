@@ -6,7 +6,7 @@
 """
 
 import os
-from datetime import datetime, timezone
+from core.timezone_utils import now_utc
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -38,7 +38,7 @@ async def get_platform_version():
     返回当前部署构建时间、代码仓库最新提交时间，用于右下角悬浮按钮展示。
     """
     # 构建时间：优先从环境变量读取（部署时注入），否则使用当前时间作为占位
-    build_time = os.environ.get("PLATFORM_BUILD_TIME") or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    build_time = os.environ.get("PLATFORM_BUILD_TIME") or now_utc().strftime("%Y-%m-%d %H:%M")
     git_latest = "暂无"
 
     try:

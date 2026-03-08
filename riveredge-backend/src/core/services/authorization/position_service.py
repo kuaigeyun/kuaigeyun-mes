@@ -8,6 +8,7 @@ from typing import Optional
 from tortoise.expressions import Q
 
 from core.models.position import Position
+from core.timezone_utils import now_utc
 from core.models.department import Department
 from core.schemas.position import PositionCreate, PositionUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
@@ -330,13 +331,14 @@ class PositionService:
         
         # 软删除
         from datetime import datetime
-        position.deleted_at = datetime.now()
+        position.deleted_at = now_utc()
         await position.save()
 
     # 中国中小制造业极简职位预设（不关联部门，用户可后续分配）
     PRESET_POSITIONS = [
         {"name": "总经理", "code": "ZJL", "sort_order": 10},
         {"name": "生产经理", "code": "SCJL", "sort_order": 20},
+        {"name": "生产人员", "code": "SCRY", "sort_order": 25},
         {"name": "采购经理", "code": "CGJL", "sort_order": 30},
         {"name": "销售经理", "code": "XSJL", "sort_order": 40},
         {"name": "仓库主管", "code": "CKZG", "sort_order": 50},
@@ -361,6 +363,7 @@ class PositionService:
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
+                now = now_utc()
                 await Position.create(
                     tenant_id=tenant_id,
                     name=item["name"],
@@ -368,6 +371,8 @@ class PositionService:
                     department_id=None,
                     sort_order=item["sort_order"],
                     is_active=True,
+                    created_at=now,
+                    updated_at=now,
                 )
                 created += 1
         return created

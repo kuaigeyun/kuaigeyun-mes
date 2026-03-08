@@ -55,6 +55,7 @@ import {
   getRolePermissions,
   assignPermissions,
   getAllPermissions,
+  loadPresetRoles,
   Role,
   CreateRoleData,
   UpdateRoleData,
@@ -110,6 +111,9 @@ const RolesPermissionsPage: React.FC = () => {
   const [copyModalVisible, setCopyModalVisible] = useState(false);
   const [sourceRoleUuid, setSourceRoleUuid] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+
+  // 加载初始相关状态
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   /**
    * 加载角色列表
@@ -731,16 +735,36 @@ const RolesPermissionsPage: React.FC = () => {
           />
         </div>
 
-        {/* 新建按钮 */}
+        {/* 新建按钮与加载初始 */}
         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            block
-            onClick={handleCreateRole}
-          >
-            {t('pages.system.roles.createRole')}
-          </Button>
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              block
+              onClick={handleCreateRole}
+            >
+              {t('pages.system.roles.createRole')}
+            </Button>
+            <Button
+              block
+              loading={loadPresetLoading}
+              onClick={async () => {
+                try {
+                  setLoadPresetLoading(true);
+                  const res = await loadPresetRoles();
+                  messageApi.success(res.message);
+                  await loadRoles();
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setLoadPresetLoading(false);
+                }
+              }}
+            >
+              {t('field.role.loadPreset')}
+            </Button>
+          </Space>
         </div>
 
         {/* 角色树 */}

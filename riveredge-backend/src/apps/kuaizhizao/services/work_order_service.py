@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
-from tortoise import timezone
+from core.timezone_utils import now_utc
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -1085,8 +1085,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if reporting_count > 0:
                 raise ValidationError("工单存在相关的报工记录，不允许删除")
 
-            # 使用 timezone.now()：工单表 deleted_at 为 TIMESTAMPTZ，与物料/工单工序等一致
-            now = timezone.now()
+            now = now_utc()
 
             # 级联软删除工单工序
             await WorkOrderOperation.filter(
@@ -1772,7 +1771,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 删除未更新的未报工工序
             for op in existing_operations:
                 if op.id not in updated_operation_ids and op.id not in reported_operation_ids:
-                    op.deleted_at = timezone.now()
+                    op.deleted_at = now_utc()
                     op.updated_by = updated_by
                     op.updated_by_name = user_info["name"]
                     await op.save()

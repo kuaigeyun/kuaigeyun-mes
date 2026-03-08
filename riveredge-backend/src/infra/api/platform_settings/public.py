@@ -7,8 +7,9 @@ Author: Auto (AI Assistant)
 Date: 2026-01-06
 """
 
-from datetime import datetime, timezone
 from fastapi import APIRouter
+
+from core.timezone_utils import now_utc
 from loguru import logger
 
 from infra.schemas.platform_settings import PlatformSettingsResponse
@@ -31,8 +32,8 @@ DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     login_content=None,
     icp_license=None,
     theme_color="#1890ff",
-    created_at=datetime.now(timezone.utc),
-    updated_at=datetime.now(timezone.utc),
+    created_at=now_utc(),
+    updated_at=now_utc(),
 )
 
 

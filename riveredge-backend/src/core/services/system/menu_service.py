@@ -10,6 +10,7 @@ import json
 
 from core.models.menu import Menu
 from core.models.permission import Permission
+from core.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse
 from core.services.application.application_service import ApplicationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -782,7 +783,7 @@ class MenuService:
                 tenant_id=tenant_id,
                 uuid__in=deleted_uuids,
                 deleted_at__isnull=True
-            ).update(deleted_at=datetime.now())
+            ).update(deleted_at=now_utc())
             logger.info(f"应用 {application_uuid} 菜单配置同步完成，删除 {len(deleted_uuids)} 个不再存在的菜单")
         
         logger.info(f"应用 {application_uuid} 菜单配置同步完成，创建/更新 {created_count} 个菜单")
