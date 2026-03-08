@@ -40,7 +40,7 @@ riveredge-backend/backups/
 
 # ===== IDE =====
 .cursor/
-.vscode/
+# .vscode/ 已排除，推送到远程仓库供团队共享配置
 nul
 *.swp
 *.swo
