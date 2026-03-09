@@ -174,6 +174,7 @@ const WorkOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
+    staleTime: 30_000, // 30 秒内不重复请求统计接口
   })
 
   // 产品列表状态

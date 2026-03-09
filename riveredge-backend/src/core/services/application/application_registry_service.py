@@ -82,7 +82,12 @@ class ApplicationRegistryService:
             from infra.infrastructure.database.database import get_db_connection
             conn = await get_db_connection()
 
-            # 查询所有已安装且启用的应用（系统级配置，不按租户隔离）
+            # 查询所有已安装且启用的应用（使用首个租户的应用配置，避免硬编码 tenant_id）
+            tenant_row = await conn.fetchrow(
+                "SELECT id FROM infra_tenants WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1"
+            )
+            default_tenant_id = tenant_row["id"] if tenant_row else 1
+
             rows = await conn.fetch("""
                 SELECT uuid, code, name, description, version, changelog,
                        route_path, entry_point, menu_config,
@@ -92,9 +97,9 @@ class ApplicationRegistryService:
                 WHERE is_installed = TRUE
                   AND is_active = TRUE
                   AND deleted_at IS NULL
-                  AND tenant_id = 1
+                  AND tenant_id = $1
                 ORDER BY sort_order, created_at
-            """)
+            """, default_tenant_id)
 
             apps = []
             logger.info(f"📊 查询返回 {len(rows)} 行数据")
@@ -432,13 +437,16 @@ class ApplicationRegistryService:
             bool: 是否注册成功
         """
         try:
-            # 从数据库查询应用信息（使用 ApplicationService 确保一致性）
-            # 注意：这里需要 tenant_id，但我们暂时使用 0 作为系统级查询
-            # 实际使用时应该传入正确的 tenant_id
+            # 从数据库查询应用信息（动态获取首个租户 ID，避免硬编码）
             from infra.infrastructure.database.database import get_db_connection
             conn = await get_db_connection()
             
             try:
+                tenant_row = await conn.fetchrow(
+                    "SELECT id FROM infra_tenants WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1"
+                )
+                default_tenant_id = tenant_row["id"] if tenant_row else 1
+
                 logger.info(f"🔍 查询应用 {app_code} 的数据库记录...")
                 rows = await conn.fetch("""
                     SELECT uuid, code, name, description, version, changelog,
@@ -450,9 +458,9 @@ class ApplicationRegistryService:
                       AND is_installed = TRUE
                       AND is_active = TRUE
                       AND deleted_at IS NULL
-                      AND tenant_id = 1
+                      AND tenant_id = $2
                     LIMIT 1
-                """, app_code)
+                """, app_code, default_tenant_id)
                 logger.info(f"📊 应用 {app_code} 查询结果: {len(rows)} 条记录")
                 
                 if not rows:

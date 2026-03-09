@@ -648,6 +648,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
   }, [])
 
+  // 预加载 UniImport（UniverSheet ~2MB）：空闲时后台加载，用户点击导入时 chunk 已缓存
+  useEffect(() => {
+    if (!showImportButton || !onImport) return
+    const preload = () => {
+      import('../uni-import').catch(() => {})
+    }
+    const id =
+      typeof requestIdleCallback !== 'undefined'
+        ? requestIdleCallback(preload, { timeout: 5000 })
+        : (setTimeout(preload, 2000) as unknown as number)
+    return () => {
+      if (typeof cancelIdleCallback !== 'undefined') {
+        cancelIdleCallback(id as number)
+      } else {
+        clearTimeout(id)
+      }
+    }
+  }, [showImportButton, onImport])
+
   // 站点日期格式（用于表格日期列展示，变更时触发列重新计算）
   const dateFormatKey = getConfig('date_format', 'YYYY-MM-DD')
 

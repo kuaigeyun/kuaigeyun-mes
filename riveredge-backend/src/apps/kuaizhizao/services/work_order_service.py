@@ -9,7 +9,7 @@ Date: 2025-01-01
 
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -762,7 +762,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         work_center_id: Optional[int] = None,
         assigned_worker_id: Optional[int] = None,
         include_operations: bool = False,
-    ) -> List[WorkOrderListResponse]:
+    ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
 
@@ -779,7 +779,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_center_id: 工作中心ID
 
         Returns:
-            List[WorkOrderListResponse]: 工单列表
+            Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
         """
         query = WorkOrder.filter(
             tenant_id=tenant_id,
@@ -803,7 +803,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             query = query.filter(work_center_id=work_center_id)
         if assigned_worker_id:
             # 筛选有工序分配给该员工的工单
-            from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
             wo_ids = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 assigned_worker_id=assigned_worker_id,
@@ -817,52 +816,68 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         # 获取总数（用于分页）
         total = await query.count()
-        
+
         # 获取分页数据
         work_orders = await query.offset(skip).limit(limit).order_by("-created_at").all()
+
+        # 批量预取 created_by_name（消除 N+1）
+        created_by_ids = [wo.created_by for wo in work_orders if wo.created_by and not wo.created_by_name]
+        user_name_map: dict[int, str] = {}
+        if created_by_ids:
+            from infra.models.user import User
+            users = await User.filter(id__in=list(set(created_by_ids))).values_list("id", "full_name", "username")
+            for uid, full_name, username in users:
+                user_name_map[uid] = (full_name or username or "未知用户") if (full_name or username) else "未知用户"
+
+        # 批量预取工序（include_operations 时消除 N+1）
+        operations_map: dict[int, list] = {}
+        if include_operations and work_orders:
+            wo_ids = [wo.id for wo in work_orders]
+            if wo_ids:
+                all_ops = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id__in=wo_ids,
+                    deleted_at__isnull=True
+                ).order_by("work_order_id", "sequence").all()
+                for op in all_ops:
+                    operations_map.setdefault(op.work_order_id, []).append({
+                        "id": op.id,
+                        "operation_name": op.operation_name,
+                        "sequence": op.sequence,
+                        "planned_start_date": op.planned_start_date,
+                        "planned_end_date": op.planned_end_date,
+                        "assigned_equipment_name": op.assigned_equipment_name,
+                        "assigned_mold_name": op.assigned_mold_name,
+                        "assigned_tool_name": op.assigned_tool_name,
+                    })
 
         # 转换为响应格式，添加错误处理
         result = []
         work_orders_to_update = []
-        
+
         for wo in work_orders:
             try:
-                # 确保 created_by_name 不为空
-                if not wo.created_by_name:
-                    user_info = await self.get_user_info(wo.created_by)
-                    wo.created_by_name = user_info.get("name", "未知用户")
+                # 确保 created_by_name 不为空（使用批量预取结果）
+                if not wo.created_by_name and wo.created_by:
+                    wo.created_by_name = user_name_map.get(wo.created_by, "未知用户")
                     work_orders_to_update.append(wo)
-                
+
                 item_dict = WorkOrderListResponse.model_validate(wo).model_dump()
                 if include_operations:
-                    ops = await self.get_work_order_operations(tenant_id, wo.id)
-                    item_dict["operations"] = [
-                        {
-                            "id": op.id,
-                            "operation_name": op.operation_name,
-                            "sequence": op.sequence,
-                            "planned_start_date": op.planned_start_date,
-                            "planned_end_date": op.planned_end_date,
-                            "assigned_equipment_name": op.assigned_equipment_name,
-                            "assigned_mold_name": op.assigned_mold_name,
-                            "assigned_tool_name": op.assigned_tool_name,
-                        }
-                        for op in ops
-                    ]
+                    item_dict["operations"] = operations_map.get(wo.id, [])
                 result.append(WorkOrderListResponse.model_validate(item_dict))
             except Exception as e:
                 logger.error(f"序列化工单 {wo.id} 失败: {str(e)}")
                 logger.error(f"工单数据: id={wo.id}, code={wo.code}, created_by_name={wo.created_by_name}")
                 logger.exception(e)
-                # 跳过有问题的工单，继续处理其他工单
                 continue
-        
+
         # 批量更新 created_by_name 为空的工单
         if work_orders_to_update:
             for wo in work_orders_to_update:
                 await wo.save(update_fields=["created_by_name"])
-        
-        return result
+
+        return result, total
 
     async def get_work_order_count(
         self,

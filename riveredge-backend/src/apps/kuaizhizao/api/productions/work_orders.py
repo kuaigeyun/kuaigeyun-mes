@@ -87,53 +87,57 @@ async def get_work_order_statistics(
     """
     返回工单各维度数量，用于列表页指标卡片。
     指标：进行中、今日完成、逾期、草稿、已完成。
+    使用单次 SQL 聚合查询替代 5 次 count，减少数据库往返。
     """
-    from apps.kuaizhizao.models.work_order import WorkOrder
-
     today = date.today()
     today_start = datetime.combine(today, datetime.min.time())
     today_end = datetime.combine(today, datetime.max.time())
+
+    try:
+        from tortoise import Tortoise
+        conn = Tortoise.get_connection("default")
+        if hasattr(conn, "execute_query_dict"):
+            # 单次 SQL 聚合 5 个指标（PostgreSQL FILTER 语法）
+            rows = await conn.execute_query_dict(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE status IN ('released', 'in_progress')) AS in_progress_count,
+                    COUNT(*) FILTER (WHERE status = 'completed' AND actual_end_date >= $1 AND actual_end_date <= $2) AS completed_today_count,
+                    COUNT(*) FILTER (WHERE status IN ('released', 'in_progress') AND planned_end_date < $1) AS overdue_count,
+                    COUNT(*) FILTER (WHERE status = 'draft') AS draft_count,
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed_count
+                FROM apps_kuaizhizao_work_orders
+                WHERE tenant_id = $3 AND deleted_at IS NULL
+                """,
+                [today_start, today_end, tenant_id],
+            )
+            if rows and len(rows) > 0:
+                r = rows[0]
+                return {
+                    "in_progress_count": int(r.get("in_progress_count", 0) or 0),
+                    "completed_today_count": int(r.get("completed_today_count", 0) or 0),
+                    "overdue_count": int(r.get("overdue_count", 0) or 0),
+                    "draft_count": int(r.get("draft_count", 0) or 0),
+                    "completed_count": int(r.get("completed_count", 0) or 0),
+                }
+    except Exception as e:
+        logger.warning(f"work-order-statistics 聚合查询失败，回退到分次查询: {e}")
+
+    # 回退：聚合失败时使用原有分次 count
+    from apps.kuaizhizao.models.work_order import WorkOrder
     base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-
-    try:
-        in_progress_count = await base.filter(
-            status__in=["released", "in_progress"],
-        ).count()
-    except Exception as e:
-        logger.warning(f"work-order-statistics in_progress_count: {e}")
-        in_progress_count = 0
-
-    try:
-        completed_today_count = await base.filter(
-            status="completed",
-            actual_end_date__gte=today_start,
-            actual_end_date__lte=today_end,
-        ).count()
-    except Exception as e:
-        logger.warning(f"work-order-statistics completed_today_count: {e}")
-        completed_today_count = 0
-
-    try:
-        overdue_count = await base.filter(
-            status__in=["released", "in_progress"],
-            planned_end_date__lt=today_start,
-        ).count()
-    except Exception as e:
-        logger.warning(f"work-order-statistics overdue_count: {e}")
-        overdue_count = 0
-
-    try:
-        draft_count = await base.filter(status="draft").count()
-    except Exception as e:
-        logger.warning(f"work-order-statistics draft_count: {e}")
-        draft_count = 0
-
-    try:
-        completed_count = await base.filter(status="completed").count()
-    except Exception as e:
-        logger.warning(f"work-order-statistics completed_count: {e}")
-        completed_count = 0
-
+    in_progress_count = await base.filter(status__in=["released", "in_progress"]).count()
+    completed_today_count = await base.filter(
+        status="completed",
+        actual_end_date__gte=today_start,
+        actual_end_date__lte=today_end,
+    ).count()
+    overdue_count = await base.filter(
+        status__in=["released", "in_progress"],
+        planned_end_date__lt=today_start,
+    ).count()
+    draft_count = await base.filter(status="draft").count()
+    completed_count = await base.filter(status="completed").count()
     return {
         "in_progress_count": in_progress_count,
         "completed_today_count": completed_today_count,
@@ -167,7 +171,7 @@ async def list_work_orders(
     """
     try:
         service = WorkOrderService()
-        result = await service.list_work_orders(
+        result, total = await service.list_work_orders(
             tenant_id=tenant_id,
             skip=skip,
             limit=limit,
@@ -180,18 +184,6 @@ async def list_work_orders(
             work_center_id=work_center_id,
             assigned_worker_id=assigned_worker_id,
             include_operations=include_operations,
-        )
-        # 返回分页格式，包含总数
-        total = await service.get_work_order_count(
-            tenant_id=tenant_id,
-            code=code,
-            name=name,
-            product_name=product_name,
-            production_mode=production_mode,
-            status=status,
-            workshop_id=workshop_id,
-            work_center_id=work_center_id,
-            assigned_worker_id=assigned_worker_id,
         )
         return {
             "data": result,
