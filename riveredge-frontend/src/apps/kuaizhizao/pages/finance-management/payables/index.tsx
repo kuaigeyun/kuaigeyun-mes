@@ -11,6 +11,7 @@ import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextA
 import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { payableService } from '../../../services/finance/payable';
+import { batchImport } from '../../../../../utils/batchOperations';
 import { Payable, PayableCreateData } from '../../../types/finance/payable';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -213,6 +214,100 @@ const PayableList: React.FC = () => {
                     };
                 }}
                 columns={columns}
+                showImportButton
+                onImport={async (data) => {
+                    if (!data || data.length < 2) {
+                        messageApi.warning('导入数据为空或格式不正确');
+                        return;
+                    }
+                    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+                    const getIdx = (...keys: string[]) => {
+                        for (const k of keys) {
+                            const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').trim().toLowerCase().includes(k.toLowerCase()));
+                            if (i >= 0) return i;
+                        }
+                        return -1;
+                    };
+                    const sIdx = getIdx('供应商', 'supplier', 'supplier_name');
+                    const amtIdx = getIdx('应付', '金额', 'amount', 'total_amount');
+                    const dueIdx = getIdx('到期', 'due');
+                    const dateIdx = getIdx('业务', 'business');
+                    if (sIdx < 0 || amtIdx < 0) {
+                        messageApi.error('导入表头需包含供应商名称和应付金额');
+                        return;
+                    }
+                    const items: PayableCreateData[] = [];
+                    for (let i = 1; i < data.length; i++) {
+                        const row = data[i];
+                        if (!row || row.length === 0) continue;
+                        const suppLabel = String(row[sIdx] ?? '').trim();
+                        const suppOpt = supplierOptions.find(o => (o.label || '').trim() === suppLabel) ?? supplierOptions.find(o => (o.label || '').includes(suppLabel));
+                        const suppId = suppOpt?.value;
+                        const amount = Number(row[amtIdx]) || 0;
+                        if (!suppId || amount <= 0) continue;
+                        const today = dayjs().format('YYYY-MM-DD');
+                        const dueDate = dueIdx >= 0 && row[dueIdx] ? dayjs(row[dueIdx]).format('YYYY-MM-DD') : today;
+                        const bizDate = dateIdx >= 0 && row[dateIdx] ? dayjs(row[dateIdx]).format('YYYY-MM-DD') : today;
+                        items.push({
+                            source_type: '手工',
+                            source_id: 0,
+                            source_code: '手工',
+                            supplier_id: suppId,
+                            supplier_name: suppOpt?.label || suppLabel,
+                            total_amount: amount,
+                            paid_amount: 0,
+                            remaining_amount: amount,
+                            due_date: dueDate,
+                            business_date: bizDate,
+                            status: '未付款',
+                            review_status: '待审核',
+                        });
+                    }
+                    if (items.length === 0) {
+                        messageApi.warning('没有可导入的有效数据');
+                        return;
+                    }
+                    const result = await batchImport({
+                        items,
+                        importFn: async (item) => payableService.createPayable(item),
+                        title: '导入应付单',
+                        concurrency: 5,
+                    });
+                    if (result.successCount > 0) {
+                        messageApi.success(`成功导入 ${result.successCount} 条应付单`);
+                        actionRef.current?.reload();
+                    }
+                    if (result.failureCount > 0) {
+                        messageApi.warning(`部分失败 ${result.failureCount} 条`);
+                    }
+                }}
+                importHeaders={['*供应商名称', '*应付金额', '到期日期', '业务日期']}
+                showExportButton
+                onExport={async (type, keys, pageData) => {
+                    try {
+                        const res = await payableService.listPayables({ skip: 0, limit: 10000 });
+                        let items = res.items || [];
+                        if (type === 'currentPage' && pageData?.length) {
+                            items = pageData;
+                        } else if (type === 'selected' && keys?.length) {
+                            items = items.filter((d: Payable) => d.id != null && keys.includes(d.id));
+                        }
+                        if (items.length === 0) {
+                            messageApi.warning('暂无数据可导出');
+                            return;
+                        }
+                        const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `payables-${new Date().toISOString().slice(0, 10)}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        messageApi.success(`已导出 ${items.length} 条记录`);
+                    } catch (error: any) {
+                        messageApi.error(error?.message || '导出失败');
+                    }
+                }}
             />
 
             <ModalForm

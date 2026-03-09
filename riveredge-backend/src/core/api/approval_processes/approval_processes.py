@@ -184,3 +184,17 @@ async def delete_approval_process(
             detail=str(e)
         )
 
+
+@router.post("/load-preset")
+async def load_preset_approval_processes(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载审批流程预设
+
+    为当前组织加载中国中小制造业极简审批流程预设（简单审批、采购单、销售单、工单等）。
+    """
+    count = await ApprovalProcessService.load_preset_sme(tenant_id)
+    return {"created": count, "message": f"成功加载 {count} 个审批流程预设"}
+

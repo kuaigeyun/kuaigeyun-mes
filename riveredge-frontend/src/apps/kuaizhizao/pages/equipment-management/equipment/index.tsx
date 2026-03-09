@@ -18,6 +18,7 @@ import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentApi } from '../../../services/equipment';
 import { workshopApi } from '../../../../master-data/services/factory';
+import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
 
 interface Equipment {
@@ -498,6 +499,91 @@ const EquipmentPage: React.FC = () => {
           showCreateButton={true}
           createButtonText="新建设备"
           onCreate={handleCreate}
+          showImportButton
+          onImport={async (data) => {
+            if (!data || data.length < 2) {
+              messageApi.warning('导入数据为空或格式不正确');
+              return;
+            }
+            const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+            const getIdx = (...keys: string[]) => {
+              for (const k of keys) {
+                const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
+                if (i >= 0) return i;
+              }
+              return -1;
+            };
+            const codeIdx = getIdx('编码', 'code');
+            const nameIdx = getIdx('名称', 'name');
+            if (nameIdx < 0) {
+              messageApi.error('导入表头需包含设备名称');
+              return;
+            }
+            const items: any[] = [];
+            for (let i = 1; i < data.length; i++) {
+              const row = data[i];
+              if (!row || row.length === 0) continue;
+              const name = String(row[nameIdx] ?? '').trim();
+              if (!name) continue;
+              const code = codeIdx >= 0 ? String(row[codeIdx] ?? '').trim() : undefined;
+              const typeIdx = getIdx('类型', 'type');
+              const catIdx = getIdx('分类', 'category');
+              const brandIdx = getIdx('品牌', 'brand');
+              const modelIdx = getIdx('型号', 'model');
+              items.push({
+                code: code || undefined,
+                name,
+                type: typeIdx >= 0 ? String(row[typeIdx] ?? '').trim() : undefined,
+                category: catIdx >= 0 ? String(row[catIdx] ?? '').trim() : undefined,
+                brand: brandIdx >= 0 ? String(row[brandIdx] ?? '').trim() : undefined,
+                model: modelIdx >= 0 ? String(row[modelIdx] ?? '').trim() : undefined,
+              });
+            }
+            if (items.length === 0) {
+              messageApi.warning('没有可导入的有效数据');
+              return;
+            }
+            const result = await batchImport({
+              items,
+              importFn: async (item) => equipmentApi.create(item),
+              title: '导入设备',
+              concurrency: 5,
+            });
+            if (result.successCount > 0) {
+              messageApi.success(`成功导入 ${result.successCount} 条设备`);
+              actionRef.current?.reload();
+            }
+            if (result.failureCount > 0) {
+              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+            }
+          }}
+          importHeaders={['设备编码', '*设备名称', '设备类型', '设备分类', '品牌', '型号']}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const res = await equipmentApi.list({ skip: 0, limit: 10000 });
+              let items = (res as any)?.items || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: Equipment) => d.uuid && keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `equipment-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (error: any) {
+              messageApi.error(error?.message || '导出失败');
+            }
+          }}
         />
       </ListPageTemplate>
 

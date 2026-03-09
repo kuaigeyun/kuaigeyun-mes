@@ -19,6 +19,7 @@ import {
   createMessageTemplate,
   updateMessageTemplate,
   deleteMessageTemplate,
+  loadPresetMessageTemplates,
   MessageTemplate,
   CreateMessageTemplateData,
   UpdateMessageTemplateData,
@@ -44,6 +45,7 @@ const MessageTemplateListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<MessageTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   /**
    * 处理新建消息模板
@@ -451,6 +453,26 @@ const MessageTemplateListPage: React.FC = () => {
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.messageTemplate.batchDeleteButton')}
+        toolBarRender={() => [
+          <Button
+            key="loadPreset"
+            loading={loadPresetLoading}
+            onClick={async () => {
+              try {
+                setLoadPresetLoading(true);
+                const res = await loadPresetMessageTemplates();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setLoadPresetLoading(false);
+              }
+            }}
+          >
+            {t('field.messageTemplate.loadPreset')}
+          </Button>,
+        ]}
         showImportButton={false}
         showExportButton={true}
         onExport={async (type, keys, pageData) => {

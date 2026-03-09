@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
+from loguru import logger
 from tortoise.exceptions import IntegrityError
 
 from core.models.approval_process import ApprovalProcess
@@ -209,4 +210,185 @@ class ApprovalProcessService:
 
         approval_process.deleted_at = datetime.now()
         await approval_process.save()
+
+    # 中国中小制造业极简审批流程预设（简单审批：开始→审批→结束）
+    PRESET_APPROVAL_PROCESSES = [
+        {
+            "name": "简单审批",
+            "code": "simple_approval",
+            "description": "通用简单审批流程：提交→审批人→结束",
+            "nodes": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "type": "start",
+                        "position": {"x": 250, "y": 50},
+                        "data": {"label": "开始", "layoutDirection": "vertical"},
+                    },
+                    {
+                        "id": "approval_1",
+                        "type": "approval",
+                        "position": {"x": 250, "y": 200},
+                        "data": {
+                            "label": "审批",
+                            "approver_type": "user",
+                            "layoutDirection": "vertical",
+                        },
+                    },
+                    {
+                        "id": "end",
+                        "type": "end",
+                        "position": {"x": 250, "y": 350},
+                        "data": {"label": "结束", "layoutDirection": "vertical"},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": "approval_1"},
+                    {"source": "approval_1", "target": "end"},
+                ],
+            },
+            "config": {},
+            "is_active": True,
+        },
+        {
+            "name": "采购单审批",
+            "code": "purchase_order",
+            "description": "采购订单审批流程",
+            "nodes": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "type": "start",
+                        "position": {"x": 250, "y": 50},
+                        "data": {"label": "开始", "layoutDirection": "vertical"},
+                    },
+                    {
+                        "id": "approval_1",
+                        "type": "approval",
+                        "position": {"x": 250, "y": 200},
+                        "data": {
+                            "label": "采购经理审批",
+                            "approver_type": "user",
+                            "layoutDirection": "vertical",
+                        },
+                    },
+                    {
+                        "id": "end",
+                        "type": "end",
+                        "position": {"x": 250, "y": 350},
+                        "data": {"label": "结束", "layoutDirection": "vertical"},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": "approval_1"},
+                    {"source": "approval_1", "target": "end"},
+                ],
+            },
+            "config": {},
+            "is_active": True,
+        },
+        {
+            "name": "销售单审批",
+            "code": "sales_order",
+            "description": "销售订单审批流程",
+            "nodes": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "type": "start",
+                        "position": {"x": 250, "y": 50},
+                        "data": {"label": "开始", "layoutDirection": "vertical"},
+                    },
+                    {
+                        "id": "approval_1",
+                        "type": "approval",
+                        "position": {"x": 250, "y": 200},
+                        "data": {
+                            "label": "销售经理审批",
+                            "approver_type": "user",
+                            "layoutDirection": "vertical",
+                        },
+                    },
+                    {
+                        "id": "end",
+                        "type": "end",
+                        "position": {"x": 250, "y": 350},
+                        "data": {"label": "结束", "layoutDirection": "vertical"},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": "approval_1"},
+                    {"source": "approval_1", "target": "end"},
+                ],
+            },
+            "config": {},
+            "is_active": True,
+        },
+        {
+            "name": "工单审批",
+            "code": "work_order",
+            "description": "生产工单审批流程",
+            "nodes": {
+                "nodes": [
+                    {
+                        "id": "start",
+                        "type": "start",
+                        "position": {"x": 250, "y": 50},
+                        "data": {"label": "开始", "layoutDirection": "vertical"},
+                    },
+                    {
+                        "id": "approval_1",
+                        "type": "approval",
+                        "position": {"x": 250, "y": 200},
+                        "data": {
+                            "label": "生产经理审批",
+                            "approver_type": "user",
+                            "layoutDirection": "vertical",
+                        },
+                    },
+                    {
+                        "id": "end",
+                        "type": "end",
+                        "position": {"x": 250, "y": 350},
+                        "data": {"label": "结束", "layoutDirection": "vertical"},
+                    },
+                ],
+                "edges": [
+                    {"source": "start", "target": "approval_1"},
+                    {"source": "approval_1", "target": "end"},
+                ],
+            },
+            "config": {},
+            "is_active": True,
+        },
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业极简审批流程预设数据。
+        仅创建不存在的流程（按 code 去重）。
+        """
+        created = 0
+        for item in ApprovalProcessService.PRESET_APPROVAL_PROCESSES:
+            exists = await ApprovalProcess.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    data = ApprovalProcessCreate(
+                        name=item["name"],
+                        code=item["code"],
+                        description=item.get("description"),
+                        nodes=item["nodes"],
+                        config=item.get("config", {}),
+                        is_active=item.get("is_active", True),
+                    )
+                    await ApprovalProcessService.create_approval_process(tenant_id, data)
+                    created += 1
+                except Exception as e:
+                    logger.warning(f"创建审批流程 {item['code']} 失败: {e}")
+        return created
 

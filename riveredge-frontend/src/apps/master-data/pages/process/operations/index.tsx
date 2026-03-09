@@ -15,6 +15,7 @@ import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../component
 import { OperationFormModal } from '../../../components/OperationFormModal';
 import { operationApi } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
+import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, DefectTypeMinimal } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
@@ -36,6 +37,7 @@ const OperationsPage: React.FC = () => {
   
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   useEffect(() => {
     const operationUuid = searchParams.get('operationUuid');
@@ -137,6 +139,92 @@ const OperationsPage: React.FC = () => {
       messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const idx = (key: string) => {
+      const k = key.toLowerCase();
+      const i = headers.findIndex((h: string) => h.replace(/^\*/, '').toLowerCase().includes(k) || (k === 'code' && (h.includes('编码') || h.includes('code'))) || (k === 'name' && (h.includes('名称') || h.includes('name'))));
+      return i >= 0 ? i : -1;
+    };
+    const codeIdx = idx('code') >= 0 ? idx('code') : headers.findIndex((h: string) => h.includes('工序编码'));
+    const nameIdx = idx('name') >= 0 ? idx('name') : headers.findIndex((h: string) => h.includes('工序名称'));
+    if (codeIdx < 0 || nameIdx < 0) {
+      messageApi.error(t('app.master-data.importMissingField', { field: '工序编码、工序名称', headers: headers.join(', ') }));
+      return;
+    }
+    const descIdx = headers.findIndex((h: string) => h.includes('描述') || h.toLowerCase().includes('desc'));
+    const activeIdx = headers.findIndex((h: string) => h.includes('启用') || h.toLowerCase().includes('active'));
+    const items: { code: string; name: string; description?: string; isActive?: boolean }[] = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length === 0) continue;
+      const code = String(row[codeIdx] ?? '').trim();
+      const name = String(row[nameIdx] ?? '').trim();
+      if (!code || !name) continue;
+      items.push({
+        code,
+        name,
+        description: descIdx >= 0 && row[descIdx] != null ? String(row[descIdx]).trim() : undefined,
+        isActive: activeIdx >= 0 ? (row[activeIdx] === true || row[activeIdx] === '是' || row[activeIdx] === '1' || String(row[activeIdx]).toLowerCase() === 'true') : true,
+      });
+    }
+    if (items.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'));
+      return;
+    }
+    const result = await batchImport({
+      items,
+      importFn: async (item) => operationApi.create(item),
+      title: '导入工序',
+      concurrency: 5,
+    });
+    if (result.successCount > 0) {
+      messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+      actionRef.current?.reload();
+    }
+    if (result.failureCount > 0) {
+      messageApi.warning(`部分失败 ${result.failureCount} 条`);
+    }
+  };
+
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedKeys?: React.Key[], pageData?: Operation[]) => {
+    try {
+      let list: Operation[] = [];
+      if (type === 'selected' && selectedKeys?.length && pageData?.length) {
+        list = pageData.filter((r) => selectedKeys.includes(r.uuid));
+      } else if (type === 'currentPage' && pageData?.length) {
+        list = pageData;
+      } else {
+        const res = await operationApi.list({ skip: 0, limit: 10000 });
+        list = Array.isArray(res) ? res : (res as any)?.data ?? [];
+      }
+      if (list.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+      const csv = [
+        ['工序编码', '工序名称', '描述', '启用状态'].join(','),
+        ...list.map((r) =>
+          [r.code, r.name, r.description ?? '', r.isActive ? '启用' : '禁用'].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+        ),
+      ].join('\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `operations-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      messageApi.success(`已导出 ${list.length} 条工序`);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.exportFailed'));
     }
   };
 
@@ -399,6 +487,24 @@ const OperationsPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="loadPreset"
+            loading={loadPresetLoading}
+            onClick={async () => {
+              try {
+                setLoadPresetLoading(true);
+                const res = await operationApi.loadPreset();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setLoadPresetLoading(false);
+              }
+            }}
+          >
+            {t('field.operation.loadPreset')}
+          </Button>,
+          <Button
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -428,6 +534,11 @@ const OperationsPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        showImportButton
+        onImport={handleImport}
+        importHeaders={['*工序编码', '*工序名称', '描述', '启用状态']}
+        showExportButton
+        onExport={handleExport}
       />
 
       <DetailDrawerTemplate<Operation>

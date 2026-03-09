@@ -35,6 +35,7 @@ const WarehousesPage: React.FC = () => {
   // Modal 相关状态（创建/编辑仓库）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   /**
    * 处理新建仓库
@@ -600,6 +601,24 @@ const WarehousesPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
+          <Button
+            key="loadPreset"
+            loading={loadPresetLoading}
+            onClick={async () => {
+              try {
+                setLoadPresetLoading(true);
+                const res = await warehouseApi.loadPreset();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setLoadPresetLoading(false);
+              }
+            }}
+          >
+            {t('field.warehouse.loadPreset')}
+          </Button>,
           <Button
             key="create"
             type="primary"

@@ -9,7 +9,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react'
+import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ActionType,
@@ -84,7 +84,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { UniTable } from '../../../../../components/uni-table'
-import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal'
+const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'))
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -117,7 +117,7 @@ import { getUserList } from '../../../../../services/user'
 import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
-import WorkOrderPrintModal from './components/WorkOrderPrintModal'
+const WorkOrderPrintModal = lazy(() => import('./components/WorkOrderPrintModal'))
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
@@ -345,74 +345,49 @@ const WorkOrdersPage: React.FC = () => {
     if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid)
   }, [productSourceData, modalVisible, isEdit])
 
-  // 初始化产品列表
+  // 创建/编辑弹窗所需数据是否已加载
+  const [modalDataLoaded, setModalDataLoaded] = useState(false)
+  const [modalDataLoading, setModalDataLoading] = useState(false)
+
+  // 延迟加载：仅当打开创建/编辑弹窗时加载产品、工序、工艺路线、人员、设备等（列表页无需这些数据）
   useEffect(() => {
+    if (!modalVisible) return
+    if (modalDataLoaded) return
+    let cancelled = false
     const loadData = async () => {
+      setModalDataLoading(true)
       try {
-        // 加载产品列表
-        const products = await materialApi.list({ isActive: true })
-        setProductList(products)
-
-        // 加载工序列表
-        try {
-          const operations = await operationApi.list({ is_active: true })
-          setOperationList(operations)
-        } catch (error) {
-          console.error('获取工序列表失败:', error)
-          setOperationList([])
-        }
-
-        // 加载工艺路线列表
-        try {
-          const routes = await processRouteApi.list({ is_active: true })
-          setProcessRouteList(routes)
-        } catch (error) {
-          console.error('获取工艺路线列表失败:', error)
-          setProcessRouteList([])
-        }
-
-        // 加载人员列表（后端 page_size 最大 100）
-        try {
-          const users = await getUserList({ is_active: true, page_size: 100 })
-          setWorkerList(users.items || [])
-        } catch (error) {
-          console.error('获取人员列表失败:', error)
-          setWorkerList([])
-        }
-
-        // 加载设备列表
-        try {
-          const equipment = await getEquipmentList({ is_active: true, limit: 100 })
-          setEquipmentList(equipment.items || [])
-        } catch (error) {
-          console.error('获取设备列表失败:', error)
-          setEquipmentList([])
-        }
-
-        // 加载模具列表
-        try {
-          const molds = await getMoldList({ is_active: true, limit: 100 })
-          setMoldList(molds.items || [])
-        } catch (error) {
-          console.error('获取模具列表失败:', error)
-          setMoldList([])
-        }
-
-        // 加载工装列表
-        try {
-          const tools = await toolApi.list({ limit: 100 })
-          setToolList(tools.items || [])
-        } catch (error) {
-          console.error('获取工装列表失败:', error)
-          setToolList([])
-        }
+        const [products, operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
+          await Promise.all([
+            materialApi.list({ isActive: true, limit: 2000 }),
+            operationApi.list({ is_active: true, limit: 500 }).catch(() => []),
+            processRouteApi.list({ is_active: true, limit: 500 }).catch(() => []),
+            getUserList({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
+            getEquipmentList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
+            getMoldList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
+            toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
+          ])
+        if (cancelled) return
+        setProductList(Array.isArray(products) ? products : [])
+        setOperationList(Array.isArray(operations) ? operations : [])
+        setProcessRouteList(Array.isArray(routes) ? routes : [])
+        setWorkerList(usersRes?.items || [])
+        setEquipmentList(equipmentRes?.items || [])
+        setMoldList(moldsRes?.items || [])
+        setToolList(toolsRes?.items || [])
+        setModalDataLoaded(true)
       } catch (error) {
-        console.error('获取数据失败:', error)
-        setProductList([])
+        if (!cancelled) {
+          console.error('获取弹窗数据失败:', error)
+          setProductList([])
+        }
+      } finally {
+        if (!cancelled) setModalDataLoading(false)
       }
     }
     loadData()
-  }, [])
+    return () => { cancelled = true }
+  }, [modalVisible, modalDataLoaded])
 
   // 加载销售订单列表（MTO模式或编辑时）
   useEffect(() => {
@@ -2649,17 +2624,19 @@ const WorkOrdersPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 打印工单 Modal */}
+      {/* 打印工单 Modal - 懒加载 */}
       {printModalVisible && (
-        <WorkOrderPrintModal
-          visible={printModalVisible}
-          onCancel={() => {
-            setPrintModalVisible(false)
-            setCurrentWorkOrderForPrint(null)
-          }}
-          workOrderData={currentWorkOrderForPrint}
-          workOrderId={currentWorkOrderForPrint?.id}
-        />
+        <Suspense fallback={<Spin spinning />}>
+          <WorkOrderPrintModal
+            visible={printModalVisible}
+            onCancel={() => {
+              setPrintModalVisible(false)
+              setCurrentWorkOrderForPrint(null)
+            }}
+            workOrderData={currentWorkOrderForPrint}
+            workOrderId={currentWorkOrderForPrint?.id}
+          />
+        </Suspense>
       )}
 
       {/* 创建/编辑工单 Modal */}
@@ -2696,6 +2673,7 @@ const WorkOrdersPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑工单' : '新建工单'}
         open={modalVisible}
+        loading={modalDataLoading}
         onClose={() => {
           setModalVisible(false)
           setCurrentWorkOrder(null)
@@ -4202,12 +4180,16 @@ const WorkOrdersPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      <SyncFromDatasetModal
-        open={syncModalVisible}
-        onClose={() => setSyncModalVisible(false)}
-        onConfirm={handleSyncConfirm}
-        title="从数据集同步工单"
-      />
+      {syncModalVisible && (
+        <Suspense fallback={<Spin spinning />}>
+          <SyncFromDatasetModal
+            open={syncModalVisible}
+            onClose={() => setSyncModalVisible(false)}
+            onConfirm={handleSyncConfirm}
+            title="从数据集同步工单"
+          />
+        </Suspense>
+      )}
     </>
   )
 }

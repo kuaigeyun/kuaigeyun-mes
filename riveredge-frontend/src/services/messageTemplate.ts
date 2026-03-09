@@ -76,6 +76,15 @@ export async function createMessageTemplate(data: CreateMessageTemplateData): Pr
 }
 
 /**
+ * 加载消息模板预设
+ */
+export async function loadPresetMessageTemplates(): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/message-templates/load-preset', {
+    method: 'POST',
+  });
+}
+
+/**
  * 更新消息模板
  */
 export async function updateMessageTemplate(messageTemplateUuid: string, data: UpdateMessageTemplateData): Promise<MessageTemplate> {

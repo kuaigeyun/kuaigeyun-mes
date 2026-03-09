@@ -60,6 +60,16 @@ export const warehouseApi = {
   },
 
   /**
+   * 加载仓库预设（原料仓、成品仓、半成品仓、不良品仓）
+   */
+  loadPreset: async (): Promise<{ created: number; message: string }> => {
+    return apiRequest<{ created: number; message: string }>(
+      '/apps/master-data/warehouse/warehouses/load-preset',
+      { method: 'POST' }
+    );
+  },
+
+  /**
    * 批量删除仓库
    */
   batchDelete: async (uuids: string[]): Promise<{

@@ -23,6 +23,7 @@ import {
   UpdateCodeRuleData,
   CodeRulePageConfig,
 } from '../../../../services/codeRule';
+import { runInitItems } from '../../../../services/tenantInit';
 import { apiRequest } from '../../../../services/api';
 import CodeRuleComponentBuilder from '../../../../components/code-rule-component-builder';
 import {
@@ -754,8 +755,9 @@ const CodeRuleListPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       setRestoreLoading(true);
-                      const res = await restorePresetRules('all');
-                      messageApi.success(t('pages.system.codeRules.restoreAllSuccess', { count: res?.restored?.length ?? 0 }));
+                      const res = await runInitItems(['code_rule']);
+                      const created = (res.results?.code_rule as any)?.created ?? 0;
+                      messageApi.success(res.message || t('pages.system.codeRules.restoreAllSuccess', { count: created }));
                       await loadCodeRules(true);
                       if (selectedPageCode) handleSelectPage(selectedPageCode);
                     } catch (e: any) {

@@ -185,3 +185,17 @@ async def delete_message_template(
             detail=str(e)
         )
 
+
+@router.post("/load-preset")
+async def load_preset_message_templates(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    加载消息模板预设
+
+    为当前组织加载中国中小制造业极简消息模板预设（审批通知、验证码、欢迎邮件等）。
+    """
+    count = await MessageTemplateService.load_preset_sme(tenant_id)
+    return {"created": count, "message": f"成功加载 {count} 个消息模板预设"}
+

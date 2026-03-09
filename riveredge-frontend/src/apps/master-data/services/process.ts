@@ -4,7 +4,7 @@
  * 提供不良品、工序、工艺路线、作业程序（SOP）的 API 调用方法
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
 import type {
   DefectType,
   DefectTypeCreate,
@@ -68,6 +68,16 @@ export const defectTypeApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/process/defect-types/${uuid}`);
   },
+
+  /**
+   * 加载不良品项预设
+   */
+  loadPreset: async (): Promise<{ created: number; message: string }> => {
+    return apiRequest<{ created: number; message: string }>(
+      '/apps/master-data/process/defect-types/load-preset',
+      { method: 'POST' }
+    );
+  },
 };
 
 /**
@@ -107,6 +117,16 @@ export const operationApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/process/operations/${uuid}`);
+  },
+
+  /**
+   * 加载工序预设
+   */
+  loadPreset: async (): Promise<{ created: number; message: string }> => {
+    return apiRequest<{ created: number; message: string }>(
+      '/apps/master-data/process/operations/load-preset',
+      { method: 'POST' }
+    );
   },
 
   /**

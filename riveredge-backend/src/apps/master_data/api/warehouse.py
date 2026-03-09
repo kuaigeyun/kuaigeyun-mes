@@ -70,6 +70,19 @@ async def list_warehouses(
         )
 
 
+@router.post("/warehouses/load-preset", summary="加载仓库预设")
+async def load_preset_warehouses(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    加载中国中小制造业常见仓库预设数据（原料仓、成品仓、半成品仓、不良品仓）。
+    仅创建不存在的仓库（按 code 去重）。
+    """
+    count = await WarehouseService.load_preset_sme(tenant_id)
+    return {"created": count, "message": f"已加载 {count} 个仓库"}
+
+
 @router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, summary="获取仓库详情")
 async def get_warehouse(
     warehouse_uuid: str,

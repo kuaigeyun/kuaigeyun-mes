@@ -541,63 +541,49 @@ class TenantService:
     
     async def initialize_tenant_data(
         self,
-        tenant_id: int
+        tenant_id: int,
+        init_data_options: Optional[List[str]] = None,
+        current_user_id: Optional[int] = None,
     ) -> None:
         """
         初始化组织数据
-        
-        在创建新组织后调用，初始化组织的默认数据（如默认角色、权限、编码规则、系统参数等）。
-        
+
+        在创建新组织后调用，初始化组织的默认数据。
+        使用 TenantInitDataService 统一管理，支持必选/可选划分。
+
         Args:
             tenant_id: 组织 ID
+            init_data_options: 可选初始化项 key 列表。None 表示全量（必选+全部可选），[] 表示仅必选
+            current_user_id: 当前用户ID（部门/职位/角色等预设需要，可选）
         """
-        from core.services.default.default_values_service import DefaultValuesService
-        from core.services.data.data_dictionary_service import DataDictionaryService
-        
+        from core.services.tenant.tenant_init_data_service import TenantInitDataService
+
+        # 1. 执行必选初始化
         try:
-            # 创建默认编码规则和系统参数
-            await DefaultValuesService.initialize_tenant_defaults(tenant_id)
-            
-            logger.info(f"组织 {tenant_id} 默认数据初始化完成")
+            await TenantInitDataService.run_required(tenant_id)
+            logger.info(f"组织 {tenant_id} 必选数据初始化完成")
         except Exception as e:
-            # 初始化失败不影响组织创建，记录日志即可
-            logger.error(f"组织 {tenant_id} 默认数据初始化失败: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-        
-        try:
-            # 初始化系统字典
-            await DataDictionaryService.initialize_system_dictionaries(tenant_id)
-            
-            logger.info(f"组织 {tenant_id} 系统字典初始化完成")
-        except Exception as e:
-            # 初始化失败不影响组织创建，记录日志即可
-            logger.error(f"组织 {tenant_id} 系统字典初始化失败: {e}")
+            logger.error(f"组织 {tenant_id} 必选数据初始化失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
 
-        try:
-            # 初始化系统语言
-            from core.services.system.language_service import LanguageService
-            await LanguageService.initialize_system_languages(tenant_id)
-            logger.info(f"组织 {tenant_id} 系统语言初始化完成")
-        except Exception as e:
-            logger.error(f"组织 {tenant_id} 系统语言初始化失败: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+        # 2. 执行可选初始化
+        if init_data_options is None:
+            # 向后兼容：未指定时执行全部可选项
+            optional_keys = [i["key"] for i in TenantInitDataService.INIT_ITEMS_OPTIONAL]
+        else:
+            optional_keys = init_data_options
 
-        try:
-            # 扫描并注册应用，新租户应用默认全部开启（is_active=True）
-            from core.services.application.application_service import ApplicationService
-            apps = await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)
-            logger.info(f"组织 {tenant_id} 应用初始化完成，共注册 {len(apps)} 个应用（默认全部开启）")
-        except Exception as e:
-            logger.error(f"组织 {tenant_id} 应用初始化失败: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-        # TODO: 后续完善
-        # 1. 创建默认角色
-        # 2. 创建默认权限
-        # 3. 其他默认配置
+        if optional_keys:
+            try:
+                await TenantInitDataService.run_optional(
+                    tenant_id=tenant_id,
+                    selected_keys=optional_keys,
+                    current_user_id=current_user_id,
+                )
+                logger.info(f"组织 {tenant_id} 可选数据初始化完成: {optional_keys}")
+            except Exception as e:
+                logger.error(f"组织 {tenant_id} 可选数据初始化失败: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 

@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormCheckbox, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
@@ -27,6 +27,7 @@ import {
   deactivateTenant,
   deleteTenantBySuperAdmin,
 } from '../../../../services/tenant';
+import { getInitConfig, type InitItem } from '../../../../services/tenantInit';
 // 使用 apiRequest 统一处理 HTTP 请求
 
 // @ts-ignore
@@ -68,6 +69,7 @@ const SuperAdminTenantList: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [packageConfigs, setPackageConfigs] = useState<Record<string, PackageConfig>>({});
   const [selectedPlan, setSelectedPlan] = useState<TenantPlan>(TenantPlan.TRIAL);
+  const [initOptionalItems, setInitOptionalItems] = useState<InitItem[]>([]);
   
   /**
    * 审核通过组织注册
@@ -661,6 +663,22 @@ const SuperAdminTenantList: React.FC = () => {
     }
   };
 
+  // 新建时加载初始化项配置并设置默认全选
+  useEffect(() => {
+    if (modalVisible && !isEdit) {
+      getInitConfig()
+        .then((res) => {
+          const items = res.optional || [];
+          setInitOptionalItems(items);
+          // 默认全选
+          formRef.current?.setFieldsValue({
+            init_data_options: items.map((i) => i.key),
+          });
+        })
+        .catch(() => setInitOptionalItems([]));
+    }
+  }, [modalVisible, isEdit]);
+
   /**
    * 关闭 Modal
    */
@@ -705,6 +723,7 @@ const SuperAdminTenantList: React.FC = () => {
           plan: values.plan || TenantPlan.TRIAL,
           settings: values.settings || {},
           expires_at: values.expires_at,
+          init_data_options: values.init_data_options,
         };
         await apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
@@ -1337,6 +1356,22 @@ const SuperAdminTenantList: React.FC = () => {
           placeholder={t('pages.infra.tenant.formExpiresAtPlaceholder')}
           colProps={{ span: 12 }}
         />
+        {!isEdit && initOptionalItems.length > 0 && (
+          <ProFormGroup
+            title={t('pages.infra.tenant.initDataOptions')}
+            colProps={{ span: 24 }}
+            extra={t('pages.infra.tenant.initDataOptionsExtra')}
+          >
+            <ProFormCheckbox.Group
+              name="init_data_options"
+              options={initOptionalItems.map((i) => ({
+                label: `${i.name}：${i.description}`,
+                value: i.key,
+              }))}
+              colProps={{ span: 24 }}
+            />
+          </ProFormGroup>
+        )}
     </FormModalTemplate>
     </>
   );

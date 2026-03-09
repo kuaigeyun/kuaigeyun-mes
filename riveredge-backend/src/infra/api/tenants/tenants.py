@@ -329,6 +329,13 @@ async def create_tenant_by_superadmin(
     # ⚠️ 第三阶段改进：统一错误处理
     # 异常由全局异常处理中间件统一处理
     tenant = await tenant_service.create_tenant(data)
+    # 初始化组织数据（必选+可选，init_data_options 为 None 时全量初始化）
+    init_opts = getattr(data, "init_data_options", None)
+    await tenant_service.initialize_tenant_data(
+        tenant.id,
+        init_data_options=init_opts,
+        current_user_id=None,
+    )
     logger.info(f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})")
     return tenant
 

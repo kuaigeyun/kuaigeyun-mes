@@ -19,6 +19,7 @@ import {
   createApprovalProcess,
   updateApprovalProcess,
   deleteApprovalProcess,
+  loadPresetApprovalProcesses,
   ApprovalProcess,
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
@@ -44,6 +45,7 @@ const ApprovalProcessListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
 
   /**
    * 处理新建审批流程
@@ -303,6 +305,26 @@ const ApprovalProcessListPage: React.FC = () => {
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
+        toolBarRender={() => [
+          <Button
+            key="loadPreset"
+            loading={loadPresetLoading}
+            onClick={async () => {
+              try {
+                setLoadPresetLoading(true);
+                const res = await loadPresetApprovalProcesses();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setLoadPresetLoading(false);
+              }
+            }}
+          >
+            {t('field.approvalProcess.loadPreset')}
+          </Button>,
+        ]}
         showImportButton
         showExportButton
         onExport={async (type, keys, pageData) => {

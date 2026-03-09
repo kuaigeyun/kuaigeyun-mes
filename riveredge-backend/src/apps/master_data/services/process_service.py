@@ -389,6 +389,43 @@ class ProcessService:
         from tortoise import timezone
         defect_type.deleted_at = timezone.now()
         await defect_type.save()
+
+    # 通用缺陷分类预设（制造业常见不良品项）
+    PRESET_DEFECT_TYPES = [
+        {"code": "SIZE", "name": "尺寸不良", "category": "外观/尺寸"},
+        {"code": "APPEARANCE", "name": "外观不良", "category": "外观/尺寸"},
+        {"code": "FUNCTION", "name": "功能不良", "category": "功能"},
+        {"code": "MATERIAL", "name": "材料不良", "category": "材料"},
+        {"code": "ASSEMBLY", "name": "装配不良", "category": "装配"},
+        {"code": "PACKAGE", "name": "包装不良", "category": "包装"},
+    ]
+
+    @staticmethod
+    async def load_preset_defect_types_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业常见不良品项预设数据。
+        仅创建不存在的不良品项（按 code 去重）。
+        """
+        created = 0
+        for item in ProcessService.PRESET_DEFECT_TYPES:
+            exists = await DefectType.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    await DefectType.create(
+                        tenant_id=tenant_id,
+                        code=item["code"],
+                        name=item["name"],
+                        category=item.get("category"),
+                        is_active=True,
+                    )
+                    created += 1
+                except IntegrityError:
+                    pass
+        return created
     
     # ==================== 工序相关方法 ====================
     
@@ -682,6 +719,42 @@ class ProcessService:
         from tortoise import timezone
         operation.deleted_at = timezone.now()
         await operation.save()
+
+    # 通用制造工序预设（下料、组装、检验、包装）
+    PRESET_OPERATIONS = [
+        {"code": "CUT", "name": "下料", "sort_order": 10},
+        {"code": "ASSEMBLE", "name": "组装", "sort_order": 20},
+        {"code": "INSPECT", "name": "检验", "sort_order": 30},
+        {"code": "PACK", "name": "包装", "sort_order": 40},
+    ]
+
+    @staticmethod
+    async def load_preset_operations_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业常见工序预设数据。
+        仅创建不存在的工序（按 code 去重）。默认按数量报工，不允许跳转。
+        """
+        created = 0
+        for item in ProcessService.PRESET_OPERATIONS:
+            exists = await Operation.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    await Operation.create(
+                        tenant_id=tenant_id,
+                        code=item["code"],
+                        name=item["name"],
+                        reporting_type="quantity",
+                        allow_jump=False,
+                        is_active=True,
+                    )
+                    created += 1
+                except IntegrityError:
+                    pass
+        return created
     
     # ==================== 工艺路线相关方法 ====================
     

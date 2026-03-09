@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -42,9 +42,9 @@ class TenantBase(BaseModel):
 class TenantCreate(TenantBase):
     """
     组织创建 Schema
-    
+
     用于创建新组织时的数据验证
-    
+
     Attributes:
         name: 组织名称（必填）
         domain: 组织域名（必填，全局唯一）
@@ -54,8 +54,12 @@ class TenantCreate(TenantBase):
         max_users: 最大用户数限制（可选，默认 10）
         max_storage: 最大存储空间限制（可选，默认 1024 MB）
         expires_at: 过期时间（可选）
+        init_data_options: 可选初始化项 key 列表（如编码规则、部门预设等）。None 表示全量初始化，[] 表示仅必选
     """
-    pass
+    init_data_options: Optional[List[str]] = Field(
+        default=None,
+        description="可选初始化项 key 列表。None=全量，[]=仅必选",
+    )
 
 
 class TenantUpdate(BaseModel):

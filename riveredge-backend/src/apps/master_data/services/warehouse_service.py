@@ -1071,3 +1071,41 @@ class WarehouseService:
         
         return result
 
+    # ==================== 预设数据 ====================
+
+    # 常见制造业仓库预设（原料仓、成品仓、半成品仓、不良品仓）
+    PRESET_WAREHOUSES = [
+        {"code": "RAW", "name": "原料仓", "description": "原材料存储", "warehouse_type": "normal"},
+        {"code": "FG", "name": "成品仓", "description": "成品存储", "warehouse_type": "normal"},
+        {"code": "WIP", "name": "半成品仓", "description": "在制品/半成品存储", "warehouse_type": "wip"},
+        {"code": "DEFECT", "name": "不良品仓", "description": "不良品隔离存储", "warehouse_type": "normal"},
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业常见仓库预设数据。
+        仅创建不存在的仓库（按 code 去重）。
+        """
+        created = 0
+        for item in WarehouseService.PRESET_WAREHOUSES:
+            exists = await Warehouse.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    await Warehouse.create(
+                        tenant_id=tenant_id,
+                        code=item["code"],
+                        name=item["name"],
+                        description=item.get("description"),
+                        warehouse_type=item.get("warehouse_type", "normal"),
+                        is_active=True,
+                    )
+                    created += 1
+                except IntegrityError:
+                    pass
+        return created
+

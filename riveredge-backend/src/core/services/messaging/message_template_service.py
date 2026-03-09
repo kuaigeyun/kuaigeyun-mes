@@ -216,3 +216,98 @@ class MessageTemplateService:
         
         return subject, content
 
+    # 中国中小制造业极简消息模板预设
+    PRESET_MESSAGE_TEMPLATES = [
+        {
+            "name": "审批通过通知",
+            "code": "approval_approved",
+            "type": "email",
+            "description": "审批通过时发送的通知邮件",
+            "subject": "【审批通过】{title}",
+            "content": "您好，\n\n您的审批申请「{title}」已通过。\n\n申请人：{submitter_name}\n审批人：{approver_name}\n通过时间：{approved_at}\n\n如有疑问请联系相关人员。",
+            "variables": {
+                "title": "审批标题",
+                "submitter_name": "申请人",
+                "approver_name": "审批人",
+                "approved_at": "通过时间",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "审批驳回通知",
+            "code": "approval_rejected",
+            "type": "email",
+            "description": "审批驳回时发送的通知邮件",
+            "subject": "【审批驳回】{title}",
+            "content": "您好，\n\n您的审批申请「{title}」已被驳回。\n\n申请人：{submitter_name}\n审批人：{approver_name}\n驳回时间：{rejected_at}\n驳回意见：{comment}\n\n请根据意见修改后重新提交。",
+            "variables": {
+                "title": "审批标题",
+                "submitter_name": "申请人",
+                "approver_name": "审批人",
+                "rejected_at": "驳回时间",
+                "comment": "驳回意见",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "验证码邮件",
+            "code": "verification_code",
+            "type": "email",
+            "description": "发送验证码的邮件模板",
+            "subject": "【{system_name}】您的验证码",
+            "content": "您好，\n\n您的验证码是：{code}\n\n验证码有效期为 {expire_minutes} 分钟，请勿泄露给他人。\n\n如非本人操作，请忽略此邮件。",
+            "variables": {
+                "code": "验证码",
+                "system_name": "系统名称",
+                "expire_minutes": "有效期（分钟）",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "欢迎注册",
+            "code": "welcome_register",
+            "type": "email",
+            "description": "用户注册成功后的欢迎邮件",
+            "subject": "欢迎加入 {system_name}",
+            "content": "您好 {username}，\n\n欢迎注册 {system_name}！\n\n您的账号已创建成功，请使用您注册时填写的手机号/邮箱登录。\n\n如有问题请联系管理员。",
+            "variables": {
+                "username": "用户名",
+                "system_name": "系统名称",
+            },
+            "is_active": True,
+        },
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业极简消息模板预设数据。
+        仅创建不存在的模板（按 code 去重）。
+        """
+        from loguru import logger
+
+        created = 0
+        for item in MessageTemplateService.PRESET_MESSAGE_TEMPLATES:
+            exists = await MessageTemplate.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    data = MessageTemplateCreate(
+                        name=item["name"],
+                        code=item["code"],
+                        type=item["type"],
+                        description=item.get("description"),
+                        subject=item.get("subject"),
+                        content=item["content"],
+                        variables=item.get("variables"),
+                        is_active=item.get("is_active", True),
+                    )
+                    await MessageTemplateService.create_message_template(tenant_id, data)
+                    created += 1
+                except Exception as e:
+                    logger.warning(f"创建消息模板 {item['code']} 失败: {e}")
+        return created
+

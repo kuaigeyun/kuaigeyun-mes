@@ -11,7 +11,9 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Popconfirm, Space } from 'antd';
 import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
-import { Invoice } from '../../../types/finance/invoice';
+import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { apiRequest } from '../../../../../services/api';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
@@ -209,6 +211,113 @@ const InvoiceList: React.FC = () => {
           };
         }}
         columns={columns}
+        showImportButton
+        onImport={async (data) => {
+          if (!data || data.length < 2) {
+            messageApi.warning('导入数据为空或格式不正确');
+            return;
+          }
+          const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+          const getIdx = (...keys: string[]) => {
+            for (const k of keys) {
+              const i = headers.findIndex((h: string) => h.includes(k) || h.replace(/\*/g, '').toLowerCase().includes(k.toLowerCase()));
+              if (i >= 0) return i;
+            }
+            return -1;
+          };
+          const numIdx = getIdx('发票号码', 'invoice_number');
+          const catIdx = getIdx('类型', 'category');
+          const partnerIdx = getIdx('往来', 'partner', '单位');
+          const totalIdx = getIdx('价税', 'total', '金额');
+          const rateIdx = getIdx('税率', 'tax_rate');
+          const dateIdx = getIdx('开票', 'invoice_date', '日期');
+          if (numIdx < 0 || partnerIdx < 0 || totalIdx < 0) {
+            messageApi.error('导入表头需包含发票号码、往来单位、价税合计');
+            return;
+          }
+          const [customers, suppliers] = await Promise.all([
+            apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 5000 } }),
+            apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', { params: { limit: 5000 } }),
+          ]);
+          const custList = Array.isArray(customers) ? customers : (customers as any)?.items ?? [];
+          const suppList = Array.isArray(suppliers) ? suppliers : (suppliers as any)?.items ?? [];
+          const items: InvoiceCreateData[] = [];
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0) continue;
+            const invNum = String(row[numIdx] ?? '').trim();
+            const category = (catIdx >= 0 ? String(row[catIdx] ?? '').trim().toUpperCase() : 'OUT') as 'IN' | 'OUT';
+            const partnerName = String(row[partnerIdx] ?? '').trim();
+            const total = Number(row[totalIdx]) || 0;
+            const taxRate = rateIdx >= 0 ? Number(row[rateIdx]) || 0.13 : 0.13;
+            const invDate = dateIdx >= 0 && row[dateIdx] ? String(row[dateIdx]).slice(0, 10) : new Date().toISOString().slice(0, 10);
+            if (!invNum || !partnerName || total <= 0) continue;
+            const list = category === 'IN' ? suppList : custList;
+            const partner = list.find((p: any) => (p.name || p.customer_name || p.supplier_name || p.code || '').includes(partnerName) || partnerName.includes(p.name || p.customer_name || p.supplier_name || p.code || ''));
+            const partnerId = partner?.id;
+            if (!partnerId) continue;
+            const taxAmount = total * (taxRate / (1 + taxRate));
+            const amountExcl = total - taxAmount;
+            items.push({
+              invoice_number: invNum,
+              category,
+              invoice_type: '增值税专用发票',
+              partner_id: partnerId,
+              partner_name: partner?.name || partner?.customer_name || partner?.supplier_name || partnerName,
+              amount_excluding_tax: Math.round(amountExcl * 100) / 100,
+              tax_amount: Math.round(taxAmount * 100) / 100,
+              total_amount: total,
+              tax_rate: taxRate,
+              invoice_date: invDate,
+              status: 'DRAFT',
+              items: [{ item_name: '导入明细', amount: amountExcl, tax_rate: taxRate, tax_amount: taxAmount }],
+            });
+          }
+          if (items.length === 0) {
+            messageApi.warning('没有可导入的有效数据（请确保往来单位在客户/供应商中存在）');
+            return;
+          }
+          const result = await batchImport({
+            items,
+            importFn: async (item) => invoiceService.createInvoice(item),
+            title: '导入发票',
+            concurrency: 5,
+          });
+          if (result.successCount > 0) {
+            messageApi.success(`成功导入 ${result.successCount} 张发票`);
+            actionRef.current?.reload();
+          }
+          if (result.failureCount > 0) {
+            messageApi.warning(`部分失败 ${result.failureCount} 张`);
+          }
+        }}
+        importHeaders={['*发票号码', '类型(IN/OUT)', '*往来单位', '*价税合计', '税率', '开票日期']}
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          try {
+            const res = await invoiceService.listInvoices({ skip: 0, limit: 10000, category: activeTabKey === 'all' ? undefined : activeTabKey as 'IN' | 'OUT' });
+            let items = res.items || [];
+            if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else if (type === 'selected' && keys?.length) {
+              items = items.filter((d: Invoice) => d.invoice_code && keys.includes(d.invoice_code));
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `invoices-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success(`已导出 ${items.length} 条记录`);
+          } catch (error: any) {
+            messageApi.error(error?.message || '导出失败');
+          }
+        }}
         toolbar={{
           menu: {
             activeKey: activeTabKey,

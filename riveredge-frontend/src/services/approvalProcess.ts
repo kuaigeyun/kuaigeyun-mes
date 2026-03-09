@@ -81,6 +81,15 @@ export async function updateApprovalProcess(approvalProcessUuid: string, data: U
 }
 
 /**
+ * 加载审批流程预设
+ */
+export async function loadPresetApprovalProcesses(): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/approval-processes/load-preset', {
+    method: 'POST',
+  });
+}
+
+/**
  * 删除审批流程
  */
 export async function deleteApprovalProcess(approvalProcessUuid: string): Promise<void> {

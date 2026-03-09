@@ -74,6 +74,19 @@ async def list_defect_types(
     return DefectTypeListResponse(data=items, total=total)
 
 
+@router.post("/defect-types/load-preset", summary="加载不良品项预设")
+async def load_preset_defect_types(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    加载中国中小制造业常见不良品项预设数据（尺寸不良、外观不良、功能不良等）。
+    仅创建不存在的不良品项（按 code 去重）。
+    """
+    count = await ProcessService.load_preset_defect_types_sme(tenant_id)
+    return {"created": count, "message": f"已加载 {count} 个不良品项"}
+
+
 @router.get("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="获取不良品详情")
 async def get_defect_type(
     defect_type_uuid: str,
@@ -180,6 +193,19 @@ async def list_operations(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取工序列表失败: {str(e)}",
         )
+
+
+@router.post("/operations/load-preset", summary="加载工序预设")
+async def load_preset_operations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    加载中国中小制造业常见工序预设数据（下料、组装、检验、包装）。
+    仅创建不存在的工序（按 code 去重）。
+    """
+    count = await ProcessService.load_preset_operations_sme(tenant_id)
+    return {"created": count, "message": f"已加载 {count} 个工序"}
 
 
 @router.get("/operations/{operation_uuid}", response_model=OperationResponse, summary="获取工序详情")

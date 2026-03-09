@@ -24,6 +24,8 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { apiRequest } from '../../../../../services/api';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useRequest } from 'ahooks';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { materialApi } from '../../../../master-data/services/material';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -377,6 +379,117 @@ const ProductionPlansPage: React.FC = () => {
     }
   };
 
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning('导入数据为空或格式不正确');
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const headerMap: Record<string, number> = {};
+    headers.forEach((h, i) => {
+      if (h.includes('计划编号') || h.includes('plan_code')) headerMap['plan_code'] = i;
+      else if (h.includes('计划名称') || h.includes('plan_name')) headerMap['plan_name'] = i;
+      else if (h.includes('计划类型') || h.includes('plan_type')) headerMap['plan_type'] = i;
+      else if (h.includes('开始') || h.includes('start')) headerMap['start'] = i;
+      else if (h.includes('结束') || h.includes('end')) headerMap['end'] = i;
+      else if (h.includes('物料') || h.includes('material')) headerMap['material_code'] = i;
+      else if (h.includes('数量') || h.includes('quantity')) headerMap['quantity'] = i;
+      else if (h.includes('单位') || h.includes('unit')) headerMap['unit'] = i;
+    });
+    if (headerMap['plan_name'] === undefined) {
+      messageApi.error('导入表头需包含计划名称');
+      return;
+    }
+    if (headerMap['material_code'] === undefined || headerMap['quantity'] === undefined) {
+      messageApi.error('导入表头需包含物料编码和数量');
+      return;
+    }
+    const getVal = (row: any[], key: string) => {
+      const idx = headerMap[key];
+      if (idx === undefined) return '';
+      const v = row[idx];
+      return v != null ? String(v).trim() : '';
+    };
+    const grouped = new Map<string, { plan_name: string; plan_type: string; start: string; end: string; items: { material_code: string; quantity: number; unit: string }[] }>();
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.every((c: any) => (c == null || String(c).trim() === ''))) continue;
+      const planCode = getVal(row, 'plan_code') || `PLAN-IMPORT-${i}`;
+      const planName = getVal(row, 'plan_name');
+      const materialCode = getVal(row, 'material_code');
+      const qty = Number(getVal(row, 'quantity')) || 0;
+      if (!planName || !materialCode || qty <= 0) continue;
+      const entry = grouped.get(planCode);
+      const item = { material_code: materialCode, quantity: qty, unit: getVal(row, 'unit') || '件' };
+      if (!entry) {
+        grouped.set(planCode, {
+          plan_name: planName,
+          plan_type: getVal(row, 'plan_type') || 'MANUAL',
+          start: getVal(row, 'start'),
+          end: getVal(row, 'end'),
+          items: [item],
+        });
+      } else {
+        entry.items.push(item);
+      }
+    }
+    const toImport = Array.from(grouped.entries()).map(([code, v]) => ({
+      plan_code: code,
+      plan_name: v.plan_name,
+      plan_type: v.plan_type,
+      plan_start_date: v.start || undefined,
+      plan_end_date: v.end || undefined,
+      items: v.items,
+    }));
+    if (toImport.length === 0) {
+      messageApi.warning('没有可导入的有效数据');
+      return;
+    }
+    const matRes = await materialApi.list({ limit: 5000, isActive: true });
+    const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.items ?? [];
+    const items = toImport.map((t) => ({
+      ...t,
+      items: t.items.map((it) => {
+        const mat = matList.find((m: any) => (m.code || m.material_code || '').toString().trim() === (it.material_code || '').trim());
+        return {
+          material_id: mat?.id ?? mat?.material_id,
+          material_code: it.material_code,
+          material_name: mat?.name || mat?.material_name || '',
+          planned_quantity: it.quantity,
+          unit: it.unit || mat?.unit || mat?.material_unit || '件',
+          suggested_action: '生产',
+        };
+      }).filter((it) => it.material_id || it.material_code),
+    })).filter((t) => t.items.length > 0);
+    if (items.length === 0) {
+      messageApi.warning('没有匹配到物料的有效数据');
+      return;
+    }
+    const result = await batchImport({
+      items,
+      importFn: async (item: any) =>
+        planningApi.productionPlan.create({
+          plan_code: item.plan_code,
+          plan_name: item.plan_name,
+          plan_type: item.plan_type || 'MANUAL',
+          plan_start_date: item.plan_start_date,
+          plan_end_date: item.plan_end_date,
+          source_type: 'Manual',
+          items: item.items,
+        }),
+      title: '导入生产计划',
+      concurrency: 5,
+    });
+    if (result.successCount > 0) {
+      messageApi.success(`成功导入 ${result.successCount} 条生产计划`);
+      actionRef.current?.reload();
+      refreshStats();
+    }
+    if (result.failureCount > 0) {
+      messageApi.warning(`部分失败 ${result.failureCount} 条`);
+    }
+  };
+
   return (
     <ListPageTemplate
       statCards={[
@@ -425,7 +538,9 @@ const ProductionPlansPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          showImportButton={false}
+          showImportButton
+          onImport={handleListImport}
+          importHeaders={['计划编号', '*计划名称', '计划类型', '开始日期', '结束日期', '*物料编码', '*数量', '单位']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

@@ -25,6 +25,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { batchImport } from '../../../../../utils/batchOperations';
 
 interface SampleTrial {
   id?: number;
@@ -243,6 +244,141 @@ const SampleTrialsPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || '同步失败');
+    }
+  };
+
+  const handleListImport = async (data: any[][]) => {
+    if (!data || data.length < 2) {
+      messageApi.warning('导入数据为空或格式不正确');
+      return;
+    }
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const headerMap: Record<string, number> = {};
+    headers.forEach((h, i) => {
+      const k = h.replace(/^\*/, '').toLowerCase();
+      if (h.includes('试用单号') || h.includes('trial_code')) headerMap['trial_code'] = i;
+      else if (h.includes('客户') || h.includes('customer')) headerMap['customer_name'] = i;
+      else if (h.includes('试用目的') || h.includes('trial_purpose')) headerMap['trial_purpose'] = i;
+      else if (h.includes('开始') || h.includes('start')) headerMap['start'] = i;
+      else if (h.includes('结束') || h.includes('end')) headerMap['end'] = i;
+      else if (h.includes('状态') || h.includes('status')) headerMap['status'] = i;
+      else if (h.includes('物料') || h.includes('material')) headerMap['material_code'] = i;
+      else if (h.includes('数量') || h.includes('quantity')) headerMap['quantity'] = i;
+      else if (h.includes('单价') || h.includes('price')) headerMap['unit_price'] = i;
+      else if (h.includes('备注') || h.includes('notes')) headerMap['notes'] = i;
+    });
+    if (headerMap['customer_name'] === undefined) {
+      messageApi.error('导入表头需包含客户名称');
+      return;
+    }
+    if (headerMap['material_code'] === undefined || headerMap['quantity'] === undefined) {
+      messageApi.error('导入表头需包含物料编码和数量');
+      return;
+    }
+    const getVal = (row: any[], key: string) => {
+      const idx = headerMap[key];
+      if (idx === undefined) return '';
+      const v = row[idx];
+      return v != null ? String(v).trim() : '';
+    };
+    const grouped = new Map<string, { customer_name: string; trial_purpose: string; start: string; end: string; status: string; notes: string; items: { material_code: string; quantity: number; unit_price: number }[] }>();
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.every((c: any) => (c == null || String(c).trim() === ''))) continue;
+      const trialCode = getVal(row, 'trial_code') || `IMPORT-${i}`;
+      const customerName = getVal(row, 'customer_name');
+      const materialCode = getVal(row, 'material_code');
+      const qty = Number(getVal(row, 'quantity')) || 0;
+      if (!customerName || !materialCode || qty <= 0) continue;
+      const entry = grouped.get(trialCode);
+      const item = { material_code: materialCode, quantity: qty, unit_price: Number(getVal(row, 'unit_price')) || 0 };
+      if (!entry) {
+        grouped.set(trialCode, {
+          customer_name: customerName,
+          trial_purpose: getVal(row, 'trial_purpose'),
+          start: getVal(row, 'start'),
+          end: getVal(row, 'end'),
+          status: getVal(row, 'status') || '草稿',
+          notes: getVal(row, 'notes'),
+          items: [item],
+        });
+      } else {
+        entry.items.push(item);
+      }
+    }
+    const toImport = Array.from(grouped.entries()).map(([code, v]) => ({
+      trial_code: code,
+      customer_name: v.customer_name,
+      trial_purpose: v.trial_purpose,
+      trial_period_start: v.start || undefined,
+      trial_period_end: v.end || undefined,
+      status: v.status,
+      notes: v.notes || undefined,
+      items: v.items,
+    }));
+    if (toImport.length === 0) {
+      messageApi.warning('没有可导入的有效数据');
+      return;
+    }
+    let custList = Array.isArray(customerList) ? customerList : [];
+    let matList = Array.isArray(materialList) ? materialList : [];
+    if (custList.length === 0) {
+      const r = await customerApi.list({ limit: 5000, isActive: true });
+      custList = Array.isArray(r) ? r : (r as any)?.items ?? [];
+    }
+    if (matList.length === 0) {
+      const r = await materialApi.list({ limit: 5000, isActive: true });
+      matList = Array.isArray(r) ? r : (r as any)?.items ?? [];
+    }
+    const items = toImport.map((t) => {
+      const cust = custList.find((c: any) => (c.name || c.customer_name || '').trim() === (t.customer_name || '').trim())
+        ?? custList.find((c: any) => (c.code || '').trim() === (t.customer_name || '').trim())
+        ?? custList.find((c: any) => (c.name || c.customer_name || c.code || '').includes(t.customer_name));
+      const mappedItems = t.items.map((it) => {
+        const mat = matList.find((m: any) => (m.code || m.material_code || '').toString().trim() === (it.material_code || '').trim());
+        return {
+          material_id: mat?.id ?? mat?.material_id,
+          material_code: it.material_code,
+          material_name: mat?.name || mat?.material_name || '',
+          material_unit: mat?.unit || mat?.material_unit || '件',
+          trial_quantity: it.quantity,
+          unit_price: it.unit_price,
+        };
+      }).filter((it) => it.material_id || it.material_code);
+      return {
+        ...t,
+        customer_id: cust?.id ?? cust?.customer_id,
+        customer_name: t.customer_name || cust?.name || cust?.customer_name,
+        items: mappedItems,
+      };
+    }).filter((t) => t.items.length > 0 && (t.customer_id != null || t.customer_name));
+    if (items.length === 0) {
+      messageApi.warning('没有匹配到客户或物料的有效数据');
+      return;
+    }
+    const result = await batchImport({
+      items,
+      importFn: async (item: any) =>
+        sampleTrialApi.create({
+          trial_code: item.trial_code,
+          customer_id: item.customer_id,
+          customer_name: item.customer_name,
+          trial_purpose: item.trial_purpose,
+          trial_period_start: item.trial_period_start || undefined,
+          trial_period_end: item.trial_period_end || undefined,
+          status: item.status || '草稿',
+          notes: item.notes,
+          items: item.items,
+        }),
+      title: '导入样品试用单',
+      concurrency: 5,
+    });
+    if (result.successCount > 0) {
+      messageApi.success(`成功导入 ${result.successCount} 条样品试用单`);
+      actionRef.current?.reload();
+    }
+    if (result.failureCount > 0) {
+      messageApi.warning(`部分失败 ${result.failureCount} 条`);
     }
   };
 
@@ -688,7 +824,9 @@ const SampleTrialsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          showImportButton={false}
+          showImportButton
+          onImport={handleListImport}
+          importHeaders={['试用单号', '*客户名称', '试用目的', '试用开始', '试用结束', '状态', '*物料编码', '*数量', '单价', '备注']}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
