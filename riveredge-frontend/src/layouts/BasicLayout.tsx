@@ -2691,9 +2691,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu {
           scrollbar-width: none !important;
         }
-        /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量 */
+        /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量；Modal 内容区/footer 使用 colorBgElevated */
         :root {
           --ant-colorBgContainer: ${token.colorBgContainer};
+          --ant-colorBgElevated: ${token.colorBgElevated};
         }
         /* 顶栏背景色（支持透明度） */
         .ant-pro-layout .ant-pro-layout-header,

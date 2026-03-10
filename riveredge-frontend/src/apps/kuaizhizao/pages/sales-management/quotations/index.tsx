@@ -20,7 +20,7 @@ import { CustomerFormModal } from '../../../../master-data/components/CustomerFo
 import { customerApi } from '../../../../master-data/services/supply-chain';
 const LazyUniImport = lazy(() => import('../../../../../components/uni-import').then(m => ({ default: m.UniImport })));
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
   listQuotations,
@@ -1266,47 +1266,34 @@ const QuotationsPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
 
-      <Modal
-        open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+      <FormModalTemplate
         title={editingId != null ? '编辑报价单' : '新建报价单'}
+        open={modalVisible}
+        onClose={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+        onFinish={async (values) => {
+          if (editingId != null) await submitEdit(values);
+          else await submitCreate(values);
+        }}
+        isEdit={editingId != null}
+        formRef={formRef}
         width={1200}
-        footer={null}
-        destroyOnHidden
-      >
-        <ProForm
-          formRef={formRef}
-          layout="vertical"
-          initialValues={editingId == null ? { quotation_date: dayjs() } : undefined}
-          onValuesChange={(changed, all) => {
-            if ('customer_id' in changed && changed.customer_id != null) {
-              const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
-              if (c) {
-                formRef.current?.setFieldsValue({
-                  customer_name: c.name ?? c.customer_name,
-                  customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
-                  customer_phone: c.phone ?? c.customer_phone,
-                });
-              }
+        layout="vertical"
+        initialValues={editingId == null ? { quotation_date: dayjs() } : undefined}
+        onValuesChange={(changed, _all) => {
+          if ('customer_id' in changed && changed.customer_id != null) {
+            const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
+            if (c) {
+              formRef.current?.setFieldsValue({
+                customer_name: c.name ?? c.customer_name,
+                customer_contact: c.contact_person ?? c.contact ?? c.customer_contact,
+                customer_phone: c.phone ?? c.customer_phone,
+              });
             }
-          }}
-          onFinish={async (values) => {
-            if (editingId != null) await submitEdit(values);
-            else await submitCreate(values);
-          }}
-          submitter={{
-            searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
-            render: (_, dom) => (
-              <div style={{ textAlign: 'left', marginTop: 16 }}>
-                <Space>{dom}</Space>
-              </div>
-            ),
-          }}
-        >
-          {formItemContent}
-        </ProForm>
-      </Modal>
+          }
+        }}
+      >
+        {formItemContent}
+      </FormModalTemplate>
 
       <CustomerFormModal
         open={customerCreateVisible}

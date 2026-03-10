@@ -22,8 +22,8 @@ class UserPreference(BaseModel):
     # uuid 字段由 BaseModel 提供
     # tenant_id 字段由 BaseModel 提供
     
-    # 关联用户（一对一）
-    user_id = fields.IntField(unique=True, description="关联用户ID（外键，一对一）")
+    # 关联用户（一对一，按租户隔离：同一用户在不同租户下各有一条偏好）
+    user_id = fields.IntField(description="关联用户ID（外键，与 tenant_id 联合唯一）")
     
     # 偏好设置
     preferences = fields.JSONField(default={}, description="偏好设置（JSON格式）")
@@ -39,7 +39,7 @@ class UserPreference(BaseModel):
             ("user_id",),
             ("created_at",),
         ]
-        unique_together = [("user_id",)]
+        unique_together = [("tenant_id", "user_id")]
     
     def __str__(self):
         """字符串表示"""

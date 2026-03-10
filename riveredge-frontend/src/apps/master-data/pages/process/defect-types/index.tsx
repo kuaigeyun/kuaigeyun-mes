@@ -480,6 +480,14 @@ const DefectTypesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            {'新建不良品' + NEW_SHORTCUT_HINT}
+          </Button>,
+          <Button
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -496,14 +504,6 @@ const DefectTypesPage: React.FC = () => {
             }}
           >
             {t('field.defectType.loadPreset')}
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {'新建不良品' + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-delete"

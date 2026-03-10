@@ -603,6 +603,14 @@ const WarehousesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            {t('app.master-data.warehouses.create') + NEW_SHORTCUT_HINT}
+          </Button>,
+          <Button
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -619,14 +627,6 @@ const WarehousesPage: React.FC = () => {
             }}
           >
             {t('field.warehouse.loadPreset')}
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {t('app.master-data.warehouses.create') + NEW_SHORTCUT_HINT}
           </Button>,
           <Popconfirm
             key="batchDelete"

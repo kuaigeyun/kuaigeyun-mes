@@ -491,6 +491,14 @@ const OperationsPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            {'新建工序' + NEW_SHORTCUT_HINT}
+          </Button>,
+          <Button
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -507,14 +515,6 @@ const OperationsPage: React.FC = () => {
             }}
           >
             {t('field.operation.loadPreset')}
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {'新建工序' + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-qrcode"

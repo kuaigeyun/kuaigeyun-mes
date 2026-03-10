@@ -7,13 +7,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Form, Select, theme } from 'antd';
+import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Select, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
-import { PageContainer } from '@ant-design/pro-components';
+import { PageContainer, ProFormText, ProFormTextArea, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
+import { FormModalTemplate } from '../../../components/layout-templates';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
-import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../utils/globalNewShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
@@ -92,7 +91,7 @@ const CardView: React.FC = () => {
   const [previewContent, setPreviewContent] = useState<string>('');
   const [previewPdfme, setPreviewPdfme] = useState<{ template: any; variables: Record<string, unknown> } | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [createForm] = Form.useForm();
+  const createFormRef = useRef<ProFormInstance>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
@@ -175,18 +174,16 @@ const CardView: React.FC = () => {
    */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    createForm.resetFields();
+    createFormRef.current?.resetFields();
   };
 
   useNewShortcut(handleCreate);
-  useSubmitShortcut(handleCreateSubmit, createModalVisible);
 
   /**
    * 提交新建模板
    */
-  const handleCreateSubmit = async () => {
+  const handleCreateSubmit = async (values: Record<string, any>) => {
     try {
-      const values = await createForm.validateFields();
       setLoading(true);
       await createPrintTemplate({
         ...values,
@@ -199,6 +196,7 @@ const CardView: React.FC = () => {
       loadTemplates();
     } catch (error: any) {
       handleError(error, t('pages.system.printTemplates.createFailed'));
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -831,58 +829,59 @@ const CardView: React.FC = () => {
       </Modal>
 
       {/* 新建模板 Modal */}
-      <Modal
+      <FormModalTemplate
         title={t('pages.system.printTemplates.modalCreate')}
         open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={handleCreateSubmit}
-        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
-        confirmLoading={loading}
-      >
-        <Form form={createForm} layout="vertical" onValuesChange={(changed, all) => {
+        onClose={() => setCreateModalVisible(false)}
+        onFinish={handleCreateSubmit}
+        isEdit={false}
+        formRef={createFormRef}
+        loading={loading}
+        layout="vertical"
+        onValuesChange={(changed, all) => {
           if ('document_type' in changed && all.document_type) {
             const code = DOCUMENT_TYPE_TO_CODE[all.document_type];
-            if (code) createForm.setFieldValue('code', code);
+            if (code) createFormRef.current?.setFieldValue('code', code);
           }
-        }}>
-          <Form.Item
-            name="name"
-            label={t('pages.system.printTemplates.labelName')}
-            rules={[{ required: true, message: t('pages.system.printTemplates.nameRequired') }]}
-          >
-            <Input placeholder={t('pages.system.printTemplates.nameRequired')} />
-          </Form.Item>
-          <Form.Item
-            name="document_type"
-            label={t('pages.system.printTemplates.labelDocumentType')}
-            rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
-          >
-            <Select placeholder={t('pages.system.printTemplates.documentTypeRequired')} options={DOCUMENT_TYPE_OPTIONS} />
-          </Form.Item>
-          <Form.Item
-            name="code"
-            label={t('pages.system.printTemplates.labelCode')}
-            rules={[{ required: true, message: t('pages.system.printTemplates.codeRequired') }]}
-          >
-            <Input placeholder={t('pages.system.printTemplates.codeTooltip')} disabled />
-          </Form.Item>
-          <Form.Item
-            name="type"
-            label={t('pages.system.printTemplates.columnType')}
-            initialValue="pdf"
-            rules={[{ required: true, message: t('pages.system.printTemplates.outputFormatRequired') }]}
-          >
-            <Select>
-              <Select.Option value="pdf">PDF</Select.Option>
-              <Select.Option value="html">HTML</Select.Option>
-              <Select.Option value="image">Image</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="description" label={t('pages.system.printTemplates.labelDescription')}>
-            <TextArea rows={4} placeholder={t('pages.system.printTemplates.descPlaceholder')} />
-          </Form.Item>
-        </Form>
-      </Modal>
+        }}
+      >
+        <ProFormText
+          name="name"
+          label={t('pages.system.printTemplates.labelName')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.nameRequired') }]}
+          placeholder={t('pages.system.printTemplates.nameRequired')}
+        />
+        <ProFormSelect
+          name="document_type"
+          label={t('pages.system.printTemplates.labelDocumentType')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
+          placeholder={t('pages.system.printTemplates.documentTypeRequired')}
+          options={DOCUMENT_TYPE_OPTIONS}
+        />
+        <ProFormText
+          name="code"
+          label={t('pages.system.printTemplates.labelCode')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.codeRequired') }]}
+          placeholder={t('pages.system.printTemplates.codeTooltip')}
+          fieldProps={{ disabled: true }}
+        />
+        <ProFormSelect
+          name="type"
+          label={t('pages.system.printTemplates.columnType')}
+          initialValue="pdf"
+          rules={[{ required: true, message: t('pages.system.printTemplates.outputFormatRequired') }]}
+          options={[
+            { label: 'PDF', value: 'pdf' },
+            { label: 'HTML', value: 'html' },
+            { label: 'Image', value: 'image' },
+          ]}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.printTemplates.labelDescription')}
+          fieldProps={{ rows: 4, placeholder: t('pages.system.printTemplates.descPlaceholder') }}
+        />
+      </FormModalTemplate>
     </>
   );
 };

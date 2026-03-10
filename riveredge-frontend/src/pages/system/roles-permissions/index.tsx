@@ -65,6 +65,7 @@ import {
   UpdateRoleData,
   Permission,
 } from '../../../services/role';
+import { FormModalTemplate } from '../../../components/layout-templates';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import {
   PERMISSION_MODULE_NAMES,
@@ -612,10 +613,7 @@ const RolesPermissionsPage: React.FC = () => {
 
   useNewShortcut(handleCreateRole);
 
-  useSubmitShortcut(
-    roleModalVisible ? handleSubmitRole : copyModalVisible ? handleCopyPermissions : undefined,
-    roleModalVisible || copyModalVisible,
-  );
+  useSubmitShortcut(copyModalVisible ? handleCopyPermissions : undefined, copyModalVisible);
 
   /**
    * 提交角色表单（创建/更新）
@@ -981,47 +979,65 @@ const RolesPermissionsPage: React.FC = () => {
       </div>
 
       {/* 角色编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEditRole ? t('pages.system.roles.editRole') : t('pages.system.roles.createRole')}
         open={roleModalVisible}
-        onCancel={() => setRoleModalVisible(false)}
-        onOk={handleSubmitRole}
-        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
-        confirmLoading={roleFormLoading}
+        onClose={() => { setRoleModalVisible(false); setCurrentEditRole(null); }}
+        onFinish={async (values) => {
+          setRoleFormLoading(true);
+          try {
+            if (isEditRole && currentEditRole) {
+              await updateRole(currentEditRole.uuid, values as UpdateRoleData);
+              messageApi.success(t('pages.system.roles.updateSuccess'));
+            } else {
+              await createRole(values as CreateRoleData);
+              messageApi.success(t('pages.system.roles.createSuccess'));
+            }
+            setRoleModalVisible(false);
+            setCurrentEditRole(null);
+            await loadRoles();
+            if (isEditRole && currentEditRole && selectedRole?.uuid === currentEditRole.uuid) {
+              await handleSelectRole(currentEditRole);
+            }
+          } catch (error: any) {
+            messageApi.error(error.message || t('pages.system.roles.operationFailed'));
+            throw error;
+          } finally {
+            setRoleFormLoading(false);
+          }
+        }}
+        isEdit={isEditRole}
+        formRef={formRef}
+        loading={roleFormLoading}
         width={600}
+        layout="vertical"
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label={t('pages.system.roles.roleName')}
-            rules={[{ required: true, message: t('pages.system.roles.roleNameRequired') }]}
-            placeholder={t('pages.system.roles.roleNamePlaceholder')}
-          />
-          <ProFormText
-            name="code"
-            label={t('pages.system.roles.roleCode')}
-            rules={[
-              { required: true, message: t('pages.system.roles.roleCodeRequired') },
-              { pattern: /^[a-zA-Z0-9_]+$/, message: t('pages.system.roles.roleCodePattern') },
-            ]}
-            placeholder={t('pages.system.roles.roleCodePlaceholder')}
-          />
-          <ProFormTextArea
-            name="description"
-            label={t('pages.system.roles.description')}
-            placeholder={t('pages.system.roles.descriptionPlaceholder')}
-          />
-          <ProFormSwitch
-            name="is_active"
-            label={t('pages.system.roles.isEnabled')}
-            initialValue={true}
-          />
-        </ProForm>
-      </Modal>
+        <ProFormText
+          name="name"
+          label={t('pages.system.roles.roleName')}
+          rules={[{ required: true, message: t('pages.system.roles.roleNameRequired') }]}
+          placeholder={t('pages.system.roles.roleNamePlaceholder')}
+        />
+        <ProFormText
+          name="code"
+          label={t('pages.system.roles.roleCode')}
+          rules={[
+            { required: true, message: t('pages.system.roles.roleCodeRequired') },
+            { pattern: /^[a-zA-Z0-9_]+$/, message: t('pages.system.roles.roleCodePattern') },
+          ]}
+          placeholder={t('pages.system.roles.roleCodePlaceholder')}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.roles.description')}
+          placeholder={t('pages.system.roles.descriptionPlaceholder')}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('pages.system.roles.isEnabled')}
+          initialValue={true}
+        />
+      </FormModalTemplate>
 
       {/* 复制权限 Modal */}
       <Modal

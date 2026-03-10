@@ -9,9 +9,9 @@
  */
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
-import React, { useRef, useState, useEffect, Suspense, lazy } from 'react';
+import React, { useRef, useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -26,7 +26,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
+import { ListPageTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import {
   listSalesOrders,
@@ -118,6 +118,8 @@ const SalesOrdersPage: React.FC = () => {
     queryFn: getSalesOrderStatistics,
   });
 
+  const { token } = theme.useToken();
+
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
   // 与 UniTable viewTypes 同步：table=订单，detailTable/card/gantt=销售明细
@@ -153,6 +155,26 @@ const SalesOrdersPage: React.FC = () => {
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
   const [editingIncl, setEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
   const editingInclValueRef = useRef<number | null>(null);
+
+  const orderModalScrollRef = useRef<HTMLDivElement>(null);
+  const [orderModalScrollHint, setOrderModalScrollHint] = useState({ atTop: true, atBottom: true });
+  const updateOrderModalScrollHint = useCallback(() => {
+    const el = orderModalScrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const atTop = scrollTop <= 2;
+    const atBottom = scrollHeight - clientHeight <= 2 || scrollTop + clientHeight >= scrollHeight - 2;
+    setOrderModalScrollHint((prev) => (prev.atTop === atTop && prev.atBottom === atBottom ? prev : { atTop, atBottom }));
+  }, []);
+  useEffect(() => {
+    if (!modalVisible) return;
+    const t = setTimeout(updateOrderModalScrollHint, 0);
+    return () => clearTimeout(t);
+  }, [modalVisible, updateOrderModalScrollHint]);
+  const orderModalShadowColor = 'rgba(0,0,0,0.12)';
+  const orderModalContentBoxShadow = !orderModalScrollHint.atBottom
+    ? `inset 0 -6px 8px -6px ${orderModalShadowColor}`
+    : 'none';
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -1629,7 +1651,7 @@ const SalesOrdersPage: React.FC = () => {
         </SalesOrderIndicatorsProvider>
       </ListPageTemplate>
 
-      {/* 新建/编辑 Modal */}
+      {/* 新建/编辑 Modal：内容区滚动，底部操作按钮固定，单层边距 */}
       <Modal
         open={modalVisible}
         onCancel={() => {
@@ -1641,30 +1663,38 @@ const SalesOrdersPage: React.FC = () => {
         width={1200}
         footer={null}
         destroyOnHidden
+        className="form-modal-template-fixed-footer"
+        styles={{
+          body: {
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT,
+            overflow: 'hidden',
+            padding: 0,
+          },
+        }}
       >
-        <ProForm
-          formRef={formRef}
-          onFinish={async () => true} // Prevent default submission
-          layout="vertical"
-          submitter={{
-            render: () => (
-              <div style={{ textAlign: 'left', marginTop: 16 }}>
-                <Space>
-                  <Button onClick={() => setModalVisible(false)}>取消</Button>
-                  {!isEdit && (
-                    <Button onClick={() => onModalSubmit(true)}>
-                      保存为草稿
-                    </Button>
-                  )}
-                  <Button type="primary" onClick={() => onModalSubmit(false)}>
-                    {isEdit ? '更新' : '提交订单'}
-                  </Button>
-                </Space>
-              </div>
-            ),
-          }}
-        >
-          <Row gutter={16}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div
+            ref={orderModalScrollRef}
+            className="modal-content-scroll"
+            onScroll={updateOrderModalScrollHint}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              boxShadow: orderModalContentBoxShadow,
+            }}
+          >
+            <div className="form-modal-content-inner" style={{ padding: 0 }}>
+            <ProForm
+              formRef={formRef}
+              onFinish={async () => true} // Prevent default submission
+              layout="vertical"
+              submitter={false}
+            >
+              <Row gutter={16}>
             <Col span={12}>
               <ProFormText
                 name="order_code"
@@ -2171,9 +2201,13 @@ const SalesOrdersPage: React.FC = () => {
                           background-color: var(--ant-color-fill-alter) !important;
                           font-weight: 600;
                         }
-                        /* 固定操作列表头：不透明背景，避免与下拉/相邻列重叠（通过 onHeaderCell 精确命中） */
+                        /* 固定操作列表头：不透明背景，避免与下拉/相邻列重叠；使用主题变量以兼容暗色模式 */
                         .sales-order-detail-table .ant-table-thead > tr > th.sales-order-fixed-op-header {
-                          background: #fafafa !important;
+                          background: var(--ant-color-fill-alter) !important;
+                        }
+                        /* 固定操作列 body 单元格背景，随主题变化（暗色模式不再亮白） */
+                        .sales-order-detail-table .ant-table-cell-fix-right {
+                          background: var(--ant-color-bg-container) !important;
                         }
                         .sales-order-detail-table .ant-table {
                           border-top: 1px solid var(--ant-color-border);
@@ -2292,20 +2326,46 @@ const SalesOrdersPage: React.FC = () => {
             label="备注"
             placeholder="请输入备注"
           />
-        </ProForm>
+            </ProForm>
+            </div>
 
-        {importModalVisible && (
-          <Suspense fallback={null}>
-            <LazyUniImport
-              visible={importModalVisible}
-              onCancel={() => setImportModalVisible(false)}
-              onConfirm={handleItemImport}
-              title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-              headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-              exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-            />
-          </Suspense>
-        )}
+            {importModalVisible && (
+              <Suspense fallback={null}>
+                <LazyUniImport
+                  visible={importModalVisible}
+                  onCancel={() => setImportModalVisible(false)}
+                  onConfirm={handleItemImport}
+                  title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
+                  headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+                  exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+                />
+              </Suspense>
+            )}
+          </div>
+          <div
+            className="form-modal-footer"
+            style={{
+              flexShrink: 0,
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              padding: '16px 0 0 0',
+              background: token.colorBgContainer,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <Button onClick={() => setModalVisible(false)}>取消</Button>
+            {!isEdit && (
+              <Button onClick={() => onModalSubmit(true)}>
+                保存为草稿
+              </Button>
+            )}
+            <Button type="primary" onClick={() => onModalSubmit(false)}>
+              {isEdit ? '更新' : '提交订单'}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <CustomerFormModal

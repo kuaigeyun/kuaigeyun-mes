@@ -64,6 +64,49 @@
   overflow-y: auto;
 }
 
+/* 表单/新建类 Modal：仅一层边距，body 无 padding，由内部内容区统一 24px */
+.form-modal-template .ant-modal-body {
+  padding: 0 !important;
+}
+.form-modal-template-fixed-footer .ant-modal-body {
+  padding: 0 !important;
+}
+
+/* 表单/新建类 Modal 内容区内层：稳定类名供选择器使用，避免因多一层容器导致客户名称/发货方式等自定义组件样式选不到；保证宽度不因 flex 被压缩 */
+.form-modal-template .form-modal-content-inner,
+.form-modal-template-fixed-footer .form-modal-content-inner {
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 表单/新建类 Modal 内容区滚动条：仅显示滑块、无滑轨，颜色偏淡，滚动条左侧留 4px */
+.form-modal-template .modal-content-scroll,
+.form-modal-template-fixed-footer .modal-content-scroll {
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  -ms-overflow-style: auto;
+}
+.form-modal-template .modal-content-scroll::-webkit-scrollbar,
+.form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+  height: 6px;
+}
+.form-modal-template .modal-content-scroll::-webkit-scrollbar-thumb,
+.form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.form-modal-template .modal-content-scroll::-webkit-scrollbar-track,
+.form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.form-modal-template .modal-content-scroll::-webkit-scrollbar-corner,
+.form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */
 .ant-modal.modal-no-limit-height .ant-modal-body {
   max-height: none;
@@ -554,16 +597,34 @@ code {
   }
 }
 
+/* 全局 Modal body 限高时：与销售订单一致的表现 - 可见滚动条、底部阴影（模板类 Modal 的 body 不滚动，由内部 .modal-content-scroll 负责） */
 .ant-modal-body {
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  -ms-overflow-style: auto;
+  box-shadow: inset 0 -6px 8px -6px rgba(0, 0, 0, 0.12);
   &::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
+    display: block !important;
+    width: 6px;
+    height: 6px;
   }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.18);
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+.form-modal-template .ant-modal-body,
+.form-modal-template-fixed-footer .ant-modal-body {
+  box-shadow: none;
 }
 
 /* 全局：Modal 确认按钮组默认居左 */
@@ -576,6 +637,14 @@ code {
 }
 .ant-modal .ant-modal-footer .ant-space {
   justify-content: flex-start;
+}
+
+/* Modal 提交按钮区背景与弹层内容区一致（使用 colorBgElevated，随主题切换） */
+.form-modal-template .form-modal-footer,
+.form-modal-template-fixed-footer .form-modal-footer,
+.ant-modal .ant-modal-footer,
+.ant-modal .ant-pro-form-submitter {
+  background: var(--ant-colorBgElevated, var(--ant-color-bg-elevated, var(--ant-color-bg-container))) !important;
 }
 
 /* 全局：Modal 内表单标题为粗体 */
@@ -594,12 +663,12 @@ code {
   padding-inline-end: 56px !important;
 }
 
-/* 全局：Modal 关闭按钮（圆角跟随系统，红色系最佳实践） */
+/* 全局：Modal 关闭按钮（圆角跟随系统，红色系；颜色随主题切换） */
 .ant-modal .ant-modal-close {
   width: 32px !important;
   height: 32px !important;
-  background: #fff1f0 !important;
-  color: #cf1322 !important;
+  background: var(--ant-color-error-bg, #fff1f0) !important;
+  color: var(--ant-color-error, #cf1322) !important;
   border-radius: var(--ant-borderRadius, 6px) !important;
   inset-inline-end: 24px !important;
   top: 36px !important;
@@ -609,8 +678,8 @@ code {
   justify-content: center !important;
 }
 .ant-modal .ant-modal-close:hover {
-  background: #ffccc7 !important;
-  color: #a8071a !important;
+  background: var(--ant-color-error-border, #ffccc7) !important;
+  color: var(--ant-color-error, #a8071a) !important;
 }
 
 /* 全局：Modal 标题几何装饰（主题色竖条） */

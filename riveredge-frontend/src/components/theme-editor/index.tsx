@@ -552,20 +552,42 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         tabsBgColor: tabsBgColorValue || '',
       };
 
+      const themeMode = (values.colorMode as 'light' | 'dark' | 'auto') || 'light';
       const hasToken = !!getToken();
       if (hasToken) {
         // 用户已登录：通过 updatePreferences 持久化，app 内订阅会同步 themeStore
-        await useUserPreferenceStore.getState().updatePreferences({
-          theme: (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
-          theme_config: themeConfigForPreference,
-          tabs_persistence: tabsPersistenceValue,
-        });
+        try {
+          await useUserPreferenceStore.getState().updatePreferences({
+            theme: themeMode,
+            theme_config: themeConfigForPreference,
+            tabs_persistence: tabsPersistenceValue,
+          });
+        } catch (prefError: any) {
+          // 新建租户等场景下偏好接口可能 404（当前用户无法创建偏好设置），仍应用主题到当前会话
+          const isPreferenceUnavailable =
+            prefError?.response?.status === 404 ||
+            (typeof prefError?.message === 'string' && (
+              prefError.message.includes('无法创建偏好设置') ||
+              prefError.message.includes('非租户用户') ||
+              prefError.message.includes('404')
+            ));
+          if (isPreferenceUnavailable) {
+            const current = JSON.parse(
+              JSON.stringify(useUserPreferenceStore.getState().preferences)
+            );
+            current.theme = themeMode;
+            current.theme_config = themeConfigForPreference;
+            current.tabs_persistence = tabsPersistenceValue;
+            useUserPreferenceStore.setState({ preferences: current });
+            useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
+            message.warning('主题已应用；当前无法保存到服务器（可能尚未完成租户初始化），仅对当前会话有效。');
+          } else {
+            throw prefError;
+          }
+        }
       } else {
         // 用户未登录：仅应用主题到 store（供当前会话使用）
-        useThemeStore.getState().applyTheme(
-          (values.colorMode as 'light' | 'dark' | 'auto') || 'light',
-          themeConfigForPreference
-        );
+        useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference);
       }
 
       // 保存站点主题配置

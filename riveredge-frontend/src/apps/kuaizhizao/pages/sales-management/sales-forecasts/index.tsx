@@ -14,7 +14,7 @@ import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, Se
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import {
   listSalesForecasts,
   getSalesForecast,
@@ -510,28 +510,16 @@ const SalesForecastsPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      <Modal
-        open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+      <FormModalTemplate
         title={isEdit ? '编辑销售预测' : '新建销售预测'}
+        open={modalVisible}
+        onClose={() => { setModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+        onFinish={handleSave}
+        isEdit={isEdit}
+        formRef={formRef}
         width={1200}
-        footer={null}
-        destroyOnHidden
+        layout="vertical"
       >
-        <ProForm
-          formRef={formRef}
-          onFinish={handleSave}
-          layout="vertical"
-          submitter={{
-            searchConfig: { submitText: isEdit ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => { setModalVisible(false); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
-            render: (_, dom) => (
-              <div style={{ textAlign: 'left', marginTop: 16 }}>
-                <Space>{dom}</Space>
-              </div>
-            ),
-          }}
-        >
           <Row gutter={16}>
             <Col span={12}>
               <ProFormText
@@ -730,8 +718,7 @@ const SalesForecastsPage: React.FC = () => {
             </ProForm.Item>
           </div>
           <ProFormTextArea name="notes" label="备注" placeholder="选填" fieldProps={{ rows: 2 }} />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       <Drawer
         title="销售预测详情"

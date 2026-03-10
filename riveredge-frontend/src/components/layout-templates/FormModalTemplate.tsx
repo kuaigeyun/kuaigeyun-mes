@@ -8,19 +8,26 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode, useRef } from 'react';
-import { Modal, theme } from 'antd';
+import React, { ReactNode, useRef, useState, useCallback, useEffect } from 'react';
+import { Modal, Button, theme } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
 import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 
-/** Modal body 限高样式，避免整页出现滚动条 */
-const MODAL_BODY_LIMIT_STYLES = {
-  body: { maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT, overflowY: 'auto' as const },
+/** Modal body：固定底部操作区，仅内容区滚动并显示滚动条 */
+const MODAL_BODY_FLEX_STYLES = {
+  body: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT,
+    overflow: 'hidden',
+    padding: 0,
+  },
 };
 
 const { useToken } = theme;
+
 
 /**
  * 表单 Modal 模板属性
@@ -88,7 +95,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   children,
   width = MODAL_CONFIG.STANDARD_WIDTH,
   layout = FORM_LAYOUT.VERTICAL,
-  grid = true,
+  grid = false,
   loading = false,
   formRef: externalFormRef,
   onValuesChange,
@@ -99,8 +106,29 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   const { token } = useToken();
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollHint, setScrollHint] = useState({ atTop: true, atBottom: true });
+
+  const updateScrollHint = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const atTop = scrollTop <= 2;
+    const atBottom = scrollHeight - clientHeight <= 2 || scrollTop + clientHeight >= scrollHeight - 2;
+    setScrollHint((prev) => (prev.atTop === atTop && prev.atBottom === atBottom ? prev : { atTop, atBottom }));
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(updateScrollHint, 0);
+    return () => clearTimeout(t);
+  }, [open, updateScrollHint]);
 
   useSubmitShortcut(() => formRef.current?.submit(), open);
+
+  const contentBoxShadow = !scrollHint.atBottom
+    ? 'inset 0 -6px 8px -6px rgba(0,0,0,0.12)'
+    : 'none';
 
   return (
     <Modal
@@ -110,37 +138,59 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       footer={null}
       width={width}
       destroyOnHidden
-      className={className}
+      className={[className, 'form-modal-template'].filter(Boolean).join(' ')}
       modalRender={modalRender}
-      styles={MODAL_BODY_LIMIT_STYLES}
+      styles={MODAL_BODY_FLEX_STYLES}
     >
-      <ProForm
-        formRef={formRef}
-        loading={loading}
-        onFinish={onFinish}
-        onValuesChange={onValuesChange}
-        initialValues={initialValues}
-        layout={layout}
-        grid={grid}
-        rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
-        submitter={{
-          searchConfig: {
-            submitText: (isEdit ? '更新' : '创建') + SUBMIT_SHORTCUT_HINT,
-            resetText: '取消',
-          },
-          resetButtonProps: {
-            onClick: onClose,
-          },
-          render: (_props: any, doms: React.ReactNode) => (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-              {doms}
-              {extraFooter}
-            </div>
-          ),
-        }}
-      >
-        {children}
-      </ProForm>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div
+          ref={scrollRef}
+          className="modal-content-scroll"
+          onScroll={updateScrollHint}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            boxShadow: contentBoxShadow,
+          }}
+        >
+          <div className="form-modal-content-inner" style={{ padding: 0 }}>
+            <ProForm
+              formRef={formRef}
+              loading={loading}
+              onFinish={onFinish}
+              onValuesChange={onValuesChange}
+              initialValues={initialValues}
+              layout={layout}
+              grid={grid}
+              rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
+              submitter={false}
+            >
+              {children}
+            </ProForm>
+          </div>
+        </div>
+        <div
+          className="form-modal-footer"
+          style={{
+            flexShrink: 0,
+            borderTop: `1px solid ${token.colorBorderSecondary}`,
+            padding: '16px 0 0 0',
+            background: token.colorBgContainer,
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          <Button onClick={onClose}>取消</Button>
+          <Button type="primary" loading={loading} onClick={() => formRef.current?.submit()}>
+            {(isEdit ? '更新' : '创建') + SUBMIT_SHORTCUT_HINT}
+          </Button>
+          {extraFooter}
+        </div>
+      </div>
     </Modal>
   );
 };

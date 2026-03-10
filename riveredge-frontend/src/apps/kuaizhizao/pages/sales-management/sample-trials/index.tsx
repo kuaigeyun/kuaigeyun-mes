@@ -18,7 +18,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate } from '../../../../../components/layout-templates';
 import { sampleTrialApi } from '../../../services/sample-trial';
 import { customerApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
@@ -902,34 +902,21 @@ const SampleTrialsPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
 
-      <Modal
-        open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+      <FormModalTemplate
         title={editingId != null ? '编辑样品试用单' : '新建样品试用单'}
+        open={modalVisible}
+        onClose={() => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); }}
+        onFinish={async (values) => {
+          if (editingId != null) await handleEditSubmit(values);
+          else await handleCreateSubmit(values);
+        }}
+        isEdit={editingId != null}
+        formRef={formRef}
         width={1200}
-        footer={null}
-        destroyOnHidden
+        layout="vertical"
       >
-        <ProForm
-          formRef={formRef}
-          layout="vertical"
-          onFinish={async (values) => {
-            if (editingId != null) await handleEditSubmit(values);
-            else await handleCreateSubmit(values);
-          }}
-          submitter={{
-            searchConfig: { submitText: editingId != null ? '更新' : '提交', resetText: '取消' },
-            resetButtonProps: { onClick: () => { setModalVisible(false); setEditingId(null); setEffectiveRuleCode(null); setEffectiveAutoGen(null); } },
-            render: (_, dom) => (
-              <div style={{ textAlign: 'left', marginTop: 16 }}>
-                <Space>{dom}</Space>
-              </div>
-            ),
-          }}
-        >
-          {sampleTrialFormContent}
-        </ProForm>
-      </Modal>
+        {sampleTrialFormContent}
+      </FormModalTemplate>
 
       <Modal
         title="创建样品出库"
