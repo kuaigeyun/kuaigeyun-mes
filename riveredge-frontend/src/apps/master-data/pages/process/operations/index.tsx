@@ -11,6 +11,8 @@ import { App, Popconfirm, Button, Tag, Space, Card, Modal } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { OperationFormModal } from '../../../components/OperationFormModal';
 import { operationApi } from '../../../services/process';
@@ -53,6 +55,8 @@ const OperationsPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: Operation) => {
     setEditUuid(record.uuid);
@@ -510,7 +514,7 @@ const OperationsPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建工序
+            {'新建工序' + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-qrcode"

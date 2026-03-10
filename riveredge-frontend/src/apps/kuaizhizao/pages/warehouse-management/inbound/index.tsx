@@ -9,6 +9,8 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Card, Table, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
@@ -68,13 +70,12 @@ const InboundPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
 
-  /**
-   * 处理创建入库单
-   */
   const handleCreate = () => {
-    setInboundType('purchase'); // 重置为默认类型
+    setInboundType('purchase');
     setCreateModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   /**
    * 处理查看详情
@@ -394,7 +395,7 @@ const InboundPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建入库单
+            {'新建入库单' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
       />

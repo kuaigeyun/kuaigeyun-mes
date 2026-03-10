@@ -13,6 +13,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutl
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
@@ -442,6 +444,8 @@ const SOPPage: React.FC = () => {
     setModalVisible(true);
   };
 
+  useNewShortcut(handleSelectSingleCreate);
+
   /**
    * 获取工序名称
    */
@@ -649,7 +653,7 @@ const SOPPage: React.FC = () => {
         toolBarRender={() => [
           <Button.Group key="create">
             <Button type="primary" icon={<PlusOutlined />} onClick={handleSelectSingleCreate}>
-              新建SOP
+              {'新建SOP' + NEW_SHORTCUT_HINT}
             </Button>
             <Dropdown
               menu={{

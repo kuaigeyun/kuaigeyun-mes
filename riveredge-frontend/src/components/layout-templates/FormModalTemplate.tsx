@@ -12,6 +12,8 @@ import React, { ReactNode, useRef } from 'react';
 import { Modal, theme } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
+import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
 
 /** Modal body 限高样式，避免整页出现滚动条 */
 const MODAL_BODY_LIMIT_STYLES = {
@@ -98,6 +100,8 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
 
+  useSubmitShortcut(() => formRef.current?.submit(), open);
+
   return (
     <Modal
       title={title}
@@ -121,7 +125,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
         submitter={{
           searchConfig: {
-            submitText: isEdit ? '更新' : '创建',
+            submitText: (isEdit ? '更新' : '创建') + SUBMIT_SHORTCUT_HINT,
             resetText: '取消',
           },
           resetButtonProps: {

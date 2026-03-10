@@ -10,6 +10,8 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
 import { defectTypeApi } from '../../../services/process';
@@ -43,6 +45,8 @@ const DefectTypesPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: DefectType) => {
     setEditUuid(record.uuid);
@@ -499,7 +503,7 @@ const DefectTypesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建不良品
+            {'新建不良品' + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-delete"

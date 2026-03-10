@@ -13,6 +13,8 @@ import { App, Tag, Space, Button, Popconfirm, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
 import { variantAttributeApi } from '../../../services/variant-attribute';
@@ -198,6 +200,8 @@ const VariantAttributesPage: React.FC = () => {
     formRef.current?.resetFields();
   };
 
+  useNewShortcut(handleCreate);
+
   /**
    * 处理编辑
    */
@@ -368,7 +372,7 @@ const VariantAttributesPage: React.FC = () => {
                 icon={<PlusOutlined />}
                 onClick={handleCreate}
               >
-                新建属性定义
+                {'新建属性定义' + NEW_SHORTCUT_HINT}
               </Button>
               <Button
                 danger

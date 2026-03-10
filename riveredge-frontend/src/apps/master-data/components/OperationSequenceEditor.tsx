@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography } from 'antd';
+import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -160,6 +162,11 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     setReplacementOperationUuid(undefined);
     message.success(t('app.master-data.operationSequence.replaceSuccess'));
   };
+
+  useSubmitShortcut(
+    addModalVisible ? handleAddOperation : replaceModalVisible ? handleReplaceOperation : undefined,
+    addModalVisible || replaceModalVisible,
+  );
 
   const availableOperations = allOperations.filter((op) => !operations.some((a) => a.uuid === op.uuid));
   const getAvailableForReplace = (excludeUuid: string | null) => {
@@ -401,7 +408,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         </DragOverlay>
       </DndContext>
 
-      <Modal title={t('app.master-data.operationSequence.selectOperation')} open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText={t('common.confirm')} cancelText={t('common.cancel')} okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
+      <Modal title={t('app.master-data.operationSequence.selectOperation')} open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} cancelText={t('common.cancel')} okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
         <Select
           mode="multiple"
           placeholder={t('app.master-data.operationSequence.selectOperationPlaceholder')}
@@ -423,7 +430,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         )}
       </Modal>
 
-      <Modal title={t('app.master-data.operationSequence.replaceOperation')} open={replaceModalVisible} onOk={handleReplaceOperation} onCancel={() => { setReplaceModalVisible(false); setReplacingOperationUuid(null); setReplacementOperationUuid(undefined); }} okText={t('common.confirm')} cancelText={t('common.cancel')} okButtonProps={{ disabled: !replacementOperationUuid || loading }}>
+      <Modal title={t('app.master-data.operationSequence.replaceOperation')} open={replaceModalVisible} onOk={handleReplaceOperation} onCancel={() => { setReplaceModalVisible(false); setReplacingOperationUuid(null); setReplacementOperationUuid(undefined); }} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} cancelText={t('common.cancel')} okButtonProps={{ disabled: !replacementOperationUuid || loading }}>
         <div style={{ marginBottom: 16 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.currentOperation')}</Typography.Text>
           <div style={{ marginTop: 4 }}>

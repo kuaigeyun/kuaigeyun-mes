@@ -56,6 +56,8 @@ import ErrorBoundary from '../error-boundary'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
+import { useNewShortcut } from '../../hooks/useNewShortcut'
+import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
 
 /**
  * 从 columns 自动生成导入配置
@@ -594,6 +596,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
 
+  // 全局 Alt+N：当前页有新建按钮时，按 Alt+N 触发新建（与点击新建按钮一致）
+  useNewShortcut(showCreateButton && onCreate ? onCreate : undefined);
+
   // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)
   const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
@@ -977,11 +982,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return headerActions
     }
 
-    // 新建按钮（第一位）
+    // 新建按钮（第一位），带 Alt+N 快捷键提示
     if (showCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
-          {createButtonText ?? t('components.uniTable.create')}
+          {(createButtonText ?? t('components.uniTable.create')) + NEW_SHORTCUT_HINT}
         </Button>
       )
     }

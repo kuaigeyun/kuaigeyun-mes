@@ -10,6 +10,8 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { workCenterApi, workstationApi } from '../../../services/factory';
 import { WorkCenterFormModal } from '../../../components/WorkCenterFormModal';
@@ -53,6 +55,8 @@ const WorkCentersPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: WorkCenter) => {
     setEditUuid(record.uuid);
@@ -549,7 +553,7 @@ const WorkCentersPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              {t('field.workCenter.createTitle')}
+              {t('field.workCenter.createTitle') + NEW_SHORTCUT_HINT}
             </Button>,
             <Popconfirm
               key="batchDelete"

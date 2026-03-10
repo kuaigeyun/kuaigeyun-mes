@@ -10,6 +10,8 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider, Spin, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, BranchesOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
@@ -50,6 +52,8 @@ const ProcessRoutesPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: ProcessRoute) => {
     setEditUuid(record.uuid);
@@ -505,7 +509,7 @@ const ProcessRoutesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            新建工艺路线
+            {'新建工艺路线' + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-delete"

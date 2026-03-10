@@ -11,6 +11,8 @@ import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'an
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { productionLineApi, workshopApi } from '../../../services/factory';
 import { ProductionLineFormModal } from '../../../components/ProductionLineFormModal';
@@ -55,6 +57,8 @@ const ProductionLinesPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: ProductionLine) => {
     setEditUuid(record.uuid);
@@ -758,7 +762,7 @@ const ProductionLinesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {t('app.master-data.productionLines.create')}
+            {t('app.master-data.productionLines.create') + NEW_SHORTCUT_HINT}
           </Button>,
           <Popconfirm
             key="batchDelete"

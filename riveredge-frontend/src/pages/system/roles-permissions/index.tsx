@@ -27,6 +27,10 @@ import {
   Flex,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNewShortcut } from '../../../hooks/useNewShortcut';
+import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../utils/globalNewShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import {
   PlusOutlined,
   EditOutlined,
@@ -599,15 +603,19 @@ const RolesPermissionsPage: React.FC = () => {
     }
   };
 
-  /**
-   * 新建角色
-   */
   const handleCreateRole = () => {
     setIsEditRole(false);
     setCurrentEditRole(null);
     setRoleModalVisible(true);
     formRef.current?.resetFields();
   };
+
+  useNewShortcut(handleCreateRole);
+
+  useSubmitShortcut(
+    roleModalVisible ? handleSubmitRole : copyModalVisible ? handleCopyPermissions : undefined,
+    roleModalVisible || copyModalVisible,
+  );
 
   /**
    * 提交角色表单（创建/更新）
@@ -744,7 +752,7 @@ const RolesPermissionsPage: React.FC = () => {
               block
               onClick={handleCreateRole}
             >
-              {t('pages.system.roles.createRole')}
+              {t('pages.system.roles.createRole') + NEW_SHORTCUT_HINT}
             </Button>
             <Button
               block
@@ -978,6 +986,7 @@ const RolesPermissionsPage: React.FC = () => {
         open={roleModalVisible}
         onCancel={() => setRoleModalVisible(false)}
         onOk={handleSubmitRole}
+        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
         confirmLoading={roleFormLoading}
         width={600}
       >
@@ -1023,6 +1032,7 @@ const RolesPermissionsPage: React.FC = () => {
           setSourceRoleUuid(null);
         }}
         onOk={handleCopyPermissions}
+        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
         confirmLoading={copying}
         okButtonProps={{ disabled: !sourceRoleUuid }}
       >

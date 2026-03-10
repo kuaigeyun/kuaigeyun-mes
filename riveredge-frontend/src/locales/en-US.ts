@@ -1096,6 +1096,13 @@ export default {
   'common.copyFailed': 'Copy failed',
   'common.refresh': 'Refresh',
   'common.close': 'Close',
+  'common.shortcutHelpTitle': 'Keyboard Shortcuts',
+  'common.shortcutHelpIntro': 'Use these shortcuts to work faster with less mouse.',
+  'common.shortcutSearch': 'Focus top search',
+  'common.shortcutNew': 'New (when page has a New button)',
+  'common.shortcutSubmit': 'Submit current modal',
+  'common.shortcutHelp': 'Show this help',
+  'common.shortcutHelpHint': 'Press ? or Esc to close',
 
   // Go Live Assistant
   'goLiveAssistant.title': 'Go Live Assistant',

@@ -10,6 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Form, Select, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
+import { useNewShortcut } from '../../../hooks/useNewShortcut';
+import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../utils/globalNewShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import {
   getPrintTemplateList,
   getPrintTemplateByUuid,
@@ -174,6 +178,9 @@ const CardView: React.FC = () => {
     createForm.resetFields();
   };
 
+  useNewShortcut(handleCreate);
+  useSubmitShortcut(handleCreateSubmit, createModalVisible);
+
   /**
    * 提交新建模板
    */
@@ -328,7 +335,7 @@ const CardView: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {t('pages.system.printTemplates.createButtonShort')}
+            {t('pages.system.printTemplates.createButtonShort') + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="refresh"
@@ -829,6 +836,7 @@ const CardView: React.FC = () => {
         open={createModalVisible}
         onCancel={() => setCreateModalVisible(false)}
         onOk={handleCreateSubmit}
+        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
         confirmLoading={loading}
       >
         <Form form={createForm} layout="vertical" onValuesChange={(changed, all) => {

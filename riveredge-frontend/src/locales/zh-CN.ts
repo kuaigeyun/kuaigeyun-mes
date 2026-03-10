@@ -1103,6 +1103,13 @@ export default {
   'common.copyFailed': '复制失败',
   'common.refresh': '刷新',
   'common.close': '关闭',
+  'common.shortcutHelpTitle': '键盘快捷键',
+  'common.shortcutHelpIntro': '使用以下快捷键减少鼠标操作，提高效率。',
+  'common.shortcutSearch': '聚焦顶部搜索',
+  'common.shortcutNew': '新建（当前页有新建按钮时）',
+  'common.shortcutSubmit': '提交当前弹窗',
+  'common.shortcutHelp': '显示本帮助',
+  'common.shortcutHelpHint': '按 ? 或 Esc 关闭',
 
   // 上线助手
   'goLiveAssistant.title': '上线助手',

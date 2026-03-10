@@ -11,6 +11,8 @@ import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'an
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import { StorageAreaFormModal } from '../../../components/StorageAreaFormModal';
@@ -55,6 +57,8 @@ const StorageAreasPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: StorageArea) => {
     setEditUuid(record.uuid);
@@ -755,7 +759,7 @@ const StorageAreasPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {t('app.master-data.storageAreas.create')}
+            {t('app.master-data.storageAreas.create') + NEW_SHORTCUT_HINT}
           </Button>,
           <Popconfirm
             key="batchDelete"

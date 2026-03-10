@@ -9,6 +9,8 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker }
 import { App, Button, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
@@ -44,6 +46,8 @@ const ToolMaintenancesPage: React.FC = () => {
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ maintenance_date: dayjs(), result: '完成' });
   };
+
+  useNewShortcut(handleCreate);
 
   const handleSubmit = async (values: any) => {
     try {
@@ -91,7 +95,7 @@ const ToolMaintenancesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            新建维保记录
+            {'新建维保记录' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}

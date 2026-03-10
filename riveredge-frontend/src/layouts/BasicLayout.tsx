@@ -24,7 +24,7 @@ import {
   DeleteOutlined,
   RocketOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Alert } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Alert, Modal } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -75,6 +75,9 @@ import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost } from '../utils/avatar';
+import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
+import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
+import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { getFilePreview } from '../services/file';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
@@ -686,6 +689,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
   const [goLiveAssistantOpen, setGoLiveAssistantOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   // 获取消息统计
   const { data: messageStats, refetch: refetchMessageStats } = useQuery({
@@ -1068,24 +1072,63 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   /**
-   * 键盘快捷键：Ctrl+K / Cmd+K 聚焦搜索框
+   * 键盘快捷键：Ctrl+K/ slash 聚焦搜索；Alt+N 新建；Ctrl+Enter/Ctrl+S 提交弹窗；? 显示快捷键帮助
+   * 使用捕获阶段并阻止默认，避免 Alt 被系统/浏览器抢走（如 Windows 菜单栏）
    */
   useEffect(() => {
+    const isInputLike = (target: EventTarget | null) => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const el = target as HTMLElement;
+      const tag = el.tagName?.toLowerCase();
+      const role = el.getAttribute?.('role');
+      const editable = el.isContentEditable;
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || role === 'textbox' || editable;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        // 聚焦搜索框
         const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
-        if (searchInput) {
-          searchInput.focus();
+        if (searchInput) searchInput.focus();
+        return;
+      }
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isInputLike(e.target)) {
+        e.preventDefault();
+        const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
+        if (searchInput) searchInput.focus();
+        return;
+      }
+      if (e.shiftKey && e.key === '?') {
+        e.preventDefault();
+        setShortcutHelpOpen((open) => !open);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        if (hasSubmitHandler()) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerSubmit();
+        }
+        return;
+      }
+      if (e.ctrlKey && e.key === 'Enter') {
+        if (hasSubmitHandler()) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerSubmit();
+        }
+      }
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        if (hasNewHandler()) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerNew();
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
   /**
@@ -3216,11 +3259,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
         }
         /* 搜索框 hover 状态 - 浅色模式浅色背景无hover */
-        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
-        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover {
           border: none !important;
           box-shadow: none !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+        }
+        /* 搜索框聚焦时外侧框线强调，使用户意识到处于搜索状态 */
+        .ant-pro-layout .ant-pro-layout-header .header-search-wrapper .ant-input-affix-wrapper-focused {
+          border: none !important;
+          box-shadow: 0 0 0 2px ${isLightModeLightBg ? token.colorPrimaryBorder : 'rgba(255, 255, 255, 0.5)'} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.15)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input {
           background-color: transparent !important;
@@ -3692,7 +3740,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 menuData={filteredMenuData}
                 isLightModeLightBg={isLightModeLightBg}
                 token={token}
-                placeholder={t('common.searchPlaceholder')}
+                placeholder={`${t('common.searchPlaceholder')} (Ctrl+K)`}
               />
             </span>
           );
@@ -4247,6 +4295,53 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         open={goLiveAssistantOpen}
         onClose={() => setGoLiveAssistantOpen(false)}
       />
+
+      {/* 键盘快捷键帮助 */}
+      <Modal
+        title={t('common.shortcutHelpTitle')}
+        open={shortcutHelpOpen}
+        onCancel={() => setShortcutHelpOpen(false)}
+        footer={null}
+        width={420}
+        centered
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          {t('common.shortcutHelpIntro')}
+        </Typography.Paragraph>
+        <List
+          size="small"
+          dataSource={[
+            { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
+            { keys: '/', desc: t('common.shortcutSearch') },
+            { keys: 'Alt + N', desc: t('common.shortcutNew') },
+            { keys: 'Ctrl + Enter', desc: t('common.shortcutSubmit') },
+            { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
+            { keys: '?', desc: t('common.shortcutHelp') },
+          ]}
+          renderItem={({ keys, desc }) => (
+            <List.Item>
+              <Space>
+                <kbd style={{
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  background: token.colorFillSecondary,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  fontSize: 12,
+                  fontFamily: CODE_FONT_FAMILY,
+                  minWidth: 88,
+                  textAlign: 'center',
+                }}>
+                  {keys}
+                </kbd>
+                <span>{desc}</span>
+              </Space>
+            </List.Item>
+          )}
+        />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('common.shortcutHelpHint')}
+        </Typography.Text>
+      </Modal>
 
       {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
       <IterationFloatButton />

@@ -13,6 +13,8 @@ import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { toolApi } from '../../../services/equipment';
 import { batchImport } from '../../../../../utils/batchOperations';
 import dayjs from 'dayjs';
@@ -275,6 +277,11 @@ const ToolLedgerPage: React.FC = () => {
       messageApi.error(e?.message || '保存失败');
     }
   };
+
+  useSubmitShortcut(
+    usageModalVisible ? handleSubmitCheckout : maintModalVisible ? handleSubmitMaintenance : calibModalVisible ? handleSubmitCalibration : undefined,
+    usageModalVisible || maintModalVisible || calibModalVisible,
+  );
 
   const handleSubmit = async (values: any) => {
     try {
@@ -751,7 +758,7 @@ const ToolLedgerPage: React.FC = () => {
         }
       />
 
-      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="operator_name" label="领用人"><Input placeholder="请输入领用人" /></Form.Item>
@@ -768,7 +775,7 @@ const ToolLedgerPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={maintForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="maintenance_type" label="维保类型" rules={[{ required: true }]}>
@@ -791,7 +798,7 @@ const ToolLedgerPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
           <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>

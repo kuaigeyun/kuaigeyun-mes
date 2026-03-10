@@ -11,6 +11,8 @@ import { ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { batchRuleApi } from '../../../services/batchSerialRules';
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
@@ -38,6 +40,8 @@ const BatchRulesPage: React.FC = () => {
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ seqStart: 1, seqStep: 1, isActive: true });
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = async (record: BatchRule) => {
     setIsEdit(true);
@@ -166,7 +170,7 @@ const BatchRulesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('pages.system.create')}
+            {t('pages.system.create') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
       />

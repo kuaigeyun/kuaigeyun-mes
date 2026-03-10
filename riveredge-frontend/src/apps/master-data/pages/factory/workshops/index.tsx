@@ -11,6 +11,8 @@ import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'an
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
 import { workshopApi, plantApi } from '../../../services/factory';
@@ -92,6 +94,8 @@ const WorkshopsPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   const handleEdit = (record: Workshop) => {
     setEditUuid(record.uuid);
@@ -932,7 +936,7 @@ const WorkshopsPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {t('app.master-data.workshops.create')}
+            {t('app.master-data.workshops.create') + NEW_SHORTCUT_HINT}
           </Button>,
           <Popconfirm
             key="batchDelete"

@@ -10,6 +10,8 @@ import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerApi } from '../../../services/supply-chain';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
@@ -43,6 +45,8 @@ const CustomersPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  useNewShortcut(handleCreate);
 
   /**
    * 处理编辑客户
@@ -638,7 +642,7 @@ const CustomersPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {t('app.master-data.customers.create')}
+            {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="batch-delete"

@@ -16,6 +16,8 @@ import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined, StarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
@@ -280,6 +282,8 @@ const BOMPage: React.FC = () => {
       console.error('获取编码规则配置失败:', error);
     }
   };
+
+  useNewShortcut(handleCreate);
 
   /**
    * 处理编辑BOM（按主料+版本加载完整 BOM 结构，支持增删改子件）
@@ -1672,7 +1676,7 @@ const BOMPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              新建BOM
+              {'新建BOM' + NEW_SHORTCUT_HINT}
             </Button>
             <Button
               disabled={selectedRowKeys.length === 0}
