@@ -47,10 +47,11 @@ export default function PlatformSettingsPage() {
   const [faviconCropModalVisible, setFaviconCropModalVisible] = useState(false);
   const [selectedFaviconFile, setSelectedFaviconFile] = useState<File | null>(null);
 
-  // 获取平台设置信息
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platformSettings'],
     queryFn: getPlatformSettings,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
 
   // 更新平台设置

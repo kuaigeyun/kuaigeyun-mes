@@ -120,7 +120,25 @@ export const useConfigStore = create<ConfigState>()(
     }),
     {
       name: 'system-config-storage',
-      partialize: (state) => ({ configs: state.configs }), // 只持久化配置数据
+      partialize: (state) => ({ configs: state.configs, initialized: state.initialized }),
     }
   )
 );
+
+const PERSIST_KEY = 'system-config-storage';
+
+/**
+ * 同步从 localStorage 读取已持久化的 configs（用于首帧渲染，避免 persist 异步注水前的空白）
+ */
+export function getPersistedConfigs(): Record<string, any> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { configs?: Record<string, any> }; configs?: Record<string, any> };
+    const configs = parsed?.state?.configs ?? parsed?.configs ?? null;
+    return configs && typeof configs === 'object' ? configs : null;
+  } catch {
+    return null;
+  }
+}

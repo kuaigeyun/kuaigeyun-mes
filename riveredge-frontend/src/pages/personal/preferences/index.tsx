@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography } from 'antd';
-import { useUserPreferenceStore } from '../../../stores/userPreferenceStore';
+import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
 import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
 import i18n from '../../../config/i18n';
@@ -63,6 +63,17 @@ const UserPreferencesPage: React.FC = () => {
   const storeLoading = useUserPreferenceStore((s) => s.loading);
   const initialized = useUserPreferenceStore((s) => s.initialized);
   const [languages, setLanguages] = useState<Language[]>([]);
+  const [formInitialValues] = useState<Record<string, any>>(() => {
+    const cached = readCachedPreferencesForCurrentUser();
+    if (!cached || Object.keys(cached).length === 0) return defaultPreferenceValues;
+    return {
+      ...defaultPreferenceValues,
+      ...cached,
+      theme_config: { ...defaultPreferenceValues.theme_config, ...(cached.theme_config || {}) },
+      ui: { ...defaultPreferenceValues.ui, ...(cached.ui || {}) },
+      notifications: { ...defaultPreferenceValues.notifications, ...(cached.notifications || {}) },
+    };
+  });
 
   /**
    * 加载偏好设置和语言列表
@@ -193,7 +204,7 @@ const UserPreferencesPage: React.FC = () => {
       <Card title={t('pages.personal.preferences.title')} loading={storeLoading} styles={{ body: { padding: '24px 24px 16px' } }}>
         <ProForm
           formRef={formRef}
-          initialValues={defaultPreferenceValues}
+          initialValues={formInitialValues}
           onFinish={handleSubmit}
           submitter={{
             searchConfig: { submitText: t('pages.personal.preferences.save') },

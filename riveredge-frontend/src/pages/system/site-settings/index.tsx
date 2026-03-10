@@ -5,7 +5,7 @@
  * 支持站点基本信息、Logo、邀请注册开关等配置。
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -15,7 +15,7 @@ import {
   getSiteSetting,
   updateSiteSetting,
 } from '../../../services/siteSetting';
-import { useConfigStore } from '../../../stores/configStore';
+import { useConfigStore, getPersistedConfigs } from '../../../stores/configStore';
 import { useThemeStore } from '../../../stores/themeStore';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
 import { 
@@ -25,15 +25,78 @@ import {
 } from '../../../services/dataDictionary';
 import { getLanguageList } from '../../../services/language';
 import ImageCropper from '../../../components/image-cropper';
+import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
 
 /**
  * 站点设置页面组件
  */
+/** 从 configStore 构建表单初始值（与 loadSiteSetting 结构一致），用于首屏立即展示，避免空数据再重载 */
+function getInitialValuesFromConfigStore(
+  configs: Record<string, any>,
+  normalizeColorValue: (color: any, defaultVal: string) => string
+) {
+  const themeConfig = configs.theme_config || {};
+  const legacyThemeColor = configs.theme_color;
+  const normalizedThemeColor = normalizeColorValue(
+    legacyThemeColor || themeConfig.colorPrimary,
+    '#1890ff'
+  );
+  return {
+    site_name: configs.site_name ?? '',
+    site_logo: configs.site_logo ?? '',
+    organization_name: configs.organization_name ?? '',
+    organization_address: configs.organization_address ?? '',
+    contact_info: configs.contact_info ?? '',
+    default_currency: configs.default_currency ?? 'CNY',
+    date_format: configs.date_format ?? 'YYYY-MM-DD',
+    default_language: configs.default_language ?? 'zh-CN',
+    timezone: configs.timezone ?? 'Asia/Shanghai',
+    theme_color: normalizedThemeColor,
+    theme_borderRadius: themeConfig.borderRadius ?? 6,
+    theme_fontSize: themeConfig.fontSize ?? 14,
+    theme_compact: themeConfig.compact ?? false,
+    enable_invitation: configs.enable_invitation !== false,
+    enable_register: configs.enable_register !== false,
+    copyright: configs.copyright ?? '',
+    description: configs.description ?? '',
+    'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
+    'security.inactivity_timeout': configs['security.inactivity_timeout'] ?? configs.security?.inactivity_timeout ?? 1800,
+    'security.user_cache_time': configs['security.user_cache_time'] ?? configs.security?.user_cache_time ?? 300,
+    'ui.max_tabs': configs['ui.max_tabs'] ?? configs.ui?.max_tabs ?? 20,
+    'ui.default_page_size': configs['ui.default_page_size'] ?? configs.ui?.default_page_size ?? 20,
+    'ui.table_loading_delay': configs['ui.table_loading_delay'] ?? configs.ui?.table_loading_delay ?? 800,
+    'theme_config.colorPrimary': configs['theme_config.colorPrimary'] ?? themeConfig.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
+    'network.timeout': configs['network.timeout'] ?? configs.network?.timeout ?? 10000,
+    'system.max_retries': configs['system.max_retries'] ?? configs.system?.max_retries ?? 3,
+  };
+}
+
+const DEFAULT_FORM_INITIAL = {
+  default_currency: 'CNY',
+  date_format: 'YYYY-MM-DD',
+  default_language: 'zh-CN',
+  timezone: 'Asia/Shanghai',
+  enable_invitation: true,
+  enable_register: true,
+} as const;
+
+/** 同步用：仅支持字符串颜色，用于首帧从 localStorage 读出的 configs */
+const syncNormalizeColor = (color: any, defaultVal: string): string =>
+  typeof color === 'string' ? color : defaultVal;
+
 const SiteSettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
+  const configs = useConfigStore((s) => s.configs);
+  const initialized = useConfigStore((s) => s.initialized);
   const [form] = Form.useForm();
+  // 首帧即用持久化 configs 填表，避免 persist 异步注水前的空白或重载感
+  const [formInitialValues] = useState<Record<string, any>>(() => {
+    const persisted = getPersistedConfigs();
+    if (!persisted || !('site_name' in persisted)) return { ...DEFAULT_FORM_INITIAL };
+    return getInitialValuesFromConfigStore(persisted, syncNormalizeColor);
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
@@ -41,9 +104,9 @@ const SiteSettingsPage: React.FC = () => {
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
-  const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>([]);
+  const [currencyOptions, setCurrencyOptions] = useState<DictionaryItem[]>(() => getSiteSettingsDictCache()?.currency ?? []);
   const systemSettingsRef = React.useRef<Record<string, any>>({});
-  const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>([]);
+  const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>(() => getSiteSettingsDictCache()?.timezone ?? []);
 
   /**
    * 判断字符串是否是UUID格式
@@ -91,8 +154,7 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
-  // 语言选项
-  const [languageOptions, setLanguageOptions] = useState<any[]>([]);
+  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string; key: string }[]>(() => getSiteSettingsDictCache()?.language ?? []);
 
   /**
    * 加载站点设置和字典数据
@@ -117,28 +179,29 @@ const SiteSettingsPage: React.FC = () => {
              key: lang.uuid
           }));
           setLanguageOptions(options);
+          setSiteSettingsDictCache({ language: options });
         }
       } catch (e) {
         console.warn('加载语言列表失败', e);
       }
 
-      // 加载货币字典
       try {
         const currencyDict = await getDataDictionaryByCode('CURRENCY');
         if (currencyDict && currencyDict.uuid) {
           const items = await getDictionaryItemList(currencyDict.uuid, true);
           setCurrencyOptions(items);
+          setSiteSettingsDictCache({ currency: items });
         }
       } catch (e) {
         console.warn('加载货币字典失败', e);
       }
 
-      // 加载时区字典
       try {
         const timezoneDict = await getDataDictionaryByCode('TIMEZONE');
         if (timezoneDict && timezoneDict.uuid) {
           const items = await getDictionaryItemList(timezoneDict.uuid, true);
           setTimezoneOptions(items);
+          setSiteSettingsDictCache({ timezone: items });
         }
       } catch (e) {
         console.warn('加载时区字典失败', e);
@@ -193,9 +256,31 @@ const SiteSettingsPage: React.FC = () => {
     return defaultValue;
   };
 
+  // 有缓存时（已初始化或持久化里含 site_name）用 store 填表；依赖 configs 以便 persist 注水后再填一次
+  useLayoutEffect(() => {
+    const hasSiteConfig = configs && (initialized || 'site_name' in configs);
+    if (!hasSiteConfig) return;
+    const values = getInitialValuesFromConfigStore(configs, normalizeColorValue);
+    form.setFieldsValue(values);
+    systemSettingsRef.current = {
+      'security.token_check_interval': values['security.token_check_interval'],
+      'security.inactivity_timeout': values['security.inactivity_timeout'],
+      'security.user_cache_time': values['security.user_cache_time'],
+      'ui.max_tabs': values['ui.max_tabs'],
+      'ui.default_page_size': values['ui.default_page_size'],
+      'ui.table_loading_delay': values['ui.table_loading_delay'],
+      'theme_config.colorPrimary': values['theme_config.colorPrimary'],
+      'network.timeout': values['network.timeout'],
+      'system.max_retries': values['system.max_retries'],
+    };
+    const logo = configs.site_logo ?? '';
+    if (logo) loadLogoPreview(logo);
+  }, [configs, initialized]);
+
   const loadSiteSetting = async () => {
     try {
-      setLoading(true);
+      const hasCache = useConfigStore.getState().initialized;
+      if (!hasCache) setLoading(true);
       const setting = await getSiteSetting();
 
       // 设置表单初始值
@@ -210,8 +295,8 @@ const SiteSettingsPage: React.FC = () => {
       );
 
       const siteLogoValue = setting.settings?.site_logo || '';
-      
-      form.setFieldsValue({
+
+      const newValues = {
         site_name: setting.settings?.site_name || '',
         site_logo: siteLogoValue,
         organization_name: setting.settings?.organization_name || '',
@@ -229,7 +314,6 @@ const SiteSettingsPage: React.FC = () => {
         enable_register: setting.settings?.enable_register !== false,
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
-        // 系统设置
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
         'security.inactivity_timeout': setting.settings?.security?.inactivity_timeout ?? 1800,
         'security.user_cache_time': setting.settings?.security?.user_cache_time ?? 300,
@@ -239,7 +323,20 @@ const SiteSettingsPage: React.FC = () => {
         'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
-      });
+      };
+
+      if (!hasCache) {
+        form.setFieldsValue(newValues);
+      } else {
+        const current = form.getFieldsValue();
+        const keys = Object.keys(newValues) as (keyof typeof newValues)[];
+        const changed = keys.some((k) => {
+          const a = current[k];
+          const b = newValues[k];
+          return typeof b === 'object' ? JSON.stringify(a) !== JSON.stringify(b) : a !== b;
+        });
+        if (changed) form.setFieldsValue(newValues);
+      }
 
       systemSettingsRef.current = {
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
@@ -747,14 +844,7 @@ const SiteSettingsPage: React.FC = () => {
     <Form
       form={form}
       layout="vertical"
-      initialValues={{
-        default_currency: 'CNY',
-        date_format: 'YYYY-MM-DD',
-        default_language: 'zh-CN',
-        timezone: 'Asia/Shanghai',
-        enable_invitation: true,
-        enable_register: true,
-      }}
+      initialValues={formInitialValues}
     >
       <MultiTabListPageTemplate
         activeTabKey={activeTabKey}

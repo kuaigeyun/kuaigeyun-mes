@@ -19,6 +19,7 @@ import { getTenantId } from '../../utils/auth';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
 import { getLanguageList } from '../../services/language';
 import { useConfigStore } from '../../stores/configStore';
+import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../utils/siteSettingsDictCache';
 import { SettingOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
 /**
@@ -47,9 +48,18 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   const [loading, setLoading] = useState(false);
   const [initData, setInitData] = useState<InitWizardData>({});
   const [stepConfigs, setStepConfigs] = useState<any[]>([]);
-  const [currencyOptions, setCurrencyOptions] = useState<{ label: string; value: string }[]>([]);
-  const [timezoneOptions, setTimezoneOptions] = useState<{ label: string; value: string }[]>([]);
-  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string }[]>([]);
+  const [currencyOptions, setCurrencyOptions] = useState<{ label: string; value: string }[]>(() => {
+    const c = getSiteSettingsDictCache()?.currency;
+    return c?.map((i) => ({ label: i.label, value: i.value })) ?? [];
+  });
+  const [timezoneOptions, setTimezoneOptions] = useState<{ label: string; value: string }[]>(() => {
+    const c = getSiteSettingsDictCache()?.timezone;
+    return c?.map((i) => ({ label: i.label, value: i.value })) ?? [];
+  });
+  const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string }[]>(() => {
+    const c = getSiteSettingsDictCache()?.language;
+    return c?.map((i) => ({ label: i.label, value: i.value })) ?? [];
+  });
 
   // 获取当前组织ID
   const currentTenantId = tenantId || getTenantId();
@@ -94,15 +104,21 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
         getDataDictionaryByCode('TIMEZONE').catch(() => null),
       ]);
       if (langRes?.items) {
-        setLanguageOptions(langRes.items.map((l: any) => ({ label: l.native_name || l.name, value: l.code })));
+        const opts = langRes.items.map((l: any) => ({ label: l.native_name || l.name, value: l.code }));
+        setLanguageOptions(opts);
+        setSiteSettingsDictCache({ language: opts.map((o) => ({ ...o, key: o.value })) });
       }
       if (currencyDict?.uuid) {
         const items = await getDictionaryItemList(currencyDict.uuid, true);
-        setCurrencyOptions(items.map((i: any) => ({ label: i.label, value: i.value })));
+        const opts = items.map((i: any) => ({ label: i.label, value: i.value }));
+        setCurrencyOptions(opts);
+        setSiteSettingsDictCache({ currency: items });
       }
       if (timezoneDict?.uuid) {
         const items = await getDictionaryItemList(timezoneDict.uuid, true);
-        setTimezoneOptions(items.map((i: any) => ({ label: i.label, value: i.value })));
+        const opts = items.map((i: any) => ({ label: i.label, value: i.value }));
+        setTimezoneOptions(opts);
+        setSiteSettingsDictCache({ timezone: items });
       }
     } catch (e) {
       console.warn('加载步骤2选项失败', e);

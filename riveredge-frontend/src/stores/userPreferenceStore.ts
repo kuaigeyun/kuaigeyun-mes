@@ -46,8 +46,8 @@ const preferenceStorage: any = { // 使用 any 暂时规避类型检查，或者
   },
 };
 
-/** 从 localStorage 当前用户 key 同步恢复偏好，供登录后立即展示缓存、再后台拉取最新 */
-function readCachedPreferencesForCurrentUser(): Record<string, any> {
+/** 从 localStorage 当前用户 key 同步恢复偏好，供登录后立即展示缓存、再后台拉取最新（供偏好设置页首帧填表） */
+export function readCachedPreferencesForCurrentUser(): Record<string, any> {
   const key = getPreferenceStorageKey();
   if (!key) return {};
   try {

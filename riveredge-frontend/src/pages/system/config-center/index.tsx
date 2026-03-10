@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, theme } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, ApartmentOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
@@ -54,6 +55,8 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
   return params;
 }
 
+const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
+
 const ConfigCenterPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -65,7 +68,6 @@ const ConfigCenterPage: React.FC = () => {
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
   const [form] = Form.useForm();
   const [processForm] = Form.useForm();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [processSaving, setProcessSaving] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>(PARAMETER_CATEGORIES[0]?.id ?? 'production');
@@ -73,6 +75,14 @@ const ConfigCenterPage: React.FC = () => {
   const [templates, setTemplates] = useState<any[]>([]);
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [templateForm] = Form.useForm();
+
+  const { data: bizRes, isLoading: configLoading, isFetching, isError: configError, refetch: refetchBusinessConfig } = useQuery({
+    queryKey: BUSINESS_CONFIG_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+  const loading = configLoading && !bizRes;
 
   const category = PARAMETER_CATEGORIES.find((c) => c.id === selectedCategory);
   const processCategory = PROCESS_CATEGORIES.find((c) => c.id === selectedProcessCategory);
@@ -107,43 +117,34 @@ const ConfigCenterPage: React.FC = () => {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const bizRes = await getBusinessConfig();
-
-      const initialValues: Record<string, any> = {};
-
-      // business_config: 参数设置 + 流程设置
-      const bizParams = flattenBusinessParams(bizRes?.parameters || {});
-      for (const [k, v] of Object.entries(bizParams)) {
-        initialValues[k] = v;
-      }
-      // 补全缺失的 business 参数默认值
-      const bizDefaults: Record<string, any> = {
-        'procurement.require_purchase_requisition': false,
-        'planning.require_production_plan': false,
-        'purchase.auto_approval': true,
-        'reporting.auto_approve': false,
-        'warehouse.location_management': false,
-        'warehouse.auto_outbound': true,
-      };
-      for (const [k, v] of Object.entries(bizDefaults)) {
-        if (initialValues[k] === undefined) initialValues[k] = v;
-      }
-
-      form.setFieldsValue(initialValues);
-      processForm.setFieldsValue(initialValues);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.configCenter.loadFailed'));
-    } finally {
-      setLoading(false);
+  // 有缓存或接口返回后立即填表，避免先空白再重载
+  useEffect(() => {
+    if (!bizRes) return;
+    const initialValues: Record<string, any> = {};
+    const bizParams = flattenBusinessParams(bizRes?.parameters || {});
+    for (const [k, v] of Object.entries(bizParams)) {
+      initialValues[k] = v;
     }
-  };
+    const bizDefaults: Record<string, any> = {
+      'procurement.require_purchase_requisition': false,
+      'planning.require_production_plan': false,
+      'purchase.auto_approval': true,
+      'reporting.auto_approve': false,
+      'warehouse.location_management': false,
+      'warehouse.auto_outbound': true,
+    };
+    for (const [k, v] of Object.entries(bizDefaults)) {
+      if (initialValues[k] === undefined) initialValues[k] = v;
+    }
+    form.setFieldsValue(initialValues);
+    processForm.setFieldsValue(initialValues);
+  }, [bizRes]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (configError && !bizRes) {
+      messageApi.error(t('pages.system.configCenter.loadFailed'));
+    }
+  }, [configError, bizRes]);
 
   const handleSaveParameters = async () => {
     try {
@@ -164,7 +165,7 @@ const ConfigCenterPage: React.FC = () => {
       }
 
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
-      await loadData();
+      await refetchBusinessConfig();
     } catch (error: any) {
       if (error?.errorFields) return;
       messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
@@ -192,7 +193,7 @@ const ConfigCenterPage: React.FC = () => {
       }
 
       messageApi.success(t('pages.system.configCenter.saveSuccess'));
-      await loadData();
+      await refetchBusinessConfig();
     } catch (error: any) {
       if (error?.errorFields) return;
       messageApi.error(error.message || t('pages.system.configCenter.saveFailed'));
@@ -287,7 +288,7 @@ const ConfigCenterPage: React.FC = () => {
 
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
+            <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>
               {t('pages.system.configCenter.refresh')}
             </Button>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveParameters} loading={saving}>
@@ -385,7 +386,7 @@ const ConfigCenterPage: React.FC = () => {
 
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={loadData} loading={loading}>
+            <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>
               {t('pages.system.configCenter.refresh')}
             </Button>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSaveProcess} loading={processSaving}>
