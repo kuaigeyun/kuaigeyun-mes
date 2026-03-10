@@ -10,22 +10,16 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProFormDependency, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Input } from 'antd';
-import { 
-  EditOutlined, 
-  DeleteOutlined, 
-  EyeOutlined, 
+import {
+  EditOutlined,
+  DeleteOutlined,
+  EyeOutlined,
   PlusOutlined,
-  MailOutlined, 
-  MessageOutlined, 
-  GlobalOutlined, 
-  SettingOutlined, 
   SafetyCertificateOutlined,
-  ThunderboltOutlined,
-  AppstoreOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -334,7 +328,7 @@ const MessageConfigListPage: React.FC = () => {
       },
     },
     {
-      title: t('pages.system.messageConfig.description'),
+      title: t('pages.system.messageConfig.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -437,7 +431,7 @@ const MessageConfigListPage: React.FC = () => {
         return typeMap[value] || value;
       },
     },
-    { title: t('pages.system.messageConfig.configDescription'), dataIndex: 'description' },
+    { title: t('pages.system.messageConfig.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.messageConfig.configInfo'),
       dataIndex: 'config',
@@ -569,132 +563,77 @@ const MessageConfigListPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={720}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <div style={{ padding: '0 4px' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: 20,
-            padding: '8px 12px',
-            background: 'rgba(22, 119, 255, 0.04)',
-            borderRadius: 8,
-            border: '1px solid rgba(22, 119, 255, 0.1)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AppstoreOutlined style={{ color: '#1677ff' }} />
-              <span style={{ fontWeight: 600, color: '#1f1f1f' }}>{t('pages.system.messageConfig.sectionBasic')}</span>
-            </div>
-            <Button 
-              size="small" 
-              type="primary"
-              ghost
-              icon={<ThunderboltOutlined />}
-              onClick={handleTest}
-            >
-              {t('pages.system.messageConfig.testConnection')}
-            </Button>
-          </div>
-
-          <ProFormGroup grid colProps={{ span: 24 }}>
-            <ProFormText
-              name="name"
-              label={t('pages.system.messageConfig.name')}
-              rules={[{ required: true, message: t('pages.system.messageConfig.nameRequired') }]}
-              placeholder={t('pages.system.messageConfig.namePlaceholder')}
-              colProps={{ md: 12, xs: 24 }}
-              fieldProps={{ prefix: <SettingOutlined style={{ color: '#bfbfbf' }} /> }}
-            />
-            <ProFormText
-              name="code"
-              label={t('pages.system.messageConfig.code')}
-              rules={[
-                { required: true, message: t('pages.system.messageConfig.codeRequired') },
-                { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageConfig.codePattern') },
-              ]}
-              placeholder={t('pages.system.messageConfig.codePlaceholder')}
-              disabled={isEdit}
-              colProps={{ md: 12, xs: 24 }}
-              fieldProps={{ prefix: <GlobalOutlined style={{ color: '#bfbfbf' }} /> }}
-            />
-            
-            <SafeProFormSelect
-              name="type"
-              label={t('pages.system.messageConfig.type')}
-              rules={[{ required: true, message: t('pages.system.messageConfig.typeRequired') }]}
-              options={[
-                { label: t('pages.system.messageConfig.typeEmailOption'), value: 'email' },
-                { label: t('pages.system.messageConfig.typeSmsOption'), value: 'sms' },
-                { label: t('pages.system.messageConfig.typeInternalOption'), value: 'internal' },
-                { label: t('pages.system.messageConfig.typePushOption'), value: 'push' },
-              ]}
-              disabled={isEdit}
-              colProps={{ md: 12, xs: 24 }}
-            />
-
-            <ProFormSwitch 
-              name="is_active" 
-              label={t('pages.system.messageConfig.activeStatus')} 
-              colProps={{ md: 6, xs: 12 }} 
-            />
-            <ProFormSwitch 
-              name="is_default" 
-              label={t('pages.system.messageConfig.defaultConfig')} 
-              colProps={{ md: 6, xs: 12 }} 
-            />
-          </ProFormGroup>
+          <ProFormText
+            name="code"
+            label={t('pages.system.messageConfig.code')}
+            rules={[
+              { required: true, message: t('pages.system.messageConfig.codeRequired') },
+              { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageConfig.codePattern') },
+            ]}
+            placeholder={t('pages.system.messageConfig.codePlaceholder')}
+            disabled={isEdit}
+          />
+          <ProFormText
+            name="name"
+            label={t('pages.system.messageConfig.name')}
+            rules={[{ required: true, message: t('pages.system.messageConfig.nameRequired') }]}
+            placeholder={t('pages.system.messageConfig.namePlaceholder')}
+          />
+          <SafeProFormSelect
+            name="type"
+            label={t('pages.system.messageConfig.type')}
+            rules={[{ required: true, message: t('pages.system.messageConfig.typeRequired') }]}
+            options={[
+              { label: t('pages.system.messageConfig.typeEmailOption'), value: 'email' },
+              { label: t('pages.system.messageConfig.typeSmsOption'), value: 'sms' },
+              { label: t('pages.system.messageConfig.typeInternalOption'), value: 'internal' },
+              { label: t('pages.system.messageConfig.typePushOption'), value: 'push' },
+            ]}
+            disabled={isEdit}
+          />
 
           <ProFormDependency name={['type']}>
             {({ type }) => {
               if (type === 'email') {
                 return (
                   <div style={{ marginTop: 24 }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      marginBottom: 16,
-                      color: '#1f1f1f',
-                      fontWeight: 600 
-                    }}>
-                      <MailOutlined style={{ color: '#1677ff' }} />
-                      <span>{t('pages.system.messageConfig.smtpSection')}</span>
-                    </div>
                     <ProFormGroup grid>
                       <ProFormText
                         name="smtp_host"
                         label={t('pages.system.messageConfig.smtpHost')}
                         rules={[{ required: true }]}
                         placeholder={t('pages.system.messageConfig.smtpHostPlaceholder')}
-                        colProps={{ md: 18, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <ProFormDigit
                         name="smtp_port"
                         label={t('pages.system.messageConfig.smtpPort')}
                         rules={[{ required: true }]}
                         placeholder={t('pages.system.messageConfig.smtpPortPlaceholder')}
-                        colProps={{ md: 6, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <ProFormText
                         name="smtp_username"
                         label={t('pages.system.messageConfig.smtpUsername')}
                         rules={[{ required: true, type: 'email' }]}
                         placeholder="your-account@example.com"
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <ProFormText.Password
                         name="smtp_password"
                         label={t('pages.system.messageConfig.smtpPassword')}
                         rules={[{ required: true }]}
                         placeholder={t('pages.system.messageConfig.smtpPasswordPlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <ProFormText
                         name="from_name"
                         label={t('pages.system.messageConfig.fromName')}
                         placeholder={t('pages.system.messageConfig.fromNamePlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <div style={{ display: 'flex', alignItems: 'center', height: 60 }}>
                         <ProFormSwitch
@@ -710,17 +649,6 @@ const MessageConfigListPage: React.FC = () => {
               if (type === 'sms') {
                 return (
                   <div style={{ marginTop: 24 }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      marginBottom: 16,
-                      color: '#1f1f1f',
-                      fontWeight: 600 
-                    }}>
-                      <MessageOutlined style={{ color: '#1677ff' }} />
-                      <span>{t('pages.system.messageConfig.smsSection')}</span>
-                    </div>
                     <ProFormGroup grid>
                       <SafeProFormSelect
                         name="provider"
@@ -737,7 +665,7 @@ const MessageConfigListPage: React.FC = () => {
                         label={t('pages.system.messageConfig.accessKeyId')}
                         rules={[{ required: true }]}
                         placeholder={t('pages.system.messageConfig.accessKeyIdPlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                         fieldProps={{ prefix: <SafetyCertificateOutlined style={{ color: '#bfbfbf' }} /> }}
                       />
                       <ProFormText.Password
@@ -745,20 +673,20 @@ const MessageConfigListPage: React.FC = () => {
                         label={t('pages.system.messageConfig.accessKeySecret')}
                         rules={[{ required: true }]}
                         placeholder={t('pages.system.messageConfig.accessKeySecretPlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                       <ProFormText
                         name="sign_name"
                         label={t('pages.system.messageConfig.signName')}
                         placeholder={t('pages.system.messageConfig.signNamePlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                         fieldProps={{ prefix: <CheckCircleOutlined style={{ color: '#bfbfbf' }} /> }}
                       />
                       <ProFormText
                         name="region"
                         label={t('pages.system.messageConfig.region')}
                         placeholder={t('pages.system.messageConfig.regionPlaceholder')}
-                        colProps={{ md: 12, xs: 24 }}
+                        colProps={{ span: 24 }}
                       />
                     </ProFormGroup>
                   </div>
@@ -771,9 +699,22 @@ const MessageConfigListPage: React.FC = () => {
           <div style={{ marginTop: 24 }}>
             <ProFormTextArea
               name="description"
-              label={t('pages.system.messageConfig.configDescription')}
-              placeholder={t('pages.system.messageConfig.configDescriptionPlaceholder')}
+              label={t('pages.system.messageConfig.remark')}
+              placeholder={t('pages.system.messageConfig.remarkPlaceholder')}
               fieldProps={{ rows: 2 }}
+            />
+          </div>
+
+          <div style={{ marginTop: 24 }}>
+            <ProFormSwitch
+              name="is_active"
+              label={t('pages.system.messageConfig.activeStatus')}
+              colProps={{ span: 24 }}
+            />
+            <ProFormSwitch
+              name="is_default"
+              label={t('pages.system.messageConfig.defaultConfig')}
+              colProps={{ span: 24 }}
             />
           </div>
         </div>

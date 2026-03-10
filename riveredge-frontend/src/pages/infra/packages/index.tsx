@@ -304,7 +304,7 @@ export default function PackageManagementPage() {
           setEditFormData(null);
         }}
         onFinish={handleSave}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         {editFormData && (
           <PackageForm
@@ -324,7 +324,7 @@ export default function PackageManagementPage() {
         open={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onFinish={handleSave}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <PackageForm
           onSubmit={handleSave}

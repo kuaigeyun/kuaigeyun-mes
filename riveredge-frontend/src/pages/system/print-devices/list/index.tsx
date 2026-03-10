@@ -92,7 +92,6 @@ const PrintDeviceListPage: React.FC = () => {
   const [currentPrintDeviceUuid, setCurrentPrintDeviceUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [configJson, setConfigJson] = useState<string>('{}');
   
   // Modal 相关状态（测试连接）
   const [testModalVisible, setTestModalVisible] = useState(false);
@@ -118,11 +117,12 @@ const PrintDeviceListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPrintDeviceUuid(null);
-    setConfigJson('{}');
     setFormInitialValues({
       type: 'network',
       is_active: true,
       is_default: false,
+      config_host: '',
+      config_port: '',
     });
     setModalVisible(true);
   };
@@ -137,7 +137,7 @@ const PrintDeviceListPage: React.FC = () => {
       
       // 获取打印设备详情
       const detail = await getPrintDeviceByUuid(record.uuid);
-      setConfigJson(JSON.stringify(detail.config, null, 2));
+      const cfg = detail.config || {};
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -145,6 +145,8 @@ const PrintDeviceListPage: React.FC = () => {
         description: detail.description,
         is_active: detail.is_active,
         is_default: detail.is_default,
+        config_host: cfg.host ?? cfg.address ?? '',
+        config_port: cfg.port != null ? String(cfg.port) : '',
       });
       setModalVisible(true);
     } catch (error: any) {
@@ -280,18 +282,18 @@ const PrintDeviceListPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 解析 JSON 配置
-      let config: Record<string, any>;
-      try {
-        config = JSON.parse(configJson);
-      } catch (e) {
-        const msg = t('pages.system.printDevices.configJsonError');
-        messageApi.error(msg);
-        throw new Error(msg);
+      // 从表单构建设备配置
+      const config: Record<string, any> = {};
+      if (values.config_host != null && String(values.config_host).trim() !== '') {
+        config.host = String(values.config_host).trim();
       }
-      
+      if (values.config_port != null && String(values.config_port).trim() !== '') {
+        const port = parseInt(String(values.config_port).trim(), 10);
+        if (!Number.isNaN(port)) config.port = port;
+      }
+      const { config_host, config_port, ...rest } = values;
       const data: CreatePrintDeviceData | UpdatePrintDeviceData = {
-        ...values,
+        ...rest,
         config,
       };
       
@@ -707,13 +709,8 @@ const PrintDeviceListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProFormText
-          name="name"
-          label={t('pages.system.printDevices.labelName')}
-          rules={[{ required: true, message: t('pages.system.printDevices.nameRequired') }]}
-        />
         <ProFormText
           name="code"
           label={t('pages.system.printDevices.labelCode')}
@@ -723,6 +720,11 @@ const PrintDeviceListPage: React.FC = () => {
           ]}
           disabled={isEdit}
           tooltip={t('pages.system.printDevices.codeTooltip')}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.printDevices.labelName')}
+          rules={[{ required: true, message: t('pages.system.printDevices.nameRequired') }]}
         />
         <SafeProFormSelect
           name="type"
@@ -736,6 +738,16 @@ const PrintDeviceListPage: React.FC = () => {
           ]}
           disabled={isEdit}
         />
+        <ProFormText
+          name="config_host"
+          label={t('pages.system.printDevices.configHost')}
+          placeholder={t('pages.system.printDevices.configHostPlaceholder')}
+        />
+        <ProFormText
+          name="config_port"
+          label={t('pages.system.printDevices.configPort')}
+          placeholder={t('pages.system.printDevices.configPortPlaceholder')}
+        />
         <ProFormTextArea
           name="description"
           label={t('pages.system.printDevices.labelDescription')}
@@ -743,31 +755,15 @@ const PrintDeviceListPage: React.FC = () => {
             rows: 3,
           }}
         />
-        <ProForm.Item
-          name="config"
-          label={t('pages.system.printDevices.labelConfig')}
-          rules={[{ required: true, message: t('pages.system.printDevices.configRequired') }]}
-          tooltip={t('pages.system.printDevices.configTooltip')}
-        >
-          <TextArea
-            rows={6}
-            value={configJson}
-            onChange={(e) => setConfigJson(e.target.value)}
-            placeholder={t('pages.system.printDevices.configPlaceholder')}
-            style={{ fontFamily: CODE_FONT_FAMILY }}
-          />
-        </ProForm.Item>
+        <ProFormSwitch
+          name="is_active"
+          label={t('pages.system.printDevices.labelActive')}
+        />
         {isEdit && (
-          <>
-            <ProFormSwitch
-              name="is_active"
-              label={t('pages.system.printDevices.labelActive')}
-            />
-            <ProFormSwitch
-              name="is_default"
-              label={t('pages.system.printDevices.labelDefault')}
-            />
-          </>
+          <ProFormSwitch
+            name="is_default"
+            label={t('pages.system.printDevices.labelDefault')}
+          />
         )}
       </FormModalTemplate>
 

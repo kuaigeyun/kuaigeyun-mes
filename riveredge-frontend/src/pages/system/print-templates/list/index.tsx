@@ -27,7 +27,7 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
-import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE, getSchemaByType } from '../../../../config/printTemplateSchemas';
 import { EMPTY_PDFME_TEMPLATE_JSON, DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON } from '../../../../components/pdfme-doc/constants-json';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -115,6 +115,9 @@ const PrintTemplateListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<PrintTemplate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // 加载预设（点击后全部加载）
+  const [presetLoading, setPresetLoading] = useState(false);
 
   /**
    * 处理新建打印模板
@@ -262,25 +265,45 @@ const PrintTemplateListPage: React.FC = () => {
   };
 
   /**
-   * 创建示例工单模板（pdfme 格式，含工单二维码）
+   * 加载预设：点击后全部加载所有预设打印模板
    */
-  const createSampleWorkOrderTemplate = async () => {
+  const handleLoadPreset = async () => {
     try {
-      await createPrintTemplate({
-        name: t('pages.system.printTemplates.workOrderTemplateName'),
-        code: DOCUMENT_TYPE_TO_CODE.work_order,
-        type: 'pdf',
-        description: t('pages.system.printTemplates.workOrderTemplateDescription'),
-        content: DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON,
-        config: { document_type: 'work_order' },
-        is_active: true,
-        is_default: true,
-      });
-
-      messageApi.success(t('pages.system.printTemplates.workOrderTemplateCreated'));
-      actionRef.current?.reload();
+      setPresetLoading(true);
+      const results = await Promise.allSettled(
+        DOCUMENT_TYPE_OPTIONS.map(({ value: presetDocumentType }) => {
+          const schema = getSchemaByType(presetDocumentType);
+          const schemaName = schema?.name ?? presetDocumentType;
+          const code = DOCUMENT_TYPE_TO_CODE[presetDocumentType] ?? presetDocumentType.toUpperCase();
+          const content = presetDocumentType === 'work_order' ? DEFAULT_WORK_ORDER_PDFME_TEMPLATE_JSON : EMPTY_PDFME_TEMPLATE_JSON;
+          return createPrintTemplate({
+            name: schemaName + t('pages.system.printTemplates.presetTemplateNameSuffix'),
+            code,
+            type: 'pdf',
+            description: t('pages.system.printTemplates.presetTemplateDescription', { name: schemaName }),
+            content,
+            config: { document_type: presetDocumentType },
+            is_active: true,
+            is_default: false,
+          });
+        })
+      );
+      const successCount = results.filter((r) => r.status === 'fulfilled').length;
+      const failCount = results.filter((r) => r.status === 'rejected').length;
+      if (successCount > 0) {
+        messageApi.success(t('pages.system.printTemplates.presetAllLoaded', { count: successCount }));
+        actionRef.current?.reload();
+      }
+      if (failCount > 0) {
+        messageApi.warning(t('pages.system.printTemplates.presetPartiallyLoaded', { success: successCount, failed: failCount }));
+      }
+      if (successCount === 0 && failCount > 0) {
+        messageApi.error(t('pages.system.printTemplates.createWorkOrderFailed'));
+      }
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
+    } finally {
+      setPresetLoading(false);
     }
   };
 
@@ -314,6 +337,7 @@ const PrintTemplateListPage: React.FC = () => {
           description: values.description,
           content: EMPTY_PDFME_TEMPLATE_JSON,
           config: { document_type: values.document_type },
+          is_active: values.is_active !== false,
         };
         await createPrintTemplate(data);
         messageApi.success(t('pages.system.printTemplates.createSuccess'));
@@ -651,8 +675,8 @@ const PrintTemplateListPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.printTemplates.batchDelete')}
           toolBarRender={() => [
-            <Button key="createSample" onClick={createSampleWorkOrderTemplate}>
-              {t('pages.system.printTemplates.createWorkOrderButton')}
+            <Button key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
+              {t('pages.system.printTemplates.loadPresetButton')}
             </Button>,
           ]}
           showImportButton
@@ -704,7 +728,7 @@ const PrintTemplateListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={formRef}
         onValuesChange={(changed, all) => {
           if ('document_type' in changed && all.document_type) {
@@ -750,13 +774,10 @@ const PrintTemplateListPage: React.FC = () => {
           label={t('pages.system.printTemplates.labelDescription')}
           fieldProps={{ rows: 3 }}
         />
-
         {isEdit && (
-          <>
-            <ProFormSwitch name="is_active" label={t('pages.system.printTemplates.labelActive')} />
-            <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />
-          </>
+          <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />
         )}
+        <ProFormSwitch name="is_active" label={t('pages.system.printTemplates.labelActive')} />
       </FormModalTemplate>
 
       {/* 渲染模板 Modal */}

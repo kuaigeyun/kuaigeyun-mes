@@ -940,7 +940,7 @@ const DataSourceListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid
         extraFooter={

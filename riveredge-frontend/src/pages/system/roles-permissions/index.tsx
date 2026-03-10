@@ -8,7 +8,7 @@
  * 布局参考文件管理页面设计。
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Button,
   Space,
@@ -49,23 +49,18 @@ import {
   SwapOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import {
   getRoleList,
   getRoleByUuid,
-  createRole,
-  updateRole,
   deleteRole,
   getRolePermissions,
   assignPermissions,
   getAllPermissions,
   loadPresetRoles,
   Role,
-  CreateRoleData,
-  UpdateRoleData,
   Permission,
 } from '../../../services/role';
-import { FormModalTemplate } from '../../../components/layout-templates';
+import { RoleFormModal } from '../roles/components/RoleFormModal';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import {
   PERMISSION_MODULE_NAMES,
@@ -81,7 +76,6 @@ const RolesPermissionsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
   const { t } = useTranslation();
-  const formRef = useRef<ProFormInstance>();
 
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -108,8 +102,6 @@ const RolesPermissionsPage: React.FC = () => {
 
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
-  const [isEditRole, setIsEditRole] = useState(false);
-  const [roleFormLoading, setRoleFormLoading] = useState(false);
   const [currentEditRole, setCurrentEditRole] = useState<Role | null>(null);
   
   // 复制权限相关状态
@@ -136,30 +128,12 @@ const RolesPermissionsPage: React.FC = () => {
   };
 
   /**
-   * 编辑角色
+   * 编辑角色（RoleFormModal 内部根据 editUuid 拉取详情并填表）
    */
-  const handleEditRole = useCallback(async (role: Role) => {
-    try {
-      setIsEditRole(true);
-      setCurrentEditRole(role);
-      setRoleModalVisible(true);
-
-      // 获取角色详情
-      const detail = await getRoleByUuid(role.uuid);
-
-      // 等待 Modal 打开后再设置表单值
-      setTimeout(() => {
-        formRef.current?.setFieldsValue({
-          name: detail.name,
-          code: detail.code,
-          description: detail.description || '',
-          is_active: detail.is_active,
-        });
-      }, 100);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.roles.getDetailFailed'));
-    }
-  }, [messageApi, t]);
+  const handleEditRole = useCallback((role: Role) => {
+    setCurrentEditRole(role);
+    setRoleModalVisible(true);
+  }, []);
 
   /**
    * 删除角色
@@ -605,46 +579,11 @@ const RolesPermissionsPage: React.FC = () => {
   };
 
   const handleCreateRole = () => {
-    setIsEditRole(false);
     setCurrentEditRole(null);
     setRoleModalVisible(true);
-    formRef.current?.resetFields();
   };
 
   useNewShortcut(handleCreateRole);
-
-  useSubmitShortcut(copyModalVisible ? handleCopyPermissions : undefined, copyModalVisible);
-
-  /**
-   * 提交角色表单（创建/更新）
-   */
-  const handleSubmitRole = async () => {
-    try {
-      setRoleFormLoading(true);
-      const values = await formRef.current?.validateFields();
-
-      if (isEditRole && currentEditRole) {
-        await updateRole(currentEditRole.uuid, values as UpdateRoleData);
-        messageApi.success(t('pages.system.roles.updateSuccess'));
-      } else {
-        await createRole(values as CreateRoleData);
-        messageApi.success(t('pages.system.roles.createSuccess'));
-      }
-
-      setRoleModalVisible(false);
-      setCurrentEditRole(null);
-      await loadRoles();
-
-      // 如果是编辑当前选中的角色，重新加载
-      if (isEditRole && currentEditRole && selectedRole?.uuid === currentEditRole.uuid) {
-        await handleSelectRole(currentEditRole);
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.roles.operationFailed'));
-    } finally {
-      setRoleFormLoading(false);
-    }
-  };
 
   /**
    * 处理从角色复制权限
@@ -668,6 +607,8 @@ const RolesPermissionsPage: React.FC = () => {
       setCopying(false);
     }
   };
+
+  useSubmitShortcut(copyModalVisible ? handleCopyPermissions : undefined, copyModalVisible);
 
   // 初始化加载
   useEffect(() => {
@@ -978,66 +919,25 @@ const RolesPermissionsPage: React.FC = () => {
         )}
       </div>
 
-      {/* 角色编辑 Modal */}
-      <FormModalTemplate
-        title={isEditRole ? t('pages.system.roles.editRole') : t('pages.system.roles.createRole')}
+      {/* 角色编辑 Modal - 复用 RoleFormModal（Schema 驱动，代码在名称前） */}
+      <RoleFormModal
         open={roleModalVisible}
         onClose={() => { setRoleModalVisible(false); setCurrentEditRole(null); }}
-        onFinish={async (values) => {
-          setRoleFormLoading(true);
-          try {
-            if (isEditRole && currentEditRole) {
-              await updateRole(currentEditRole.uuid, values as UpdateRoleData);
-              messageApi.success(t('pages.system.roles.updateSuccess'));
-            } else {
-              await createRole(values as CreateRoleData);
-              messageApi.success(t('pages.system.roles.createSuccess'));
+        editUuid={currentEditRole?.uuid ?? null}
+        onSuccess={async () => {
+          const editedUuid = currentEditRole?.uuid;
+          await loadRoles();
+          if (editedUuid && selectedRole?.uuid === editedUuid) {
+            try {
+              const updated = await getRoleByUuid(editedUuid);
+              setSelectedRole(updated);
+              await handleSelectRole(updated);
+            } catch (e: any) {
+              messageApi.error(e?.message || t('common.loadFailed'));
             }
-            setRoleModalVisible(false);
-            setCurrentEditRole(null);
-            await loadRoles();
-            if (isEditRole && currentEditRole && selectedRole?.uuid === currentEditRole.uuid) {
-              await handleSelectRole(currentEditRole);
-            }
-          } catch (error: any) {
-            messageApi.error(error.message || t('pages.system.roles.operationFailed'));
-            throw error;
-          } finally {
-            setRoleFormLoading(false);
           }
         }}
-        isEdit={isEditRole}
-        formRef={formRef}
-        loading={roleFormLoading}
-        width={600}
-        layout="vertical"
-      >
-        <ProFormText
-          name="name"
-          label={t('pages.system.roles.roleName')}
-          rules={[{ required: true, message: t('pages.system.roles.roleNameRequired') }]}
-          placeholder={t('pages.system.roles.roleNamePlaceholder')}
-        />
-        <ProFormText
-          name="code"
-          label={t('pages.system.roles.roleCode')}
-          rules={[
-            { required: true, message: t('pages.system.roles.roleCodeRequired') },
-            { pattern: /^[a-zA-Z0-9_]+$/, message: t('pages.system.roles.roleCodePattern') },
-          ]}
-          placeholder={t('pages.system.roles.roleCodePlaceholder')}
-        />
-        <ProFormTextArea
-          name="description"
-          label={t('pages.system.roles.description')}
-          placeholder={t('pages.system.roles.descriptionPlaceholder')}
-        />
-        <ProFormSwitch
-          name="is_active"
-          label={t('pages.system.roles.isEnabled')}
-          initialValue={true}
-        />
-      </FormModalTemplate>
+      />
 
       {/* 复制权限 Modal */}
       <Modal

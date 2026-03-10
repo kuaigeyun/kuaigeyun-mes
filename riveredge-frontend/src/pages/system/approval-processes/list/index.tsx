@@ -12,7 +12,7 @@ import { App, Popconfirm, Button, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getApprovalProcessList,
   getApprovalProcessByUuid,
@@ -363,15 +363,8 @@ const ApprovalProcessListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={720}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProFormText
-          name="name"
-          label={t('pages.system.approvalProcesses.nameLabel')}
-          placeholder={t('pages.system.approvalProcesses.namePlaceholder')}
-          rules={[{ required: true, message: t('pages.system.approvalProcesses.nameRequired') }]}
-          colProps={{ span: 12 }}
-        />
         <ProFormText
           name="code"
           label={t('pages.system.approvalProcesses.codeLabel')}
@@ -382,6 +375,13 @@ const ApprovalProcessListPage: React.FC = () => {
           ]}
           disabled={isEdit}
           tooltip={t('pages.system.approvalProcesses.codeTooltip')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.approvalProcesses.nameLabel')}
+          placeholder={t('pages.system.approvalProcesses.namePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.approvalProcesses.nameRequired') }]}
           colProps={{ span: 12 }}
         />
       

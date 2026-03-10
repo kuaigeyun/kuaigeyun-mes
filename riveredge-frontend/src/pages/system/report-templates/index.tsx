@@ -14,7 +14,7 @@ import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -356,6 +356,7 @@ const ReportTemplatesPage: React.FC = () => {
         }}
         formRef={formRef}
         fields={formFields}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       />
 
       {/* 详情Drawer */}

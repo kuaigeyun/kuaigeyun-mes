@@ -8,6 +8,7 @@ import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Card, Row, Col, Input, Radio, Space, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import {
   CONNECTOR_DEFINITIONS,
   CONNECTOR_CATEGORIES,
@@ -60,7 +61,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
       open={open}
       onCancel={onClose}
       footer={null}
-      width={720}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
       destroyOnHidden
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>

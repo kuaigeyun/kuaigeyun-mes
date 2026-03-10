@@ -413,7 +413,7 @@ const MoldListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormText
           name="code"

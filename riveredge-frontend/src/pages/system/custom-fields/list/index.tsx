@@ -1307,7 +1307,7 @@ const CustomFieldListPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid
       >

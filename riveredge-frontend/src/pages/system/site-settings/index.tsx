@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker } from 'antd';
-import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
 import {
@@ -834,8 +834,8 @@ const SiteSettingsPage: React.FC = () => {
         activeTabKey={activeTabKey}
         onTabChange={setActiveTabKey}
         tabs={[
-          { key: 'basic', label: t('pages.system.siteSettings.tabBasic'), children: basicInfoWithActions },
-          { key: 'system', label: t('pages.system.siteSettings.tabSystem'), children: systemSettingsWithActions },
+          { key: 'basic', label: (<Space><InfoCircleOutlined /><span>{t('pages.system.siteSettings.tabBasic')}</span></Space>), children: basicInfoWithActions },
+          { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
         ]}
       />
 

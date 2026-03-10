@@ -508,7 +508,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         onClose={() => setSubmitModalVisible(false)}
         onFinish={handleSubmitForm}
         loading={submitFormLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <SafeProFormSelect
           name="process_uuid"

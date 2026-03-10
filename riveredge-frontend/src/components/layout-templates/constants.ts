@@ -11,13 +11,18 @@ import type { CSSProperties } from 'react';
 
 /**
  * Modal 标准配置
+ *
+ * 新建/编辑类 FormModalTemplate 必须显式传 width，且仅使用以下常量：
+ * - SMALL_WIDTH (600)：单栏表单（无 grid 或仅 span:24）
+ * - STANDARD_WIDTH (800)：双栏表单（grid + colProps span:12 等）
+ * - LARGE_WIDTH (1000)：复杂表单（多块 Row/Col、多步骤、大量字段）
  */
 export const MODAL_CONFIG = {
-  /** 标准宽度 */
+  /** 标准宽度（双栏） */
   STANDARD_WIDTH: 800,
-  /** 大宽度（用于复杂表单） */
+  /** 大宽度（复杂表单） */
   LARGE_WIDTH: 1000,
-  /** 小宽度（用于简单表单） */
+  /** 小宽度（单栏） */
   SMALL_WIDTH: 600,
   /** 极小宽度（用于字段极少的表单） */
   TINY_WIDTH: 520,

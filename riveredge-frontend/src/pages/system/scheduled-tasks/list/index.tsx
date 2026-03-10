@@ -7,9 +7,9 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Row, Col, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -45,8 +45,13 @@ const ScheduledTaskListPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [triggerType, setTriggerType] = useState<'cron' | 'interval' | 'date'>('cron');
-  const [triggerConfigJson, setTriggerConfigJson] = useState<string>('{}');
-  const [taskConfigJson, setTaskConfigJson] = useState<string>('{}');
+  const [triggerCron, setTriggerCron] = useState<string>('0 0 * * *');
+  const [triggerIntervalSeconds, setTriggerIntervalSeconds] = useState<number>(300);
+  const [triggerDateAt, setTriggerDateAt] = useState<string>('');
+  const [taskType, setTaskType] = useState<string>('api_call');
+  const [taskUrl, setTaskUrl] = useState<string>('');
+  const [taskMethod, setTaskMethod] = useState<string>('POST');
+  const [taskScriptUuid, setTaskScriptUuid] = useState<string>('');
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -60,8 +65,13 @@ const ScheduledTaskListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentScheduledTaskUuid(null);
     setTriggerType('cron');
-    setTriggerConfigJson('{}');
-    setTaskConfigJson('{}');
+    setTriggerCron('0 0 * * *');
+    setTriggerIntervalSeconds(300);
+    setTriggerDateAt('');
+    setTaskType('api_call');
+    setTaskUrl('');
+    setTaskMethod('POST');
+    setTaskScriptUuid('');
     setFormInitialValues({
       type: 'api_call',
       trigger_type: 'cron',
@@ -77,12 +87,17 @@ const ScheduledTaskListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentScheduledTaskUuid(record.uuid);
-      setTriggerType(record.trigger_type);
-      
-      // 获取定时任务详情
       const detail = await getScheduledTaskByUuid(record.uuid);
-      setTriggerConfigJson(JSON.stringify(detail.trigger_config, null, 2));
-      setTaskConfigJson(JSON.stringify(detail.task_config, null, 2));
+      setTriggerType(detail.trigger_type);
+      const tc = detail.trigger_config || {};
+      setTriggerCron(tc.cron ?? '0 0 * * *');
+      setTriggerIntervalSeconds(typeof tc.seconds === 'number' ? tc.seconds : 300);
+      setTriggerDateAt(tc.at ?? '');
+      setTaskType(detail.type);
+      const taskCfg = detail.task_config || {};
+      setTaskUrl(taskCfg.url ?? '');
+      setTaskMethod(taskCfg.method ?? 'POST');
+      setTaskScriptUuid(taskCfg.script_uuid ?? taskCfg.script_code ?? '');
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -200,30 +215,30 @@ const ScheduledTaskListPage: React.FC = () => {
   };
 
   /**
-   * 处理提交表单（创建/更新定时任务）
+   * 处理提交表单（创建/更新定时任务）- 从表单构建设置
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      
-      // 解析触发器配置 JSON
+
+      const triggerTypeVal = values.trigger_type || triggerType;
       let triggerConfig: Record<string, any> = {};
-      try {
-        triggerConfig = JSON.parse(triggerConfigJson);
-      } catch (e) {
-        messageApi.error(t('field.scheduledTask.triggerConfigJsonInvalid'));
-        throw new Error(t('field.scheduledTask.triggerConfigJsonInvalid'));
+      if (triggerTypeVal === 'cron') {
+        triggerConfig = { cron: triggerCron || '0 0 * * *' };
+      } else if (triggerTypeVal === 'interval') {
+        triggerConfig = { seconds: Number(triggerIntervalSeconds) || 300 };
+      } else if (triggerTypeVal === 'date') {
+        triggerConfig = { at: triggerDateAt || new Date().toISOString() };
       }
-      
-      // 解析任务配置 JSON
+
+      const typeVal = values.type || taskType;
       let taskConfig: Record<string, any> = {};
-      try {
-        taskConfig = JSON.parse(taskConfigJson);
-      } catch (e) {
-        messageApi.error(t('field.scheduledTask.taskConfigJsonInvalid'));
-        throw new Error(t('field.scheduledTask.taskConfigJsonInvalid'));
+      if (typeVal === 'api_call') {
+        taskConfig = { url: taskUrl, method: taskMethod || 'POST' };
+      } else if (typeVal === 'python_script') {
+        taskConfig = { script_code: taskScriptUuid || undefined, script_path: taskScriptUuid || undefined };
       }
-      
+
       if (isEdit && currentScheduledTaskUuid) {
         await updateScheduledTask(currentScheduledTaskUuid, {
           name: values.name,
@@ -529,7 +544,7 @@ const ScheduledTaskListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑定时任务 Modal */}
+      {/* 创建/编辑定时任务 Modal - 两栏布局，备注倒数第二，触发器/任务配置为表单 */}
       <FormModalTemplate
         title={isEdit ? t('field.scheduledTask.editTitle') : t('field.scheduledTask.createTitle')}
         open={modalVisible}
@@ -541,94 +556,142 @@ const ScheduledTaskListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-          <ProFormText
-            name="name"
-            label={t('field.scheduledTask.name')}
-            rules={[{ required: true, message: t('field.scheduledTask.nameRequired') }]}
-            placeholder={t('field.scheduledTask.namePlaceholder')}
-          />
-          <ProFormText
-            name="code"
-            label={t('field.scheduledTask.code')}
-            rules={[
-              { required: true, message: t('field.scheduledTask.codeRequired') },
-              { pattern: /^[a-z0-9_]+$/, message: t('field.scheduledTask.codePattern') },
-            ]}
-            placeholder={t('field.scheduledTask.codePlaceholder')}
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="type"
-            label={t('field.scheduledTask.type')}
-            rules={[{ required: true, message: t('field.scheduledTask.typeRequired') }]}
-            options={[
-              { label: t('field.scheduledTask.typePython'), value: 'python_script' },
-              { label: t('field.scheduledTask.typeApi'), value: 'api_call' },
-            ]}
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="trigger_type"
-            label={t('field.scheduledTask.triggerType')}
-            rules={[{ required: true, message: t('field.scheduledTask.triggerTypeRequired') }]}
-            options={[
-              { label: t('field.scheduledTask.triggerCron'), value: 'cron' },
-              { label: t('field.scheduledTask.triggerInterval'), value: 'interval' },
-              { label: t('field.scheduledTask.triggerDate'), value: 'date' },
-            ]}
-            fieldProps={{
-              onChange: (value) => {
-                setTriggerType(value);
-                const defaultConfigs: Record<string, Record<string, any>> = {
-                  cron: { cron: '0 0 * * *' },
-                  interval: { seconds: 300 },
-                  date: { at: new Date().toISOString() },
-                };
-                setTriggerConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
-              },
-            }}
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label={t('field.scheduledTask.description')}
-            placeholder={t('field.scheduledTask.descriptionPlaceholder')}
-          />
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              {t('field.scheduledTask.triggerConfigJson')}
-            </label>
-            <TextArea
-              value={triggerConfigJson}
-              onChange={(e) => setTriggerConfigJson(e.target.value)}
-              rows={4}
-              placeholder={triggerType === 'cron'
-                ? t('field.scheduledTask.triggerConfigPlaceholderCron')
-                : triggerType === 'interval'
-                ? t('field.scheduledTask.triggerConfigPlaceholderInterval')
-                : t('field.scheduledTask.triggerConfigPlaceholderDate')
-              }
-              style={{ fontFamily: CODE_FONT_FAMILY }}
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="code"
+              label={t('field.scheduledTask.code')}
+              rules={[
+                { required: true, message: t('field.scheduledTask.codeRequired') },
+                { pattern: /^[a-z0-9_]+$/, message: t('field.scheduledTask.codePattern') },
+              ]}
+              placeholder={t('field.scheduledTask.codePlaceholder')}
+              disabled={isEdit}
             />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              {t('field.scheduledTask.taskConfigJson')}
-            </label>
-            <TextArea
-              value={taskConfigJson}
-              onChange={(e) => setTaskConfigJson(e.target.value)}
-              rows={6}
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="name"
+              label={t('field.scheduledTask.name')}
+              rules={[{ required: true, message: t('field.scheduledTask.nameRequired') }]}
+              placeholder={t('field.scheduledTask.namePlaceholder')}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <SafeProFormSelect
+              name="type"
+              label={t('field.scheduledTask.type')}
+              rules={[{ required: true, message: t('field.scheduledTask.typeRequired') }]}
+              options={[
+                { label: t('field.scheduledTask.typePython'), value: 'python_script' },
+                { label: t('field.scheduledTask.typeApi'), value: 'api_call' },
+              ]}
+              fieldProps={{ onChange: (v: string) => setTaskType(v || 'api_call') }}
+              disabled={isEdit}
+            />
+          </Col>
+          <Col span={12}>
+            <SafeProFormSelect
+              name="trigger_type"
+              label={t('field.scheduledTask.triggerType')}
+              rules={[{ required: true, message: t('field.scheduledTask.triggerTypeRequired') }]}
+              options={[
+                { label: t('field.scheduledTask.triggerCron'), value: 'cron' },
+                { label: t('field.scheduledTask.triggerInterval'), value: 'interval' },
+                { label: t('field.scheduledTask.triggerDate'), value: 'date' },
+              ]}
+              fieldProps={{
+                onChange: (value: string) => {
+                  setTriggerType(value as 'cron' | 'interval' | 'date');
+                  if (value === 'cron') setTriggerCron('0 0 * * *');
+                  if (value === 'interval') setTriggerIntervalSeconds(300);
+                  if (value === 'date') setTriggerDateAt(new Date().toISOString().slice(0, 16));
+                },
+              }}
+              disabled={isEdit}
+            />
+          </Col>
+        </Row>
+        {/* 触发器配置 - 表单模式 */}
+        {triggerType === 'cron' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerCronLabel')} name="_triggerCron">
+            <Input
+              value={triggerCron}
+              onChange={(e) => setTriggerCron(e.target.value)}
+              placeholder={t('field.scheduledTask.triggerConfigPlaceholderCron')}
+            />
+          </ProForm.Item>
+        )}
+        {triggerType === 'interval' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerIntervalLabel')} name="_triggerInterval">
+            <Input
+              type="number"
+              value={triggerIntervalSeconds}
+              onChange={(e) => setTriggerIntervalSeconds(Number(e.target.value) || 300)}
+              placeholder={t('field.scheduledTask.triggerConfigPlaceholderInterval')}
+            />
+          </ProForm.Item>
+        )}
+        {triggerType === 'date' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerDateLabel')} name="_triggerDate">
+            <Input
+              type="datetime-local"
+              value={triggerDateAt}
+              onChange={(e) => setTriggerDateAt(e.target.value)}
+            />
+          </ProForm.Item>
+        )}
+        {/* 任务配置 - 表单模式 */}
+        {taskType === 'api_call' && (
+          <Row gutter={16}>
+            <Col span={16}>
+              <ProForm.Item label={t('field.scheduledTask.taskUrlLabel')} name="_taskUrl">
+                <Input
+                  value={taskUrl}
+                  onChange={(e) => setTaskUrl(e.target.value)}
+                  placeholder="https://api.example.com/endpoint"
+                />
+              </ProForm.Item>
+            </Col>
+            <Col span={8}>
+              <ProForm.Item label={t('field.scheduledTask.taskMethodLabel')} name="_taskMethod">
+                <Select
+                  value={taskMethod}
+                  onChange={setTaskMethod}
+                  options={[
+                    { value: 'GET', label: 'GET' },
+                    { value: 'POST', label: 'POST' },
+                    { value: 'PUT', label: 'PUT' },
+                    { value: 'DELETE', label: 'DELETE' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </ProForm.Item>
+            </Col>
+          </Row>
+        )}
+        {taskType === 'python_script' && (
+          <ProForm.Item label={t('field.scheduledTask.taskScriptUuidLabel')} name="_taskScriptUuid">
+            <Input
+              value={taskScriptUuid}
+              onChange={(e) => setTaskScriptUuid(e.target.value)}
               placeholder={t('field.scheduledTask.taskConfigPlaceholder')}
-              style={{ fontFamily: CODE_FONT_FAMILY }}
             />
-          </div>
-          <ProFormSwitch
-            name="is_active"
-            label={t('field.scheduledTask.isActiveLabel')}
-          />
+          </ProForm.Item>
+        )}
+        <ProFormTextArea
+          name="description"
+          label={t('field.scheduledTask.description')}
+          placeholder={t('field.scheduledTask.descriptionPlaceholder')}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('field.scheduledTask.isActiveLabel')}
+        />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}

@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -444,7 +444,7 @@ const ScriptListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑 Modal */}
+      {/* 创建/编辑 Modal - 两栏布局，备注倒数第二，启用开关最后 */}
       <FormModalTemplate
         title={isEdit ? t('pages.system.scripts.modalEdit') : t('pages.system.scripts.modalCreate')}
         open={modalVisible}
@@ -456,43 +456,44 @@ const ScriptListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <ProFormText
-          name="name"
-          label={t('pages.system.scripts.labelName')}
-          rules={[{ required: true, message: t('pages.system.scripts.nameRequired') }]}
-        />
-        <ProFormText
-          name="code"
-          label={t('pages.system.scripts.labelCode')}
-          rules={[
-            { required: true, message: t('pages.system.scripts.codeRequired') },
-            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: t('pages.system.scripts.codePattern') },
-          ]}
-          disabled={isEdit}
-          tooltip={t('pages.system.scripts.codeTooltip')}
-        />
-        <SafeProFormSelect
-          name="type"
-          label={t('pages.system.scripts.labelType')}
-          rules={[{ required: true, message: t('pages.system.scripts.typeRequired') }]}
-          options={[
-            { label: t('pages.system.scripts.typePython'), value: 'python' },
-            { label: t('pages.system.scripts.typeShell'), value: 'shell' },
-            { label: t('pages.system.scripts.typeSql'), value: 'sql' },
-            { label: t('pages.system.scripts.typeJavascript'), value: 'javascript' },
-            { label: t('pages.system.scripts.typeOther'), value: 'other' },
-          ]}
-          disabled={isEdit}
-        />
-        <ProFormTextArea
-          name="description"
-          label={t('pages.system.scripts.labelDescription')}
-          fieldProps={{
-            rows: 3,
-          }}
-        />
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormText
+              name="code"
+              label={t('pages.system.scripts.labelCode')}
+              rules={[
+                { required: true, message: t('pages.system.scripts.codeRequired') },
+                { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: t('pages.system.scripts.codePattern') },
+              ]}
+              disabled={isEdit}
+              tooltip={t('pages.system.scripts.codeTooltip')}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormText
+              name="name"
+              label={t('pages.system.scripts.labelName')}
+              rules={[{ required: true, message: t('pages.system.scripts.nameRequired') }]}
+            />
+          </Col>
+          <Col span={8}>
+            <SafeProFormSelect
+              name="type"
+              label={t('pages.system.scripts.labelType')}
+              rules={[{ required: true, message: t('pages.system.scripts.typeRequired') }]}
+              options={[
+                { label: t('pages.system.scripts.typePython'), value: 'python' },
+                { label: t('pages.system.scripts.typeShell'), value: 'shell' },
+                { label: t('pages.system.scripts.typeSql'), value: 'sql' },
+                { label: t('pages.system.scripts.typeJavascript'), value: 'javascript' },
+                { label: t('pages.system.scripts.typeOther'), value: 'other' },
+              ]}
+              disabled={isEdit}
+            />
+          </Col>
+        </Row>
         <ProFormTextArea
           name="content"
           label={t('pages.system.scripts.labelContent')}
@@ -511,12 +512,17 @@ const ScriptListPage: React.FC = () => {
           }}
           tooltip={t('pages.system.scripts.configTooltip')}
         />
-        {isEdit && (
-          <ProFormSwitch
-            name="is_active"
-            label={t('pages.system.scripts.labelActive')}
-          />
-        )}
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.scripts.labelDescription')}
+          fieldProps={{
+            rows: 3,
+          }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('pages.system.scripts.labelActive')}
+        />
       </FormModalTemplate>
 
       {/* 执行脚本 Modal */}

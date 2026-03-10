@@ -8,6 +8,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Space } from 'antd';
+import { ToolOutlined, TeamOutlined, ShoppingOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProductionCostPage from '../production-cost';
@@ -56,22 +58,22 @@ const CostCalculationTabsPage: React.FC = () => {
   const tabItems = [
     {
       key: 'production',
-      label: '生产成本',
+      label: (<Space><ToolOutlined /><span>生产成本</span></Space>),
       children: <ProductionCostPage />,
     },
     {
       key: 'outsource',
-      label: '委外成本',
+      label: (<Space><TeamOutlined /><span>委外成本</span></Space>),
       children: <OutsourceCostPage />,
     },
     {
       key: 'purchase',
-      label: '采购成本',
+      label: (<Space><ShoppingOutlined /><span>采购成本</span></Space>),
       children: <PurchaseCostPage />,
     },
     {
       key: 'quality',
-      label: '质量成本',
+      label: (<Space><SafetyCertificateOutlined /><span>质量成本</span></Space>),
       children: <QualityCostPage />,
     },
   ];

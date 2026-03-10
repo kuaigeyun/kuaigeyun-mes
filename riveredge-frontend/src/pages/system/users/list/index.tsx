@@ -824,7 +824,7 @@ const UserListPage: React.FC = () => {
           allowClear
           options={departmentOptions}
           fieldProps={{ showSearch: true }}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
         />
         <ProFormSelect
           name="position_uuid"
@@ -834,7 +834,7 @@ const UserListPage: React.FC = () => {
           fieldProps={{
             showSearch: true,
           }}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
         />
         <ProFormSelect
           name="role_uuids"
@@ -851,7 +851,7 @@ const UserListPage: React.FC = () => {
               setRoleUuidsDraft(next);
             },
           }}
-          colProps={{ span: 24 }}
+          colProps={{ span: 8 }}
         />
         <ProFormSwitch
           name="is_active"

@@ -948,14 +948,18 @@ const FileListPage: React.FC = () => {
         loading={uploading}
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Upload
+        <Upload.Dragger
           fileList={uploadFileList}
           onChange={({ fileList }) => setUploadFileList(fileList)}
           beforeUpload={() => false}
           multiple
         >
-          <Button icon={<UploadOutlined />}>{t('pages.system.files.selectFiles')}</Button>
-        </Upload>
+          <p className="ant-upload-drag-icon">
+            <UploadOutlined style={{ fontSize: 48, color: token.colorPrimary }} />
+          </p>
+          <p className="ant-upload-text">{t('pages.system.files.dragDropHint')}</p>
+          <p className="ant-upload-hint">{t('pages.system.files.clickOrDragHint')}</p>
+        </Upload.Dragger>
       </FormModalTemplate>
 
       {/* 文件预览 Modal */}

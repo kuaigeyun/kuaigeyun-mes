@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Space } from 'antd';
+import { PartitionOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { OutsourceOrdersTable } from '../outsource-orders';
 import { OutsourceWorkOrdersTable } from '../outsource-work-orders';
@@ -9,12 +11,12 @@ const OutsourceManagementPage: React.FC = () => {
     const tabs = [
         {
             key: 'process',
-            label: '工序委外',
+            label: (<Space><PartitionOutlined /><span>工序委外</span></Space>),
             children: <OutsourceOrdersTable />,
         },
         {
             key: 'whole',
-            label: '工单委外',
+            label: (<Space><UnorderedListOutlined /><span>工单委外</span></Space>),
             children: <OutsourceWorkOrdersTable />,
         },
     ];

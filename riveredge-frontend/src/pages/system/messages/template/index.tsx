@@ -389,7 +389,7 @@ const MessageTemplateListPage: React.FC = () => {
         </pre>
       ) : '-',
     },
-    { title: t('pages.system.messageTemplate.templateDescription'), dataIndex: 'description' },
+    { title: t('pages.system.messageTemplate.remark'), dataIndex: 'description' },
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
@@ -517,94 +517,97 @@ const MessageTemplateListPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid
       >
-        <ProFormText
-          name="code"
-          label={t('pages.system.messageTemplate.templateCode')}
-          rules={[
-            { required: true, message: t('pages.system.messageTemplate.codeRequired') },
-            { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageTemplate.codePattern') },
-          ]}
-          placeholder={t('pages.system.messageTemplate.codePlaceholder')}
-          disabled={isEdit}
-          colProps={{ md: 12, xs: 24 }}
-        />
-        <ProFormText
-          name="name"
-          label={t('pages.system.messageTemplate.templateName')}
-          rules={[{ required: true, message: t('pages.system.messageTemplate.nameRequired') }]}
-          placeholder={t('pages.system.messageTemplate.namePlaceholder')}
-          colProps={{ md: 12, xs: 24 }}
-        />
-        <SafeProFormSelect
-          name="type"
-          label={t('pages.system.messageConfig.type')}
-          rules={[{ required: true, message: t('pages.system.messageTemplate.typeRequired') }]}
-          options={[
-            { label: t('pages.system.messageConfig.typeEmail'), value: 'email' },
-            { label: t('pages.system.messageConfig.typeSms'), value: 'sms' },
-            { label: t('pages.system.messageConfig.typeInternal'), value: 'internal' },
-            { label: t('pages.system.messageConfig.typePush'), value: 'push' },
-          ]}
-          disabled={isEdit}
-          colProps={{ md: 12, xs: 24 }}
-        />
-        <ProFormSwitch
-          name="is_active"
-          label={t('pages.system.messageConfig.activeStatus')}
-          colProps={{ md: 12, xs: 24 }}
-        />
-        <ProFormText
-          name="subject"
-          label={t('pages.system.messageTemplate.messageSubject')}
-          placeholder={t('pages.system.messageTemplate.subjectPlaceholder')}
-          colProps={{ span: 24 }}
-        />
-        <ProFormTextArea
-          name="content"
-          label={t('pages.system.messageTemplate.templateBody')}
-          rules={[{ required: true, message: t('pages.system.messageTemplate.contentRequired') }]}
-          placeholder={t('pages.system.messageTemplate.contentPlaceholder')}
-          fieldProps={{
-            rows: 6,
-          }}
-          colProps={{ span: 24 }}
-        />
-        <ProFormList
-          name="variableList"
-          label={t('pages.system.messageTemplate.variableDeclaration')}
-          creatorButtonProps={{
-            creatorButtonText: t('pages.system.messageTemplate.addVariable'),
-          }}
-          itemRender={({ listDom, action }) => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>{listDom}</div>
-              {action}
-            </div>
-          )}
-        >
-          <ProFormGroup key="group">
-            <ProFormText 
-              name="key" 
-              placeholder={t('pages.system.messageTemplate.varKeyPlaceholder')} 
-              rules={[{ required: true, message: t('pages.system.messageTemplate.required') }]}
+            <ProFormText
+              name="code"
+              label={t('pages.system.messageTemplate.templateCode')}
+              rules={[
+                { required: true, message: t('pages.system.messageTemplate.codeRequired') },
+                { pattern: /^[A-Z0-9_]+$/, message: t('pages.system.messageTemplate.codePattern') },
+              ]}
+              placeholder={t('pages.system.messageTemplate.codePlaceholder')}
+              disabled={isEdit}
+              colProps={{ span: 8 }}
             />
-            <ProFormText 
-              name="label" 
-              placeholder={t('pages.system.messageTemplate.varLabelPlaceholder')} 
+            <ProFormText
+              name="name"
+              label={t('pages.system.messageTemplate.templateName')}
+              rules={[{ required: true, message: t('pages.system.messageTemplate.nameRequired') }]}
+              placeholder={t('pages.system.messageTemplate.namePlaceholder')}
+              colProps={{ span: 8 }}
             />
-          </ProFormGroup>
-        </ProFormList>
+            <SafeProFormSelect
+              name="type"
+              label={t('pages.system.messageConfig.type')}
+              rules={[{ required: true, message: t('pages.system.messageTemplate.typeRequired') }]}
+              options={[
+                { label: t('pages.system.messageConfig.typeEmail'), value: 'email' },
+                { label: t('pages.system.messageConfig.typeSms'), value: 'sms' },
+                { label: t('pages.system.messageConfig.typeInternal'), value: 'internal' },
+                { label: t('pages.system.messageConfig.typePush'), value: 'push' },
+              ]}
+              disabled={isEdit}
+              colProps={{ span: 8 }}
+            />
+            <ProFormText
+              name="subject"
+              label={t('pages.system.messageTemplate.messageSubject')}
+              placeholder={t('pages.system.messageTemplate.subjectPlaceholder')}
+              colProps={{ span: 24 }}
+            />
+            <ProFormTextArea
+              name="content"
+              label={t('pages.system.messageTemplate.templateBody')}
+              rules={[{ required: true, message: t('pages.system.messageTemplate.contentRequired') }]}
+              placeholder={t('pages.system.messageTemplate.contentPlaceholder')}
+              fieldProps={{
+                rows: 6,
+              }}
+              colProps={{ span: 24 }}
+            />
+            <ProFormGroup colProps={{ span: 24 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
+              <ProFormList
+                name="variableList"
+                label={t('pages.system.messageTemplate.variableDeclaration')}
+                creatorButtonProps={{
+                  creatorButtonText: t('pages.system.messageTemplate.addVariable'),
+                }}
+                itemRender={({ listDom, action }) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>{listDom}</div>
+                    {action}
+                  </div>
+                )}
+              >
+                <ProFormGroup key="group" grid colProps={{ span: 12 }}>
+                  <ProFormText 
+                    name="key" 
+                    placeholder={t('pages.system.messageTemplate.varKeyPlaceholder')} 
+                    rules={[{ required: true, message: t('pages.system.messageTemplate.required') }]}
+                  />
+                  <ProFormText 
+                    name="label" 
+                    placeholder={t('pages.system.messageTemplate.varLabelPlaceholder')} 
+                  />
+                </ProFormGroup>
+              </ProFormList>
+            </ProFormGroup>
 
-        <ProFormTextArea
-          name="description"
-          label={t('pages.system.messageTemplate.templateDescription')}
-          placeholder={t('pages.system.messageTemplate.descriptionPlaceholder')}
-          fieldProps={{
-            rows: 2,
-          }}
-          colProps={{ span: 24 }}
-        />
+            <ProFormTextArea
+              name="description"
+              label={t('pages.system.messageTemplate.remark')}
+              placeholder={t('pages.system.messageTemplate.descriptionPlaceholder')}
+              fieldProps={{
+                rows: 2,
+              }}
+              colProps={{ span: 24 }}
+            />
+            <ProFormSwitch
+              name="is_active"
+              label={t('pages.system.messageTemplate.enabled')}
+              colProps={{ span: 12 }}
+            />
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}

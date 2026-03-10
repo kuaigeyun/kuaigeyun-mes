@@ -484,7 +484,7 @@ const UserTasksPage: React.FC = () => {
         }}
         onFinish={handleConfirmProcess}
         loading={false}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         {currentTask && (
           <>

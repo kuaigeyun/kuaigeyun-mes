@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Select, theme } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
 import { PageContainer, ProFormText, ProFormTextArea, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
-import { FormModalTemplate } from '../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../utils/globalNewShortcut';
 import {
@@ -837,6 +837,7 @@ const CardView: React.FC = () => {
         isEdit={false}
         formRef={createFormRef}
         loading={loading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
         layout="vertical"
         onValuesChange={(changed, all) => {
           if ('document_type' in changed && all.document_type) {

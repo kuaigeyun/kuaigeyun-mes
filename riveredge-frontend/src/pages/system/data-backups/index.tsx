@@ -576,6 +576,7 @@ const DataBackupsPage: React.FC = () => {
         onFinish={handleCreate}
         isEdit={false}
         loading={false}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProFormText
           name="name"
