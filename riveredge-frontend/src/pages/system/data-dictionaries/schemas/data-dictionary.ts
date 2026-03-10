@@ -6,14 +6,6 @@ import type { FieldConfig } from '../../../../components/schema-form';
 
 export const dataDictionaryFormSchema: FieldConfig[] = [
   {
-    name: 'name',
-    type: 'text',
-    labelKey: 'field.dataDictionary.name',
-    placeholderKey: 'field.dataDictionary.namePlaceholder',
-    required: true,
-    rules: [{ required: true, messageKey: 'field.dataDictionary.nameRequired' }],
-  },
-  {
     name: 'code',
     type: 'text',
     labelKey: 'field.dataDictionary.code',
@@ -22,10 +14,18 @@ export const dataDictionaryFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.dataDictionary.codeRequired' }],
   },
   {
+    name: 'name',
+    type: 'text',
+    labelKey: 'field.dataDictionary.name',
+    placeholderKey: 'field.dataDictionary.namePlaceholder',
+    required: true,
+    rules: [{ required: true, messageKey: 'field.dataDictionary.nameRequired' }],
+  },
+  {
     name: 'description',
     type: 'textarea',
-    labelKey: 'field.dataDictionary.description',
-    placeholderKey: 'field.dataDictionary.descriptionPlaceholder',
+    labelKey: 'field.dataDictionary.remark',
+    placeholderKey: 'field.dataDictionary.remarkPlaceholder',
   },
   {
     name: 'is_active',

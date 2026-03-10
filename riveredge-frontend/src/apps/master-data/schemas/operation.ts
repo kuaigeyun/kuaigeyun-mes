@@ -43,13 +43,6 @@ export const operationFormSchema: FieldConfig[] = [
     fieldProps: { allowClear: true },
   },
   {
-    name: 'description',
-    type: 'textarea',
-    labelKey: 'field.operation.description',
-    colSpan: 24,
-    fieldProps: { rows: 4, maxLength: 500 },
-  },
-  {
     name: 'reportingType',
     type: 'select',
     labelKey: 'field.operation.reportingType',
@@ -69,6 +62,13 @@ export const operationFormSchema: FieldConfig[] = [
     labelKey: 'field.operation.allowJump',
     colSpan: 12,
     extraKey: 'field.operation.allowJumpExtra',
+  },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'field.operation.description',
+    colSpan: 24,
+    fieldProps: { rows: 4, maxLength: 500 },
   },
   {
     name: 'isActive',

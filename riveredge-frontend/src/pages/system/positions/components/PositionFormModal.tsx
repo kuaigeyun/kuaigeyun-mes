@@ -111,11 +111,10 @@ export const PositionFormModal: React.FC<PositionFormModalProps> = ({
       onFinish={handleSubmit}
       isEdit={isEdit}
       loading={formLoading}
-      width={MODAL_CONFIG.STANDARD_WIDTH}
+      width={MODAL_CONFIG.SMALL_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ is_active: true, sort_order: 0 }}
       layout="vertical"
-      grid
     >
       <SchemaFormRenderer
         schema={positionFormSchema}

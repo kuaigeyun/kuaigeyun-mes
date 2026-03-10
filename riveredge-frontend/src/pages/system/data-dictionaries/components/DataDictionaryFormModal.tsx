@@ -95,7 +95,6 @@ export const DataDictionaryFormModal: React.FC<DataDictionaryFormModalProps> = (
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ is_active: true, is_system: false }}
       layout="vertical"
-      grid
     >
       <SchemaFormRenderer
         schema={dataDictionaryFormSchema}

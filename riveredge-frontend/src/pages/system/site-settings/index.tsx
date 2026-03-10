@@ -492,7 +492,6 @@ const SiteSettingsPage: React.FC = () => {
         timezone: values.timezone,
         enable_invitation: values.enable_invitation,
         enable_register: values.enable_register,
-        copyright: values.copyright,
         description: values.description,
       };
 
@@ -713,11 +712,6 @@ const SiteSettingsPage: React.FC = () => {
         </Form.Item>
       </Col>
       <Col xs={24} sm={24} md={24} lg={24}>
-        <Form.Item name="copyright" label={t('pages.system.siteSettings.copyright')}>
-          <Input placeholder={t('pages.system.siteSettings.copyrightPlaceholder')} />
-        </Form.Item>
-      </Col>
-      <Col xs={24} sm={24} md={24} lg={24}>
         <Form.Item name="description" label={t('pages.system.siteSettings.description')}>
           <Input.TextArea rows={3} placeholder={t('pages.system.siteSettings.descriptionPlaceholder')} />
         </Form.Item>
@@ -732,31 +726,17 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
-  const functionSettingsContent = (
-    <Row gutter={[24, 16]}>
-      <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
-          <Switch />
-        </Form.Item>
-      </Col>
-      <Col xs={24} sm={24} md={12} lg={12}>
-        <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
-          <Switch />
-        </Form.Item>
-      </Col>
-    </Row>
-  );
-
-  const functionSettingsWithActions = (
-    <>
-      {functionSettingsContent}
-      {actionButtons}
-    </>
-  );
-
   const systemSettingsContent = (
     <Row gutter={[24, 16]}>
-      <Col xs={24}>
+      <Col xs={24} md={8}>
+        <Card title={t('pages.system.siteSettings.tabFunction')} size="small" style={{ marginBottom: 16 }}>
+          <Form.Item name="enable_invitation" label={t('pages.system.siteSettings.enableInvitation')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="enable_register" label={t('pages.system.siteSettings.enableRegister')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Card>
         <Card title={t('pages.system.configCenter.param.security_token_check_interval')} size="small" style={{ marginBottom: 16 }}>
           <Form.Item
             name="security.token_check_interval"
@@ -780,6 +760,8 @@ const SiteSettingsPage: React.FC = () => {
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Card>
+      </Col>
+      <Col xs={24} md={8}>
         <Card title={t('pages.system.configCenter.param.ui_max_tabs')} size="small" style={{ marginBottom: 16 }}>
           <Form.Item
             name="ui.max_tabs"
@@ -813,6 +795,8 @@ const SiteSettingsPage: React.FC = () => {
             <ColorPicker showText />
           </Form.Item>
         </Card>
+      </Col>
+      <Col xs={24} md={8}>
         <Card title={t('pages.system.configCenter.param.network_timeout')} size="small" style={{ marginBottom: 16 }}>
           <Form.Item
             name="network.timeout"
@@ -851,7 +835,6 @@ const SiteSettingsPage: React.FC = () => {
         onTabChange={setActiveTabKey}
         tabs={[
           { key: 'basic', label: t('pages.system.siteSettings.tabBasic'), children: basicInfoWithActions },
-          { key: 'function', label: t('pages.system.siteSettings.tabFunction'), children: functionSettingsWithActions },
           { key: 'system', label: t('pages.system.siteSettings.tabSystem'), children: systemSettingsWithActions },
         ]}
       />

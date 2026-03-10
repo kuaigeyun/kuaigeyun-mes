@@ -10,8 +10,10 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ProFormText, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, theme } from 'antd';
-import { TwoColumnLayout } from '../../../../components/layout-templates';
+import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates';
+import { MODAL_CONFIG } from '../../../../components/layout-templates/constants';
 import { 
   EditOutlined, 
   DeleteOutlined, 
@@ -140,6 +142,7 @@ const FileListPage: React.FC = () => {
   
   // Modal 相关状态
   const [uploadVisible, setUploadVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [uploadFileList, setUploadFileList] = useState<AntdUploadFile[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewInfo, setPreviewInfo] = useState<FilePreviewResponse | null>(null);
@@ -147,7 +150,7 @@ const FileListPage: React.FC = () => {
   const [renameValue, setRenameValue] = useState('');
   const [renameFile, setRenameFile] = useState<File | null>(null);
   const [createFolderVisible, setCreateFolderVisible] = useState(false);
-  const [folderName, setFolderName] = useState('');
+  const createFolderFormRef = useRef<ProFormInstance>();
   const [creatingFolder, setCreatingFolder] = useState(false);
   
   // 右键菜单状态
@@ -340,15 +343,14 @@ const FileListPage: React.FC = () => {
       messageApi.warning(t('pages.system.files.selectFilesToUpload'));
       return;
     }
-    
     try {
+      setUploading(true);
       const uploadPromises = uploadFileList.map(file => {
         if (file.originFileObj) {
           return uploadFile(file.originFileObj);
         }
         return Promise.resolve(null);
       });
-      
       await Promise.all(uploadPromises);
       messageApi.success(t('pages.system.files.uploadSuccess'));
       setUploadVisible(false);
@@ -356,51 +358,42 @@ const FileListPage: React.FC = () => {
       loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.uploadFailed'));
+    } finally {
+      setUploading(false);
     }
   };
 
   /**
-   * 处理新建文件夹
+   * 处理新建文件夹（由 FormModalTemplate onFinish 调用）
    */
-  const handleCreateFolder = async () => {
-    if (!folderName.trim()) {
+  const handleCreateFolderSubmit = async (values: { folderName?: string }) => {
+    const name = (values?.folderName ?? '').trim();
+    if (!name) {
       messageApi.warning(t('pages.system.files.enterFolderName'));
       return;
     }
-
-    // 检查文件夹名称是否已存在
     const categories = new Set<string>();
     fileList.forEach(file => {
-      if (file.category) {
-        categories.add(file.category);
-      }
+      if (file.category) categories.add(file.category);
     });
-    
-    if (categories.has(folderName.trim())) {
+    if (categories.has(name)) {
       messageApi.warning(t('pages.system.files.folderNameExists'));
       return;
     }
-
     try {
       setCreatingFolder(true);
-      // 创建一个占位文件来表示文件夹
-      // 使用一个包含文件夹标识的文本文件作为占位符
       const placeholderContent = new Blob(['FOLDER_PLACEHOLDER'], { type: 'text/plain' });
-      const placeholderFile = new File([placeholderContent], `folder_${folderName.trim()}.txt`, { type: 'text/plain' });
-      
+      const placeholderFile = new File([placeholderContent], `folder_${name}.txt`, { type: 'text/plain' });
       await uploadFile(placeholderFile, {
-        category: folderName.trim(),
+        category: name,
         description: t('pages.system.files.folderPlaceholderDesc'),
       });
-      
       messageApi.success(t('pages.system.files.folderCreateSuccess'));
       setCreateFolderVisible(false);
-      setFolderName('');
-      // 刷新文件列表
+      createFolderFormRef.current?.resetFields();
       await loadFileList();
-      // 自动选中新创建的文件夹
-      setSelectedTreeKeys([folderName.trim()]);
-      setCurrentPath([ROOT_PATH_KEY, folderName.trim()]);
+      setSelectedTreeKeys([name]);
+      setCurrentPath([ROOT_PATH_KEY, name]);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.folderCreateFailed'));
     } finally {
@@ -943,15 +936,17 @@ const FileListPage: React.FC = () => {
       />
 
       {/* 上传文件 Modal */}
-      <Modal
+      <FormModalTemplate
         title={t('pages.system.files.uploadModalTitle')}
         open={uploadVisible}
-        onCancel={() => {
+        onClose={() => {
           setUploadVisible(false);
           setUploadFileList([]);
         }}
-        onOk={handleUpload}
-        width={600}
+        onFinish={async () => { await handleUpload(); }}
+        isEdit={false}
+        loading={uploading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <Upload
           fileList={uploadFileList}
@@ -961,7 +956,7 @@ const FileListPage: React.FC = () => {
         >
           <Button icon={<UploadOutlined />}>{t('pages.system.files.selectFiles')}</Button>
         </Upload>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 文件预览 Modal */}
       <Modal
@@ -1008,24 +1003,28 @@ const FileListPage: React.FC = () => {
       </Modal>
 
       {/* 新建文件夹 Modal */}
-      <Modal
+      <FormModalTemplate
         title={t('pages.system.files.newFolderModalTitle')}
         open={createFolderVisible}
-        onCancel={() => {
+        onClose={() => {
           setCreateFolderVisible(false);
-          setFolderName('');
+          createFolderFormRef.current?.resetFields();
         }}
-        onOk={handleCreateFolder}
-        confirmLoading={creatingFolder}
+        onFinish={handleCreateFolderSubmit}
+        isEdit={false}
+        loading={creatingFolder}
+        formRef={createFolderFormRef as React.RefObject<ProFormInstance>}
+        initialValues={{ folderName: '' }}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Input
-          value={folderName}
-          onChange={(e) => setFolderName(e.target.value)}
+        <ProFormText
+          name="folderName"
+          label={t('pages.system.files.folderNameLabel')}
           placeholder={t('pages.system.files.folderNamePlaceholder')}
-          onPressEnter={handleCreateFolder}
-          autoFocus
+          rules={[{ required: true, message: t('pages.system.files.enterFolderName') }]}
+          fieldProps={{ autoFocus: true }}
         />
-      </Modal>
+      </FormModalTemplate>
 
       {/* 右键菜单 */}
       {contextMenuVisible && (

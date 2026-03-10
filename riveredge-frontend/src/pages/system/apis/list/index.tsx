@@ -644,14 +644,8 @@ const APIListPage: React.FC = () => {
         initialValues={formInitialValues}
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid
       >
-        <ProFormText
-          name="name"
-          label={t('pages.system.apis.labelName')}
-          rules={[{ required: true, message: t('pages.system.apis.nameRequired') }]}
-          placeholder={t('pages.system.apis.namePlaceholder')}
-          colProps={{ span: 12 }}
-        />
         <ProFormText
           name="code"
           label={t('pages.system.apis.labelCode')}
@@ -661,6 +655,13 @@ const APIListPage: React.FC = () => {
           ]}
           placeholder={t('pages.system.apis.codePlaceholder')}
           disabled={isEdit}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.apis.labelName')}
+          rules={[{ required: true, message: t('pages.system.apis.nameRequired') }]}
+          placeholder={t('pages.system.apis.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         <ProFormText

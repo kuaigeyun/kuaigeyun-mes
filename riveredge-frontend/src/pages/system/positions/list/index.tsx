@@ -166,7 +166,7 @@ const PositionListPage: React.FC = () => {
       render: (_, record) => record.department?.name || '-',
     },
     {
-      title: t('field.position.description'),
+      title: t('field.position.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -323,7 +323,7 @@ const PositionListPage: React.FC = () => {
         columns={[
           { title: t('field.position.name'), dataIndex: 'name' },
           { title: t('field.position.code'), dataIndex: 'code' },
-          { title: t('field.position.description'), dataIndex: 'description', span: 2 },
+          { title: t('field.position.remark'), dataIndex: 'description', span: 2 },
           {
             title: t('field.position.departmentUuid'),
             dataIndex: ['department', 'name'],

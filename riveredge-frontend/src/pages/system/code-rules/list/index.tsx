@@ -25,6 +25,7 @@ import {
 } from '../../../../services/codeRule';
 import { runInitItems } from '../../../../services/tenantInit';
 import { apiRequest } from '../../../../services/api';
+import { getApplicationList } from '../../../../services/application';
 import CodeRuleComponentBuilder from '../../../../components/code-rule-component-builder';
 import {
   CodeRuleComponent,
@@ -232,12 +233,32 @@ const CodeRuleListPage: React.FC = () => {
   };
 
   /**
+   * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
+   */
+  const filterPagesByEnabledApps = async (pages: CodeRulePageConfig[]): Promise<CodeRulePageConfig[]> => {
+    try {
+      const apps = await getApplicationList({ is_installed: true, is_active: true });
+      const enabledPrefixes = apps.map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
+      if (enabledPrefixes.length === 0) return [];
+      return pages.filter(
+        (p) =>
+          enabledPrefixes.some(
+            (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
+          ),
+      );
+    } catch {
+      return pages;
+    }
+  };
+
+  /**
    * 加载页面配置列表
    */
   const loadPageConfigs = async () => {
     try {
       setPageConfigsLoading(true);
-      const pages = await getCodeRulePages();
+      const allPages = await getCodeRulePages();
+      const pages = await filterPagesByEnabledApps(allPages);
 
       // 合并保存的配置和默认配置，确保所有页面都存在
       const savedConfigs = localStorage.getItem(getCodeRulePageConfigsKey());
@@ -259,20 +280,19 @@ const CodeRuleListPage: React.FC = () => {
           });
           setPageConfigs(mergedConfigs);
 
-          // 默认选中第一个页面（仅当没有选中页面时）
+          // 默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中（应用被禁用），则重置为第一项并初始化表单
           if (mergedConfigs.length > 0) {
             setPageConfigs(mergedConfigs);
-            const currentSelected = selectedPageCode || null;
-            if (!currentSelected) {
+            const stillInList =
+              selectedPageCode && mergedConfigs.some((p) => p.pageCode === selectedPageCode);
+            if (!stillInList) setSelectedPageCode(mergedConfigs[0].pageCode);
+            const needInitFirst = !selectedPageCode || !stillInList;
+            if (needInitFirst) {
               const firstPageCode = mergedConfigs[0].pageCode;
-              setSelectedPageCode(firstPageCode);
-              // 延迟初始化表单，确保 codeRules 加载完成后再加载规则
               setTimeout(() => {
                 const firstPageConfig = mergedConfigs.find(p => p.pageCode === firstPageCode);
                 if (firstPageConfig?.ruleCode) {
-                  setTimeout(() => {
-                    handleSelectPage(firstPageCode);
-                  }, 200);
+                  setTimeout(() => handleSelectPage(firstPageCode), 200);
                 } else {
                   resetPageRuleForm(firstPageCode);
                 }
@@ -288,19 +308,17 @@ const CodeRuleListPage: React.FC = () => {
       } else {
         setPageConfigs(pages);
 
-        // 如果没有保存的配置，默认选中第一个页面（仅当没有选中页面时）
+        // 如果没有保存的配置，默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中则重置并初始化
         if (pages.length > 0) {
-          const currentSelected = selectedPageCode || null;
-          if (!currentSelected) {
+          const stillInList = selectedPageCode && pages.some((p) => p.pageCode === selectedPageCode);
+          if (!stillInList) setSelectedPageCode(pages[0].pageCode);
+          const needInitFirst = !selectedPageCode || !stillInList;
+          if (needInitFirst) {
             const firstPageCode = pages[0].pageCode;
-            setSelectedPageCode(firstPageCode);
-            // 延迟初始化表单，等待 codeRules 加载完成后再加载规则
             setTimeout(() => {
               const firstPageConfig = pages.find(p => p.pageCode === firstPageCode);
               if (firstPageConfig?.ruleCode) {
-                setTimeout(() => {
-                  handleSelectPage(firstPageCode);
-                }, 200);
+                setTimeout(() => handleSelectPage(firstPageCode), 200);
               } else {
                 resetPageRuleForm(firstPageCode);
               }
@@ -813,7 +831,7 @@ const CodeRuleListPage: React.FC = () => {
             </div>
 
             {/* 功能页面列表 */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+            <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
               {pageConfigsLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="large" />
@@ -823,29 +841,42 @@ const CodeRuleListPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  {/* 提示：如果页面配置数量较少，提示可能遗漏的页面 */}
-                  {pageConfigs.length < 30 && (
+                  {/* 提示：仅当列表较少或为空时展示，避免干扰；详细排查步骤折叠 */}
+                  {pageConfigs.length < 10 && (
                     <Alert
                       message={t('pages.system.codeRules.tip')}
                       description={
-                        <div>
-                          <p style={{ margin: 0, marginBottom: '8px' }}>
-                            {t('pages.system.codeRules.tipDescription')}
+                        <div style={{ fontSize: '12px' }}>
+                          <p style={{ margin: 0, marginBottom: '6px' }}>
+                            {t('pages.system.codeRules.tipAppFilter')}
                           </p>
-                          <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
-                            <li>{t('pages.system.codeRules.tipCheck1')} <code>isAutoGenerateEnabled</code> / <code>getPageRuleCode</code></li>
-                            <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
-                            <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
-                          </ul>
-                          <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: token.colorTextSecondary }}>
-                            💡 {t('pages.system.codeRules.tipSuggestion')}
-                          </p>
+                          <Collapse
+                            size="small"
+                            items={[
+                              {
+                                key: '1',
+                                label: t('pages.system.codeRules.tipExpandLabel'),
+                                children: (
+                                  <>
+                                    <p style={{ margin: '0 0 6px 0' }}>{t('pages.system.codeRules.tipDescription')}</p>
+                                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                                      <li>{t('pages.system.codeRules.tipCheck1')} <code>isAutoGenerateEnabled</code> / <code>getPageRuleCode</code></li>
+                                      <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
+                                      <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
+                                    </ul>
+                                    <p style={{ margin: '6px 0 0 0', color: token.colorTextSecondary }}>💡 {t('pages.system.codeRules.tipSuggestion')}</p>
+                                  </>
+                                ),
+                              },
+                            ]}
+                            style={{ marginTop: '6px', background: 'transparent', border: 'none' }}
+                          />
                         </div>
                       }
                       type="info"
                       showIcon
                       closable
-                      style={{ marginBottom: '12px', fontSize: '12px' }}
+                      style={{ marginBottom: '12px' }}
                     />
                   )}
                   {getCodeRuleModules().map(module => {
@@ -992,7 +1023,7 @@ const CodeRuleListPage: React.FC = () => {
                 </div>
 
                 {/* 配置表单 */}
-                <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+                <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <Card
                     title={t('pages.system.codeRules.configTitle')}
                     size="small"

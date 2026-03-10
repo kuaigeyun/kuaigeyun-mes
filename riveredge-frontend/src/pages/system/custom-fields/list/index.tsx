@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin, Form } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Input, theme, Modal, Spin, Form, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -30,6 +30,7 @@ import {
   UpdateCustomFieldData,
   CustomFieldPageConfig,
 } from '../../../../services/customField';
+import { getApplicationList } from '../../../../services/application';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -116,17 +117,39 @@ const CustomFieldListPage: React.FC = () => {
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
 
   /**
+   * 根据已启用应用过滤页面：只展示已安装且启用的应用下的页面
+   */
+  const filterPagesByEnabledApps = async (
+    pages: CustomFieldPageConfig[],
+  ): Promise<CustomFieldPageConfig[]> => {
+    try {
+      const apps = await getApplicationList({ is_installed: true, is_active: true });
+      const enabledPrefixes = apps.map((a) => a.route_path || `/apps/${a.code}`).filter(Boolean);
+      if (enabledPrefixes.length === 0) return [];
+      return pages.filter((p) =>
+        enabledPrefixes.some(
+          (prefix) => p.pagePath === prefix || p.pagePath.startsWith(prefix + '/'),
+        ),
+      );
+    } catch {
+      return pages;
+    }
+  };
+
+  /**
    * 加载页面配置列表
    */
   const loadPageConfigs = async () => {
     try {
       setPageConfigsLoading(true);
-      const pages = await getCustomFieldPages();
+      const allPages = await getCustomFieldPages();
+      const pages = await filterPagesByEnabledApps(allPages);
       setPageConfigs(pages);
 
-      // 默认选中第一个页面（仅当没有选中页面时）
-      if (pages.length > 0 && !selectedPageCode) {
-        setSelectedPageCode(pages[0].pageCode);
+      // 默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中（应用被禁用），则重置为第一项
+      if (pages.length > 0) {
+        const stillInList = selectedPageCode && pages.some((p) => p.pageCode === selectedPageCode);
+        if (!stillInList) setSelectedPageCode(pages[0].pageCode);
       } else if (pages.length === 0) {
         console.warn('⚠️ 未发现任何自定义字段页面配置，请检查应用的 manifest.json 是否包含 custom_field_pages 配置');
         messageApi.warning(t('field.customField.noPageConfig'));
@@ -488,14 +511,14 @@ const CustomFieldListPage: React.FC = () => {
       case 'text':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="default_value"
                 label={t('field.customField.defaultValue')}
                 placeholder={t('field.customField.defaultValuePlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="max_length"
                 label={t('field.customField.maxLength')}
@@ -508,21 +531,21 @@ const CustomFieldListPage: React.FC = () => {
       case 'number':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="default_value"
                 label={t('field.customField.defaultValue')}
                 placeholder={t('field.customField.defaultValuePlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="min_value"
                 label={t('field.customField.minValue')}
                 placeholder={t('field.customField.minValuePlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="max_value"
                 label={t('field.customField.maxValue')}
@@ -534,14 +557,14 @@ const CustomFieldListPage: React.FC = () => {
       case 'date':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="default_value"
                 label={t('field.customField.defaultValue')}
                 placeholder={t('field.customField.dateDefaultPlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="date_format"
                 label={t('field.customField.dateFormat')}
@@ -555,14 +578,14 @@ const CustomFieldListPage: React.FC = () => {
       case 'time':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="default_value"
                 label={t('field.customField.defaultValue')}
                 placeholder={t('field.customField.timeDefaultPlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="time_format"
                 label={t('field.customField.timeFormat')}
@@ -576,14 +599,14 @@ const CustomFieldListPage: React.FC = () => {
       case 'datetime':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="default_value"
                 label={t('field.customField.defaultValue')}
                 placeholder={t('field.customField.datetimeDefaultPlaceholder')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="datetime_format"
                 label={t('field.customField.datetimeFormat')}
@@ -597,7 +620,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'select':
       case 'multiselect':
         return (
-          <div style={{ gridColumn: 'span 1' }}>
+          <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
             <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('field.customField.selectOptions')}</div>
             <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 8 }}>
               {t('field.customField.selectOptionsHint')}
@@ -645,7 +668,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'image':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="image_max_size"
                 label={t('field.customField.imageMaxSize')}
@@ -654,7 +677,7 @@ const CustomFieldListPage: React.FC = () => {
                 extra={t('field.customField.imageMaxSizeExtra')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="image_allowed_types"
                 label={t('field.customField.allowedTypes')}
@@ -667,7 +690,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'file':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="file_max_size"
                 label={t('field.customField.fileMaxSize')}
@@ -676,7 +699,7 @@ const CustomFieldListPage: React.FC = () => {
                 extra={t('field.customField.fileMaxSizeExtra')}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormText
                 name="file_allowed_types"
                 label={t('field.customField.allowedTypes')}
@@ -689,7 +712,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'associated_object':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <SafeProFormSelect
                 name="associated_table"
                 label={t('field.customField.associatedTable')}
@@ -706,7 +729,7 @@ const CustomFieldListPage: React.FC = () => {
                 }}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <SafeProFormSelect
                 name="associated_field"
                 label={t('field.customField.associatedField')}
@@ -727,7 +750,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'formula':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormTextArea
                 name="formula_expression"
                 label={t('field.customField.formulaExpression')}
@@ -741,7 +764,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'textarea':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormTextArea
                 name="default_value"
                 label={t('field.customField.defaultValue')}
@@ -749,7 +772,7 @@ const CustomFieldListPage: React.FC = () => {
                 fieldProps={{ rows: 3 }}
               />
             </div>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormDigit
                 name="textarea_rows"
                 label={t('field.customField.textareaRows')}
@@ -763,7 +786,7 @@ const CustomFieldListPage: React.FC = () => {
       case 'json':
         return (
           <>
-            <div style={{ gridColumn: 'span 1' }}>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <ProFormTextArea
                 name="default_value"
                 label={t('field.customField.defaultValueJson')}
@@ -1039,7 +1062,7 @@ const CustomFieldListPage: React.FC = () => {
             </div>
 
             {/* 功能页面列表 */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+            <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
               {pageConfigsLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <Spin size="large" />
@@ -1160,7 +1183,7 @@ const CustomFieldListPage: React.FC = () => {
                 </div>
 
                 {/* 字段列表 */}
-                <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+                <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px' }}>
                   <UniTable<CustomField>
                     actionRef={actionRef}
                     columns={columns}
@@ -1286,14 +1309,8 @@ const CustomFieldListPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid
       >
-          <ProFormText
-            name="name"
-            label={t('field.customField.name')}
-            rules={[{ required: true, message: t('field.customField.nameRequired') }]}
-            placeholder={t('field.customField.namePlaceholder')}
-            colProps={{ span: 12 }}
-          />
           <ProFormText
             name="code"
             label={t('field.customField.code')}
@@ -1301,6 +1318,13 @@ const CustomFieldListPage: React.FC = () => {
             placeholder={t('field.customField.codePlaceholder')}
             disabled={isEdit}
             extra={t('field.customField.codeExtra')}
+            colProps={{ span: 12 }}
+          />
+          <ProFormText
+            name="name"
+            label={t('field.customField.name')}
+            rules={[{ required: true, message: t('field.customField.nameRequired') }]}
+            placeholder={t('field.customField.namePlaceholder')}
             colProps={{ span: 12 }}
           />
           <ProFormText
@@ -1357,35 +1381,26 @@ const CustomFieldListPage: React.FC = () => {
             fieldProps={{ min: 0 }}
             colProps={{ span: 8 }}
           />
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              width: '100%',
-              minWidth: 0,
-              marginBottom: 16,
-              paddingLeft: 8,
-              paddingRight: 8,
-              boxSizing: 'border-box',
-            }}
-          >
-            <div
-              style={{
-                padding: '16px',
-                backgroundColor: token.colorFillAlter || '#fafafa',
-                borderRadius: token.borderRadius,
-                border: `1px solid ${token.colorBorder}`,
-                width: '100%',
-                minWidth: 0,
-                overflow: 'hidden',
-                boxSizing: 'border-box',
-              }}
-            >
-              <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', width: '100%' }}>
-                {renderConfigFields()}
+          <Row style={{ width: '100%', marginBottom: 16 }}>
+            <Col span={24} style={{ paddingLeft: 8, paddingRight: 8, boxSizing: 'border-box' }}>
+              <div
+                style={{
+                  padding: '16px',
+                  backgroundColor: token.colorFillAlter || '#fafafa',
+                  borderRadius: token.borderRadius,
+                  border: `1px solid ${token.colorBorder}`,
+                  width: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', width: '100%', minWidth: 0 }}>
+                  {renderConfigFields()}
+                </div>
               </div>
-            </div>
-          </div>
+            </Col>
+          </Row>
           <ProFormSwitch
             name="is_required"
             label={t('field.customField.isRequired')}

@@ -46,7 +46,8 @@ import type { DataNode, TreeProps } from 'antd/es/tree'
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable } from '../../../../components/uni-table'
-import { TwoColumnLayout } from '../../../../components/layout-templates'
+import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates'
+import { MODAL_CONFIG } from '../../../../components/layout-templates/constants'
 import { MaterialForm } from '../../components/MaterialForm'
 import { QRCodeGenerator } from '../../../../components/qrcode'
 import { qrcodeApi } from '../../../../services/qrcode'
@@ -66,6 +67,8 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../serv
 import { getFileDownloadUrl } from '../../../../services/file'
 import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
+import { useNewShortcut } from '../../../../hooks/useNewShortcut'
+import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 
 
 /**
@@ -444,6 +447,9 @@ const MaterialsManagementPage: React.FC = () => {
     setMaterialModalVisible(true)
     // 注意：编码生成逻辑已移至 MaterialForm 组件内部
   }, [])
+
+  // Alt+N 绑定到新建物料（与新建分组区分，仅新建物料响应快捷键）
+  useNewShortcut(handleCreateMaterial)
 
   const handleEditMaterial = useCallback(
     async (record: Material) => {
@@ -1067,7 +1073,7 @@ const MaterialsManagementPage: React.FC = () => {
               headerActions={
                 <Space>
                   <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateMaterial}>
-                    {t('app.master-data.materials.createMaterial')}
+                    {t('app.master-data.materials.createMaterial') + NEW_SHORTCUT_HINT}
                   </Button>
                   <Button
                     icon={<QrcodeOutlined />}
@@ -1218,97 +1224,83 @@ const MaterialsManagementPage: React.FC = () => {
         }}
       />
 
-      {/* 分组创建/编辑 Modal */}
-      <Modal
+      {/* 分组创建/编辑 Modal - 使用 FormModalTemplate 与其它单列 modal 行为一致 */}
+      <FormModalTemplate
         title={groupIsEdit ? t('app.master-data.materials.editGroup') : t('app.master-data.materials.createGroup')}
         open={groupModalVisible}
-        onCancel={() => setGroupModalVisible(false)}
-        footer={null}
-        width={600}
-        destroyOnHidden
+        onClose={() => setGroupModalVisible(false)}
+        onFinish={handleGroupSubmit}
+        isEdit={groupIsEdit}
+        loading={groupFormLoading}
+        formRef={groupFormRef as React.RefObject<ProFormInstance>}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        initialValues={
+          groupIsEdit && currentGroup
+            ? {
+                code: currentGroup.code,
+                name: currentGroup.name,
+                parentId: currentGroup.parentId,
+                description: currentGroup.description,
+                isActive: currentGroup.isActive,
+              }
+            : { isActive: true }
+        }
       >
-        <ProForm
-          formRef={groupFormRef}
-          submitter={{
-            searchConfig: {
-              submitText: groupIsEdit ? t('app.master-data.materials.update') : t('app.master-data.materials.create'),
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
+        <SafeProFormSelect
+          name="parentId"
+          label={t('app.master-data.materials.parentGroup')}
+          placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
+          options={materialGroups
+            .filter(g => !groupIsEdit || g.id !== currentGroup?.id) // 编辑时排除自己
+            .map(g => ({
+              label: `${g.code} - ${g.name}`,
+              value: g.id,
+            }))}
+          fieldProps={{
+            loading: materialGroupsLoading,
+            showSearch: true,
+            allowClear: true,
+            filterOption: (input: string, option: any) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
-          onFinish={handleGroupSubmit}
-          loading={groupFormLoading}
-          initialValues={
-            groupIsEdit && currentGroup
-              ? {
-                  code: currentGroup.code,
-                  name: currentGroup.name,
-                  parentId: currentGroup.parentId,
-                  description: currentGroup.description,
-                  isActive: currentGroup.isActive,
-                }
-              : {
-                  isActive: true,
-                }
-          }
-        >
-          <SafeProFormSelect
-            name="parentId"
-            label={t('app.master-data.materials.parentGroup')}
-            placeholder={t('app.master-data.materials.parentGroupPlaceholder')}
-            options={materialGroups
-              .filter(g => !groupIsEdit || g.id !== currentGroup?.id) // 编辑时排除自己
-              .map(g => ({
-                label: `${g.code} - ${g.name}`,
-                value: g.id,
-              }))}
-            fieldProps={{
-              loading: materialGroupsLoading,
-              showSearch: true,
-              allowClear: true,
-              filterOption: (input: string, option: any) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-            }}
-          />
-          <ProFormText
-            name="code"
-            label={t('app.master-data.materials.groupCode')}
-            placeholder={t('app.master-data.materials.groupCodePlaceholder')}
-            rules={[
-              { required: true, message: t('app.master-data.materials.groupCodeRequired') },
-              { max: 50, message: t('app.master-data.materials.groupCodeMax') },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label={t('app.master-data.materials.groupName')}
-            placeholder={t('app.master-data.materials.groupNamePlaceholder')}
-            rules={[
-              { required: true, message: t('app.master-data.materials.groupNameRequired') },
-              { max: 200, message: t('app.master-data.materials.groupNameMax') },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label={t('app.master-data.materials.description')}
-            placeholder={t('app.master-data.materials.descriptionPlaceholder')}
-            rows={3}
-            fieldProps={{
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label={t('app.master-data.materials.enabledStatusLabel')}
-            checkedChildren={t('app.master-data.materials.checkedChildren')}
-            unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
-          />
-        </ProForm>
-      </Modal>
+        />
+        <ProFormText
+          name="code"
+          label={t('app.master-data.materials.groupCode')}
+          placeholder={t('app.master-data.materials.groupCodePlaceholder')}
+          rules={[
+            { required: true, message: t('app.master-data.materials.groupCodeRequired') },
+            { max: 50, message: t('app.master-data.materials.groupCodeMax') },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
+          }}
+        />
+        <ProFormText
+          name="name"
+          label={t('app.master-data.materials.groupName')}
+          placeholder={t('app.master-data.materials.groupNamePlaceholder')}
+          rules={[
+            { required: true, message: t('app.master-data.materials.groupNameRequired') },
+            { max: 200, message: t('app.master-data.materials.groupNameMax') },
+          ]}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('app.master-data.materials.description')}
+          placeholder={t('app.master-data.materials.descriptionPlaceholder')}
+          rows={3}
+          fieldProps={{
+            maxLength: 500,
+          }}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label={t('app.master-data.materials.enabledStatusLabel')}
+          checkedChildren={t('app.master-data.materials.checkedChildren')}
+          unCheckedChildren={t('app.master-data.materials.unCheckedChildren')}
+        />
+      </FormModalTemplate>
 
       {/* 物料创建/编辑 Modal - 使用新的多标签页表单组件 */}
       <MaterialForm

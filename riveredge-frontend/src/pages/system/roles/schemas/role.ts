@@ -6,14 +6,6 @@ import type { FieldConfig } from '../../../../components/schema-form';
 
 export const roleFormSchema: FieldConfig[] = [
   {
-    name: 'name',
-    type: 'text',
-    labelKey: 'field.role.name',
-    placeholderKey: 'field.role.namePlaceholder',
-    required: true,
-    rules: [{ required: true, messageKey: 'field.role.nameRequired' }],
-  },
-  {
     name: 'code',
     type: 'text',
     labelKey: 'field.role.code',
@@ -23,6 +15,14 @@ export const roleFormSchema: FieldConfig[] = [
       { required: true, messageKey: 'field.role.codeRequired' },
       { pattern: /^[a-zA-Z0-9_]+$/, messageKey: 'field.role.codePattern' },
     ],
+  },
+  {
+    name: 'name',
+    type: 'text',
+    labelKey: 'field.role.name',
+    placeholderKey: 'field.role.namePlaceholder',
+    required: true,
+    rules: [{ required: true, messageKey: 'field.role.nameRequired' }],
   },
   {
     name: 'description',

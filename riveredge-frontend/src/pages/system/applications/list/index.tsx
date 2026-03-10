@@ -8,9 +8,9 @@
 import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Switch, Card, Dropdown } from 'antd';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Switch, Card, Dropdown } from 'antd';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { theme } from 'antd';
 import {
@@ -85,10 +85,12 @@ const getApplicationIcon = (code: string, icon?: string | null) => {
  */
 const ApplicationListPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
+  const editFormRef = useRef<ProFormInstance>(null);
+  const upgradeFormRef = useRef<ProFormInstance>(null);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -357,7 +359,7 @@ const ApplicationListPage: React.FC = () => {
         icon: <AppstoreOutlined />,
         onClick: async () => {
           try {
-            Modal.confirm({
+            modalApi.confirm({
               title: t('pages.system.applications.syncMenu'),
               content: t('pages.system.applications.syncMenuConfirm'),
               onOk: async () => {
@@ -418,7 +420,7 @@ const ApplicationListPage: React.FC = () => {
           label: t('pages.system.applications.install'),
           icon: <DownloadOutlined />,
           onClick: () => {
-            Modal.confirm({
+            modalApi.confirm({
               title: t('pages.system.applications.installConfirm'),
               onOk: () => handleInstall(application),
             });
@@ -432,7 +434,7 @@ const ApplicationListPage: React.FC = () => {
           disabled: application.is_system,
           onClick: () => {
             if (application.is_system) return;
-            Modal.confirm({
+            modalApi.confirm({
               title: t('pages.system.applications.uninstallConfirm'),
               onOk: () => handleUninstall(application),
             });
@@ -449,6 +451,8 @@ const ApplicationListPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: themeToken.borderRadiusLG,
+          border: `1px solid ${themeToken.colorBorder}`,
+          overflow: 'hidden',
         }}
         cover={
           <div
@@ -460,6 +464,8 @@ const ApplicationListPage: React.FC = () => {
               backgroundColor: application.is_active && application.is_installed ? '#f0f9ff' : '#fafafa',
               padding: '16px',
               borderBottom: `1px solid ${themeToken.colorBorder}`,
+              borderTopLeftRadius: themeToken.borderRadiusLG,
+              borderTopRightRadius: themeToken.borderRadiusLG,
             }}
           >
             <div
@@ -752,40 +758,44 @@ const ApplicationListPage: React.FC = () => {
         column={1}
       />
 
-      {/* 编辑应用 Modal */}
-      <Modal
+      {/* 应用设置 Modal - 使用 FormModalTemplate */}
+      <FormModalTemplate
+        key={editingApp?.uuid ?? 'edit'}
         title={t('pages.system.applications.editModalTitle', { name: editingApp?.name ?? '' })}
         open={editModalVisible}
-        onOk={() => {
-          const form = document.getElementById('edit-app-form') as HTMLFormElement;
-          const formData = new FormData(form);
-          const name = formData.get('name') as string;
-          const description = (formData.get('description') as string) || '';
-          const sortOrder = parseInt(formData.get('sort_order') as string, 10);
-
+        onClose={() => setEditModalVisible(false)}
+        onFinish={async (values: any) => {
           if (editingApp) {
-            const isCustomName = name !== editingApp.name || editingApp.is_custom_name;
-            const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
-            handleUpdateAppConfig(editingApp, {
-              name,
-              description: description.trim() || undefined,
-              sort_order: sortOrder,
+            const isCustomName = values.name !== editingApp.name || editingApp.is_custom_name;
+            const isCustomSort = values.sort_order !== (editingApp.sort_order ?? 0) || editingApp.is_custom_sort;
+            await handleUpdateAppConfig(editingApp, {
+              name: values.name,
+              description: values.description?.trim() || undefined,
+              sort_order: values.sort_order,
               is_custom_name: isCustomName,
-              is_custom_sort: isCustomSort
+              is_custom_sort: isCustomSort,
             });
           }
         }}
-        onCancel={() => setEditModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setEditModalVisible(false)}>
-            {t('common.cancel')}
-          </Button>,
-          <Button
-            key="restore"
-            danger
-            onClick={async () => {
-              if (editingApp) {
-                Modal.confirm({
+        isEdit={true}
+        loading={submitting}
+        formRef={editFormRef}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        initialValues={
+          editingApp
+            ? {
+                name: editingApp.name,
+                description: editingApp.description ?? '',
+                sort_order: editingApp.sort_order ?? 0,
+              }
+            : undefined
+        }
+        extraFooter={
+          editingApp ? (
+            <Button
+              danger
+              onClick={() => {
+                modalApi.confirm({
                   title: t('pages.system.applications.restoreDefault'),
                   content: t('pages.system.applications.restoreDefaultConfirm'),
                   onOk: async () => {
@@ -793,7 +803,7 @@ const ApplicationListPage: React.FC = () => {
                     try {
                       await updateApplication(editingApp.uuid, {
                         is_custom_name: false,
-                        is_custom_sort: false
+                        is_custom_sort: false,
                       });
                       await syncApplicationManifest(editingApp.code);
                       messageApi.success(t('pages.system.applications.restoreSuccess'));
@@ -804,160 +814,75 @@ const ApplicationListPage: React.FC = () => {
                     } finally {
                       setSubmitting(false);
                     }
-                  }
+                  },
                 });
-              }
-            }}
-          >
-            {t('pages.system.applications.restoreDefault')}
-          </Button>,
-          <Button key="submit" type="primary" loading={submitting} onClick={() => {
-            const form = document.getElementById('edit-app-form') as HTMLFormElement;
-            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-          }}>
-            {t('pages.dashboard.save')}
-          </Button>
-        ]}
-        destroyOnHidden
+              }}
+            >
+              {t('pages.system.applications.restoreDefault')}
+            </Button>
+          ) : null
+        }
       >
-        <form
-          id="edit-app-form"
-          style={{ padding: '20px 0' }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const name = formData.get('name') as string;
-            const description = (formData.get('description') as string) || '';
-            const sortOrder = parseInt(formData.get('sort_order') as string, 10);
-            if (editingApp) {
-              const isCustomName = name !== editingApp.name || editingApp.is_custom_name;
-              const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
-              handleUpdateAppConfig(editingApp, {
-                name,
-                description: description.trim() || undefined,
-                sort_order: sortOrder,
-                is_custom_name: isCustomName,
-                is_custom_sort: isCustomSort
-              });
-            }
-          }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.nameLabel')}:</label>
-            <input
-              type="text"
-              name="name"
-              defaultValue={editingApp?.name}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #d9d9d9'
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.descriptionLabel')}:</label>
-            <textarea
-              name="description"
-              defaultValue={editingApp?.description ?? ''}
-              placeholder={t('pages.system.applications.descriptionPlaceholder')}
-              rows={3}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #d9d9d9',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.sortOrderHint')}:</label>
-            <input
-              type="number"
-              name="sort_order"
-              defaultValue={editingApp?.sort_order || 0}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #d9d9d9'
-              }}
-            />
-          </div>
-          <div style={{ color: '#8c8c8c', fontSize: 12 }}>
-            {t('pages.system.applications.editHint')}
-          </div>
-        </form>
-      </Modal>
+        <ProFormText
+          name="name"
+          label={t('pages.system.applications.nameLabel')}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.applications.descriptionLabel')}
+          placeholder={t('pages.system.applications.descriptionPlaceholder')}
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormDigit
+          name="sort_order"
+          label={t('pages.system.applications.sortOrderHint')}
+          fieldProps={{ min: 0 }}
+        />
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
+          {t('pages.system.applications.editHint')}
+        </div>
+      </FormModalTemplate>
 
-      {/* 应用升版 Modal */}
-      <Modal
+      {/* 应用升版 Modal - 使用 FormModalTemplate */}
+      <FormModalTemplate
+        key={upgradingApp?.uuid ?? 'upgrade'}
         title={t('pages.system.applications.upgradeModalTitle', { name: upgradingApp?.name ?? '' })}
         open={upgradeModalVisible}
-        onCancel={() => setUpgradeModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setUpgradeModalVisible(false)}>
-            {t('common.cancel')}
-          </Button>,
-          <Button key="submit" type="primary" loading={submitting} onClick={() => {
-            const form = document.getElementById('upgrade-app-form') as HTMLFormElement;
-            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-          }}>
-            {t('pages.dashboard.save')}
-          </Button>
-        ]}
-        destroyOnHidden
+        onClose={() => setUpgradeModalVisible(false)}
+        onFinish={async (values: any) => {
+          if (upgradingApp) {
+            await handleUpgradeApp(upgradingApp, values.version, values.changelog ?? '');
+          }
+        }}
+        isEdit={true}
+        loading={submitting}
+        formRef={upgradeFormRef}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        initialValues={
+          upgradingApp
+            ? {
+                version: upgradingApp.version ?? '',
+                changelog: upgradingApp.changelog ?? '',
+              }
+            : undefined
+        }
       >
-        <form
-          id="upgrade-app-form"
-          style={{ padding: '20px 0' }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const version = formData.get('version') as string;
-            const changelog = formData.get('changelog') as string;
-            if (upgradingApp) {
-              handleUpgradeApp(upgradingApp, version, changelog);
-            }
-          }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.newVersionLabel')}:</label>
-            <input
-              type="text"
-              name="version"
-              required
-              defaultValue={upgradingApp?.version}
-              placeholder={t('pages.system.applications.newVersionPlaceholder')}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #d9d9d9'
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8 }}>{t('pages.system.applications.changelogLabel')}:</label>
-            <textarea
-              name="changelog"
-              placeholder={t('pages.system.applications.changelogPlaceholder')}
-              rows={5}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '4px',
-                border: '1px solid #d9d9d9'
-              }}
-            />
-          </div>
-          <div style={{ color: '#8c8c8c', fontSize: 12 }}>
-            {t('pages.system.applications.upgradeHint')}
-          </div>
-        </form>
-      </Modal>
+        <ProFormText
+          name="version"
+          label={t('pages.system.applications.newVersionLabel')}
+          placeholder={t('pages.system.applications.newVersionPlaceholder')}
+          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }]}
+        />
+        <ProFormTextArea
+          name="changelog"
+          label={t('pages.system.applications.changelogLabel')}
+          placeholder={t('pages.system.applications.changelogPlaceholder')}
+          fieldProps={{ rows: 5 }}
+        />
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
+          {t('pages.system.applications.upgradeHint')}
+        </div>
+      </FormModalTemplate>
     </>
   );
 };

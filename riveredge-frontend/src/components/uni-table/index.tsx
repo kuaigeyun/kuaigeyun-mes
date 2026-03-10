@@ -1186,7 +1186,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-fuzzy-search .ant-input-search-button {
           height: 32px !important;
         }
-        /* 搜索框整体：边框颜色与 UniTable 容器卡片一致（token.colorBorderSecondary） */
+        /* 搜索框整体：边框与高级搜索/重置按钮一致（token.colorBorder） */
         html body .uni-table-fuzzy-search.ant-input-search,
         html body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html body .uni-table-fuzzy-search .ant-input-group,
@@ -1194,13 +1194,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .pro-table-button-container .uni-table-fuzzy-search,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
-          border: 1px solid ${token.colorBorderSecondary} !important;
+          border: 1px solid ${token.colorBorder} !important;
           border-radius: ${token.borderRadius}px !important;
           overflow: hidden !important;
           background-color: ${token.colorBgContainer} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
         }
-        /* 深色模式下的搜索框样式 - 边框颜色与 UniTable 容器卡片一致 */
+        /* 深色模式下的搜索框样式 - 边框与按钮一致 */
         html[data-theme="dark"] body .uni-table-fuzzy-search.ant-input-search,
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group,
@@ -1208,7 +1208,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
-          border: 1px solid ${token.colorBorderSecondary} !important;
+          border: 1px solid ${token.colorBorder} !important;
           background-color: ${token.colorBgContainer} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
         }
@@ -1253,7 +1253,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper:focus,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper:focus,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper-focused {
-          border-color: var(--ant-colorBorderSecondary) !important;
+          border-color: var(--ant-colorBorder) !important;
           box-shadow: none !important;
           outline: none !important;
         }
@@ -1261,7 +1261,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper {
           background-color: var(--ant-colorBgContainer) !important;
-          border-color: var(--ant-colorBorderSecondary) !important;
+          border-color: var(--ant-colorBorder) !important;
         }
         html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input,
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input {
@@ -1273,8 +1273,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           color: var(--ant-colorTextPlaceholder) !important;
           opacity: 0.5 !important;
         }
-        /* 统一按钮阴影：高级搜索按钮、重置按钮、钉住的条件、视图按钮 */
-        /* 高级搜索和重置按钮（QuerySearchButton 组件内的按钮）- 统一高度 32px */
+        /* 高级搜索、重置按钮使用默认样式，与模糊搜索框相同的阴影 */
+        .pro-table-button-container .ant-btn[type="default"]:not(.ant-btn-dangerous):not(.ant-radio-button-wrapper) {
+          height: 32px !important;
+          border-radius: ${token.borderRadius}px !important;
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+        }
+        html[data-theme="dark"] body .pro-table-button-container .ant-btn[type="default"]:not(.ant-btn-dangerous):not(.ant-radio-button-wrapper) {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
+        }
+        /* 钉住的条件、视图按钮等 type="text" 的按钮 - 统一高度与阴影 */
         .pro-table-button-container .ant-btn[type="text"]:not(.ant-btn-dangerous):not(.ant-radio-button-wrapper) {
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;

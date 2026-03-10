@@ -2766,22 +2766,8 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
       <Button
           ref={buttonRef}
           onClick={handleOpen}
-          type="text"
-          style={{
-            backgroundColor: token.colorFillTertiary,
-            color: token.colorPrimary,
-            height: '32px',
-            boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
-            borderRadius: token.borderRadius,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-            e.currentTarget.style.color = token.colorPrimary;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = token.colorFillTertiary;
-            e.currentTarget.style.color = token.colorPrimary;
-          }}
+          type="default"
+          style={{ height: '32px' }}
       >
         {t('components.uniQuery.advancedSearch')}
           <DownOutlined style={{ marginLeft: 4 }} />
@@ -2789,22 +2775,8 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         <Button
           onClick={handleReset}
           icon={<ReloadOutlined />}
-          type="text"
-          style={{
-            backgroundColor: token.colorFillTertiary,
-            color: token.colorTextSecondary,
-            height: '32px',
-            boxShadow: '0 1px 1px 0 rgba(0, 0, 0, 0.03), 0 1px 4px -1px rgba(0, 0, 0, 0.02), 0 2px 2px 0 rgba(0, 0, 0, 0.02)',
-            borderRadius: token.borderRadius,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-            e.currentTarget.style.color = token.colorText;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = token.colorFillTertiary;
-            e.currentTarget.style.color = token.colorTextSecondary;
-          }}
+          type="default"
+          style={{ height: '32px' }}
         >
           {t('components.uniQuery.reset')}
         </Button>

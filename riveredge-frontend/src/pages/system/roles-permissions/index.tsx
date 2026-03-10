@@ -681,7 +681,7 @@ const RolesPermissionsPage: React.FC = () => {
       style={{
         display: 'flex',
         height: '100%',
-        padding: `0 ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px`,
+        padding: `0 ${PAGE_SPACING?.PADDING ?? 16}px ${PAGE_SPACING?.PADDING ?? 16}px ${PAGE_SPACING?.PADDING ?? 16}px`,
         margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,

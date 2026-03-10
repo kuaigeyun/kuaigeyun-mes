@@ -19,6 +19,8 @@ export const MODAL_CONFIG = {
   LARGE_WIDTH: 1000,
   /** 小宽度（用于简单表单） */
   SMALL_WIDTH: 600,
+  /** 极小宽度（用于字段极少的表单） */
+  TINY_WIDTH: 520,
   /** Modal body 限高：预留标题+底部+边距约 280px，避免整页出现滚动条 */
   BODY_MAX_HEIGHT: 'calc(100vh - 280px)',
 } as const;

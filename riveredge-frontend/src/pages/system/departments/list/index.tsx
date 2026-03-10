@@ -332,7 +332,7 @@ const DepartmentListPage: React.FC = () => {
       copyable: true,
     },
     {
-      title: t('field.department.description'),
+      title: t('field.department.remark'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -562,7 +562,7 @@ const DepartmentListPage: React.FC = () => {
           { title: t('field.department.queryCode'), dataIndex: 'query_code' },
           { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
           { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-          { title: t('field.department.description'), dataIndex: 'description', span: 2 },
+          { title: t('field.department.remark'), dataIndex: 'description', span: 2 },
         ]}
       />
     </ListPageTemplate>

@@ -6,18 +6,20 @@ import type { FieldConfig } from '../../../../components/schema-form';
 
 export const positionFormSchema: FieldConfig[] = [
   {
+    name: 'code',
+    type: 'text',
+    labelKey: 'field.position.code',
+    placeholderKey: 'field.position.codePlaceholder',
+    required: true,
+    rules: [{ required: true, messageKey: 'field.position.codeRequired' }],
+  },
+  {
     name: 'name',
     type: 'text',
     labelKey: 'field.position.name',
     placeholderKey: 'field.position.namePlaceholder',
     required: true,
     rules: [{ required: true, messageKey: 'field.position.nameRequired' }],
-  },
-  {
-    name: 'code',
-    type: 'text',
-    labelKey: 'field.position.code',
-    placeholderKey: 'field.position.codePlaceholder',
   },
   {
     name: 'department_uuid',
@@ -27,16 +29,15 @@ export const positionFormSchema: FieldConfig[] = [
     allowClear: true,
   },
   {
-    name: 'description',
-    type: 'textarea',
-    labelKey: 'field.position.description',
-    placeholderKey: 'field.position.descriptionPlaceholder',
-  },
-  {
     name: 'sort_order',
     type: 'number',
     labelKey: 'field.position.sortOrder',
-    colSpan: 12,
+  },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'field.position.remark',
+    placeholderKey: 'field.position.remarkPlaceholder',
   },
   {
     name: 'is_active',

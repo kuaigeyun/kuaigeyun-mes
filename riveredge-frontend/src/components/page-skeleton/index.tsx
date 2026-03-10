@@ -13,8 +13,10 @@ import { PAGE_SPACING } from '../layout-templates/constants';
 
 export interface PageSkeletonProps {
   /** 工作台/分析页等使用 DashboardTemplate 的页面需传入 'dashboard'，与模板边距一致 */
-  variant?: 'default' | 'dashboard';
+  variant?: 'default' | 'dashboard' | 'rolesPermissions';
 }
+
+const P = PAGE_SPACING.PADDING;
 
 /**
  * 页面骨架屏组件
@@ -22,11 +24,42 @@ export interface PageSkeletonProps {
  * 提供统一的页面加载占位效果。
  * - default: 无内边距，适用于多数列表/表单页
  * - dashboard: 边距 0 16px 16px 16px，仅工作台/分析页使用，与 DashboardTemplate 一致
+ * - rolesPermissions: 边距与角色权限页一致（0 16px 16px 16px），左右分栏布局
  */
 const PageSkeleton: React.FC<PageSkeletonProps> = ({ variant = 'default' }) => {
-  const padding = variant === 'dashboard'
-    ? `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`
-    : 0;
+  const padding =
+    variant === 'dashboard' || variant === 'rolesPermissions'
+      ? `0 ${P}px ${P}px ${P}px`
+      : 0;
+
+  if (variant === 'rolesPermissions') {
+    return (
+      <div style={{ padding, display: 'flex', height: '100%', gap: 0, boxSizing: 'border-box' }}>
+        {/* 左侧栏骨架（与角色树宽度一致） */}
+        <div style={{ width: 300, flexShrink: 0, padding: 8 }}>
+          <Skeleton.Input active size="small" style={{ width: '100%', marginBottom: 8 }} />
+          <Skeleton.Button active block style={{ marginBottom: 8 }} />
+          <Skeleton active paragraph={{ rows: 6, width: ['100%', '100%', '80%', '80%', '60%', '60%'] }} />
+        </div>
+        {/* 右侧主区骨架 */}
+        <div style={{ flex: 1, padding: 16, minWidth: 0 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Skeleton.Input active size="default" style={{ width: 120, marginRight: 8 }} />
+            <Skeleton.Input active size="default" style={{ width: 200 }} />
+          </div>
+          <Skeleton
+            active
+            paragraph={{
+              rows: 10,
+              width: ['100%', '100%', '100%', '100%', '100%', '100%', '100%', '100%', '90%', '70%'],
+            }}
+            title={{ width: '60%' }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding }}>
       {/* 页面标题骨架 */}

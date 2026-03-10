@@ -917,6 +917,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid
         extraFooter={
           <ProFormDependency name={['type']}>
             {({ type }) => {
@@ -936,7 +937,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
         }
       >
         <ProFormText name="type" label="连接器类型" disabled colProps={{ span: 12 }} />
-        <ProFormText name="name" label="应用连接名称" rules={[{ required: true }]} placeholder="例：生产环境连接" colProps={{ span: 12 }} />
         <ProFormText
           name="code"
           label="应用连接代码"
@@ -948,6 +948,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
+        <ProFormText name="name" label="应用连接名称" rules={[{ required: true }]} placeholder="例：生产环境连接" colProps={{ span: 12 }} />
         <ProFormDependency name={['type']}>
           {({ type }) => {
             if (!type) return null;
@@ -956,12 +957,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
         </ProFormDependency>
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="选填"
+          label={t('pages.system.applicationConnections.columnDescription')}
+          placeholder={t('pages.system.applicationConnections.descPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
-        <ProFormSwitch name="is_active" label="启用状态" colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('pages.system.applicationConnections.columnActive')} colProps={{ span: 12 }} />
       </FormModalTemplate>
 
       <AppConnectorMarket

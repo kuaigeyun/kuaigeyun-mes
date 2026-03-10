@@ -942,6 +942,7 @@ const DataSourceListPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid
         extraFooter={
           <ProFormDependency name={['type']}>
             {({ type }) => {
@@ -961,13 +962,6 @@ const DataSourceListPage: React.FC = () => {
         }
       >
         <ProFormText
-          name="name"
-          label={t('pages.system.dataSources.labelName')}
-          rules={[{ required: true, message: t('pages.system.dataSources.nameRequired') }]}
-          placeholder={t('pages.system.dataSources.namePlaceholder')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
           name="code"
           label={t('pages.system.dataSources.labelCode')}
           rules={[
@@ -976,6 +970,13 @@ const DataSourceListPage: React.FC = () => {
           ]}
           placeholder={t('pages.system.dataSources.codePlaceholder')}
           disabled={isEdit}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.dataSources.labelName')}
+          rules={[{ required: true, message: t('pages.system.dataSources.nameRequired') }]}
+          placeholder={t('pages.system.dataSources.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         <SafeProFormSelect

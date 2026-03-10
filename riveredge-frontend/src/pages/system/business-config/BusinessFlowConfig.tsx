@@ -33,7 +33,6 @@ import { Background, BackgroundVariant } from 'reactflow';
 import { CANVAS_GRID_REACTFLOW } from '../../../components/layout-templates';
 import BusinessBlueprintNode from './BusinessBlueprintNode';
 
-const { Content, Sider } = Layout;
 
 const { Text } = Typography;
 const { useToken } = theme;
@@ -1204,9 +1203,20 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     };
 
     return (
-        <Layout style={{ height: 'calc(100vh - 218px)', border: `1px solid ${token.colorBorder}` }}>
-            {/* Top Toolbar */}
-            <div style={{ background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorder}`, padding: '0 16px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Layout style={{ height: 'calc(100vh - 218px)' }}>
+            {/* 工具栏 + 三栏 同在一个圆角容器内，分割线在内部，避免直边压圆角 */}
+            <div
+                style={{
+                    height: '100%',
+                    border: `1px solid ${token.colorBorder}`,
+                    borderRadius: token.borderRadiusLG,
+                    overflow: 'hidden',
+                    background: token.colorBgContainer,
+                    display: 'flex',
+                    flexDirection: 'column',
+                }}
+            >
+                <div style={{ background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorder}`, padding: '0 16px', height: 64, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Space>
                     <Space size={8}>
                         <Text strong>{t('pages.system.businessConfig.blueprint.businessModeLabel')}</Text>
@@ -1272,14 +1282,42 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                     </Button>
                     <Button onClick={onSaveAsTemplate}>{t('pages.system.businessConfig.blueprint.saveAsTemplate')}</Button>
                 </Space>
-            </div>
-            <Layout style={{ height: 'calc(100% - 64px)' }}>
-                <Sider width={200} theme={isDark ? 'dark' : 'light'} style={{ borderRight: `1px solid ${token.colorBorder}` }}>
+                </div>
+                {/* 三栏同级：组件库 | 画板 | 节点配置，无外框（由外层统一圆角） */}
+                <div
+                    className="blueprint-panels"
+                    style={{
+                        display: 'flex',
+                        flex: 1,
+                        minHeight: 0,
+                        background: token.colorBgContainer,
+                    }}
+                >
+                <div
+                    className="blueprint-panel blueprint-panel-left"
+                    style={{
+                        width: 200,
+                        minWidth: 200,
+                        flexShrink: 0,
+                        borderRight: `1px solid ${token.colorBorder}`,
+                        background: token.colorBgContainer,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                    }}
+                >
                     {renderToolbox()}
-                </Sider>
-                <Content style={{ position: 'relative', background: token.colorBgLayout }}>
+                </div>
+                <div
+                    className="blueprint-panel blueprint-panel-center"
+                    style={{
+                        flex: 1,
+                        minWidth: 0,
+                        position: 'relative',
+                        background: token.colorBgLayout,
+                    }}
+                >
                     <style>{`
-                        /* 审核角标：仅上、右边着色，下、左保持透明以形成三角形 */
                         .business-blueprint-node-audit.ant-pro-checkcard-checked::after {
                             border-block-start-color: ${token.colorWarning} !important;
                             border-inline-end-color: ${token.colorWarning} !important;
@@ -1306,11 +1344,24 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                             color={isDark ? 'rgba(255,255,255,0.15)' : CANVAS_GRID_REACTFLOW.color}
                         />
                     </FlowEditor>
-                </Content>
-                <Sider width={300} theme={isDark ? 'dark' : 'light'} style={{ borderLeft: `1px solid ${token.colorBorder}` }}>
+                </div>
+                <div
+                    className="blueprint-panel blueprint-panel-right"
+                    style={{
+                        width: 300,
+                        minWidth: 300,
+                        flexShrink: 0,
+                        borderLeft: `1px solid ${token.colorBorder}`,
+                        background: token.colorBgContainer,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                    }}
+                >
                     {renderPropertiesPanel()}
-                </Sider>
-            </Layout>
+                </div>
+                </div>
+            </div>
         </Layout>
     );
 };

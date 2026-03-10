@@ -16,6 +16,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, useImperative
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
+import { FormModalTemplate } from '../../../components/layout-templates';
+import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton } from '@ant-design/pro-components';
 import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialUnit, MaterialCodeMapping } from '../types/material';
@@ -894,18 +896,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           padding-top: 0;
         }
         
-        /* Modal 内的 Tab 内容 - 确保占满宽度并统一边距（使用硬编码宽度） */
+        /* Modal 内 Tab 内容区：底部留白 16px；左右不设 padding，与模板 Modal 内容区对齐 */
         .material-form-modal .ant-pro-form .ant-tabs-tabpane {
-          width: 968px;
-          padding: 0 8px 16px 8px;
+          width: 100%;
+          max-width: 968px;
+          padding: 0 0 16px 0;
           box-sizing: border-box;
-        }
-        
-        /* 基本信息 和 变体管理 Tab - 移除左右padding（使用:has()选择器，基于内容特征） */
-        /* 基本信息Tab和变体管理Tab都直接包含.ant-row.gutter，而多单位管理和编码映射Tab不直接包含 */
-        .material-form-modal .ant-pro-form .ant-tabs-tabpane:has(> .ant-row[class*="gutter"]:first-child) {
-          padding-left: 0 !important;
-          padding-right: 0 !important;
         }
         
         /* Modal 内的 Collapse - 确保占满宽度 */
@@ -944,24 +940,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           margin: 0 8px 16px 8px !important;
         }
       `}</style>
-      <Modal
+      <FormModalTemplate
         className="material-form-modal"
         title={isEdit ? t('app.master-data.materialForm.editMaterial') : t('app.master-data.materialForm.createMaterial')}
         open={open}
-        onCancel={onClose}
-        footer={null}
-        width={1000}
-        destroyOnHidden
-        modalRender={(modal) => (
-          <div data-smart-suggestion-anchor="material-form">
-            {modal}
-          </div>
-        )}
-      >
-        <ProForm
-        formRef={formRef}
-        loading={loading}
+        onClose={onClose}
         onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={loading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
         initialValues={
           !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
             ? { ...initialValues, baseUnit: 'PC' }
@@ -969,37 +957,23 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
         layout="vertical"
         grid={true}
-        rowProps={{ gutter: 16 }}
         onValuesChange={(changedValues, allValues) => {
-          // 当物料分组、物料类型或名称变化时，重新生成编码
           if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
             const groupId = allValues.groupId;
             const materialType = allValues.materialType;
             const name = allValues.name;
-            
-            // 如果物料分组变化，强制更新编码
             if (changedValues.groupId !== undefined) {
-              // 延迟生成编码，避免频繁调用
-              setTimeout(() => {
-                generateCode(groupId, materialType, name, true); // 强制更新
-              }, 300);
+              setTimeout(() => generateCode(groupId, materialType, name, true), 300);
             } else if (changedValues.materialType !== undefined || changedValues.name !== undefined) {
-              // 物料类型或名称变化时，只在编码为空或包含占位符时更新
-              setTimeout(() => {
-                generateCode(groupId, materialType, name, false);
-              }, 300);
+              setTimeout(() => generateCode(groupId, materialType, name, false), 300);
             }
           }
         }}
-        submitter={{
-          searchConfig: {
-            submitText: isEdit ? t('app.master-data.materialForm.update') : t('app.master-data.materialForm.create'),
-            resetText: t('app.master-data.materialForm.cancel'),
-          },
-          resetButtonProps: {
-            onClick: onClose,
-          },
-        }}
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="material-form">
+            {modal}
+          </div>
+        )}
       >
         <Tabs
           activeKey={activeTab}
@@ -1084,8 +1058,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             },
           ]}
         />
-      </ProForm>
-    </Modal>
+      </FormModalTemplate>
     </>
   );
 };
@@ -1584,6 +1557,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             label={t('app.master-data.materialForm.materialType')}
             placeholder={t('app.master-data.materialForm.materialTypePlaceholder')}
             formRef={formRef}
+            colProps={{ span: 24 }}
           />
         </Col>
         <Col span={6}>
@@ -1610,6 +1584,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
             required
             formRef={formRef}
+            colProps={{ span: 24 }}
           />
         </Col>
         <Col span={6}>

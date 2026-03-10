@@ -6,7 +6,7 @@
  * 布局与部门管理对齐。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect } from '@ant-design/pro-components';
 import { EditOutlined, DeleteOutlined, PlusOutlined, AppstoreOutlined, LinkOutlined, CheckCircleOutlined, EyeOutlined, SyncOutlined } from '@ant-design/icons';
 import { App, Button, Tag, Space, Popconfirm, Tooltip } from 'antd';
@@ -94,7 +94,8 @@ const MenuListPage: React.FC = () => {
   };
 
   /**
-   * 加载应用列表
+   * 加载应用列表（用于新建/编辑表单的关联应用下拉）
+   * 页面挂载时即请求，与菜单树并行，不阻塞首屏
    */
   const loadApplications = async () => {
     try {
@@ -110,18 +111,17 @@ const MenuListPage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (currentUser) loadApplications();
+  }, [currentUser]);
+
   /**
-   * 加载数据
+   * 加载数据（仅请求菜单树，应用列表已在上方并行加载）
    */
   const loadData = async (_params: any, _sort: any, _filter: any, searchFormValues?: any) => {
      if (!currentUser) return { data: [], success: false, total: 0 };
 
     try {
-      // 获取应用列表（如果是首次）
-      if (applications.length === 0) {
-        loadApplications();
-      }
-
       const response = await getMenuTree({
           is_active: searchFormValues?.is_active === 'true' ? true : (searchFormValues?.is_active === 'false' ? false : undefined),
       });
@@ -173,11 +173,11 @@ const MenuListPage: React.FC = () => {
       setAllMenus(flatList);
       setMenuTreeData(response);
 
-      // 默认展开
+      // 默认只展开一级，避免整树展开导致大量 DOM 渲染卡顿；有关键词时展开过滤后的整树便于查看
       if (expandedRowKeys.length === 0 && !keyword) {
-         setExpandedRowKeys(getAllKeys(finalData));
+        setExpandedRowKeys(finalData.map((node: MenuTree) => node.uuid));
       } else if (keyword) {
-         setExpandedRowKeys(getAllKeys(finalData));
+        setExpandedRowKeys(getAllKeys(finalData));
       }
 
       return {
@@ -552,6 +552,7 @@ const MenuListPage: React.FC = () => {
             initialValues={formInitialValues}
             loading={formLoading}
             width={MODAL_CONFIG.STANDARD_WIDTH}
+            grid
         >
              <ProFormText name="name" label={t('pages.system.menus.menuName')} rules={[{ required: true }]} placeholder={t('pages.system.menus.menuNamePlaceholder')} colProps={{ span: 12 }} />
              <ProFormText name="path" label={t('pages.system.menus.path')} placeholder={t('pages.system.menus.pathPlaceholder')} colProps={{ span: 12 }} />
@@ -581,10 +582,10 @@ const MenuListPage: React.FC = () => {
              />
              <ProFormText name="permission_code" label={t('pages.system.menus.permissionCode')} colProps={{ span: 12 }} />
              <ProFormText name="sort_order" label={t('pages.system.menus.sort')} fieldProps={{ type: 'number' }} colProps={{ span: 12 }} />
-             <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 6 }} />
-             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 6 }} />
+             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 12 }} />
              <ProFormText name="external_url" label={t('pages.system.menus.externalUrl')} colProps={{ span: 24 }} />
              <ProFormTextArea name="meta" label={t('pages.system.menus.metadataJson')} fieldProps={{ rows: 3 }} colProps={{ span: 24 }} />
+             <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />
         </FormModalTemplate>
 
         <DetailDrawerTemplate

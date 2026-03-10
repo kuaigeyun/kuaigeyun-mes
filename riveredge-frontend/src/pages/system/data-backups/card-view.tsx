@@ -139,7 +139,7 @@ const CardView: React.FC = () => {
    * 跳转到备份策略配置
    */
   const handleGoToStrategy = () => {
-    navigate('/system/system-parameters?group=backup');
+    navigate('/system/config-center?tab=parameters');
   };
 
   /**

@@ -170,8 +170,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         colProps={effectiveColProps}
         className="dictionary-select-form-item"
       >
-        <div className="dictionary-select-wrapper">
+        <div className="dictionary-select-wrapper" style={{ width: '100%' }}>
           <UniDropdown
+            style={{ width: '100%' }}
             placeholder={placeholder || `请选择${label}`}
             showSearch
             allowClear

@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, theme } from 'antd';
+import { App, Form, Card, Button, Space, Layout, Menu, InputNumber, ColorPicker, Typography, Spin, Modal, Input, Switch, theme } from 'antd';
 import { SaveOutlined, ReloadOutlined, SettingOutlined, ControlOutlined, ApartmentOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -19,7 +19,6 @@ import {
   saveConfigTemplate,
   applyConfigTemplate,
 } from '../../../services/businessConfig';
-import SkeuomorphicSwitch from '../../../components/SkeuomorphicSwitch';
 import BusinessFlowConfig from '../business-config/BusinessFlowConfig';
 import { PARAMETER_CATEGORIES, PROCESS_CATEGORIES } from './configTree';
 import type { Color } from 'antd/es/color-picker';
@@ -271,7 +270,7 @@ const ConfigCenterPage: React.FC = () => {
                         }
                       >
                         {param.type === 'boolean' ? (
-                          <SkeuomorphicSwitch />
+                          <Switch />
                         ) : param.type === 'number' ? (
                           <InputNumber min={param.min} max={param.max} precision={0} style={{ width: 140 }} />
                         ) : param.type === 'color' ? (
@@ -374,7 +373,7 @@ const ConfigCenterPage: React.FC = () => {
                         noStyle
                         valuePropName="checked"
                       >
-                        <SkeuomorphicSwitch />
+                        <Switch />
                       </Form.Item>
                     </div>
                   </div>
@@ -400,8 +399,20 @@ const ConfigCenterPage: React.FC = () => {
   );
 
   return (
-    <div className="config-center-page" style={{ background: token.colorBgContainer, minHeight: '100%' }}>
+    <div
+        className="config-center-page"
+        style={{
+          background: token.colorBgContainer,
+          minHeight: '100%',
+          borderRadius: typeof token.borderRadiusLG === 'number' ? token.borderRadiusLG : (token.borderRadiusLG ?? 8),
+          overflow: 'hidden',
+        }}
+      >
       <style>{`
+        /* 最外层带 tabs 的卡片保留圆角 */
+        .config-center-page .ant-card.ant-card-bordered.ant-card-contain-tabs {
+          border-radius: ${typeof token.borderRadiusLG === 'number' ? `${token.borderRadiusLG}px` : token.borderRadiusLG ?? '8px'} !important;
+        }
         /* 修正 ant-card-body 多出的 16px 高度：将 padding 从默认 24px 调整为 16px */
         .config-center-page .ant-card .ant-card-body {
           padding: 16px !important;

@@ -618,13 +618,6 @@ const DatasetListPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <ProFormText
-          name="name"
-          label={t('pages.system.datasets.labelName')}
-          rules={[{ required: true, message: t('pages.system.datasets.nameRequired') }]}
-          placeholder={t('pages.system.datasets.namePlaceholder')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
           name="code"
           label={t('pages.system.datasets.labelCode')}
           rules={[
@@ -633,6 +626,13 @@ const DatasetListPage: React.FC = () => {
           ]}
           placeholder={t('pages.system.datasets.codePlaceholder')}
           disabled={isEdit}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.datasets.labelName')}
+          rules={[{ required: true, message: t('pages.system.datasets.nameRequired') }]}
+          placeholder={t('pages.system.datasets.namePlaceholder')}
           colProps={{ span: 12 }}
         />
         {!isEdit && (
@@ -646,8 +646,8 @@ const DatasetListPage: React.FC = () => {
         )}
         <ProFormTextArea
           name="description"
-          label={t('pages.system.datasets.labelDescription')}
-          placeholder={t('pages.system.datasets.descriptionOptional')}
+          label={t('pages.system.datasets.labelRemark')}
+          placeholder={t('pages.system.datasets.remarkOptional')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />

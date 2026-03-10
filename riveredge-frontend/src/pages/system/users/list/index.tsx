@@ -731,7 +731,8 @@ const UserListPage: React.FC = () => {
         initialValues={formInitialValues}
         loading={formLoading}
         formRef={formRef}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid={true}
       >
         <ProFormText
           name="username"

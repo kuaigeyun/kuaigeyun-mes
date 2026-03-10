@@ -5,6 +5,9 @@
  *
  * 性能优化：系统级/平台级页面按需懒加载，仅首屏核心页面立即加载
  *
+ * 约定：URL 路径与渲染组件所在目录一致，避免歧义（如 /system/config-center 对应 config-center 页面）。
+ * 旧路径通过 Navigate 重定向到主路径，兼容书签与历史链接。
+ *
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
 
@@ -43,6 +46,11 @@ const withLoginSuspense = (LazyComponent: React.LazyExoticComponent<React.Compon
 // 工作台/分析页专用，骨架屏边距与 DashboardTemplate 一致
 const withDashboardSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton variant="dashboard" />}><LazyComponent /></Suspense>
+);
+
+// 角色权限页专用，骨架屏边距与左右分栏布局一致
+const withRolesPermissionsSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton variant="rolesPermissions" />}><LazyComponent /></Suspense>
 );
 
 const withPermission = (
@@ -117,7 +125,6 @@ const IntegrationConfigsPage = React.lazy(() => import('../pages/system/integrat
 const MessageTemplatesPage = React.lazy(() => import('../pages/system/messages/template'));
 const MessageConfigsPage = React.lazy(() => import('../pages/system/messages/config'));
 const MenusPage = React.lazy(() => import('../pages/system/menus'));
-const SystemParametersPage = React.lazy(() => import('../pages/system/system-parameters'));
 const FilesPage = React.lazy(() => import('../pages/system/files/list'));
 const ApprovalProcessesPage = React.lazy(() => import('../pages/system/approval-processes/list'));
 const ApprovalProcessDesignerPage = React.lazy(() => import('../pages/system/approval-processes/designer'));
@@ -157,7 +164,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route path="/system/dashboard/workplace" element={withDashboardSuspense(DashboardPage)} />
     <Route path="/system/dashboard/analysis" element={withDashboardSuspense(DashboardAnalysisPage)} />
-    <Route path="/system/roles" element={withPermission(withSuspense(RolesPermissionsPage), ['system.role:read', 'system.role:update'])} />
+    <Route path="/system/roles" element={withPermission(withRolesPermissionsSuspense(RolesPermissionsPage), ['system.role:read', 'system.role:update'])} />
     <Route path="/system/permissions" element={withPermission(withSuspense(PermissionsPage), ['system.permission:read', 'system.permission:update'])} />
     <Route path="/system/departments" element={withPermission(withSuspense(DepartmentsPage), ['system.department:read', 'system.department:update'])} />
     <Route path="/system/positions" element={withPermission(withSuspense(PositionsPage), ['system.position:read', 'system.position:update'])} />
@@ -170,9 +177,10 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/user-profile" element={withSuspense(UserProfilePage)} />
     <Route path="/system/languages" element={withSuspense(LanguagesPage)} />
     <Route path="/system/site-settings" element={withSuspense(SiteSettingsPage)} />
-    <Route path="/system/business-config" element={withSuspense(ConfigCenterPage)} />
-    <Route path="/system/config-center" element={<Navigate to="/system/business-config" replace />} />
-    <Route path="/system/system-parameters" element={<Navigate to="/system/business-config" replace />} />
+    {/* 业务配置：主路径与组件一致（config-center → ConfigCenterPage），旧路径兼容重定向 */}
+    <Route path="/system/config-center" element={withSuspense(ConfigCenterPage)} />
+    <Route path="/system/business-config" element={<Navigate to="/system/config-center" replace />} />
+    <Route path="/system/system-parameters" element={<Navigate to="/system/config-center" replace />} />
     <Route path="/system/applications" element={withSuspense(ApplicationCenterPage)} />
     <Route path="/system/plugin-manager" element={withSuspense(PluginManagerPage)} />
     <Route path="/system/operation-logs" element={withSuspense(OperationLogsPage)} />
@@ -199,7 +207,6 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/message-configs" element={withSuspense(MessageConfigsPage)} />
     <Route path="/system/messages/config" element={withSuspense(MessageConfigsPage)} />
     <Route path="/system/menus" element={withSuspense(MenusPage)} />
-    <Route path="/system/system-parameters" element={withSuspense(SystemParametersPage)} />
     <Route path="/system/files" element={withSuspense(FilesPage)} />
     <Route path="/system/approval-processes" element={withSuspense(ApprovalProcessesPage)} />
     <Route path="/system/approval-processes/designer" element={withSuspense(ApprovalProcessDesignerPage)} />

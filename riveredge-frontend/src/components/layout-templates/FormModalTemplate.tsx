@@ -8,7 +8,7 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode, useRef, useState, useCallback, useEffect } from 'react';
+import React, { ReactNode, useRef, useState, useEffect } from 'react';
 import { Modal, Button, theme } from 'antd';
 import { ProForm, ProFormInstance } from '@ant-design/pro-components';
 import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
@@ -107,28 +107,29 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   const internalFormRef = useRef<ProFormInstance>();
   const formRef = externalFormRef || internalFormRef;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [scrollHint, setScrollHint] = useState({ atTop: true, atBottom: true });
-
-  const updateScrollHint = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const atTop = scrollTop <= 2;
-    const atBottom = scrollHeight - clientHeight <= 2 || scrollTop + clientHeight >= scrollHeight - 2;
-    setScrollHint((prev) => (prev.atTop === atTop && prev.atBottom === atBottom ? prev : { atTop, atBottom }));
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(updateScrollHint, 0);
-    return () => clearTimeout(t);
-  }, [open, updateScrollHint]);
+  const [hasScrollbar, setHasScrollbar] = useState(false);
 
   useSubmitShortcut(() => formRef.current?.submit(), open);
 
-  const contentBoxShadow = !scrollHint.atBottom
-    ? 'inset 0 -6px 8px -6px rgba(0,0,0,0.12)'
-    : 'none';
+  useEffect(() => {
+    if (!open) {
+      setHasScrollbar(false);
+      return;
+    }
+    let ro: ResizeObserver | null = null;
+    const timer = setTimeout(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const update = () => setHasScrollbar(el.scrollHeight > el.clientHeight);
+      update();
+      ro = new ResizeObserver(update);
+      ro.observe(el);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      ro?.disconnect();
+    };
+  }, [open]);
 
   return (
     <Modal
@@ -146,13 +147,12 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         <div
           ref={scrollRef}
           className="modal-content-scroll"
-          onScroll={updateScrollHint}
           style={{
             flex: 1,
             minHeight: 0,
             overflowY: 'auto',
             overflowX: 'hidden',
-            boxShadow: contentBoxShadow,
+            paddingRight: hasScrollbar ? 6 : 0,
           }}
         >
           <div className="form-modal-content-inner" style={{ padding: 0 }}>
@@ -176,6 +176,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
           style={{
             flexShrink: 0,
             borderTop: `1px solid ${token.colorBorderSecondary}`,
+            marginTop: 6,
             padding: '16px 0 0 0',
             background: token.colorBgContainer,
             display: 'flex',

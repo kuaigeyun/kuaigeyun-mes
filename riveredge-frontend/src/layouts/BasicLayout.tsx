@@ -358,9 +358,9 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
       '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
-      '/system/config-center': ManufacturingIcons.systemConfig, // 兼容旧书签
-      '/system/business-config': ManufacturingIcons.systemConfig, // 业务配置
-      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 保留兼容
+      '/system/config-center': ManufacturingIcons.systemConfig, // 业务配置（主路径，与页面组件一致）
+      '/system/business-config': ManufacturingIcons.systemConfig, // 兼容旧书签，重定向到 config-center
+      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 兼容旧书签，重定向到 config-center
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
       '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
@@ -501,7 +501,7 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/applications', name: t('menu.system.applications'), icon: getMenuIcon(t('menu.system.applications'), '/system/applications') },
         { path: '/system/menus', name: t('menu.system.menus'), icon: getMenuIcon(t('menu.system.menus'), '/system/menus') },
         { path: '/system/site-settings', name: t('menu.system.site-settings'), icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings') },
-        { path: '/system/business-config', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/business-config') },
+        { path: '/system/config-center', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/config-center') },
         { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries') },
         { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages') },
         { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules') },

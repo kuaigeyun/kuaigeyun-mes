@@ -623,18 +623,20 @@ const LanguageListPage: React.FC = () => {
           label={t('field.language.nativeName')}
           placeholder={t('field.language.namePlaceholder')}
         />
-        <ProFormSwitch
-          name="is_default"
-          label={t('field.language.isDefault')}
-        />
         <ProFormDigit
           name="sort_order"
           label={t('field.language.sortOrder')}
           fieldProps={{ min: 0 }}
         />
         <ProFormSwitch
+          name="is_default"
+          label={t('field.language.isDefault')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
           name="is_active"
           label={t('field.language.isActive')}
+          colProps={{ span: 12 }}
         />
       </FormModalTemplate>
 
