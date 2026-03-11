@@ -66,6 +66,7 @@ import {
   PrinterOutlined,
   MoreOutlined,
   StopOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -363,7 +364,7 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const [products, operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
           await Promise.all([
-            materialApi.list({ isActive: true, limit: 2000 }),
+            materialApi.list({ isActive: true, limit: 1000 }),
             operationApi.list({ is_active: true, limit: 500 }).catch(() => []),
             processRouteApi.list({ is_active: true, limit: 500 }).catch(() => []),
             getUserList({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
@@ -372,7 +373,7 @@ const WorkOrdersPage: React.FC = () => {
             toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
           ])
         if (cancelled) return
-        setProductList(Array.isArray(products) ? products : [])
+        setProductList(Array.isArray(products) ? products : (products as any)?.data ?? (products as any)?.items ?? [])
         setOperationList(Array.isArray(operations) ? operations : [])
         setProcessRouteList(Array.isArray(routes) ? routes : [])
         setWorkerList(usersRes?.items || [])
@@ -728,10 +729,10 @@ const WorkOrdersPage: React.FC = () => {
       // 按状态报工：已完成返回100%，未完成返回0%
       return operation.status === 'completed' ? 100 : 0
     } else {
-      // 按数量报工：已完成数量 / 计划数量
-      const completed = Number(operation.completed_quantity || 0)
+      // 按数量报工：合格数量 / 计划数量
+      const qualified = Number(operation.qualified_quantity || 0)
       const planned = Number(workOrder.quantity || 1)
-      return Math.min(Math.round((completed / planned) * 100), 100)
+      return Math.min(Math.round((qualified / planned) * 100), 100)
     }
   }
 
@@ -784,190 +785,236 @@ const WorkOrdersPage: React.FC = () => {
 
     return (
       <React.Fragment key={operation.id || index}>
-        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Card
-            size="small"
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            width: 200,
+            minHeight: 200,
+            flexShrink: 0,
+            borderRadius: 8,
+            overflow: 'hidden',
+            border:
+              operation.status === 'completed'
+                ? '2px solid #52c41a'
+                : operation.status === 'in_progress'
+                  ? `2px solid ${token.colorPrimary}`
+                  : `1px solid ${token.colorBorder}`,
+            backgroundColor: token.colorBgContainer,
+          }}
+        >
+          {/* 顶部：工序名 + 状态 */}
+          <div
             style={{
-              width: 200,
-              border:
-                operation.status === 'completed'
-                  ? '2px solid #52c41a'
-                  : operation.status === 'in_progress'
-                    ? '2px solid #1890ff'
-                    : '1px solid #d9d9d9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 10px',
+              borderBottom: `1px solid ${token.colorBorderSecondary}`,
+              flexShrink: 0,
+              backgroundColor: token.colorFillTertiary,
             }}
-            title={
-              <div style={{ fontSize: 14, fontWeight: 'bold' }}>{operation.operation_name}</div>
-            }
-            extra={
-              <Tag
-                color={
-                  operation.status === 'completed'
-                    ? 'success'
-                    : operation.status === 'in_progress'
-                      ? 'processing'
-                      : 'default'
-                }
-              >
-                {operation.status === 'completed'
-                  ? '已完成'
-                  : operation.status === 'in_progress'
-                    ? '进行中'
-                    : '待开始'}
-              </Tag>
-            }
           >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{operation.operation_name}</div>
+            <Tag
+              color={
+                operation.status === 'completed'
+                  ? 'success'
+                  : operation.status === 'in_progress'
+                    ? 'processing'
+                    : 'default'
+              }
+            >
+              {operation.status === 'completed'
+                ? '已完成'
+                : operation.status === 'in_progress'
+                  ? '进行中'
+                  : '待开始'}
+            </Tag>
+          </div>
+
+          {/* 中部：进度与信息 */}
+          <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden', minHeight: 0 }}>
             {/* 环状图进度显示 */}
-            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+            <div style={{ textAlign: 'center', marginBottom: 6 }}>
               <Progress
                 type="circle"
                 percent={progress}
-                size={80}
+                size={64}
                 strokeColor={progressColor}
                 format={percent => `${percent}%`}
               />
-              <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+              <div style={{ marginTop: 2, fontSize: 11, color: token.colorTextSecondary, lineHeight: 1.4 }}>
                 {operation.reporting_type === 'status' ? (
-                  <div>
-                    <div>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
-                  </div>
+                  <div style={{ whiteSpace: 'nowrap' }}>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
                 ) : (
                   <div>
-                    <div>
-                      完成：{operation.completed_quantity || 0} / {workOrder.quantity}
-                    </div>
-                    <div>
-                      合格：{operation.qualified_quantity || 0} / 不合格：
-                      {operation.unqualified_quantity || 0}
-                    </div>
-                    {operation.completed_quantity > 0 && (
-                      <div
-                        style={{
-                          color:
-                            qualifiedRate >= 95
+                    <div style={{ whiteSpace: 'nowrap' }}>完成：{operation.completed_quantity || 0} / {workOrder.quantity}</div>
+                    <div style={{ whiteSpace: 'nowrap' }}>合格：{operation.qualified_quantity || 0} / 不合格：{operation.unqualified_quantity || 0}</div>
+                    <div
+                      style={{
+                        whiteSpace: 'nowrap',
+                        color:
+                          operation.completed_quantity > 0
+                            ? qualifiedRate >= 95
                               ? '#52c41a'
                               : qualifiedRate >= 80
                                 ? '#faad14'
-                                : '#ff4d4f',
-                        }}
-                      >
-                        合格率：{qualifiedRate}%
-                      </div>
-                    )}
+                                : '#ff4d4f'
+                            : token.colorTextTertiary,
+                      }}
+                    >
+                      合格率：{operation.completed_quantity > 0 ? `${qualifiedRate}%` : '-'}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             {/* 工序信息 */}
-            <div style={{ fontSize: 12, color: '#666' }}>
-              <div style={{ marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+              <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 <strong>车间：</strong>
                 {operation.workshop_name || '-'}
               </div>
-              <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 <strong>工作中心：</strong>
                 {operation.work_center_name || '-'}
               </div>
-              {operation.planned_start_date && (
-                <div style={{ marginBottom: 4 }}>
-                  <strong>计划时间：</strong>
-                  <div>
-                    {new Date(operation.planned_start_date).toLocaleString('zh-CN', {
+              <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
+                <strong>计划时间：</strong>
+                {operation.planned_start_date
+                  ? new Date(operation.planned_start_date).toLocaleString('zh-CN', {
                       month: '2-digit',
                       day: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
-                    })}
-                  </div>
-                </div>
-              )}
-              {operation.actual_start_date && (
-                <div style={{ marginBottom: 4 }}>
-                  <strong>实际开始：</strong>
-                  <div>
-                    {new Date(operation.actual_start_date).toLocaleString('zh-CN', {
+                    })
+                  : '-'}
+              </div>
+              <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
+                <strong>实际开始：</strong>
+                {operation.actual_start_date
+                  ? new Date(operation.actual_start_date).toLocaleString('zh-CN', {
                       month: '2-digit',
                       day: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
-                    })}
-                  </div>
-                </div>
-              )}
+                    })
+                  : '-'}
+              </div>
               {/* 派工信息 */}
-              <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
-                <div style={{ marginBottom: 4 }}>
+              <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <strong>负责人：</strong>
-                  {operation.assigned_worker_name || <span style={{ color: '#ccc' }}>未分配</span>}
+                  {operation.assigned_worker_name || <span style={{ color: token.colorTextQuaternary }}>未分配</span>}
                 </div>
-                <div style={{ marginBottom: 4 }}>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <strong>设备：</strong>
                   {operation.assigned_equipment_name || (
-                    <span style={{ color: '#ccc' }}>未分配</span>
+                    <span style={{ color: token.colorTextQuaternary }}>未分配</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* 操作按钮 */}
+          </div>
+
+          {/* 底部：与卡片融合的两个按钮 */}
+          <div
+            style={{
+              display: 'flex',
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              flexShrink: 0,
+            }}
+          >
             <div
+              onClick={() => operation.status !== 'completed' && handleOpenDispatchModal(operation, workOrder)}
               style={{
-                marginTop: 12,
-                textAlign: 'center',
+                flex: 1,
                 display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
-                gap: 8,
+                padding: '8px 4px',
+                fontSize: 12,
+                fontWeight: 500,
+                color: operation.status !== 'completed' ? '#fff' : token.colorTextDisabled,
+                backgroundColor: operation.status !== 'completed' ? token.colorPrimary : token.colorFillTertiary,
+                cursor: operation.status !== 'completed' ? 'pointer' : 'default',
+                borderRight: `1px solid ${token.colorBorderSecondary}`,
+                transition: 'background-color 0.2s, opacity 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                if (operation.status !== 'completed') {
+                  e.currentTarget.style.opacity = '0.9'
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1'
               }}
             >
-              {operation.status !== 'completed' && (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<EditOutlined style={{ fontSize: 12 }} />}
-                  onClick={() => handleOpenDispatchModal(operation, workOrder)}
-                >
-                  派工
-                </Button>
-              )}
-              {operation.status === 'pending' && (
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<PlayCircleOutlined />}
-                  onClick={async () => {
-                    try {
-                      // 开始工序
-                      await workOrderApi.startOperation(workOrder.id!.toString(), operation.id)
-                      messageApi.success('工序已开始')
-                      // 刷新工序列表
-                      const operations = await workOrderApi.getOperations(workOrder.id!.toString())
-                      setExpandedOperationsMap(prev => ({
-                        ...prev,
-                        [workOrder.id!]: operations || [],
-                      }))
-                      // 刷新工单列表
-                      invalidateStatistics(); actionRef.current?.reload()
-                    } catch (error: any) {
-                      messageApi.error(error.message || '开始工序失败')
-                    }
-                  }}
-                >
-                  开始
-                </Button>
-              )}
-              {operation.status === 'in_progress' && (
-                <Tag color="processing" style={{ margin: 0 }}>
-                  进行中
-                </Tag>
-              )}
-              {operation.status === 'completed' && (
-                <Tag color="success" style={{ margin: 0 }}>
-                  已完成
-                </Tag>
-              )}
+              <TeamOutlined style={{ marginRight: 4, fontSize: 12 }} />
+              派工
             </div>
-          </Card>
+            <div
+              onClick={
+                operation.status === 'pending'
+                  ? async () => {
+                      try {
+                        await workOrderApi.startOperation(workOrder.id!.toString(), operation.id)
+                        messageApi.success('工序已开始')
+                        const operations = await workOrderApi.getOperations(workOrder.id!.toString())
+                        setExpandedOperationsMap(prev => ({
+                          ...prev,
+                          [workOrder.id!]: operations || [],
+                        }))
+                        invalidateStatistics(); actionRef.current?.reload()
+                      } catch (error: any) {
+                        messageApi.error(error.message || '开始工序失败')
+                      }
+                    }
+                  : undefined
+              }
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '8px 4px',
+                fontSize: 12,
+                fontWeight: 500,
+                color:
+                  operation.status === 'pending'
+                    ? '#fff'
+                    : operation.status === 'in_progress'
+                      ? token.colorPrimary
+                      : operation.status === 'completed'
+                        ? token.colorSuccess
+                        : token.colorText,
+                backgroundColor:
+                  operation.status === 'pending'
+                    ? token.colorPrimary
+                    : operation.status === 'in_progress'
+                      ? token.colorPrimaryBg
+                      : operation.status === 'completed'
+                        ? token.colorSuccessBg
+                        : 'transparent',
+                cursor: operation.status === 'pending' ? 'pointer' : 'default',
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                if (operation.status === 'pending') {
+                  e.currentTarget.style.opacity = '0.9'
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1'
+              }}
+            >
+              {operation.status === 'pending' && <PlayCircleOutlined style={{ marginRight: 4, fontSize: 12 }} />}
+              {operation.status === 'pending' ? '开始' : operation.status === 'in_progress' ? '进行中' : '已完成'}
+            </div>
+          </div>
         </div>
         {/* 箭头连接（不是最后一个） */}
         {index < total - 1 && (
@@ -977,12 +1024,12 @@ const WorkOrdersPage: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              marginLeft: 8,
-              marginRight: 8,
+              marginLeft: 0,
+              marginRight: 0,
               alignSelf: 'center',
             }}
           >
-            <RightOutlined style={{ fontSize: 24, color: '#d9d9d9' }} />
+            <RightOutlined style={{ fontSize: 24, color: token.colorBorder }} />
           </div>
         )}
       </React.Fragment>
@@ -1005,12 +1052,12 @@ const WorkOrdersPage: React.FC = () => {
     }
 
     if (operations.length === 0) {
-      return <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>暂无工序信息</div>
+      return <div style={{ padding: '20px', textAlign: 'center', color: token.colorTextTertiary }}>暂无工序信息</div>
     }
 
     return (
-      <div style={{ padding: '20px', backgroundColor: '#fafafa', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+      <div style={{ padding: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
           {operations.map((operation: any, index: number) =>
             renderOperationCard(operation, record, index, operations.length)
           )}
@@ -2204,7 +2251,7 @@ const WorkOrdersPage: React.FC = () => {
 
           {/* 工单名称 */}
           {workOrder.name && (
-            <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, color: '#666' }}>
+            <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, color: token.colorTextSecondary }}>
               {workOrder.name}
             </div>
           )}
@@ -2753,6 +2800,7 @@ const WorkOrdersPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
+        grid
         modalRender={modal => <div data-smart-suggestion-anchor="work-order-form">{modal}</div>}
       >
         <CodeField
@@ -3541,7 +3589,7 @@ const WorkOrdersPage: React.FC = () => {
       >
         {currentOperationForDispatch && currentWorkOrderForDispatch && (
           <>
-            <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }}>
+            <Card size="small" style={{ marginBottom: 16, backgroundColor: token.colorFillTertiary }}>
               <Row gutter={16}>
                 <Col span={12}>
                   <div style={{ marginBottom: 4 }}>

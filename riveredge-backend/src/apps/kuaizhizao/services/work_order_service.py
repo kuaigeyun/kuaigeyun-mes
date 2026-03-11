@@ -1922,17 +1922,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             allow_jump = work_order.allow_operation_jump if hasattr(work_order, 'allow_operation_jump') else work_order_operation.allow_jump
             
             if not allow_jump:
-                # 检查是否有前序工序未完成
+                # 只检查上一道工序：只要有产出即可开始（报工数量由 reporting_service 校验不超过上一道完工数）
                 previous_operations = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
                     work_order_id=work_order_id,
                     sequence__lt=work_order_operation.sequence,
                     deleted_at__isnull=True
-                ).all()
+                ).order_by('-sequence').limit(1).all()
 
-                for prev_op in previous_operations:
-                    if prev_op.status != 'completed':
-                        raise BusinessLogicError(f"前序工序 {prev_op.operation_name} 未完成，不能开始当前工序")
+                if previous_operations:
+                    prev_op = previous_operations[0]
+                    if (prev_op.completed_quantity or 0) <= 0:
+                        raise BusinessLogicError(f"前序工序 {prev_op.operation_name} 尚无产出，不能开始当前工序")
 
             # 获取开始人信息
             user_info = await self.get_user_info(started_by)

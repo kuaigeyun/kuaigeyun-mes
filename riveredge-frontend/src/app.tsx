@@ -25,7 +25,7 @@ import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
-import { updateLastActivity, getLastActivityTime } from './utils/activityUtils';
+import { updateLastActivity, getLastActivityTime, hasPendingRequests } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
 // 使用 routes 中的路由配置
@@ -285,8 +285,12 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
         return false;
       }
 
-      // 2. 检查用户不活动超时 (0表示禁用)，仅当无用户操作且无 API 请求时才超时
+      // 2. 检查用户不活动超时 (0表示禁用)，仅当完全无操作且无进行中请求时才超时
       if (inactivityTimeout > 0) {
+        if (hasPendingRequests()) {
+          // 有进行中的 API 请求，视为用户正在操作，不触发超时
+          return true;
+        }
         const lastActivityTime = getLastActivityTime();
         const inactiveTime = Date.now() - lastActivityTime;
         if (inactiveTime > inactivityTimeout) {

@@ -8,6 +8,7 @@
  */
 
 import { getToken } from '../../../utils/auth';
+import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../../../utils/activityUtils';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -339,6 +340,8 @@ export const inventoryAnalysisApi = {
  * 通用报表导出功能
  */
 export async function exportReport(reportType: string, params: ReportParams = {}): Promise<void> {
+  updateLastActivity(true);
+  incrementPendingRequests();
   try {
     const response = await fetch(`/api/v1/apps/kuaizhizao/reports/${reportType}/export?${new URLSearchParams(params as any)}`, {
       method: 'GET',
@@ -363,5 +366,7 @@ export async function exportReport(reportType: string, params: ReportParams = {}
     window.URL.revokeObjectURL(url);
   } catch (error) {
     throw new Error('导出失败：' + (error as Error).message);
+  } finally {
+    decrementPendingRequests();
   }
 }

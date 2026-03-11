@@ -6,7 +6,7 @@
 
 // 使用 Fetch API 进行 HTTP 请求
 import { clearAuth, getToken } from '../utils/auth';
-import { updateLastActivity } from '../utils/activityUtils';
+import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
 
 /**
@@ -273,6 +273,13 @@ export async function apiRequest<T = any>(
   // 确保 headers 始终使用我们构建的 headers（包含 X-Tenant-ID）
   fetchOptions.headers = headers;
 
+  // ⚠️ 关键：在请求发起时即更新活动时间（而非仅响应成功时）
+  // 避免长耗时请求（导出、报表等）期间因未收到响应而被误判为无操作导致登出
+  if (!isPublicEndpoint) {
+    updateLastActivity(true);
+    incrementPendingRequests();
+  }
+
   try {
     const response = await fetch(requestUrl, fetchOptions);
 
@@ -485,6 +492,10 @@ export async function apiRequest<T = any>(
     const wrappedError = new Error(error.message || '请求失败') as any;
     wrappedError.originalError = error;
     throw wrappedError;
+  } finally {
+    if (!isPublicEndpoint) {
+      decrementPendingRequests();
+    }
   }
 }
 

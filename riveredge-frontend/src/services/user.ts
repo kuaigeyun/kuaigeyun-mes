@@ -7,6 +7,7 @@
 
 // 使用 apiRequest 统一处理 HTTP 请求
 import { getToken } from '../utils/auth';
+import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { apiRequest } from './api';
 
 /**
@@ -224,28 +225,34 @@ export async function importUsers(data: any[][]): Promise<{
  * @returns 文件下载 URL
  */
 export async function exportUsers(params?: UserListParams): Promise<Blob> {
-  const response = await fetch(
-    `/api/v1/core/users/export?${new URLSearchParams(
-      Object.entries(params || {}).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null) {
-          acc[key] = String(value);
-        }
-        return acc;
-      }, {} as Record<string, string>)
-    ).toString()}`,
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-      },
+  updateLastActivity(true);
+  incrementPendingRequests();
+  try {
+    const response = await fetch(
+      `/api/v1/core/users/export?${new URLSearchParams(
+        Object.entries(params || {}).reduce((acc, [key, value]) => {
+          if (value !== undefined && value !== null) {
+            acc[key] = String(value);
+          }
+          return acc;
+        }, {} as Record<string, string>)
+      ).toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('导出失败');
     }
-  );
-  
-  if (!response.ok) {
-    throw new Error('导出失败');
+
+    return response.blob();
+  } finally {
+    decrementPendingRequests();
   }
-  
-  return response.blob();
 }
 
 /**

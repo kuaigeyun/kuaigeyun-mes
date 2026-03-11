@@ -1666,6 +1666,7 @@ export default {
   'app.kuaizhizao.salesOrder.importSuccess': '批量导入成功！成功导入 {{count}} 条销售订单',
   'app.kuaizhizao.salesOrder.detailFailed': '获取销售订单详情失败',
   'app.kuaizhizao.salesOrder.itemsRequired': '请至少添加一条订单明细',
+  'app.kuaizhizao.salesOrder.saveDraft': '保存为草稿',
   'app.kuaizhizao.salesOrder.savedDraft': '订单已保存为草稿',
   'app.kuaizhizao.salesOrder.updated': '销售订单已更新。',
   'app.kuaizhizao.salesOrder.pushTitle': '下推到需求计算',

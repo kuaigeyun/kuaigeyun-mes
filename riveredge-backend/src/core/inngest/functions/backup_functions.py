@@ -271,11 +271,13 @@ def _run_pg_restore(dump_path: str, backup_scope: str) -> None:
     """
     执行 pg_restore 恢复数据库。
     仅支持全量备份（backup_scope=all）；租户隔离备份格式不同，暂不支持自动恢复。
+
+    恢复策略：先 DROP SCHEMA public CASCADE 清空库（解决 --clean 无法 CASCADE 导致的依赖冲突），
+    再 pg_restore 导入。避免 pg_restore --clean 因外键依赖顺序导致 DROP 失败、后续 CREATE 冲突。
     """
     if backup_scope == "tenant":
         raise NotImplementedError("租户隔离备份的自动恢复暂未实现，请使用全量备份或手动恢复")
 
-    # 校验是否为 pg_dump 格式（pg_restore -l 可列出则说明格式正确）
     db_user = infra_settings.DB_USER
     db_password = infra_settings.DB_PASSWORD
     db_host = infra_settings.DB_HOST
@@ -284,23 +286,41 @@ def _run_pg_restore(dump_path: str, backup_scope: str) -> None:
     env = os.environ.copy()
     env["PGPASSWORD"] = db_password
 
+    # 校验是否为 pg_dump 格式
     check_cmd = ["pg_restore", "-l", "-h", db_host, "-p", str(db_port), "-U", db_user, dump_path]
     check = subprocess.run(check_cmd, env=env, capture_output=True, text=True)
     if check.returncode != 0:
         raise ValueError("备份文件不是 pg_dump 格式，可能为租户隔离备份。请使用全量备份恢复。")
 
-    # 注：终止其他连接会断开后端，可能导致 Inngest 请求失败。若 pg_restore 报 DROP 失败，可先停止后端再恢复。
+    # 先清空 public schema（CASCADE 解决外键依赖导致的 DROP 失败）
+    # pg_restore --clean 的 DROP 不带 CASCADE，遇依赖会失败，导致后续 CREATE 冲突
+    drop_sql = """
+        DROP SCHEMA public CASCADE;
+        CREATE SCHEMA public;
+        GRANT ALL ON SCHEMA public TO postgres;
+        GRANT ALL ON SCHEMA public TO public;
+    """
+    drop_cmd = [
+        "psql",
+        "-h", db_host,
+        "-p", str(db_port),
+        "-U", db_user,
+        "-d", db_name,
+        "-v", "ON_ERROR_STOP=1",
+        "-c", drop_sql.strip(),
+    ]
+    logger.info("清空 public schema (DROP CASCADE)...")
+    drop_result = subprocess.run(drop_cmd, env=env, capture_output=True, text=True, timeout=60)
+    if drop_result.returncode != 0:
+        raise Exception(f"清空 schema 失败: {drop_result.stderr or drop_result.stdout}")
 
-    # --clean --if-exists: 恢复前清理对象，避免冲突
-    # --no-owner --no-acl: 不恢复所有权和权限，避免权限问题
+    # 不再使用 --clean，已通过 DROP SCHEMA 清空
     cmd = [
         "pg_restore",
         "-h", db_host,
         "-p", str(db_port),
         "-U", db_user,
         "-d", db_name,
-        "--clean",
-        "--if-exists",
         "--no-owner",
         "--no-acl",
         "-v",
@@ -313,11 +333,7 @@ def _run_pg_restore(dump_path: str, backup_scope: str) -> None:
         raise Exception("pg_restore 超时（30分钟），数据库可能过大")
     if result.returncode != 0:
         err_msg = result.stderr or result.stdout or "无输出"
-        # pg_restore 在 --clean 时对不存在的对象可能返回非 0，但实际已恢复
-        if "does not exist" in err_msg and "ERROR" in err_msg:
-            logger.warning(f"pg_restore 部分警告（对象不存在）: {err_msg[:500]}")
-        else:
-            raise Exception(f"pg_restore 失败 (exit={result.returncode}): {err_msg[:2000]}")
+        raise Exception(f"pg_restore 失败 (exit={result.returncode}): {err_msg[:2000]}")
 
 
 def _restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:

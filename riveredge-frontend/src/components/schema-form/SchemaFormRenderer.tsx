@@ -31,6 +31,8 @@ export interface SchemaFormRendererProps {
   optionsMap?: Record<string, Array<{ value: any; label: string }>>;
   /** treeSelect 类型字段的 treeData，key 为字段名，格式 { title, value, key, children? } */
   treeDataMap?: Record<string, Array<{ title: string; value: string; key?: string; children?: any[] }>>;
+  /** 编辑时是否允许修改编码字段（默认 false，编辑时编码禁用） */
+  allowEditCodeWhenEdit?: boolean;
 }
 
 function buildRules(field: FieldConfig, t: (key: string) => string): any[] {
@@ -60,6 +62,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
   isEdit,
   optionsMap = {},
   treeDataMap = {},
+  allowEditCodeWhenEdit = false,
 }) => {
   const { t } = useTranslation();
 
@@ -198,7 +201,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
 
         // default: text
         const textFieldProps = { ...field.fieldProps };
-        if (isCodeField && isEdit) {
+        if (isCodeField && isEdit && !allowEditCodeWhenEdit) {
           textFieldProps.disabled = true;
         }
         return (

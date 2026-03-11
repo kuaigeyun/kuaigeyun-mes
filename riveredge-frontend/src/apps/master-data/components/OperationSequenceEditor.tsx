@@ -104,8 +104,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       code: op.code,
       name: op.name,
       description: op.description,
-      reportingType: op.reportingType,
-      allowJump: op.allowJump,
+      reportingType: (op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
+      allowJump: op.allowJump ?? (op as any).allow_jump ?? false,
     }));
     const updated = [...operations, ...newItems];
     setOperations(updated);
@@ -152,8 +152,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       code: replacement.code,
       name: replacement.name,
       description: replacement.description,
-      reportingType: replacement.reportingType,
-      allowJump: replacement.allowJump,
+      reportingType: (replacement.reportingType ?? (replacement as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
+      allowJump: replacement.allowJump ?? (replacement as any).allow_jump ?? false,
     };
     setOperations(newOperations);
     onChange?.(newOperations);

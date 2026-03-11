@@ -145,7 +145,14 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
               for (const uuid of seqObj.sequence) {
                 const op = allOps.find((o) => o.uuid === uuid);
                 if (op) {
-                  sequenceData.push({ uuid: op.uuid, code: op.code, name: op.name, description: op.description });
+                  sequenceData.push({
+                    uuid: op.uuid,
+                    code: op.code,
+                    name: op.name,
+                    description: op.description,
+                    reportingType: op.reportingType ?? (op as any).reporting_type,
+                    allowJump: op.allowJump ?? (op as any).allow_jump,
+                  });
                 }
               }
             }
@@ -156,27 +163,44 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             const ops: OperationItem[] = [];
             for (const item of sequenceData) {
               let opItem: OperationItem | null = null;
+              const toOpItem = (op: { uuid: string; code?: string; name?: string; description?: string; reportingType?: string; reporting_type?: string; allowJump?: boolean; allow_jump?: boolean }) => ({
+                uuid: op.uuid,
+                code: op.code || '',
+                name: op.name || '',
+                description: op.description,
+                reportingType: (op.reportingType ?? op.reporting_type ?? 'quantity') as 'quantity' | 'status',
+                allowJump: op.allowJump ?? op.allow_jump ?? false,
+              });
               if (typeof item === 'string') {
                 const op = allOps.find((o) => o.uuid === item);
-                opItem = op
-                  ? { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description }
-                  : { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence') };
+                opItem = op ? toOpItem(op) : { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false };
               } else if (item && typeof item === 'object') {
                 const uuid = item.uuid ?? item.operation_uuid;
                 const code = item.code ?? '';
                 const name = item.name ?? '';
                 if (uuid) {
-                  if (code || name) {
-                    opItem = { uuid, code: code || uuid.substring(0, 8), name: name || t('field.route.operationSequence'), description: item.description };
+                  const op = allOps.find((o) => o.uuid === uuid);
+                  if (op) {
+                    opItem = {
+                      ...toOpItem(op),
+                      reportingType: (item.reportingType ?? item.reporting_type ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
+                      allowJump: item.allowJump ?? item.allow_jump ?? op.allowJump ?? (op as any).allow_jump ?? false,
+                    };
+                  } else if (code || name) {
+                    opItem = {
+                      uuid,
+                      code: code || uuid.substring(0, 8),
+                      name: name || t('field.route.operationSequence'),
+                      description: item.description,
+                      reportingType: (item.reportingType ?? item.reporting_type ?? 'quantity') as 'quantity' | 'status',
+                      allowJump: item.allowJump ?? item.allow_jump ?? false,
+                    };
                   } else {
-                    const op = allOps.find((o) => o.uuid === uuid);
-                    opItem = op
-                      ? { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description }
-                      : { uuid, code: uuid.substring(0, 8), name: t('field.route.operationSequence') };
+                    opItem = { uuid, code: uuid.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false };
                   }
                 } else if (item.operation_id && allOps.length > 0) {
                   const op = allOps.find((o) => o.id === item.operation_id);
-                  if (op) opItem = { uuid: op.uuid, code: op.code || '', name: op.name || '', description: op.description };
+                  if (op) opItem = toOpItem(op);
                 }
               }
               if (opItem) ops.push(opItem);
@@ -208,7 +232,13 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
 
       const operationSequenceData = {
         sequence: operationSequence.map((op) => op.uuid),
-        operations: operationSequence.map((op) => ({ uuid: op.uuid, code: op.code, name: op.name })),
+        operations: operationSequence.map((op) => ({
+          uuid: op.uuid,
+          code: op.code,
+          name: op.name,
+          reportingType: op.reportingType ?? 'quantity',
+          allowJump: op.allowJump ?? false,
+        })),
       };
 
       let finalCode = values.code.trim();

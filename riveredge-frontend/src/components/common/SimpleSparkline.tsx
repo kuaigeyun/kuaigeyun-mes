@@ -14,12 +14,13 @@ export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
   color = '#1890ff',
   height = 60
 }) => {
-  if (!data || data.length === 0) return null;
+  const safeData = Array.isArray(data) ? data : [];
+  if (safeData.length === 0) return null;
 
   const baseConfig: any = {
     height,
     autoFit: true,
-    data,
+    data: safeData,
     smooth: true,
     padding: 0,
     axis: false,

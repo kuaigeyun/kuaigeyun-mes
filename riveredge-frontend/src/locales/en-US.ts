@@ -1658,6 +1658,7 @@ export default {
   'app.kuaizhizao.salesOrder.importSuccess': 'Import completed! Successfully imported {{count}} sales order(s)',
   'app.kuaizhizao.salesOrder.detailFailed': 'Failed to get sales order detail',
   'app.kuaizhizao.salesOrder.itemsRequired': 'Please add at least one order item',
+  'app.kuaizhizao.salesOrder.saveDraft': 'Save as Draft',
   'app.kuaizhizao.salesOrder.savedDraft': 'Order saved as draft',
   'app.kuaizhizao.salesOrder.updated': 'Sales order updated.',
   'app.kuaizhizao.salesOrder.pushTitle': 'Push to Demand Computation',

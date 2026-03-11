@@ -26,7 +26,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
 import { SimpleSparkline } from '../../../../../components';
 import {
@@ -157,25 +157,7 @@ const SalesOrdersPage: React.FC = () => {
   const [editingIncl, setEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
   const editingInclValueRef = useRef<number | null>(null);
 
-  const orderModalScrollRef = useRef<HTMLDivElement>(null);
-  const [orderModalScrollHint, setOrderModalScrollHint] = useState({ atTop: true, atBottom: true });
-  const updateOrderModalScrollHint = useCallback(() => {
-    const el = orderModalScrollRef.current;
-    if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const atTop = scrollTop <= 2;
-    const atBottom = scrollHeight - clientHeight <= 2 || scrollTop + clientHeight >= scrollHeight - 2;
-    setOrderModalScrollHint((prev) => (prev.atTop === atTop && prev.atBottom === atBottom ? prev : { atTop, atBottom }));
-  }, []);
-  useEffect(() => {
-    if (!modalVisible) return;
-    const t = setTimeout(updateOrderModalScrollHint, 0);
-    return () => clearTimeout(t);
-  }, [modalVisible, updateOrderModalScrollHint]);
-  const orderModalShadowColor = 'rgba(0,0,0,0.12)';
-  const orderModalContentBoxShadow = !orderModalScrollHint.atBottom
-    ? `inset 0 -6px 8px -6px ${orderModalShadowColor}`
-    : 'none';
+  const [modalSubmitting, setModalSubmitting] = useState(false);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -699,6 +681,19 @@ const SalesOrdersPage: React.FC = () => {
       }
     } catch (err: any) {
       // 表单校验失败（如必填项未填），由表单项显示错误，不重复弹窗
+      if (err?.errorFields?.length) {
+        messageApi.warning(err?.message ?? t('app.kuaizhizao.salesOrder.completeRequired'));
+      } else {
+        messageApi.error(err?.message ?? t('app.kuaizhizao.salesOrder.operationFailed'));
+      }
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      const values = await formRef.current?.validateFields();
+      if (values) await handleSaveInternal(values, true);
+    } catch (err: any) {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('app.kuaizhizao.salesOrder.completeRequired'));
       } else {
@@ -1688,50 +1683,31 @@ const SalesOrdersPage: React.FC = () => {
         </SalesOrderIndicatorsProvider>
       </ListPageTemplate>
 
-      {/* 新建/编辑 Modal：内容区滚动，底部操作按钮固定，单层边距 */}
-      <Modal
+      {/* 新建/编辑 Modal：使用标准 FormModalTemplate，统一创建按钮与快捷键 */}
+      <FormModalTemplate
+        title={isEdit ? t('app.kuaizhizao.salesOrder.edit') : t('app.kuaizhizao.salesOrder.create')}
         open={modalVisible}
-        onCancel={() => {
+        onClose={() => {
           setModalVisible(false);
           setPreviewCode(null);
           setEffectiveRuleCode(null);
         }}
-        title={isEdit ? t('app.kuaizhizao.salesOrder.edit') : t('app.kuaizhizao.salesOrder.create')}
-        width={1200}
-        footer={null}
-        destroyOnHidden
-        className="form-modal-template-fixed-footer"
-        styles={{
-          body: {
-            display: 'flex',
-            flexDirection: 'column',
-            maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT,
-            overflow: 'hidden',
-            padding: 0,
-          },
+        onFinish={async (values) => {
+          setModalSubmitting(true);
+          try {
+            await handleSaveInternal(values, false);
+          } finally {
+            setModalSubmitting(false);
+          }
         }}
+        isEdit={isEdit}
+        formRef={formRef}
+        width={1200}
+        loading={modalSubmitting}
+        grid={false}
+        extraFooter={!isEdit ? <Button onClick={handleSaveDraft}>{t('app.kuaizhizao.salesOrder.saveDraft')}</Button> : undefined}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <div
-            ref={orderModalScrollRef}
-            className="modal-content-scroll"
-            onScroll={updateOrderModalScrollHint}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              boxShadow: orderModalContentBoxShadow,
-            }}
-          >
-            <div className="form-modal-content-inner" style={{ padding: 0 }}>
-            <ProForm
-              formRef={formRef}
-              onFinish={async () => true} // Prevent default submission
-              layout="vertical"
-              submitter={false}
-            >
-              <Row gutter={16}>
+        <Row gutter={16}>
             <Col span={12}>
               <ProFormText
                 name="order_code"
@@ -2363,47 +2339,19 @@ const SalesOrdersPage: React.FC = () => {
             label="备注"
             placeholder="请输入备注"
           />
-            </ProForm>
-            </div>
-
-            {importModalVisible && (
-              <Suspense fallback={null}>
-                <LazyUniImport
-                  visible={importModalVisible}
-                  onCancel={() => setImportModalVisible(false)}
-                  onConfirm={handleItemImport}
-                  title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-                  headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
-                  exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
-                />
-              </Suspense>
-            )}
-          </div>
-          <div
-            className="form-modal-footer"
-            style={{
-              flexShrink: 0,
-              borderTop: `1px solid ${token.colorBorderSecondary}`,
-              padding: '16px 0 0 0',
-              background: token.colorBgContainer,
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            <Button onClick={() => setModalVisible(false)}>取消</Button>
-            {!isEdit && (
-              <Button onClick={() => onModalSubmit(true)}>
-                保存为草稿
-              </Button>
-            )}
-            <Button type="primary" onClick={() => onModalSubmit(false)}>
-              {isEdit ? '更新' : '提交订单'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        {importModalVisible && (
+          <Suspense fallback={null}>
+            <LazyUniImport
+              visible={importModalVisible}
+              onCancel={() => setImportModalVisible(false)}
+              onConfirm={handleItemImport}
+              title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
+              headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+              exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
+            />
+          </Suspense>
+        )}
+      </FormModalTemplate>
 
       <CustomerFormModal
         open={customerCreateVisible}

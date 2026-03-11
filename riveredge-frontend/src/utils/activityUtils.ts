@@ -11,14 +11,38 @@ const THROTTLE_MS = 1000;
 
 let lastUpdateTime = 0;
 
+/** 进行中的 API 请求数：有请求时视为用户正在操作，不触发超时退出 */
+let pendingRequestCount = 0;
+
+/**
+ * 增加进行中请求计数（内部使用，由 api.ts 在请求发起/结束时调用）
+ */
+export function incrementPendingRequests(): void {
+  pendingRequestCount += 1;
+}
+
+/**
+ * 减少进行中请求计数
+ */
+export function decrementPendingRequests(): void {
+  if (pendingRequestCount > 0) pendingRequestCount -= 1;
+}
+
+/**
+ * 是否有进行中的请求（有则视为用户正在操作）
+ */
+export function hasPendingRequests(): boolean {
+  return pendingRequestCount > 0;
+}
+
 /**
  * 更新最后活动时间
  *
  * 在以下场景调用以表示用户处于活动状态：
  * - 用户操作：鼠标移动、点击、键盘、滚动、触摸
- * - API 请求成功：表示页面正在使用，用户处于活动状态
+ * - API 请求发起/成功：表示页面正在使用，用户处于活动状态
  *
- * @param force - 是否强制更新（忽略节流），用于 API 响应等低频场景
+ * @param force - 是否强制更新（忽略节流），用于 API 请求等低频场景
  */
 export function updateLastActivity(force = false): void {
   if (typeof window === 'undefined') return;
