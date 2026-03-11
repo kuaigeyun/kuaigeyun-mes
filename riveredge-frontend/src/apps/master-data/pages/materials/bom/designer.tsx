@@ -1687,7 +1687,7 @@ const BOMDesignerPage: React.FC = () => {
               materialType:
                 (materialToEdit as any).materialType ??
                 (materialToEdit as any).material_type ??
-                'RAW',
+                undefined,
               specification: materialToEdit.specification ?? (materialToEdit as any).specification,
               baseUnit:
                 materialToEdit.baseUnit ?? (materialToEdit as any).base_unit ?? 'PC',

@@ -774,6 +774,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       // 组装完整的数据，将驼峰命名转换为蛇形命名
       const { defaults: _defaults, ...restValues } = values;
       // 物料类型：优先从 restValues 取，兼容条件渲染或 Tab 下字段可能未及时同步的情况
+      // 用户清空时传 null，确保后端能正确清空该字段
       const materialTypeValue = restValues.materialType ?? formRef.current?.getFieldValue('materialType');
       const submitData: any = {
         // 基础字段转换（驼峰 -> 蛇形）
@@ -781,7 +782,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         name: restValues.name,
         group_id: restValues.groupId,
         process_route_id: sourceType === 'Make' ? (processRouteIdForSubmit ?? (material as any)?.process_route_id ?? (material as any)?.processRouteId ?? null) : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
-        material_type: materialTypeValue,
+        material_type: materialTypeValue ?? null,
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,

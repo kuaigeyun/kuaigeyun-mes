@@ -1331,9 +1331,9 @@ const MaterialsManagementPage: React.FC = () => {
                 name: currentMaterial.name,
                 groupId: currentMaterial.groupId ?? (currentMaterial as any).group_id,
                 materialType:
-                  ((currentMaterial as any).materialType ??
-                    (currentMaterial as any).material_type) ||
-                  'RAW',
+                  (currentMaterial as any).materialType ??
+                  (currentMaterial as any).material_type ??
+                  undefined,
                 specification: currentMaterial.specification,
                 baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
                 batchManaged:
