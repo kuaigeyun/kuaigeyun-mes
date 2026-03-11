@@ -362,6 +362,78 @@ class ProcessService:
         return DefectTypeResponse.model_validate(_defect_type_to_response_data(defect_type))
     
     @staticmethod
+    async def batch_resolve_or_create_defect_types(
+        tenant_id: int,
+        items: List[str]
+    ) -> Dict[str, str]:
+        """
+        批量解析或创建不良品项。用于工序导入时：已存在则返回 uuid，不存在则创建（编码按规则自动生成）。
+        
+        Args:
+            tenant_id: 组织ID
+            items: 不良品编码或名称列表（支持混合，如 ["尺寸不良", "DIM001"]）
+            
+        Returns:
+            Dict[input, uuid]: 输入字符串 -> 不良品 uuid 的映射
+        """
+        from core.services.business.code_generation_service import CodeGenerationService
+        from core.services.default.default_values_service import DefaultValuesService
+        
+        result: Dict[str, str] = {}
+        seen: Dict[str, str] = {}  # 归一化后的 key -> uuid，用于去重（同一输入只查一次）
+        
+        # 确保编码规则存在
+        await DefaultValuesService.ensure_code_rule_for_page(tenant_id, "master-data-defect-type")
+        
+        for raw in items:
+            if not raw or not str(raw).strip():
+                continue
+            inp = str(raw).strip()
+            key = inp.upper()  # 用于去重（编码不区分大小写）
+            if key in seen:
+                result[inp] = seen[key]
+                continue
+            
+            # 1. 按编码查找
+            dt = await DefectType.filter(
+                tenant_id=tenant_id,
+                code=key,
+                deleted_at__isnull=True
+            ).first()
+            
+            # 2. 按名称查找
+            if not dt:
+                dt = await DefectType.filter(
+                    tenant_id=tenant_id,
+                    name=inp,
+                    deleted_at__isnull=True
+                ).first()
+            
+            if dt:
+                result[inp] = str(dt.uuid)
+                seen[key] = str(dt.uuid)
+                seen[inp] = str(dt.uuid)
+                continue
+            
+            # 3. 不存在则创建，编码按规则自动生成
+            try:
+                code = await CodeGenerationService.generate_code(tenant_id, "DEFECT_TYPE_CODE")
+                defect_type = await DefectType.create(
+                    tenant_id=tenant_id,
+                    code=code,
+                    name=inp,
+                    is_active=True
+                )
+                uuid_str = str(defect_type.uuid)
+                result[inp] = uuid_str
+                seen[key] = uuid_str
+                seen[inp] = uuid_str
+            except Exception as e:
+                raise ValidationError(f"不良品项「{inp}」解析或创建失败: {e}")
+        
+        return result
+
+    @staticmethod
     async def delete_defect_type(
         tenant_id: int,
         defect_type_uuid: str

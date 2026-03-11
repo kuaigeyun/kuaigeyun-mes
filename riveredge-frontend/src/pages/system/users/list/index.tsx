@@ -706,6 +706,69 @@ const UserListPage: React.FC = () => {
         ]}
         showImportButton={true}
         onImport={handleImport}
+        importHeaders={[
+          `*${t('field.user.username')}`,
+          `*${t('field.user.password')}`,
+          t('field.user.fullName'),
+          t('field.user.department'),
+          t('field.user.position'),
+          t('field.user.roles'),
+          t('field.user.phone'),
+          t('field.user.email'),
+        ]}
+        importExampleRow={[
+          'user001',
+          'Password123',
+          t('components.uniTable.exampleField', { title: t('field.user.fullName') }),
+          t('components.uniTable.exampleValue'),
+          t('components.uniTable.exampleValue'),
+          t('components.uniTable.exampleValue'),
+          '13800138000',
+          'user@example.com',
+        ]}
+        importFieldMap={{
+          [t('field.user.username')]: 'username',
+          [`*${t('field.user.username')}`]: 'username',
+          'username': 'username',
+          '*username': 'username',
+          [t('field.user.password')]: 'password',
+          [`*${t('field.user.password')}`]: 'password',
+          'password': 'password',
+          '*password': 'password',
+          '密码': 'password',
+          '*密码': 'password',
+          [t('field.user.fullName')]: 'full_name',
+          'full_name': 'full_name',
+          '姓名': 'full_name',
+          [t('field.user.department')]: 'department',
+          'department': 'department',
+          '部门': 'department',
+          [t('field.user.position')]: 'position',
+          'position': 'position',
+          '职位': 'position',
+          [t('field.user.roles')]: 'roles',
+          'roles': 'roles',
+          '角色': 'roles',
+          [t('field.user.phone')]: 'phone',
+          'phone': 'phone',
+          '手机号': 'phone',
+          [t('field.user.email')]: 'email',
+          'email': 'email',
+          '邮箱': 'email',
+        }}
+        importFieldRules={{
+          username: { required: true },
+          password: {
+            required: true,
+            validator: (value: any) => {
+              const str = value ? String(value).trim() : '';
+              if (!str) return t('field.user.passwordRequiredPlaceholder');
+              if (str.length < 8) return t('field.user.passwordMin');
+              if (str.length > 128) return t('field.user.passwordMax');
+              return true;
+            },
+          },
+        }}
         showExportButton={true}
         onExport={handleExport}
         showCreateButton

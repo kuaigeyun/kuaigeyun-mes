@@ -78,6 +78,18 @@ export const defectTypeApi = {
       { method: 'POST' }
     );
   },
+
+  /**
+   * 批量解析或创建不良品项（用于工序导入）
+   * 已存在则返回 uuid，不存在则创建（编码按规则自动）
+   */
+  batchResolveOrCreate: async (items: string[]): Promise<Record<string, string>> => {
+    const res = await apiRequest<{ results: Record<string, string> }>(
+      '/apps/master-data/process/defect-types/batch-resolve-or-create',
+      { method: 'POST', data: { items } }
+    );
+    return res?.results ?? {};
+  },
 };
 
 /**

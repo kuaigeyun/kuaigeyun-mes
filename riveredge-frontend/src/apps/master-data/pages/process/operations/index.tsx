@@ -15,7 +15,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { OperationFormModal } from '../../../components/OperationFormModal';
-import { operationApi } from '../../../services/process';
+import { operationApi, defectTypeApi } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -165,18 +165,63 @@ const OperationsPage: React.FC = () => {
     }
     const descIdx = headers.findIndex((h: string) => h.includes('描述') || h.toLowerCase().includes('desc'));
     const activeIdx = headers.findIndex((h: string) => h.includes('启用') || h.toLowerCase().includes('active'));
-    const items: { code: string; name: string; description?: string; isActive?: boolean }[] = [];
+    const defectIdx = headers.findIndex((h: string) => h.includes('不良品') || h.toLowerCase().includes('defect'));
+
+    // 1. 收集所有不良品项（编码或名称，逗号/分号分隔）
+    const allDefectInputs = new Set<string>();
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
       if (!row || row.length === 0) continue;
       const code = String(row[codeIdx] ?? '').trim();
       const name = String(row[nameIdx] ?? '').trim();
       if (!code || !name) continue;
+      if (defectIdx >= 0 && row[defectIdx] != null) {
+        const val = String(row[defectIdx]).trim();
+        if (val) {
+          val.split(/[,，;；]/).forEach((s: string) => {
+            const t = s.trim();
+            if (t) allDefectInputs.add(t);
+          });
+        }
+      }
+    }
+
+    // 2. 批量解析或创建不良品项
+    let defectMap: Record<string, string> = {};
+    if (allDefectInputs.size > 0) {
+      try {
+        defectMap = await defectTypeApi.batchResolveOrCreate(Array.from(allDefectInputs));
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.master-data.exportFailed'));
+        return;
+      }
+    }
+
+    const items: { code: string; name: string; description?: string; isActive?: boolean; defectTypeUuids?: string[] }[] = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length === 0) continue;
+      const code = String(row[codeIdx] ?? '').trim();
+      const name = String(row[nameIdx] ?? '').trim();
+      if (!code || !name) continue;
+      let defectTypeUuids: string[] = [];
+      if (defectIdx >= 0 && row[defectIdx] != null) {
+        const val = String(row[defectIdx]).trim();
+        if (val) {
+          defectTypeUuids = val
+            .split(/[,，;；]/)
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+            .map((s: string) => defectMap[s])
+            .filter(Boolean);
+        }
+      }
       items.push({
         code,
         name,
         description: descIdx >= 0 && row[descIdx] != null ? String(row[descIdx]).trim() : undefined,
         isActive: activeIdx >= 0 ? (row[activeIdx] === true || row[activeIdx] === '是' || row[activeIdx] === '1' || String(row[activeIdx]).toLowerCase() === 'true') : true,
+        defectTypeUuids: defectTypeUuids.length > 0 ? defectTypeUuids : undefined,
       });
     }
     if (items.length === 0) {
@@ -214,10 +259,12 @@ const OperationsPage: React.FC = () => {
         return;
       }
       const csv = [
-        ['工序编码', '工序名称', '描述', '启用状态'].join(','),
-        ...list.map((r) =>
-          [r.code, r.name, r.description ?? '', r.isActive ? '启用' : '禁用'].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
-        ),
+        ['工序编码', '工序名称', '描述', '启用状态', '不良品项'].join(','),
+        ...list.map((r) => {
+          const dts = r.defectTypes ?? r.defect_types ?? [];
+          const defectStr = Array.isArray(dts) ? dts.map((d: DefectTypeMinimal) => d.name ?? d.code).filter(Boolean).join(',') : '';
+          return [r.code, r.name, r.description ?? '', r.isActive ? '启用' : '禁用', defectStr].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+        }),
       ].join('\n');
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -540,7 +587,8 @@ const OperationsPage: React.FC = () => {
         }}
         showImportButton
         onImport={handleImport}
-        importHeaders={['*工序编码', '*工序名称', '描述', '启用状态']}
+        importHeaders={['*工序编码', '*工序名称', '描述', '启用状态', '不良品项']}
+        importExampleRow={['OP001', '装配工序', '工序描述', '启用', '尺寸不良,外观不良']}
         showExportButton
         onExport={handleExport}
       />

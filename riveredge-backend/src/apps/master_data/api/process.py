@@ -6,6 +6,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
+from pydantic import BaseModel, Field
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -72,6 +73,29 @@ async def list_defect_types(
     """
     items, total = await ProcessService.list_defect_types(tenant_id, skip, limit, category, is_active)
     return DefectTypeListResponse(data=items, total=total)
+
+
+class BatchResolveOrCreateDefectTypesRequest(BaseModel):
+    """批量解析或创建不良品项请求"""
+    items: List[str] = Field(..., description="不良品编码或名称列表，支持混合；已存在则使用，不存在则创建（编码按规则自动）")
+
+
+@router.post("/defect-types/batch-resolve-or-create", summary="批量解析或创建不良品项")
+async def batch_resolve_or_create_defect_types(
+    data: BatchResolveOrCreateDefectTypesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量解析或创建不良品项。用于工序导入等场景：
+    - 已存在（按编码或名称匹配）：直接返回 uuid
+    - 不存在：创建新不良品项，编码根据编码规则自动生成
+    """
+    try:
+        result = await ProcessService.batch_resolve_or_create_defect_types(tenant_id, data.items)
+        return {"results": result}
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/defect-types/load-preset", summary="加载不良品项预设")
