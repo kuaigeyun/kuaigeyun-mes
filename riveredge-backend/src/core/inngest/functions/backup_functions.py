@@ -267,9 +267,95 @@ def _read_backup_metadata(zip_path: str) -> dict:
     return {}
 
 
+def _run_pg_restore(dump_path: str, backup_scope: str) -> None:
+    """
+    执行 pg_restore 恢复数据库。
+    仅支持全量备份（backup_scope=all）；租户隔离备份格式不同，暂不支持自动恢复。
+    """
+    if backup_scope == "tenant":
+        raise NotImplementedError("租户隔离备份的自动恢复暂未实现，请使用全量备份或手动恢复")
+
+    # 校验是否为 pg_dump 格式（pg_restore -l 可列出则说明格式正确）
+    db_user = infra_settings.DB_USER
+    db_password = infra_settings.DB_PASSWORD
+    db_host = infra_settings.DB_HOST
+    db_port = infra_settings.DB_PORT
+    db_name = infra_settings.DB_NAME
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_password
+
+    check_cmd = ["pg_restore", "-l", "-h", db_host, "-p", str(db_port), "-U", db_user, dump_path]
+    check = subprocess.run(check_cmd, env=env, capture_output=True, text=True)
+    if check.returncode != 0:
+        raise ValueError("备份文件不是 pg_dump 格式，可能为租户隔离备份。请使用全量备份恢复。")
+
+    # 注：终止其他连接会断开后端，可能导致 Inngest 请求失败。若 pg_restore 报 DROP 失败，可先停止后端再恢复。
+
+    # --clean --if-exists: 恢复前清理对象，避免冲突
+    # --no-owner --no-acl: 不恢复所有权和权限，避免权限问题
+    cmd = [
+        "pg_restore",
+        "-h", db_host,
+        "-p", str(db_port),
+        "-U", db_user,
+        "-d", db_name,
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--no-acl",
+        "-v",
+        dump_path,
+    ]
+    logger.info(f"执行 pg_restore: {' '.join(cmd[:8])}...")
+    try:
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=1800)
+    except subprocess.TimeoutExpired:
+        raise Exception("pg_restore 超时（30分钟），数据库可能过大")
+    if result.returncode != 0:
+        err_msg = result.stderr or result.stdout or "无输出"
+        # pg_restore 在 --clean 时对不存在的对象可能返回非 0，但实际已恢复
+        if "does not exist" in err_msg and "ERROR" in err_msg:
+            logger.warning(f"pg_restore 部分警告（对象不存在）: {err_msg[:500]}")
+        else:
+            raise Exception(f"pg_restore 失败 (exit={result.returncode}): {err_msg[:2000]}")
+
+
+def _restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:
+    """从备份 zip 恢复 uploads 目录到配置的上传目录"""
+    upload_dir = infra_settings.FILE_UPLOAD_DIR
+    if not upload_dir:
+        return
+    upload_dir = os.path.abspath(upload_dir)
+    uploads_in_zip = "uploads/"
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names = [n for n in zf.namelist() if n.startswith(uploads_in_zip)]
+            if not names:
+                logger.info("备份中无 uploads 目录，跳过")
+                return
+            for name in names:
+                zf.extract(name, extract_dir)
+            src = os.path.join(extract_dir, "uploads")
+            if os.path.exists(src):
+                os.makedirs(upload_dir, exist_ok=True)
+                for item in os.listdir(src):
+                    s = os.path.join(src, item)
+                    d = os.path.join(upload_dir, item)
+                    if os.path.isdir(s):
+                        if os.path.exists(d):
+                            shutil.rmtree(d)
+                        shutil.copytree(s, d)
+                    else:
+                        shutil.copy2(s, d)
+                logger.info(f"已恢复 uploads 到 {upload_dir}")
+    except Exception as e:
+        logger.warning(f"恢复 uploads 失败: {e}")
+
+
 @inngest_client.create_function(
     fn_id="data_restore_workflow",
     trigger=TriggerEvent(event="database/restore.requested"),
+    retries=1,  # 恢复失败重试意义不大，减少等待
 )
 async def data_restore_workflow(ctx: inngest.Context, step: Step):
     """
@@ -289,9 +375,10 @@ async def data_restore_workflow(ctx: inngest.Context, step: Step):
     backup_dir = os.path.abspath("backups")
     os.makedirs(backup_dir, exist_ok=True)
 
+    zip_path = os.path.abspath(file_path) if file_path else ""
     # 从备份 zip 读取元数据，获取导出时的租户 ID（用于替换）
-    if file_path and os.path.exists(file_path):
-        metadata = _read_backup_metadata(file_path)
+    if zip_path and os.path.exists(zip_path):
+        metadata = _read_backup_metadata(zip_path)
         if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
             source_tenant_id = metadata["source_tenant_id"]
 
@@ -325,9 +412,54 @@ async def data_restore_workflow(ctx: inngest.Context, step: Step):
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
-    # Step 2: 恢复（当前为占位）+ 租户 ID 替换
-    # 当实现 pg_restore 后，需在恢复完成后调用 _run_tenant_id_replacement
-    # 若 source_tenant_id != target_tenant_id，替换所有表的 tenant_id 以归属到当前租户
+    # Step 2: 解压并执行 pg_restore 恢复数据库
+    if not zip_path or not os.path.exists(zip_path):
+        logger.error(f"备份文件不存在，无法恢复: {file_path}")
+        return
+
+    restore_extract_dir = os.path.join(backup_dir, f"temp_restore_{backup_uuid}")
+    db_dump_path = None
+
+    def extract_and_restore():
+        nonlocal db_dump_path
+        logger.info(f"开始恢复: zip_path={zip_path}, extract_dir={restore_extract_dir}")
+        if not os.path.exists(zip_path):
+            raise FileNotFoundError(f"备份文件不存在: {zip_path}")
+        os.makedirs(restore_extract_dir, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(restore_extract_dir)
+        db_dump_path = os.path.join(restore_extract_dir, "database.dump")
+        if not os.path.exists(db_dump_path):
+            raise FileNotFoundError(f"备份中未找到 database.dump，zip 内容: {os.listdir(restore_extract_dir)}")
+
+        metadata = _read_backup_metadata(zip_path)
+        backup_scope = metadata.get("backup_scope", "all")
+        logger.info(f"备份元数据: backup_scope={backup_scope}")
+
+        if backup_scope == "tenant":
+            raise NotImplementedError("租户隔离备份的自动恢复暂未实现，请使用全量备份")
+
+        _run_pg_restore(db_dump_path, backup_scope)
+        _restore_uploads_from_zip(zip_path, restore_extract_dir)
+        logger.info("extract_and_restore 完成")
+
+    try:
+        await step.run("extract_and_restore", extract_and_restore)
+    except Exception as e:
+        logger.exception(f"备份恢复失败: {e}")
+        if os.path.exists(restore_extract_dir):
+            shutil.rmtree(restore_extract_dir, ignore_errors=True)
+        return
+    finally:
+        if os.path.exists(restore_extract_dir):
+            shutil.rmtree(restore_extract_dir, ignore_errors=True)
+
+    # Step 3: 租户 ID 替换（若 source != target）
     if source_tenant_id is not None and source_tenant_id != target_tenant_id:
-        logger.info(f"恢复后将执行租户ID替换: {source_tenant_id} -> {target_tenant_id}")
-    logger.warning("收到恢复请求，当前实现仅创建恢复前备份。实际恢复建议手动执行 pg_restore，恢复后需执行租户ID替换。")
+        try:
+            tables_updated = await _run_tenant_id_replacement(source_tenant_id, target_tenant_id)
+            logger.info(f"租户ID替换完成，共处理 {tables_updated} 个表")
+        except Exception as e:
+            logger.exception(f"租户ID替换失败: {e}")
+
+    logger.info("数据恢复完成")
