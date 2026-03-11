@@ -12,6 +12,8 @@ const { useToken } = theme;
 export interface QuickEntryIconProps {
   /** 图标 */
   icon: React.ReactNode;
+  /** 是否小屏 */
+  isSmallScreen?: boolean;
   /** 标题 */
   title: string;
   /** 点击事件 */
@@ -34,6 +36,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
   gradient,
   editable = false,
   onDelete,
+  isSmallScreen = false,
 }) => {
   const { token } = useToken();
 
@@ -55,9 +58,9 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       {/* 扁平图标容器 */}
       <div
         style={{
-          width: '64px',
-          height: '64px',
-          borderRadius: '12px',
+          width: isSmallScreen ? '48px' : '64px',
+          height: isSmallScreen ? '48px' : '64px',
+          borderRadius: isSmallScreen ? '10px' : '12px',
           background: bgColor,
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
           display: 'flex',
@@ -82,7 +85,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
         {/* 图标 */}
         <div
           style={{
-            fontSize: '24px',
+            fontSize: isSmallScreen ? '20px' : '24px',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',

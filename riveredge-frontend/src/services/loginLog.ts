@@ -33,6 +33,9 @@ export interface LoginLogStats {
   failed_count: number;
   by_status: { [key: string]: number };
   by_user: { [key: string]: number };
+  today_total?: number;
+  yesterday_total?: number;
+  trend_data?: { date: string; value: number }[];
 }
 
 /**

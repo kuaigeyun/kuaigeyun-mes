@@ -11,9 +11,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag, Space, message, Button } from 'antd';
+import { Tag, Space, Modal, Typography, App, Button } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
+import { Area } from '@ant-design/charts';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getOperationLogs,
@@ -151,13 +152,70 @@ const OperationLogsPage: React.FC = () => {
     { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', span: 2, render: (value: string) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{value || '-'}</div>) },
   ];
 
-  const statCards = stats ? [
-    { title: t('pages.system.operationLogs.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+  const renderDOD = (today?: number, yesterday?: number) => {
+    if (today === undefined || yesterday === undefined) return null;
+    const diff = today - yesterday;
+    const color = diff > 0 ? '#cf1322' : diff < 0 ? '#3f8600' : 'rgba(0, 0, 0, 0.45)';
+    const icon = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+    return (
+      <span style={{ marginLeft: 8, fontSize: 13, color }}>
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {icon} {Math.abs(diff)}
+      </span>
+    );
+  };
+
+  const renderTrendChart = (data: any[] = [], color: string) => {
+    if (!data || data.length === 0) return null;
+    return (
+      <Area
+        data={data}
+        xField="date"
+        yField="value"
+        padding={0}
+        axis={false}
+        colorField={() => color}
+        shapeField="smooth"
+        style={{
+          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+          fillOpacity: 0.2, // increased opacity since gradient fades it out
+          stroke: color,
+          lineWidth: 2,
+        }}
+        autoFit
+      />
+    );
+  };
+
+  const statCards = [
+    { 
+      title: t('pages.system.operationLogs.statTotal'), 
+      value: (
+        <span>
+          {stats?.total || 0}
+        </span>
+      ),
+      valueStyle: { color: '#1890ff' },
+      backgroundChart: renderTrendChart(stats?.trend_data || [], '#1890ff'),
+    },
+    {
+      title: t('pages.system.operationLogs.statToday', '今日新增'),
+      value: (
+        <span>
+          {stats?.today_total || 0}
+        </span>
+      ),
+      description: stats?.today_total !== undefined && stats?.yesterday_total !== undefined ? (
+        <div>
+          {renderDOD(stats.today_total, stats.yesterday_total)}
+        </div>
+      ) : undefined,
+      valueStyle: { color: '#cf1322' },
+    },
     {
       title: t('pages.system.operationLogs.statByType'),
       value: (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-          {Object.entries(stats.by_type).map(([type, count]) => {
+          {Object.entries(stats?.by_type || {}).map(([type, count]) => {
             const typeMap: Record<string, { color: string; text: string }> = {
               create: { color: 'success', text: t('pages.system.operationLogs.typeCreate') },
               update: { color: 'processing', text: t('pages.system.operationLogs.typeUpdate') },
@@ -167,23 +225,13 @@ const OperationLogsPage: React.FC = () => {
               unknown: { color: 'default', text: t('pages.system.operationLogs.typeUnknown') },
             };
             const typeInfo = typeMap[type] || { color: 'default', text: type };
-            return <Tag key={type} color={typeInfo.color}>{typeInfo.text}: {count}</Tag>;
+            return <Tag key={type} color={typeInfo.color}>{typeInfo.text}: {count as React.ReactNode}</Tag>;
           })}
+          {Object.keys(stats?.by_type || {}).length === 0 && <span style={{ color: '#999' }}>-</span>}
         </div>
       ),
     },
-    {
-      title: t('pages.system.operationLogs.statByModule'),
-      value: (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-          {Object.entries(stats.by_module).sort(([, a], [, b]) => b - a).slice(0, 5).map(([module, count]) => (
-            <Tag key={module}>{formatModuleName(module)}: {count}</Tag>
-          ))}
-          {Object.keys(stats.by_module).length > 5 && <Tag>...</Tag>}
-        </div>
-      ),
-    },
-  ] : [];
+  ];
 
   /**
    * 表格列定义（优化：突出对用户有用的信息）

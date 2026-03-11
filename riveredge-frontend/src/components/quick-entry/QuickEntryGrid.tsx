@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Card, Row, Col, Button, Modal, Tree, Space, message, theme } from 'antd';
+import { Card, Button, Modal, Tree, Space, message, theme } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { DataNode } from 'antd/es/tree';
@@ -34,6 +34,8 @@ export interface QuickEntryItem {
 export interface QuickEntryGridProps {
   /** 快捷入口列表 */
   items: QuickEntryItem[];
+  /** 是否小屏 */
+  isSmallScreen?: boolean;
   /** 菜单树数据（用于配置选择） */
   menuTree?: DataNode[];
   /** 是否显示配置按钮 */
@@ -56,6 +58,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   onSave,
   renderMenuIcon,
   title,
+  isSmallScreen = false,
 }) => {
   const { token } = useToken();
   const navigate = useNavigate();
@@ -133,7 +136,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   // 生成渐变色（根据索引生成不同颜色，使用不透明实色）
   const generateGradient = (index: number): string => {
     const gradients = [
-      'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',      // 紫色 - 工单管理
+      'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',     // 纯蓝 - 工单管理
       'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',    // 粉紫 - 库存管理
       'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',     // 蓝色 - 质量管理
       'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',     // 绿色 - 设备管理
@@ -174,11 +177,18 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           },
         }}
       >
-        <Row gutter={[12, 12]}>
+        <div style={{ width: '100%', height: '100%' }}>
           {editingItems.length > 0 ? (
-            editingItems.map((item, index) => (
-              <Col xs={12} sm={8} md={6} lg={6} key={item.menu_uuid}>
+            <div 
+              style={{ 
+                display: 'grid', 
+                gridTemplateColumns: `repeat(auto-fill, minmax(${isSmallScreen ? 60 : 76}px, 1fr))`, 
+                gap: '16px 8px' 
+              }}
+            >
+              {editingItems.map((item, index) => (
                 <QuickEntryIcon
+                  key={item.menu_uuid}
                   icon={item.menu_icon || <PlusOutlined />}
                   title={item.menu_name}
                   onClick={() => {
@@ -189,24 +199,23 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                   gradient={item.gradient || generateGradient(index)}
                   editable={configModalVisible}
                   onDelete={() => handleDeleteItem(item.menu_uuid)}
+                  isSmallScreen={isSmallScreen}
                 />
-              </Col>
-            ))
+              ))}
+            </div>
           ) : (
-            <Col span={24}>
-              <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextSecondary }}>
-                <p>暂无快捷入口</p>
-                <Button
-                  type="link"
-                  icon={<PlusOutlined />}
-                  onClick={handleOpenConfig}
-                >
-                  添加快捷入口
-                </Button>
-              </div>
-            </Col>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextSecondary }}>
+              <p>暂无快捷入口</p>
+              <Button
+                type="link"
+                icon={<PlusOutlined />}
+                onClick={handleOpenConfig}
+              >
+                添加快捷入口
+              </Button>
+            </div>
           )}
-        </Row>
+        </div>
       </Card>
 
       {/* 配置模态框 */}

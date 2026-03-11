@@ -795,9 +795,9 @@ export default function DashboardPage() {
               borderRadius: token.borderRadius,
               border: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
               width: '100%',
-              height: '100%',
+              height: isSmallScreen ? '100px' : '100%',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
@@ -838,9 +838,9 @@ export default function DashboardPage() {
               borderRadius: token.borderRadius,
               border: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              background: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
               width: '100%',
-              height: '100%',
+              height: isSmallScreen ? '100px' : '100%',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
@@ -883,7 +883,7 @@ export default function DashboardPage() {
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
               background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
               width: '100%',
-              height: '100%',
+              height: isSmallScreen ? '100px' : '100%',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
@@ -925,7 +925,7 @@ export default function DashboardPage() {
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
               background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
               width: '100%',
-              height: '100%',
+              height: isSmallScreen ? '100px' : '100%',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
@@ -968,7 +968,7 @@ export default function DashboardPage() {
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
               background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
               width: '100%',
-              height: '100%',
+              height: isSmallScreen ? '100px' : '100%',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
@@ -1008,7 +1008,7 @@ export default function DashboardPage() {
         className="dashboard-four-cards-row"
         style={{ 
           height: isSmallScreen
-            ? 'calc(100vh - 56px - 30px - 144px - 168px)'
+            ? 'calc(100vh - 56px - 30px - 100px - 140px)'
             : 'calc(100vh - 56px - 30px - 192px - 198px)',
           minHeight: 0,
           display: 'flex',
@@ -1023,6 +1023,7 @@ export default function DashboardPage() {
         {/* 快捷入口 - iOS风格（占25%） */}
         <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
           <QuickEntryGrid
+            isSmallScreen={isSmallScreen}
             title={
               <Space>
                 <AppstoreOutlined />

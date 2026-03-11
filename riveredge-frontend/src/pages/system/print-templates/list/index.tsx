@@ -358,8 +358,7 @@ const PrintTemplateListPage: React.FC = () => {
    * 计算统计信息
    */
   const statCards = useMemo(() => {
-    if (allTemplates.length === 0) return undefined;
-    
+    // 始终返回包含 4 个元素的指标卡配置，避免数据加载前后产生的布局抖动（即指标卡出现导致页面元素下移）
     const stats = {
       total: allTemplates.length,
       active: allTemplates.filter((t) => t.is_active).length,

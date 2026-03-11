@@ -565,7 +565,7 @@ const MessageConfigListPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <div style={{ padding: '0 4px' }}>
+        <div style={{ padding: '0' }}>
           <ProFormText
             name="code"
             label={t('pages.system.messageConfig.code')}

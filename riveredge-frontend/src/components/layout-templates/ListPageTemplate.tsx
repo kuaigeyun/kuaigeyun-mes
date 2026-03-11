@@ -9,7 +9,7 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Row, Col, Card, Statistic } from 'antd';
+import { Row, Col, Card, Statistic, theme as AntdTheme } from 'antd';
 import { STAT_CARD_CONFIG } from './constants';
 
 
@@ -20,7 +20,7 @@ export interface StatCard {
   /** 标题 */
   title: string;
   /** 数值 */
-  value: number | string;
+  value: number | string | ReactNode;
   /** 前缀（如图标或符号） */
   prefix?: ReactNode;
   /** 后缀（如单位） */
@@ -31,6 +31,12 @@ export interface StatCard {
   precision?: number;
   /** 卡片点击事件 */
   onClick?: () => void;
+  /** 数值下方的说明（如较昨日波动） */
+  description?: ReactNode;
+  /** 卡片底部的扩展区域（如图表） */
+  footer?: ReactNode;
+  /** 作为背景的微缩图表（如折线图、面积图） */
+  backgroundChart?: ReactNode;
 }
 
 /**
@@ -75,6 +81,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   className,
   style,
 }) => {
+  const { token } = AntdTheme.useToken();
 
   return (
     <div
@@ -84,15 +91,14 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
         ...style,
       }}
     >
-      {/* 统计卡片区域 - 只有在数量足够（>3）时才显示，且始终占满一行 */}
-      {statCards && statCards.length > 3 && (
+      {/* 统计卡片区域 - 显示所有提供的指标卡并在一行均分 */}
+      {statCards && statCards.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={false}>
+          <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={true}>
             {statCards.map((card, index) => (
               <Col
                 key={index}
-                flex={1}
-                style={{ minWidth: 0 }} // 防止 flex 子项溢出
+                style={{ flex: '1 1 240px', minWidth: 240 }} // flexible equal width, wraps if too narrow
               >
                 <Card
                   hoverable={!!card.onClick}
@@ -100,16 +106,45 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                   style={{
                     cursor: card.onClick ? 'pointer' : 'default',
                     height: '100%',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    // Unified shadow with ProTable container (standardized system shadow)
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+                    border: `1px solid ${token.colorBorderSecondary}`,
                   }}
                   styles={{
                     body: {
-                      padding: STAT_CARD_CONFIG.PADDING,
+                      padding: 16,
+                      position: 'relative',
+                      zIndex: 1,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
                     },
                   }}
                 >
+                  {/* Top Right Extra Info - Standardized class for easier management */}
+                  {card.description && (
+                    <div 
+                      className="stat-card-extra"
+                      style={{ 
+                        position: 'absolute', 
+                        top: 16, // Aligned with card body padding
+                        right: 16, 
+                        fontSize: 12, 
+                        lineHeight: '22px', // Align with ant-statistic-title line height approx
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      {card.description}
+                    </div>
+                  )}
+
                   <Statistic
                     title={card.title}
-                    value={card.value}
+                    value={typeof card.value === 'number' || typeof card.value === 'string' ? card.value : 0}
+                    formatter={typeof card.value === 'number' || typeof card.value === 'string' ? undefined : () => card.value as ReactNode}
                     prefix={card.prefix}
                     suffix={card.suffix}
                     precision={card.precision}
@@ -119,9 +154,34 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                         fontWeight: 600,
                         ...card.valueStyle,
                       },
+                      title: {
+                        marginBottom: 4,
+                        color: token.colorTextSecondary,
+                      }
                     }}
-                    style={{ marginBottom: 0 }} // 确保 Statistic 自身没有额外下边距
+                    style={{ marginBottom: 0 }}
                   />
+
+                  {card.footer && (
+                    <div style={{ marginTop: 'auto', paddingTop: 8, zIndex: 2 }}>
+                      {card.footer}
+                    </div>
+                  )}
+
+                  {card.backgroundChart && (
+                    <div style={{ 
+                      position: 'absolute', 
+                      bottom: -18, 
+                      left: -20,   // More horizontal overflow to hide vertical edge lines
+                      right: -20, 
+                      height: 70, 
+                      zIndex: 0, 
+                      pointerEvents: 'none',
+                      opacity: 0.8,
+                    }}>
+                      {card.backgroundChart}
+                    </div>
+                  )}
                 </Card>
               </Col>
             ))}

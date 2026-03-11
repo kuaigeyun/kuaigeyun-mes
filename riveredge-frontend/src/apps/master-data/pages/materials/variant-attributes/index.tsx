@@ -400,6 +400,7 @@ const VariantAttributesPage: React.FC = () => {
         formRef={formRef}
         loading={formLoading}
         onFinish={handleSubmit}
+        grid
       >
         <ProFormText
           name="attribute_name"
@@ -410,6 +411,7 @@ const VariantAttributesPage: React.FC = () => {
             { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '属性名称只能包含字母、数字、下划线和中文' },
           ]}
           disabled={isEdit}
+          colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="attribute_type"
@@ -419,34 +421,44 @@ const VariantAttributesPage: React.FC = () => {
           rules={[{ required: true, message: '请选择属性类型' }]}
           fieldProps={{
             onChange: (value) => {
-              // 当类型改变时，清空枚举值（如果不是枚举类型）
               if (value !== 'enum') {
                 formRef.current?.setFieldsValue({ enum_values: undefined });
               }
             },
           }}
+          colProps={{ span: 12 }}
         />
         <ProFormText
           name="display_name"
           label="显示名称"
           placeholder="请输入显示名称（如：产品颜色）"
           rules={[{ required: true, message: '请输入显示名称' }]}
-        />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入属性描述"
-        />
-        <ProFormSwitch
-          name="is_required"
-          label="是否必填"
-          initialValue={false}
+          colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="display_order"
           label="显示顺序"
           initialValue={0}
           min={0}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入属性描述"
+          colProps={{ span: 24 }}
+        />
+        <ProFormSwitch
+          name="is_required"
+          label="是否必填"
+          initialValue={false}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+          initialValue={true}
+          colProps={{ span: 12 }}
         />
         <ProForm.Item
           noStyle
@@ -462,17 +474,13 @@ const VariantAttributesPage: React.FC = () => {
                   placeholder="请输入枚举值，多个值用逗号分隔（如：红色,蓝色,绿色）"
                   rules={[{ required: true, message: '请输入枚举值' }]}
                   extra="多个值用逗号分隔"
+                  colProps={{ span: 24 }}
                 />
               );
             }
             return null;
           }}
         </ProForm.Item>
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-          initialValue={true}
-        />
       </FormModalTemplate>
 
 

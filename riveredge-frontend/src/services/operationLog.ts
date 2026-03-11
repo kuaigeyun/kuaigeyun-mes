@@ -36,6 +36,9 @@ export interface OperationLogStats {
   total: number;
   by_type: Record<string, number>;
   by_module: Record<string, number>;
+  today_total?: number;
+  yesterday_total?: number;
+  trend_data?: { date: string; value: number }[];
 }
 
 /**

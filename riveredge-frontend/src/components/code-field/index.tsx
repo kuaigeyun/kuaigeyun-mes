@@ -229,10 +229,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
         rules={required ? [{ required: true, message: `请输入${label || '编码'}` }] : []}
         placeholder={`请输入${label || '编码'}`}
         disabled={disabled}
-        onChange={(e) => onChange?.(e.target.value)}
-        value={value}
         colProps={colProps}
-        fieldProps={fieldProps}
+        fieldProps={{
+          ...fieldProps,
+          value: value,
+          onChange: (e: any) => onChange?.(e.target.value),
+        }}
       />
     );
   }
@@ -266,17 +268,15 @@ const CodeField: React.FC<CodeFieldProps> = ({
       name={name}
       label={label || pageConfig.codeFieldLabel}
       rules={required ? [{ required: true, message: `请输入${label || pageConfig.codeFieldLabel}` }] : []}
-      placeholder={canEdit ? (showGenerateButton ? `请输入${label || pageConfig.codeFieldLabel}，或点击按钮自动生成` : `请输入${label || pageConfig.codeFieldLabel}`) : '系统自动生成'}
+      placeholder={`请输入${label || pageConfig.codeFieldLabel}`}
       disabled={disabled || (!canEdit && !!value)}
-      onChange={(e) => onChange?.(e.target.value)}
-      value={value}
       colProps={colProps}
-      fieldProps={mergedFieldProps}
-      extra={
-        showGenerateButton
-          ? (canEdit ? '可以手动填写，也可以点击"生成"按钮自动生成' : '系统自动生成，不可手动修改')
-          : (canEdit ? '可以手动填写，系统会在提交时自动生成' : '系统自动生成，不可手动修改')
-      }
+      fieldProps={{
+        ...mergedFieldProps,
+        value: value,
+        onChange: (e: any) => onChange?.(e.target.value),
+      }}
+      extra={undefined}
     />
   );
 };

@@ -169,11 +169,47 @@ class LoginLogService:
         by_user_raw = await LoginLog.filter(query & Q(user_id__isnull=False)).group_by("user_id", "username").annotate(count=Count("id")).order_by("-count").limit(10).values("user_id", "username", "count")
         by_user = {f"{item['username']}({item['user_id']})": item["count"] for item in by_user_raw}
         
+        # 计算最近7天趋势数据 (采用固定的 Asia/Shanghai 时区偏移确保统计边界正确)
+        import asyncio
+        from datetime import timedelta as td, datetime as dt, timezone as tz_module
+        
+        sh_tz = tz_module(td(hours=8))
+        now_sh = dt.now(sh_tz)
+        today = now_sh.date()
+        
+        trend_data = []
+        tasks = []
+        
+        for i in range(6, -1, -1):
+            d = today - td(days=i)
+            # 这里的 d 是上海日期的 midnight
+            start_sh = dt.combine(d, dt.min.time()).replace(tzinfo=sh_tz)
+            end_sh = dt.combine(d + td(days=1), dt.min.time()).replace(tzinfo=tz_module.utc if False else sh_tz) # 保持 sh_tz
+            
+            # 转换为 naive UTC 供数据库查询 (因 DB 存储的是 UTC)
+            start_utc = start_sh.astimezone(tz_module.utc).replace(tzinfo=None)
+            end_utc = end_sh.astimezone(tz_module.utc).replace(tzinfo=None)
+            
+            day_query = query & Q(created_at__gte=start_utc, created_at__lt=end_utc)
+            tasks.append((d.strftime("%Y-%m-%d"), LoginLog.filter(day_query).count()))
+            
+        day_strs, day_counts_awaitables = zip(*tasks)
+        day_counts = await asyncio.gather(*day_counts_awaitables)
+        
+        for date_str, count in zip(day_strs, day_counts):
+            trend_data.append({"date": date_str, "value": count})
+            
+        today_total_val = trend_data[-1]["value"] if trend_data else 0
+        yesterday_total_val = trend_data[-2]["value"] if len(trend_data) > 1 else 0
+        
         return LoginLogStatsResponse(
             total=total,
             success_count=success_count,
             failed_count=failed_count,
             by_status=by_status,
             by_user=by_user,
+            today_total=today_total_val,
+            yesterday_total=yesterday_total_val,
+            trend_data=trend_data,
         )
 

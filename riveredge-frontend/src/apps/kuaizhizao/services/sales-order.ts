@@ -130,6 +130,19 @@ export interface SalesOrderStatistics {
   in_progress_count: number;
   overdue_count: number;
   total_amount: number;
+  // 新增指标
+  today_new_count?: number;
+  unfulfilled_count?: number;
+  annual_total_amount?: number;
+  avg_delivery_cycle?: number;
+  // 趋势数据（mock使用或由后端支持）
+  trends?: {
+    today_new?: number[];
+    unfulfilled?: number[];
+    annual_total?: number[];
+  };
+  /** 年度总额同比（百分比，如 12.5 表示 12.5%） */
+  annual_total_yoy?: number;
 }
 
 /** 获取销售订单统计 */

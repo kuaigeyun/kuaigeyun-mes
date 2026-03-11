@@ -325,10 +325,13 @@ class OnlineUserService:
         for user in online_users:
             tenant_id_key = str(user.tenant_id)
             by_tenant[tenant_id_key] = by_tenant.get(tenant_id_key, 0) + 1
-        
+            
         return OnlineUserStatisticsResponse(
             total=total,
             active=active,
-            by_tenant=by_tenant
+            by_tenant=by_tenant,
+            today_active=0,
+            yesterday_active=0,
+            trend_data=[],
         )
 

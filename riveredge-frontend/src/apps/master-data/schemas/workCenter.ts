@@ -26,13 +26,6 @@ export const workCenterFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.workCenter.nameRequired' }],
   },
   {
-    name: 'description',
-    type: 'textarea',
-    labelKey: 'field.workCenter.description',
-    colSpan: 24,
-    fieldProps: { rows: 3 },
-  },
-  {
     name: 'workstationIds',
     type: 'select',
     labelKey: 'field.workCenter.workstationIds',
@@ -40,6 +33,13 @@ export const workCenterFormSchema: FieldConfig[] = [
     colSpan: 24,
     mode: 'multiple',
     fieldProps: { allowClear: true },
+  },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'field.workCenter.description',
+    colSpan: 24,
+    fieldProps: { rows: 3 },
   },
   {
     name: 'isActive',

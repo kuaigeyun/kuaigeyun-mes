@@ -11,9 +11,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag, Space, message, Button } from 'antd';
+import { Tag, Space, Drawer, Typography, Descriptions, App, Button } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
+import { Area } from '@ant-design/charts';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getLoginLogs,
@@ -146,24 +147,64 @@ const LoginLogsPage: React.FC = () => {
     },
   ];
 
-  // 构建统计卡片数据
-  const statCards = stats ? [
+  const renderDOD = (today?: number, yesterday?: number) => {
+    if (today === undefined || yesterday === undefined) return null;
+    const diff = today - yesterday;
+    const color = diff > 0 ? '#cf1322' : diff < 0 ? '#3f8600' : 'rgba(0, 0, 0, 0.45)';
+    const icon = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+    return (
+      <span style={{ marginLeft: 8, fontSize: 13, color }}>
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {icon} {Math.abs(diff)}
+      </span>
+    );
+  };
+
+  const renderTrendChart = (data: any[] = [], color: string) => {
+    if (!data || data.length === 0) return null;
+    return (
+      <Area
+        data={data}
+        xField="date"
+        yField="value"
+        padding={0}
+        axis={false}
+        colorField={() => color}
+        shapeField="smooth"
+        style={{
+          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+          fillOpacity: 0.2, // increased opacity since gradient fades it out
+          stroke: color,
+          lineWidth: 2,
+        }}
+        autoFit
+      />
+    );
+  };
+
+  // 构建统计卡片数据，始终返回卡片结构，避免数据加载前后产生的布局抖动
+  const statCards = [
     {
       title: t('pages.system.loginLogs.statTotal'),
-      value: stats.total,
+      value: stats?.total || 0,
+      description: stats?.today_total !== undefined ? (
+        <div>
+          今日: {stats.today_total} {renderDOD(stats.today_total, stats.yesterday_total)}
+        </div>
+      ) : undefined,
       valueStyle: { color: '#1890ff' },
+      backgroundChart: renderTrendChart(stats?.trend_data || [], '#1890ff'),
     },
     {
       title: t('pages.system.loginLogs.statSuccess'),
-      value: stats.success_count,
+      value: stats?.success_count || 0,
       valueStyle: { color: '#52c41a' },
     },
     {
       title: t('pages.system.loginLogs.statFailed'),
-      value: stats.failed_count,
+      value: stats?.failed_count || 0,
       valueStyle: { color: '#ff4d4f' },
     },
-  ] : [];
+  ];
 
   /**
    * 表格列定义

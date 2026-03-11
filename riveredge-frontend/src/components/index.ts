@@ -41,3 +41,4 @@ export { default as DocumentRelationDisplay } from './document-relation-display'
 export type { DocumentRelationDisplayProps, DocumentRelationData, RelatedDocument } from './document-relation-display';
 export { SchemaFormRenderer } from './schema-form';
 export type { SchemaFormRendererProps, FieldConfig, FieldType, RuleConfig } from './schema-form';
+export { SimpleSparkline } from './common/SimpleSparkline';

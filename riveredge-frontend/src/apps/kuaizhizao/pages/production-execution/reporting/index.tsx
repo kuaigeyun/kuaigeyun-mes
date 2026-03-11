@@ -6,12 +6,15 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio, theme as AntdTheme } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { reportingApi, workOrderApi, materialBindingApi } from '../../../services/production';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { SimpleSparkline } from '../../../../../components';
+import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
 import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
@@ -32,9 +35,307 @@ interface ReportingRecord {
   reported_at: string;
   remarks?: string;
   sop_parameters?: Record<string, any>;
+  [key: string]: any; // 支持索引访问
 }
 
+/** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
+const getWorkerInfo = (operation?: any) => {
+  const { worker_id, worker_name } = getUserInfo() || {};
+  return {
+    worker_id: operation?.assigned_worker_id || worker_id || 0,
+    worker_name: operation?.assigned_worker_name || worker_name || '未知',
+  };
+};
+
+/**
+ * 子工序报工表单组件（核心功能，新增）
+ */
+const SubOperationReportingForm: React.FC<{
+  subOperation: any;
+  workOrder: any;
+  subOperations: any[];
+  onSuccess: () => void;
+  onCancel: () => void;
+  formRef: React.RefObject<any>;
+}> = ({ subOperation, workOrder, subOperations, onSuccess, onCancel, formRef }) => {
+  const { message: messageApi } = App.useApp();
+  const [subOpSopConfig, setSubOpSopConfig] = useState<any>(null);
+  const [loadingSubOpSOP, setLoadingSubOpSOP] = useState(false);
+
+  // 加载子工序的SOP配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
+  useEffect(() => {
+    const loadSubOpSOP = async () => {
+      if (!subOperation?.operation_id || !workOrder?.id) return;
+      
+      setLoadingSubOpSOP(true);
+      try {
+        const sopData = await sopApi.getForReporting(workOrder.id, subOperation.operation_id);
+        if (sopData && sopData.formConfig && sopData.formConfig.properties && Object.keys(sopData.formConfig.properties).length > 0) {
+          setSubOpSopConfig(sopData.formConfig);
+          const initialParams: Record<string, any> = {};
+          Object.keys(sopData.formConfig.properties).forEach((key) => {
+            const formConfig = (sopData as any).formConfig;
+            const field = formConfig.properties[key];
+            if (field.default !== undefined) {
+              initialParams[key] = field.default;
+            }
+          });
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({ sop_params: initialParams });
+          }, 100);
+        } else {
+          setSubOpSopConfig(null);
+        }
+      } catch (error: any) {
+        console.error('获取子工序SOP信息失败:', error);
+        setSubOpSopConfig(null);
+      } finally {
+        setLoadingSubOpSOP(false);
+      }
+    };
+    
+    loadSubOpSOP();
+  }, [subOperation?.operation_id, workOrder?.id, formRef]);
+
+  // 渲染SOP参数收集表单
+  const renderSubOpSOPParameters = () => {
+    if (!subOpSopConfig || !subOpSopConfig.properties) return null;
+    const fields: React.ReactNode[] = [];
+    Object.entries(subOpSopConfig.properties).forEach(([fieldCode, fieldSchema]: [string, any]) => {
+      const fieldName = `sop_params.${fieldCode}`;
+      if (fieldSchema.type === 'number') {
+        fields.push(
+          <ProFormDigit
+            key={fieldCode}
+            name={fieldName}
+            label={fieldSchema.title}
+            placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
+            rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
+            min={fieldSchema['x-validator']?.[0]?.min}
+            max={fieldSchema['x-validator']?.[0]?.max}
+            fieldProps={{
+              precision: fieldSchema['x-component-props']?.precision,
+              addonAfter: fieldSchema['x-component-props']?.unit,
+            }}
+          />
+        );
+      } else if (fieldSchema.type === 'string') {
+        if (fieldSchema['x-component'] === 'Select' || fieldSchema.enum) {
+          fields.push(
+            <ProFormSelect
+              key={fieldCode}
+              name={fieldName}
+              label={fieldSchema.title}
+              placeholder={fieldSchema['x-component-props']?.placeholder || `请选择${fieldSchema.title}`}
+              rules={fieldSchema.required ? [{ required: true, message: `请选择${fieldSchema.title}` }] : []}
+              options={fieldSchema.enum?.map((opt: any) => ({
+                label: opt.label || opt,
+                value: opt.value !== undefined ? opt.value : opt,
+              }))}
+            />
+          );
+        } else {
+          fields.push(
+            <ProFormText
+              key={fieldCode}
+              name={fieldName}
+              label={fieldSchema.title}
+              placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
+              rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
+            />
+          );
+        }
+      }
+    });
+    return (
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: 16 }}>SOP参数收集：</div>
+        <Card size="small" style={{ backgroundColor: '#fafafa' }}>
+          {fields}
+        </Card>
+      </div>
+    );
+  };
+
+  return (
+    <Form
+      ref={formRef}
+      layout="vertical"
+      onFinish={async (values) => {
+        try {
+          // 检查跳转规则（如果不允许跳转，且上道子工序未完成，阻止提交）
+          const subOpIndex = subOperations.findIndex((op: any) => op.operation_id === subOperation.operation_id);
+          if (subOpIndex > 0) {
+            const prevSubOp = subOperations[subOpIndex - 1];
+            if (!subOperation.allow_jump && prevSubOp.status !== 'completed') {
+              messageApi.error(`无法报工：必须先完成前序子工序 "${prevSubOp.operation_name}"`);
+              return;
+            }
+          }
+
+          // 验证SOP必填参数
+          if (subOpSopConfig && subOpSopConfig.properties) {
+            const missingParams: string[] = [];
+            Object.entries(subOpSopConfig.properties).forEach(([key, field]: [string, any]) => {
+              if (field.required && (!values.sop_params || !values.sop_params[key])) {
+                missingParams.push(field.title || key);
+              }
+            });
+            if (missingParams.length > 0) {
+              messageApi.error(`请填写SOP必填参数：${missingParams.join('、')}`);
+              return;
+            }
+          }
+
+          // 收集SOP参数数据
+          const sopParams: Record<string, any> = {};
+          if (values.sop_params) {
+            Object.entries(values.sop_params).forEach(([key, value]) => {
+              sopParams[key] = value;
+            });
+          }
+
+          const { worker_id, worker_name } = getWorkerInfo(subOperation);
+          const reportingData = {
+            work_order_id: workOrder.id,
+            work_order_code: workOrder.code,
+            work_order_name: workOrder.name,
+            operation_id: subOperation.operation_id,
+            operation_code: subOperation.operation_code,
+            operation_name: subOperation.operation_name,
+            worker_id,
+            worker_name,
+            reported_quantity: subOperation.reporting_type === 'status' 
+              ? (values.completed_status === 'completed' ? 1 : 0)
+              : values.reported_quantity,
+            qualified_quantity: values.qualified_quantity || 0,
+            unqualified_quantity: values.unqualified_quantity || 0,
+            work_hours: values.work_hours || 0,
+            status: 'pending',
+            reported_at: new Date().toISOString(),
+            remarks: values.remarks,
+            sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
+          };
+
+          await reportingApi.create(reportingData);
+          onSuccess();
+        } catch (error: any) {
+          messageApi.error(error.message || '子工序报工失败');
+        }
+      }}
+    >
+      {subOperation.reporting_type === 'status' ? (
+        // 按状态报工
+        <>
+          <Form.Item
+            name="completed_status"
+            label="完成状态"
+            rules={[{ required: true, message: '请选择完成状态' }]}
+          >
+            <Radio.Group>
+              <Radio value="completed">完成</Radio>
+              <Radio value="incomplete">未完成</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <ProFormDigit
+            name="work_hours"
+            label="工时(小时)"
+            placeholder="工时"
+            min={0}
+            fieldProps={{ step: 0.1 }}
+          />
+          
+          {/* SOP参数收集表单 */}
+          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
+
+          <ProFormTextArea
+            name="remarks"
+            label="备注"
+            placeholder="请输入备注信息"
+            fieldProps={{ rows: 3 }}
+          />
+        </>
+      ) : (
+        // 按数量报工
+        <>
+          <ProFormDigit
+            name="reported_quantity"
+            label="完成数量"
+            placeholder="请输入完成数量"
+            rules={[{ required: true, message: '请输入完成数量' }]}
+            min={0}
+            fieldProps={{
+              precision: 2,
+              max: workOrder.quantity - (subOperation.completed_quantity || 0),
+            }}
+            extra="完成数量必须大于0"
+          />
+          <ProFormDigit
+            name="qualified_quantity"
+            label="合格数量"
+            placeholder="请输入合格数量"
+            rules={[
+              { required: true, message: '请输入合格数量' },
+              ({ getFieldValue }: any) => ({
+                validator: (_: any, value: any) => {
+                  const reportedQuantity = getFieldValue('reported_quantity');
+                  if (reportedQuantity && value > reportedQuantity) {
+                    return Promise.reject(new Error('合格数量不能大于完成数量'));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+            min={0}
+            fieldProps={{ precision: 2 }}
+            extra="合格数量必须大于等于0，且不能大于完成数量"
+          />
+          <ProFormDigit
+            name="unqualified_quantity"
+            label="不合格数量"
+            placeholder="自动计算"
+            disabled
+            fieldProps={{
+              precision: 2,
+            }}
+            extra="不合格数量 = 完成数量 - 合格数量（自动计算）"
+          />
+          <ProFormDigit
+            name="work_hours"
+            label="工时(小时)"
+            placeholder="工时"
+            min={0}
+            fieldProps={{ step: 0.1 }}
+          />
+          
+          {/* SOP参数收集表单 */}
+          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
+
+          <ProFormTextArea
+            name="remarks"
+            label="备注"
+            placeholder="请输入备注信息"
+            fieldProps={{ rows: 3 }}
+          />
+        </>
+      )}
+      <Form.Item>
+        <Space>
+          <Button type="primary" htmlType="submit">
+            提交报工
+          </Button>
+          <Button onClick={onCancel}>
+            取消
+          </Button>
+        </Space>
+      </Form.Item>
+    </Form>
+  );
+};
+
 const ReportingPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { token } = AntdTheme.useToken();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -992,62 +1293,91 @@ const ReportingPage: React.FC = () => {
     },
   ];
 
-  // 报工统计数据（从 API 获取）
-  const [statData, setStatData] = useState<{
-    total_count: number;
-    pending_count: number;
-    qualification_rate: number;
-    total_work_hours: number;
-  } | null>(null);
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const stats = await reportingApi.getStatistics({
-          date_start: today.toISOString(),
-          date_end: tomorrow.toISOString(),
-        });
-        setStatData(stats as any);
-      } catch (e) {
-        setStatData({ total_count: 0, pending_count: 0, qualification_rate: 0, total_work_hours: 0 });
-      }
-    };
-    loadStats();
-  }, []);
+  // 报工统计数据（采用 useQuery）
+  const { data: statistics } = useQuery({
+    queryKey: ['reportingStatistics'],
+    queryFn: getReportingStatistics,
+  });
+
+  const statCards: StatCard[] = statistics
+    ? [
+        {
+          title: t('app.kuaizhizao.reporting.statCumulativeHours'),
+          value: statistics.cumulative_hours ?? 0,
+          suffix: 'h',
+          valueStyle: { color: token.colorPrimary },
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.hours || [120, 145, 138, 160, 155, 175, 168]} 
+              color={token.colorPrimary} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statEstimatedWages'),
+          value: statistics.estimated_wages ?? 0,
+          prefix: '¥',
+          precision: 2,
+          valueStyle: { color: token.colorPrimary },
+          description: (
+            <div style={{ color: token.colorTextSecondary }}>
+              本月预提 ¥{((statistics.estimated_wages ?? 0) * 1.1).toFixed(2)}
+            </div>
+          ),
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.wages || [1200, 1500, 1800, 1600, 2100, 1900, 2400]} 
+              color={token.colorPrimary} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statDowntimeRecords'),
+          value: statistics.downtime_records ?? 0,
+          valueStyle: (statistics.downtime_records ?? 0) > 0 ? { color: token.colorError } : undefined,
+          backgroundChart: (
+            <SimpleSparkline 
+              data={[2, 4, 1, 0, 3, 1, 2]} 
+              type="column"
+              color={token.colorError} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statExceptionReports'),
+          value: statistics.exception_reports ?? 0,
+          valueStyle: (statistics.exception_reports ?? 0) > 0 ? { color: token.colorWarning } : undefined,
+          description: (statistics.exception_reports ?? 0) > 0 ? '需优先响应' : '近期无异常',
+          backgroundChart: (
+            <SimpleSparkline 
+              data={[1, 0, 2, 0, 1, 0, 0]} 
+              color={token.colorWarning} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.reporting.statEfficiency'),
+          value: statistics.efficiency ?? 0,
+          suffix: '%',
+          valueStyle: { color: '#fa8c16' }, // Orange
+          description: (statistics.efficiency ?? 0) > 0 || (statistics as any).efficiency_yoy ? (
+            <div style={{ color: ((statistics as any).efficiency_yoy ?? 5) >= 0 ? '#52c41a' : '#ff4d4f' }}>
+              较基准 {(statistics as any).efficiency_yoy ? `${(statistics as any).efficiency_yoy > 0 ? '+' : ''}${(statistics as any).efficiency_yoy}%` : '+5%'}
+            </div>
+          ) : null,
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.efficiency || [75, 82, 78, 85, 88, 92, 90]} 
+              color="#fa8c16" 
+            />
+          ),
+        },
+      ]
+    : [];
 
   return (
-    <ListPageTemplate
-      statCards={[
-        {
-          title: '今日报工总数',
-          value: statData?.total_count ?? '-',
-          prefix: <ClockCircleOutlined />,
-          valueStyle: { color: '#1890ff' },
-        },
-        {
-          title: '待审核数量',
-          value: statData?.pending_count ?? '-',
-          prefix: <CheckCircleOutlined />,
-          valueStyle: { color: '#faad14' },
-        },
-        {
-          title: '合格率',
-          value: statData?.qualification_rate != null ? statData.qualification_rate.toFixed(1) : '-',
-          suffix: '%',
-          prefix: <CheckCircleOutlined />,
-          valueStyle: { color: '#52c41a' },
-        },
-        {
-          title: '总工时(小时)',
-          value: statData?.total_work_hours != null ? statData.total_work_hours.toFixed(1) : '-',
-          prefix: <ClockCircleOutlined />,
-          valueStyle: { color: '#722ed1' },
-        },
-      ]}
-    >
+    <>
+      <ListPageTemplate statCards={statCards}>
       <UniTable
         headerTitle="报工管理"
         actionRef={actionRef}
@@ -2136,293 +2466,12 @@ const ReportingPage: React.FC = () => {
       </Modal>
 
     </ListPageTemplate>
+    </>
   );
 };
 
 /**
  * 子工序报工表单组件（核心功能，新增）
  */
-const SubOperationReportingForm: React.FC<{
-  subOperation: any;
-  workOrder: any;
-  subOperations: any[];
-  onSuccess: () => void;
-  onCancel: () => void;
-  formRef: React.RefObject<any>;
-}> = ({ subOperation, workOrder, subOperations, onSuccess, onCancel, formRef }) => {
-  const { message: messageApi } = App.useApp();
-  const [subOpSopConfig, setSubOpSopConfig] = useState<any>(null);
-  const [loadingSubOpSOP, setLoadingSubOpSOP] = useState(false);
-
-  // 加载子工序的SOP配置（按工单+工序匹配，支持不同产品相同工序不同SOP）
-  useEffect(() => {
-    const loadSubOpSOP = async () => {
-      if (!subOperation?.operation_id || !workOrder?.id) return;
-      
-      setLoadingSubOpSOP(true);
-      try {
-        const sop = await sopApi.getForReporting(workOrder.id, subOperation.operation_id);
-        if (sop && sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
-          setSubOpSopConfig(sop.formConfig);
-          const initialParams: Record<string, any> = {};
-          Object.keys(sop.formConfig.properties).forEach((key) => {
-            const formConfig = (sop as any).formConfig;
-            const field = formConfig.properties[key];
-            if (field.default !== undefined) {
-              initialParams[key] = field.default;
-            }
-          });
-          setTimeout(() => {
-            formRef.current?.setFieldsValue({ sop_params: initialParams });
-          }, 100);
-        } else {
-          setSubOpSopConfig(null);
-        }
-      } catch (error: any) {
-        console.error('获取子工序SOP信息失败:', error);
-        setSubOpSopConfig(null);
-      } finally {
-        setLoadingSubOpSOP(false);
-      }
-    };
-    
-    loadSubOpSOP();
-  }, [subOperation?.operation_id, workOrder?.id, formRef]);
-
-  // 渲染SOP参数收集表单
-  const renderSubOpSOPParameters = () => {
-    if (!subOpSopConfig || !subOpSopConfig.properties) return null;
-    const fields: React.ReactNode[] = [];
-    Object.entries(subOpSopConfig.properties).forEach(([fieldCode, fieldSchema]: [string, any]) => {
-      const fieldName = `sop_params.${fieldCode}`;
-      if (fieldSchema.type === 'number') {
-        fields.push(
-          <ProFormDigit
-            key={fieldCode}
-            name={fieldName}
-            label={fieldSchema.title}
-            placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
-            rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
-            min={fieldSchema['x-validator']?.[0]?.min}
-            max={fieldSchema['x-validator']?.[0]?.max}
-            fieldProps={{
-              precision: fieldSchema['x-component-props']?.precision,
-              addonAfter: fieldSchema['x-component-props']?.unit,
-            }}
-          />
-        );
-      } else if (fieldSchema.type === 'string') {
-        if (fieldSchema['x-component'] === 'Select' || fieldSchema.enum) {
-          fields.push(
-            <ProFormSelect
-              key={fieldCode}
-              name={fieldName}
-              label={fieldSchema.title}
-              placeholder={fieldSchema['x-component-props']?.placeholder || `请选择${fieldSchema.title}`}
-              rules={fieldSchema.required ? [{ required: true, message: `请选择${fieldSchema.title}` }] : []}
-              options={fieldSchema.enum?.map((opt: any) => ({
-                label: opt.label || opt,
-                value: opt.value !== undefined ? opt.value : opt,
-              }))}
-            />
-          );
-        } else {
-          fields.push(
-            <ProFormText
-              key={fieldCode}
-              name={fieldName}
-              label={fieldSchema.title}
-              placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
-              rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
-            />
-          );
-        }
-      }
-    });
-    return (
-      <div style={{ marginTop: 16, marginBottom: 16 }}>
-        <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: 16 }}>SOP参数收集：</div>
-        <Card size="small" style={{ backgroundColor: '#fafafa' }}>
-          {fields}
-        </Card>
-      </div>
-    );
-  };
-
-  return (
-    <Form
-      ref={formRef}
-      layout="vertical"
-      onFinish={async (values) => {
-        try {
-          // 检查跳转规则（如果不允许跳转，且上道子工序未完成，阻止提交）
-          const subOpIndex = subOperations.findIndex((op: any) => op.operation_id === subOperation.operation_id);
-          if (subOpIndex > 0) {
-            const prevSubOp = subOperations[subOpIndex - 1];
-            if (!subOperation.allow_jump && prevSubOp.status !== 'completed') {
-              messageApi.error(`无法报工：必须先完成前序子工序 "${prevSubOp.operation_name}"`);
-              return;
-            }
-          }
-
-          // 验证SOP必填参数
-          if (subOpSopConfig && subOpSopConfig.properties) {
-            const missingParams: string[] = [];
-            Object.entries(subOpSopConfig.properties).forEach(([key, field]: [string, any]) => {
-              if (field.required && (!values.sop_params || !values.sop_params[key])) {
-                missingParams.push(field.title || key);
-              }
-            });
-            if (missingParams.length > 0) {
-              messageApi.error(`请填写SOP必填参数：${missingParams.join('、')}`);
-              return;
-            }
-          }
-
-          // 收集SOP参数数据
-          const sopParams: Record<string, any> = {};
-          if (values.sop_params) {
-            Object.entries(values.sop_params).forEach(([key, value]) => {
-              sopParams[key] = value;
-            });
-          }
-
-          const { worker_id, worker_name } = getWorkerInfo(subOperation);
-          const reportingData = {
-            work_order_id: workOrder.id,
-            work_order_code: workOrder.code,
-            work_order_name: workOrder.name,
-            operation_id: subOperation.operation_id,
-            operation_code: subOperation.operation_code,
-            operation_name: subOperation.operation_name,
-            worker_id,
-            worker_name,
-            reported_quantity: subOperation.reporting_type === 'status' 
-              ? (values.completed_status === 'completed' ? 1 : 0)
-              : values.reported_quantity,
-            qualified_quantity: values.qualified_quantity || 0,
-            unqualified_quantity: values.unqualified_quantity || 0,
-            work_hours: values.work_hours || 0,
-            status: 'pending',
-            reported_at: new Date().toISOString(),
-            remarks: values.remarks,
-            sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
-          };
-
-          await reportingApi.create(reportingData);
-          onSuccess();
-        } catch (error: any) {
-          messageApi.error(error.message || '子工序报工失败');
-        }
-      }}
-    >
-      {subOperation.reporting_type === 'status' ? (
-        // 按状态报工
-        <>
-          <Form.Item
-            name="completed_status"
-            label="完成状态"
-            rules={[{ required: true, message: '请选择完成状态' }]}
-          >
-            <Radio.Group>
-              <Radio value="completed">完成</Radio>
-              <Radio value="incomplete">未完成</Radio>
-            </Radio.Group>
-          </Form.Item>
-          <ProFormDigit
-            name="work_hours"
-            label="工时(小时)"
-            placeholder="工时"
-            min={0}
-            fieldProps={{ step: 0.1 }}
-          />
-          
-          {/* SOP参数收集表单 */}
-          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
-
-          <ProFormTextArea
-            name="remarks"
-            label="备注"
-            placeholder="请输入备注信息"
-            fieldProps={{ rows: 3 }}
-          />
-        </>
-      ) : (
-        // 按数量报工
-        <>
-          <ProFormDigit
-            name="reported_quantity"
-            label="完成数量"
-            placeholder="请输入完成数量"
-            rules={[{ required: true, message: '请输入完成数量' }]}
-            min={0}
-            fieldProps={{
-              precision: 2,
-              max: workOrder.quantity - (subOperation.completed_quantity || 0),
-            }}
-            extra="完成数量必须大于0"
-          />
-          <ProFormDigit
-            name="qualified_quantity"
-            label="合格数量"
-            placeholder="请输入合格数量"
-            rules={[
-              { required: true, message: '请输入合格数量' },
-              ({ getFieldValue }: any) => ({
-                validator: (_: any, value: any) => {
-                  const reportedQuantity = getFieldValue('reported_quantity');
-                  if (reportedQuantity && value > reportedQuantity) {
-                    return Promise.reject(new Error('合格数量不能大于完成数量'));
-                  }
-                  return Promise.resolve();
-                },
-              }),
-            ]}
-            min={0}
-            fieldProps={{ precision: 2 }}
-            extra="合格数量必须大于等于0，且不能大于完成数量"
-          />
-          <ProFormDigit
-            name="unqualified_quantity"
-            label="不合格数量"
-            placeholder="自动计算"
-            disabled
-            fieldProps={{
-              precision: 2,
-            }}
-            extra="不合格数量 = 完成数量 - 合格数量（自动计算）"
-          />
-          <ProFormDigit
-            name="work_hours"
-            label="工时(小时)"
-            placeholder="工时"
-            min={0}
-            fieldProps={{ step: 0.1 }}
-          />
-          
-          {/* SOP参数收集表单 */}
-          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
-
-          <ProFormTextArea
-            name="remarks"
-            label="备注"
-            placeholder="请输入备注信息"
-            fieldProps={{ rows: 3 }}
-          />
-        </>
-      )}
-      <Form.Item>
-        <Space>
-          <Button type="primary" htmlType="submit">
-            提交报工
-          </Button>
-          <Button onClick={onCancel}>
-            取消
-          </Button>
-        </Space>
-      </Form.Item>
-    </Form>
-  );
-};
 
 export default ReportingPage;

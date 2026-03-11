@@ -10,8 +10,8 @@
 
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme } from 'antd';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormUploadButton } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, ImportOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -28,6 +28,7 @@ import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
+import { SimpleSparkline } from '../../../../../components';
 import {
   listSalesOrders,
   getSalesOrder,
@@ -118,7 +119,7 @@ const SalesOrdersPage: React.FC = () => {
     queryFn: getSalesOrderStatistics,
   });
 
-  const { token } = theme.useToken();
+  const { token } = AntdTheme.useToken();
 
   // 销售订单审核开关（从业务配置加载）
   const [auditEnabled, setAuditEnabled] = useState(true);
@@ -1241,19 +1242,19 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'required_quantity',
       width: 100,
       align: 'right' as const,
-      render: (val: number, record: SalesOrderItemRow) => (
+      render: (val: any, record: SalesOrderItemRow) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
           <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
           {val ?? 0}
         </span>
       ),
     },
-    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
-    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 70, align: 'right' as const, render: (val: number) => val ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: number) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: any) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 70, align: 'right' as const, render: (val: any) => val ?? 0 },
+    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: any) => <AmountDisplay resource="sales_order" value={val} /> },
     { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 110 },
-    { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 90, align: 'right' as const, render: (text: number) => text ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 90, align: 'right' as const, render: (text: number) => text ?? 0 },
+    { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 90, align: 'right' as const, render: (text: any) => text ?? 0 },
+    { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 90, align: 'right' as const, render: (text: any) => text ?? 0 },
     {
       title: t('app.kuaizhizao.salesOrder.bomCheck'),
       key: 'bom_check',
@@ -1337,15 +1338,23 @@ const SalesOrdersPage: React.FC = () => {
   const statCards: StatCard[] = statistics
     ? [
         {
-          title: t('app.kuaizhizao.salesOrder.statActive'),
-          value: statistics.active_count,
+          title: t('app.kuaizhizao.salesOrder.statTodayNew'),
+          value: statistics.today_new_count ?? 0,
+          valueStyle: { color: token.colorPrimary },
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.today_new || [0, 0, 0, 0, 0, 0, 0]} 
+              color={token.colorPrimary} 
+            />
+          ),
         },
         {
           title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
-          value: statistics.pending_review_count,
-          valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
+          value: statistics.pending_review_count ?? 0,
+          valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
+          description: (statistics.pending_review_count ?? 0) > 0 ? '需即时处理' : '无待办',
           onClick:
-            statistics.pending_review_count > 0
+            (statistics.pending_review_count ?? 0) > 0
               ? () => {
                   tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
                   actionRef.current?.reload?.();
@@ -1353,19 +1362,45 @@ const SalesOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.salesOrder.lifecycleInProgress'),
-          value: statistics.in_progress_count,
+          title: t('app.kuaizhizao.salesOrder.statUnfulfilled'),
+          value: statistics.unfulfilled_count ?? 0,
+          valueStyle: { color: '#2f54eb' }, // Geek Blue
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.unfulfilled || [0, 0, 0, 0, 0, 0, 0]} 
+              color="#2f54eb" 
+            />
+          ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.statOverdue'),
-          value: statistics.overdue_count,
-          valueStyle: statistics.overdue_count > 0 ? { color: '#ff4d4f' } : undefined,
-        },
-        {
-          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-          value: statistics.total_amount ?? 0,
+          title: t('app.kuaizhizao.salesOrder.statAnnualTotal'),
+          value: statistics.annual_total_amount ?? 0,
           prefix: '¥',
           precision: 2,
+          valueStyle: { color: token.colorPrimary },
+          description: (
+            <div style={{ color: (statistics as any).annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
+              较去年同期 {(statistics as any).annual_total_yoy ? `${(statistics as any).annual_total_yoy > 0 ? '+' : ''}${(statistics as any).annual_total_yoy}%` : '+0%'}
+            </div>
+          ),
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.annual_total || [1000, 2000, 1500, 3000, 2500, 4000, 3500]} 
+              color={token.colorPrimary} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statAvgDeliveryCycle'),
+          value: statistics.avg_delivery_cycle ?? 0,
+          suffix: t('app.kuaizhizao.salesOrder.unitDays'),
+          valueStyle: { color: '#722ed1' }, // Purple
+          backgroundChart: (
+            <SimpleSparkline 
+              data={[5, 4.5, 5.2, 4.8, 5.5, 5, 4.2]} 
+              color="#722ed1" 
+            />
+          ),
         },
       ]
     : [];

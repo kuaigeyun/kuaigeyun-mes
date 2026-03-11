@@ -35,4 +35,8 @@ class OnlineUserStatisticsResponse(BaseModel):
     total: int = Field(..., description="总在线用户数")
     active: int = Field(..., description="活跃用户数（最近5分钟有活动）")
     by_tenant: Dict[str, int] = Field(default_factory=dict, description="按组织统计在线用户数")
+    
+    today_active: int = Field(0, description="今日活跃人数(推断)")
+    yesterday_active: int = Field(0, description="昨日活跃人数(推断)")
+    trend_data: list[dict] = Field(default_factory=list, description="最近7天趋势数据")
 

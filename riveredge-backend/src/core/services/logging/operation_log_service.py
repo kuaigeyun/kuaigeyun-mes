@@ -248,10 +248,46 @@ class OperationLogService:
         for item in logs_by_module:
             if item['operation_module']:
                 by_module[item['operation_module']] = item['count']
+                
+        # 计算最近7天趋势数据 (采用固定的 Asia/Shanghai 时区偏移确保统计边界正确)
+        import asyncio
+        from datetime import timedelta as td, datetime as dt, timezone as tz_module
+        
+        sh_tz = tz_module(td(hours=8))
+        now_sh = dt.now(sh_tz)
+        today = now_sh.date()
+        
+        trend_data = []
+        tasks = []
+        
+        for i in range(6, -1, -1):
+            d = today - td(days=i)
+            # 这里的 d 是上海日期的 midnight
+            start_sh = dt.combine(d, dt.min.time()).replace(tzinfo=sh_tz)
+            end_sh = dt.combine(d + td(days=1), dt.min.time()).replace(tzinfo=sh_tz)
+            
+            # 转换为 naive UTC 供数据库查询
+            start_utc = start_sh.astimezone(tz_module.utc).replace(tzinfo=None)
+            end_utc = end_sh.astimezone(tz_module.utc).replace(tzinfo=None)
+            
+            day_query = query & Q(created_at__gte=start_utc, created_at__lt=end_utc)
+            tasks.append((d.strftime("%Y-%m-%d"), OperationLog.filter(day_query).count()))
+            
+        day_strs, day_counts_awaitables = zip(*tasks)
+        day_counts = await asyncio.gather(*day_counts_awaitables)
+        
+        for date_str, count in zip(day_strs, day_counts):
+            trend_data.append({"date": date_str, "value": count})
+            
+        today_total = trend_data[-1]["value"] if trend_data else 0
+        yesterday_total = trend_data[-2]["value"] if len(trend_data) > 1 else 0
         
         return OperationLogStatsResponse(
             total=total,
             by_type=by_type,
             by_module=by_module,
+            today_total=today_total,
+            yesterday_total=yesterday_total,
+            trend_data=trend_data,
         )
 

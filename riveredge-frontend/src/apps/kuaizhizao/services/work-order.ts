@@ -11,6 +11,20 @@ export interface WorkOrderStatistics {
   overdue_count: number;
   draft_count: number;
   completed_count: number;
+  // 新增指标
+  qualified_output_today?: number;
+  total_wip?: number;
+  first_pass_yield?: number;
+  plan_achievement_rate?: number;
+  manufacturing_lead_time?: number;
+  // 趋势数据
+  trends?: {
+    output?: number[];
+    wip?: number[];
+    yield?: number[];
+  };
+  /** 良率同比（百分比） */
+  yield_yoy?: number;
 }
 
 export async function getWorkOrderStatistics(): Promise<WorkOrderStatistics> {

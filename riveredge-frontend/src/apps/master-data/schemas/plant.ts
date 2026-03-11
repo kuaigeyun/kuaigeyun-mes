@@ -26,18 +26,18 @@ export const plantFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.plant.nameRequired' }],
   },
   {
-    name: 'description',
-    type: 'textarea',
-    labelKey: 'field.plant.description',
-    colSpan: 24,
-    fieldProps: { rows: 3 },
-  },
-  {
     name: 'address',
     type: 'textarea',
     labelKey: 'field.plant.address',
     colSpan: 24,
     fieldProps: { rows: 2 },
+  },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'field.plant.description',
+    colSpan: 24,
+    fieldProps: { rows: 3 },
   },
   {
     name: 'isActive',

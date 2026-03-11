@@ -27,6 +27,9 @@ export interface OnlineUserStats {
   total: number;
   active: number;
   by_tenant: Record<string, number>;
+  today_active?: number;
+  yesterday_active?: number;
+  trend_data?: { date: string; value: number }[];
 }
 
 /**

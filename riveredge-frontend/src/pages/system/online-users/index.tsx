@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Avatar, Tag, Space, message, Popconfirm, Button, Badge, Typography, Tooltip, theme } from 'antd';
+import { App, Card, Avatar, Tag, Space, Popconfirm, Button, Badge, Typography, Tooltip, theme } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
@@ -144,31 +144,33 @@ const OnlineUsersPage: React.FC = () => {
    * 构建统计卡片数据
    */
   const statCards = useMemo(() => {
-    if (!stats) return undefined;
-    
+    // 始终返回卡片结构，避免数据加载前后产生的布局抖动
     return [
       {
-        title: t('pages.system.onlineUsers.statTotal'),
-        value: stats.total,
-        valueStyle: { color: '#1890ff' },
-      },
-      {
         title: t('pages.system.onlineUsers.statActive'),
-        value: stats.active,
+        value: stats?.active || 0,
         valueStyle: { color: '#52c41a' },
       },
-      ...(Object.keys(stats.by_tenant).length > 0 ? [{
+      {
+        title: t('pages.system.onlineUsers.statTotal'),
+        value: stats?.total || 0,
+        valueStyle: { color: '#1890ff' },
+      },
+      ...((stats && Object.keys(stats.by_tenant).length > 0) ? [{
         title: t('pages.system.onlineUsers.statByTenant'),
         value: (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
             {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
               <Tag key={tenantId} color="blue">
-                {t('pages.system.onlineUsers.tenantLabel', { id: tenantId })}: {count}
+                {t('pages.system.onlineUsers.tenantLabel', { id: tenantId })}: {count as React.ReactNode}
               </Tag>
             ))}
           </div>
         ),
-      }] : []),
+      }] : [{
+        title: t('pages.system.onlineUsers.statByTenant'),
+        value: '-',
+      }]),
     ];
   }, [stats, t]);
 

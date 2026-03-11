@@ -52,4 +52,8 @@ class LoginLogStatsResponse(BaseModel):
     failed_count: int = Field(..., description="失败登录数")
     by_status: dict = Field(default_factory=dict, description="按登录状态统计")
     by_user: dict = Field(default_factory=dict, description="按用户统计（前10名）")
+    
+    today_total: int = Field(0, description="今日登录数")
+    yesterday_total: int = Field(0, description="昨日登录数")
+    trend_data: list[dict] = Field(default_factory=list, description="最近7天趋势数据")
 

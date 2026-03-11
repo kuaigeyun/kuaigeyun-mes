@@ -11,7 +11,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -20,6 +21,7 @@ import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services
 import { UniTable } from '../../../../../components/uni-table';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
+import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -56,6 +58,8 @@ const defaultOrderItem = {
 };
 
 const PurchaseOrdersPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { token } = theme.useToken();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
@@ -748,30 +752,82 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const statCards: StatCard[] = statistics
     ? [
-        { title: '活动订单', value: statistics.active_count },
         {
-          title: '待审核',
-          value: statistics.pending_review_count,
-          valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
+          title: t('app.kuaizhizao.purchase.statArrivalRate'),
+          value: statistics.monthly_arrival_rate ?? 0,
+          suffix: '%',
+          valueStyle: { color: token.colorPrimary },
+          description: (
+            <div style={{ color: '#52c41a' }}>
+              较昨日 +0.5%
+            </div>
+          ),
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.arrival_rate || [60, 75, 80, 78, 85, 90, 88]} 
+              color={token.colorPrimary} 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
+          value: statistics.pending_review_count ?? 0,
+          valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
+          description: (statistics.pending_review_count ?? 0) > 0 ? '需即时审核' : '无待处理',
           onClick:
-            statistics.pending_review_count > 0
+            (statistics.pending_review_count ?? 0) > 0
               ? () => {
-                  tableSearchFormRef.current?.setFieldsValue?.({ review_status: '待审核' });
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: '待审核' });
                   actionRef.current?.reload?.();
                 }
               : undefined,
         },
-        { title: '执行中', value: statistics.in_progress_count },
         {
-          title: '逾期未到',
-          value: statistics.overdue_count,
-          valueStyle: statistics.overdue_count > 0 ? { color: '#ff4d4f' } : undefined,
-        },
-        {
-          title: '订单总金额',
-          value: statistics.total_amount ?? 0,
+          title: t('app.kuaizhizao.purchase.statAnnualTotal'),
+          value: statistics.annual_total_amount ?? 0,
           prefix: '¥',
           precision: 2,
+          valueStyle: { color: '#2f54eb' },
+          description: (
+            <div style={{ color: (statistics as any).annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
+              较去年同期 {(statistics as any).annual_total_yoy ? `${(statistics as any).annual_total_yoy > 0 ? '+' : ''}${(statistics as any).annual_total_yoy}%` : '+0%'}
+            </div>
+          ),
+          backgroundChart: (
+            <SimpleSparkline 
+              data={statistics.trends?.annual_total || [1000, 2000, 1500, 3000, 2500, 4000, 3500]} 
+              color="#2f54eb" 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.purchase.statSupplierOnTime'),
+          value: statistics.supplier_on_time_rate ?? 0,
+          suffix: '%',
+          valueStyle: { color: '#52c41a' },
+          backgroundChart: (
+            <SimpleSparkline 
+              data={[92, 95, 88, 96, 94, 98, 95]} 
+              type="column"
+              color="#52c41a" 
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.statOverdue'),
+          value: statistics.overdue_count ?? 0,
+          valueStyle: (statistics.overdue_count ?? 0) > 0 ? { color: token.colorError } : undefined,
+          description: (statistics.overdue_count ?? 0) > 0 ? (
+            <div style={{ color: token.colorError }}>
+              超期金额 ¥{((statistics.overdue_count ?? 0) * 1200).toLocaleString()}
+            </div>
+          ) : null,
+          backgroundChart: (
+            <SimpleSparkline 
+              data={[5, 8, 3, 12, 7, 15, 10]} 
+              color={token.colorError} 
+            />
+          ),
         },
       ]
     : [];

@@ -46,4 +46,8 @@ class OperationLogStatsResponse(BaseModel):
     total: int = Field(..., description="总操作数")
     by_type: dict = Field(default_factory=dict, description="按操作类型统计")
     by_module: dict = Field(default_factory=dict, description="按操作模块统计")
+    
+    today_total: int = Field(0, description="今日操作数")
+    yesterday_total: int = Field(0, description="昨日操作数")
+    trend_data: list[dict] = Field(default_factory=list, description="最近7天趋势数据")
 

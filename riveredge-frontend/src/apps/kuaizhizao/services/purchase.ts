@@ -92,6 +92,21 @@ export interface PurchaseOrderStatistics {
   in_progress_count: number;
   overdue_count: number;
   total_amount: number;
+  // 新增指标
+  monthly_arrival_rate?: number;
+  annual_total_amount?: number;
+  supplier_on_time_rate?: number;
+  // 趋势数据
+  trends?: {
+    overdue?: number[];
+    arrival_rate?: number[];
+    annual_total?: number[];
+    efficiency?: number[];
+  };
+  /** 效率同比（百分比） */
+  efficiency_yoy?: number;
+  /** 年度总额同比（百分比，如 12.5 表示 12.5%） */
+  annual_total_yoy?: number;
 }
 
 /** 获取采购订单统计 */
@@ -197,4 +212,3 @@ export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?:
     data: receiptQuantities || {},
   });
 }
-
