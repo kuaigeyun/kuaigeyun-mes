@@ -29,10 +29,17 @@
   }
 }
 
-/* 全局滚动条样式优化，支持暗黑模式自动适配 */
+/* ==================== 统一滚动条样式（全局、Modal、表格、编码规则等） ====================
+ * 尺寸：6px（水平与垂直一致）
+ * 颜色：固定 rgba 保证页面与表格滚动条完全一致；更淡以符合素雅风格
+ * 轨道：透明
+ */
+@scrollbar-thumb: rgba(0, 0, 0, 0.16);
+@scrollbar-thumb-hover: rgba(0, 0, 0, 0.06);
+
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -40,22 +47,22 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: var(--ant-colorFillSecondary);
-  border-radius: 10px;
-  /* 使用透明边框和 background-clip 实现薄形滚动条效果 */
-  border: 3px solid transparent;
-  background-clip: content-box;
+  background-color: @scrollbar-thumb;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--ant-colorFill);
-  border: 2px solid transparent;
+  background-color: @scrollbar-thumb-hover;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Firefox 滚动条适配 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--ant-colorFillSecondary) transparent;
+  scrollbar-color: @scrollbar-thumb transparent;
 }
 
 /* Modal body 限高：避免整页出现滚动条，滚动仅发生在 Modal 内部 */
@@ -79,11 +86,11 @@
   box-sizing: border-box;
 }
 
-/* 表单/新建类 Modal 内容区滚动条：仅显示滑块、无滑轨，颜色偏淡，滚动条左侧留 4px */
+/* 表单/新建类 Modal 内容区滚动条：与全局统一 */
 .form-modal-template .modal-content-scroll,
 .form-modal-template-fixed-footer .modal-content-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  scrollbar-color: @scrollbar-thumb transparent;
   -ms-overflow-style: auto;
 }
 .form-modal-template .modal-content-scroll::-webkit-scrollbar,
@@ -94,8 +101,12 @@
 }
 .form-modal-template .modal-content-scroll::-webkit-scrollbar-thumb,
 .form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.18);
-  border-radius: 3px;
+  background-color: @scrollbar-thumb;
+  border-radius: 4px;
+}
+.form-modal-template .modal-content-scroll::-webkit-scrollbar-thumb:hover,
+.form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: @scrollbar-thumb-hover;
 }
 .form-modal-template .modal-content-scroll::-webkit-scrollbar-track,
 .form-modal-template-fixed-footer .modal-content-scroll::-webkit-scrollbar-track {
@@ -596,13 +607,13 @@ code {
   }
 }
 
-/* 全局 Modal body 限高时：可见滚动条（已去掉底部内阴影，避免分割线上方出现上阴影） */
+/* 全局 Modal body 限高时：可见滚动条，与全局统一 */
 .ant-modal-body {
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  scrollbar-color: @scrollbar-thumb transparent;
   -ms-overflow-style: auto;
   &::-webkit-scrollbar {
     display: block !important;
@@ -610,8 +621,11 @@ code {
     height: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.18);
-    border-radius: 3px;
+    background-color: @scrollbar-thumb;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: @scrollbar-thumb-hover;
   }
   &::-webkit-scrollbar-track {
     background: transparent;
@@ -628,7 +642,7 @@ code {
 /* 与 Modal 内容区一致的滚动条样式（编码规则、自定义字段等左右栏滚动区） */
 .scrollbar-like-modal {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  scrollbar-color: @scrollbar-thumb transparent;
   -ms-overflow-style: auto;
   &::-webkit-scrollbar {
     display: block !important;
@@ -636,8 +650,11 @@ code {
     height: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.18);
-    border-radius: 3px;
+    background-color: @scrollbar-thumb;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: @scrollbar-thumb-hover;
   }
   &::-webkit-scrollbar-track {
     background: transparent;
@@ -668,6 +685,7 @@ code {
 }
 .ant-modal .ant-modal-footer {
   border-top: 1px solid var(--ant-colorBorder);
+  padding-top: 16px;
 }
 
 /* 全局：Modal 内表单标题为粗体 */
@@ -780,6 +798,38 @@ code {
   /* 显示卡片边框 */
   border: 1px solid var(--ant-colorBorder) !important;
   border-radius: var(--ant-borderRadius) !important;
+}
+
+/* 表格滚动条：与全局完全统一（6px、@scrollbar-thumb/@scrollbar-thumb-hover） */
+.ant-table-wrapper .ant-table-body,
+.ant-table-wrapper .ant-table-content {
+  overflow-x: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: @scrollbar-thumb transparent !important;
+}
+.ant-table-wrapper .ant-table-body::-webkit-scrollbar,
+.ant-table-wrapper .ant-table-content::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+  display: block !important;
+  background: transparent !important;
+}
+.ant-table-wrapper .ant-table-body::-webkit-scrollbar-thumb,
+.ant-table-wrapper .ant-table-content::-webkit-scrollbar-thumb {
+  background-color: @scrollbar-thumb !important;
+  border-radius: 4px !important;
+}
+.ant-table-wrapper .ant-table-body::-webkit-scrollbar-thumb:hover,
+.ant-table-wrapper .ant-table-content::-webkit-scrollbar-thumb:hover {
+  background-color: @scrollbar-thumb-hover !important;
+}
+.ant-table-wrapper .ant-table-body::-webkit-scrollbar-track,
+.ant-table-wrapper .ant-table-content::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.ant-table-wrapper .ant-table-body::-webkit-scrollbar-corner,
+.ant-table-wrapper .ant-table-content::-webkit-scrollbar-corner {
+  background: transparent !important;
 }
 
 :where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-switcher:before {

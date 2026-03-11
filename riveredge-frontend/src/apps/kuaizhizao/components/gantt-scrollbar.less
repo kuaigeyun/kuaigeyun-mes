@@ -1,40 +1,36 @@
 /**
- * 甘特图滚动条：去掉轨道和按钮，只保留滑块
+ * 甘特图滚动条：与全局完全统一（6px、rgba(0,0,0,0.06)/0.1）
  * 必须在 @svar-ui/react-gantt/all.css 之后导入以覆盖库样式
  */
+@scrollbar-thumb: rgba(0, 0, 0, 0.16);
+@scrollbar-thumb-hover: rgba(0, 0, 0, 0.06);
+
 .gantt-chart-wrapper {
   scrollbar-width: thin;
-  scrollbar-color: var(--ant-colorFillSecondary) transparent;
+  scrollbar-color: @scrollbar-thumb transparent;
 }
 
-/* 横向滚动条：.wx-chart 为时间轴区域，overflow-x: auto */
-.gantt-chart-wrapper .wx-chart::-webkit-scrollbar-track,
-.gantt-chart-wrapper .wx-chart::-webkit-scrollbar {
-  background: transparent !important;
-}
-.gantt-chart-wrapper .wx-chart::-webkit-scrollbar-button {
-  display: none !important;
-}
-
-/* 纵向滚动条：.wx-gantt 为主容器 */
-.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar-track,
-.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar {
-  background: transparent !important;
-}
-.gantt-chart-wrapper .wx-gantt::-webkit-scrollbar-button {
-  display: none !important;
-}
-
+/* 尺寸与轨道 */
 .gantt-chart-wrapper ::-webkit-scrollbar,
 .gantt-chart-wrapper *::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
   background: transparent !important;
-  background-color: transparent !important;
 }
-
 .gantt-chart-wrapper ::-webkit-scrollbar-track,
 .gantt-chart-wrapper *::-webkit-scrollbar-track {
   background: transparent !important;
-  background-color: transparent !important;
+}
+
+/* 滑块：与全局完全统一颜色（素雅风格） */
+.gantt-chart-wrapper ::-webkit-scrollbar-thumb,
+.gantt-chart-wrapper *::-webkit-scrollbar-thumb {
+  background-color: @scrollbar-thumb !important;
+  border-radius: 4px !important;
+}
+.gantt-chart-wrapper ::-webkit-scrollbar-thumb:hover,
+.gantt-chart-wrapper *::-webkit-scrollbar-thumb:hover {
+  background-color: @scrollbar-thumb-hover !important;
 }
 
 /* 隐藏轨道两侧的箭头按钮 */
