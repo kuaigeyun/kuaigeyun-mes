@@ -102,6 +102,7 @@ async def get_current_user(
         setattr(virtual_user, 'email', getattr(admin, 'email', None))
         setattr(virtual_user, 'is_active', True)
         setattr(virtual_user, 'tenant_id', None)  # 平台超级管理员不属于任何租户
+        setattr(virtual_user, 'is_infra_admin', True)  # 平台超级管理员即平台管理员，用于 is_infra_admin_user() 等权限判断
         setattr(virtual_user, 'password_hash', "")  # 虚拟用户不需要密码
         setattr(virtual_user, 'full_name', getattr(admin, 'full_name', admin.username))
         # 设置一个标记，表示这是平台超级管理员
