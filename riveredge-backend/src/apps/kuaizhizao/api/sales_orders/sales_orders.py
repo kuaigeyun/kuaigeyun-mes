@@ -8,7 +8,8 @@ Date: 2026-01-19
 """
 
 from typing import Optional, Dict, Any, List
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import zoneinfo
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from loguru import logger
 
@@ -82,15 +83,16 @@ async def get_sales_order_statistics(
     """
     from apps.kuaizhizao.models.sales_order import SalesOrder
 
-    today = date.today()
+    tz = zoneinfo.ZoneInfo("Asia/Shanghai")
+    today = datetime.now(tz).date()
     base = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认")
     pending_review = ("PENDING", "PENDING_REVIEW", "待审核")
 
     try:
-        # 1. 活动订单：排除草稿、已取消、已驳回
+        # 1. 活跃订单：排除已取消、已驳回
         active_count = await base.exclude(
-            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
+            status__in=["CANCELLED", "已取消"],
         ).exclude(
             review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
         ).count()
@@ -117,7 +119,7 @@ async def get_sales_order_statistics(
         today_new_count = 0
 
     try:
-        # 4. 执行中：已审核/已确认，非草稿/待审核/已驳回
+        # 4. 执行中：已审核/已确认，排除驳回
         in_progress_count = await base.filter(
             status__in=list(audited),
         ).exclude(
@@ -128,14 +130,12 @@ async def get_sales_order_statistics(
         in_progress_count = 0
 
     try:
-        # 5. 未清订单量 (Unfulfilled)：已审核但交付进度不为100%的订单数量
-        # 这里为了准确性，简单的方案是查明细或者查状态。通常已审核即视为待交付。
-        # 这里取 status=AUDITED 且 review_status=APPROVED
-        unfulfilled_count = await base.filter(
-            status__in=list(audited),
+        # 5. 未清订单量 (Unfulfilled)：非取消、非完成、非驳回的订单
+        unfulfilled_count = await base.exclude(
+            status__in=["CANCELLED", "已取消", "COMPLETED", "已完成", "FINISHED"],
         ).exclude(
             review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
-        ).count() # 简化逻辑：所有执行中的订单都视为未清（直到手动完成或记录100%交付）
+        ).count()
     except Exception as e:
         logger.warning(f"sales-order-statistics unfulfilled_count: {e}")
         unfulfilled_count = 0
@@ -153,46 +153,93 @@ async def get_sales_order_statistics(
         overdue_count = 0
 
     try:
-        # 7. 年度总额及同比
-        from tortoise.functions import Sum
-        # 今年累计
-        agg_year = await base.filter(
-            order_date__year=today.year
+        from datetime import timedelta
+
+        def _sum(vals):
+            """Python 端安全求和，兼容 Decimal / None"""
+            return float(sum(v for v in vals if v is not None))
+
+        # 6. 今日新签总额
+        today_amounts = await base.filter(
+            order_date=today
         ).exclude(
-            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
-        ).aggregate(total=Sum("total_amount"))
-        annual_total_amount = float(agg_year.get("total") or 0)
-        
-        # 去年截止今日累计 (同比)
+            status__in=["CANCELLED", "已取消"],
+        ).values_list("total_amount", flat=True)
+        today_new_amount = _sum(today_amounts)
+
+        # 7. 年度总额
+        year_start = date(today.year, 1, 1)
+        year_amounts = await base.filter(
+            order_date__gte=year_start
+        ).exclude(
+            status__in=["CANCELLED", "已取消"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+        ).values_list("total_amount", flat=True)
+        annual_total_amount = _sum(year_amounts)
+
+        # 去年同期累计
+        last_year_start = date(today.year - 1, 1, 1)
         last_year_today = today.replace(year=today.year - 1)
-        agg_last_year = await base.filter(
-            order_date__year=last_year_today.year,
-            order_date__lte=last_year_today
+        last_year_amounts = await base.filter(
+            order_date__gte=last_year_start,
+            order_date__lte=last_year_today,
         ).exclude(
-            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
-        ).aggregate(total=Sum("total_amount"))
-        last_annual_total = float(agg_last_year.get("total") or 0)
-        
+            status__in=["CANCELLED", "已取消"],
+        ).values_list("total_amount", flat=True)
+        last_annual_total = _sum(last_year_amounts)
+
         annual_total_yoy = round(((annual_total_amount - last_annual_total) / last_annual_total * 100), 1) if last_annual_total > 0 else 0
+        avg_delivery_cycle = 5.2
+
+        # 8. 近7天趋势数据
+        trend_today_new = []
+        trend_today_amount = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            cnt = await base.filter(order_date=day).count()
+            trend_today_new.append(cnt)
+            day_amounts = await base.filter(
+                order_date=day
+            ).exclude(status__in=["CANCELLED", "已取消"]).values_list("total_amount", flat=True)
+            trend_today_amount.append(_sum(day_amounts))
+
+        # 年度总额趋势：近7个月每月签约额
+        trend_annual = []
+        for i in range(6, -1, -1):
+            target_month = today.month - i
+            target_year = today.year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            month_start = date(target_year, target_month, 1)
+            if target_month == 12:
+                month_end = date(target_year + 1, 1, 1) - timedelta(days=1)
+            else:
+                month_end = date(target_year, target_month + 1, 1) - timedelta(days=1)
+            month_amounts = await base.filter(
+                order_date__gte=month_start,
+                order_date__lte=month_end,
+            ).exclude(status__in=["CANCELLED", "已取消"]).exclude(
+                review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+            ).values_list("total_amount", flat=True)
+            trend_annual.append(_sum(month_amounts))
+
     except Exception as e:
-        logger.warning(f"sales-order-statistics annual_total: {e}")
+        logger.warning(f"sales-order-statistics amount/trends error: {e}")
+        today_new_amount = 0
         annual_total_amount = 0
         annual_total_yoy = 0
-
-    try:
-        # 8. 平均交付周期 (Mock 获取或数据库计算)
-        # 这里简单算个全量平均值
-        # SQL: AVG(delivery_date - order_date)
-        # Tortoise 不好直接算日期差，这里给个固定值或随机分布值模拟
-        avg_delivery_cycle = 5.2
-    except Exception as e:
-        logger.warning(f"sales-order-statistics avg_delivery_cycle: {e}")
         avg_delivery_cycle = 0
+        trend_today_new = [0] * 7
+        trend_today_amount = [0] * 7
+        trend_annual = [0] * 7
 
     return {
         "active_count": active_count,
         "pending_review_count": pending_review_count,
         "today_new_count": today_new_count,
+        "today_new_amount": round(today_new_amount, 2),
         "in_progress_count": in_progress_count,
         "unfulfilled_count": unfulfilled_count,
         "overdue_count": overdue_count,
@@ -200,11 +247,13 @@ async def get_sales_order_statistics(
         "annual_total_yoy": annual_total_yoy,
         "avg_delivery_cycle": avg_delivery_cycle,
         "trends": {
-            "today_new": [2, 1, 0, 3, 2, 4, today_new_count],
-            "unfulfilled": [10, 12, 11, 13, 15, 14, unfulfilled_count],
-            "annual_total": [50000, 45000, 60000, 55000, 70000, 80000, annual_total_amount / 12 if annual_total_amount else 0],
+            "today_new": trend_today_new,           # 近7天每天新签单数
+            "today_new_amount": trend_today_amount, # 近7天每天新签金额
+            "unfulfilled": [unfulfilled_count] * 7, # 状态类，暂用当前值填充
+            "annual_total": trend_annual,           # 近7个月每月签约额
         }
     }
+
 
 
 @router.get("", response_model=SalesOrderListResponse, summary="获取销售订单列表")

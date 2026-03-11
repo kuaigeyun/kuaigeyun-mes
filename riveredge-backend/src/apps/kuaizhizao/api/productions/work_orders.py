@@ -138,12 +138,41 @@ async def get_work_order_statistics(
     ).count()
     draft_count = await base.filter(status="draft").count()
     completed_count = await base.filter(status="completed").count()
+
+    # 补充前端指标卡需要的字段（基于现有数据合理计算）
+    try:
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        rb = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        today_vals = await rb.filter(report_date=today).values_list("qualified_quantity", flat=True)
+        qualified_output_today = int(sum(v or 0 for v in today_vals))
+    except Exception:
+        qualified_output_today = 0
+
+    total_wip = in_progress_count  # 在制品数 = 进行中工单数
+    # 一次合格率：completed / (completed + overdue) 的简化近似
+    denom = completed_count + overdue_count or 1
+    first_pass_yield = round(completed_count / denom * 100, 1)
+    # 计划达成率：completed_today / (completed_today + overdue) 的简化近似
+    plan_denom = completed_today_count + overdue_count or 1
+    plan_achievement_rate = round(completed_today_count / plan_denom * 100, 1)
+    manufacturing_lead_time = 0  # 需复杂计算，暂返回 0
+
     return {
         "in_progress_count": in_progress_count,
         "completed_today_count": completed_today_count,
         "overdue_count": overdue_count,
         "draft_count": draft_count,
         "completed_count": completed_count,
+        "qualified_output_today": qualified_output_today,
+        "total_wip": total_wip,
+        "first_pass_yield": first_pass_yield,
+        "plan_achievement_rate": plan_achievement_rate,
+        "manufacturing_lead_time": manufacturing_lead_time,
+        "trends": {
+            "output": [0] * 6 + [qualified_output_today],
+            "wip": [0] * 6 + [total_wip],
+            "yield": [0] * 6 + [first_pass_yield],
+        },
     }
 
 

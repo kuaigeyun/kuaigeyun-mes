@@ -1340,7 +1340,9 @@ const SalesOrdersPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.salesOrder.statTodayNew'),
           value: statistics.today_new_count ?? 0,
+          suffix: t('app.kuaizhizao.salesOrder.unitOrders', { defaultValue: '单' }),
           valueStyle: { color: token.colorPrimary },
+          description: `今日金额 ¥${(statistics.today_new_amount ?? 0).toFixed(2)}`,
           backgroundChart: (
             <SimpleSparkline 
               data={statistics.trends?.today_new || [0, 0, 0, 0, 0, 0, 0]} 

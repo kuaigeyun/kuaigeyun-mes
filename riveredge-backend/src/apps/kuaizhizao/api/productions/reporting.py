@@ -51,6 +51,74 @@ router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
 
 # ============ 报工管理 API ============
 
+@router.get("/reporting/statistics", summary="获取报工统计（用于指标卡片）")
+async def get_reporting_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from datetime import date, timedelta
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+
+    today = date.today()
+    base = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+
+    try:
+        # 当月累计工时
+        month_start = date(today.year, today.month, 1)
+        hours_vals = await base.filter(report_date__gte=month_start).values_list("actual_hours", flat=True)
+        cumulative_hours = round(float(sum(v or 0 for v in hours_vals)), 1)
+
+        # 估算工资（工时 × 默认时薪 ¥45）
+        estimated_wages = round(cumulative_hours * 45, 2)
+
+        # 停机记录数（当月）
+        try:
+            downtime_records = await base.filter(report_date__gte=month_start, downtime_minutes__gt=0).count()
+        except Exception:
+            downtime_records = 0
+
+        # 异常报工数（当月 status=exception 或 is_exception=True）
+        try:
+            exception_reports = await base.filter(report_date__gte=month_start, status="exception").count()
+        except Exception:
+            exception_reports = 0
+
+        # 效率：合格量 / 计划量，取当月
+        try:
+            qualified_vals = await base.filter(report_date__gte=month_start).values_list("qualified_quantity", flat=True)
+            planned_vals = await base.filter(report_date__gte=month_start).values_list("planned_quantity", flat=True)
+            total_q = sum(v or 0 for v in qualified_vals)
+            total_p = sum(v or 0 for v in planned_vals) or 1
+            efficiency = round(total_q / total_p * 100, 1)
+        except Exception:
+            efficiency = 0
+
+        # 近7天趋势（每天工时）
+        trend_hours = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            vals = await base.filter(report_date=d).values_list("actual_hours", flat=True)
+            trend_hours.append(round(float(sum(v or 0 for v in vals)), 1))
+
+    except Exception as e:
+        import logging; logging.warning(f"reporting-statistics: {e}")
+        cumulative_hours = 0; estimated_wages = 0; downtime_records = 0
+        exception_reports = 0; efficiency = 0; trend_hours = [0] * 7
+
+    return {
+        "cumulative_hours": cumulative_hours,
+        "estimated_wages": estimated_wages,
+        "downtime_records": downtime_records,
+        "exception_reports": exception_reports,
+        "efficiency": efficiency,
+        "trends": {
+            "hours": trend_hours,
+            "wages": [round(h * 45, 2) for h in trend_hours],
+            "efficiency": [efficiency] * 7,
+        },
+    }
+
+
 @router.post("/reporting", response_model=ReportingRecordResponse, summary="创建报工记录")
 async def create_reporting_record(
     reporting: ReportingRecordCreate,

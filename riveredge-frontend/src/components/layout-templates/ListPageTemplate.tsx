@@ -108,9 +108,9 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     height: '100%',
                     position: 'relative',
                     overflow: 'hidden',
-                    // Unified shadow with ProTable container (standardized system shadow)
                     boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
                     border: `1px solid ${token.colorBorderSecondary}`,
+                    transition: 'all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1)',
                   }}
                   styles={{
                     body: {
@@ -153,10 +153,14 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                         fontSize: '24px',
                         fontWeight: 600,
                         ...card.valueStyle,
+                        position: 'relative',
+                        zIndex: 2,
                       },
                       title: {
                         marginBottom: 4,
                         color: token.colorTextSecondary,
+                        position: 'relative',
+                        zIndex: 2,
                       }
                     }}
                     style={{ marginBottom: 0 }}
@@ -172,9 +176,9 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     <div style={{ 
                       position: 'absolute', 
                       bottom: -18, 
-                      left: -20,   // More horizontal overflow to hide vertical edge lines
-                      right: -20, 
-                      height: 70, 
+                      left: -18, 
+                      right: -18, 
+                      height: 76, 
                       zIndex: 0, 
                       pointerEvents: 'none',
                       opacity: 0.8,

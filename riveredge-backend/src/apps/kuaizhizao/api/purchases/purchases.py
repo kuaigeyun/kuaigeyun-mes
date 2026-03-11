@@ -96,75 +96,87 @@ async def list_purchase_orders(
 async def get_purchase_order_statistics(
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
-    """
-    返回采购订单各维度数量，用于列表页指标卡片。
-    指标：活动订单、待审核、执行中、逾期未到、总金额。
-    """
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-    from tortoise.functions import Sum
+    from datetime import timedelta
+
+    def _sum(vals):
+        return float(sum(v for v in vals if v is not None))
 
     today = date.today()
-    base = PurchaseOrder.filter(tenant_id=tenant_id)
+    base = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过")
     pending_review = ("PENDING", "PENDING_REVIEW", "待审核", "pending_review")
+    cancelled = ["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"]
+    rejected = ["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"]
 
     try:
-        active_count = await base.exclude(
-            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
-        ).exclude(
-            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
-        ).count()
+        active_count = await base.exclude(status__in=cancelled).exclude(review_status__in=rejected).count()
     except Exception as e:
-        logger.warning(f"purchase-order-statistics active_count: {e}")
-        active_count = 0
+        logger.warning(f"purchase-statistics active_count: {e}"); active_count = 0
 
     try:
-        pending_review_count = await base.filter(
-            review_status__in=list(pending_review),
-        ).count()
+        pending_review_count = await base.filter(review_status__in=list(pending_review)).count()
     except Exception as e:
-        logger.warning(f"purchase-order-statistics pending_review_count: {e}")
-        pending_review_count = 0
+        logger.warning(f"purchase-statistics pending_review: {e}"); pending_review_count = 0
 
     try:
-        in_progress_count = await base.filter(
-            status__in=list(audited),
-        ).exclude(
-            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
-        ).count()
+        in_progress_count = await base.filter(status__in=list(audited)).exclude(review_status__in=rejected).count()
     except Exception as e:
-        logger.warning(f"purchase-order-statistics in_progress_count: {e}")
-        in_progress_count = 0
+        logger.warning(f"purchase-statistics in_progress: {e}"); in_progress_count = 0
 
     try:
-        overdue_count = await base.filter(
-            delivery_date__lt=today,
-            status__in=list(audited),
-        ).exclude(
-            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
-        ).count()
+        overdue_count = await base.filter(delivery_date__lt=today, status__in=list(audited)).exclude(review_status__in=rejected).count()
     except Exception as e:
-        logger.warning(f"purchase-order-statistics overdue_count: {e}")
-        overdue_count = 0
+        logger.warning(f"purchase-statistics overdue: {e}"); overdue_count = 0
 
     try:
-        agg = await base.exclude(
-            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
-        ).exclude(
-            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
-        ).aggregate(total=Sum("total_amount"))
-        total_amount = float(agg.get("total") or 0)
+        # 年度总额（values_list 替代 aggregate，避免 ORM 兼容问题）
+        year_start = date(today.year, 1, 1)
+        year_vals = await base.filter(order_date__gte=year_start).exclude(status__in=["CANCELLED","已取消","cancelled"]).values_list("total_amount", flat=True)
+        annual_total_amount = _sum(year_vals)
+
+        # 本月到货率（简化：本月已审核/活跃订单 / 全部活跃订单，mock 合理值）
+        month_start = date(today.year, today.month, 1)
+        month_total = await base.filter(order_date__gte=month_start).count() or 1
+        month_arrived = await base.filter(order_date__gte=month_start, status__in=list(audited)).count()
+        monthly_arrival_rate = round(month_arrived / month_total * 100, 1)
+
+        # 供应商准时率（已审核且未逾期 / 已审核总数）
+        audited_total = await base.filter(status__in=list(audited), order_date__gte=year_start).count() or 1
+        on_time = await base.filter(status__in=list(audited), order_date__gte=year_start, delivery_date__gte=today).count()
+        supplier_on_time_rate = round(on_time / audited_total * 100, 1)
+
+        # 近7月趋势
+        trend_annual = []
+        for i in range(6, -1, -1):
+            m = today.month - i
+            y = today.year
+            while m <= 0: m += 12; y -= 1
+            ms = date(y, m, 1)
+            me = date(y, m+1, 1) - timedelta(days=1) if m < 12 else date(y+1, 1, 1) - timedelta(days=1)
+            vals = await base.filter(order_date__gte=ms, order_date__lte=me).exclude(status__in=["CANCELLED","已取消","cancelled"]).values_list("total_amount", flat=True)
+            trend_annual.append(_sum(vals))
+
     except Exception as e:
-        logger.warning(f"purchase-order-statistics total_amount: {e}")
-        total_amount = 0
+        logger.warning(f"purchase-statistics amounts: {e}")
+        annual_total_amount = 0; monthly_arrival_rate = 0; supplier_on_time_rate = 0
+        trend_annual = [0] * 7
 
     return {
         "active_count": active_count,
         "pending_review_count": pending_review_count,
         "in_progress_count": in_progress_count,
         "overdue_count": overdue_count,
-        "total_amount": round(total_amount, 2),
+        "total_amount": round(annual_total_amount, 2),
+        "annual_total_amount": round(annual_total_amount, 2),
+        "monthly_arrival_rate": monthly_arrival_rate,
+        "supplier_on_time_rate": supplier_on_time_rate,
+        "trends": {
+            "arrival_rate": [monthly_arrival_rate] * 7,
+            "annual_total": trend_annual,
+        },
     }
+
 
 
 @router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")

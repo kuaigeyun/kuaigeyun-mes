@@ -16,18 +16,14 @@ export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
 }) => {
   if (!data || data.length === 0) return null;
 
-  const config: any = {
+  const baseConfig: any = {
     height,
     autoFit: true,
     data,
     smooth: true,
-    color,
-    padding: 0, // Force chart to edges
-    line: {
-      style: {
-        lineWidth: 2,
-      },
-    },
+    padding: 0,
+    axis: false,
+    tooltip: false,
     animation: {
       appear: {
         animation: 'path-in',
@@ -37,12 +33,42 @@ export const SimpleSparkline: React.FC<SimpleSparklineProps> = ({
   };
 
   if (type === 'area') {
-    return <Tiny.Area {...config} areaStyle={{ fill: `l(270) 0:#ffffff 1:${color}` }} />;
+    // @ant-design/charts v2 API：用 style 控制面积填充，stroke: 'none' 消除闭合路径的竖线
+    // line 单独控制顶部曲线
+    return (
+      <Tiny.Area
+        {...baseConfig}
+        style={{
+          fill: `l(90) 0:${color} 1:rgba(255,255,255,0)`,
+          fillOpacity: 1,
+          stroke: 'none',  // 关键：去掉面积闭合路径的描边（含左右竖线）
+        }}
+        line={{
+          style: {
+            stroke: color,
+            lineWidth: 2,
+          },
+        }}
+      />
+    );
   }
 
   if (type === 'column') {
-    return <Tiny.Column {...config} />;
+    return (
+      <Tiny.Column
+        {...baseConfig}
+        style={{ fill: color }}
+      />
+    );
   }
 
-  return <Tiny.Line {...config} />;
+  return (
+    <Tiny.Line
+      {...baseConfig}
+      style={{
+        stroke: color,
+        lineWidth: 2,
+      }}
+    />
+  );
 };

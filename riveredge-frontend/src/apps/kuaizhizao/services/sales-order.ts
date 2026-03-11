@@ -132,6 +132,7 @@ export interface SalesOrderStatistics {
   total_amount: number;
   // 新增指标
   today_new_count?: number;
+  today_new_amount?: number;
   unfulfilled_count?: number;
   annual_total_amount?: number;
   avg_delivery_cycle?: number;
