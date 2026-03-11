@@ -72,14 +72,14 @@ class CodeGenerationService:
             seq_step = 1  # 组件格式中步长固定为1
             seq_reset_rule = counter_config.get("reset_cycle", "never")
             
-            # 计算 Scope Key
-            scope_fields = counter_config.get("scope_fields", [])
+            # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
+            scope_fields = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:
                     val = context.get(field)
-                    if val is not None:
-                        scope_values.append(str(val))
+                    if val is not None and str(val).strip():
+                        scope_values.append(str(val).strip())
                 if scope_values:
                     scope_key = ":".join(scope_values)
         else:
@@ -207,14 +207,14 @@ class CodeGenerationService:
             seq_step = 1  # 组件格式中步长固定为1
             seq_reset_rule = counter_config.get("reset_cycle", "never")
             
-            # 计算 Scope Key
-            scope_fields = counter_config.get("scope_fields", [])
+            # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
+            scope_fields = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:
                     val = context.get(field)
-                    if val is not None:
-                        scope_values.append(str(val))
+                    if val is not None and str(val).strip():
+                        scope_values.append(str(val).strip())
                 if scope_values:
                     scope_key = ":".join(scope_values)
         else:

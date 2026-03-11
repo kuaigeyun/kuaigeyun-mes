@@ -50,7 +50,7 @@ import {
   updateFile,
   batchDeleteFiles,
   getFilePreview,
-  getFileDownloadUrl,
+  getFileDownloadUrlWithToken,
   type File,
   FileUpdate,
   FileListParams,
@@ -415,16 +415,20 @@ const FileListPage: React.FC = () => {
   };
 
   /**
-   * 处理文件下载
+   * 处理文件下载（使用带 token 的 URL，确保生产环境可下载）
    */
-  const handleDownload = (file: File) => {
-    const downloadUrl = getFileDownloadUrl(file.uuid);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = file.original_name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (file: File) => {
+    try {
+      const downloadUrl = await getFileDownloadUrlWithToken(file.uuid);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = file.original_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.files.downloadFailed'));
+    }
   };
 
   /**

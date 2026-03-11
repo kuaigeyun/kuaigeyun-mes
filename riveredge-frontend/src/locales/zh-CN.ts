@@ -4278,6 +4278,7 @@ export default {
   'pages.system.files.folderCreateSuccess': '文件夹创建成功',
   'pages.system.files.folderCreateFailed': '创建文件夹失败',
   'pages.system.files.previewFailed': '获取预览信息失败',
+  'pages.system.files.downloadFailed': '下载失败',
   'pages.system.files.selectToDelete': '请选择要删除的文件',
   'pages.system.files.deleteSuccess': '删除成功',
   'pages.system.files.deleteFailed': '删除失败',

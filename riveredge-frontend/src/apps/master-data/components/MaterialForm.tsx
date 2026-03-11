@@ -38,7 +38,7 @@ import { testGenerateCode } from '../../../services/codeRule';
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import SmartSuggestionFloatPanel from '../../../components/smart-suggestion-float-panel';
-import { getFileDownloadUrl, uploadMultipleFiles } from '../../../services/file';
+import { getFileDownloadUrlWithToken, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 
 const { Panel } = Collapse;
@@ -360,6 +360,22 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   }, [isEdit, materialGroups]);
 
   /**
+   * 当物料分组加载完成且已选择分组时，重新生成编码（确保 scope_fields 隔离计数生效）
+   * 场景：用户在选择分组时 materialGroups 可能尚未加载，导致 context 缺少 group_code
+   */
+  useEffect(() => {
+    if (isEdit || !isAutoGenerateEnabled('master-data-material') || materialGroups.length === 0) return;
+    const groupId = formRef.current?.getFieldValue('groupId');
+    if (!groupId) return;
+    const group = materialGroups.find(g => g.id === groupId);
+    if (group) {
+      const materialType = formRef.current?.getFieldValue('materialType');
+      const name = formRef.current?.getFieldValue('name');
+      generateCode(groupId, materialType, name, true);
+    }
+  }, [materialGroups, isEdit, generateCode]);
+
+  /**
    * 初始化数据
    */
   useEffect(() => {
@@ -438,19 +454,23 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           loadExternalSystemCodes(material.uuid);
         }
         
-        // 处理图片预填
+        // 处理图片预填（使用带 token 的 URL，确保生产环境可显示）
         const materialImages = (material as any).images || [];
         if (materialImages.length > 0) {
-          setTimeout(() => {
-            formRef.current?.setFieldsValue({
-              images: materialImages.map((uuid: string) => ({
+          Promise.all(
+            materialImages.map((uuid: string) =>
+              getFileDownloadUrlWithToken(uuid).then((url) => ({
                 uid: uuid,
                 name: t('app.master-data.materialForm.images'),
-                status: 'done',
-                url: getFileDownloadUrl(uuid),
+                status: 'done' as const,
+                url,
               }))
-            });
-          }, 100);
+            )
+          ).then((fileList) => {
+            setTimeout(() => {
+              formRef.current?.setFieldsValue({ images: fileList });
+            }, 100);
+          });
         }
         
         // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
@@ -753,13 +773,15 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       
       // 组装完整的数据，将驼峰命名转换为蛇形命名
       const { defaults: _defaults, ...restValues } = values;
+      // 物料类型：优先从 restValues 取，兼容条件渲染或 Tab 下字段可能未及时同步的情况
+      const materialTypeValue = restValues.materialType ?? formRef.current?.getFieldValue('materialType');
       const submitData: any = {
         // 基础字段转换（驼峰 -> 蛇形）
         main_code: restValues.mainCode,
         name: restValues.name,
         group_id: restValues.groupId,
         process_route_id: sourceType === 'Make' ? (processRouteIdForSubmit ?? (material as any)?.process_route_id ?? (material as any)?.processRouteId ?? null) : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
-        material_type: restValues.materialType,
+        material_type: materialTypeValue,
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,

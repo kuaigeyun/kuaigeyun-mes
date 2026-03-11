@@ -4262,6 +4262,7 @@ export default {
   'pages.system.files.folderCreateSuccess': 'Folder created',
   'pages.system.files.folderCreateFailed': 'Failed to create folder',
   'pages.system.files.previewFailed': 'Failed to get preview',
+  'pages.system.files.downloadFailed': 'Download failed',
   'pages.system.files.selectToDelete': 'Please select files to delete',
   'pages.system.files.deleteSuccess': 'Deleted',
   'pages.system.files.deleteFailed': 'Delete failed',

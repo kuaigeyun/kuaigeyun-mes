@@ -172,7 +172,7 @@ class MaterialUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
     group_id: Optional[int] = Field(None, description="物料分组ID")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="默认工艺路线ID（自制件时使用）")
-    material_type: Optional[str] = Field(None, max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
+    material_type: Optional[str] = Field(None, alias="materialType", max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: Optional[str] = Field(None, max_length=20, description="基础单位")
     units: Optional[Dict[str, Any]] = Field(None, description="多单位管理（JSON格式）")

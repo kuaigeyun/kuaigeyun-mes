@@ -257,7 +257,8 @@ export async function getFilePreview(
 /**
  * 下载文件
  * 
- * 获取文件下载URL（包含权限验证token）。
+ * 获取文件下载URL（不含 token，仅用于已带 token 的 URL 或开发环境）。
+ * 生产环境 img 标签无法携带 Authorization 头，需使用 getFileDownloadUrlWithToken 或 SecureImage 组件。
  * 
  * @param fileUuid - 文件 UUID
  * @returns 文件下载URL
@@ -266,6 +267,23 @@ export function getFileDownloadUrl(fileUuid: string): string {
   // 使用相对路径，便于局域网访问（避免 VITE_API_BASE_URL 硬编码 127.0.0.1）
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
   return `${baseUrl}/api/v1/core/files/${fileUuid}/download`;
+}
+
+/**
+ * 获取带 token 的文件下载 URL（用于 img 等无法携带请求头的场景）
+ * 
+ * 生产环境必须使用此方法，否则图片会因鉴权失败无法显示。
+ * 
+ * @param fileUuid - 文件 UUID
+ * @param options - 可选，forAvatar 为头像场景时请求缩略图
+ * @returns 带 token 的 preview_url
+ */
+export async function getFileDownloadUrlWithToken(
+  fileUuid: string,
+  options?: { forAvatar?: boolean }
+): Promise<string> {
+  const preview = await getFilePreview(fileUuid, options);
+  return preview.preview_url;
 }
 
 /**

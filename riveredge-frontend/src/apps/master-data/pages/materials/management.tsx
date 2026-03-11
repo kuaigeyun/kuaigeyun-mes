@@ -64,7 +64,7 @@ import type {
 } from '../../types/material'
 import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
-import { getFileDownloadUrl } from '../../../../services/file'
+import { SecureImage } from '../../../../components/secure-image'
 import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
@@ -825,17 +825,29 @@ const MaterialsManagementPage: React.FC = () => {
           const images = (record as any).images || [];
           if (images.length > 0) {
             const firstImage = images[0];
-            const url = firstImage.url || getFileDownloadUrl(firstImage.uid || firstImage.uuid);
-            return (
-              <Image
-                src={url}
-                alt={firstImage.name || t('app.master-data.materials.image')}
-                width={40}
-                height={40}
-                style={{ objectFit: 'cover', borderRadius: 4 }}
-                preview={{ src: url }}
-              />
-            );
+            const fileUuid = firstImage.uid ?? firstImage.uuid ?? (typeof firstImage === 'string' ? firstImage : null);
+            if (fileUuid) {
+              return (
+                <SecureImage
+                  fileUuid={fileUuid}
+                  alt={firstImage.name || t('app.master-data.materials.image')}
+                  width={40}
+                  height={40}
+                />
+              );
+            }
+            if (firstImage.url) {
+              return (
+                <Image
+                  src={firstImage.url}
+                  alt={firstImage.name || t('app.master-data.materials.image')}
+                  width={40}
+                  height={40}
+                  style={{ objectFit: 'cover', borderRadius: 4 }}
+                  preview={{ src: firstImage.url }}
+                />
+              );
+            }
           }
           return '-';
         },
