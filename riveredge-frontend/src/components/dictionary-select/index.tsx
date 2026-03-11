@@ -170,26 +170,24 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         colProps={effectiveColProps}
         className="dictionary-select-form-item"
       >
-        <div className="dictionary-select-wrapper" style={{ width: '100%' }}>
-          <UniDropdown
-            style={{ width: '100%' }}
-            placeholder={placeholder || `请选择${label}`}
-            showSearch
-            allowClear
-            loading={loading || externalLoading}
-            disabled={disabled}
-            options={options}
-            quickCreate={{
-              label: '创建新项',
-              onClick: () => {
-                setCreateLabel('');
-                setCreateValue('');
-                setCreateDescription('');
-                setCreateModalVisible(true);
-              },
-            }}
-          />
-        </div>
+        <UniDropdown
+          style={{ width: '100%' }}
+          placeholder={placeholder || `请选择${label}`}
+          showSearch
+          allowClear
+          loading={loading || externalLoading}
+          disabled={disabled}
+          options={options}
+          quickCreate={{
+            label: '创建新项',
+            onClick: () => {
+              setCreateLabel('');
+              setCreateValue('');
+              setCreateDescription('');
+              setCreateModalVisible(true);
+            },
+          }}
+        />
       </ProForm.Item>
 
       <Modal

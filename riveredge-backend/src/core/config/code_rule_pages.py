@@ -827,6 +827,8 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "master-data-warehouse-storage-location": ("apps.master_data.models.warehouse", "StorageLocation", "code"),
     "MASTER_DATA_MATERIAL_GROUP": ("apps.master_data.models.material", "MaterialGroup", "code"),
     "master-data-material-group": ("apps.master_data.models.material", "MaterialGroup", "code"),
+    "MATERIAL_CODE": ("apps.master_data.models.material", "Material", "main_code"),
+    "master-data-material": ("apps.master_data.models.material", "Material", "main_code"),
     "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
     "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
     "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment", "code"),

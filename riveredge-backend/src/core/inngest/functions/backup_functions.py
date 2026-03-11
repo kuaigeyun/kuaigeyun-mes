@@ -2,9 +2,11 @@
 数据备份与恢复 Inngest 函数
 
 处理后台的数据库转储、文件打包和数据恢复任务。
+支持导出/导入时租户 ID 替换：恢复时若 source_tenant_id != target_tenant_id，自动替换所有 tenant_id。
 """
 
 import os
+import json
 import subprocess
 import zipfile
 import shutil
@@ -136,6 +138,9 @@ async def data_backup_workflow(ctx: inngest.Context, step: Step):
             dump_path = db_dump_file if backup_scope != "tenant" else os.path.join(temp_dir, "db_dump.sql")
             with zipfile.ZipFile(final_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 zipf.write(dump_path, "database.dump")
+                # 写入元数据：导出时的租户 ID，恢复时用于替换（若与目标租户不一致）
+                metadata = {"source_tenant_id": backup.tenant_id, "backup_scope": backup_scope}
+                zipf.writestr("backup_metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
                 if backup_type == "full":
                     upload_dir = infra_settings.FILE_UPLOAD_DIR
                     if upload_dir and os.path.exists(upload_dir):
@@ -170,6 +175,98 @@ async def data_backup_workflow(ctx: inngest.Context, step: Step):
             shutil.rmtree(temp_dir)
 
 
+def _run_full_backup_dump_and_zip(backup_dir: str, temp_dir: str, backup_name: str) -> str:
+    """
+    执行全量备份（pg_dump + zip），返回最终 zip 路径。
+    用于恢复前的自动备份。
+    """
+    db_user = infra_settings.DB_USER
+    db_password = infra_settings.DB_PASSWORD
+    db_host = infra_settings.DB_HOST
+    db_port = infra_settings.DB_PORT
+    db_name = infra_settings.DB_NAME
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_password
+
+    os.makedirs(temp_dir, exist_ok=True)
+    db_dump_file = os.path.join(temp_dir, "db_dump.dump")
+
+    cmd = [
+        "pg_dump",
+        "-h", db_host,
+        "-p", str(db_port),
+        "-U", db_user,
+        "-F", "c",
+        "-b",
+        "-v",
+        "-f", db_dump_file,
+        db_name
+    ]
+    logger.info(f"执行恢复前备份: pg_dump ...")
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise Exception(f"pg_dump 失败: {result.stderr}")
+
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    final_zip_name = f"{backup_name}_{ts}.zip"
+    final_zip_path = os.path.join(backup_dir, final_zip_name)
+
+    with zipfile.ZipFile(final_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(db_dump_file, "database.dump")
+        upload_dir = infra_settings.FILE_UPLOAD_DIR
+        if upload_dir and os.path.exists(upload_dir):
+            for root, dirs, files in os.walk(upload_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.join("uploads", os.path.relpath(file_path, upload_dir))
+                    zipf.write(file_path, arcname)
+
+    return final_zip_path
+
+
+async def _run_tenant_id_replacement(
+    source_tenant_id: int,
+    target_tenant_id: int,
+) -> int:
+    """
+    恢复后替换租户 ID：将所有 tenant_id=source 的记录改为 target。
+    导出时的租户 ID 与导入恢复时可能不一致，需替换以归属到当前租户。
+    """
+    if source_tenant_id == target_tenant_id:
+        return 0
+    from tortoise import Tortoise
+    conn = Tortoise.get_connection("default")
+    # 查询包含 tenant_id 的表
+    tables_sql = """
+        SELECT table_name FROM information_schema.columns
+        WHERE column_name = 'tenant_id' AND table_schema = 'public'
+    """
+    tables_rows = await conn.execute_query_dict(tables_sql)
+    tables = [r["table_name"] for r in (tables_rows if isinstance(tables_rows, list) else []) if r.get("table_name")]
+    total_updated = 0
+    for table in tables:
+        try:
+            update_sql = f'UPDATE "{table}" SET tenant_id = $1 WHERE tenant_id = $2'
+            await conn.execute_query(update_sql, [target_tenant_id, source_tenant_id])
+            total_updated += 1  # 表已处理
+            logger.info(f"租户ID替换: {table} tenant_id {source_tenant_id} -> {target_tenant_id}")
+        except Exception as e:
+            logger.warning(f"租户ID替换跳过表 {table}: {e}")
+    return total_updated
+
+
+def _read_backup_metadata(zip_path: str) -> dict:
+    """从备份 zip 读取 backup_metadata.json"""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            if "backup_metadata.json" in zf.namelist():
+                with zf.open("backup_metadata.json") as f:
+                    return json.load(f)
+    except Exception as e:
+        logger.warning(f"读取备份元数据失败: {e}")
+    return {}
+
+
 @inngest_client.create_function(
     fn_id="data_restore_workflow",
     trigger=TriggerEvent(event="database/restore.requested"),
@@ -177,12 +274,60 @@ async def data_backup_workflow(ctx: inngest.Context, step: Step):
 async def data_restore_workflow(ctx: inngest.Context, step: Step):
     """
     数据恢复工作流
-    
-    1. 解压备份文件
-    2. 执行 pg_restore 恢复数据库
-    3. 覆盖恢复 uploads 目录 (如果存在)
+
+    1. 若 create_pre_restore_backup=True，先创建恢复前备份（便于误覆盖时撤回）
+    2. 解压备份文件
+    3. 执行 pg_restore 恢复数据库
     """
-    # 恢复逻辑目前仅作为占位，因为恢复操作极其危险且需要更复杂的连接管理
-    # 在生产环境中通常需要停止应用服务
-    logger.warning("收到恢复请求，当前实现仅记录日志。恢复功能建议手动执行 pg_restore。")
-    pass
+    event_data = ctx.event.data
+    backup_uuid = event_data.get("backup_uuid")
+    target_tenant_id = event_data.get("target_tenant_id") or event_data.get("tenant_id")
+    source_tenant_id = event_data.get("source_tenant_id")
+    file_path = event_data.get("file_path")
+    create_pre_restore = event_data.get("create_pre_restore_backup", True)
+
+    backup_dir = os.path.abspath("backups")
+    os.makedirs(backup_dir, exist_ok=True)
+
+    # 从备份 zip 读取元数据，获取导出时的租户 ID（用于替换）
+    if file_path and os.path.exists(file_path):
+        metadata = _read_backup_metadata(file_path)
+        if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
+            source_tenant_id = metadata["source_tenant_id"]
+
+    # Step 1: 恢复前自动备份
+    if create_pre_restore:
+        pre_restore_name = "恢复前备份"
+        temp_dir = os.path.join(backup_dir, f"temp_pre_restore_{backup_uuid}")
+
+        def do_pre_restore_backup():
+            return _run_full_backup_dump_and_zip(backup_dir, temp_dir, pre_restore_name)
+
+        try:
+            final_zip_path = await step.run("create_pre_restore_backup", do_pre_restore_backup)
+
+            pre_backup = await DataBackup.create(
+                tenant_id=target_tenant_id,
+                name=pre_restore_name,
+                backup_type="full",
+                backup_scope="all",
+                status="success",
+                source_type="generated",
+                file_path=final_zip_path,
+                file_size=os.path.getsize(final_zip_path),
+                started_at=datetime.now(),
+                completed_at=datetime.now(),
+            )
+            logger.info(f"已创建恢复前备份: {pre_backup.uuid} -> {final_zip_path}")
+        except Exception as e:
+            logger.exception(f"创建恢复前备份失败: {e}")
+        finally:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+
+    # Step 2: 恢复（当前为占位）+ 租户 ID 替换
+    # 当实现 pg_restore 后，需在恢复完成后调用 _run_tenant_id_replacement
+    # 若 source_tenant_id != target_tenant_id，替换所有表的 tenant_id 以归属到当前租户
+    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+        logger.info(f"恢复后将执行租户ID替换: {source_tenant_id} -> {target_tenant_id}")
+    logger.warning("收到恢复请求，当前实现仅创建恢复前备份。实际恢复建议手动执行 pg_restore，恢复后需执行租户ID替换。")

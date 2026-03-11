@@ -17,6 +17,7 @@ export interface DataBackup {
   file_path?: string;
   file_uuid?: string;
   file_size?: number;
+  source_type?: 'generated' | 'uploaded';
   status: string;
   inngest_run_id?: string;
   started_at?: string;
@@ -61,6 +62,19 @@ export async function createBackup(data: CreateDataBackupData): Promise<DataBack
 }
 
 /**
+ * 上传备份文件
+ */
+export async function uploadBackup(file: File, name?: string): Promise<DataBackup> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (name) formData.append('name', name);
+  return apiRequest<DataBackup>('/core/data-backups/upload', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+/**
  * 获取备份列表
  */
 export async function getBackups(params?: {
@@ -84,11 +98,20 @@ export async function getBackupDetail(uuid: string): Promise<DataBackup> {
 
 /**
  * 恢复备份
+ * @param createPreRestoreBackup 恢复前自动创建当前状态备份，便于误覆盖时撤回（默认 true）
+ * @param sourceTenantId 备份中的租户ID，用于恢复时替换；上传备份或元数据缺失时需手动指定
  */
-export async function restoreBackup(uuid: string, confirm: boolean = true): Promise<RestoreBackupResponse> {
+export async function restoreBackup(
+  uuid: string,
+  confirm: boolean = true,
+  createPreRestoreBackup: boolean = true,
+  sourceTenantId?: number
+): Promise<RestoreBackupResponse> {
+  const data: Record<string, unknown> = { confirm, create_pre_restore_backup: createPreRestoreBackup };
+  if (sourceTenantId != null) data.source_tenant_id = sourceTenantId;
   return apiRequest<RestoreBackupResponse>(`/core/data-backups/${uuid}/restore`, {
     method: 'POST',
-    data: { confirm },
+    data,
   });
 }
 

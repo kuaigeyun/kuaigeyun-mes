@@ -4,6 +4,8 @@
 提供数据备份的创建、查询、删除和恢复功能。
 """
 
+import os
+import shutil
 from typing import List, Tuple, Optional
 from datetime import datetime
 from loguru import logger
@@ -111,6 +113,45 @@ class DataBackupService:
         return backup
 
     @staticmethod
+    async def upload_backup_file(tenant_id: int, file, backup_name: str) -> DataBackup:
+        """
+        上传备份文件并创建备份记录
+        """
+        backup_dir = os.path.abspath("backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in backup_name)[:100]
+        filename = f"{safe_name}_{ts}.zip"
+        file_path = os.path.join(backup_dir, filename)
+        try:
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            file_size = os.path.getsize(file_path)
+            backup = await DataBackup.create(
+                tenant_id=tenant_id,
+                name=backup_name,
+                backup_type="full",
+                backup_scope="all",
+                backup_tables=None,
+                file_path=file_path,
+                file_size=file_size,
+                status="success",
+                source_type="uploaded",
+                started_at=datetime.now(),
+                completed_at=datetime.now(),
+            )
+            logger.info(f"已上传备份文件: {backup.uuid} -> {file_path}")
+            return backup
+        except Exception as e:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+            raise
+
+    @staticmethod
     async def delete_backup(tenant_id: int, uuid: str) -> None:
         """
         删除备份记录（同时应处理物理文件，这通常由 Inngest 或服务层手动处理）
@@ -130,23 +171,35 @@ class DataBackupService:
         await backup.delete()
 
     @staticmethod
-    async def restore_backup(tenant_id: int, uuid: str) -> bool:
+    async def restore_backup(
+        tenant_id: int,
+        uuid: str,
+        create_pre_restore_backup: bool = True,
+        source_tenant_id: Optional[int] = None,
+    ) -> bool:
         """
         触发恢复备份任务
+
+        若 create_pre_restore_backup=True，恢复前会自动创建当前状态的备份。
+        source_tenant_id: 备份中的租户ID，用于恢复时替换；不填则从备份记录推断；若与目标租户不同则自动替换。
         """
         backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
-        
+
         if backup.status != "success":
             raise ValueError("只能恢复成功的备份")
-            
+
+        src = source_tenant_id if source_tenant_id is not None else backup.tenant_id
+
         try:
             await inngest_client.send(
                 Event(
                     name="database/restore.requested",
                     data={
                         "backup_uuid": backup.uuid,
-                        "tenant_id": tenant_id,
-                        "file_path": backup.file_path
+                        "target_tenant_id": tenant_id,
+                        "source_tenant_id": src,
+                        "file_path": backup.file_path,
+                        "create_pre_restore_backup": create_pre_restore_backup,
                     }
                 )
             )

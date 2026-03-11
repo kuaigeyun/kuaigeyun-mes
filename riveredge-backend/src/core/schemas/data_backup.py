@@ -24,6 +24,7 @@ class DataBackupResponse(DataBackupBase):
     file_path: Optional[str] = None
     file_uuid: Optional[str] = None
     file_size: Optional[int] = None
+    source_type: str = "generated"
     status: str
     inngest_run_id: Optional[str] = None
     started_at: Optional[datetime] = None

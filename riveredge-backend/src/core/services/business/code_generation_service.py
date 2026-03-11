@@ -19,6 +19,33 @@ from core.services.code_rule.code_rule_component_service import CodeRuleComponen
 from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
 from infra.exceptions.exceptions import ValidationError
 
+# snake_case <-> camelCase 映射（用于 scope_fields 与 context 的兼容）
+_SCOPE_FIELD_ALIASES = {
+    "group_code": "groupCode",
+    "group_name": "groupName",
+    "material_type": "materialType",
+}
+
+
+def _get_context_value(context: Dict, field: str) -> Any:
+    """从 context 获取字段值，兼容 snake_case 与 camelCase"""
+    val = context.get(field)
+    if val is not None and str(val).strip():
+        return val
+    alias = _SCOPE_FIELD_ALIASES.get(field)
+    if alias:
+        val = context.get(alias)
+        if val is not None and str(val).strip():
+            return val
+    # 反向：若 field 是 camelCase，尝试 snake_case
+    for sn, cam in _SCOPE_FIELD_ALIASES.items():
+        if cam == field:
+            val = context.get(sn)
+            if val is not None and str(val).strip():
+                return val
+            break
+    return None
+
 
 class CodeGenerationService:
     """
@@ -73,11 +100,12 @@ class CodeGenerationService:
             seq_reset_rule = counter_config.get("reset_cycle", "never")
             
             # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
-            scope_fields = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
+            scope_fields_raw = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
+            scope_fields = [f for f in scope_fields_raw if f and str(f).strip()]
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:
-                    val = context.get(field)
+                    val = _get_context_value(context, field)
                     if val is not None and str(val).strip():
                         scope_values.append(str(val).strip())
                 if scope_values:
@@ -208,11 +236,12 @@ class CodeGenerationService:
             seq_reset_rule = counter_config.get("reset_cycle", "never")
             
             # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
-            scope_fields = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
+            scope_fields_raw = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
+            scope_fields = [f for f in scope_fields_raw if f and str(f).strip()]
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:
-                    val = context.get(field)
+                    val = _get_context_value(context, field)
                     if val is not None and str(val).strip():
                         scope_values.append(str(val).strip())
                 if scope_values:

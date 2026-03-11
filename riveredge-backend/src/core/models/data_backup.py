@@ -50,6 +50,7 @@ class DataBackup(BaseModel):
     file_path = fields.CharField(max_length=500, null=True, description="备份文件本地路径")
     file_uuid = fields.CharField(max_length=100, null=True, description="文件UUID")
     file_size = fields.BigIntField(null=True, description="文件大小")
+    source_type = fields.CharField(max_length=20, default="generated", description="备份来源：generated=系统生成，uploaded=用户上传")
     
     status = fields.CharField(max_length=20, default="pending", description="备份状态")
     inngest_run_id = fields.CharField(max_length=100, null=True, description="Inngest 运行ID")

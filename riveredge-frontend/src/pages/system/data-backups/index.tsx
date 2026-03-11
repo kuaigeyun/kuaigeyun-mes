@@ -9,14 +9,15 @@ import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme } from 'antd';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
 import { Area } from '@ant-design/charts';
-import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getBackups,
   createBackup,
+  uploadBackup,
   getBackupDetail,
   restoreBackup,
   deleteBackup,
@@ -72,9 +73,14 @@ const DataBackupsPage: React.FC = () => {
     return scopeMap[scope] || scope;
   };
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentBackup, setCurrentBackup] = useState<DataBackup | null>(null);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [restoreBackupRecord, setRestoreBackupRecord] = useState<DataBackup | null>(null);
   const [formRef] = ProForm.useForm();
+  const [restoreForm] = Form.useForm();
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
 
   /**
@@ -106,19 +112,51 @@ const DataBackupsPage: React.FC = () => {
   };
 
   /**
-   * 恢复备份
+   * 恢复备份（上传的备份需二次确认，可指定备份中的租户ID用于替换）
    */
-  const handleRestore = async (record: DataBackup) => {
+  const handleRestore = (record: DataBackup) => {
+    setRestoreBackupRecord(record);
+    // 上传的备份默认不填（需用户指定）；系统生成的备份默认用记录中的租户ID
+    restoreForm.setFieldsValue({
+      source_tenant_id: record.source_type === 'uploaded' ? undefined : (record.tenant_id ?? undefined),
+    });
+    setRestoreModalVisible(true);
+  };
+
+  const handleRestoreConfirm = async () => {
+    if (!restoreBackupRecord) return;
+    const values = await restoreForm.validateFields().catch(() => null);
+    if (!values) return;
+    const sourceTenantId = values.source_tenant_id != null ? Number(values.source_tenant_id) : undefined;
     try {
-      const result = await restoreBackup(record.uuid, true);
+      const result = await restoreBackup(restoreBackupRecord.uuid, true, true, sourceTenantId);
       if (result.success) {
         messageApi.success(result.message || t('pages.system.dataBackups.restoreSuccess'));
+        setRestoreModalVisible(false);
+        setRestoreBackupRecord(null);
         actionRef.current?.reload();
       } else {
         messageApi.error(result.error || t('pages.system.dataBackups.restoreFailed'));
       }
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.dataBackups.restoreFailed'));
+    }
+  };
+
+  /**
+   * 上传备份文件
+   */
+  const handleUpload = async (file: File, name?: string) => {
+    try {
+      setUploading(true);
+      await uploadBackup(file, name || file.name.replace(/\.zip$/i, ''));
+      messageApi.success(t('pages.system.dataBackups.uploadSuccess'));
+      setUploadModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.dataBackups.uploadFailed'));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -287,15 +325,7 @@ const DataBackupsPage: React.FC = () => {
           backup.status === 'success' ? (
             <Tooltip key="restore" title={t('pages.system.dataBackups.restoreBackup')}>
               <ReloadOutlined
-                onClick={() => {
-                  Modal.confirm({
-                    title: t('pages.system.dataBackups.restoreConfirmTitle'),
-                    content: t('pages.system.dataBackups.restoreConfirmContent'),
-                    okText: t('common.confirm'),
-                    cancelText: t('common.cancel'),
-                    onOk: () => handleRestore(backup),
-                  });
-                }}
+                onClick={() => handleRestore(backup)}
                 style={{ fontSize: 16, color: '#1890ff' }}
               />
             </Tooltip>
@@ -467,15 +497,7 @@ const DataBackupsPage: React.FC = () => {
             type="link"
             size="small"
             icon={<ReloadOutlined />}
-            onClick={() => {
-              Modal.confirm({
-                title: t('pages.system.dataBackups.restoreConfirmTitle'),
-                content: t('pages.system.dataBackups.restoreConfirmContent'),
-                okText: t('common.confirm'),
-                cancelText: t('common.cancel'),
-                onOk: () => handleRestore(record),
-              });
-            }}
+            onClick={() => handleRestore(record)}
           >
             {t('pages.system.dataBackups.restore')}
           </Button>
@@ -496,8 +518,16 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 详情列定义
    */
+  const getSourceTypeTag = (sourceType?: string) => {
+    if (sourceType === 'uploaded') {
+      return <Tag color="orange">{t('pages.system.dataBackups.sourceUploaded')}</Tag>;
+    }
+    return <Tag color="blue">{t('pages.system.dataBackups.sourceGenerated')}</Tag>;
+  };
+
   const detailColumns = [
     { title: t('pages.system.dataBackups.columnName'), dataIndex: 'name' },
+    { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (v: string) => getSourceTypeTag(v) },
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (value: string) => getBackupTypeTag(value) },
     { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (value: string) => getBackupScopeText(value) },
     { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (value: string) => getStatusTag(value) },
@@ -586,6 +616,15 @@ const DataBackupsPage: React.FC = () => {
           showCreateButton
           createButtonText={t('pages.system.dataBackups.createButton')}
           onCreate={() => setCreateModalVisible(true)}
+          toolBarRender={() => [
+            <Button
+              key="upload"
+              icon={<UploadOutlined />}
+              onClick={() => setUploadModalVisible(true)}
+            >
+              {t('pages.system.dataBackups.uploadButton')}
+            </Button>,
+          ]}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {
@@ -665,6 +704,60 @@ const DataBackupsPage: React.FC = () => {
           placeholder={t('pages.system.dataBackups.scopePlaceholder')}
         />
       </FormModalTemplate>
+
+      {/* 上传备份 Modal */}
+      <Modal
+        title={t('pages.system.dataBackups.uploadModalTitle')}
+        open={uploadModalVisible}
+        onCancel={() => setUploadModalVisible(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <Upload.Dragger
+          accept=".zip"
+          maxCount={1}
+          beforeUpload={(file) => {
+            handleUpload(file, file.name.replace(/\.zip$/i, ''));
+            return false; // 阻止默认上传
+          }}
+          disabled={uploading}
+        >
+          <p className="ant-upload-drag-icon">
+            <UploadOutlined style={{ fontSize: 48, color: token.colorPrimary }} />
+          </p>
+          <p className="ant-upload-text">{t('pages.system.dataBackups.uploadHint')}</p>
+        </Upload.Dragger>
+      </Modal>
+
+      {/* 恢复备份 Modal（含租户ID替换） */}
+      <Modal
+        title={t('pages.system.dataBackups.restoreConfirmTitle')}
+        open={restoreModalVisible}
+        onCancel={() => {
+          setRestoreModalVisible(false);
+          setRestoreBackupRecord(null);
+        }}
+        onOk={handleRestoreConfirm}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        destroyOnClose
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>{restoreBackupRecord?.source_type === 'uploaded' ? t('pages.system.dataBackups.restoreUploadedConfirmContent') : t('pages.system.dataBackups.restoreConfirmContent')}</p>
+          <p style={{ marginTop: 8, color: 'var(--ant-color-text-secondary)' }}>
+            {t('pages.system.dataBackups.preRestoreBackupHint')}
+          </p>
+        </div>
+        <Form form={restoreForm} layout="vertical">
+          <Form.Item
+            name="source_tenant_id"
+            label={t('pages.system.dataBackups.sourceTenantIdLabel')}
+            extra={t('pages.system.dataBackups.sourceTenantIdExtra')}
+          >
+            <InputNumber min={1} placeholder={t('pages.system.dataBackups.sourceTenantIdPlaceholder')} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 备份详情 Drawer */}
       <DetailDrawerTemplate<DataBackup>

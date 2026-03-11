@@ -4,7 +4,7 @@
 
 import os
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from core.api.deps import get_current_user
 from infra.models.user import User
@@ -54,6 +54,23 @@ async def get_backups(
         "page": page,
         "page_size": page_size
     }
+
+
+@router.post("/upload", response_model=DataBackupResponse, status_code=status.HTTP_201_CREATED)
+async def upload_backup(
+    file: UploadFile = File(...),
+    name: str = Form(None),
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    上传备份文件
+    
+    支持上传 .zip 格式的备份文件，上传后可直接用于恢复。
+    """
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="仅支持上传 .zip 格式的备份文件")
+    backup_name = (name or file.filename or "uploaded_backup").strip() or "uploaded_backup"
+    return await DataBackupService.upload_backup_file(current_user.tenant_id, file, backup_name)
 
 
 @router.post("", response_model=DataBackupResponse, status_code=status.HTTP_201_CREATED)
@@ -136,8 +153,12 @@ async def delete_backup(
 
 from pydantic import BaseModel
 
+
 class RestoreRequest(BaseModel):
     confirm: bool
+    create_pre_restore_backup: bool = True  # 恢复前自动创建备份，便于误覆盖时撤回
+    source_tenant_id: Optional[int] = None  # 备份中的租户ID（用于替换）；不填则从备份元数据或记录推断
+
 
 @router.post("/{uuid}/restore")
 async def restore_backup(
@@ -147,12 +168,19 @@ async def restore_backup(
 ) -> Any:
     """
     恢复备份
+    
+    若 create_pre_restore_backup=True（默认），恢复前会自动创建当前状态的备份，便于误覆盖时撤回。
     """
     if not data.confirm:
         raise HTTPException(status_code=400, detail="确认恢复标记必须为 true")
-        
+
     try:
-        success = await DataBackupService.restore_backup(current_user.tenant_id, uuid)
+        success = await DataBackupService.restore_backup(
+            current_user.tenant_id,
+            uuid,
+            create_pre_restore_backup=data.create_pre_restore_backup,
+            source_tenant_id=data.source_tenant_id,
+        )
         return {"success": success}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
