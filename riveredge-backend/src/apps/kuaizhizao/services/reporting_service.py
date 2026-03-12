@@ -226,14 +226,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order.qualified_quantity = (work_order.qualified_quantity or Decimal('0')) + reporting_data.qualified_quantity
             work_order.unqualified_quantity = (work_order.unqualified_quantity or Decimal('0')) + reporting_data.unqualified_quantity
             
-            # 检查工单是否完成（所有工序都完成）
+            # 检查工单是否完成（以最后一道工序完成为依据，即所有工序都完成）
             all_operations = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order.id,
-
+                deleted_at__isnull=True,
             ).all()
-            
-            all_completed = all(op.status == 'completed' for op in all_operations)
+            all_completed = len(all_operations) > 0 and all(op.status == 'completed' for op in all_operations)
             if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
                 work_order.actual_end_date = work_order.actual_end_date or datetime.now()
@@ -700,8 +699,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 更新不合格数量（从报废记录统计）
             await self._update_work_order_unqualified_quantity(tenant_id, work_order_id, work_order)
 
-            # 如果完成数量达到计划数量，更新状态为已完成
-            if total_completed >= work_order.quantity:
+            # 工单完成判断：以最后一道工序完成为依据，而非完成数量达到计划数量
+            all_operations = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).all()
+            all_completed = len(all_operations) > 0 and all(op.status == 'completed' for op in all_operations)
+            if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
                 work_order.actual_end_date = datetime.now()
 

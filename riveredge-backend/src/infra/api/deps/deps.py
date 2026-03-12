@@ -136,11 +136,11 @@ async def get_current_user(
     if tenant_id:
         set_current_tenant_id(tenant_id)
     
-    # 获取用户
+    # 获取用户（排除已软删除的用户，避免已删除用户通过旧 Token 继续访问）
     logger.debug(f"🔍 开始查询用户，user_id: {user_id}")
-    user = await User.get_or_none(id=user_id)
+    user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     if not user:
-        logger.error(f"❌ 用户不存在，user_id: {user_id}")
+        logger.error(f"❌ 用户不存在或已被删除，user_id: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",

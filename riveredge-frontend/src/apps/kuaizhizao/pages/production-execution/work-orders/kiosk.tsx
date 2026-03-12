@@ -35,6 +35,7 @@ import ProcessInspectionModal from './components/ProcessInspectionModal';
 import NumericKeypad from './components/NumericKeypad';
 import DocumentCenter, { type DocumentCenterTabKey } from './components/DocumentCenter';
 import { getToken } from '../../../../../utils/auth';
+import { getAvatarText } from '../../../../../utils/avatar';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 
@@ -136,13 +137,15 @@ const WorkOrdersKioskPage: React.FC = () => {
         try {
             const effectiveFilter = filterOverride ?? workOrderFilter;
             const params: any = { skip: 0, limit: 200 };
-            if (workCenterId) params.work_center_id = workCenterId;
+            // 仅在选择「只看本机台」时按工作中心筛选；「全部」时显示所有工单（含未设置工作中心的）
+            if (effectiveFilter === 'station' && workCenterId) params.work_center_id = workCenterId;
             if (effectiveFilter === 'currentUser' && userInfo?.id) params.assigned_worker_id = userInfo.id;
             const response = await workOrderApi.list(params);
             const data = response?.data ?? (Array.isArray(response) ? response : []);
             const list = Array.isArray(data) ? data : [];
-            setWorkOrders(list.filter((wo: WorkOrder) => ['released', 'in_progress'].includes(wo.status || '')));
-            
+            const filtered = list.filter((wo: WorkOrder) => ['released', 'in_progress'].includes(wo.status || ''));
+            setWorkOrders(filtered);
+
             if (selectedWorkOrder) {
                 const updated = data.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
                 if (updated) setSelectedWorkOrder(updated);
@@ -381,7 +384,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     getPopupContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
                     onChange={(v) => {
                         setWorkOrderFilter(v);
-                        if (stationInfo?.workCenterId) loadWorkOrders(stationInfo.workCenterId, v);
+                        loadWorkOrders(stationInfo?.workCenterId, v);
                     }}
                     options={[
                         { label: '全部', value: 'all' },
@@ -1057,10 +1060,11 @@ const WorkOrdersKioskPage: React.FC = () => {
                     ? (userInfo.avatar.startsWith('http') 
                         ? userInfo.avatar 
                         : `/api/v1/core/files/${userInfo.avatar}/download?access_token=${getToken() || ''}`)
-                    : (userInfo?.username ? `https://api.dicebear.com/7.x/initials/svg?seed=${userInfo.username}` : undefined)
+                    : ((userInfo?.full_name || userInfo?.username)
+                        ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(getAvatarText(userInfo.full_name, userInfo.username))}`
+                        : undefined)
             }
             operatorRole={userInfo?.is_tenant_admin ? '管理员' : '操作员'}
-            operatorEmail={userInfo?.email}
             stationName={stationInfo.stationName}
             stationWorkshop={stationInfo.workshopName}
             stationLine={stationInfo.lineName}

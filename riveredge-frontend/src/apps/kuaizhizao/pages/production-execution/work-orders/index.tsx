@@ -601,11 +601,26 @@ const WorkOrdersPage: React.FC = () => {
       setIsEdit(true)
       setCurrentWorkOrder(detail)
       setModalVisible(true)
+      // 加载工单工序列表，用于编辑时展示
+      try {
+        const operations = await workOrderApi.getOperations(record.id!.toString())
+        const ops = (operations || []).map((op: any) => ({
+          operation_id: op.operation_id,
+          operation_code: op.operation_code || op.operationCode,
+          operation_name: op.operation_name || op.operationName,
+          sequence: op.sequence ?? 0,
+        }))
+        setSelectedOperations(ops)
+      } catch (e) {
+        console.error('加载工单工序失败', e)
+        setSelectedOperations([])
+      }
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
         setProductionMode(mode)
         formRef.current?.setFieldsValue({
+          code: detail.code,
           name: detail.name,
           product_id: detail.product_id,
           product_code: detail.product_code,
@@ -2794,6 +2809,7 @@ const WorkOrdersPage: React.FC = () => {
           setCurrentWorkOrder(null)
           setSelectedMaterialSourceInfo(null)
           setProductSourceData(null)
+          setSelectedOperations([])
           formRef.current?.resetFields()
         }}
         onFinish={handleSubmit}

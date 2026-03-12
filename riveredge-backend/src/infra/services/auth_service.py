@@ -111,10 +111,11 @@ class AuthService:
                 detail="组织未激活，无法注册"
             )
         
-        # 检查组织内用户名是否已存在
+        # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
         existing_username = await User.get_or_none(
             tenant_id=data.tenant_id,
-            username=data.username
+            username=data.username,
+            deleted_at__isnull=True
         )
         if existing_username:
             raise HTTPException(
@@ -344,10 +345,11 @@ class AuthService:
         #     # 如果邀请码有效，直接注册成功（免审核）
         #     pass
         
-        # 检查组织内用户名是否已存在
+        # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
         existing_username = await User.get_or_none(
             tenant_id=tenant_id,
-            username=data.username
+            username=data.username,
+            deleted_at__isnull=True
         )
         if existing_username:
             raise HTTPException(
@@ -544,26 +546,32 @@ class AuthService:
 
         # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
         # 平台管理不需要 tenant_id，可以跨组织访问
+        # ⚠️ 关键：排除已软删除的用户，避免删除后重建同用户名用户时登录到旧账号
         user = await User.get_or_none(
             username=data.username,
             tenant_id__isnull=True,
-            is_infra_admin=True
+            is_infra_admin=True,
+            deleted_at__isnull=True
         )
 
         # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
         if not user:
             if data.tenant_id is not None:
                 # 提供了 tenant_id，查找该组织内的用户（支持用户名或手机号）
+                # ⚠️ 关键：排除已软删除的用户
                 user = await User.filter(
                     Q(username=data.username) | Q(phone=data.username),
-                    tenant_id=data.tenant_id
+                    tenant_id=data.tenant_id,
+                    deleted_at__isnull=True
                 ).first()
             else:
                 # 没有提供 tenant_id：可能多个用户匹配（同手机号不同组织、同用户名不同组织等）
                 # 逐个验证密码，找到第一个密码匹配的用户（支持手机号登录时，同一手机号可能对应多个用户、多个密码）
+                # ⚠️ 关键：排除已软删除的用户
                 candidates = await User.filter(
                     Q(username=data.username) | Q(phone=data.username),
-                    is_active=True
+                    is_active=True,
+                    deleted_at__isnull=True
                 ).all()
                 user = None
                 for u in candidates:
@@ -695,7 +703,8 @@ class AuthService:
             from infra.models.tenant import Tenant, TenantStatus
             users_with_same_username = await User.filter(
                 username=user.username,
-                is_active=True
+                is_active=True,
+                deleted_at__isnull=True
             ).all()
             
             # 获取所有有效的组织 ID（排除 None）
@@ -752,7 +761,8 @@ class AuthService:
                     switch_user = await User.filter(
                         username=user.username,
                         tenant_id=t["id"],
-                        is_active=True
+                        is_active=True,
+                        deleted_at__isnull=True
                     ).first()
                     if switch_user and verify_password(data.password, switch_user.password_hash):
                         user = switch_user
@@ -887,9 +897,9 @@ class AuthService:
                 detail="无效的 Token"
             )
         
-        # 获取用户信息
+        # 获取用户信息（排除已软删除的用户）
         user_id = int(payload.get("sub"))
-        user = await User.get_or_none(id=user_id)
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -993,7 +1003,8 @@ class AuthService:
             logger.info(f"查找体验账户: username={guest_username}, tenant_id={default_tenant.id}")
             guest_user = await User.get_or_none(
                 username=guest_username,
-                tenant_id=default_tenant.id
+                tenant_id=default_tenant.id,
+                deleted_at__isnull=True
             )
             logger.info(f"体验账户查找结果: {guest_user.id if guest_user else 'None'}")
 
@@ -1137,8 +1148,8 @@ class AuthService:
         if tenant_id:
             set_current_tenant_id(tenant_id)
         
-        # 获取用户
-        user = await User.get_or_none(id=user_id)
+        # 获取用户（排除已软删除的用户）
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
