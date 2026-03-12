@@ -25,6 +25,39 @@ from core.schemas.print_template import (
     PrintTemplateRenderRequest,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.schemas.print_template import PrintTemplateCreate
+from loguru import logger
+
+
+# 预设打印模板（新建租户时可选加载）
+PRESET_PRINT_TEMPLATES = [
+    {
+        "name": "通用标签模板",
+        "code": "default_label",
+        "type": "html",
+        "description": "通用标签打印模板，支持 {{code}}、{{name}}、{{quantity}} 等变量",
+        "content": """<div style="padding:8px;border:1px solid #ccc;font-size:12px;">
+  <div><strong>{{code}}</strong></div>
+  <div>{{name}}</div>
+  <div>数量: {{quantity}}</div>
+</div>""",
+        "config": {"document_type": "label"},
+        "is_active": True,
+    },
+    {
+        "name": "通用收据模板",
+        "code": "default_receipt",
+        "type": "html",
+        "description": "通用收据打印模板，支持 {{title}}、{{items}}、{{total}} 等变量",
+        "content": """<div style="padding:16px;font-size:14px;">
+  <h3>{{title}}</h3>
+  <div>{{items}}</div>
+  <div>合计: {{total}}</div>
+</div>""",
+        "config": {"document_type": "receipt"},
+        "is_active": True,
+    },
+]
 
 
 class PrintTemplateService:
@@ -73,6 +106,35 @@ class PrintTemplateService:
             return print_template
         except IntegrityError:
             raise ValidationError(f"打印模板代码 {data.code} 已存在")
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int) -> int:
+        """
+        加载打印模板预设数据。
+        仅创建不存在的模板（按 code 去重）。
+        """
+        created = 0
+        for item in PRESET_PRINT_TEMPLATES:
+            exists = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    data = PrintTemplateCreate(
+                        name=item["name"],
+                        code=item["code"],
+                        type=item["type"],
+                        description=item.get("description"),
+                        content=item["content"],
+                        config=item.get("config"),
+                    )
+                    await PrintTemplateService.create_print_template(tenant_id, data)
+                    created += 1
+                except Exception as e:
+                    logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
+        return created
     
     @staticmethod
     async def get_print_template_by_uuid(
@@ -323,4 +385,72 @@ class PrintTemplateService:
             "content": rendered_content,
             "message": "模板渲染成功"
         }
+
+    # 预设打印模板（中国中小制造业常用）
+    PRESET_PRINT_TEMPLATES = [
+        {
+            "name": "标签模板",
+            "code": "label_default",
+            "type": "html",
+            "description": "通用标签打印模板，支持 {{code}}、{{name}} 等变量",
+            "content": """<div style="padding:8px;border:1px solid #ccc;font-size:12px;">
+  <div><strong>{{code}}</strong></div>
+  <div>{{name}}</div>
+  <div>{{quantity}}</div>
+</div>""",
+            "config": {"document_type": "label"},
+            "is_active": True,
+        },
+        {
+            "name": "收货单模板",
+            "code": "receipt_default",
+            "type": "html",
+            "description": "采购收货单打印模板",
+            "content": """<div style="padding:16px;font-family:SimSun;">
+  <h3>收货单</h3>
+  <p>单号：{{receipt_code}}</p>
+  <p>日期：{{date}}</p>
+  <p>供应商：{{supplier_name}}</p>
+  <table border="1" cellpadding="4" style="width:100%;border-collapse:collapse;">
+    <tr><th>物料编码</th><th>物料名称</th><th>数量</th></tr>
+    {{#items}}
+    <tr><td>{{code}}</td><td>{{name}}</td><td>{{quantity}}</td></tr>
+    {{/items}}
+  </table>
+</div>""",
+            "config": {"document_type": "receipt"},
+            "is_active": True,
+        },
+    ]
+
+    @staticmethod
+    async def load_preset_sme(tenant_id: int) -> int:
+        """
+        加载中国中小制造业极简打印模板预设数据。
+        仅创建不存在的模板（按 code 去重）。
+        """
+        from loguru import logger
+
+        created = 0
+        for item in PrintTemplateService.PRESET_PRINT_TEMPLATES:
+            exists = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                code=item["code"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    data = PrintTemplateCreate(
+                        name=item["name"],
+                        code=item["code"],
+                        type=item["type"],
+                        description=item.get("description"),
+                        content=item["content"],
+                        config=item.get("config"),
+                    )
+                    await PrintTemplateService.create_print_template(tenant_id, data)
+                    created += 1
+                except Exception as e:
+                    logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
+        return created
 

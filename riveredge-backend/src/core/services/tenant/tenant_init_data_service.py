@@ -50,6 +50,7 @@ class TenantInitDataService:
         {"key": "role_preset", "name": "角色预设", "description": "部门经理、普通员工等常用角色"},
         {"key": "approval_process_preset", "name": "审批流程预设", "description": "采购单、销售单等审批流程"},
         {"key": "message_template_preset", "name": "消息模板预设", "description": "审批通知、验证码等消息模板"},
+        {"key": "print_template_preset", "name": "打印模板预设", "description": "通用标签、收据等打印模板"},
     ]
 
     @classmethod
@@ -190,5 +191,9 @@ class TenantInitDataService:
         if key == "message_template_preset":
             from core.services.messaging.message_template_service import MessageTemplateService
             return await MessageTemplateService.load_preset_sme(tenant_id)
+
+        if key == "print_template_preset":
+            from core.services.print.print_template_service import PrintTemplateService
+            return await PrintTemplateService.load_preset_sme(tenant_id)
 
         raise ValueError(f"未知的初始化项: {key}")

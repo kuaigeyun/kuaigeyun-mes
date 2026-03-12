@@ -757,6 +757,8 @@ class ApplicationService:
 
         从 src/apps 目录扫描所有插件的 manifest.json 文件，
         自动在数据库中创建或更新应用记录。
+        非 PRO 租户（allow_pro_apps=False）仅安装非 PRO 应用；
+        PRO 租户安装全部应用。
 
         Args:
             tenant_id: 组织ID
@@ -764,13 +766,30 @@ class ApplicationService:
         Returns:
             List[Application]: 已注册的应用列表
         """
+        from infra.models.tenant import Tenant
+        from infra.domain.package_config import get_package_config
+
         plugins = ApplicationService._scan_plugin_manifests()
         logger.info(f"扫描到 {len(plugins)} 个插件清单")
+
+        # 获取租户套餐允许的 PRO 应用权限
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        allow_pro_apps = True
+        if tenant:
+            pkg = get_package_config(tenant.plan)
+            allow_pro_apps = pkg.get("allow_pro_apps", False)
+
         registered_apps = []
 
         for manifest in plugins:
             logger.debug(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
             try:
+                # 非 PRO 租户跳过 PRO 应用
+                is_pro_app = manifest.get('is_pro', False)
+                if not allow_pro_apps and is_pro_app:
+                    logger.info(f"跳过 PRO 应用 {manifest.get('code')}（当前租户套餐不允许 PRO 应用）")
+                    continue
+
                 # 从 manifest.json 提取应用信息
                 code = manifest.get('code')
                 if not code:
