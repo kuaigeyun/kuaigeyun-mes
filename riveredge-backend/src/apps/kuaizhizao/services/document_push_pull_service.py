@@ -15,6 +15,7 @@ from loguru import logger
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
+from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -314,13 +315,29 @@ class DocumentPushPullService:
         work_orders = []
         relations = []
         
+        # MTO 模式：从 Demand 追溯销售订单，写入工单以便列表可追溯到源订单
+        sales_order_id: Optional[int] = None
+        sales_order_code: Optional[str] = None
+        sales_order_name: Optional[str] = None
+        if computation.business_mode == "MTO":
+            demand_ids_to_check = [computation.demand_id] if computation.demand_id else (computation.demand_ids or [])
+            for did in demand_ids_to_check:
+                demand = await Demand.get_or_none(tenant_id=tenant_id, id=did)
+                if demand and demand.source_type == "sales_order" and demand.source_id:
+                    so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=demand.source_id)
+                    if so:
+                        sales_order_id = so.id
+                        sales_order_code = so.order_code
+                        sales_order_name = getattr(so, "order_name", None) or so.order_code
+                        break
+        
         for material_id, group in agg_by_material.items():
             first = group[0]
             total_qty = sum(float(i.suggested_work_order_quantity or i.planned_production or 0) for i in group)
             start_dates = [i.production_start_date for i in group if i.production_start_date]
             end_dates = [i.production_completion_date for i in group if i.production_completion_date]
             
-            # 创建工单
+            # 创建工单（MTO 时写入销售订单信息，便于工单列表追溯到源订单）
             work_order_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",  # 使用编码规则生成工单编码
                 product_id=first.material_id,
@@ -328,6 +345,9 @@ class DocumentPushPullService:
                 product_name=first.material_name,
                 quantity=total_qty,
                 production_mode=computation.business_mode,
+                sales_order_id=sales_order_id,
+                sales_order_code=sales_order_code,
+                sales_order_name=sales_order_name,
                 planned_start_date=min(start_dates) if start_dates else None,
                 planned_end_date=max(end_dates) if end_dates else None,
                 status="draft",
