@@ -696,13 +696,16 @@ class AuthService:
         
         # 查询用户所属的所有组织列表（用于多组织登录选择）
         # 查询所有具有相同 username 或相同 phone 的用户（不同组织），用于多组织切换
-        # 注：手机号相同时可能对应不同用户名（不同组织独立注册），此时仅返回当前用户的组织
+        # 注：手机号相同时可能对应不同用户名（不同组织独立注册），需同时按 username 和 phone 查
         user_tenants_list = []
         if not is_infra_admin:
-            # 组织管理员和普通用户：按 username 查（同一人在多组织的账号用户名相同）
+            # 组织管理员和普通用户：按 username 或 phone 查（同一手机号可归属多组织，各组织用户名可能不同）
             from infra.models.tenant import Tenant, TenantStatus
+            q = Q(username=user.username)
+            if user.phone:
+                q = q | Q(phone=user.phone)
             users_with_same_username = await User.filter(
-                username=user.username,
+                q,
                 is_active=True,
                 deleted_at__isnull=True
             ).all()
@@ -757,9 +760,12 @@ class AuthService:
             # 若当前用户所属组织未激活，需在激活组织中查找密码匹配的用户（同一账号在不同组织有独立 User 记录）
             if final_tenant_id and not any(t["id"] == final_tenant_id for t in user_tenants_list):
                 switched = False
+                switch_q = Q(username=user.username)
+                if user.phone:
+                    switch_q = switch_q | Q(phone=user.phone)
                 for t in user_tenants_list:
                     switch_user = await User.filter(
-                        username=user.username,
+                        switch_q,
                         tenant_id=t["id"],
                         is_active=True,
                         deleted_at__isnull=True

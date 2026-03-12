@@ -557,6 +557,10 @@ class TenantService:
             current_user_id: 当前用户ID（部门/职位/角色等预设需要，可选）
         """
         from core.services.tenant.tenant_init_data_service import TenantInitDataService
+        from infra.domain.tenant_context import set_current_tenant_id
+
+        # 设置组织上下文，确保初始化过程中的查询使用正确的 tenant_id
+        set_current_tenant_id(tenant_id)
 
         # 1. 执行必选初始化
         try:
@@ -586,4 +590,14 @@ class TenantService:
                 logger.error(f"组织 {tenant_id} 可选数据初始化失败: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+
+        # 3. 显式同步应用级菜单到数据库（确保注册后菜单立即可用）
+        # 应用注册时可能因时序等原因未完成菜单同步，此处统一兜底
+        try:
+            from core.services.system.menu_service import MenuService
+            count = await MenuService.sync_all_menus_from_applications(tenant_id)
+            if count > 0:
+                logger.info(f"组织 {tenant_id} 初始化完成，已同步 {count} 个应用菜单")
+        except Exception as e:
+            logger.warning(f"组织 {tenant_id} 菜单同步失败（不中断流程）: {e}")
 
