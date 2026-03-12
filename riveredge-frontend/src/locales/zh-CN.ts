@@ -6783,8 +6783,13 @@ export default {
   'app.kuaizhizao.purchase.statAnnualTotal': '年度采购总额',
   'app.kuaizhizao.purchase.statSupplierOnTime': '供应商准时率',
 
+  'app.kuaizhizao.workOrder.statCompletedToday': '今日完成',
+  'app.kuaizhizao.workOrder.statOperationCompleted': '工序完成',
   'app.kuaizhizao.workOrder.statQualifiedOutputToday': '当日合格产出',
+  'app.kuaizhizao.workOrder.statQualifiedRate': '合格率',
   'app.kuaizhizao.workOrder.statTotalWip': '在制品总数',
+  'app.kuaizhizao.workOrder.statOverdue': '逾期',
+  'app.kuaizhizao.workOrder.statDraft': '草稿',
   'app.kuaizhizao.workOrder.statFirstPassYield': '直通良率',
   'app.kuaizhizao.workOrder.statPlanAchievement': '计划达成率',
   'app.kuaizhizao.workOrder.statLeadTime': '制造提前期',

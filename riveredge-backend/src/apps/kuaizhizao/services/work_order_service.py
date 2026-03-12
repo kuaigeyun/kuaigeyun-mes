@@ -761,6 +761,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         workshop_id: Optional[int] = None,
         work_center_id: Optional[int] = None,
         assigned_worker_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        planned_start_from: Optional[str] = None,
+        planned_start_to: Optional[str] = None,
+        planned_end_from: Optional[str] = None,
+        planned_end_to: Optional[str] = None,
+        order_by: Optional[str] = None,
         include_operations: bool = False,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
@@ -777,10 +783,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             status: 工单状态
             workshop_id: 车间ID
             work_center_id: 工作中心ID
+            keyword: 关键词搜索（工单编码、名称、产品名称）
+            planned_start_from/to: 计划开始日期范围
+            planned_end_from/to: 计划结束日期范围
+            order_by: 排序，如 code、-created_at
 
         Returns:
             Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
         """
+        from tortoise.expressions import Q
+        from datetime import datetime
+
         query = WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True  # 只查询未删除的工单
@@ -813,12 +826,42 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 query = query.filter(id__in=wo_id_set)
             else:
                 query = query.filter(id__in=[])  # 无匹配
+        if keyword and str(keyword).strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(product_name__icontains=kw) | Q(product_code__icontains=kw)
+            )
+        if planned_start_from:
+            try:
+                dt = datetime.strptime(planned_start_from[:10], "%Y-%m-%d").date()
+                query = query.filter(planned_start_date__gte=dt)
+            except (ValueError, TypeError):
+                pass
+        if planned_start_to:
+            try:
+                dt = datetime.strptime(planned_start_to[:10], "%Y-%m-%d").date()
+                query = query.filter(planned_start_date__lte=dt)
+            except (ValueError, TypeError):
+                pass
+        if planned_end_from:
+            try:
+                dt = datetime.strptime(planned_end_from[:10], "%Y-%m-%d").date()
+                query = query.filter(planned_end_date__gte=dt)
+            except (ValueError, TypeError):
+                pass
+        if planned_end_to:
+            try:
+                dt = datetime.strptime(planned_end_to[:10], "%Y-%m-%d").date()
+                query = query.filter(planned_end_date__lte=dt)
+            except (ValueError, TypeError):
+                pass
 
         # 获取总数（用于分页）
         total = await query.count()
 
-        # 获取分页数据
-        work_orders = await query.offset(skip).limit(limit).order_by("-created_at").all()
+        # 排序
+        order_clause = order_by if order_by else "-created_at"
+        work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
         # 批量预取 created_by_name（消除 N+1）
         created_by_ids = [wo.created_by for wo in work_orders if wo.created_by and not wo.created_by_name]

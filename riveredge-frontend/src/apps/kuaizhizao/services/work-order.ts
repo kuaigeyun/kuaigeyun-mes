@@ -4,6 +4,12 @@
 
 import { apiRequest } from '../../../services/api';
 
+/** 趋势数据项（用于折线图） */
+export interface WorkOrderTrendItem {
+  date: string;
+  value: number;
+}
+
 /** 工单统计（用于指标卡片） */
 export interface WorkOrderStatistics {
   in_progress_count: number;
@@ -11,19 +17,38 @@ export interface WorkOrderStatistics {
   overdue_count: number;
   draft_count: number;
   completed_count: number;
-  // 新增指标
   qualified_output_today?: number;
+  /** 今日合格率（%） */
+  qualified_rate_today?: number;
+  /** 今日工序完成数量（报工记录数） */
+  operation_completed_today?: number;
   total_wip?: number;
   first_pass_yield?: number;
   plan_achievement_rate?: number;
   manufacturing_lead_time?: number;
-  // 趋势数据
+  trend_completed?: WorkOrderTrendItem[];
+  trend_output?: WorkOrderTrendItem[];
+  trend_yield?: WorkOrderTrendItem[];
+  trend_operation_count?: WorkOrderTrendItem[];
+  /** 近7天在制品数（当前值填充，用于折线图） */
+  trend_wip?: WorkOrderTrendItem[];
+  /** 昨日完成工单数（用于较昨日对比） */
+  yesterday_completed_count?: number;
+  /** 昨日工序完成数 */
+  yesterday_operation_count?: number;
+  /** 昨日合格产出 */
+  yesterday_qualified_output?: number;
+  /** 昨日合格率（%） */
+  yesterday_qualified_rate?: number;
+  /** 昨日在制品数 */
+  yesterday_wip?: number;
   trends?: {
     output?: number[];
+    completed?: number[];
     wip?: number[];
     yield?: number[];
+    operation_count?: number[];
   };
-  /** 良率同比（百分比） */
   yield_yoy?: number;
 }
 

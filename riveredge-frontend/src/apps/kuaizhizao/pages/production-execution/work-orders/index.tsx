@@ -96,6 +96,7 @@ import {
   type StatCard,
 } from '../../../../../components/layout-templates'
 import { SimpleSparkline } from '../../../../../components';
+import { Area } from '@ant-design/charts';
 import { QRCodeGenerator } from '../../../../../components/qrcode'
 import { qrcodeApi } from '../../../../../services/qrcode'
 import { workOrderApi, reworkOrderApi, outsourceOrderApi, getWorkOrderStatistics } from '../../../services/production'
@@ -1482,6 +1483,7 @@ const WorkOrdersPage: React.FC = () => {
       title: '优先级',
       dataIndex: 'priority',
       width: 100,
+      sorter: true,
       render: (_, record) => {
         const priorityMap: Record<string, { text: string; color: string }> = {
           low: { text: '低', color: 'default' },
@@ -2365,24 +2367,31 @@ const WorkOrdersPage: React.FC = () => {
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: '工单名称',
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: '产品',
       dataIndex: 'product_name',
       width: 150,
       ellipsis: true,
+      sorter: true,
+      hideInSearch: false,
     },
     {
       title: '数量',
       dataIndex: 'quantity',
       width: 100,
       align: 'right',
+      sorter: true,
     },
     {
       title: '生产模式',
@@ -2392,6 +2401,7 @@ const WorkOrdersPage: React.FC = () => {
         MTS: { text: '按库存生产', status: 'processing' },
         MTO: { text: '按订单生产', status: 'success' },
       },
+      hideInSearch: false,
     },
     {
       title: '销售订单',
@@ -2408,6 +2418,15 @@ const WorkOrdersPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       width: 120,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: {
+        draft: { text: '草稿' },
+        released: { text: '已下达' },
+        in_progress: { text: '执行中' },
+        completed: { text: '已完成' },
+        cancelled: { text: '已取消' },
+      },
       render: (_, record) => {
         const lifecycle = getWorkOrderLifecycle(record)
         const colorMap: Record<string, string> = {
@@ -2429,6 +2448,7 @@ const WorkOrdersPage: React.FC = () => {
       title: '优先级',
       dataIndex: 'priority',
       width: 100,
+      sorter: true,
       render: (_, record) => {
         const priorityMap: Record<string, { text: string; color: string }> = {
           low: { text: '低', color: 'default' },
@@ -2448,18 +2468,41 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
       width: 160,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: '计划开始',
+      dataIndex: 'planned_start_date',
+      valueType: 'dateRange',
+      width: 160,
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: { placeholder: ['开始日期', '结束日期'], style: { width: '100%' } },
     },
     {
       title: '计划结束时间',
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
       width: 160,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: '计划结束',
+      dataIndex: 'planned_end_date',
+      valueType: 'dateRange',
+      width: 160,
+      hideInTable: true,
+      hideInSearch: false,
+      fieldProps: { placeholder: ['开始日期', '结束日期'], style: { width: '100%' } },
     },
     {
       title: '创建时间',
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
+      sorter: true,
     },
     {
       title: '操作',
@@ -2521,76 +2564,127 @@ const WorkOrdersPage: React.FC = () => {
     },
   ]
 
+  /** 较昨日对比（参考登录日志） */
+  const renderDOD = (today?: number, yesterday?: number) => {
+    if (today === undefined || yesterday === undefined) return null;
+    const diff = today - yesterday;
+    const color = diff > 0 ? '#cf1322' : diff < 0 ? '#3f8600' : 'rgba(0, 0, 0, 0.45)';
+    const icon = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+    return (
+      <span style={{ marginLeft: 8, fontSize: 13, color }}>
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {icon} {Math.abs(diff)}
+      </span>
+    );
+  };
+
+  /** 折线图渲染（参考操作日志样式：Area 面积图 + 渐变填充） */
+  const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
+    if (!data || data.length === 0) return null;
+    return (
+      <Area
+        data={data}
+        xField="date"
+        yField="value"
+        padding={0}
+        axis={false}
+        colorField={() => color}
+        shapeField="smooth"
+        style={{
+          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+          fillOpacity: 0.2,
+          stroke: color,
+          lineWidth: 2,
+        }}
+        autoFit
+      />
+    );
+  };
+
   const statCards: StatCard[] = statistics
     ? [
         {
+          title: t('app.kuaizhizao.workOrder.statCompletedToday', '今日完成'),
+          value: statistics.completed_today_count ?? 0,
+          description:
+            statistics.completed_today_count !== undefined &&
+            statistics.yesterday_completed_count !== undefined ? (
+              <div>
+                今日: {statistics.completed_today_count}{' '}
+                {renderDOD(statistics.completed_today_count, statistics.yesterday_completed_count)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: token.colorPrimary },
+          backgroundChart: renderTrendChart(statistics.trend_completed ?? [], token.colorPrimary),
+          onClick:
+            (statistics.completed_today_count ?? 0) > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'completed' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statOperationCompleted', '工序完成'),
+          value: statistics.operation_completed_today ?? 0,
+          description:
+            statistics.operation_completed_today !== undefined &&
+            statistics.yesterday_operation_count !== undefined ? (
+              <div>
+                今日: {statistics.operation_completed_today}{' '}
+                {renderDOD(statistics.operation_completed_today, statistics.yesterday_operation_count)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#1890ff' },
+          backgroundChart: renderTrendChart(statistics.trend_operation_count ?? [], '#1890ff'),
+        },
+        {
           title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday'),
           value: statistics.qualified_output_today ?? 0,
-          valueStyle: { color: token.colorPrimary },
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.output || [45, 52, 48, 61, 55, 67, 60]} 
-              color={token.colorPrimary} 
-            />
-          ),
+          description:
+            statistics.qualified_output_today !== undefined &&
+            statistics.yesterday_qualified_output !== undefined ? (
+              <div>
+                今日: {statistics.qualified_output_today}{' '}
+                {renderDOD(statistics.qualified_output_today, statistics.yesterday_qualified_output)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#52c41a' },
+          backgroundChart: renderTrendChart(statistics.trend_output ?? [], '#52c41a'),
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statQualifiedRate', '合格率'),
+          value: statistics.qualified_rate_today ?? 0,
+          suffix: '%',
+          description:
+            statistics.qualified_rate_today !== undefined &&
+            statistics.yesterday_qualified_rate !== undefined ? (
+              <div>
+                今日: {statistics.qualified_rate_today}%{' '}
+                {renderDOD(statistics.qualified_rate_today, statistics.yesterday_qualified_rate)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#13c2c2' },
+          backgroundChart: renderTrendChart(statistics.trend_yield ?? [], '#13c2c2'),
         },
         {
           title: t('app.kuaizhizao.workOrder.statTotalWip'),
           value: statistics.total_wip ?? 0,
+          description:
+            statistics.total_wip !== undefined && statistics.yesterday_wip !== undefined ? (
+              <div>
+                今日: {statistics.total_wip}{' '}
+                {renderDOD(statistics.total_wip, statistics.yesterday_wip)}
+              </div>
+            ) : undefined,
           valueStyle: { color: '#2f54eb' },
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.wip || [120, 135, 128, 142, 138, 150, 145]} 
-              type="column"
-              color="#2f54eb" 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statFirstPassYield'),
-          value: statistics.first_pass_yield ?? 0,
-          suffix: '%',
-          valueStyle: { color: '#52c41a' },
-          description: (
-            <div style={{ color: ((statistics as any).yield_yoy ?? 1.2) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              较昨日 {((statistics as any).yield_yoy ?? 1.2) >= 0 ? '↑' : '↓'} {Math.abs((statistics as any).yield_yoy ?? 1.2)}%
-            </div>
-          ),
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.yield || [95, 96, 94, 97, 95, 98, 96]} 
-              color="#52c41a" 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statPlanAchievement'),
-          value: statistics.plan_achievement_rate ?? 0,
-          suffix: '%',
-          valueStyle: { color: '#1890ff' },
-          backgroundChart: (
-            <SimpleSparkline 
-              data={[85, 88, 92, 90, 95, 93, 94]} 
-              color="#1890ff" 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statLeadTime'),
-          value: statistics.manufacturing_lead_time ?? 0,
-          suffix: t('app.kuaizhizao.salesOrder.unitDays'),
-          valueStyle: { color: '#722ed1' },
-          description: (
-            <div style={{ color: token.colorTextSecondary }}>
-              {t('app.kuaizhizao.workOrder.benchmarkLeadTime', { value: '3.5' })}
-            </div>
-          ),
-          backgroundChart: (
-            <SimpleSparkline 
-              data={[4.2, 3.8, 3.5, 3.2, 4.0, 3.5, 3.1]} 
-              color="#722ed1" 
-            />
-          ),
+          backgroundChart: renderTrendChart(statistics.trend_wip ?? [], '#2f54eb'),
+          onClick:
+            (statistics.total_wip ?? 0) > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
         },
       ]
     : []
@@ -2605,13 +2699,39 @@ const WorkOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          request={async params => {
+          request={async (params: any, sort: any, _filter: any, searchFormValues: any) => {
             try {
-              const response = await workOrderApi.list({
+              const apiParams: any = {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                ...params,
-              })
+              }
+              // 搜索参数
+              if (searchFormValues?.code) apiParams.code = searchFormValues.code
+              if (searchFormValues?.name) apiParams.name = searchFormValues.name
+              if (searchFormValues?.product_name) apiParams.product_name = searchFormValues.product_name
+              if (searchFormValues?.production_mode) apiParams.production_mode = searchFormValues.production_mode
+              if (searchFormValues?.status) apiParams.status = searchFormValues.status
+              if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword
+              // 计划日期范围
+              if (searchFormValues?.planned_start_date && Array.isArray(searchFormValues.planned_start_date) && searchFormValues.planned_start_date.length === 2) {
+                const [start, end] = searchFormValues.planned_start_date
+                if (start) apiParams.planned_start_from = dayjs(start).format('YYYY-MM-DD')
+                if (end) apiParams.planned_start_to = dayjs(end).format('YYYY-MM-DD')
+              }
+              if (searchFormValues?.planned_end_date && Array.isArray(searchFormValues.planned_end_date) && searchFormValues.planned_end_date.length === 2) {
+                const [start, end] = searchFormValues.planned_end_date
+                if (start) apiParams.planned_end_from = dayjs(start).format('YYYY-MM-DD')
+                if (end) apiParams.planned_end_to = dayjs(end).format('YYYY-MM-DD')
+              }
+              // 排序
+              if (sort && Object.keys(sort).length > 0) {
+                const key = Object.keys(sort)[0]
+                const order = sort[key]
+                if (order) {
+                  apiParams.order_by = order === 'ascend' ? key : `-${key}`
+                }
+              }
+              const response = await workOrderApi.list(apiParams)
 
               // 后端返回的是数组或分页格式，需要统一处理
               if (Array.isArray(response)) {

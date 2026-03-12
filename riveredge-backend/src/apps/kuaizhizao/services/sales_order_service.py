@@ -400,10 +400,14 @@ class SalesOrderService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         customer_name: Optional[str] = None,
+        order_code: Optional[str] = None,
+        keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
     ) -> SalesOrderListResponse:
         """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）"""
+        from tortoise.expressions import Q
+
         query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
@@ -415,6 +419,13 @@ class SalesOrderService:
             query = query.filter(order_date__lte=end_date)
         if customer_name and str(customer_name).strip():
             query = query.filter(customer_name__icontains=customer_name.strip())
+        if order_code and str(order_code).strip():
+            query = query.filter(order_code__icontains=order_code.strip())
+        if keyword and str(keyword).strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(order_code__icontains=kw) | Q(customer_name__icontains=kw)
+            )
         total = await query.count()
         order_clause = order_by if order_by else "-created_at"
         orders = await query.offset(skip).limit(limit).order_by(order_clause)

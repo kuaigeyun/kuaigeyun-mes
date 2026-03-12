@@ -93,11 +93,17 @@ async def get_work_order_statistics(
     today_start = datetime.combine(today, datetime.min.time())
     today_end = datetime.combine(today, datetime.max.time())
 
+    sql_ok = False
+    in_progress_count = 0
+    completed_today_count = 0
+    overdue_count = 0
+    draft_count = 0
+    completed_count = 0
+
     try:
         from tortoise import Tortoise
         conn = Tortoise.get_connection("default")
         if hasattr(conn, "execute_query_dict"):
-            # 单次 SQL 聚合 5 个指标（PostgreSQL FILTER 语法）
             rows = await conn.execute_query_dict(
                 """
                 SELECT
@@ -113,38 +119,43 @@ async def get_work_order_statistics(
             )
             if rows and len(rows) > 0:
                 r = rows[0]
-                return {
-                    "in_progress_count": int(r.get("in_progress_count", 0) or 0),
-                    "completed_today_count": int(r.get("completed_today_count", 0) or 0),
-                    "overdue_count": int(r.get("overdue_count", 0) or 0),
-                    "draft_count": int(r.get("draft_count", 0) or 0),
-                    "completed_count": int(r.get("completed_count", 0) or 0),
-                }
+                in_progress_count = int(r.get("in_progress_count", 0) or 0)
+                completed_today_count = int(r.get("completed_today_count", 0) or 0)
+                overdue_count = int(r.get("overdue_count", 0) or 0)
+                draft_count = int(r.get("draft_count", 0) or 0)
+                completed_count = int(r.get("completed_count", 0) or 0)
+                sql_ok = True
     except Exception as e:
         logger.warning(f"work-order-statistics 聚合查询失败，回退到分次查询: {e}")
 
-    # 回退：聚合失败时使用原有分次 count
-    from apps.kuaizhizao.models.work_order import WorkOrder
-    base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    in_progress_count = await base.filter(status__in=["released", "in_progress"]).count()
-    completed_today_count = await base.filter(
-        status="completed",
-        actual_end_date__gte=today_start,
-        actual_end_date__lte=today_end,
-    ).count()
-    overdue_count = await base.filter(
-        status__in=["released", "in_progress"],
-        planned_end_date__lt=today_start,
-    ).count()
-    draft_count = await base.filter(status="draft").count()
-    completed_count = await base.filter(status="completed").count()
+    if not sql_ok:
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        in_progress_count = await base.filter(status__in=["released", "in_progress"]).count()
+        completed_today_count = await base.filter(
+            status="completed",
+            actual_end_date__gte=today_start,
+            actual_end_date__lte=today_end,
+        ).count()
+        overdue_count = await base.filter(
+            status__in=["released", "in_progress"],
+            planned_end_date__lt=today_start,
+        ).count()
+        draft_count = await base.filter(status="draft").count()
+        completed_count = await base.filter(status="completed").count()
 
     # 补充前端指标卡需要的字段（基于现有数据合理计算）
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+    rb = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     try:
-        from apps.kuaizhizao.models.reporting_record import ReportingRecord
-        rb = ReportingRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        today_vals = await rb.filter(report_date=today).values_list("qualified_quantity", flat=True)
-        qualified_output_today = int(sum(v or 0 for v in today_vals))
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
+        today_vals = await rb.filter(
+            reported_at__gte=today_start,
+            reported_at__lte=today_end,
+        ).values_list("qualified_quantity", flat=True)
+        qualified_output_today = int(sum(float(v or 0) for v in today_vals))
     except Exception:
         qualified_output_today = 0
 
@@ -157,6 +168,73 @@ async def get_work_order_statistics(
     plan_achievement_rate = round(completed_today_count / plan_denom * 100, 1)
     manufacturing_lead_time = 0  # 需复杂计算，暂返回 0
 
+    # 近7天趋势数据（真实数据，用于折线图指标卡）
+    from datetime import timedelta as td
+    trend_completed = []      # 每日完成工单数
+    trend_output = []        # 每日合格产出（报工汇总）
+    trend_yield = []          # 每日合格率（%）
+    trend_operation_count = []  # 每日工序完成数量（报工记录数）
+    for i in range(6, -1, -1):
+        d = today - td(days=i)
+        date_str = d.strftime("%Y-%m-%d")
+        day_start = datetime.combine(d, datetime.min.time())
+        day_end = datetime.combine(d, datetime.max.time())
+        # 当日完成的工单数
+        try:
+            wo_base = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="completed")
+            cnt = await wo_base.filter(
+                actual_end_date__gte=day_start,
+                actual_end_date__lte=day_end,
+            ).count()
+        except Exception:
+            cnt = 0
+        trend_completed.append({"date": date_str, "value": cnt})
+        # 当日合格产出、不合格产出、工序完成数、合格率
+        try:
+            day_records = await rb.filter(
+                reported_at__gte=day_start,
+                reported_at__lte=day_end,
+            ).values_list("qualified_quantity", "unqualified_quantity")
+            out_sum = 0
+            unq_sum = 0
+            for q, u in day_records:
+                out_sum += float(q or 0)
+                unq_sum += float(u or 0)
+            op_count = len(day_records)  # 工序完成数量 = 报工记录数
+            total_qty = out_sum + unq_sum
+            yield_pct = round(out_sum / total_qty * 100, 1) if total_qty > 0 else 0
+        except Exception:
+            out_sum = 0
+            op_count = 0
+            yield_pct = 0
+        trend_output.append({"date": date_str, "value": int(out_sum)})
+        trend_operation_count.append({"date": date_str, "value": op_count})
+        trend_yield.append({"date": date_str, "value": yield_pct})
+
+    # 今日合格率（合格数量 / 总报工数量）
+    try:
+        today_records = await rb.filter(
+            reported_at__gte=today_start,
+            reported_at__lte=today_end,
+        ).values_list("qualified_quantity", "unqualified_quantity")
+        today_qualified = sum(float(q or 0) for q, _ in today_records)
+        today_unqualified = sum(float(u or 0) for _, u in today_records)
+        today_total = today_qualified + today_unqualified
+        qualified_rate_today = round(today_qualified / today_total * 100, 1) if today_total > 0 else 0
+        operation_completed_today = len(today_records)
+    except Exception:
+        qualified_rate_today = 0
+        operation_completed_today = 0
+
+    trend_wip = [{"date": x["date"], "value": total_wip} for x in trend_completed]
+
+    # 昨日对比值（从趋势数据倒数第二天获取，用于「较昨日」展示）
+    yesterday_completed_count = trend_completed[-2]["value"] if len(trend_completed) > 1 else 0
+    yesterday_operation_count = trend_operation_count[-2]["value"] if len(trend_operation_count) > 1 else 0
+    yesterday_qualified_output = trend_output[-2]["value"] if len(trend_output) > 1 else 0
+    yesterday_qualified_rate = trend_yield[-2]["value"] if len(trend_yield) > 1 else 0
+    yesterday_wip = trend_wip[-2]["value"] if len(trend_wip) > 1 else 0
+
     return {
         "in_progress_count": in_progress_count,
         "completed_today_count": completed_today_count,
@@ -164,16 +242,39 @@ async def get_work_order_statistics(
         "draft_count": draft_count,
         "completed_count": completed_count,
         "qualified_output_today": qualified_output_today,
+        "qualified_rate_today": qualified_rate_today,
+        "operation_completed_today": operation_completed_today,
         "total_wip": total_wip,
+        "yesterday_completed_count": yesterday_completed_count,
+        "yesterday_operation_count": yesterday_operation_count,
+        "yesterday_qualified_output": yesterday_qualified_output,
+        "yesterday_qualified_rate": yesterday_qualified_rate,
+        "yesterday_wip": yesterday_wip,
         "first_pass_yield": first_pass_yield,
         "plan_achievement_rate": plan_achievement_rate,
         "manufacturing_lead_time": manufacturing_lead_time,
+        "trend_completed": trend_completed,
+        "trend_output": trend_output,
+        "trend_yield": trend_yield,
+        "trend_operation_count": trend_operation_count,
+        "trend_wip": trend_wip,
         "trends": {
-            "output": [0] * 6 + [qualified_output_today],
-            "wip": [0] * 6 + [total_wip],
-            "yield": [0] * 6 + [first_pass_yield],
+            "output": [x["value"] for x in trend_output],
+            "completed": [x["value"] for x in trend_completed],
+            "yield": [x["value"] for x in trend_yield],
+            "operation_count": [x["value"] for x in trend_operation_count],
+            "wip": [total_wip] * 7,
         },
     }
+
+
+# 工单可排序字段白名单（防止注入）
+WORK_ORDER_SORTABLE_FIELDS = frozenset({
+    "code", "name", "product_code", "product_name", "quantity",
+    "status", "priority", "production_mode", "sales_order_code",
+    "planned_start_date", "planned_end_date", "actual_start_date", "actual_end_date",
+    "completed_quantity", "qualified_quantity", "created_at", "updated_at",
+})
 
 
 @router.get("/work-orders", summary="获取工单列表")
@@ -188,6 +289,12 @@ async def list_work_orders(
     workshop_id: Optional[int] = Query(None, description="车间ID"),
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
     assigned_worker_id: Optional[int] = Query(None, description="分配员工ID（只看当前用户时传入）"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（工单编码、名称、产品名称）"),
+    planned_start_from: Optional[str] = Query(None, description="计划开始日期起（YYYY-MM-DD）"),
+    planned_start_to: Optional[str] = Query(None, description="计划开始日期止（YYYY-MM-DD）"),
+    planned_end_from: Optional[str] = Query(None, description="计划结束日期起（YYYY-MM-DD）"),
+    planned_end_to: Optional[str] = Query(None, description="计划结束日期止（YYYY-MM-DD）"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 code、-created_at（前缀-表示降序）"),
     include_operations: bool = Query(False, description="是否包含工序（用于甘特图展示设备/模具/工装）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -198,6 +305,13 @@ async def list_work_orders(
     支持多种筛选条件的高级搜索。
     返回格式：{ "data": [], "total": 0, "success": true }
     """
+    # 校验 order_by 防止注入
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in WORK_ORDER_SORTABLE_FIELDS:
+            safe_order_by = order_by
+
     try:
         service = WorkOrderService()
         result, total = await service.list_work_orders(
@@ -212,6 +326,12 @@ async def list_work_orders(
             workshop_id=workshop_id,
             work_center_id=work_center_id,
             assigned_worker_id=assigned_worker_id,
+            keyword=keyword,
+            planned_start_from=planned_start_from,
+            planned_start_to=planned_start_to,
+            planned_end_from=planned_end_from,
+            planned_end_to=planned_end_to,
+            order_by=safe_order_by,
             include_operations=include_operations,
         )
         return {

@@ -265,6 +265,8 @@ async def list_sales_orders(
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
     customer_name: Optional[str] = Query(None, description="客户名称（模糊匹配）"),
+    order_code: Optional[str] = Query(None, description="订单编码（模糊匹配）"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（订单编码、客户名称）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 order_code、-created_at（前缀-表示降序）"),
     include_items: bool = Query(False, description="是否包含订单明细"),
     current_user: User = Depends(get_current_user),
@@ -292,6 +294,8 @@ async def list_sales_orders(
             start_date=start_date,
             end_date=end_date,
             customer_name=customer_name,
+            order_code=order_code,
+            keyword=keyword,
             order_by=safe_order_by,
             include_items=include_items,
         )

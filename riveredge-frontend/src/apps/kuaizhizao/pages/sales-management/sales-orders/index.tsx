@@ -1080,9 +1080,11 @@ const SalesOrdersPage: React.FC = () => {
 
   // 订单视图列（一行一单，可展开明细）
   const orderColumns: ProColumns<SalesOrder>[] = [
-    { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 150, fixed: 'left' as const, ellipsis: true, sorter: true },
-    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true },
-    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true },
+    { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 150, fixed: 'left' as const, ellipsis: true, sorter: true, hideInSearch: false },
+    { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name', width: 150, ellipsis: true, sorter: true, hideInSearch: false },
+    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
+    // 订单日期范围（仅搜索）
+    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('common.startDate') ?? '开始日期', t('common.endDate') ?? '结束日期'] } },
     { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date', width: 120, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource="sales_order" value={r.total_amount} /> },
@@ -1482,16 +1484,35 @@ const SalesOrdersPage: React.FC = () => {
               apiParams.status = lifecycleToStatus[searchFormValues.lifecycle] ?? searchFormValues.lifecycle;
             }
             if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
-            if (sort) {
-              const sortKeys = Object.keys(sort);
-              if (sortKeys.length > 0) {
-                const key = sortKeys[0];
-                apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
+            if (searchFormValues?.order_code) apiParams.order_code = searchFormValues.order_code;
+            if (searchFormValues?.keyword) apiParams.keyword = searchFormValues.keyword;
+            // 订单日期范围
+            if (searchFormValues?.order_date && Array.isArray(searchFormValues.order_date) && searchFormValues.order_date.length === 2) {
+              const [start, end] = searchFormValues.order_date;
+              if (start) apiParams.start_date = dayjs(start).format('YYYY-MM-DD');
+              if (end) apiParams.end_date = dayjs(end).format('YYYY-MM-DD');
+            }
+            // 排序
+            if (sort && Object.keys(sort).length > 0) {
+              const key = Object.keys(sort)[0];
+              const order = sort[key];
+              if (order) {
+                apiParams.order_by = order === 'ascend' ? key : `-${key}`;
               }
             }
             // 始终请求 include_items=true，切换视图时从缓存转换，避免重复请求
             apiParams.include_items = true;
-            const paramsKey = JSON.stringify({ skip: apiParams.skip, limit: apiParams.limit, status: apiParams.status, customer_name: apiParams.customer_name, order_by: apiParams.order_by });
+            const paramsKey = JSON.stringify({
+              skip: apiParams.skip,
+              limit: apiParams.limit,
+              status: apiParams.status,
+              customer_name: apiParams.customer_name,
+              order_code: apiParams.order_code,
+              keyword: apiParams.keyword,
+              start_date: apiParams.start_date,
+              end_date: apiParams.end_date,
+              order_by: apiParams.order_by,
+            });
 
             const toFlatRows = (orders: SalesOrder[]) => {
               const map = new Map<string, number>();
