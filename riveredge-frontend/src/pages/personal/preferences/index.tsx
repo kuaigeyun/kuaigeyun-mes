@@ -370,6 +370,11 @@ const UserPreferencesPage: React.FC = () => {
                       placeholder={t('pages.personal.preferences.pleaseSelect')}
                     />
                   </Col>
+                  <Col xs={24}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('pages.personal.preferences.tableColumnsHint')}
+                    </Typography.Text>
+                  </Col>
                 </Row>
               </div>
               </Card>

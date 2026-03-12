@@ -46,6 +46,22 @@ const preferenceStorage: any = { // 使用 any 暂时规避类型检查，或者
   },
 };
 
+/** 将偏好中的表格列设置同步到 localStorage，供 ProTable 读取（跨设备/换机后恢复列展示） */
+function syncTableColumnsToLocalStorage(preferences: Record<string, any>): void {
+  if (typeof window === 'undefined') return;
+  const tables = preferences?.ui?.tables;
+  if (!tables || typeof tables !== 'object') return;
+  Object.keys(tables).forEach((tableId) => {
+    const tablePref = tables[tableId];
+    const columns = tablePref?.columns ?? tablePref;
+    if (columns && typeof columns === 'object') {
+      try {
+        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(columns));
+      } catch (_) {}
+    }
+  });
+}
+
 /** 从 localStorage 当前用户 key 同步恢复偏好，供登录后立即展示缓存、再后台拉取最新（供偏好设置页首帧填表） */
 export function readCachedPreferencesForCurrentUser(): Record<string, any> {
   const key = getPreferenceStorageKey();
@@ -110,8 +126,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
             loading: false,
             initialized: true,
           });
-          
-          // 触发全局事件通知其他组件（如 App.tsx 的主题加载逻辑）
+          syncTableColumnsToLocalStorage(finalPrefs);
         } catch (error) {
           console.warn('Failed to fetch user preferences:', error);
           set({ loading: false, initialized: true });
@@ -133,7 +148,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         const cached = readCachedPreferencesForCurrentUser();
         if (Object.keys(cached).length === 0) return;
         set((s) => ({ ...s, preferences: cached, initialized: true }));
-        // 注意：不在此处 dispatch 事件，app.tsx 的初始化逻辑会直接读取 store 状态
+        syncTableColumnsToLocalStorage(cached);
       },
 
       updatePreferences: async (newPrefs) => {
@@ -179,6 +194,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
             preferences: currentPrefs, 
             loading: false 
           });
+          syncTableColumnsToLocalStorage(currentPrefs);
           
         } catch (error) {
           console.error('Failed to update user preferences:', error);

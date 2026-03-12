@@ -126,14 +126,13 @@ class StateTransitionService:
         Returns:
             bool: 是否可以流转
         """
-        # 检查是否有明确的流转规则
+        # 检查是否有明确的流转规则（StateTransitionRule 无 deleted_at 软删除字段）
         rule = await StateTransitionRule.filter(
             tenant_id=tenant_id,
             entity_type=entity_type,
             from_state=from_state,
             to_state=to_state,
             is_active=True,
-            deleted_at__isnull=True
         ).first()
         
         if rule:
@@ -269,13 +268,12 @@ class StateTransitionService:
         Returns:
             List[Dict]: 可用的状态流转列表
         """
-        # 查询所有从当前状态出发的规则
+        # 查询所有从当前状态出发的规则（StateTransitionRule 无 deleted_at 软删除字段）
         rules = await StateTransitionRule.filter(
             tenant_id=tenant_id,
             entity_type=entity_type,
             from_state=current_state,
             is_active=True,
-            deleted_at__isnull=True
         ).all()
         
         result = []

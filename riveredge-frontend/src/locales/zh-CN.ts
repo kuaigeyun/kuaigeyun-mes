@@ -331,6 +331,7 @@ export default {
   'pages.personal.preferences.densityMiddle': '中等',
   'pages.personal.preferences.densitySmall': '紧凑',
   'pages.personal.preferences.maxTabs': '最大标签页数',
+  'pages.personal.preferences.tableColumnsHint': '表格列展示：在各表格的列设置中自定义显示列、顺序和固定列，将自动同步到偏好设置（跨设备生效）',
 
   'pages.personal.messages.loadStatsFailed': '加载消息统计失败',
   'pages.personal.messages.selectToMark': '请选择要标记的消息',

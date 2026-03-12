@@ -331,6 +331,7 @@ export default {
   'pages.personal.preferences.densityMiddle': 'Middle',
   'pages.personal.preferences.densitySmall': 'Compact',
   'pages.personal.preferences.maxTabs': 'Max tabs',
+  'pages.personal.preferences.tableColumnsHint': 'Table columns: Customize visible columns, order, and pinned columns in each table\'s column settings. Changes sync to preferences (cross-device).',
 
   'pages.personal.messages.loadStatsFailed': 'Failed to load message stats',
   'pages.personal.messages.selectToMark': 'Please select messages to mark',

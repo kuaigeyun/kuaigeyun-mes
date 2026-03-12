@@ -595,6 +595,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const getConfig = useConfigStore((s) => s.getConfig);
   const getPreference = useUserPreferenceStore((s) => s.getPreference);
   const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+  const syncTablePreference = useUserPreferenceStore((s) => s.syncTablePreference);
 
   // 全局 Alt+N：当前页有新建按钮时，按 Alt+N 触发新建（与点击新建按钮一致）
   useNewShortcut(showCreateButton && onCreate ? onCreate : undefined);
@@ -643,6 +644,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [showDelayedLoading, setShowDelayedLoading] = useState(false)
   const loadingDelayTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isLoadingRef = useRef(false)
+  const columnsSyncDebounceRef = useRef<NodeJS.Timeout | null>(null)
 
   // 预加载拼音库（组件挂载时）
   useEffect(() => {
@@ -812,6 +814,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (loadingDelayTimerRef.current) {
         clearTimeout(loadingDelayTimerRef.current)
+      }
+      if (columnsSyncDebounceRef.current) {
+        clearTimeout(columnsSyncDebounceRef.current)
       }
     }
   }, [])
@@ -1419,17 +1424,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 // 更新用户偏好中的默认表格密度
                 updatePreferences({ 'ui.default_table_density': size })
               }}
-              // 支持列设置持久化
+              // 支持列设置持久化：本地 localStorage + 同步到用户偏好（跨设备生效）
               columnsState={{
                 persistenceKey: (restProps as any).headerTitle ? `ui.tables.${(restProps as any).headerTitle}.columns` : undefined,
                 persistenceType: 'localStorage',
-                onChange: (_map) => {
-                   // 这里的 map 是 Record<string, ColumnsState>
-                   // ProTable 内部会自动处理 localStorage 持久化
-                   // 如果我们需要同步到后端，可以在这里调用 API
-                   // 目前仅通过 persistenceKey 实现本地持久化
-                   // TODO: 考虑通过 syncTablePreference 同步到后端
-                }
+                onChange: (map) => {
+                  const tableId = (restProps as any).headerTitle
+                  if (!tableId || !map) return
+                  // 防抖同步到后端偏好设置，避免频繁请求
+                  if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
+                  columnsSyncDebounceRef.current = setTimeout(() => {
+                    columnsSyncDebounceRef.current = null
+                    syncTablePreference(tableId, { columns: map }).catch(() => {})
+                  }, 800)
+                },
               }}
               options={{
                 density: true,
