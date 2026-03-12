@@ -73,6 +73,14 @@ class InitWizardService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="组织不存在"
             )
+
+        # 首次进入初始化向导时，同步已安装应用的菜单到数据库
+        # 用于解决注册后菜单未自动同步的问题（注册时可能因时序等原因未完成）
+        try:
+            from core.services.system.menu_service import MenuService
+            await MenuService.sync_all_menus_from_applications(tenant_id)
+        except Exception as e:
+            logger.warning(f"初始化向导加载时菜单同步失败（不中断流程）: {e}")
         
         # 构建步骤响应列表，根据 tenant.settings 细粒度判断各步骤完成状态
         settings = tenant.settings or {}
@@ -301,6 +309,14 @@ class InitWizardService:
                     logger.warning(f"应用行业模板失败（不中断流程）: {e}")
                     # 如果应用失败，不中断流程，只记录警告
         
+        # 完成向导前，同步已安装应用的菜单到数据库
+        try:
+            from core.services.system.menu_service import MenuService
+            await MenuService.sync_all_menus_from_applications(tenant_id)
+            logger.info(f"组织 {tenant_id} 完成向导时菜单同步完成")
+        except Exception as e:
+            logger.warning(f"完成向导时菜单同步失败（不中断流程）: {e}")
+
         # 如果还没有创建默认配置，则创建默认编码规则和系统参数
         if not settings.get("defaults_initialized"):
             from core.services.default.default_values_service import DefaultValuesService

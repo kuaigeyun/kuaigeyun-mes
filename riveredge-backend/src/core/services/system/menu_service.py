@@ -806,3 +806,45 @@ class MenuService:
             logger.warning(f"菜单同步后权限同步失败: {e}")
 
         return created_count
+
+    @staticmethod
+    async def sync_all_menus_from_applications(tenant_id: int) -> int:
+        """
+        根据已安装应用的菜单配置，同步所有菜单到数据库。
+        用于初始化向导或组织首次进入时，确保菜单已写入数据库。
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            int: 同步的菜单总数
+        """
+        from loguru import logger
+
+        apps = await ApplicationService.list_applications(
+            tenant_id=tenant_id,
+            skip=0,
+            limit=500,
+            is_installed=True,
+            is_active=True,
+        )
+        total = 0
+        for app in apps:
+            menu_config = app.get("menu_config")
+            app_uuid = app.get("uuid")
+            if app_uuid and not isinstance(app_uuid, str):
+                app_uuid = str(app_uuid)
+            if menu_config and app_uuid:
+                try:
+                    count = await MenuService.sync_menus_from_application_config(
+                        tenant_id=tenant_id,
+                        application_uuid=str(app_uuid),
+                        menu_config=menu_config,
+                        is_active=app.get("is_active", True),
+                    )
+                    total += count
+                except Exception as e:
+                    logger.warning(f"同步应用 {app.get('code')} 菜单失败: {e}")
+        if total > 0:
+            logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")
+        return total
