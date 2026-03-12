@@ -1,12 +1,17 @@
-# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" width="40" height="40" style="vertical-align: middle" /> 快格轻制造
+# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="40" style="vertical-align: middle" /> 快格轻制造
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
-![Ant Design](https://img.shields.io/badge/Ant%20Design-5-0170FE?style=flat-square&logo=antdesign)
+![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+![Redis](https://img.shields.io/badge/Redis-6+-DC382D?style=flat-square&logo=redis)
+![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
+![UV](https://img.shields.io/badge/UV-1.x-FFD43B?style=flat-square)
+![Tortoise ORM](https://img.shields.io/badge/Tortoise%20ORM-0.21-2E7D32?style=flat-square)
+![Inngest](https://img.shields.io/badge/Inngest-0.3-6366F1?style=flat-square)
 
 面向中小制造企业的轻量级 MES，基于 RiverEdge SaaS 多租户平台。统一业务流程主线，支持 MTS/MTO，按需选择即可运转。
 
