@@ -192,19 +192,32 @@ async def get_sales_order_statistics(
         annual_total_yoy = round(((annual_total_amount - last_annual_total) / last_annual_total * 100), 1) if last_annual_total > 0 else 0
         avg_delivery_cycle = 5.2
 
-        # 8. 近7天趋势数据
+        # 8. 近7天趋势数据（{ date, value }[] 格式，用于折线图指标卡）
         trend_today_new = []
         trend_today_amount = []
+        trend_overdue = []
         for i in range(6, -1, -1):
             day = today - timedelta(days=i)
+            date_str = day.strftime("%Y-%m-%d")
             cnt = await base.filter(order_date=day).count()
-            trend_today_new.append(cnt)
+            trend_today_new.append({"date": date_str, "value": cnt})
             day_amounts = await base.filter(
                 order_date=day
             ).exclude(status__in=["CANCELLED", "已取消"]).values_list("total_amount", flat=True)
-            trend_today_amount.append(_sum(day_amounts))
+            trend_today_amount.append({"date": date_str, "value": round(_sum(day_amounts), 2)})
+            # 当日逾期数：交货日<当日 且 当日未完成
+            try:
+                od_cnt = await base.filter(
+                    delivery_date__lt=day,
+                    status__in=list(audited),
+                ).exclude(
+                    review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
+                ).exclude(status__in=["COMPLETED", "已完成", "FINISHED"]).count()
+            except Exception:
+                od_cnt = overdue_count if day == today else 0
+            trend_overdue.append({"date": date_str, "value": od_cnt})
 
-        # 年度总额趋势：近7个月每月签约额
+        # 年度总额趋势：近7个月每月签约额（{ date, value } 格式）
         trend_annual = []
         for i in range(6, -1, -1):
             target_month = today.month - i
@@ -223,7 +236,7 @@ async def get_sales_order_statistics(
             ).exclude(status__in=["CANCELLED", "已取消"]).exclude(
                 review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
             ).values_list("total_amount", flat=True)
-            trend_annual.append(_sum(month_amounts))
+            trend_annual.append({"date": f"{target_year}-{target_month:02d}", "value": round(_sum(month_amounts), 2)})
 
     except Exception as e:
         logger.warning(f"sales-order-statistics amount/trends error: {e}")
@@ -231,9 +244,28 @@ async def get_sales_order_statistics(
         annual_total_amount = 0
         annual_total_yoy = 0
         avg_delivery_cycle = 0
-        trend_today_new = [0] * 7
-        trend_today_amount = [0] * 7
-        trend_annual = [0] * 7
+        _fallback_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+        trend_today_new = [{"date": d, "value": 0} for d in _fallback_dates]
+        trend_today_amount = [{"date": d, "value": 0} for d in _fallback_dates]
+        trend_overdue = [{"date": d, "value": 0} for d in _fallback_dates]
+        trend_annual = []
+        for i in range(6, -1, -1):
+            tm = today.month - i
+            ty = today.year
+            while tm <= 0:
+                tm += 12
+                ty -= 1
+            trend_annual.append({"date": f"{ty}-{tm:02d}", "value": 0})
+
+    trend_unfulfilled = [{"date": x["date"], "value": unfulfilled_count} for x in trend_today_new]
+    trend_pending_review = [{"date": x["date"], "value": pending_review_count} for x in trend_today_new]
+
+    # 昨日对比值（用于「较昨日」展示）
+    yesterday_today_new = trend_today_new[-2]["value"] if len(trend_today_new) > 1 else 0
+    yesterday_today_amount = trend_today_amount[-2]["value"] if len(trend_today_amount) > 1 else 0
+    yesterday_overdue = trend_overdue[-2]["value"] if len(trend_overdue) > 1 else 0
+    yesterday_unfulfilled = trend_unfulfilled[-2]["value"] if len(trend_unfulfilled) > 1 else 0
+    yesterday_pending_review = trend_pending_review[-2]["value"] if len(trend_pending_review) > 1 else 0
 
     return {
         "active_count": active_count,
@@ -246,11 +278,22 @@ async def get_sales_order_statistics(
         "annual_total_amount": round(annual_total_amount, 2),
         "annual_total_yoy": annual_total_yoy,
         "avg_delivery_cycle": avg_delivery_cycle,
+        "yesterday_today_new": yesterday_today_new,
+        "yesterday_today_amount": yesterday_today_amount,
+        "yesterday_overdue": yesterday_overdue,
+        "yesterday_unfulfilled": yesterday_unfulfilled,
+        "yesterday_pending_review": yesterday_pending_review,
+        "trend_today_new": trend_today_new,
+        "trend_today_amount": trend_today_amount,
+        "trend_overdue": trend_overdue,
+        "trend_unfulfilled": trend_unfulfilled,
+        "trend_pending_review": trend_pending_review,
+        "trend_annual": trend_annual,
         "trends": {
-            "today_new": trend_today_new,           # 近7天每天新签单数
-            "today_new_amount": trend_today_amount, # 近7天每天新签金额
-            "unfulfilled": [unfulfilled_count] * 7, # 状态类，暂用当前值填充
-            "annual_total": trend_annual,           # 近7个月每月签约额
+            "today_new": [x["value"] for x in trend_today_new],
+            "today_new_amount": [x["value"] for x in trend_today_amount],
+            "unfulfilled": [x["value"] for x in trend_unfulfilled],
+            "annual_total": [x["value"] for x in trend_annual],
         }
     }
 

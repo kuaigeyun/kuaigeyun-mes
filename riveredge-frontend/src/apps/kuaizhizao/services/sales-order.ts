@@ -141,11 +141,29 @@ export interface SalesOrderStatistics {
   // 趋势数据（mock使用或由后端支持）
   trends?: {
     today_new?: number[];
+    today_new_amount?: number[];
     unfulfilled?: number[];
     annual_total?: number[];
   };
   /** 年度总额同比（百分比，如 12.5 表示 12.5%） */
   annual_total_yoy?: number;
+  /** 昨日今日新签单数 */
+  yesterday_today_new?: number;
+  /** 昨日今日新签金额 */
+  yesterday_today_amount?: number;
+  /** 昨日逾期数 */
+  yesterday_overdue?: number;
+  /** 昨日未履约数 */
+  yesterday_unfulfilled?: number;
+  /** 昨日待审核数 */
+  yesterday_pending_review?: number;
+  /** 近7天趋势（{ date, value }[] 格式，用于 Area 折线图） */
+  trend_today_new?: { date: string; value: number }[];
+  trend_today_amount?: { date: string; value: number }[];
+  trend_overdue?: { date: string; value: number }[];
+  trend_unfulfilled?: { date: string; value: number }[];
+  trend_pending_review?: { date: string; value: number }[];
+  trend_annual?: { date: string; value: number }[];
 }
 
 /** 获取销售订单统计 */

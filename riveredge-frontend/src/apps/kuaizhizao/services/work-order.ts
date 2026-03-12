@@ -32,6 +32,10 @@ export interface WorkOrderStatistics {
   trend_operation_count?: WorkOrderTrendItem[];
   /** 近7天在制品数（当前值填充，用于折线图） */
   trend_wip?: WorkOrderTrendItem[];
+  /** 近7天逾期工单数 */
+  trend_overdue?: WorkOrderTrendItem[];
+  /** 近7天待下达工单数 */
+  trend_draft?: WorkOrderTrendItem[];
   /** 昨日完成工单数（用于较昨日对比） */
   yesterday_completed_count?: number;
   /** 昨日工序完成数 */
@@ -42,6 +46,10 @@ export interface WorkOrderStatistics {
   yesterday_qualified_rate?: number;
   /** 昨日在制品数 */
   yesterday_wip?: number;
+  /** 昨日逾期数 */
+  yesterday_overdue_count?: number;
+  /** 昨日待下达数 */
+  yesterday_draft_count?: number;
   trends?: {
     output?: number[];
     completed?: number[];

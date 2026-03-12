@@ -28,7 +28,7 @@ import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, FormModalTemplate, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { AmountDisplay } from '../../../../../components/permission';
-import { SimpleSparkline } from '../../../../../components';
+import { Area } from '@ant-design/charts';
 import {
   listSalesOrders,
   getSalesOrder,
@@ -1332,26 +1332,93 @@ const SalesOrdersPage: React.FC = () => {
       }
     : handleDelete;
 
+  /** 较昨日对比：显示 +x / -x 格式 */
+  const renderDOD = (today?: number, yesterday?: number) => {
+    if (today === undefined || yesterday === undefined) return null;
+    const diff = today - yesterday;
+    const color = diff > 0 ? '#cf1322' : diff < 0 ? '#3f8600' : 'rgba(0, 0, 0, 0.45)';
+    const text = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '0';
+    return (
+      <span style={{ marginLeft: 8, fontSize: 13, color }}>
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {text}
+      </span>
+    );
+  };
+
+  /** 折线图渲染（Area 面积图 + 渐变填充） */
+  const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
+    if (!data || data.length === 0) return null;
+    return (
+      <Area
+        data={data}
+        xField="date"
+        yField="value"
+        padding={0}
+        axis={false}
+        colorField={() => color}
+        shapeField="smooth"
+        style={{
+          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+          fillOpacity: 0.2,
+          stroke: color,
+          lineWidth: 2,
+        }}
+        autoFit
+      />
+    );
+  };
+
   const statCards: StatCard[] = statistics
     ? [
         {
-          title: t('app.kuaizhizao.salesOrder.statTodayNew'),
-          value: statistics.today_new_count ?? 0,
-          suffix: t('app.kuaizhizao.salesOrder.unitOrders', { defaultValue: '单' }),
-          valueStyle: { color: token.colorPrimary },
-          description: `今日金额 ¥${(statistics.today_new_amount ?? 0).toFixed(2)}`,
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.today_new || [0, 0, 0, 0, 0, 0, 0]} 
-              color={token.colorPrimary} 
-            />
-          ),
+          title: t('app.kuaizhizao.salesOrder.statOverdue', '逾期未交'),
+          value: statistics.overdue_count ?? 0,
+          description:
+            statistics.overdue_count !== undefined && statistics.yesterday_overdue !== undefined ? (
+              <div>
+                今日: {statistics.overdue_count}{' '}
+                {renderDOD(statistics.overdue_count, statistics.yesterday_overdue)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#ff4d4f' },
+          backgroundChart: renderTrendChart(statistics.trend_overdue ?? [], '#ff4d4f'),
+          onClick:
+            (statistics.overdue_count ?? 0) > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
         },
         {
-          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
+          title: t('app.kuaizhizao.salesOrder.statTodayNew', '今日新签'),
+          value: statistics.today_new_count ?? 0,
+          suffix: t('app.kuaizhizao.salesOrder.unitOrders', { defaultValue: '单' }),
+          description:
+            statistics.today_new_count !== undefined && statistics.yesterday_today_new !== undefined ? (
+              <div>
+                今日: {statistics.today_new_count}{' '}
+                {renderDOD(statistics.today_new_count, statistics.yesterday_today_new)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: token.colorPrimary },
+          backgroundChart: renderTrendChart(statistics.trend_today_new ?? [], token.colorPrimary),
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview', '待审核'),
           value: statistics.pending_review_count ?? 0,
+          description:
+            statistics.pending_review_count !== undefined &&
+            statistics.yesterday_pending_review !== undefined ? (
+              <div>
+                今日: {statistics.pending_review_count}{' '}
+                {renderDOD(statistics.pending_review_count, statistics.yesterday_pending_review)}
+              </div>
+            ) : (statistics.pending_review_count ?? 0) > 0 ? (
+              <div style={{ color: '#faad14' }}>需即时处理</div>
+            ) : undefined,
           valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
-          description: (statistics.pending_review_count ?? 0) > 0 ? '需即时处理' : '无待办',
+          backgroundChart: renderTrendChart(statistics.trend_pending_review ?? [], '#faad14'),
           onClick:
             (statistics.pending_review_count ?? 0) > 0
               ? () => {
@@ -1361,45 +1428,32 @@ const SalesOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.salesOrder.statUnfulfilled'),
+          title: t('app.kuaizhizao.salesOrder.statUnfulfilled', '未履约'),
           value: statistics.unfulfilled_count ?? 0,
-          valueStyle: { color: '#2f54eb' }, // Geek Blue
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.unfulfilled || [0, 0, 0, 0, 0, 0, 0]} 
-              color="#2f54eb" 
-            />
-          ),
+          description:
+            statistics.unfulfilled_count !== undefined &&
+            statistics.yesterday_unfulfilled !== undefined ? (
+              <div>
+                今日: {statistics.unfulfilled_count}{' '}
+                {renderDOD(statistics.unfulfilled_count, statistics.yesterday_unfulfilled)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#2f54eb' },
+          backgroundChart: renderTrendChart(statistics.trend_unfulfilled ?? [], '#2f54eb'),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.statAnnualTotal'),
+          title: t('app.kuaizhizao.salesOrder.statAnnualTotal', '本年累计'),
           value: statistics.annual_total_amount ?? 0,
           prefix: '¥',
           precision: 2,
           valueStyle: { color: token.colorPrimary },
           description: (
-            <div style={{ color: (statistics as any).annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              较去年同期 {(statistics as any).annual_total_yoy ? `${(statistics as any).annual_total_yoy > 0 ? '+' : ''}${(statistics as any).annual_total_yoy}%` : '+0%'}
+            <div style={{ color: (statistics.annual_total_yoy ?? 0) >= 0 ? '#52c41a' : '#ff4d4f' }}>
+              较去年同期 {(statistics.annual_total_yoy ?? 0) > 0 ? '+' : ''}
+              {statistics.annual_total_yoy ?? 0}%
             </div>
           ),
-          backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.annual_total || [1000, 2000, 1500, 3000, 2500, 4000, 3500]} 
-              color={token.colorPrimary} 
-            />
-          ),
-        },
-        {
-          title: t('app.kuaizhizao.salesOrder.statAvgDeliveryCycle'),
-          value: statistics.avg_delivery_cycle ?? 0,
-          suffix: t('app.kuaizhizao.salesOrder.unitDays'),
-          valueStyle: { color: '#722ed1' }, // Purple
-          backgroundChart: (
-            <SimpleSparkline 
-              data={[5, 4.5, 5.2, 4.8, 5.5, 5, 4.2]} 
-              color="#722ed1" 
-            />
-          ),
+          backgroundChart: renderTrendChart(statistics.trend_annual ?? [], token.colorPrimary),
         },
       ]
     : [];

@@ -170,10 +170,12 @@ async def get_work_order_statistics(
 
     # 近7天趋势数据（真实数据，用于折线图指标卡）
     from datetime import timedelta as td
+    from tortoise.expressions import Q
     trend_completed = []      # 每日完成工单数
     trend_output = []        # 每日合格产出（报工汇总）
     trend_yield = []          # 每日合格率（%）
     trend_operation_count = []  # 每日工序完成数量（报工记录数）
+    trend_overdue = []        # 每日逾期工单数（计划结束日<当日且当日未完成）
     for i in range(6, -1, -1):
         d = today - td(days=i)
         date_str = d.strftime("%Y-%m-%d")
@@ -189,6 +191,17 @@ async def get_work_order_statistics(
         except Exception:
             cnt = 0
         trend_completed.append({"date": date_str, "value": cnt})
+        # 当日逾期数：计划结束日<当日 且 当日结束时未完成（进行中 或 实际完成日>当日）
+        try:
+            overdue_base = WorkOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, planned_end_date__lt=day_end
+            )
+            overdue_cnt = await overdue_base.filter(
+                Q(status__in=["released", "in_progress"]) | Q(status="completed", actual_end_date__gt=day_end)
+            ).count()
+        except Exception:
+            overdue_cnt = 0
+        trend_overdue.append({"date": date_str, "value": overdue_cnt})
         # 当日合格产出、不合格产出、工序完成数、合格率
         try:
             day_records = await rb.filter(
@@ -227,6 +240,7 @@ async def get_work_order_statistics(
         operation_completed_today = 0
 
     trend_wip = [{"date": x["date"], "value": total_wip} for x in trend_completed]
+    trend_draft = [{"date": x["date"], "value": draft_count} for x in trend_completed]
 
     # 昨日对比值（从趋势数据倒数第二天获取，用于「较昨日」展示）
     yesterday_completed_count = trend_completed[-2]["value"] if len(trend_completed) > 1 else 0
@@ -234,6 +248,8 @@ async def get_work_order_statistics(
     yesterday_qualified_output = trend_output[-2]["value"] if len(trend_output) > 1 else 0
     yesterday_qualified_rate = trend_yield[-2]["value"] if len(trend_yield) > 1 else 0
     yesterday_wip = trend_wip[-2]["value"] if len(trend_wip) > 1 else 0
+    yesterday_overdue_count = trend_overdue[-2]["value"] if len(trend_overdue) > 1 else 0
+    yesterday_draft_count = trend_draft[-2]["value"] if len(trend_draft) > 1 else 0
 
     return {
         "in_progress_count": in_progress_count,
@@ -250,6 +266,8 @@ async def get_work_order_statistics(
         "yesterday_qualified_output": yesterday_qualified_output,
         "yesterday_qualified_rate": yesterday_qualified_rate,
         "yesterday_wip": yesterday_wip,
+        "yesterday_overdue_count": yesterday_overdue_count,
+        "yesterday_draft_count": yesterday_draft_count,
         "first_pass_yield": first_pass_yield,
         "plan_achievement_rate": plan_achievement_rate,
         "manufacturing_lead_time": manufacturing_lead_time,
@@ -258,12 +276,16 @@ async def get_work_order_statistics(
         "trend_yield": trend_yield,
         "trend_operation_count": trend_operation_count,
         "trend_wip": trend_wip,
+        "trend_overdue": trend_overdue,
+        "trend_draft": trend_draft,
         "trends": {
             "output": [x["value"] for x in trend_output],
             "completed": [x["value"] for x in trend_completed],
             "yield": [x["value"] for x in trend_yield],
             "operation_count": [x["value"] for x in trend_operation_count],
             "wip": [total_wip] * 7,
+            "overdue": [x["value"] for x in trend_overdue],
+            "draft": [x["value"] for x in trend_draft],
         },
     }
 

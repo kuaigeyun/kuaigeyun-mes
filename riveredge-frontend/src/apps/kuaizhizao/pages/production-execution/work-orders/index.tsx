@@ -2564,15 +2564,15 @@ const WorkOrdersPage: React.FC = () => {
     },
   ]
 
-  /** 较昨日对比（参考登录日志） */
+  /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
     if (today === undefined || yesterday === undefined) return null;
     const diff = today - yesterday;
     const color = diff > 0 ? '#cf1322' : diff < 0 ? '#3f8600' : 'rgba(0, 0, 0, 0.45)';
-    const icon = diff > 0 ? '↑' : diff < 0 ? '↓' : '';
+    const text = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '0';
     return (
       <span style={{ marginLeft: 8, fontSize: 13, color }}>
-        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {icon} {Math.abs(diff)}
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {text}
       </span>
     );
   };
@@ -2603,6 +2603,27 @@ const WorkOrdersPage: React.FC = () => {
   const statCards: StatCard[] = statistics
     ? [
         {
+          title: t('app.kuaizhizao.workOrder.statOverdue', '逾期工单'),
+          value: statistics.overdue_count ?? 0,
+          description:
+            statistics.overdue_count !== undefined &&
+            statistics.yesterday_overdue_count !== undefined ? (
+              <div>
+                今日: {statistics.overdue_count}{' '}
+                {renderDOD(statistics.overdue_count, statistics.yesterday_overdue_count)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#ff4d4f' },
+          backgroundChart: renderTrendChart(statistics.trend_overdue ?? [], '#ff4d4f'),
+          onClick:
+            (statistics.overdue_count ?? 0) > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        {
           title: t('app.kuaizhizao.workOrder.statCompletedToday', '今日完成'),
           value: statistics.completed_today_count ?? 0,
           description:
@@ -2624,50 +2645,7 @@ const WorkOrdersPage: React.FC = () => {
               : undefined,
         },
         {
-          title: t('app.kuaizhizao.workOrder.statOperationCompleted', '工序完成'),
-          value: statistics.operation_completed_today ?? 0,
-          description:
-            statistics.operation_completed_today !== undefined &&
-            statistics.yesterday_operation_count !== undefined ? (
-              <div>
-                今日: {statistics.operation_completed_today}{' '}
-                {renderDOD(statistics.operation_completed_today, statistics.yesterday_operation_count)}
-              </div>
-            ) : undefined,
-          valueStyle: { color: '#1890ff' },
-          backgroundChart: renderTrendChart(statistics.trend_operation_count ?? [], '#1890ff'),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday'),
-          value: statistics.qualified_output_today ?? 0,
-          description:
-            statistics.qualified_output_today !== undefined &&
-            statistics.yesterday_qualified_output !== undefined ? (
-              <div>
-                今日: {statistics.qualified_output_today}{' '}
-                {renderDOD(statistics.qualified_output_today, statistics.yesterday_qualified_output)}
-              </div>
-            ) : undefined,
-          valueStyle: { color: '#52c41a' },
-          backgroundChart: renderTrendChart(statistics.trend_output ?? [], '#52c41a'),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statQualifiedRate', '合格率'),
-          value: statistics.qualified_rate_today ?? 0,
-          suffix: '%',
-          description:
-            statistics.qualified_rate_today !== undefined &&
-            statistics.yesterday_qualified_rate !== undefined ? (
-              <div>
-                今日: {statistics.qualified_rate_today}%{' '}
-                {renderDOD(statistics.qualified_rate_today, statistics.yesterday_qualified_rate)}
-              </div>
-            ) : undefined,
-          valueStyle: { color: '#13c2c2' },
-          backgroundChart: renderTrendChart(statistics.trend_yield ?? [], '#13c2c2'),
-        },
-        {
-          title: t('app.kuaizhizao.workOrder.statTotalWip'),
+          title: t('app.kuaizhizao.workOrder.statTotalWip', '在制品'),
           value: statistics.total_wip ?? 0,
           description:
             statistics.total_wip !== undefined && statistics.yesterday_wip !== undefined ? (
@@ -2682,6 +2660,41 @@ const WorkOrdersPage: React.FC = () => {
             (statistics.total_wip ?? 0) > 0
               ? () => {
                   tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
+                  actionRef.current?.reload?.();
+                }
+              : undefined,
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statQualifiedOutputToday', '当日合格产出'),
+          value: statistics.qualified_output_today ?? 0,
+          description:
+            statistics.qualified_output_today !== undefined &&
+            statistics.yesterday_qualified_output !== undefined ? (
+              <div>
+                今日: {statistics.qualified_output_today}{' '}
+                {renderDOD(statistics.qualified_output_today, statistics.yesterday_qualified_output)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#52c41a' },
+          backgroundChart: renderTrendChart(statistics.trend_output ?? [], '#52c41a'),
+        },
+        {
+          title: t('app.kuaizhizao.workOrder.statPendingRelease', '待下达'),
+          value: statistics.draft_count ?? 0,
+          description:
+            statistics.draft_count !== undefined &&
+            statistics.yesterday_draft_count !== undefined ? (
+              <div>
+                今日: {statistics.draft_count}{' '}
+                {renderDOD(statistics.draft_count, statistics.yesterday_draft_count)}
+              </div>
+            ) : undefined,
+          valueStyle: { color: '#fa8c16' },
+          backgroundChart: renderTrendChart(statistics.trend_draft ?? [], '#fa8c16'),
+          onClick:
+            (statistics.draft_count ?? 0) > 0
+              ? () => {
+                  tableSearchFormRef.current?.setFieldsValue?.({ status: 'draft' });
                   actionRef.current?.reload?.();
                 }
               : undefined,
