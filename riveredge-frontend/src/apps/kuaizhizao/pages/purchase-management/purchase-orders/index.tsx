@@ -26,7 +26,7 @@ import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -56,6 +56,17 @@ const defaultOrderItem = {
   tax_rate: 0,
   required_date: undefined,
 };
+
+/** 安全提取金额数值（兼容 number、string、{ value } 对象） */
+function formatAmount(val: unknown): string {
+  const num =
+    typeof val === 'number' && !isNaN(val)
+      ? val
+      : val && typeof val === 'object' && 'value' in val && typeof (val as { value?: unknown }).value === 'number'
+        ? (val as { value: number }).value
+        : parseFloat(String(val ?? 0));
+  return (isNaN(num) ? 0 : num).toLocaleString();
+}
 
 const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -143,6 +154,12 @@ const PurchaseOrdersPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [supplierCreateVisible, setSupplierCreateVisible] = useState(false);
 
+  // 下推入库 Modal
+  const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
+  const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
+  const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
+  const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
+
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
     {
@@ -204,7 +221,7 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text) => `¥${formatAmount(text)}`,
     },
     {
       title: '总数量',
@@ -304,22 +321,64 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // 处理下推到采购入库
+  // 打开下推入库 Modal（加载订单明细，初始化可编辑数量）
   const handlePushToReceipt = async (record: PurchaseOrder) => {
-    Modal.confirm({
-      title: '下推到采购入库',
-      content: `确定要从采购订单 "${record.order_code}" 下推生成采购入库单吗？`,
-      onOk: async () => {
-        try {
-          const result = await pushPurchaseOrderToReceipt(record.id!);
-          messageApi.success(`成功生成采购入库单：${result.receipt_code || '已创建'}`);
-          invalidateStatistics();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '下推采购入库失败');
+    try {
+      const detail = await getPurchaseOrder(record.id!);
+      const items = (detail.items || []).filter(
+        (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
+      );
+      if (items.length === 0) {
+        messageApi.warning('采购单已全部入库，无可下推明细');
+        return;
+      }
+      const quantities: Record<number, number> = {};
+      items.forEach((it: PurchaseOrderItem) => {
+        if (it.id != null) {
+          quantities[it.id] = Number(it.outstanding_quantity ?? 0);
         }
-      },
-    });
+      });
+      setPushToReceiptOrder(detail as PurchaseOrderDetail);
+      setPushToReceiptQuantities(quantities);
+      setPushToReceiptVisible(true);
+    } catch {
+      messageApi.error('加载采购订单详情失败');
+    }
+  };
+
+  // 确认下推入库
+  const handlePushToReceiptConfirm = async () => {
+    if (!pushToReceiptOrder?.id) return;
+    const items = (pushToReceiptOrder.items || []).filter(
+      (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
+    );
+    for (const it of items) {
+      if (it.id == null) continue;
+      const qty = pushToReceiptQuantities[it.id] ?? 0;
+      const max = Number(it.outstanding_quantity ?? 0);
+      if (qty <= 0) continue;
+      if (qty > max) {
+        messageApi.error(`物料 ${it.material_code || it.material_name} 的入库数量不能超过未入库数量 ${max}`);
+        return;
+      }
+    }
+    setPushToReceiptLoading(true);
+    try {
+      const result = await pushPurchaseOrderToReceipt(pushToReceiptOrder.id, pushToReceiptQuantities);
+      messageApi.success(`成功生成采购入库单：${result.receipt_code || '已创建'}`);
+      setPushToReceiptVisible(false);
+      setPushToReceiptOrder(null);
+      setPushToReceiptQuantities({});
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (detailDrawerVisible && orderDetail?.id === pushToReceiptOrder.id) {
+        getPurchaseOrder(pushToReceiptOrder.id).then(setOrderDetail);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error.message || '下推采购入库失败');
+    } finally {
+      setPushToReceiptLoading(false);
+    }
   };
 
   // 处理删除
@@ -725,7 +784,7 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '订单金额',
       dataIndex: 'total_amount',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text) => `¥${formatAmount(text)}`,
     },
     {
       title: '税率',
@@ -735,12 +794,12 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: '税额',
       dataIndex: 'tax_amount',
-      render: (text) => text ? `¥${text.toLocaleString()}` : '-',
+      render: (text) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
     },
     {
       title: '含税金额',
       dataIndex: 'net_amount',
-      render: (text) => text ? `¥${text.toLocaleString()}` : '-',
+      render: (text) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
     },
     {
       title: '备注',
@@ -1454,16 +1513,16 @@ const PurchaseOrdersPage: React.FC = () => {
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={6}>
-                    <strong>订单金额：</strong>¥{orderDetail.total_amount?.toLocaleString() || 0}
+                    <strong>订单金额：</strong>¥{formatAmount(orderDetail.total_amount)}
                   </Col>
                   <Col span={6}>
                     <strong>税率：</strong>{orderDetail.tax_rate ? `${orderDetail.tax_rate}%` : '-'}
                   </Col>
                   <Col span={6}>
-                    <strong>税额：</strong>¥{orderDetail.tax_amount?.toLocaleString() || 0}
+                    <strong>税额：</strong>¥{formatAmount(orderDetail.tax_amount)}
                   </Col>
                   <Col span={6}>
-                    <strong>含税金额：</strong>¥{orderDetail.net_amount?.toLocaleString() || 0}
+                    <strong>含税金额：</strong>¥{formatAmount(orderDetail.net_amount)}
                   </Col>
                 </Row>
               </DetailDrawerSection>
@@ -1620,6 +1679,65 @@ const PurchaseOrdersPage: React.FC = () => {
         onConfirm={handleSyncConfirm}
         title="从数据集同步采购订单"
       />
+
+      {/* 下推入库 Modal：标准 Modal，采购数量可编辑 */}
+      <Modal
+        title="下推到采购入库"
+        open={pushToReceiptVisible}
+        onCancel={() => {
+          setPushToReceiptVisible(false);
+          setPushToReceiptOrder(null);
+          setPushToReceiptQuantities({});
+        }}
+        onOk={handlePushToReceiptConfirm}
+        confirmLoading={pushToReceiptLoading}
+        okText="确认下推"
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        destroyOnClose
+      >
+        {pushToReceiptOrder && (
+          <div>
+            <p style={{ marginBottom: 16 }}>
+              从采购订单 <strong>{pushToReceiptOrder.order_code}</strong> 下推生成采购入库单，可修改各明细的入库数量（不超过未入库数量）：
+            </p>
+            <Table
+              size="small"
+              dataSource={(pushToReceiptOrder.items || []).filter(
+                (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
+              )}
+              rowKey="id"
+              pagination={false}
+              scroll={{ x: 700 }}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
+                { title: '未到货', dataIndex: 'outstanding_quantity', width: 90, align: 'right' },
+                {
+                  title: '入库数量',
+                  width: 140,
+                  align: 'right',
+                  render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
+                    <InputNumber
+                      min={0}
+                      max={Number(record.outstanding_quantity ?? 0)}
+                      value={pushToReceiptQuantities[record.id] ?? 0}
+                      onChange={(v) =>
+                        setPushToReceiptQuantities((prev) => ({
+                          ...prev,
+                          [record.id!]: Number(v) || 0,
+                        }))
+                      }
+                      style={{ width: 100 }}
+                    />
+                  ) : null),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
     </>
   );
 };

@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
+import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
@@ -492,13 +493,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 
-    async def delete_purchase_order(self, tenant_id: int, order_id: int) -> bool:
+    async def delete_purchase_order(
+        self, tenant_id: int, order_id: int, operator_id: Optional[int] = None
+    ) -> bool:
         """
         删除采购订单
+
+        删除前会同步回滚关联的采购申请：清除申请明细的 purchase_order_id，
+        并重新计算采购申请状态（全部转单→部分转单→已通过），同时在采购申请上留下操作记录。
 
         Args:
             tenant_id: 租户ID
             order_id: 订单ID
+            operator_id: 操作人ID（用于记录操作历史）
 
         Returns:
             bool: 是否删除成功
@@ -511,6 +518,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not is_draft_status(order.status):
             raise BusinessLogicError("只能删除草稿状态的订单")
 
+        po_code = getattr(order, "order_code", str(order_id))
+
+        # 同步回滚采购申请：清除关联申请明细的转单引用，重算申请状态，并记录操作历史
+        await self._sync_requisition_on_po_delete(
+            tenant_id=tenant_id, order_id=order_id, po_code=po_code, operator_id=operator_id
+        )
+
+        # 删除采购申请→采购订单 的 DocumentRelation（避免操作历史显示已删除的下游）
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_requisition",
+            target_type="purchase_order",
+            target_id=order_id,
+        ).delete()
+
         # 删除订单明细
         await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
 
@@ -518,6 +541,86 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         await order.delete()
 
         return True
+
+    async def _sync_requisition_on_po_delete(
+        self,
+        tenant_id: int,
+        order_id: int,
+        po_code: str = "",
+        operator_id: Optional[int] = None,
+    ) -> None:
+        """采购订单删除时，清除关联采购申请明细的转单引用、重算申请状态，并记录操作历史"""
+        from apps.kuaizhizao.models import PurchaseRequisition, PurchaseRequisitionItem
+        from apps.kuaizhizao.models.state_transition import StateTransitionLog
+        from apps.kuaizhizao.constants import DocumentStatus
+        from apps.base_service import AppBaseService
+        from datetime import datetime
+
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, purchase_order_id=order_id
+        ).all()
+        if not items:
+            return
+
+        operator_name = ""
+        if operator_id:
+            try:
+                operator_name = await AppBaseService().get_user_name(operator_id) or str(operator_id)
+            except Exception:
+                operator_name = str(operator_id)
+
+        requisition_ids = list({i.requisition_id for i in items})
+        for item in items:
+            await item.update_from_dict({
+                "purchase_order_id": None,
+                "purchase_order_item_id": None,
+                "supplier_id": None,
+            }).save()
+
+        reason = f"下游采购单已删除（{po_code}）" if po_code else "下游采购单已删除"
+        comment = json.dumps({"deleted_po_id": order_id, "deleted_po_code": po_code}, ensure_ascii=False)
+
+        for rid in requisition_ids:
+            req = await PurchaseRequisition.get_or_none(
+                tenant_id=tenant_id, id=rid, deleted_at__isnull=True
+            )
+            if not req:
+                continue
+
+            from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+            await PurchaseRequisitionService().merge_split_requisition_items(tenant_id, rid)
+
+            old_status = req.status
+            all_items = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=rid
+            ).all()
+            if not all_items:
+                continue
+            has_any = any(i.purchase_order_id for i in all_items)
+            all_converted = all(i.purchase_order_id for i in all_items)
+            if all_converted:
+                req.status = DocumentStatus.FULL_CONVERTED.value
+            elif has_any:
+                req.status = DocumentStatus.PARTIAL_CONVERTED.value
+            else:
+                req.status = "已通过"
+            await req.save()
+
+            if operator_id:
+                await StateTransitionLog.create(
+                    tenant_id=tenant_id,
+                    entity_type="purchase_requisition",
+                    entity_id=rid,
+                    from_state=old_status,
+                    to_state=req.status,
+                    transition_reason=reason,
+                    transition_comment=comment,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    transition_time=datetime.now(),
+                    related_entity_type="purchase_order",
+                    related_entity_id=order_id,
+                )
 
     async def push_to_receipt(
         self,

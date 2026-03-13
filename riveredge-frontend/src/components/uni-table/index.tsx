@@ -720,7 +720,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return columns
   }, [currentViewType, columns, detailTableColumns])
 
+  // 检测是否为操作列（用于操作列样式与宽度处理）
+  const isOperationColumn = (col: any) => {
+    const dataIndex = col.dataIndex
+    const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '')
+    const key = col.key || fieldName
+    return (
+      key === 'action' ||
+      key === 'operation' ||
+      key === 'option' ||
+      fieldName === 'action' ||
+      fieldName === 'operation' ||
+      fieldName === 'option' ||
+      col.valueType === 'option' ||
+      (!dataIndex && col.render && typeof col.render === 'function')
+    )
+  }
+
   // 为 date/dateTime 列注入站点格式的展示，使站点设置中的日期格式在单据表格中生效
+  // 操作列：自适应宽度、不换行（whiteSpace: nowrap，移除固定 width）
   const processedColumns = React.useMemo(() => {
     return effectiveColumns.map((col: any) => {
       if ((col.valueType === 'date' || col.valueType === 'dateTime') && !col.render && !col.valueFormatter) {
@@ -737,6 +755,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               ? formatDateTimeBySiteSetting(val, '-')
               : formatDateBySiteSetting(val, '-')
           },
+        }
+      }
+      if (isOperationColumn(col)) {
+        const { width, ...rest } = col
+        return {
+          ...rest,
+          onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         }
       }
       return col

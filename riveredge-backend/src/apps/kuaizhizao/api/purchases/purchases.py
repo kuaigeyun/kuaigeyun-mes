@@ -10,7 +10,7 @@ Date: 2025-12-30
 from datetime import date
 from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, Body
 from fastapi.responses import JSONResponse
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -242,16 +242,19 @@ async def update_purchase_order(
 @router.delete("/purchase-orders/{order_id}", summary="删除采购订单")
 async def delete_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """
     删除采购订单
 
-    只能删除草稿状态的订单
+    只能删除草稿状态的订单。删除后会在关联的采购申请上留下操作记录。
 
     - **order_id**: 采购订单ID
     """
-    result = await PurchaseService().delete_purchase_order(tenant_id, order_id)
+    result = await PurchaseService().delete_purchase_order(
+        tenant_id=tenant_id, order_id=order_id, operator_id=current_user.id
+    )
     return JSONResponse(content={"success": result, "message": "删除成功"})
 
 
@@ -319,7 +322,7 @@ async def confirm_purchase_order(
 @router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
 async def push_purchase_order_to_receipt(
     order_id: int = Path(..., description="采购订单ID"),
-    receipt_quantities: Optional[dict] = None,
+    receipt_quantities: Optional[dict] = Body(None, description="入库数量字典 {item_id: quantity}"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -333,13 +336,21 @@ async def push_purchase_order_to_receipt(
     """
     from fastapi import status
     from fastapi.responses import JSONResponse
-    
+
+    # JSON 键为字符串，转换为 int 以匹配 item.id
+    normalized = None
+    if receipt_quantities:
+        try:
+            normalized = {int(k): float(v) for k, v in receipt_quantities.items()}
+        except (ValueError, TypeError):
+            normalized = receipt_quantities
+
     service = PurchaseService()
     result = await service.push_to_receipt(
         tenant_id=tenant_id,
         order_id=order_id,
         created_by=current_user.id,
-        receipt_quantities=receipt_quantities
+        receipt_quantities=normalized
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

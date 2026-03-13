@@ -117,6 +117,8 @@ class DocumentTrackingService:
                         pass
                 if is_edit:
                     detail = f"编辑：修改了 {', '.join(changed_fields)}" if changed_fields else "编辑订单"
+                elif log.from_state == log.to_state and log.transition_reason:
+                    detail = log.transition_reason
                 else:
                     detail = f"{log.from_state} → {log.to_state}"
                 is_auto_approve = log.transition_reason == "自动审核"

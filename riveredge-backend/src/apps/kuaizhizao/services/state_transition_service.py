@@ -78,6 +78,9 @@ class StateTransitionService:
         {"from": DocumentStatus.PENDING_REVIEW.value, "to": DocumentStatus.REJECTED.value, "description": "审核驳回"},
         {"from": DocumentStatus.REJECTED.value, "to": DocumentStatus.DRAFT.value, "description": "重新编辑"},
         {"from": DocumentStatus.PENDING_REVIEW.value, "to": DocumentStatus.DRAFT.value, "description": "撤回"},
+        {"from": DocumentStatus.AUDITED.value, "to": DocumentStatus.PENDING_REVIEW.value, "description": "撤回审核"},
+        {"from": DocumentStatus.PARTIAL_CONVERTED.value, "to": DocumentStatus.PENDING_REVIEW.value, "description": "撤回审核"},
+        {"from": DocumentStatus.FULL_CONVERTED.value, "to": DocumentStatus.PENDING_REVIEW.value, "description": "撤回审核"},
     ]
 
     # 生产计划状态流转（草稿→已审核→已执行）

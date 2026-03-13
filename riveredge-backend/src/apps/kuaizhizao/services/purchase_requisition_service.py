@@ -130,10 +130,75 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
 
+        from apps.kuaizhizao.constants import is_draft_status, LEGACY_AUDITED_VALUES
+
+        async def _build_item_resps(items_list, clear_orphan: bool = False):
+            resps = []
+            cleared = False
+            for i in items_list:
+                d = {k: getattr(i, k) for k in i._meta.fields_map if hasattr(i, k)}
+                d["converted_quantity_draft"] = Decimal(0)
+                d["converted_quantity_confirmed"] = Decimal(0)
+                if i.purchase_order_id and i.purchase_order_item_id:
+                    po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=i.purchase_order_id)
+                    po_item = (
+                        await PurchaseOrderItem.get_or_none(
+                            tenant_id=tenant_id, id=i.purchase_order_item_id
+                        )
+                        if po
+                        else None
+                    )
+                    if po and po_item:
+                        qty = po_item.ordered_quantity or Decimal(0)
+                        if is_draft_status(po.status):
+                            d["converted_quantity_draft"] = qty
+                        elif po.status in LEGACY_AUDITED_VALUES:
+                            d["converted_quantity_confirmed"] = qty
+                    elif clear_orphan:
+                        await i.update_from_dict({
+                            "purchase_order_id": None,
+                            "purchase_order_item_id": None,
+                            "supplier_id": None,
+                        }).save()
+                        d["purchase_order_id"] = None
+                        d["purchase_order_item_id"] = None
+                        d["supplier_id"] = None
+                        cleared = True
+                resps.append(PurchaseRequisitionItemResponse.model_validate(d))
+            return resps, cleared
+
+        item_resps, cleared_orphan = await _build_item_resps(items, clear_orphan=True)
+        if cleared_orphan:
+            await self.merge_split_requisition_items(tenant_id, requisition_id)
+            items = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=requisition_id
+            ).all()
+            item_resps, _ = await _build_item_resps(items, clear_orphan=False)
+
+        # 若清除了孤儿引用，需重新计算采购申请状态
+        all_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=requisition_id
+        ).all()
+        has_any = any(i.purchase_order_id for i in all_items)
+        all_converted = (
+            len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
+        )
+        from apps.kuaizhizao.constants import DocumentStatus
+        new_status = (
+            DocumentStatus.FULL_CONVERTED.value
+            if all_converted
+            else DocumentStatus.PARTIAL_CONVERTED.value
+            if has_any
+            else "已通过"
+        )
+        if req.status != new_status:
+            req.status = new_status
+            await req.save()
+
         req_dict = {k: getattr(req, k) for k in req._meta.fields_map if hasattr(req, k)}
         req_dict.pop("items", None)
         resp = PurchaseRequisitionResponse.model_construct(**req_dict)
-        resp.items = [PurchaseRequisitionItemResponse.model_validate(i) for i in items]
+        resp.items = item_resps
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle
         resp.lifecycle = get_purchase_requisition_lifecycle(req)
         return resp
@@ -171,6 +236,90 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             resp.lifecycle = get_purchase_requisition_lifecycle(req)
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
+
+    async def merge_split_requisition_items(
+        self, tenant_id: int, requisition_id: int
+    ) -> None:
+        """
+        合并因部分下推而拆分的申请明细行。
+        当同一物料存在多行且均未转单时，合并为一行（数量相加）。
+        """
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            requisition_id=requisition_id,
+            purchase_order_id__isnull=True,
+        ).all()
+        if len(items) < 2:
+            return
+
+        by_material: Dict[int, List] = {}
+        for i in items:
+            mid = i.material_id
+            if mid not in by_material:
+                by_material[mid] = []
+            by_material[mid].append(i)
+
+        for mid, group in by_material.items():
+            if len(group) < 2:
+                continue
+            total_qty = sum(Decimal(str(x.quantity or 0)) for x in group)
+            keeper = group[0]
+            to_delete = group[1:]
+            await keeper.update_from_dict({"quantity": total_qty}).save()
+            for d in to_delete:
+                await d.delete()
+
+    async def fix_requisition_status(
+        self, tenant_id: int, requisition_id: int
+    ) -> PurchaseRequisitionResponse:
+        """
+        修正采购申请状态：若状态为「全部转单」但存在未转单明细，则改为「部分转单」。
+        同时清除指向已删除采购单的引用（purchase_order_id 指向不存在的 PO 时清空）。
+        """
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        from apps.kuaizhizao.constants import DocumentStatus
+
+        all_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=requisition_id
+        ).all()
+
+        # 清除指向已删除采购单的引用
+        cleared_any = False
+        for i in all_items:
+            if i.purchase_order_id:
+                po = await PurchaseOrder.get_or_none(
+                    tenant_id=tenant_id, id=i.purchase_order_id
+                )
+                if not po:
+                    await i.update_from_dict({
+                        "purchase_order_id": None,
+                        "purchase_order_item_id": None,
+                        "supplier_id": None,
+                    }).save()
+                    cleared_any = True
+
+        if cleared_any:
+            await self.merge_split_requisition_items(tenant_id, requisition_id)
+
+        all_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, requisition_id=requisition_id
+        ).all()
+        has_any = any(i.purchase_order_id for i in all_items)
+        all_converted = (
+            len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
+        )
+        if all_converted:
+            req.status = DocumentStatus.FULL_CONVERTED.value
+        elif has_any:
+            req.status = DocumentStatus.PARTIAL_CONVERTED.value
+        else:
+            req.status = "已通过"
+        await req.save()
+        return await self.get_requisition_by_id(tenant_id, requisition_id)
 
     async def delete_requisition(self, tenant_id: int, requisition_id: int) -> bool:
         """删除采购申请（软删除，仅草稿可删）"""
@@ -297,6 +446,40 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
+    async def withdraw_approval(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        operator_id: Optional[int] = None,
+    ) -> PurchaseRequisitionResponse:
+        """撤回审核：将已通过/部分转单/全部转单的采购申请撤回为待审核，可重新审核"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status
+
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+
+        normalized = normalize_status(req.status)
+        if normalized not in (
+            DocumentStatus.AUDITED.value,
+            DocumentStatus.PARTIAL_CONVERTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+        ):
+            raise BusinessLogicError("只有已通过、部分转单或全部转单状态的采购申请可撤回审核")
+
+        req.status = DocumentStatus.PENDING_REVIEW.value
+        req.review_status = ReviewStatus.PENDING.value
+        req.reviewer_id = None
+        req.reviewer_name = None
+        req.review_time = None
+        req.review_remarks = None
+        req.updated_by = operator_id
+        await req.save()
+
+        return await self.get_requisition_by_id(tenant_id, requisition_id)
+
     async def convert_to_purchase_order(
         self,
         tenant_id: int,
@@ -334,10 +517,37 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         max_required = max((i.required_date or today for i in items), default=today)
 
         po_items = []
+        items_converted = []  # (item, converted_qty) 仅记录实际转单的申请行
         for item in items:
             unit_price = item.suggested_unit_price or Decimal(0)
-            qty = item.quantity
+            full_qty = item.quantity
+            qty = full_qty
+            if data.item_quantities:
+                override = data.item_quantities.get(item.id) or data.item_quantities.get(str(item.id))
+                if override is not None:
+                    qty = Decimal(str(override))
+            if qty <= 0:
+                continue
+            # 部分转单：拆分申请行，剩余数量新建一行，当前行只保留已转数量
+            if qty < full_qty:
+                remaining = full_qty - qty
+                await PurchaseRequisitionItem.create(
+                    tenant_id=tenant_id,
+                    requisition_id=requisition_id,
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    unit=item.unit or "件",
+                    quantity=remaining,
+                    suggested_unit_price=item.suggested_unit_price,
+                    required_date=item.required_date,
+                    demand_computation_item_id=item.demand_computation_item_id,
+                    notes=item.notes,
+                )
+                await item.update_from_dict({"quantity": qty}).save()
             total_price = qty * unit_price
+            items_converted.append((item, qty))
             po_items.append(
                 PurchaseOrderItemCreate(
                     material_id=item.material_id,
@@ -357,6 +567,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 )
             )
 
+        if not po_items:
+            raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成采购订单")
+
         po_data = PurchaseOrderCreate(
             supplier_id=data.supplier_id,
             supplier_name=data.supplier_name,
@@ -374,19 +587,23 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, order_data=po_data, created_by=created_by
         )
 
-        for i, item in enumerate(items):
+        for i, (item, _) in enumerate(items_converted):
             po_item = po.items[i] if i < len(po.items) else None
             po_item_id = getattr(po_item, "id", None) if po_item else None
-            await item.update_from_dict(
-                purchase_order_id=po.id,
-                purchase_order_item_id=po_item_id,
-                supplier_id=data.supplier_id,
-            ).save()
+            await item.update_from_dict({
+                "purchase_order_id": po.id,
+                "purchase_order_item_id": po_item_id,
+                "supplier_id": data.supplier_id,
+            }).save()
 
         all_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
-        all_converted = all(i.purchase_order_id for i in all_items)
+        # 全部转单：至少有一条明细，且每条明细都已转单（purchase_order_id 非空）
+        all_converted = (
+            len(all_items) > 0
+            and all(i.purchase_order_id for i in all_items)
+        )
         req.status = DocumentStatus.FULL_CONVERTED.value if all_converted else DocumentStatus.PARTIAL_CONVERTED.value
         await req.save()
 
@@ -518,11 +735,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             for i, item in enumerate(grp):
                 po_item = po.items[i] if i < len(po.items) else None
                 po_item_id = getattr(po_item, "id", None) if po_item else None
-                await item.update_from_dict(
-                    purchase_order_id=po.id,
-                    purchase_order_item_id=po_item_id,
-                    supplier_id=sid,
-                ).save()
+                await item.update_from_dict({
+                    "purchase_order_id": po.id,
+                    "purchase_order_item_id": po_item_id,
+                    "supplier_id": sid,
+                }).save()
 
             generated.append({"id": po.id, "code": po.order_code})
 

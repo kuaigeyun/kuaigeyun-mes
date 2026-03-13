@@ -652,6 +652,7 @@ def get_purchase_requisition_lifecycle(requisition: Any) -> Dict[str, Any]:
         "已通过": "approved", "approved": "approved",
         "部分转单": "partial", "partial": "partial",
         "全部转单": "full", "full": "full",
+        "PARTIAL_CONVERTED": "partial", "FULL_CONVERTED": "full",
     }
     key = status_map.get(status, "draft")
     stage_name = {"draft": "草稿", "pending_review": "待审核", "approved": "已通过",

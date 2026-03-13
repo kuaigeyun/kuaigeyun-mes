@@ -6,7 +6,7 @@ Date: 2025-02-01
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -51,6 +51,8 @@ class PurchaseRequisitionItemResponse(PurchaseRequisitionItemBase):
     purchase_order_id: Optional[int] = None
     purchase_order_item_id: Optional[int] = None
     supplier_id: Optional[int] = None
+    converted_quantity_draft: Optional[Decimal] = Field(0, description="已下推数量（草稿）")
+    converted_quantity_confirmed: Optional[Decimal] = Field(0, description="已下推数量（已确认）")
     created_at: datetime
     updated_at: datetime
 
@@ -121,6 +123,7 @@ class ConvertToPurchaseOrderRequest(BaseModel):
     item_ids: List[int] = Field(..., description="要转单的采购申请行ID列表")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., description="供应商名称")
+    item_quantities: Optional[Dict[int, float]] = Field(None, description="按 item_id 覆盖数量，不传则用申请行原数量")
 
 
 class ApproveRequisitionRequest(BaseModel):

@@ -22,6 +22,8 @@ const STATUS_TO_STAGE: Record<string, string> = {
   pending_review: '待审核',
   rejected: '已驳回',
   approved: '已通过',
+  PARTIAL_CONVERTED: '部分转单',
+  FULL_CONVERTED: '全部转单',
 };
 
 const MAIN_STAGE_KEYS = ['draft', 'pending_review', 'approved', 'partial', 'full'] as const;
@@ -62,6 +64,8 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     已通过: 'approved',
     部分转单: 'partial',
     全部转单: 'full',
+    PARTIAL_CONVERTED: 'partial',
+    FULL_CONVERTED: 'full',
   };
   const key = keyMap[stageName] ?? 'draft';
 

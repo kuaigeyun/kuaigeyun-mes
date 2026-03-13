@@ -126,6 +126,20 @@ async def approve_requisition(
     )
 
 
+@router.post("/purchase-requisitions/{requisition_id}/withdraw-approval", response_model=PurchaseRequisitionResponse, summary="撤回审核")
+async def withdraw_approval(
+    requisition_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """撤回审核：将已通过的采购申请撤回为待审核，可重新审核"""
+    return await PurchaseRequisitionService().withdraw_approval(
+        tenant_id=tenant_id,
+        requisition_id=requisition_id,
+        operator_id=current_user.id,
+    )
+
+
 @router.post("/purchase-requisitions/{requisition_id}/submit", response_model=PurchaseRequisitionResponse, summary="提交采购申请")
 async def submit_requisition(
     requisition_id: int = Path(...),
@@ -140,7 +154,7 @@ async def submit_requisition(
     )
 
 
-@router.post("/purchase-requisitions/{requisition_id}/convert-to-purchase-order", summary="转采购单")
+@router.post("/purchase-requisitions/{requisition_id}/convert-to-purchase-order", summary="下推采购单")
 async def convert_to_purchase_order(
     data: ConvertToPurchaseOrderRequest,
     requisition_id: int = Path(...),
@@ -159,6 +173,22 @@ async def convert_to_purchase_order(
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/purchase-requisitions/{requisition_id}/fix-status", response_model=PurchaseRequisitionResponse, summary="修正采购申请状态")
+async def fix_requisition_status(
+    requisition_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    修正采购申请状态：若状态为「全部转单」但存在未转单明细，则改为「部分转单」
+    用于修复因历史 bug 导致的错误状态
+    """
+    return await PurchaseRequisitionService().fix_requisition_status(
+        tenant_id=tenant_id,
+        requisition_id=requisition_id,
+    )
 
 
 @router.delete("/purchase-requisitions/{requisition_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除采购申请")

@@ -2,6 +2,11 @@
  * 快格轻制造 APP 入口文件
  *
  * 路由级代码分割：各页面使用 React.lazy 按需加载，避免 70+ 页面打包成单一 10MB chunk
+ *
+ * 路由约定（与 pages/ 一一对应，无重复）：
+ * - 文件: pages/{path}/index.tsx
+ * - Route path: {path}
+ * - 完整 URL: /apps/kuaizhizao/{path}
  */
 
 import React, { Suspense, lazy } from 'react';

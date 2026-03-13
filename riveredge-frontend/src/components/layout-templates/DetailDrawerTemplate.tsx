@@ -93,6 +93,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       title={title}
       open={open ?? visible}
       onClose={onClose}
+      width={drawerSize}
       size={drawerSize}
       loading={loading}
       className={className}

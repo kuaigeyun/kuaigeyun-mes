@@ -176,7 +176,8 @@ export const DocumentTrackingPanel: React.FC<DocumentTrackingPanelProps> = ({
     const fieldChanges = item.type === 'edit' && item.field_changes && item.field_changes.length > 0;
 
     const isStateTransition = item.type === 'state_transition' && item.from_state != null && item.to_state != null;
-    const detailContent = isStateTransition ? (
+    const isSameStateWithReason = isStateTransition && item.from_state === item.to_state && item.detail;
+    const detailContent = isStateTransition && !isSameStateWithReason ? (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {renderStatusBadge(item.from_state!)}
         <span style={{ color: '#1890ff' }}>→</span>

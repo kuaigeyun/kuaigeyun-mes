@@ -18,6 +18,8 @@ export interface PurchaseRequisitionItem {
   purchase_order_id?: number;
   purchase_order_item_id?: number;
   demand_computation_item_id?: number;
+  converted_quantity_draft?: number;
+  converted_quantity_confirmed?: number;
   notes?: string;
 }
 
@@ -82,9 +84,21 @@ export async function approvePurchaseRequisition(
   });
 }
 
+export async function withdrawPurchaseRequisition(id: number): Promise<PurchaseRequisition> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/withdraw-approval`, {
+    method: 'POST',
+  });
+}
+
+export async function fixPurchaseRequisitionStatus(id: number): Promise<PurchaseRequisition> {
+  return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${id}/fix-status`, {
+    method: 'POST',
+  });
+}
+
 export async function convertToPurchaseOrder(
   requisitionId: number,
-  data: { item_ids: number[]; supplier_id: number; supplier_name: string }
+  data: { item_ids: number[]; supplier_id: number; supplier_name: string; item_quantities?: Record<number, number> }
 ): Promise<{ success: boolean; message: string; purchase_order_id: number; purchase_order_code: string }> {
   return apiRequest(`/apps/kuaizhizao/purchase-requisitions/${requisitionId}/convert-to-purchase-order`, {
     method: 'POST',
