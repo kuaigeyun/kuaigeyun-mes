@@ -67,6 +67,8 @@ import {
   MoreOutlined,
   StopOutlined,
   TeamOutlined,
+  ShoppingOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -1476,7 +1478,16 @@ const WorkOrdersPage: React.FC = () => {
           normal: 'default',
         }
         const color = colorMap[lifecycle.status || 'normal'] || 'default'
-        return <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
+        const isOverdue =
+          record.planned_end_date &&
+          ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '') &&
+          dayjs(record.planned_end_date).isBefore(dayjs(), 'day')
+        return (
+          <Space>
+            <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
+            {isOverdue && <Tag color="error">逾期</Tag>}
+          </Space>
+        )
       },
     },
     {
@@ -2258,12 +2269,19 @@ const WorkOrdersPage: React.FC = () => {
             <div style={{ fontSize: TOUCH_SCREEN_CONFIG.TITLE_FONT_SIZE, fontWeight: 600 }}>
               {workOrder.code}
             </div>
-            <Tag
-              color={statusColor}
-              style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, padding: '8px 16px' }}
-            >
-              {lifecycle.stageName || '-'}
-            </Tag>
+            <Space>
+              <Tag
+                color={statusColor}
+                style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, padding: '8px 16px' }}
+              >
+                {lifecycle.stageName || '-'}
+              </Tag>
+              {workOrder.planned_end_date &&
+                ['released', 'in_progress', '已下达', '执行中'].includes(workOrder.status || '') &&
+                dayjs(workOrder.planned_end_date).isBefore(dayjs(), 'day') && (
+                  <Tag color="error">逾期</Tag>
+                )}
+            </Space>
           </div>
 
           {/* 工单名称 */}
@@ -2357,6 +2375,328 @@ const WorkOrdersPage: React.FC = () => {
     )
   }
 
+  /** 未完成工单状态集合（排除已完成、已取消） */
+  const IN_PROGRESS_STATUSES = ['draft', 'released', 'in_progress', '草稿', '已下达', '执行中']
+
+  /** 优先级映射（中文显示） */
+  const PRIORITY_MAP: Record<string, { text: string; color: string }> = {
+    low: { text: '低', color: 'default' },
+    normal: { text: '正常', color: 'blue' },
+    high: { text: '高', color: 'orange' },
+    urgent: { text: '紧急', color: 'red' },
+  }
+
+  /**
+   * 在制产品视图：以产品为维度树形展示未完成工单
+   */
+  const renderProductTree = (data: WorkOrder[]) => {
+    const inProgress = data.filter((r) => r.status && IN_PROGRESS_STATUSES.includes(r.status))
+    const byProduct = new Map<string, WorkOrder[]>()
+    inProgress.forEach((wo) => {
+      const key = String(wo.product_id ?? wo.product_code ?? wo.product_name ?? '未知')
+      if (!byProduct.has(key)) byProduct.set(key, [])
+      byProduct.get(key)!.push(wo)
+    })
+    const treeData = Array.from(byProduct.entries()).map(([key, orders]) => ({
+      key: `product-${key}`,
+      title: orders[0]?.product_name || orders[0]?.product_code || key,
+      product_name: orders[0]?.product_name || orders[0]?.product_code || key,
+      quantity: orders.reduce((s, o) => s + Number(o.quantity ?? 0), 0),
+      orderCount: orders.length,
+      isParent: true,
+      children: orders.map((wo) => ({
+        key: `wo-${wo.id}`,
+        ...wo,
+        title: wo.code,
+        quantity: Number(wo.quantity ?? 0),
+        isParent: false,
+      })),
+    }))
+    const treeColumns = [
+      {
+        title: '产品/工单',
+        dataIndex: 'title',
+        key: 'title',
+        width: 180,
+        render: (_: any, record: any) =>
+          record.isParent ? (
+            <strong>{record.product_name}</strong>
+          ) : (
+            <a onClick={() => handleDetail(record)}>{record.code}</a>
+          ),
+      },
+      {
+        title: '工单名称',
+        dataIndex: 'name',
+        key: 'name',
+        width: 160,
+        ellipsis: true,
+        render: (_: any, r: any) => (r.isParent ? `共 ${r.orderCount} 个工单` : (r.name || '-')),
+      },
+      {
+        title: '数量',
+        dataIndex: 'quantity',
+        key: 'quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (_: any, record: any) => {
+          const n = Number(record.quantity)
+          return Number.isNaN(n) ? '-' : (n % 1 === 0 ? n : n.toFixed(2))
+        },
+      },
+      {
+        title: '生产模式',
+        dataIndex: 'production_mode',
+        key: 'production_mode',
+        width: 100,
+        render: (_: any, r: any) =>
+          r.isParent ? null : (
+            <Tag color={r.production_mode === 'MTO' ? 'blue' : 'default'}>
+              {r.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
+            </Tag>
+          ),
+      },
+      {
+        title: '销售订单',
+        dataIndex: 'sales_order_code',
+        key: 'sales_order_code',
+        width: 130,
+        render: (_: any, record: any) =>
+          record.isParent ? null : (
+            record.production_mode === 'MTO' ? <Tag color="blue">{record.sales_order_code || '-'}</Tag> : <span style={{ color: '#999' }}>无</span>
+          ),
+      },
+      {
+        title: '车间',
+        dataIndex: 'workshop_name',
+        key: 'workshop_name',
+        width: 100,
+        render: (_: any, r: any) => (r.isParent ? null : (r.workshop_name || '-')),
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        width: 140,
+        render: (_: any, record: any) => {
+          if (record.isParent) return null
+          const lifecycle = getWorkOrderLifecycle(record)
+          const colorMap: Record<string, string> = { success: 'success', exception: 'error', active: 'processing', normal: 'default' }
+          const isOverdue =
+            record.planned_end_date &&
+            ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '') &&
+            dayjs(record.planned_end_date).isBefore(dayjs(), 'day')
+          return (
+            <Space size={4}>
+              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
+              {isOverdue && <Tag color="error">逾期</Tag>}
+              {record.is_frozen && <Tag color="warning">已冻结</Tag>}
+            </Space>
+          )
+        },
+      },
+      {
+        title: '优先级',
+        dataIndex: 'priority',
+        key: 'priority',
+        width: 90,
+        render: (_: any, record: any) => {
+          if (record.isParent) return null
+          const config = PRIORITY_MAP[record.priority || 'normal'] || { text: record.priority || '正常', color: 'blue' }
+          return <Tag color={config.color}>{config.text}</Tag>
+        },
+      },
+      {
+        title: '计划开始',
+        dataIndex: 'planned_start_date',
+        key: 'planned_start_date',
+        width: 110,
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
+      },
+      {
+        title: '计划结束',
+        dataIndex: 'planned_end_date',
+        key: 'planned_end_date',
+        width: 110,
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? dayjs(record.planned_end_date).format('YYYY-MM-DD') : '-')),
+      },
+    ]
+    if (treeData.length === 0) {
+      return (
+        <Empty
+          description="暂无在制工单"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          style={{ marginTop: 60 }}
+        />
+      )
+    }
+    return (
+      <Table
+        columns={treeColumns}
+        dataSource={treeData}
+        pagination={false}
+        size="small"
+        defaultExpandAllRows
+        rowKey="key"
+        scroll={{ x: 'max-content' }}
+      />
+    )
+  }
+
+  /**
+   * 在制订单视图：以销售订单为维度树形展示未完成工单
+   */
+  const renderOrderTree = (data: WorkOrder[]) => {
+    const inProgress = data.filter((r) => r.status && IN_PROGRESS_STATUSES.includes(r.status))
+    const byOrder = new Map<string, WorkOrder[]>()
+    inProgress.forEach((wo) => {
+      const key = wo.sales_order_code || (wo.sales_order_id != null ? String(wo.sales_order_id) : '_no_sales_')
+      if (!byOrder.has(key)) byOrder.set(key, [])
+      byOrder.get(key)!.push(wo)
+    })
+    const treeData = Array.from(byOrder.entries()).map(([key, orders]) => ({
+      key: `order-${key}`,
+      title: key === '_no_sales_' ? '无销售订单' : (orders[0]?.sales_order_name || orders[0]?.sales_order_code || key),
+      sales_order_code: key === '_no_sales_' ? '' : (orders[0]?.sales_order_code ?? key),
+      quantity: orders.reduce((s, o) => s + Number(o.quantity ?? 0), 0),
+      orderCount: orders.length,
+      isParent: true,
+      children: orders.map((wo) => ({
+        key: `wo-${wo.id}`,
+        ...wo,
+        title: wo.code,
+        quantity: Number(wo.quantity ?? 0),
+        isParent: false,
+      })),
+    }))
+    const treeColumns = [
+      {
+        title: '销售订单/工单',
+        dataIndex: 'title',
+        key: 'title',
+        width: 180,
+        render: (_: any, record: any) =>
+          record.isParent ? (
+            <strong>{record.title}</strong>
+          ) : (
+            <a onClick={() => handleDetail(record)}>{record.code}</a>
+          ),
+      },
+      {
+        title: '工单名称',
+        dataIndex: 'name',
+        key: 'name',
+        width: 160,
+        ellipsis: true,
+        render: (_: any, r: any) => (r.isParent ? `共 ${r.orderCount} 个工单` : (r.name || '-')),
+      },
+      {
+        title: '产品',
+        dataIndex: 'product_name',
+        key: 'product_name',
+        width: 150,
+        render: (_: any, r: any) => (r.isParent ? null : (r.product_name || r.product_code || '-')),
+      },
+      {
+        title: '数量',
+        dataIndex: 'quantity',
+        key: 'quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (_: any, record: any) => {
+          const n = Number(record.quantity)
+          return Number.isNaN(n) ? '-' : (n % 1 === 0 ? n : n.toFixed(2))
+        },
+      },
+      {
+        title: '生产模式',
+        dataIndex: 'production_mode',
+        key: 'production_mode',
+        width: 100,
+        render: (_: any, r: any) =>
+          r.isParent ? null : (
+            <Tag color={r.production_mode === 'MTO' ? 'blue' : 'default'}>
+              {r.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
+            </Tag>
+          ),
+      },
+      {
+        title: '车间',
+        dataIndex: 'workshop_name',
+        key: 'workshop_name',
+        width: 100,
+        render: (_: any, r: any) => (r.isParent ? null : (r.workshop_name || '-')),
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        key: 'status',
+        width: 140,
+        render: (_: any, record: any) => {
+          if (record.isParent) return null
+          const lifecycle = getWorkOrderLifecycle(record)
+          const colorMap: Record<string, string> = { success: 'success', exception: 'error', active: 'processing', normal: 'default' }
+          const isOverdue =
+            record.planned_end_date &&
+            ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '') &&
+            dayjs(record.planned_end_date).isBefore(dayjs(), 'day')
+          return (
+            <Space size={4}>
+              <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
+              {isOverdue && <Tag color="error">逾期</Tag>}
+              {record.is_frozen && <Tag color="warning">已冻结</Tag>}
+            </Space>
+          )
+        },
+      },
+      {
+        title: '优先级',
+        dataIndex: 'priority',
+        key: 'priority',
+        width: 90,
+        render: (_: any, record: any) => {
+          if (record.isParent) return null
+          const config = PRIORITY_MAP[record.priority || 'normal'] || { text: record.priority || '正常', color: 'blue' }
+          return <Tag color={config.color}>{config.text}</Tag>
+        },
+      },
+      {
+        title: '计划开始',
+        dataIndex: 'planned_start_date',
+        key: 'planned_start_date',
+        width: 110,
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
+      },
+      {
+        title: '计划结束',
+        dataIndex: 'planned_end_date',
+        key: 'planned_end_date',
+        width: 110,
+        render: (_: any, record: any) => (record.isParent ? null : (record.planned_end_date ? dayjs(record.planned_end_date).format('YYYY-MM-DD') : '-')),
+      },
+    ]
+    if (treeData.length === 0) {
+      return (
+        <Empty
+          description="暂无在制工单"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          style={{ marginTop: 60 }}
+        />
+      )
+    }
+    return (
+      <Table
+        columns={treeColumns}
+        dataSource={treeData}
+        pagination={false}
+        size="small"
+        defaultExpandAllRows
+        rowKey="key"
+        scroll={{ x: 'max-content' }}
+      />
+    )
+  }
+
   /**
    * 表格列定义
    */
@@ -2417,7 +2757,7 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 120,
+      width: 140,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: {
@@ -2436,9 +2776,14 @@ const WorkOrdersPage: React.FC = () => {
           normal: 'default',
         }
         const color = colorMap[lifecycle.status || 'normal'] || 'default'
+        const isOverdue =
+          record.planned_end_date &&
+          ['released', 'in_progress', '已下达', '执行中'].includes(record.status || '') &&
+          dayjs(record.planned_end_date).isBefore(dayjs(), 'day')
         return (
           <Space>
             <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
+            {isOverdue && <Tag color="error">逾期</Tag>}
             {record.is_frozen && <Tag color="warning">已冻结</Tag>}
           </Space>
         )
@@ -2879,7 +3224,11 @@ const WorkOrdersPage: React.FC = () => {
             </Button>,
           ]}
           onDelete={handleDelete}
-          viewTypes={['table', 'help']}
+          viewTypes={['table', 'productTree', 'orderTree', 'help']}
+          customViews={[
+            { key: 'productTree', label: '在制产品', icon: ShoppingOutlined, render: renderProductTree },
+            { key: 'orderTree', label: '在制订单', icon: FileTextOutlined, render: renderOrderTree },
+          ]}
           touchViewConfig={{
             renderCard: renderTouchCard,
             columns: 1,

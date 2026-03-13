@@ -9,6 +9,7 @@ import React, { useRef, ReactNode, useState, useEffect, Suspense, lazy } from 'r
 import { useTranslation } from 'react-i18next'
 import {
   ProTable,
+  ProCard,
   ActionType,
   ProColumns,
   ProFormInstance,
@@ -31,6 +32,7 @@ import {
   ImportOutlined,
   DownloadOutlined,
   SyncOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin'
 
@@ -55,9 +57,33 @@ const useProTableSearch = () => {
 import ErrorBoundary from '../error-boundary'
 import { useConfigStore } from '../../stores/configStore'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
+import { useAntdResizableHeader } from 'use-antd-resizable-header'
+import 'use-antd-resizable-header/dist/style.css'
+import { TableContext } from '@ant-design/pro-table/es/Store/Provide'
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
 import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
+
+/** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
+function TableColumnResetButton({
+  onResetResizable,
+}: {
+  onResetResizable: () => void
+}) {
+  const { t } = useTranslation()
+  const counter = React.useContext(TableContext)
+  const { clearPersistenceStorage, setColumnsMap, defaultColumnKeyMap } = counter || {}
+  const handleClick = () => {
+    clearPersistenceStorage?.()
+    setColumnsMap?.(defaultColumnKeyMap || {})
+    onResetResizable()
+  }
+  return (
+    <a onClick={handleClick} className="ant-pro-table-column-setting-action-rest-button" style={{ marginLeft: 8 }}>
+      {t('components.uniTable.columnReset', '重置')}
+    </a>
+  )
+}
 
 /**
  * 从 columns 自动生成导入配置
@@ -401,15 +427,15 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 支持：'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
    * 默认：['table', 'help'] - 表格视图 + 帮助视图
    */
-  viewTypes?: Array<'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'>
+  viewTypes?: Array<'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt' | (string & {})>
   /**
    * 默认视图类型（默认：'table'）
    */
-  defaultViewType?: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
+  defaultViewType?: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt' | (string & {})
   /**
    * 视图切换回调
    */
-  onViewTypeChange?: (viewType: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt') => void
+  onViewTypeChange?: (viewType: string) => void
   /**
    * 帮助视图配置（仅当 viewTypes 包含 'help' 时生效）
    */
@@ -499,6 +525,16 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     }>
   }
   /**
+   * 自定义视图配置（用于扩展视图类型，如树形表格等）
+   * 每个视图需提供 key、label、icon、render 函数
+   */
+  customViews?: Array<{
+    key: string
+    label: string
+    icon: React.ComponentType<any>
+    render: (data: T[]) => React.ReactNode
+  }>
+  /**
    * 触屏视图配置（仅当 viewTypes 包含 'touch' 时生效）
    */
   touchViewConfig?: {
@@ -581,6 +617,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   cardViewConfig,
   kanbanViewConfig,
   statsViewConfig,
+  customViews,
   touchViewConfig,
   toolBarButtonSize,
   loadingDelay: loadingDelayProp,
@@ -609,10 +646,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 800)
 
-  // 视图类型状态
-  const [currentViewType, setCurrentViewType] = useState<
-    'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt'
-  >(defaultViewType)
+  // 视图类型状态（支持内置类型及 customViews 的 key）
+  const [currentViewType, setCurrentViewType] = useState<string>(defaultViewType)
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([])
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
@@ -707,6 +742,37 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return col
     })
   }, [effectiveColumns, dateFormatKey])
+
+  // 列宽拖拽：至少一列不能拖动（width 不设置），确保满足 use-antd-resizable-header 要求
+  const columnsForResize = React.useMemo(() => {
+    if (!processedColumns.length) return []
+    const allHaveWidth = processedColumns.every((c: any) => c.width != null)
+    if (!allHaveWidth) return processedColumns
+    const lastIdx = processedColumns.length - 1
+    return processedColumns.map((col: any, i: number) =>
+      i === lastIdx ? (() => { const { width, ...rest } = col; return rest })() : col
+    )
+  }, [processedColumns])
+
+  // 列宽拖拽 hook（仅表格视图时生效，与 ProTable 列设置共存）
+  const tableId = headerTitle
+  const { components: resizableComponents, resizableColumns, tableWidth, resetColumns, refresh } = useAntdResizableHeader({
+    columns: columnsForResize,
+    columnsState: tableId
+      ? { persistenceKey: `ui.tables.${tableId}.columnsWidth`, persistenceType: 'localStorage' }
+      : undefined,
+  })
+
+  const handleColumnReset = React.useCallback(() => {
+    if (tableId) {
+      try {
+        localStorage.removeItem(`ui.tables.${tableId}.columnsWidth`)
+      } catch (_) {}
+      resetColumns(true)
+      refresh()
+      syncTablePreference(tableId, { columns: {}, columnsWidth: {} }).catch(() => {})
+    }
+  }, [tableId, resetColumns, refresh, syncTablePreference])
 
   // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
   const effectiveImportConfig = React.useMemo(() => {
@@ -928,7 +994,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 处理视图类型切换
    */
-  const handleViewTypeChange = (viewType: 'table' | 'detailTable' | 'help' | 'card' | 'kanban' | 'stats' | 'touch' | 'gantt') => {
+  const handleViewTypeChange = (viewType: string) => {
     setCurrentViewType(viewType)
     if (onViewTypeChange) {
       onViewTypeChange(viewType)
@@ -943,7 +1009,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return null
     }
 
-    const viewTypeOptions = [
+    const builtinOptions = [
       { value: 'table', label: t('components.uniTable.viewTable'), icon: TableOutlined },
       { value: 'detailTable', label: t('components.uniTable.viewDetailTable'), icon: UnorderedListOutlined },
       { value: 'card', label: t('components.uniTable.viewCard'), icon: AppstoreOutlined },
@@ -952,7 +1018,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       { value: 'stats', label: t('components.uniTable.viewStats'), icon: BarChartOutlined },
       { value: 'touch', label: t('components.uniTable.viewTouch'), icon: TabletOutlined },
       { value: 'help', label: t('components.uniTable.viewHelp'), icon: QuestionCircleOutlined },
-    ].filter(option => viewTypes.includes(option.value as any))
+    ]
+    const customOptions = (customViews ?? []).map(v => ({
+      value: v.key,
+      label: v.label,
+      icon: v.icon,
+    }))
+    const filtered = [...builtinOptions, ...customOptions].filter(option =>
+      viewTypes.includes(option.value as any)
+    )
+    // 按 viewTypes 顺序排列，确保帮助等可排在最后
+    const viewTypeOptions = [...filtered].sort(
+      (a, b) => viewTypes.indexOf(a.value as any) - viewTypes.indexOf(b.value as any)
+    )
 
     return (
       <Radio.Group
@@ -1158,6 +1236,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
           overflow: visible !important;
+        }
+        /* 标准视图与在制视图统一：操作按钮组左边距 16px */
+        .uni-table-pro-table .ant-pro-card .ant-pro-card-head,
+        .uni-table-pro-table .ant-pro-card .ant-pro-card-header {
+          padding-left: 16px !important;
+          padding-right: 16px !important;
+          padding-inline: 16px !important;
         }
         .uni-table-pro-table .ant-pro-card .ant-pro-card-body {
           padding-left: 16px !important;
@@ -1409,7 +1494,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}
               formRef={formRef}
-              columns={processedColumns}
+              columns={resizableColumns.length > 0 ? resizableColumns : processedColumns}
               request={handleRequest}
               debounceTime={300}
               rowKey={rowKey}
@@ -1426,10 +1511,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               }}
               // 支持列设置持久化：本地 localStorage + 同步到用户偏好（跨设备生效）
               columnsState={{
-                persistenceKey: (restProps as any).headerTitle ? `ui.tables.${(restProps as any).headerTitle}.columns` : undefined,
+                persistenceKey: tableId ? `ui.tables.${tableId}.columns` : undefined,
                 persistenceType: 'localStorage',
                 onChange: (map) => {
-                  const tableId = (restProps as any).headerTitle
                   if (!tableId || !map) return
                   // 防抖同步到后端偏好设置，避免频繁请求
                   if (columnsSyncDebounceRef.current) clearTimeout(columnsSyncDebounceRef.current)
@@ -1443,6 +1527,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 density: true,
                 setting: {
                   listsHeight: 360,
+                  checkedReset: false,
+                  extra: <TableColumnResetButton onResetResizable={handleColumnReset} />,
                 },
                 reload: () => actionRef.current?.reload(),
                 // 设为 false 避免 ProTable 内部 ConfigProvider 覆盖 getPopupContainer，使列设置等弹出层挂到 body 不被截断
@@ -1508,7 +1594,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 pageSizeOptions: ['10', '20', '50', '100'],
                 showTotal: (total, range) => t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
               }}
-              scroll={hasActionColumn ? { x: 'max-content' } : undefined}
+              components={resizableColumns.length > 0 ? resizableComponents : undefined}
+              scroll={
+                resizableColumns.length > 0
+                  ? { x: tableWidth ?? 'max-content' }
+                  : hasActionColumn
+                    ? { x: 'max-content' }
+                    : undefined
+              }
               {...(() => {
                 // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
                 // toolBarRender 已经在左侧处理了
@@ -1793,6 +1886,52 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 </div>
               )}
             </div>
+          )}
+
+          {/* 自定义视图（customViews）- 与表格视图保持相同容器结构（操作按钮、导入导出等） */}
+          {customViews?.map(
+            cv =>
+              currentViewType === cv.key &&
+              viewTypes.includes(cv.key) && (
+                <div
+                  key={cv.key}
+                  className="uni-table-pro-table"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    margin: 0,
+                    padding: 0,
+                  }}
+                >
+                  <ProCard
+                    bordered
+                    style={{
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+                      borderRadius: token.borderRadius,
+                      overflow: 'visible',
+                    }}
+                    headerStyle={{ paddingLeft: 16, paddingRight: 16 }}
+                    bodyStyle={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}
+                    title={buildHeaderActions() || headerTitle || undefined}
+                    extra={
+                      <Space size="small">
+                        {buildRightActions()}
+                        <Button
+                          key="reload"
+                          icon={<ReloadOutlined />}
+                          size={toolBarButtonSize}
+                          onClick={() => actionRef.current?.reload?.()}
+                        >
+                          {t('components.uniTable.reload')}
+                        </Button>
+                      </Space>
+                    }
+                  >
+                    <div style={{ minHeight: '200px' }}>{cv.render(tableData)}</div>
+                  </ProCard>
+                </div>
+              )
           )}
 
           {/* 触屏视图 */}

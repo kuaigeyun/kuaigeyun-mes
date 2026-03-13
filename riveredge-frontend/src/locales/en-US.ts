@@ -1169,6 +1169,8 @@ export default {
   'components.uniTable.exampleField': 'Example {{title}}',
   'components.uniTable.validatorNumber': '{{title}} must be a number',
   'components.uniTable.validatorDate': '{{title}} must be a valid date',
+  'components.uniTable.columnReset': 'Reset',
+  'components.uniTable.reload': 'Reload',
 
   // UniQuery advanced search
   'components.uniQuery.advancedSearch': 'Advanced search',

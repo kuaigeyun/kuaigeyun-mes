@@ -1176,6 +1176,8 @@ export default {
   'components.uniTable.exampleField': '示例{{title}}',
   'components.uniTable.validatorNumber': '{{title}}必须是数字',
   'components.uniTable.validatorDate': '{{title}}必须是有效的日期',
+  'components.uniTable.columnReset': '重置',
+  'components.uniTable.reload': '刷新',
 
   // UniQuery 高级搜索
   'components.uniQuery.advancedSearch': '高级搜索',
