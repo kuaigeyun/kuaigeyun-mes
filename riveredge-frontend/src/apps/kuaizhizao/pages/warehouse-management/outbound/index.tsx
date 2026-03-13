@@ -4,18 +4,20 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, message, Card, Table, Row, Col, Form } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
-import { warehouseApi } from '../../../services/production';
+import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
+import { listSalesOrders } from '../../../services/sales-order';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 统一的出库单接口（结合生产领料和销售出库）
@@ -66,6 +68,126 @@ const OutboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
+
+  // 批量出库 Modal
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
+  const [batchForm] = Form.useForm();
+  const [batchOutboundType, setBatchOutboundType] = useState<'production_picking' | 'sales_delivery'>('production_picking');
+  const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
+  const [salesOrderOptions, setSalesOrderOptions] = useState<{ label: string; value: number }[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+
+  /** 批量出库：加载工单、销售订单、仓库 */
+  useEffect(() => {
+    if (!batchModalVisible) return;
+    const load = async () => {
+      try {
+        const [woRes, soRes, whRes] = await Promise.all([
+          workOrderApi.list({ skip: 0, limit: 500 }),
+          listSalesOrders({ skip: 0, limit: 500 }),
+          masterWarehouseApi.list({ isActive: true }),
+        ]);
+        const woList = Array.isArray(woRes) ? woRes : (woRes as any)?.data ?? (woRes as any)?.items ?? [];
+        const eligibleWo = woList.filter(
+          (wo: any) => ['已下达', '进行中', 'released', 'in_progress'].includes(wo.status)
+        );
+        setWorkOrderOptions(
+          eligibleWo.map((wo: any) => ({
+            label: `${wo.code || wo.id} - ${wo.product_name || wo.name || '-'}`,
+            value: wo.id,
+          }))
+        );
+        const soData = (soRes as any)?.data ?? (soRes as any)?.items ?? soRes ?? [];
+        const soList = Array.isArray(soData) ? soData : [];
+        const eligibleSo = soList.filter(
+          (so: any) => ['已审核', '已确认', 'AUDITED', 'CONFIRMED'].includes(so.status)
+        );
+        setSalesOrderOptions(
+          eligibleSo.map((so: any) => ({
+            label: `${so.order_code || so.code || so.id} - ${so.customer_name || '-'}`,
+            value: so.id,
+          }))
+        );
+        const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
+        setWarehouseOptions(
+          (Array.isArray(whList) ? whList : []).map((w: any) => ({
+            label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+            value: w.id,
+            name: w.name || '',
+          }))
+        );
+      } catch {
+        setWorkOrderOptions([]);
+        setSalesOrderOptions([]);
+        setWarehouseOptions([]);
+      }
+    };
+    load();
+  }, [batchModalVisible]);
+
+  /** 批量出库提交 */
+  const handleBatchOutboundSubmit = async () => {
+    try {
+      const values = await batchForm.validateFields();
+      const type = values.batch_outbound_type || batchOutboundType;
+      setBatchSubmitting(true);
+
+      if (type === 'sales_delivery') {
+        const orderIds = values.sales_order_ids as number[];
+        const warehouseId = values.warehouse_id as number;
+        const wh = warehouseOptions.find((w) => w.value === warehouseId);
+        if (!orderIds?.length) {
+          messageApi.warning('请选择至少一个销售订单');
+          return;
+        }
+        if (!warehouseId) {
+          messageApi.warning('请选择出库仓库');
+          return;
+        }
+        let success = 0;
+        for (const id of orderIds) {
+          try {
+            await warehouseApi.salesDelivery.pullFromSalesOrder({
+              sales_order_id: id,
+              warehouse_id: warehouseId,
+              warehouse_name: wh?.name,
+            });
+            success++;
+          } catch (e: any) {
+            messageApi.warning(`销售订单 ${id} 上拉失败：${e?.message || e?.response?.data?.detail || '未知错误'}`);
+          }
+        }
+        messageApi.success(`批量销售出库成功，共创建 ${success} 张销售出库单`);
+      } else {
+        const workOrderIds = values.work_order_ids as number[];
+        const warehouseId = values.warehouse_id as number;
+        const wh = warehouseOptions.find((w) => w.value === warehouseId);
+        if (!workOrderIds?.length) {
+          messageApi.warning('请选择至少一个工单');
+          return;
+        }
+        if (!warehouseId) {
+          messageApi.warning('请选择出库仓库');
+          return;
+        }
+        const result = await warehouseApi.productionPicking.batchPick({
+          work_order_ids: workOrderIds,
+          warehouse_id: warehouseId,
+          warehouse_name: wh?.name,
+        });
+        const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
+        messageApi.success(`批量生产领料成功，共创建 ${list.length} 张领料单`);
+      }
+      setBatchModalVisible(false);
+      batchForm.resetFields();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.response?.data?.detail || '批量出库失败');
+    } finally {
+      setBatchSubmitting(false);
+    }
+  };
 
   const handleCreate = () => {
     setOutboundType('production');
@@ -164,7 +286,11 @@ const OutboundPage: React.FC = () => {
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         const colorMap: Record<string, string> = {
           草稿: 'default',
+          待领料: 'processing',
+          待出库: 'processing',
           已确认: 'processing',
+          已领料: 'success',
+          已出库: 'success',
           已完成: 'success',
           已取消: 'error',
         };
@@ -233,7 +359,7 @@ const OutboundPage: React.FC = () => {
           >
             详情
           </Button>
-          {record.status === 'draft' && (
+          {(record.status === 'draft' || record.status === '草稿' || record.status === '待领料' || record.status === '待出库') && (
             <Button
               type="link"
               size="small"
@@ -241,7 +367,7 @@ const OutboundPage: React.FC = () => {
               onClick={() => handleConfirm(record)}
               style={{ color: '#52c41a' }}
             >
-              确认
+              确认出库
             </Button>
           )}
         </Space>
@@ -272,7 +398,7 @@ const OutboundPage: React.FC = () => {
         request={async (params) => {
           try {
             // 并行获取生产领料单和销售出库单
-            const [productionPickings, salesDeliveries] = await Promise.all([
+            const [pickingRes, deliveryRes] = await Promise.all([
               warehouseApi.productionPicking.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
@@ -285,16 +411,16 @@ const OutboundPage: React.FC = () => {
               }),
             ]);
 
-            // 合并并转换数据格式
-            const pickingData = productionPickings.data?.map(item => ({
+            // 后端可能直接返回数组，或 { data/items: [] } 格式
+            const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
+            const pickingData = toList(pickingRes).map((item: any) => ({
               ...item,
               outbound_type: 'production_picking' as const,
-            })) || [];
-
-            const deliveryData = salesDeliveries.data?.map(item => ({
+            }));
+            const deliveryData = toList(deliveryRes).map((item: any) => ({
               ...item,
               outbound_type: 'sales_delivery' as const,
-            })) || [];
+            }));
 
             // 合并两个数据源
             const combinedData = [...pickingData, ...deliveryData];
@@ -302,10 +428,14 @@ const OutboundPage: React.FC = () => {
             // 按创建时间排序
             combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
 
+            const total =
+              (typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
+              (typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length);
+
             return {
               data: combinedData,
               success: true,
-              total: (productionPickings.total || 0) + (salesDeliveries.total || 0),
+              total,
             };
           } catch (error) {
             messageApi.error('获取出库单列表失败');
@@ -348,6 +478,17 @@ const OutboundPage: React.FC = () => {
             onClick={handleCreate}
           >
             {'新建出库单' + NEW_SHORTCUT_HINT}
+          </Button>,
+          <Button
+            key="batch"
+            icon={<InboxOutlined />}
+            onClick={() => {
+              batchForm.resetFields();
+              setBatchOutboundType('production_picking');
+              setBatchModalVisible(true);
+            }}
+          >
+            批量出库
           </Button>,
         ]}
       />
@@ -448,6 +589,91 @@ const OutboundPage: React.FC = () => {
         </Row>
       </FormModalTemplate>
 
+      <Modal
+        title="批量出库"
+        open={batchModalVisible}
+        onCancel={() => setBatchModalVisible(false)}
+        onOk={handleBatchOutboundSubmit}
+        confirmLoading={batchSubmitting}
+        width={520}
+        okText="确认出库"
+      >
+        <p style={{ marginBottom: 16, color: '#666' }}>
+          根据上游单据批量创建出库单。生产领料：从工单下推；销售出库：从销售订单上拉。
+        </p>
+        <Form form={batchForm} layout="vertical" initialValues={{ batch_outbound_type: 'production_picking' }}>
+          <Form.Item
+            name="batch_outbound_type"
+            label="出库类型"
+            rules={[{ required: true }]}
+          >
+            <ProFormSelect
+              options={[
+                { label: '生产领料（从工单）', value: 'production_picking' },
+                { label: '销售出库（从销售订单）', value: 'sales_delivery' },
+              ]}
+              fieldProps={{
+                onChange: (v: string) => setBatchOutboundType(v as 'production_picking' | 'sales_delivery'),
+              }}
+            />
+          </Form.Item>
+          {batchOutboundType === 'production_picking' && (
+            <>
+              <Form.Item
+                name="work_order_ids"
+                label="选择工单"
+                rules={[{ required: true, message: '请选择至少一个工单' }]}
+              >
+                <ProFormSelect
+                  mode="multiple"
+                  placeholder="请选择工单（已下达/进行中）"
+                  options={workOrderOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+              <Form.Item
+                name="warehouse_id"
+                label="出库仓库"
+                rules={[{ required: true, message: '请选择出库仓库' }]}
+              >
+                <ProFormSelect
+                  placeholder="请选择仓库"
+                  options={warehouseOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+            </>
+          )}
+          {batchOutboundType === 'sales_delivery' && (
+            <>
+              <Form.Item
+                name="sales_order_ids"
+                label="选择销售订单"
+                rules={[{ required: true, message: '请选择至少一个销售订单' }]}
+              >
+                <ProFormSelect
+                  mode="multiple"
+                  placeholder="请选择销售订单（已审核/已确认）"
+                  options={salesOrderOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+              <Form.Item
+                name="warehouse_id"
+                label="出库仓库"
+                rules={[{ required: true, message: '请选择出库仓库' }]}
+              >
+                <ProFormSelect
+                  placeholder="请选择仓库"
+                  options={warehouseOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
+
       <DetailDrawerTemplate
         title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
@@ -455,7 +681,7 @@ const OutboundPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
-          currentOrder && (currentOrder.status === 'draft' || currentOrder.status === '草稿' || currentOrder.status === '待领料' || currentOrder.status === '待出库') && (
+          currentOrder && ['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') && (
             <Button
               type="primary"
               icon={<CheckCircleOutlined />}

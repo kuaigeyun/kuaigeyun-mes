@@ -71,5 +71,6 @@
   // 文件编码
   "files.encoding": "utf8",
   "files.autoGuessEncoding": true,
-  "chatgpt.openOnStartup": true
+  "chatgpt.openOnStartup": true,
+  "liveServer.settings.port": 5581
 }

@@ -4,18 +4,20 @@
  * 提供入库单的管理功能，支持多种入库类型：采购入库、成品入库（产品入库）、生产退料等。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import CodeField from '../../../../../components/code-field';
-import { warehouseApi } from '../../../services/production';
+import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
@@ -70,12 +72,122 @@ const InboundPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
 
+  // 批量入库 Modal
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
+  const [batchForm] = Form.useForm();
+  const [batchInboundType, setBatchInboundType] = useState<'finished_goods' | 'purchase'>('finished_goods');
+  const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
+  const [purchaseOrderOptions, setPurchaseOrderOptions] = useState<{ label: string; value: number }[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+
   const handleCreate = () => {
     setInboundType('purchase');
     setCreateModalVisible(true);
   };
 
   useNewShortcut(handleCreate);
+
+  /** 批量入库：加载工单、采购订单、仓库 */
+  useEffect(() => {
+    if (!batchModalVisible) return;
+    const load = async () => {
+      try {
+        const [woRes, poRes, whRes] = await Promise.all([
+          workOrderApi.list({ skip: 0, limit: 500 }),
+          listPurchaseOrders({ skip: 0, limit: 500 }),
+          masterWarehouseApi.list({ isActive: true }),
+        ]);
+        const woList = Array.isArray(woRes) ? woRes : (woRes as any)?.data ?? (woRes as any)?.items ?? [];
+        const eligibleWo = woList.filter(
+          (wo: any) => ['进行中', '已完成', 'in_progress', 'completed'].includes(wo.status)
+        );
+        setWorkOrderOptions(
+          eligibleWo.map((wo: any) => ({
+            label: `${wo.code || wo.id} - ${wo.product_name || wo.name || '-'}`,
+            value: wo.id,
+          }))
+        );
+        const poData = (poRes as any)?.data ?? (poRes as any)?.items ?? poRes ?? [];
+        const poList = Array.isArray(poData) ? poData : [];
+        const eligiblePo = poList.filter(
+          (po: any) => ['已审核', '已确认', 'AUDITED', 'CONFIRMED'].includes(po.status)
+        );
+        setPurchaseOrderOptions(
+          eligiblePo.map((po: any) => ({
+            label: `${po.order_code || po.code || po.id} - ${po.supplier_name || '-'}`,
+            value: po.id,
+          }))
+        );
+        const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
+        setWarehouseOptions(
+          (Array.isArray(whList) ? whList : []).map((w: any) => ({
+            label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+            value: w.id,
+            name: w.name || '',
+          }))
+        );
+      } catch {
+        setWorkOrderOptions([]);
+        setPurchaseOrderOptions([]);
+        setWarehouseOptions([]);
+      }
+    };
+    load();
+  }, [batchModalVisible]);
+
+  /** 批量入库提交 */
+  const handleBatchSubmit = async () => {
+    try {
+      const values = await batchForm.validateFields();
+      const type = values.batch_inbound_type || batchInboundType;
+      setBatchSubmitting(true);
+
+      if (type === 'purchase') {
+        const orderIds = values.purchase_order_ids as number[];
+        if (!orderIds?.length) {
+          messageApi.warning('请选择至少一个采购订单');
+          return;
+        }
+        let success = 0;
+        for (const id of orderIds) {
+          try {
+            await pushPurchaseOrderToReceipt(id);
+            success++;
+          } catch (e: any) {
+            messageApi.warning(`采购订单 ${id} 下推失败：${e?.message || e?.response?.data?.detail || '未知错误'}`);
+          }
+        }
+        messageApi.success(`批量采购入库成功，共创建 ${success} 张采购入库单`);
+      } else {
+        const workOrderIds = values.work_order_ids as number[];
+        const warehouseId = values.warehouse_id as number;
+        const wh = warehouseOptions.find((w) => w.value === warehouseId);
+        if (!workOrderIds?.length) {
+          messageApi.warning('请选择至少一个工单');
+          return;
+        }
+        if (!warehouseId) {
+          messageApi.warning('请选择入库仓库');
+          return;
+        }
+        const result = await warehouseApi.finishedGoodsReceipt.batchReceipt({
+          work_order_ids: workOrderIds,
+          warehouse_id: warehouseId,
+          warehouse_name: wh?.name,
+        });
+        const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
+        messageApi.success(`批量成品入库成功，共创建 ${list.length} 张成品入库单`);
+      }
+      setBatchModalVisible(false);
+      batchForm.resetFields();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.response?.data?.detail || '批量入库失败');
+    } finally {
+      setBatchSubmitting(false);
+    }
+  };
 
   /**
    * 处理查看详情
@@ -196,6 +308,7 @@ const InboundPage: React.FC = () => {
         const stageName = lifecycle.stageName ?? record.status ?? '草稿';
         const colorMap: Record<string, string> = {
           草稿: 'default',
+          待入库: 'processing',
           已确认: 'processing',
           已完成: 'success',
           已取消: 'error',
@@ -269,7 +382,7 @@ const InboundPage: React.FC = () => {
           >
             详情
           </Button>
-          {(record.status === 'draft' || record.status === '待退料') && (
+          {(record.status === 'draft' || record.status === '草稿' || record.status === '待入库' || record.status === '待退料') && (
             <>
               <Button
                 type="link"
@@ -278,7 +391,7 @@ const InboundPage: React.FC = () => {
                 onClick={() => handleConfirm(record)}
                 style={{ color: '#52c41a' }}
               >
-                {record.receipt_type === 'production_return' ? '确认退料' : '确认'}
+                {record.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
               </Button>
               {record.receipt_type === 'production_return' && (
                 <Button
@@ -325,32 +438,35 @@ const InboundPage: React.FC = () => {
             const listParams = { skip, limit, ...params };
 
             // 并行获取采购入库单、成品入库单、生产退料单
-            const [purchaseReceipts, finishedGoodsReceipts, productionReturns] = await Promise.all([
+            const [purchaseRes, finishedRes, returnRes] = await Promise.all([
               warehouseApi.purchaseReceipt.list(listParams),
               warehouseApi.finishedGoodsReceipt.list(listParams),
               warehouseApi.productionReturn.list(listParams),
             ]);
 
-            const purchaseData = (purchaseReceipts.data ?? purchaseReceipts.items ?? [])?.map((item: any) => ({
+            // 后端可能直接返回数组，或 { data/items: [] } 格式
+            const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
+            const purchaseData = toList(purchaseRes).map((item: any) => ({
               ...item,
               receipt_type: 'purchase' as const,
-            })) || [];
-
-            const finishedData = (finishedGoodsReceipts.data ?? finishedGoodsReceipts.items ?? [])?.map((item: any) => ({
+            }));
+            const finishedData = toList(finishedRes).map((item: any) => ({
               ...item,
               receipt_type: 'finished_goods' as const,
-            })) || [];
-
-            const returnData = (Array.isArray(productionReturns) ? productionReturns : (productionReturns.data ?? productionReturns.items ?? []))?.map((item: any) => ({
+            }));
+            const returnData = toList(returnRes).map((item: any) => ({
               ...item,
               receipt_type: 'production_return' as const,
               receipt_code: item.return_code,
-            })) || [];
+            }));
 
             const combinedData = [...purchaseData, ...finishedData, ...returnData];
             combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
 
-            const total = (purchaseReceipts.total ?? purchaseData.length) + (finishedGoodsReceipts.total ?? finishedData.length) + (productionReturns?.total ?? returnData.length);
+            const total =
+              (typeof purchaseRes?.total === 'number' ? purchaseRes.total : purchaseData.length) +
+              (typeof finishedRes?.total === 'number' ? finishedRes.total : finishedData.length) +
+              (typeof returnRes?.total === 'number' ? returnRes.total : returnData.length);
 
             return {
               data: combinedData,
@@ -396,6 +512,17 @@ const InboundPage: React.FC = () => {
             onClick={handleCreate}
           >
             {'新建入库单' + NEW_SHORTCUT_HINT}
+          </Button>,
+          <Button
+            key="batch"
+            icon={<InboxOutlined />}
+            onClick={() => {
+              batchForm.resetFields();
+              setBatchInboundType('finished_goods');
+              setBatchModalVisible(true);
+            }}
+          >
+            批量入库
           </Button>,
         ]}
       />
@@ -497,6 +624,78 @@ const InboundPage: React.FC = () => {
           <Col span={12} />
         </Row>
       </FormModalTemplate>
+
+      <Modal
+        title="批量入库"
+        open={batchModalVisible}
+        onCancel={() => setBatchModalVisible(false)}
+        onOk={handleBatchSubmit}
+        confirmLoading={batchSubmitting}
+        width={520}
+        okText="确认入库"
+      >
+        <p style={{ marginBottom: 16, color: '#666' }}>
+          根据上游单据批量创建入库单。成品入库：从工单下推；采购入库：从采购订单下推。
+        </p>
+        <Form form={batchForm} layout="vertical" initialValues={{ batch_inbound_type: 'finished_goods' }}>
+          <Form.Item
+            name="batch_inbound_type"
+            label="入库类型"
+            rules={[{ required: true }]}
+          >
+            <ProFormSelect
+              options={[
+                { label: '成品入库（从工单）', value: 'finished_goods' },
+                { label: '采购入库（从采购订单）', value: 'purchase' },
+              ]}
+              fieldProps={{
+                onChange: (v: string) => setBatchInboundType(v as 'finished_goods' | 'purchase'),
+              }}
+            />
+          </Form.Item>
+          {batchInboundType === 'finished_goods' && (
+            <>
+              <Form.Item
+                name="work_order_ids"
+                label="选择工单"
+                rules={[{ required: true, message: '请选择至少一个工单' }]}
+              >
+                <ProFormSelect
+                  mode="multiple"
+                  placeholder="请选择工单（进行中/已完成且有报工）"
+                  options={workOrderOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+              <Form.Item
+                name="warehouse_id"
+                label="入库仓库"
+                rules={[{ required: true, message: '请选择入库仓库' }]}
+              >
+                <ProFormSelect
+                  placeholder="请选择仓库"
+                  options={warehouseOptions}
+                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+                />
+              </Form.Item>
+            </>
+          )}
+          {batchInboundType === 'purchase' && (
+            <Form.Item
+              name="purchase_order_ids"
+              label="选择采购订单"
+              rules={[{ required: true, message: '请选择至少一个采购订单' }]}
+            >
+              <ProFormSelect
+                mode="multiple"
+                placeholder="请选择采购订单（已审核/已确认且有未入库数量）"
+                options={purchaseOrderOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
 
       <DetailDrawerTemplate
         title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}

@@ -12,6 +12,7 @@ function norm(s: string | undefined): string {
 
 const STATUS_TO_STAGE: Record<string, string> = {
   草稿: '草稿',
+  待入库: '待入库',
   已确认: '已确认',
   已完成: '已完成',
   已取消: '已取消',
@@ -24,6 +25,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   const stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
   const keyMap: Record<string, string> = {
     草稿: 'draft',
+    待入库: 'pending_inbound',
     已确认: 'confirmed',
     已完成: 'completed',
     已取消: 'cancelled',
@@ -38,6 +40,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   ];
   const stageToIdx: Record<string, number> = {
     草稿: 0,
+    待入库: 1,
     已确认: 1,
     已完成: 2,
     已取消: 0,
@@ -58,7 +61,7 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     current_stage_name: stageName,
     status: isException ? 'exception' : stageName === '已完成' || stageName === '已退料' ? 'success' : 'normal',
     main_stages: mainStages,
-    next_step_suggestions: stageName === '草稿' ? ['确认'] : stageName === '已确认' || stageName === '待退料' ? ['完成'] : [],
+    next_step_suggestions: ['草稿', '待入库'].includes(stageName) ? ['确认'] : ['已确认', '待退料'].includes(stageName) ? ['完成'] : [],
   };
 }
 

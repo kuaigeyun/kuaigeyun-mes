@@ -914,12 +914,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
 
+  // 稳定引用：避免每次渲染创建新函数导致 useUnifiedMenuData 重复计算
+  const getSystemMenuConfig = React.useCallback(() => getMenuConfig(t), [t]);
+
   const {
     sidebarMenuData: filteredMenuData,
     breadcrumbMenuData,
-    refetch: refetchApplicationMenus,
   } = useUnifiedMenuData({
-    getSystemMenuConfig: () => getMenuConfig(t),
+    getSystemMenuConfig,
     convertMenuTreeToMenuDataItem,
     t,
     collapsed,
@@ -933,7 +935,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     refetchOnWindowFocus: true,
   });
 
-  // 用户登录后清除菜单缓存并触发菜单查询
+  // 用户登录后清除菜单缓存（invalidate 会自动触发 refetch，避免重复调用导致竞态）
   const prevUserIdRef = useRef<number | undefined>();
   useEffect(() => {
     const userId = currentUser?.id;
@@ -941,19 +943,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     prevUserIdRef.current = userId;
     if (!justLoggedIn) return;
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-    requestAnimationFrame(() => setTimeout(() => refetchApplicationMenus(), 0));
-  }, [currentUser?.id, queryClient, refetchApplicationMenus]);
+  }, [currentUser?.id, queryClient]);
 
-  // 监听租户ID变化，刷新菜单（React Query 按 queryKey 缓存，切换租户需 invalidate）
+  // 监听租户ID变化，刷新菜单（invalidate 会自动触发 refetch）
   const prevTenantIdRef = useRef<number | undefined>();
   useEffect(() => {
     const tid = currentUser?.tenant_id;
     if (tid !== undefined && prevTenantIdRef.current !== undefined && prevTenantIdRef.current !== tid) {
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-      refetchApplicationMenus();
     }
     prevTenantIdRef.current = tid;
-  }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
+  }, [currentUser?.tenant_id, queryClient]);
 
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
@@ -1427,7 +1427,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       case 'clear-menu-cache':
         queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
-        refetchApplicationMenus();
         message.success(t('ui.clearCacheSuccess'));
         break;
       case 'lock-screen':

@@ -397,8 +397,8 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     },
     {
         "page_code": "kuaizhizao-purchase-receipt",
-        "page_name": "采购收货",
-        "page_path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
+        "page_name": "采购入库",
+        "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
         "code_field": "receipt_code",
         "code_field_label": "采购收货单编码",
         "module": "快格轻制造",
@@ -435,7 +435,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-sales-delivery",
         "page_name": "销售发货",
-        "page_path": "/apps/kuaizhizao/sales-management/sales-deliveries",
+        "page_path": "/apps/kuaizhizao/warehouse-management/outbound",
         "code_field": "delivery_code",
         "code_field_label": "销售发货单编码",
         "module": "快格轻制造",

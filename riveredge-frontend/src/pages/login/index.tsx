@@ -779,24 +779,26 @@ export default function LoginPage() {
       useUserPreferenceStore.getState().rehydrateFromStorage();
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
-      
-      // 延迟执行消息提示和导航，检查初始化状态
       const urlParams = new URL(window.location.href).searchParams;
       const redirect = urlParams.get('redirect');
-      setTimeout(async () => {
-        message.success(t('pages.login.success'));
+      const targetPath = redirect || '/system/dashboard/workplace';
+
+      // 先立即跳转，避免等待 getInitSteps 导致卡顿
+      message.success(t('pages.login.success'));
+      navigate(targetPath, { replace: true });
+
+      // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
+      (async () => {
         try {
           const { getInitSteps } = await import('../../services/init-wizard');
           const stepsRes = await getInitSteps(selectedTenantId);
           if (stepsRes.init_completed === false) {
             navigate('/init/wizard', { replace: true });
-          } else {
-            navigate(redirect || '/system/dashboard/workplace', { replace: true });
           }
         } catch {
-          navigate(redirect || '/system/dashboard/workplace', { replace: true });
+          // 忽略错误，用户已在目标页
         }
-      }, 0);
+      })();
     } else {
       message.error(t('pages.login.loginFailed'));
     }
@@ -1290,23 +1292,26 @@ export default function LoginPage() {
         setLoginResponse(null);
         setLoginCredentials(null);
 
-        // 延迟执行消息提示和导航，检查初始化状态
         const urlParams = new URL(window.location.href).searchParams;
         const redirect = urlParams.get('redirect');
-        setTimeout(async () => {
-          message.success(t('pages.login.tenantSelected'));
+        const targetPath = redirect || '/system/dashboard/workplace';
+
+        // 先立即跳转，避免等待 getInitSteps 导致卡顿
+        message.success(t('pages.login.tenantSelected'));
+        navigate(targetPath, { replace: true });
+
+        // 异步检查 init 状态，未完成则跳转 init wizard（不阻塞主流程）
+        (async () => {
           try {
             const { getInitSteps } = await import('../../services/init-wizard');
             const stepsRes = await getInitSteps(selectedTenantId);
             if (stepsRes.init_completed === false) {
               navigate('/init/wizard', { replace: true });
-            } else {
-              navigate(redirect || '/system/dashboard/workplace', { replace: true });
             }
           } catch {
-            navigate(redirect || '/system/dashboard/workplace', { replace: true });
+            // 忽略错误，用户已在目标页
           }
-        }, 0);
+        })();
       } else {
         message.error(t('pages.login.tenantSelectFailed'));
       }

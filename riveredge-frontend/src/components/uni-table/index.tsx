@@ -759,8 +759,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (isOperationColumn(col)) {
         const { width, ...rest } = col
+        // 操作列通常有 3–5 个按钮，200px 易被裁切；固定列必须有 width
+        const OPERATION_MIN_WIDTH = 280
+        const widthConfig =
+          col.fixed === 'right'
+            ? { width: Math.max(width ?? OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
+            : { minWidth: Math.max(width ?? OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
         return {
           ...rest,
+          ...widthConfig,
           onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         }
       }
@@ -769,13 +776,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [effectiveColumns, dateFormatKey])
 
   // 列宽拖拽：至少一列不能拖动（width 不设置），确保满足 use-antd-resizable-header 要求
+  // 固定列必须有 width，不能移除；从最后一列往前找第一个非固定列以移除其 width
   const columnsForResize = React.useMemo(() => {
     if (!processedColumns.length) return []
     const allHaveWidth = processedColumns.every((c: any) => c.width != null)
     if (!allHaveWidth) return processedColumns
-    const lastIdx = processedColumns.length - 1
+    let idxToRemove = -1
+    for (let i = processedColumns.length - 1; i >= 0; i--) {
+      if (!processedColumns[i].fixed) {
+        idxToRemove = i
+        break
+      }
+    }
+    if (idxToRemove < 0) return processedColumns
     return processedColumns.map((col: any, i: number) =>
-      i === lastIdx ? (() => { const { width, ...rest } = col; return rest })() : col
+      i === idxToRemove ? (() => { const { width, ...rest } = col; return rest })() : col
     )
   }, [processedColumns])
 
@@ -798,6 +813,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       syncTablePreference(tableId, { columns: {}, columnsWidth: {} }).catch(() => {})
     }
   }, [tableId, resetColumns, refresh, syncTablePreference])
+
+  // 最终传给 ProTable 的列：强制操作列宽度不小于 280，避免被持久化的小值覆盖导致裁切
+  const OPERATION_MIN_WIDTH = 280
+  const effectiveTableColumns = React.useMemo(() => {
+    const cols = resizableColumns.length > 0 ? resizableColumns : processedColumns
+    return cols.map((col: any) => {
+      if (!isOperationColumn(col)) return col
+      const w = col.width ?? col.minWidth
+      if (w != null && Number(w) >= OPERATION_MIN_WIDTH) return col
+      return { ...col, width: Math.max(Number(w) || OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
+    })
+  }, [resizableColumns, processedColumns])
 
   // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
   const effectiveImportConfig = React.useMemo(() => {
@@ -1519,7 +1546,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}
               formRef={formRef}
-              columns={resizableColumns.length > 0 ? resizableColumns : processedColumns}
+              columns={effectiveTableColumns}
               request={handleRequest}
               debounceTime={300}
               rowKey={rowKey}

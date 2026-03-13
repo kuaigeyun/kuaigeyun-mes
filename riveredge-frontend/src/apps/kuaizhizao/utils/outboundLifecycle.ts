@@ -14,8 +14,12 @@ export const getOutboundLifecycle = createLifecycleResolver({
   statusToKey: {
     草稿: 'draft',
     draft: 'draft',
+    待领料: 'pending_picking',
+    待出库: 'pending_delivery',
     已确认: 'confirmed',
     confirmed: 'confirmed',
+    已领料: 'completed',
+    已出库: 'completed',
     已完成: 'completed',
     completed: 'completed',
     已取消: 'cancelled',

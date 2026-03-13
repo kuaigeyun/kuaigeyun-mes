@@ -14,6 +14,16 @@ export const warehouseApi = {
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/production-pickings/${id}/confirm`, { method: 'POST' }),
     quickPick: async (workOrderId: string) =>
       apiRequest('/apps/kuaizhizao/production-pickings/quick-pick', { method: 'POST', params: { work_order_id: workOrderId } }),
+    /** 批量领料：从多个工单下推创建生产领料单 */
+    batchPick: async (params: { work_order_ids: number[]; warehouse_id?: number; warehouse_name?: string }) =>
+      apiRequest('/apps/kuaizhizao/production-pickings/batch-pick', {
+        method: 'POST',
+        params: {
+          work_order_ids: params.work_order_ids,
+          warehouse_id: params.warehouse_id,
+          warehouse_name: params.warehouse_name,
+        },
+      }),
   },
   productionReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'GET', params }),
@@ -87,6 +97,16 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/confirm`, { method: 'POST' }),
+    /** 批量入库：从多个工单下推创建成品入库单 */
+    batchReceipt: async (params: { work_order_ids: number[]; warehouse_id?: number; warehouse_name?: string }) =>
+      apiRequest('/apps/kuaizhizao/finished-goods-receipts/batch-receipt', {
+        method: 'POST',
+        params: {
+          work_order_ids: params.work_order_ids,
+          warehouse_id: params.warehouse_id,
+          warehouse_name: params.warehouse_name,
+        },
+      }),
   },
   salesDelivery: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/sales-deliveries', { method: 'GET', params }),

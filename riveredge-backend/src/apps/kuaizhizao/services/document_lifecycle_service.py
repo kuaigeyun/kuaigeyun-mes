@@ -486,7 +486,7 @@ def get_purchase_order_lifecycle(order: Any) -> Dict[str, Any]:
             "status": "normal",
             "main_stages": _build_main_stages(PURCHASE_ORDER_MAIN_STAGES, "audited"),
             "sub_stages": None,
-            "next_step_suggestions": ["下推收货通知", "下推采购入库"],
+            "next_step_suggestions": ["下推收货通知", "下推采购入库", "下推采购发票"],
         }
     return {
         "current_stage_key": "draft",

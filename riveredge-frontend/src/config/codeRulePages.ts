@@ -399,14 +399,15 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   },
   {
     pageCode: 'kuaizhizao-purchase-receipt',
-    pageName: '采购收货',
-    pagePath: '/apps/kuaizhizao/purchase-management/purchase-receipts',
-    codeField: 'code',
-    codeFieldLabel: '采购收货单编码',
+    pageName: '采购入库',
+    pagePath: '/apps/kuaizhizao/warehouse-management/inbound',
+    codeField: 'receipt_code',
+    codeFieldLabel: '采购入库单编码',
     module: '快格轻制造',
     moduleIcon: 'tool',
-    autoGenerate: false,
+    autoGenerate: true,
     ruleCode: 'PURCHASE_RECEIPT_CODE',
+    allowManualEdit: true,
   },
   
   // 快格轻制造 - 销售管理
@@ -449,7 +450,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-sales-delivery',
     pageName: '销售发货',
-    pagePath: '/apps/kuaizhizao/sales-management/sales-deliveries',
+    pagePath: '/apps/kuaizhizao/warehouse-management/outbound',
     codeField: 'delivery_code',
     codeFieldLabel: '销售发货单编码',
     module: '快格轻制造',

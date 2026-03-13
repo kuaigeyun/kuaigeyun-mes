@@ -11,9 +11,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -26,7 +26,7 @@ import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -135,6 +135,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
   const formRef = useRef<any>(null);
+  /** 标记是否在保存后自动提交（草稿转正式） */
+  const submitAfterSaveRef = useRef(false);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -159,6 +161,15 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
   const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
+
+  // 下推收货通知 Modal
+  const [pushToNoticeVisible, setPushToNoticeVisible] = useState(false);
+  const [pushToNoticeOrder, setPushToNoticeOrder] = useState<PurchaseOrderDetail | null>(null);
+  const [pushToNoticeQuantities, setPushToNoticeQuantities] = useState<Record<number, number>>({});
+  const [pushToNoticeLoading, setPushToNoticeLoading] = useState(false);
+
+  // 下推采购发票 loading
+  const [pushToInvoiceLoading, setPushToInvoiceLoading] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
@@ -272,15 +283,19 @@ const PurchaseOrdersPage: React.FC = () => {
             onSuccess={() => { invalidateStatistics(); actionRef.current?.reload(); }}
           />
           {isAuditedStatus(record.status) && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handlePushToReceipt(record)}
-              style={{ color: '#722ed1' }}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(record) },
+                  { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(record) },
+                  { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(record) },
+                ],
+              }}
             >
-              下推入库
-            </Button>
+              <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#722ed1' }}>
+                下推 <DownOutlined />
+              </Button>
+            </Dropdown>
           )}
           {isDraftStatus(record.status) && (
             <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
@@ -378,6 +393,78 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.error(error?.response?.data?.detail || error.message || '下推采购入库失败');
     } finally {
       setPushToReceiptLoading(false);
+    }
+  };
+
+  // 打开下推收货通知 Modal
+  const handlePushToNotice = async (record: PurchaseOrder) => {
+    try {
+      const detail = await getPurchaseOrder(record.id!);
+      const items = (detail.items || []).filter((it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0);
+      if (items.length === 0) {
+        messageApi.warning('采购单已全部入库，无可下推明细');
+        return;
+      }
+      const quantities: Record<number, number> = {};
+      items.forEach((it: PurchaseOrderItem) => {
+        if (it.id != null) quantities[it.id] = Number(it.outstanding_quantity ?? 0);
+      });
+      setPushToNoticeOrder(detail as PurchaseOrderDetail);
+      setPushToNoticeQuantities(quantities);
+      setPushToNoticeVisible(true);
+    } catch {
+      messageApi.error('加载采购订单详情失败');
+    }
+  };
+
+  // 确认下推收货通知
+  const handlePushToNoticeConfirm = async () => {
+    if (!pushToNoticeOrder?.id) return;
+    const items = (pushToNoticeOrder.items || []).filter((it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0);
+    for (const it of items) {
+      if (it.id == null) continue;
+      const qty = pushToNoticeQuantities[it.id] ?? 0;
+      const max = Number(it.outstanding_quantity ?? 0);
+      if (qty <= 0) continue;
+      if (qty > max) {
+        messageApi.error(`物料 ${it.material_code || it.material_name} 的通知数量不能超过未入库数量 ${max}`);
+        return;
+      }
+    }
+    setPushToNoticeLoading(true);
+    try {
+      const result = await pushPurchaseOrderToReceiptNotice(pushToNoticeOrder.id, pushToNoticeQuantities);
+      messageApi.success(`成功生成收货通知单：${result.notice_code || '已创建'}`);
+      setPushToNoticeVisible(false);
+      setPushToNoticeOrder(null);
+      setPushToNoticeQuantities({});
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (detailDrawerVisible && orderDetail?.id === pushToNoticeOrder.id) {
+        getPurchaseOrder(pushToNoticeOrder.id).then(setOrderDetail);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error.message || '下推收货通知失败');
+    } finally {
+      setPushToNoticeLoading(false);
+    }
+  };
+
+  // 下推采购发票（直接调用，无需数量选择）
+  const handlePushToInvoice = async (record: PurchaseOrder) => {
+    setPushToInvoiceLoading(true);
+    try {
+      const result = await pushPurchaseOrderToInvoice(record.id!);
+      messageApi.success(`成功生成采购发票：${result.invoice_code || '已创建'}，请前往财务管理完善发票号码等信息`);
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (detailDrawerVisible && orderDetail?.id === record.id) {
+        getPurchaseOrder(record.id!).then(setOrderDetail);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error.message || '下推采购发票失败');
+    } finally {
+      setPushToInvoiceLoading(false);
     }
   };
 
@@ -723,17 +810,36 @@ const PurchaseOrdersPage: React.FC = () => {
       data.tax_amount = totalAmount * data.tax_rate;
       data.net_amount = totalAmount + data.tax_amount;
 
+      let orderId: number | undefined;
       if (isEdit && currentOrder?.id) {
         await updatePurchaseOrder(currentOrder.id, { ...data, items: itemsPayload });
-        messageApi.success('采购订单更新成功');
+        orderId = currentOrder.id;
+        if (!submitAfterSaveRef.current) {
+          messageApi.success('采购订单更新成功');
+        }
       } else {
-        await createPurchaseOrder({ ...data, items: itemsPayload });
-        messageApi.success('采购订单创建成功');
+        const created = await createPurchaseOrder({ ...data, items: itemsPayload });
+        orderId = (created as any)?.id;
+        if (!submitAfterSaveRef.current) {
+          messageApi.success('采购订单创建成功');
+        }
       }
+
+      if (submitAfterSaveRef.current && orderId) {
+        try {
+          await submitPurchaseOrder(orderId);
+          messageApi.success(isEdit ? '采购订单已保存并提交，状态已转为待审核' : '采购订单已创建并提交，状态已转为待审核');
+        } catch (submitErr: any) {
+          messageApi.warning(`保存成功，但提交失败：${submitErr?.message || '未知错误'}。您可在列表中点击「提交」重试。`);
+        }
+        submitAfterSaveRef.current = false;
+      }
+
       setModalVisible(false);
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
+      submitAfterSaveRef.current = false;
       if (error?.message && !error.message.includes('请至少添加') && !error.message.includes('要求到货')) {
         messageApi.error(error.message || '操作失败');
       }
@@ -990,6 +1096,7 @@ const PurchaseOrdersPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentOrder(null);
+          submitAfterSaveRef.current = false;
           formRef.current?.resetFields();
         }}
         onFinish={handleFormSubmit}
@@ -998,6 +1105,27 @@ const PurchaseOrdersPage: React.FC = () => {
         formRef={formRef}
         grid={false}
         initialValues={!isEdit ? { items: [defaultOrderItem] } : undefined}
+        extraFooter={
+          (isEdit && isDraftStatus(currentOrder?.status)) || !isEdit ? (
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={async () => {
+                try {
+                  await formRef.current?.validateFields();
+                  submitAfterSaveRef.current = true;
+                  formRef.current?.submit();
+                } catch (err: any) {
+                  if (err?.errorFields?.length) {
+                    messageApi.warning('请完善必填项后再提交');
+                  }
+                }
+              }}
+            >
+              {isEdit ? '保存并提交' : '创建并提交'}
+            </Button>
+          ) : undefined
+        }
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -1456,9 +1584,19 @@ const PurchaseOrdersPage: React.FC = () => {
                   key: 'push',
                   visible: isAuditedStatus(orderDetail.status),
                   render: () => (
-                    <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handlePushToReceipt(orderDetail)} style={{ color: '#722ed1' }}>
-                      下推入库
-                    </Button>
+                    <Dropdown
+                      menu={{
+                        items: [
+                          { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(orderDetail) },
+                          { key: 'receipt', label: '采购入库', icon: <InboxOutlined />, onClick: () => handlePushToReceipt(orderDetail) },
+                          { key: 'invoice', label: '采购发票', icon: <DollarOutlined />, onClick: () => handlePushToInvoice(orderDetail) },
+                        ],
+                      }}
+                    >
+                      <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#722ed1' }}>
+                        下推 <DownOutlined />
+                      </Button>
+                    </Dropdown>
                   ),
                 },
                 {
@@ -1725,6 +1863,65 @@ const PurchaseOrdersPage: React.FC = () => {
                       value={pushToReceiptQuantities[record.id] ?? 0}
                       onChange={(v) =>
                         setPushToReceiptQuantities((prev) => ({
+                          ...prev,
+                          [record.id!]: Number(v) || 0,
+                        }))
+                      }
+                      style={{ width: 100 }}
+                    />
+                  ) : null),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* 下推收货通知 Modal */}
+      <Modal
+        title="下推到收货通知"
+        open={pushToNoticeVisible}
+        onCancel={() => {
+          setPushToNoticeVisible(false);
+          setPushToNoticeOrder(null);
+          setPushToNoticeQuantities({});
+        }}
+        onOk={handlePushToNoticeConfirm}
+        confirmLoading={pushToNoticeLoading}
+        okText="确认下推"
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        destroyOnClose
+      >
+        {pushToNoticeOrder && (
+          <div>
+            <p style={{ marginBottom: 16 }}>
+              从采购订单 <strong>{pushToNoticeOrder.order_code}</strong> 下推生成收货通知单，可修改各明细的通知数量（不超过未入库数量）：
+            </p>
+            <Table
+              size="small"
+              dataSource={(pushToNoticeOrder.items || []).filter(
+                (it: PurchaseOrderItem) => (it.outstanding_quantity ?? 0) > 0
+              )}
+              rowKey="id"
+              pagination={false}
+              scroll={{ x: 700 }}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
+                { title: '未到货', dataIndex: 'outstanding_quantity', width: 90, align: 'right' },
+                {
+                  title: '通知数量',
+                  width: 140,
+                  align: 'right',
+                  render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
+                    <InputNumber
+                      min={0}
+                      max={Number(record.outstanding_quantity ?? 0)}
+                      value={pushToNoticeQuantities[record.id] ?? 0}
+                      onChange={(v) =>
+                        setPushToNoticeQuantities((prev) => ({
                           ...prev,
                           [record.id!]: Number(v) || 0,
                         }))

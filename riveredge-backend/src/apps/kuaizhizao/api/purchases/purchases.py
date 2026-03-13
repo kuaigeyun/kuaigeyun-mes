@@ -355,6 +355,61 @@ async def push_purchase_order_to_receipt(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
+@router.post("/purchase-orders/{order_id}/push-to-receipt-notice", summary="下推到收货通知")
+async def push_purchase_order_to_receipt_notice(
+    order_id: int = Path(..., description="采购订单ID"),
+    notice_quantities: Optional[dict] = Body(None, description="通知数量字典 {item_id: quantity}"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从采购单下推到收货通知
+    
+    自动生成收货通知单，通知仓库收货（不直接动库存）
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    normalized = None
+    if notice_quantities:
+        try:
+            normalized = {int(k): float(v) for k, v in notice_quantities.items()}
+        except (ValueError, TypeError):
+            normalized = notice_quantities
+
+    service = PurchaseService()
+    result = await service.push_to_receipt_notice(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+        notice_quantities=normalized
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
+@router.post("/purchase-orders/{order_id}/push-to-invoice", summary="下推到采购发票")
+async def push_purchase_order_to_invoice(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从采购单下推到采购发票
+    
+    自动生成采购发票（草稿，发票号码等待补全）
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    service = PurchaseService()
+    result = await service.push_to_invoice(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
 @router.get("/purchase-orders/{order_id}/print", summary="打印采购订单")
 async def print_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),

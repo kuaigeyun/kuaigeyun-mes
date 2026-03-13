@@ -212,3 +212,22 @@ export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?:
     data: receiptQuantities || {},
   });
 }
+
+/**
+ * 下推到收货通知
+ */
+export async function pushPurchaseOrderToReceiptNotice(id: number, noticeQuantities?: Record<number, number>): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt-notice`, {
+    method: 'POST',
+    data: noticeQuantities || {},
+  });
+}
+
+/**
+ * 下推到采购发票
+ */
+export async function pushPurchaseOrderToInvoice(id: number): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-invoice`, {
+    method: 'POST',
+  });
+}

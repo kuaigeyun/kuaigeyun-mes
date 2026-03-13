@@ -754,3 +754,153 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             "receipt_code": receipt_code,
             "message": "采购入库单创建成功"
         }
+
+    async def push_to_receipt_notice(
+        self,
+        tenant_id: int,
+        order_id: int,
+        created_by: int,
+        notice_quantities: Optional[Dict[int, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        下推到收货通知
+
+        从采购单下推，自动生成收货通知单（通知仓库收货，不直接动库存）。
+
+        Args:
+            tenant_id: 租户ID
+            order_id: 采购单ID
+            created_by: 创建人ID
+            notice_quantities: 通知数量字典 {item_id: quantity}，不提供则使用订单未入库数量
+
+        Returns:
+            Dict: 包含创建的收货通知单信息
+        """
+        from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+        from apps.kuaizhizao.schemas.receipt_notice import ReceiptNoticeCreate, ReceiptNoticeItemCreate
+        from apps.master_data.models.warehouse import Warehouse
+        from decimal import Decimal
+
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        if order.status not in LEGACY_AUDITED_VALUES:
+            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到收货通知")
+
+        order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        if not order_items:
+            raise BusinessLogicError("采购单没有明细，无法生成收货通知单")
+
+        has_outstanding = any(item.outstanding_quantity > 0 for item in order_items)
+        if not has_outstanding:
+            raise BusinessLogicError("采购单已全部入库，无法生成收货通知单")
+
+        default_warehouse = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
+        warehouse_id = default_warehouse.id if default_warehouse else None
+        warehouse_name = default_warehouse.name if default_warehouse else None
+
+        items = []
+        for item in order_items:
+            qty = float(notice_quantities.get(item.id, item.outstanding_quantity)) if notice_quantities else float(item.outstanding_quantity)
+            if qty <= 0:
+                continue
+            if qty > float(item.outstanding_quantity):
+                raise ValidationError(f"物料 {item.material_code} 的通知数量 {qty} 超过未入库数量 {item.outstanding_quantity}")
+            items.append(ReceiptNoticeItemCreate(
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec or "",
+                material_unit=item.unit,
+                notice_quantity=qty,
+                unit_price=float(item.unit_price),
+                total_amount=qty * float(item.unit_price),
+                purchase_order_item_id=item.id,
+            ))
+
+        if not items:
+            raise BusinessLogicError("没有可通知的明细")
+
+        notice_data = ReceiptNoticeCreate(
+            purchase_order_id=order_id,
+            purchase_order_code=order.order_code,
+            supplier_id=order.supplier_id,
+            supplier_name=order.supplier_name,
+            supplier_contact=order.supplier_contact,
+            supplier_phone=order.supplier_phone,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            planned_receipt_date=order.delivery_date,
+            status="待收货",
+            notes=f"从采购订单 {order.order_code} 下推",
+            items=items,
+        )
+        notice_service = ReceiptNoticeService()
+        notice = await notice_service.create_receipt_notice(tenant_id=tenant_id, notice_data=notice_data, created_by=created_by)
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "notice_id": notice.id,
+            "notice_code": notice.notice_code,
+            "message": "收货通知单创建成功",
+        }
+
+    async def push_to_invoice(
+        self,
+        tenant_id: int,
+        order_id: int,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        下推到采购发票
+
+        从采购单下推，自动生成采购发票（草稿，待补全发票号码等）。
+
+        Args:
+            tenant_id: 租户ID
+            order_id: 采购单ID
+            created_by: 创建人ID
+
+        Returns:
+            Dict: 包含创建的采购发票信息
+        """
+        from apps.kuaizhizao.services.finance_service import PurchaseInvoiceService
+        from apps.kuaizhizao.schemas.finance import PurchaseInvoiceCreate
+
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        if order.status not in LEGACY_AUDITED_VALUES:
+            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购发票")
+
+        today = datetime.now().strftime("%Y%m%d")
+        invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
+
+        total_amount = float(order.total_amount or 0)
+        tax_rate = float(order.tax_rate or 0)
+        tax_amount = total_amount * tax_rate if tax_rate else 0
+        invoice_amount = total_amount
+        total_with_tax = total_amount + tax_amount
+
+        invoice_data = PurchaseInvoiceCreate(
+            invoice_code=invoice_code,
+            purchase_order_id=order_id,
+            purchase_order_code=order.order_code,
+            supplier_id=order.supplier_id,
+            supplier_name=order.supplier_name,
+            invoice_number="待补全",
+            invoice_date=datetime.now().date(),
+            invoice_type="增值税专用发票",
+            tax_rate=tax_rate,
+            invoice_amount=invoice_amount,
+            tax_amount=tax_amount,
+            total_amount=total_with_tax,
+            status="未审核",
+            review_status="待审核",
+            notes=f"从采购订单 {order.order_code} 下推",
+        )
+        invoice_service = PurchaseInvoiceService()
+        invoice = await invoice_service.create_purchase_invoice(tenant_id=tenant_id, invoice_data=invoice_data, created_by=created_by)
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "invoice_id": invoice.id,
+            "invoice_code": invoice.invoice_code,
+            "message": "采购发票创建成功",
+        }

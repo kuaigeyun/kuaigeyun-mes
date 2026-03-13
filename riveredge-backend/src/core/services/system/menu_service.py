@@ -701,18 +701,31 @@ class MenuService:
             menu_meta = menu_item.get("meta")
             children = menu_item.get("children", [])
             
-            # 检查菜单是否已存在
+            # 检查菜单是否已存在（按优先级：uuid > path > parent+name）
+            # 无 path 的父级菜单必须按 parent_id+name 匹配，否则每次同步都会新建导致重复
             existing_menu = None
             if menu_uuid and menu_uuid in existing_menu_map:
                 existing_menu = existing_menu_map[menu_uuid]
             elif menu_path:
-                # 如果没有UUID，尝试通过路径查找
                 existing_menu = await Menu.filter(
                     tenant_id=tenant_id,
                     application_uuid=application_uuid,
                     path=menu_path,
                     deleted_at__isnull=True
                 ).first()
+            elif menu_name:
+                # 无 path 的菜单（如父级分组）：按 parent_id + name 匹配，从源头杜绝重复
+                filter_kw: Dict[str, Any] = dict(
+                    tenant_id=tenant_id,
+                    application_uuid=application_uuid,
+                    name=menu_name,
+                    deleted_at__isnull=True,
+                )
+                if parent_id is None:
+                    filter_kw["parent_id__isnull"] = True
+                else:
+                    filter_kw["parent_id"] = parent_id
+                existing_menu = await Menu.filter(**filter_kw).first()
             
             if existing_menu:
                 # 更新现有菜单

@@ -110,14 +110,7 @@ export function useUnifiedMenuData(
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
-    const appRoots = tree.filter((m) => m.application_uuid);
-    const seen = new Set<string>();
-    return appRoots.filter((m) => {
-      const u = m.application_uuid;
-      if (!u || seen.has(u)) return false;
-      seen.add(u);
-      return true;
-    });
+    return tree.filter((m) => m.application_uuid);
   }, [fullMenuTree]);
 
   const filteredApplicationMenus = useMemo(() => {
@@ -166,31 +159,7 @@ export function useUnifiedMenuData(
             children: [{ key: `app-group-placeholder-${appMenu.uuid}`, name: '', style: { display: 'none' } }],
           } as MenuDataItem);
         }
-        const seenKeys = new Set<string>();
-        const getLogicalKey = (item: any): string => {
-          if (item?.uuid) return `uuid:${item.uuid}`;
-          if (item?.path) return `path:${item.path}`;
-          const name = item?.name || item?.title || '';
-          if (name) {
-            const tail = name.split('.').pop();
-            return `name:${tail || name}`;
-          }
-          const firstPath = (list: any[]): string | null => {
-            for (const x of list || []) {
-              if (x?.path) return x.path;
-              const f = firstPath(x?.children || []);
-              if (f) return f;
-            }
-            return null;
-          };
-          const fp = firstPath([item]);
-          return fp ? `path:${fp}` : `idx:${seenKeys.size}`;
-        };
         appMenu.children.forEach((child) => {
-          const c = child as any;
-          const key = getLogicalKey(c);
-          if (seenKeys.has(key)) return;
-          seenKeys.add(key);
           const converted = convertMenuTreeToMenuDataItem(child, true);
           converted.className = converted.className ? `${converted.className} app-menu-item` : 'app-menu-item';
           appMenuItems.push(converted);

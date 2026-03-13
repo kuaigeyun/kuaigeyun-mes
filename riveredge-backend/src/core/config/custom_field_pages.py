@@ -238,8 +238,8 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
     },
     {
         "page_code": "kuaizhizao-purchase-receipt",
-        "page_name": "采购收货",
-        "page_path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
+        "page_name": "采购入库",
+        "page_path": "/apps/kuaizhizao/warehouse-management/inbound",
         "table_name": "apps_kuaizhizao_purchase_receipts",
         "table_name_label": "采购收货表",
         "module": "快格轻制造",
@@ -275,7 +275,7 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
     {
         "page_code": "kuaizhizao-sales-delivery",
         "page_name": "销售发货",
-        "page_path": "/apps/kuaizhizao/sales-management/sales-deliveries",
+        "page_path": "/apps/kuaizhizao/warehouse-management/outbound",
         "table_name": "apps_kuaizhizao_sales_deliveries",
         "table_name_label": "销售发货表",
         "module": "快格轻制造",
