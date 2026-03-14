@@ -1,13 +1,13 @@
 {
-    "name": "基础数据管理",
+    "name": "主数据",
     "code": "master-data",
     "version": "1.0.0",
-    "description": "统一管理工厂、仓库、物料、工艺、供应链、绩效等基础数据",
+    "description": "系统的唯一数据源",
     "icon": "database",
     "author": "RiverEdge Team",
     "entry_point": "../apps/master-data/index.tsx",
     "route_path": "/apps/master-data",
-    "sort_order": 10,
+    "sort_order": 70,
     "menu_config": {
         "title": "app.master-data.name",
         "icon": "database",
@@ -250,7 +250,7 @@
             "page_path": "/apps/master-data/factory/plants",
             "code_field": "code",
             "code_field_label": "厂区编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -260,7 +260,7 @@
             "page_path": "/apps/master-data/factory/workshops",
             "code_field": "code",
             "code_field_label": "车间编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -270,7 +270,7 @@
             "page_path": "/apps/master-data/factory/production-lines",
             "code_field": "code",
             "code_field_label": "产线编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -280,7 +280,7 @@
             "page_path": "/apps/master-data/factory/workstations",
             "code_field": "code",
             "code_field_label": "工位编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -290,7 +290,7 @@
             "page_path": "/apps/master-data/factory/work-centers",
             "code_field": "code",
             "code_field_label": "工作中心编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "WORK_CENTER_CODE",
@@ -302,7 +302,7 @@
             "page_path": "/apps/master-data/warehouse/warehouses",
             "code_field": "code",
             "code_field_label": "仓库编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -312,7 +312,7 @@
             "page_path": "/apps/master-data/warehouse/storage-areas",
             "code_field": "code",
             "code_field_label": "库区编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -322,7 +322,7 @@
             "page_path": "/apps/master-data/warehouse/storage-locations",
             "code_field": "code",
             "code_field_label": "库位编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -332,7 +332,7 @@
             "page_path": "/apps/master-data/materials",
             "code_field": "code",
             "code_field_label": "分组编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -342,7 +342,7 @@
             "page_path": "/apps/master-data/materials",
             "code_field": "main_code",
             "code_field_label": "物料主编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "MATERIAL_CODE",
@@ -378,7 +378,7 @@
             "page_path": "/apps/master-data/process/operations",
             "code_field": "code",
             "code_field_label": "工序编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false,
             "rule_code": "OPERATION_CODE"
@@ -389,7 +389,7 @@
             "page_path": "/apps/master-data/process/routes",
             "code_field": "code",
             "code_field_label": "路线编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false
         },
@@ -399,7 +399,7 @@
             "page_path": "/apps/master-data/process/defect-types",
             "code_field": "code",
             "code_field_label": "不良品编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": false,
             "rule_code": "DEFECT_TYPE_CODE"
@@ -410,7 +410,7 @@
             "page_path": "/apps/master-data/supply-chain/customers",
             "code_field": "code",
             "code_field_label": "客户编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "customer",
@@ -422,7 +422,7 @@
             "page_path": "/apps/master-data/supply-chain/suppliers",
             "code_field": "code",
             "code_field_label": "供应商编码",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "supplier",
@@ -435,7 +435,7 @@
             "page_path": "/apps/master-data/factory/workshops",
             "table_name": "master_data_factory_workshops",
             "table_name_label": "车间表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -444,7 +444,7 @@
             "page_path": "/apps/master-data/factory/production-lines",
             "table_name": "master_data_factory_production_lines",
             "table_name_label": "产线表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -453,7 +453,7 @@
             "page_path": "/apps/master-data/factory/workstations",
             "table_name": "master_data_factory_workstations",
             "table_name_label": "工位表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -462,7 +462,7 @@
             "page_path": "/apps/master-data/warehouse/warehouses",
             "table_name": "master_data_warehouse_warehouses",
             "table_name_label": "仓库表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -471,7 +471,7 @@
             "page_path": "/apps/master-data/warehouse/storage-areas",
             "table_name": "master_data_warehouse_storage_areas",
             "table_name_label": "库区表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -480,7 +480,7 @@
             "page_path": "/apps/master-data/warehouse/storage-locations",
             "table_name": "master_data_warehouse_storage_locations",
             "table_name_label": "库位表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -489,7 +489,7 @@
             "page_path": "/apps/master-data/materials",
             "table_name": "master_data_material_groups",
             "table_name_label": "物料分组表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -498,7 +498,7 @@
             "page_path": "/apps/master-data/materials",
             "table_name": "master_data_materials",
             "table_name_label": "物料表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -507,7 +507,7 @@
             "page_path": "/apps/master-data/process/engineering-bom",
             "table_name": "master_data_boms",
             "table_name_label": "物料清单BOM表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -516,7 +516,7 @@
             "page_path": "/apps/master-data/process/defect-types",
             "table_name": "master_data_defect_types",
             "table_name_label": "缺陷类型表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -525,7 +525,7 @@
             "page_path": "/apps/master-data/process/operations",
             "table_name": "master_data_operations",
             "table_name_label": "工序表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -534,7 +534,7 @@
             "page_path": "/apps/master-data/process/routes",
             "table_name": "master_data_process_routes",
             "table_name_label": "工艺路线表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -543,7 +543,7 @@
             "page_path": "/apps/master-data/process/sop",
             "table_name": "master_data_sops",
             "table_name_label": "标准操作SOP表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -552,7 +552,7 @@
             "page_path": "/apps/master-data/supply-chain/customers",
             "table_name": "master_data_customers",
             "table_name_label": "客户表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -561,7 +561,7 @@
             "page_path": "/apps/master-data/supply-chain/suppliers",
             "table_name": "master_data_suppliers",
             "table_name_label": "供应商表",
-            "module": "主数据管理",
+            "module": "主数据",
             "module_icon": "database"
         },
         {
@@ -570,7 +570,7 @@
             "page_path": "/apps/kuaizhizao/performance/holidays",
             "table_name": "master_data_holidays",
             "table_name_label": "节假日表",
-            "module": "快格轻制造",
+            "module": "快制造",
             "module_icon": "production"
         },
         {
@@ -579,7 +579,7 @@
             "page_path": "/apps/kuaizhizao/performance/skills",
             "table_name": "master_data_skills",
             "table_name_label": "技能表",
-            "module": "快格轻制造",
+            "module": "快制造",
             "module_icon": "production"
         }
     ]

@@ -900,6 +900,7 @@ export default {
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
   'path.kuaizhizao': '快格轻制造',
+  'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
   'path.demand-management': '需求管理',
   'path.scheduling': '计划排程',
@@ -1132,6 +1133,10 @@ export default {
   'components.iterationFloatButton.viewRepo': '查看代码仓库',
   'components.iterationFloatButton.feedbackTitle': '意见与需求反馈',
   'components.iterationFloatButton.feedbackDesc': '请扫码添加微信，我们将及时响应您的反馈。',
+
+  'components.proUpgradePrompt.title': '{{name}} 为 PRO 应用',
+  'components.proUpgradePrompt.description': '升级至专业版或企业版套餐即可解锁使用。',
+  'components.proUpgradePrompt.upgradeButton': '升级套餐',
 
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',
@@ -1451,11 +1456,28 @@ export default {
   'tabs.fullscreen': '全屏',
   'tabs.exitFullscreen': '退出全屏',
 
-  // 应用名称翻译（符合中国中小企业叫法）
-  'app.kuaizhizao.name': '快格轻制造',
-  'app.master-data.name': '基础数据',
+  // 应用名称翻译（统一规范）
+  'app.kuaicrm.name': '快客户',
+  'app.kuaipdm.name': '快研发',
+  'app.kuaizhizao.name': '快制造',
+  'app.kuaichain.name': '快协同',
+  'app.kuaicaiwu.name': '快财务',
+  'app.kuaicaiwu.common.code': '编码',
+  'app.kuaicaiwu.menu.finance-management': '财务管理',
+  'app.kuaicaiwu.menu.finance-management.receivables': '应收账款',
+  'app.kuaicaiwu.menu.finance-management.payables': '应付账款',
+  'app.kuaicaiwu.menu.finance-management.purchase-invoices': '采购发票',
+  'app.kuaicaiwu.menu.cost-management': '成本管理',
+  'app.kuaicaiwu.menu.cost-management.cost-calculations': '成本核算',
+  'app.kuaicaiwu.menu.cost-management.cost-comparison': '成本分析',
+  'app.kuaicaiwu.menu.cost-management.cost-rules': '成本规则',
+  'app.kuaicaiwu.menu.cost-management.cost-details': '成本明细',
+  'app.kuaicaiwu.menu.cost-management.cost-optimization': '成本优化',
+  'app.kuaicaiwu.menu.cost-management.cost-report': '成本报表',
+  'app.master-data.name': '主数据',
+  'app.kuaiai.name': 'KU-AI',
 
-  // 快格轻制造应用菜单翻译
+  // 快制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
   'app.kuaizhizao.menu.plan-management.demand-management': '需求管理',
   'app.kuaizhizao.menu.plan-management.unified-demand-management': '统一需求管理',
@@ -3582,6 +3604,8 @@ export default {
   'pages.system.applications.uninstallConfirm': '确定要卸载这个应用吗？',
   'pages.system.applications.moreActions': '更多操作',
   'pages.system.applications.customNameTag': '已修改',
+  'pages.system.applications.planningTag': '规划中',
+  'pages.system.applications.proLockedTag': '需升级解锁',
   'pages.system.applications.noDescription': '暂无描述',
   'pages.system.applications.codeLabel': '代码',
   'pages.system.applications.changelog': '更新日志',
@@ -3600,6 +3624,12 @@ export default {
   'pages.system.applications.scanApplications': '扫描应用',
   'pages.system.applications.scanSuccess': '已扫描并注册 {{count}} 个应用',
   'pages.system.applications.scanFailed': '扫描应用失败',
+  'pages.system.applications.syncAllMenus': '一键同步菜单',
+  'pages.system.applications.syncAllNoApps': '暂无已安装的应用',
+  'pages.system.applications.syncAllLoading': '正在同步菜单...',
+  'pages.system.applications.syncAllSuccess': '已同步 {{count}} 个应用菜单',
+  'pages.system.applications.syncAllPartial': '已同步 {{success}}/{{total}} 个应用，部分失败: {{errors}}',
+  'pages.system.applications.syncAllFailed': '一键同步菜单失败',
   'pages.system.applications.editModalTitle': '应用设置 - {{name}}',
   'pages.system.applications.upgradeModalTitle': '应用升版 - {{name}}',
   'pages.system.applications.restoreDefault': '恢复默认',
@@ -6540,7 +6570,7 @@ export default {
   'pages.infra.platform.floatButtonEnabledTooltip': '开启后，系统主界面右下角将显示悬浮按钮，用于展示迭代说明、版本信息及意见反馈入口',
 
   // 报表与看板应用
-  'app.kuaireport.name': '自制报表',
+  'app.kuaireport.name': '快报表',
   'app.kuaireport.menu.reports': '报表中心',
   'app.kuaireport.menu.dashboards': '大屏中心',
   'app.kuaireport.menu.dashboard-designer': '大屏设计器',

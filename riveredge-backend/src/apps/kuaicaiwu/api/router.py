@@ -1,0 +1,49 @@
+"""
+轻管理会计 (kuaicaiwu) APP - 主路由
+
+统一管理所有 API 路由。
+"""
+
+from fastapi import APIRouter
+
+# 导入财务管理路由
+from .finance.receivables import router as receivables_router
+from .finance.payables import router as payables_router
+from .finance.purchase_invoices import router as purchase_invoices_router
+
+# 导入成本核算路由
+from .cost import (
+    cost_rules_router,
+    cost_calculations_router,
+    production_cost_router,
+    outsource_cost_router,
+    purchase_cost_router,
+    quality_cost_router,
+    cost_comparison_router,
+    cost_optimization_router,
+    cost_report_router,
+)
+
+router = APIRouter(tags=["Kuaicaiwu"])
+
+# 注册财务管理路由
+router.include_router(receivables_router)
+router.include_router(payables_router)
+router.include_router(purchase_invoices_router)
+
+# 注册成本核算路由
+router.include_router(cost_rules_router)
+router.include_router(cost_calculations_router)
+router.include_router(production_cost_router)
+router.include_router(outsource_cost_router)
+router.include_router(purchase_cost_router)
+router.include_router(quality_cost_router)
+router.include_router(cost_comparison_router)
+router.include_router(cost_optimization_router)
+router.include_router(cost_report_router)
+
+
+@router.get("/health")
+async def health_check():
+    """健康检查接口"""
+    return {"status": "ok", "app": "kuaicaiwu"}

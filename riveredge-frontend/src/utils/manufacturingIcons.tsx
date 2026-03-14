@@ -81,6 +81,9 @@ export const ManufacturingIcons = {
   production: getLucideIcon('TrendingUp'),
   workflow: getLucideIcon('Workflow'), // 工作流/工艺路线
   process: getLucideIcon('Workflow'), // 工艺管理
+  gitBranch: getLucideIcon('GitBranch'), // 快协同/供应链协同
+  sparkles: getLucideIcon('Sparkles'), // KU-AI/智能建议
+  layers: getLucideIcon('Layers'), // 快研发/产品生命周期
   
   // 仓储和物流
   warehouse: getLucideIcon('Warehouse'),

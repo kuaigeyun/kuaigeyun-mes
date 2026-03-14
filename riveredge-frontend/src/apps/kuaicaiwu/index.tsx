@@ -1,0 +1,70 @@
+/**
+ * 轻管理会计 APP 入口文件
+ *
+ * 路由约定：
+ * - 文件: pages/{path}/index.tsx
+ * - Route path: {path}
+ * - 完整 URL: /apps/kuaicaiwu/{path}
+ */
+
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import PageSkeleton from '../../components/page-skeleton';
+import PlaceholderPage from './components/PlaceholderPage';
+
+const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
+  <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
+);
+
+// 财务管理页面
+const ReceivableListPage = lazy(() => import('./pages/finance-management/receivables'));
+const ReceivableDetailPage = lazy(() => import('./pages/finance-management/receivables/detail'));
+const PayableListPage = lazy(() => import('./pages/finance-management/payables'));
+const PayableDetailPage = lazy(() => import('./pages/finance-management/payables/detail'));
+const PurchaseInvoiceListPage = lazy(() => import('./pages/finance-management/purchase-invoices'));
+const PurchaseInvoiceDetailPage = lazy(() => import('./pages/finance-management/purchase-invoices/detail'));
+
+// 成本管理页面
+const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
+const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
+const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
+const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
+const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
+const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
+const CostCalculationTabsPage = lazy(() => import('./pages/cost-management/cost-calculation-tabs'));
+
+const KuaicaiwuApp: React.FC = () => {
+  return (
+    <Routes>
+      {/* 财务管理路由 */}
+      <Route path="finance-management/receivables" element={withPageSuspense(ReceivableListPage)} />
+      <Route path="finance-management/receivables/:id" element={withPageSuspense(ReceivableDetailPage)} />
+      <Route path="finance-management/payables" element={withPageSuspense(PayableListPage)} />
+      <Route path="finance-management/payables/:id" element={withPageSuspense(PayableDetailPage)} />
+      <Route path="finance-management/purchase-invoices" element={withPageSuspense(PurchaseInvoiceListPage)} />
+      <Route path="finance-management/purchase-invoices/:id" element={withPageSuspense(PurchaseInvoiceDetailPage)} />
+
+      {/* 成本管理路由 */}
+      <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
+      <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
+      <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
+      <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
+      <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
+      <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
+      <Route path="cost-management/production-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route path="cost-management/outsource-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route path="cost-management/purchase-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+      <Route path="cost-management/quality-cost" element={withPageSuspense(CostCalculationTabsPage)} />
+
+      {/* 默认路由 */}
+      <Route path="" element={
+        <div style={{ padding: '24px', textAlign: 'center' }}>
+          <h2>快财务</h2>
+          <p>业务驱动的管理会计，提供成本、账款、盈利分析等核心功能</p>
+        </div>
+      } />
+    </Routes>
+  );
+};
+
+export default KuaicaiwuApp;

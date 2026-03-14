@@ -20,7 +20,7 @@ from apps.kuaizhizao.models.quality_exception import QualityException
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-from apps.kuaizhizao.models.cost_rule import CostRule
+from apps.kuaicaiwu.models.cost_rule import CostRule
 
 
 class QualityCostService:

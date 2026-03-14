@@ -30,9 +30,14 @@
 ---
 ## 近期更新
 
+
+**应用规划更新 20260314**：
+
+![运营规划更新](docs/screenshots/update/update20260314.png)
+
 **工单指标卡视觉体验优化 20260312**：
 
-![登录页面](docs/screenshots/update/update20260312.png)
+![工单指标卡](docs/screenshots/update/update20260312.png)
 
 
 ---

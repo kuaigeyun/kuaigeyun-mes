@@ -40,20 +40,9 @@ from .tools.tools import router as tools_router
 from .equipment_status.equipment_status import router as equipment_status_router
 from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
 
-# 导入成本核算路由
-from .cost.cost_rules import router as cost_rules_router
-from .cost.cost_calculations import router as cost_calculations_router
-from .cost.production_cost import router as production_cost_router
-from .cost.outsource_cost import router as outsource_cost_router
-from .cost.purchase_cost import router as purchase_cost_router
-from .cost.quality_cost import router as quality_cost_router
-from .cost.cost_comparison import router as cost_comparison_router
-from .cost.cost_optimization import router as cost_optimization_router
-from .cost.cost_report import router as cost_report_router
+# 成本核算路由已迁移至 kuaicaiwu
 
-# 导入财务管理路由
-from .finance.payables import router as payables_router
-from .finance.receivables import router as receivables_router
+# 导入财务管理路由（应收、应付、采购发票已迁移至 kuaicaiwu，仅保留销售发票）
 from .finance.invoices import router as invoices_router
 
 # 导入期初数据导入路由
@@ -97,20 +86,7 @@ router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
 
-# 注册成本核算路由
-router.include_router(cost_rules_router)
-router.include_router(cost_calculations_router)
-router.include_router(production_cost_router)
-router.include_router(outsource_cost_router)
-router.include_router(purchase_cost_router)
-router.include_router(quality_cost_router)
-router.include_router(cost_comparison_router)
-router.include_router(cost_optimization_router)
-router.include_router(cost_report_router)
-
-# 注册财务管理路由
-router.include_router(payables_router)
-router.include_router(receivables_router)
+# 注册财务管理路由（销售发票）
 router.include_router(invoices_router)
 
 # 注册期初数据导入路由

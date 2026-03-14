@@ -30,8 +30,8 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.production_plan import ProductionPlan
-from apps.kuaizhizao.models.payable import Payable
-from apps.kuaizhizao.models.receivable import Receivable
+from apps.kuaicaiwu.models.payable import Payable
+from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection

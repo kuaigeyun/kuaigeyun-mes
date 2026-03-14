@@ -16,7 +16,7 @@ from loguru import logger
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from apps.master_data.models.material import Material
-from apps.kuaizhizao.models.cost_calculation import CostCalculation
+from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from apps.kuaizhizao.services.production_cost_service import ProductionCostService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.outsource_cost_service import OutsourceCostService

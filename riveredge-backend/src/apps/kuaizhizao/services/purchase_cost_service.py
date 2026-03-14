@@ -394,7 +394,7 @@ class PurchaseCostService:
         Returns:
             tuple[Decimal, List[Dict[str, Any]]]: (采购费用, 费用明细)
         """
-        from apps.kuaizhizao.models.cost_rule import CostRule
+        from apps.kuaicaiwu.models.cost_rule import CostRule
         
         total_fee = Decimal(0)
         fee_breakdown = []

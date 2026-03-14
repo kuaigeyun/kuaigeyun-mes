@@ -8,7 +8,7 @@
 from .work_order_service import WorkOrderService
 from .reporting_service import ReportingService
 from .rework_order_service import ReworkOrderService
-from .cost_service import CostRuleService, CostCalculationService
+# CostRuleService, CostCalculationService 已迁移至 kuaicaiwu
 from .outsource_service import OutsourceService
 
 # 仓储管理模块
@@ -35,12 +35,7 @@ from .quality_service import (
 from .quality_standard_service import QualityStandardService
 from .inspection_plan_service import InspectionPlanService
 
-# 财务协同模块
-from .finance_service import (
-    PayableService,
-    PurchaseInvoiceService,
-    ReceivableService,
-)
+# 财务协同模块（PayableService, ReceivableService, PurchaseInvoiceService 已迁移至 kuaicaiwu）
 
 # 采购管理模块
 from .purchase_service import PurchaseService
@@ -65,8 +60,6 @@ __all__ = [
     'WorkOrderService',
     'ReportingService',
     'ReworkOrderService',
-    'CostRuleService',
-    'CostCalculationService',
     'OutsourceService',
 
     # 仓储管理模块
@@ -88,11 +81,6 @@ __all__ = [
     'FinishedGoodsInspectionService',
     'QualityStandardService',
     'InspectionPlanService',
-
-    # 财务协同模块
-    'PayableService',
-    'PurchaseInvoiceService',
-    'ReceivableService',
 
     # 采购管理模块
     'PurchaseService',

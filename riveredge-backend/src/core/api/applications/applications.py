@@ -19,9 +19,20 @@ import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.tenant import Tenant
+from infra.domain.package_config import can_use_pro_apps
 from loguru import logger
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
+
+
+def _enrich_app_with_pro_info(app: dict, allow_pro_apps: bool) -> dict:
+    """从 manifest 读取 is_pro，并计算 can_access，注入到 app_data。"""
+    code = app.get('code')
+    manifest = ApplicationService._get_manifest_by_code(code) if code else None
+    is_pro = bool(manifest.get('is_pro', False)) if manifest else False
+    can_access = not is_pro or allow_pro_apps
+    return {'is_pro': is_pro, 'can_access': can_access}
 
 
 @router.post("", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
@@ -88,6 +99,10 @@ async def list_applications(
         is_active=is_active
     )
 
+    # 获取租户套餐是否允许 PRO 应用
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+
     # 安全构造响应对象，避免传递多余字段
     result = []
     for app in applications:
@@ -100,6 +115,7 @@ async def list_applications(
                 except (json.JSONDecodeError, TypeError):
                     app['menu_config'] = None
 
+            pro_info = _enrich_app_with_pro_info(app, allow_pro_apps)
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
             # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
@@ -123,6 +139,7 @@ async def list_applications(
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
+                **pro_info,
             }
 
             # 构造响应对象
@@ -154,6 +171,10 @@ async def list_installed_applications(
         is_active=is_active
     )
 
+    # 获取租户套餐是否允许 PRO 应用
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
+
     # 安全构造响应对象，避免传递多余字段
     result = []
     for app in applications:
@@ -166,6 +187,7 @@ async def list_installed_applications(
                 except (json.JSONDecodeError, TypeError):
                     app['menu_config'] = None
 
+            pro_info = _enrich_app_with_pro_info(app, allow_pro_apps)
             # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
             # is_custom_name/is_custom_sort 使用 .get 兼容数据库未执行迁移 127 的环境
             app_data = {
@@ -189,6 +211,7 @@ async def list_installed_applications(
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
+                **pro_info,
             }
 
             # 构造响应对象

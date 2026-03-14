@@ -61,14 +61,6 @@ const FinishedGoodsInspectionPage = lazy(() => import('./pages/quality-managemen
 const TraceabilityPage = lazy(() => import('./pages/quality-management/traceability'));
 const InspectionPlansPage = lazy(() => import('./pages/quality-management/inspection-plans'));
 
-// 成本管理页面
-const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
-const CostCalculationsPage = lazy(() => import('./pages/cost-management/cost-calculations'));
-const CostDetailsPage = lazy(() => import('./pages/cost-management/cost-details'));
-const CostComparisonPage = lazy(() => import('./pages/cost-management/cost-comparison'));
-const CostOptimizationPage = lazy(() => import('./pages/cost-management/cost-optimization'));
-const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'));
-
 // 设备管理页面
 const EquipmentPage = lazy(() => import('./pages/equipment-management/equipment'));
 const EquipmentFaultsPage = lazy(() => import('./pages/equipment-management/equipment-faults'));
@@ -85,13 +77,9 @@ const ToolMaintenancesPage = lazy(() => import('./pages/equipment-management/too
 const ToolCalibrationsPage = lazy(() => import('./pages/equipment-management/tool-calibrations'));
 const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/tool-maintenance-reminders'));
 
-// 财务管理页面
+// 财务管理页面（销售发票保留，应收应付已迁至 kuaicaiwu）
 const InvoiceListPage = lazy(() => import('./pages/finance-management/invoices'));
 const InvoiceDetailPage = lazy(() => import('./pages/finance-management/invoices/detail'));
-const PayableListPage = lazy(() => import('./pages/finance-management/payables'));
-const PayableDetailPage = lazy(() => import('./pages/finance-management/payables/detail'));
-const ReceivableListPage = lazy(() => import('./pages/finance-management/receivables'));
-const ReceivableDetailPage = lazy(() => import('./pages/finance-management/receivables/detail'));
 
 // 仓储管理页面
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
@@ -183,14 +171,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/traceability" element={withPageSuspense(TraceabilityPage)} />
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
 
-      {/* 成本管理路由 */}
-      <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
-      <Route path="cost-management/cost-calculations" element={withPageSuspense(CostCalculationsPage)} />
-      <Route path="cost-management/cost-details" element={withPageSuspense(CostDetailsPage)} />
-      <Route path="cost-management/cost-comparison" element={withPageSuspense(CostComparisonPage)} />
-      <Route path="cost-management/cost-optimization" element={withPageSuspense(CostOptimizationPage)} />
-      <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
-
       {/* 设备管理路由 */}
       <Route path="equipment-management/equipment" element={withPageSuspense(EquipmentPage)} />
       <Route path="equipment-management/equipment-faults" element={withPageSuspense(EquipmentFaultsPage)} />
@@ -207,19 +187,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/tool-calibrations" element={withPageSuspense(ToolCalibrationsPage)} />
       <Route path="equipment-management/tool-maintenance-reminders" element={withPageSuspense(ToolMaintenanceRemindersPage)} />
 
-      {/* 财务管理路由 */}
+      {/* 财务管理路由（销售发票保留，应收应付已迁至 kuaicaiwu） */}
       <Route path="finance-management/invoices" element={withPageSuspense(InvoiceListPage)} />
       <Route path="finance-management/invoices/:code" element={withPageSuspense(InvoiceDetailPage)} />
       <Route path="finance-management/sales-invoices" element={withPageSuspense(InvoiceListPage)} />
-      <Route path="finance-management/purchase-invoices" element={withPageSuspense(InvoiceListPage)} />
-
-      <Route path="finance-management/payables" element={withPageSuspense(PayableListPage)} />
-      <Route path="finance-management/payables/:id" element={withPageSuspense(PayableDetailPage)} />
-      <Route path="finance-management/payments" element={withPageSuspense(PayableListPage)} />
-
-      <Route path="finance-management/receivables" element={withPageSuspense(ReceivableListPage)} />
-      <Route path="finance-management/receivables/:id" element={withPageSuspense(ReceivableDetailPage)} />
-      <Route path="finance-management/receipts" element={withPageSuspense(ReceivableListPage)} />
 
       {/* 绩效管理路由 */}
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />

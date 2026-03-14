@@ -80,9 +80,14 @@ function getPluginSourcePath(pluginCode: string): string {
  * 生产环境通过此映射加载，无需额外构建步骤。
  */
 const APP_LOADERS: Record<string, () => Promise<unknown>> = {
+  kuaicrm: () => import('../apps/kuaicrm/index'),
+  kuaipdm: () => import('../apps/kuaipdm/index'),
   kuaizhizao: () => import('../apps/kuaizhizao/index'),
+  kuaichain: () => import('../apps/kuaichain/index'),
+  kuaicaiwu: () => import('../apps/kuaicaiwu/index'),
   kuaireport: () => import('../apps/kuaireport/index'),
   'master-data': () => import('../apps/master-data/index'),
+  kuaiai: () => import('../apps/kuaiai/index'),
 };
 
 /**

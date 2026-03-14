@@ -20,8 +20,7 @@ from .warehouse import *
 # 质量管理模块
 from .quality import *
 
-# 财务协同模块
-from .finance import *
+# 财务协同模块（应收、应付、采购发票 schema 已迁移至 kuaicaiwu）
 
 # 采购管理模块
 from .purchase import *
@@ -220,37 +219,6 @@ __all__ = [
     'FinishedGoodsInspectionUpdate',
     'FinishedGoodsInspectionResponse',
     'FinishedGoodsInspectionListResponse',
-
-    # 应付单相关
-    'PayableBase',
-    'PayableCreate',
-    'PayableUpdate',
-    'PayableResponse',
-    'PayableListResponse',
-
-    # 采购发票相关
-    'PurchaseInvoiceBase',
-    'PurchaseInvoiceCreate',
-    'PurchaseInvoiceUpdate',
-    'PurchaseInvoiceResponse',
-    'PurchaseInvoiceListResponse',
-
-    # 应收单相关
-    'ReceivableBase',
-    'ReceivableCreate',
-    'ReceivableUpdate',
-    'ReceivableResponse',
-    'ReceivableListResponse',
-
-    # 付款记录相关
-    'PaymentRecordBase',
-    'PaymentRecordCreate',
-    'PaymentRecordResponse',
-
-    # 收款记录相关
-    'ReceiptRecordBase',
-    'ReceiptRecordCreate',
-    'ReceiptRecordResponse',
 
     # 销售预测相关
     'SalesForecastBase',

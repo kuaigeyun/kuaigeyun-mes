@@ -19,8 +19,8 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-from apps.kuaizhizao.models.receivable import Receivable
-from apps.kuaizhizao.models.payable import Payable
+from apps.kuaicaiwu.models.receivable import Receivable
+from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery

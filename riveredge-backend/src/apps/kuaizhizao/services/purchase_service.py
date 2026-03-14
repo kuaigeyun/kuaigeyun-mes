@@ -862,8 +862,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             Dict: 包含创建的采购发票信息
         """
-        from apps.kuaizhizao.services.finance_service import PurchaseInvoiceService
-        from apps.kuaizhizao.schemas.finance import PurchaseInvoiceCreate
+        from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+        from apps.kuaicaiwu.schemas.finance import PurchaseInvoiceCreate
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         if order.status not in LEGACY_AUDITED_VALUES:

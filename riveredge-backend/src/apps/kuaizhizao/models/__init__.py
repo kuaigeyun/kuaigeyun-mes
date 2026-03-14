@@ -9,8 +9,7 @@ from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
 from .rework_order_operation import ReworkOrderOperation
-from .cost_rule import CostRule
-from .cost_calculation import CostCalculation
+# CostRule, CostCalculation 已迁移至 kuaicaiwu
 from .outsource_order import OutsourceOrder
 from .outsource_work_order import (
     OutsourceWorkOrder,
@@ -76,10 +75,7 @@ from .finished_goods_inspection import FinishedGoodsInspection
 from .quality_standard import QualityStandard
 from .inspection_plan import InspectionPlan, InspectionPlanStep
 
-# 财务协同模块
-from .payable import Payable
-from .purchase_invoice import PurchaseInvoice
-from .receivable import Receivable
+# 财务协同模块（Payable, PurchaseInvoice, Receivable 已迁移至 kuaicaiwu）
 from .invoice import Invoice, InvoiceItem
 
 # 销售管理模块
@@ -139,8 +135,6 @@ __all__ = [
     'ReportingRecord',
     'ReworkOrder',
     'ReworkOrderOperation',
-    'CostRule',
-    'CostCalculation',
     'OutsourceOrder',
     'OutsourceWorkOrder',
     'OutsourceMaterialIssue',
@@ -207,11 +201,6 @@ __all__ = [
     'QualityStandard',
     'InspectionPlan',
     'InspectionPlanStep',
-
-    # 财务协同模块
-    'Payable',
-    'PurchaseInvoice',
-    'Receivable',
 
     # 销售管理模块
     'SalesForecast',

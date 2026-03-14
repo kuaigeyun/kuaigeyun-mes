@@ -28,12 +28,15 @@ import {
   BarChartOutlined,
   ApiOutlined,
   ArrowUpOutlined,
+  LockOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import { useGlobalStore } from '../../../../stores';
 import {
   getApplicationList,
   getApplicationByUuid,
+  getInstalledApplicationList,
   installApplication,
   uninstallApplication,
   enableApplication,
@@ -44,30 +47,34 @@ import {
   Application,
 } from '../../../../services/application';
 
+/** 卡片内图标尺寸（缩小以显得更精致，圆角背景保持 88x88） */
+const CARD_ICON_SIZE = 52;
+
 /**
  * 根据应用代码和图标配置获取图标组件
- * 
+ *
  * @param code - 应用代码
  * @param icon - 图标配置（可以是图片路径或 lucide 图标名称）
- * @returns React 图标组件
+ * @param size - 图标尺寸（默认 72，卡片内使用 CARD_ICON_SIZE）
  */
-const getApplicationIcon = (code: string, icon?: string | null) => {
-  // 如果 icon 是图片路径（以 / 或 http 开头），使用图片
+const getApplicationIcon = (code: string, icon?: string | null, size: number = 72) => {
   if (icon && (icon.startsWith('/') || icon.startsWith('http'))) {
     return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
-
-  // 如果 icon 是 lucide 图标名称，使用 ManufacturingIcons
   if (icon && ManufacturingIcons[icon as keyof typeof ManufacturingIcons]) {
     const IconComponent = ManufacturingIcons[icon as keyof typeof ManufacturingIcons];
-    return React.createElement(IconComponent, { size: 72 });
+    return React.createElement(IconComponent, { size });
   }
-
-  // 根据应用代码返回默认图标
   const iconMap: Record<string, React.ReactNode> = {
-    kuaimes: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻MES
-    kuaizhizao: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻制造
-    'master-data': React.createElement(ManufacturingIcons.database, { size: 72 }), // 主数据管理
+    kuaimes: React.createElement(ManufacturingIcons.production, { size }),
+    kuaicrm: React.createElement(ManufacturingIcons.users, { size }),
+    kuaipdm: React.createElement(ManufacturingIcons.layers, { size }),
+    kuaizhizao: React.createElement(ManufacturingIcons.production, { size }),
+    kuaichain: React.createElement(ManufacturingIcons.gitBranch, { size }),
+    kuaicaiwu: React.createElement(ManufacturingIcons.wallet, { size }),
+    kuaireport: React.createElement(ManufacturingIcons.fileBarChart, { size }),
+    'master-data': React.createElement(ManufacturingIcons.database, { size }),
+    kuaiai: React.createElement(ManufacturingIcons.sparkles, { size }),
     crm: <UserOutlined />,
     erp: <ShopOutlined />,
     mes: <DatabaseOutlined />,
@@ -78,6 +85,24 @@ const getApplicationIcon = (code: string, icon?: string | null) => {
     hr: <TeamOutlined />,
   };
   return iconMap[code] || <AppstoreOutlined />;
+};
+
+/** 各应用卡片渐变背景（素雅略深、契合主题，避免蓝紫 AI 风） */
+const getCardGradient = (code: string, isActive: boolean): string => {
+  if (!isActive) return 'linear-gradient(135deg, #e8e8e8 0%, #f2f2f2 100%)';
+  const gradients: Record<string, string> = {
+    kuaicrm: 'linear-gradient(135deg, #f8e4dc 0%, #f5ede8 100%)',      // 暖珊瑚
+    kuaipdm: 'linear-gradient(135deg, #dceee6 0%, #eaf5f0 100%)',      // 青绿
+    kuaizhizao: 'linear-gradient(135deg, #e5e2de 0%, #eeebe8 100%)',   // 暖灰
+    kuaichain: 'linear-gradient(135deg, #d8ebe8 0%, #e8f4f1 100%)',    // 薄荷
+    kuaicaiwu: 'linear-gradient(135deg, #f5ecd8 0%, #f0ebe0 100%)',    // 暖金
+    kuaireport: 'linear-gradient(135deg, #dce4f0 0%, #e8eef6 100%)',   // 淡天青
+    'master-data': 'linear-gradient(135deg, #dce0e6 0%, #e8ecf2 100%)', // 石板灰
+    kuaiai: 'linear-gradient(135deg, #f8e8e0 0%, #f2ebe6 100%)',       // 暖杏
+    kuaimes: 'linear-gradient(135deg, #e5e2de 0%, #eeebe8 100%)',      // 暖灰
+    bi: 'linear-gradient(135deg, #dce4f0 0%, #e8eef6 100%)',          // 淡天青
+  };
+  return gradients[code] || 'linear-gradient(135deg, #e8e8e8 0%, #f0f0f0 100%)';
 };
 
 /**
@@ -105,6 +130,7 @@ const ApplicationListPage: React.FC = () => {
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [upgradingApp, setUpgradingApp] = useState<Application | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [syncAllLoading, setSyncAllLoading] = useState(false);
 
   /**
    * 处理扫描应用（从 src/apps 发现并注册）
@@ -121,6 +147,62 @@ const ApplicationListPage: React.FC = () => {
       messageApi.error(error?.message || t('pages.system.applications.scanFailed', { defaultValue: '扫描应用失败' }));
     } finally {
       setScanning(false);
+    }
+  };
+
+  /**
+   * 一键同步所有已安装应用的菜单
+   */
+  const handleSyncAllMenus = async () => {
+    try {
+      setSyncAllLoading(true);
+      const apps = await getInstalledApplicationList({ is_active: true });
+      const codes = apps.map((a) => a.code).filter(Boolean);
+      if (codes.length === 0) {
+        messageApi.info(t('pages.system.applications.syncAllNoApps', { defaultValue: '暂无已安装的应用' }));
+        return;
+      }
+      messageApi.loading({ content: t('pages.system.applications.syncAllLoading', { defaultValue: '正在同步菜单...' }), key: 'sync-all' });
+      let successCount = 0;
+      const errors: string[] = [];
+      for (const code of codes) {
+        try {
+          const result = await syncApplicationManifest(code);
+          if (result.success) successCount += 1;
+          else errors.push(`${code}: ${result.message || ''}`);
+        } catch (e: any) {
+          errors.push(`${code}: ${e?.message || String(e)}`);
+        }
+      }
+      if (errors.length > 0) {
+        messageApi.warning({
+          content: t('pages.system.applications.syncAllPartial', {
+            success: successCount,
+            total: codes.length,
+            errors: errors.slice(0, 3).join('; '),
+            defaultValue: `已同步 ${successCount}/${codes.length} 个应用，部分失败: ${errors.slice(0, 3).join('; ')}`,
+          }),
+          key: 'sync-all',
+        });
+      } else {
+        messageApi.success({
+          content: t('pages.system.applications.syncAllSuccess', {
+            count: successCount,
+            defaultValue: `已同步 ${successCount} 个应用菜单`,
+          }),
+          key: 'sync-all',
+        });
+      }
+      actionRef.current?.reload();
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      useGlobalStore.getState().incrementApplicationMenuVersion();
+    } catch (error: any) {
+      messageApi.error({
+        content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '一键同步菜单失败' }),
+        key: 'sync-all',
+      });
+    } finally {
+      setSyncAllLoading(false);
     }
   };
 
@@ -461,7 +543,7 @@ const ApplicationListPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: application.is_active && application.is_installed ? '#f0f9ff' : '#fafafa',
+              background: getCardGradient(application.code, !!(application.is_active && application.is_installed)),
               padding: '16px',
               borderBottom: `1px solid ${themeToken.colorBorder}`,
               borderTopLeftRadius: themeToken.borderRadiusLG,
@@ -482,15 +564,15 @@ const ApplicationListPage: React.FC = () => {
               }}
             >
               {(() => {
-                const iconElement = getApplicationIcon(application.code, application.icon);
+                const iconElement = getApplicationIcon(application.code, application.icon, CARD_ICON_SIZE);
                 if (React.isValidElement(iconElement) && iconElement.type === 'img') {
                   return React.cloneElement(iconElement as React.ReactElement, {
-                    style: { width: '100%', height: '100%', objectFit: 'cover' },
+                    style: { width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, objectFit: 'contain' },
                   });
                 }
                 return React.cloneElement(iconElement as React.ReactElement, {
                   style: {
-                    fontSize: 48,
+                    fontSize: CARD_ICON_SIZE,
                     color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
                   },
                 });
@@ -530,13 +612,27 @@ const ApplicationListPage: React.FC = () => {
                     </span>
                   )}
                   {application.code === 'master-data' && (
-                     <Tag color="geekblue" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>BASE</Tag>
+                     <Tag color="geekblue" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Base</Tag>
                   )}
                   {(application.code === 'kuaimes' || application.code === 'kuaizhizao') && (
-                     <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>LITE</Tag>
+                     <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
+                  )}
+                  {['kuaicrm', 'kuaipdm', 'kuaichain', 'kuaicaiwu'].includes(application.code) && (
+                     <>
+                       <Tag color="purple" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>Lite</Tag>
+                       <Tag color="blue" style={{ marginLeft: 4, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>{t('pages.system.applications.planningTag')}</Tag>
+                     </>
                   )}
                   {(application.code === 'bi' || application.code === 'kuaireport') && (
                      <Tag color="cyan" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>BI</Tag>
+                  )}
+                  {application.is_pro && (
+                     <Tag color="gold" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>PRO</Tag>
+                  )}
+                  {application.is_pro && !application.can_access && (
+                     <Tag icon={<LockOutlined />} color="default" style={{ marginLeft: 8, fontSize: 10, lineHeight: '18px', transform: 'scale(0.9)' }}>
+                       {t('pages.system.applications.proLockedTag')}
+                     </Tag>
                   )}
                 </span>
                 <Space size={4}>
@@ -735,6 +831,14 @@ const ApplicationListPage: React.FC = () => {
               onClick={handleScanApplications}
             >
               {t('pages.system.applications.scanApplications', { defaultValue: '扫描应用' })}
+            </Button>,
+            <Button
+              key="sync-all"
+              icon={<SyncOutlined />}
+              loading={syncAllLoading}
+              onClick={handleSyncAllMenus}
+            >
+              {t('pages.system.applications.syncAllMenus', { defaultValue: '一键同步菜单' })}
             </Button>,
           ]}
           viewTypes={['card', 'table', 'help']}

@@ -407,12 +407,19 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.wrench, // 设备管理 - 扳手图标（与系统设置齿轮区分）
       '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
       '/apps/kuaizhizao/analysis-center': ManufacturingIcons.chartBar, // 分析中心 - 柱状图
+      '/apps/kuaicrm': ManufacturingIcons.users, // 快客户
+      '/apps/kuaipdm': ManufacturingIcons.layers, // 快研发
+      '/apps/kuaicaiwu': ManufacturingIcons.wallet, // 快财务
+      '/apps/kuaichain': ManufacturingIcons.gitBranch, // 快协同
+      '/apps/kuaicaiwu/finance-management': ManufacturingIcons.wallet, // 财务管理
+      '/apps/kuaicaiwu/cost-management': ManufacturingIcons.calculator, // 成本管理
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
-      '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
-      '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
-      '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 自制报表 - 报表/图表图标（与仪表盘、大屏中心区分）
+      '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
+      '/apps/master-data/warehouse': ManufacturingIcons.archive, // 主数据-仓库数据 - 使用归档图标（区别于仓储管理）
+      '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
+      '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 智能建议
     };
 
     // 精确路径匹配

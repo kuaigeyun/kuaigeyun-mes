@@ -19,7 +19,7 @@ from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
-from apps.kuaizhizao.models.receivable import Receivable
+from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.invoice import Invoice, InvoiceItem

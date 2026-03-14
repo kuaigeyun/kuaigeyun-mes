@@ -128,70 +128,28 @@ export const outsourceOrderApi = {
 
 // 财务协同相关接口
 export const financeApi = {
-  // 应付单
+  // 应付单（已迁至 kuaicaiwu）
   payable: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/payables', { method: 'GET', params });
-    },
-    create: async (data: any) => {
-      return apiRequest('/apps/kuaizhizao/payables', { method: 'POST', data });
-    },
-    update: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/payables/${id}`, { method: 'PUT', data });
-    },
-    delete: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/payables/${id}`, { method: 'DELETE' });
-    },
-    get: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/payables/${id}`, { method: 'GET' });
-    },
-    recordPayment: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/payables/${id}/payment`, { method: 'POST', data });
-    },
+    list: async (params?: any) => apiRequest('/apps/kuaicaiwu/payables', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaicaiwu/payables', { method: 'POST', data }),
+    get: async (id: string) => apiRequest(`/apps/kuaicaiwu/payables/${id}`, { method: 'GET' }),
+    recordPayment: async (id: string, data: any) => apiRequest(`/apps/kuaicaiwu/payables/${id}/payment`, { method: 'POST', data }),
   },
 
-  // 采购发票
+  // 采购发票（已迁至 kuaicaiwu）
   purchaseInvoice: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/purchase-invoices', { method: 'GET', params });
-    },
-    create: async (data: any) => {
-      return apiRequest('/apps/kuaizhizao/purchase-invoices', { method: 'POST', data });
-    },
-    update: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}`, { method: 'PUT', data });
-    },
-    delete: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}`, { method: 'DELETE' });
-    },
-    get: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}`, { method: 'GET' });
-    },
-    approve: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}/approve`, { method: 'POST', data });
-    },
+    list: async (params?: any) => apiRequest('/apps/kuaicaiwu/purchase-invoices', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaicaiwu/purchase-invoices', { method: 'POST', data }),
+    get: async (id: string) => apiRequest(`/apps/kuaicaiwu/purchase-invoices/${id}`, { method: 'GET' }),
+    approve: async (id: string, data?: any) => apiRequest(`/apps/kuaicaiwu/purchase-invoices/${id}/approve`, { method: 'POST', data }),
   },
 
-  // 应收单
+  // 应收单（已迁至 kuaicaiwu）
   receivable: {
-    list: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/receivables', { method: 'GET', params });
-    },
-    create: async (data: any) => {
-      return apiRequest('/apps/kuaizhizao/receivables', { method: 'POST', data });
-    },
-    update: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/receivables/${id}`, { method: 'PUT', data });
-    },
-    delete: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/receivables/${id}`, { method: 'DELETE' });
-    },
-    get: async (id: string) => {
-      return apiRequest(`/apps/kuaizhizao/receivables/${id}`, { method: 'GET' });
-    },
-    recordReceipt: async (id: string, data: any) => {
-      return apiRequest(`/apps/kuaizhizao/receivables/${id}/receipt`, { method: 'POST', data });
-    },
+    list: async (params?: any) => apiRequest('/apps/kuaicaiwu/receivables', { method: 'GET', params }),
+    create: async (data: any) => apiRequest('/apps/kuaicaiwu/receivables', { method: 'POST', data }),
+    get: async (id: string) => apiRequest(`/apps/kuaicaiwu/receivables/${id}`, { method: 'GET' }),
+    recordReceipt: async (id: string, data: any) => apiRequest(`/apps/kuaicaiwu/receivables/${id}/receipt`, { method: 'POST', data }),
   },
 };
 

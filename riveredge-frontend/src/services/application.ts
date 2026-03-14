@@ -24,6 +24,8 @@ export interface Application {
   is_system: boolean;
   is_active: boolean;
   is_installed: boolean;
+  is_pro?: boolean;
+  can_access?: boolean;
   is_custom_name: boolean;
   is_custom_sort: boolean;
   sort_order: number;

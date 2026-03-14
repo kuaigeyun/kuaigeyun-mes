@@ -20,6 +20,7 @@ import { getInstalledApplicationList, scanPlugins } from '../services/applicatio
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
+import ProUpgradePrompt from '../components/pro-upgrade-prompt';
 
 const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] as const;
 
@@ -199,16 +200,21 @@ const AppRoutes: React.FC = () => {
         lazyAppsCache.current.set(app.code, createLazyApp(app));
       }
       const LazyApp = lazyAppsCache.current.get(app.code)!;
+      const isProLocked = app.is_pro && !app.can_access;
       routes.push(
         <Route
           key={`app-${app.code}-${relativePath}`}
           path={`${relativePath}/*`}
           element={
-            <Suspense fallback={<DelayedFallback />}>
-              <AppErrorBoundary appName={app.name}>
-                <LazyApp />
-              </AppErrorBoundary>
-            </Suspense>
+            isProLocked ? (
+              <ProUpgradePrompt appName={app.name} appCode={app.code} />
+            ) : (
+              <Suspense fallback={<DelayedFallback />}>
+                <AppErrorBoundary appName={app.name}>
+                  <LazyApp />
+                </AppErrorBoundary>
+              </Suspense>
+            )
           }
         />
       );

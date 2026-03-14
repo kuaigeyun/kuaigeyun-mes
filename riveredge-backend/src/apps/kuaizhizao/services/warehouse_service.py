@@ -1283,8 +1283,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             # 自动生成应收单
             try:
-                from apps.kuaizhizao.services.finance_service import ReceivableService
-                from apps.kuaizhizao.schemas.finance import ReceivableCreate
+                from apps.kuaicaiwu.services.finance_service import ReceivableService
+                from apps.kuaicaiwu.schemas.finance import ReceivableCreate
                 
                 receivable_service = ReceivableService()
                 
@@ -1812,8 +1812,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             # 自动生成应付单
             try:
-                from apps.kuaizhizao.services.finance_service import PayableService
-                from apps.kuaizhizao.schemas.finance import PayableCreate
+                from apps.kuaicaiwu.services.finance_service import PayableService
+                from apps.kuaicaiwu.schemas.finance import PayableCreate
                 
                 payable_service = PayableService()
                 
@@ -2624,8 +2624,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
             # 创建红字应收单（销售退货冲减）
             try:
-                from apps.kuaizhizao.services.finance_service import ReceivableService
-                from apps.kuaizhizao.schemas.finance import ReceivableCreate
+                from apps.kuaicaiwu.services.finance_service import ReceivableService
+                from apps.kuaicaiwu.schemas.finance import ReceivableCreate
 
                 ret_obj = await SalesReturn.get(tenant_id=tenant_id, id=return_id)
                 total_amount = float(ret_obj.total_amount or 0)
@@ -2877,8 +2877,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             # 创建红字应付单（采购退货冲减）
             try:
-                from apps.kuaizhizao.services.finance_service import PayableService
-                from apps.kuaizhizao.schemas.finance import PayableCreate
+                from apps.kuaicaiwu.services.finance_service import PayableService
+                from apps.kuaicaiwu.schemas.finance import PayableCreate
 
                 ret_obj = await PurchaseReturn.get(tenant_id=tenant_id, id=return_id)
                 total_amount = float(ret_obj.total_amount or 0)

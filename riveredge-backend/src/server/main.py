@@ -105,7 +105,6 @@ from core.api.logistics import router as logistics_router
 from core.api.login_logs.login_logs import router as login_logs_router
 from core.api.online_users.online_users import router as online_users_router
 from core.api.help_documents.help_documents import router as help_documents_router
-from core.api.ai.suggestions import router as ai_suggestions_router
 from core.api.onboarding.onboarding import router as onboarding_router
 from core.api.data_quality.data_quality import router as data_quality_router
 from core.api.operation_guide.operation_guide import router as operation_guide_router
@@ -707,7 +706,7 @@ app.include_router(logistics_router, prefix="/api/v1/core")
 app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
-app.include_router(ai_suggestions_router, prefix="/api/v1/core")
+# 智能建议已迁移至 KU-AI 应用 (apps/kuaiai)，通过 ApplicationRegistryService 注册
 app.include_router(onboarding_router, prefix="/api/v1/core")
 app.include_router(data_quality_router, prefix="/api/v1/core")
 app.include_router(operation_guide_router, prefix="/api/v1/core")

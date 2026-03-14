@@ -943,6 +943,7 @@ export default {
   'pages.traceability.operationName': 'Operation',
   'pages.traceability.viewWorkOrder': 'View Work Order Details',
   'path.kuaizhizao': 'Kuaimes Manufacturing',
+  'path.kuaicaiwu': 'Light Management Accounting',
   'path.plan-management': 'Plan Management',
   'path.demand-management': 'Demand Management',
   'path.scheduling': 'Scheduling',
@@ -1125,6 +1126,10 @@ export default {
   'components.iterationFloatButton.viewRepo': 'View repository',
   'components.iterationFloatButton.feedbackTitle': 'Feedback & feature requests',
   'components.iterationFloatButton.feedbackDesc': 'Scan the QR code to add WeChat. We will respond to your feedback promptly.',
+
+  'components.proUpgradePrompt.title': '{{name}} is a PRO app',
+  'components.proUpgradePrompt.description': 'Upgrade your plan to Professional or Enterprise to unlock this app.',
+  'components.proUpgradePrompt.upgradeButton': 'Upgrade plan',
 
   // UniTable component
   'components.uniTable.fuzzySearch': 'Fuzzy search',
@@ -1445,11 +1450,28 @@ export default {
   'tabs.fullscreen': 'Fullscreen',
   'tabs.exitFullscreen': 'Exit Fullscreen',
 
-  // Application name translations (best practices)
-  'app.kuaizhizao.name': 'Kuaimes Manufacturing',
-  'app.master-data.name': 'Master Data',
+  // Application name translations (unified spec)
+  'app.kuaicrm.name': 'Kuaicrm',
+  'app.kuaipdm.name': 'Kuaipdm',
+  'app.kuaizhizao.name': 'Kuaizhizao',
+  'app.kuaichain.name': 'Kuaichain',
+  'app.kuaicaiwu.name': 'Kuaicaiwu',
+  'app.kuaicaiwu.common.code': 'Code',
+  'app.kuaicaiwu.menu.finance-management': 'Finance',
+  'app.kuaicaiwu.menu.finance-management.receivables': 'Receivables',
+  'app.kuaicaiwu.menu.finance-management.payables': 'Payables',
+  'app.kuaicaiwu.menu.finance-management.purchase-invoices': 'Purchase Invoices',
+  'app.kuaicaiwu.menu.cost-management': 'Cost Management',
+  'app.kuaicaiwu.menu.cost-management.cost-calculations': 'Cost Calculations',
+  'app.kuaicaiwu.menu.cost-management.cost-comparison': 'Cost Comparison',
+  'app.kuaicaiwu.menu.cost-management.cost-rules': 'Cost Rules',
+  'app.kuaicaiwu.menu.cost-management.cost-details': 'Cost Details',
+  'app.kuaicaiwu.menu.cost-management.cost-optimization': 'Cost Optimization',
+  'app.kuaicaiwu.menu.cost-management.cost-report': 'Cost Report',
+  'app.master-data.name': 'Master-data',
+  'app.kuaiai.name': 'KU-AI',
 
-  // Kuaimes Manufacturing application menu translations
+  // Kuaizhizao application menu translations
   'app.kuaizhizao.menu.plan-management': 'Plan Management',
   'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Management',
   'app.kuaizhizao.menu.plan-management.unified-demand-management': 'Unified Demand Management',
@@ -3567,6 +3589,8 @@ export default {
   'pages.system.applications.uninstallConfirm': 'Uninstall this application?',
   'pages.system.applications.moreActions': 'More',
   'pages.system.applications.customNameTag': 'Modified',
+  'pages.system.applications.planningTag': 'Planning',
+  'pages.system.applications.proLockedTag': 'Upgrade to unlock',
   'pages.system.applications.noDescription': 'No description',
   'pages.system.applications.codeLabel': 'Code',
   'pages.system.applications.changelog': 'Changelog',
@@ -3585,6 +3609,12 @@ export default {
   'pages.system.applications.scanApplications': 'Scan Applications',
   'pages.system.applications.scanSuccess': 'Scanned and registered {{count}} application(s)',
   'pages.system.applications.scanFailed': 'Failed to scan applications',
+  'pages.system.applications.syncAllMenus': 'Sync All Menus',
+  'pages.system.applications.syncAllNoApps': 'No installed applications',
+  'pages.system.applications.syncAllLoading': 'Syncing menus...',
+  'pages.system.applications.syncAllSuccess': 'Synced {{count}} application menu(s)',
+  'pages.system.applications.syncAllPartial': 'Synced {{success}}/{{total}} applications, some failed: {{errors}}',
+  'pages.system.applications.syncAllFailed': 'Failed to sync all menus',
   'pages.system.applications.editModalTitle': 'App settings - {{name}}',
   'pages.system.applications.upgradeModalTitle': 'Upgrade - {{name}}',
   'pages.system.applications.restoreDefault': 'Restore default',
@@ -6524,7 +6554,7 @@ export default {
   'pages.infra.platform.floatButtonEnabledTooltip': 'When enabled, a floating button will appear at the bottom-right of the main interface for iteration info, version details, and feedback',
 
   // Report & Dashboard application
-  'app.kuaireport.name': 'Reports & Dashboards',
+  'app.kuaireport.name': 'Kuaireport',
   'app.kuaireport.menu.reports': 'Report Center',
   'app.kuaireport.menu.dashboards': 'Dashboard Center',
   'app.kuaireport.menu.dashboard-designer': 'Dashboard Designer',

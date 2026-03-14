@@ -1,0 +1,60 @@
+{
+  "code": "kuaicaiwu",
+  "name": "快财务",
+  "version": "1.0.0",
+  "description": "业务驱动的管理会计",
+  "icon": "wallet",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaicaiwu/index.tsx",
+  "route_path": "/apps/kuaicaiwu",
+  "sort_order": 50,
+  "menu_config": {
+    "title": "app.kuaicaiwu.name",
+    "icon": "wallet",
+    "path": "/apps/kuaicaiwu",
+    "children": [
+      {
+        "title": "app.kuaicaiwu.menu.finance-management",
+        "icon": "wallet",
+        "sort_order": 1,
+        "children": [
+          {"title": "app.kuaicaiwu.menu.finance-management.receivables", "path": "/apps/kuaicaiwu/finance-management/receivables", "permission": "kuaicaiwu:receivable:view", "sort_order": 1},
+          {"title": "app.kuaicaiwu.menu.finance-management.payables", "path": "/apps/kuaicaiwu/finance-management/payables", "permission": "kuaicaiwu:payable:view", "sort_order": 2},
+          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 3}
+        ]
+      },
+      {
+        "title": "app.kuaicaiwu.menu.cost-management",
+        "icon": "calculator",
+        "sort_order": 2,
+        "children": [
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-calculations", "path": "/apps/kuaicaiwu/cost-management/cost-calculations", "sort_order": 1},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-comparison", "path": "/apps/kuaicaiwu/cost-management/cost-comparison", "sort_order": 2},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-rules", "path": "/apps/kuaicaiwu/cost-management/cost-rules", "sort_order": 3},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-details", "path": "/apps/kuaicaiwu/cost-management/cost-details", "sort_order": 4},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-optimization", "path": "/apps/kuaicaiwu/cost-management/cost-optimization", "sort_order": 5},
+          {"title": "app.kuaicaiwu.menu.cost-management.cost-report", "path": "/apps/kuaicaiwu/cost-management/cost-report", "sort_order": 6}
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaicaiwu:receivable:view",
+    "kuaicaiwu:receivable:create",
+    "kuaicaiwu:receivable:update",
+    "kuaicaiwu:receivable:delete",
+    "kuaicaiwu:payable:view",
+    "kuaicaiwu:payable:create",
+    "kuaicaiwu:payable:update",
+    "kuaicaiwu:payable:delete",
+    "kuaicaiwu:invoice:view",
+    "kuaicaiwu:invoice:create",
+    "kuaicaiwu:cost:view",
+    "kuaicaiwu:cost:create",
+    "kuaicaiwu:cost:update"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}
