@@ -51,6 +51,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionPickingCreate,
     ProductionPickingResponse,
     ProductionPickingListResponse,
+    ProductionPickingWithItemsResponse,
     ProductionReturnCreate,
     ProductionReturnUpdate,
     ProductionReturnResponse,
@@ -60,12 +61,15 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionReturnItemUpdate,
     FinishedGoodsReceiptCreate,
     FinishedGoodsReceiptResponse,
+    FinishedGoodsReceiptWithItemsResponse,
     SalesDeliveryCreate,
     SalesDeliveryResponse,
+    SalesDeliveryWithItemsResponse,
     SalesReturnCreate,
     SalesReturnResponse,
     PurchaseReceiptCreate,
     PurchaseReceiptResponse,
+    PurchaseReceiptWithItemsResponse,
     PurchaseReturnCreate,
     PurchaseReturnResponse,
     OtherInboundCreate,
@@ -242,12 +246,12 @@ async def list_production_pickings(
     )
 
 
-@router.get("/production-pickings/{picking_id}", response_model=ProductionPickingResponse, summary="获取生产领料单详情")
+@router.get("/production-pickings/{picking_id}", response_model=ProductionPickingWithItemsResponse, summary="获取生产领料单详情")
 async def get_production_picking(
     picking_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> ProductionPickingResponse:
+) -> ProductionPickingWithItemsResponse:
     """
     根据ID获取生产领料单详情
 
@@ -980,12 +984,12 @@ async def list_finished_goods_receipts(
     )
 
 
-@router.get("/finished-goods-receipts/{receipt_id}", response_model=FinishedGoodsReceiptResponse, summary="获取成品入库单详情")
+@router.get("/finished-goods-receipts/{receipt_id}", response_model=FinishedGoodsReceiptWithItemsResponse, summary="获取成品入库单详情")
 async def get_finished_goods_receipt(
     receipt_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> FinishedGoodsReceiptResponse:
+) -> FinishedGoodsReceiptWithItemsResponse:
     """
     根据ID获取成品入库单详情
 
@@ -1815,12 +1819,12 @@ async def list_sales_deliveries(
     )
 
 
-@router.get("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryResponse, summary="获取销售出库单详情")
+@router.get("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryWithItemsResponse, summary="获取销售出库单详情")
 async def get_sales_delivery(
     delivery_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> SalesDeliveryResponse:
+) -> SalesDeliveryWithItemsResponse:
     """
     根据ID获取销售出库单详情
 
@@ -2265,12 +2269,12 @@ async def list_purchase_receipts(
     )
 
 
-@router.get("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptResponse, summary="获取采购入库单详情")
+@router.get("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptWithItemsResponse, summary="获取采购入库单详情")
 async def get_purchase_receipt(
     receipt_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> PurchaseReceiptResponse:
+) -> PurchaseReceiptWithItemsResponse:
     """
     根据ID获取采购入库单详情
 

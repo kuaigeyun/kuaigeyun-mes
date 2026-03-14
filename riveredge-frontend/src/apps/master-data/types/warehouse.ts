@@ -12,6 +12,11 @@ export interface Warehouse {
   name: string;
   description?: string;
   isActive: boolean;
+  warehouseType?: string;
+  workshopId?: number;
+  workshopName?: string;
+  workCenterId?: number;
+  workCenterName?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -22,6 +27,9 @@ export interface WarehouseCreate {
   name: string;
   description?: string;
   isActive?: boolean;
+  warehouseType?: string;
+  workshopId?: number;
+  workCenterId?: number;
 }
 
 export interface WarehouseUpdate {
@@ -29,12 +37,16 @@ export interface WarehouseUpdate {
   name?: string;
   description?: string;
   isActive?: boolean;
+  warehouseType?: string;
+  workshopId?: number;
+  workCenterId?: number;
 }
 
 export interface WarehouseListParams {
   skip?: number;
   limit?: number;
   isActive?: boolean;
+  warehouse_type?: string;
 }
 
 export interface StorageArea {

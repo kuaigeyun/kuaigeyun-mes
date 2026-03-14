@@ -60,6 +60,11 @@ class ProductionPickingListResponse(ProductionPickingResponse):
     pass
 
 
+class ProductionPickingWithItemsResponse(ProductionPickingResponse):
+    """生产领料单详情响应（含明细）"""
+    items: List["ProductionPickingItemResponse"] = Field(default_factory=list, description="领料明细列表")
+
+
 # === 生产领料单明细 ===
 
 class ProductionPickingItemBase(BaseSchema):
@@ -250,6 +255,11 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
         from_attributes = True
 
 
+class FinishedGoodsReceiptWithItemsResponse(FinishedGoodsReceiptResponse):
+    """成品入库单详情响应（含明细）"""
+    items: List["FinishedGoodsReceiptItemResponse"] = Field(default_factory=list, description="入库明细列表")
+
+
 # === 成品入库单明细 ===
 
 class FinishedGoodsReceiptItemBase(BaseSchema):
@@ -357,6 +367,11 @@ class SalesDeliveryResponse(SalesDeliveryBase):
         from_attributes = True
 
 
+class SalesDeliveryWithItemsResponse(SalesDeliveryResponse):
+    """销售出库单详情响应（含明细）"""
+    items: List["SalesDeliveryItemResponse"] = Field(default_factory=list, description="出库明细列表")
+
+
 # === 销售出库单明细 ===
 
 class SalesDeliveryItemBase(BaseSchema):
@@ -414,9 +429,9 @@ class SalesDeliveryItemResponse(SalesDeliveryItemBase):
 
 class PurchaseReceiptBase(BaseSchema):
     """采购入库单基础schema"""
-    receipt_code: str = Field(..., max_length=50, description="入库单编码")
-    purchase_order_id: int = Field(..., description="采购订单ID")
-    purchase_order_code: str = Field(..., max_length=50, description="采购订单编码")
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，不提供则自动生成）")
+    purchase_order_id: int = Field(0, description="采购订单ID（手动创建时为0）")
+    purchase_order_code: str = Field("", max_length=50, description="采购订单编码（手动创建时为空）")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
     warehouse_id: int = Field(..., description="入库仓库ID")
@@ -441,7 +456,7 @@ class PurchaseReceiptBase(BaseSchema):
 
 class PurchaseReceiptItemBase(BaseSchema):
     """采购入库单明细基础schema"""
-    purchase_order_item_id: int = Field(..., description="采购订单明细ID")
+    purchase_order_item_id: int = Field(0, description="采购订单明细ID（手动创建时为0）")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -507,6 +522,11 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
 
     class Config:
         from_attributes = True
+
+
+class PurchaseReceiptWithItemsResponse(PurchaseReceiptResponse):
+    """采购入库单详情响应（含明细）"""
+    items: List[PurchaseReceiptItemResponse] = Field(default_factory=list, description="入库明细列表")
 
 
 # === 销售退货单 ===

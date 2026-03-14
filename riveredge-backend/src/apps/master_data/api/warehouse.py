@@ -24,7 +24,7 @@ router = APIRouter(prefix="/warehouse", tags=["Warehouse"])
 
 # ==================== 仓库相关接口 ====================
 
-@router.post("/warehouses", response_model=WarehouseResponse, summary="创建仓库")
+@router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="创建仓库")
 async def create_warehouse(
     data: WarehouseCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -44,23 +44,25 @@ async def create_warehouse(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/warehouses", response_model=List[WarehouseResponse], summary="获取仓库列表")
+@router.get("/warehouses", response_model=List[WarehouseResponse], response_model_by_alias=True, summary="获取仓库列表")
 async def list_warehouses(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/quarantine）")
 ):
     """
     获取仓库列表
-    
+
     - **skip**: 跳过数量（默认：0）
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
+    - **warehouse_type**: 仓库类型（可选）
     """
     try:
-        return await WarehouseService.list_warehouses(tenant_id, skip, limit, is_active)
+        return await WarehouseService.list_warehouses(tenant_id, skip, limit, is_active, warehouse_type)
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取仓库列表失败: {e}")
@@ -83,7 +85,7 @@ async def load_preset_warehouses(
     return {"created": count, "message": f"已加载 {count} 个仓库"}
 
 
-@router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, summary="获取仓库详情")
+@router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="获取仓库详情")
 async def get_warehouse(
     warehouse_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -100,7 +102,7 @@ async def get_warehouse(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, summary="更新仓库")
+@router.put("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="更新仓库")
 async def update_warehouse(
     warehouse_uuid: str,
     data: WarehouseUpdate,

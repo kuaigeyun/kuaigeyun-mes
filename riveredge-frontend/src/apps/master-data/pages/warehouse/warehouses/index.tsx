@@ -15,6 +15,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/warehouse';
+import { workshopApi, workCenterApi } from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -141,6 +142,14 @@ const WarehousesPage: React.FC = () => {
       '*name': 'name',
       '描述': 'description',
       'description': 'description',
+      '仓库类型': 'warehouseType',
+      'warehouseType': 'warehouseType',
+      '车间': 'workshopCode',
+      '车间编码': 'workshopCode',
+      'workshopCode': 'workshopCode',
+      '工作中心': 'workCenterCode',
+      '工作中心编码': 'workCenterCode',
+      'workCenterCode': 'workCenterCode',
     };
 
     // 找到表头索引
@@ -165,6 +174,20 @@ const WarehousesPage: React.FC = () => {
     if (headerIndexMap['name'] === undefined) {
       messageApi.error(t('app.master-data.importMissingField', { field: t('app.master-data.warehouses.name'), headers: headers.join(', ') }));
       return;
+    }
+
+    // 加载车间和工作中心（用于解析 workshopCode/workCenterCode）
+    let workshops: Array<{ id: number; code: string; name: string }> = [];
+    let workCenters: Array<{ id: number; code: string; name: string }> = [];
+    try {
+      const [wsList, wcList] = await Promise.all([
+        workshopApi.list({ limit: 10000, isActive: true }),
+        workCenterApi.list({ limit: 10000, isActive: true }),
+      ]);
+      workshops = wsList || [];
+      workCenters = wcList || [];
+    } catch (e) {
+      console.warn('加载车间/工作中心失败，线边仓关联将跳过', e);
     }
 
     // 解析数据行
@@ -193,6 +216,9 @@ const WarehousesPage: React.FC = () => {
         const codeIndex = headerIndexMap['code'];
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
+        const warehouseTypeIndex = headerIndexMap['warehouseType'];
+        const workshopCodeIndex = headerIndexMap['workshopCode'];
+        const workCenterCodeIndex = headerIndexMap['workCenterCode'];
 
         if (codeIndex === undefined || nameIndex === undefined) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.headerMapError') });
@@ -204,10 +230,19 @@ const WarehousesPage: React.FC = () => {
         const description = descriptionIndex !== undefined && row[descriptionIndex] !== undefined
           ? row[descriptionIndex]
           : undefined;
-        
+        const warehouseTypeVal = warehouseTypeIndex !== undefined && row[warehouseTypeIndex] !== undefined
+          ? String(row[warehouseTypeIndex]).trim()
+          : 'normal';
+        const workshopCodeVal = workshopCodeIndex !== undefined && row[workshopCodeIndex] !== undefined
+          ? String(row[workshopCodeIndex]).trim()
+          : '';
+        const workCenterCodeVal = workCenterCodeIndex !== undefined && row[workCenterCodeIndex] !== undefined
+          ? String(row[workCenterCodeIndex]).trim()
+          : '';
+
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
         const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
-        
+
         if (!codeValue) {
           errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.codeRequired') });
           return;
@@ -217,12 +252,53 @@ const WarehousesPage: React.FC = () => {
           return;
         }
 
+        // 解析仓库类型（支持中文或英文值）
+        const typeMap: Record<string, string> = {
+          normal: 'normal', '普通仓': 'normal', '普通': 'normal',
+          line_side: 'line_side', '线边仓': 'line_side', '线边': 'line_side',
+          wip: 'wip', '在制品仓': 'wip', '在制品': 'wip',
+          outsourcing: 'outsourcing', '委外仓': 'outsourcing', '委外': 'outsourcing',
+          consignment: 'consignment', '寄售仓': 'consignment', '寄售': 'consignment',
+          vmi: 'vmi', 'VMI仓': 'vmi', 'VMI': 'vmi',
+          defect: 'defect', '不良品仓': 'defect', '不良品': 'defect',
+          quarantine: 'quarantine', '待检仓': 'quarantine', '待检': 'quarantine',
+        };
+        const warehouseType = typeMap[warehouseTypeVal] || 'normal';
+
+        // 线边仓时解析车间
+        let workshopId: number | undefined;
+        if (workshopCodeVal) {
+          const found = workshops.find((w) => w.code.toUpperCase() === workshopCodeVal.toUpperCase());
+          if (found) {
+            workshopId = found.id;
+          } else {
+            errors.push({ row: actualRowIndex, message: `车间编码 "${workshopCodeVal}" 不存在` });
+            return;
+          }
+        }
+        if (warehouseType === 'line_side' && !workshopId) {
+          errors.push({ row: actualRowIndex, message: t('field.warehouse.workshopIdRequired') });
+          return;
+        }
+
+        // 解析工作中心
+        let workCenterId: number | undefined;
+        if (workCenterCodeVal) {
+          const found = workCenters.find((w) => w.code.toUpperCase() === workCenterCodeVal.toUpperCase());
+          if (found) {
+            workCenterId = found.id;
+          }
+        }
+
         // 构建导入数据
         const warehouseData: WarehouseCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           description: description ? String(description).trim() : undefined,
-          isActive: true, // 默认启用
+          isActive: true,
+          warehouseType,
+          workshopId,
+          workCenterId,
         };
 
         importData.push(warehouseData);
@@ -351,10 +427,32 @@ const WarehousesPage: React.FC = () => {
       }
 
       // 构建 CSV 内容
-      const headers = [t('app.master-data.warehouses.code'), t('app.master-data.warehouses.name'), t('app.master-data.warehouses.description'), t('app.master-data.warehouses.status'), t('app.master-data.warehouses.createTime')];
-      const rows = exportData.map(item => [
+      const headers = [
+        t('app.master-data.warehouses.code'),
+        t('app.master-data.warehouses.name'),
+        t('field.warehouse.warehouseType'),
+        t('field.warehouse.workshopName'),
+        t('field.warehouse.workCenterName'),
+        t('app.master-data.warehouses.description'),
+        t('app.master-data.warehouses.status'),
+        t('app.master-data.warehouses.createTime'),
+      ];
+      const warehouseTypeLabels: Record<string, string> = {
+        normal: t('warehouse.type.normal'),
+        line_side: t('warehouse.type.line_side'),
+        wip: t('warehouse.type.wip'),
+        outsourcing: t('warehouse.type.outsourcing'),
+        consignment: t('warehouse.type.consignment'),
+        vmi: t('warehouse.type.vmi'),
+        defect: t('warehouse.type.defect'),
+        quarantine: t('warehouse.type.quarantine'),
+      };
+      const rows = exportData.map((item) => [
         item.code || '',
         item.name || '',
+        warehouseTypeLabels[item.warehouseType || 'normal'] || item.warehouseType || '',
+        item.workshopName || '',
+        item.workCenterName || '',
         item.description || '',
         item.isActive ? t('common.enabled') : t('common.disabled'),
         item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
@@ -410,6 +508,17 @@ const WarehousesPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const warehouseTypeEnum: Record<string, { text: string }> = {
+    normal: { text: t('warehouse.type.normal') },
+    line_side: { text: t('warehouse.type.line_side') },
+    wip: { text: t('warehouse.type.wip') },
+    outsourcing: { text: t('warehouse.type.outsourcing') },
+    consignment: { text: t('warehouse.type.consignment') },
+    vmi: { text: t('warehouse.type.vmi') },
+    defect: { text: t('warehouse.type.defect') },
+    quarantine: { text: t('warehouse.type.quarantine') },
+  };
+
   const columns: ProColumns<Warehouse>[] = [
     {
       title: t('app.master-data.warehouses.code'),
@@ -423,6 +532,30 @@ const WarehousesPage: React.FC = () => {
       title: t('app.master-data.warehouses.name'),
       dataIndex: 'name',
       width: 200,
+    },
+    {
+      title: t('field.warehouse.warehouseType'),
+      dataIndex: 'warehouseType',
+      width: 100,
+      valueType: 'select',
+      valueEnum: warehouseTypeEnum,
+      render: (_, record) => warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+    },
+    {
+      title: t('field.warehouse.workshopName'),
+      dataIndex: 'workshopName',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.workshopName || '-',
+    },
+    {
+      title: t('field.warehouse.workCenterName'),
+      dataIndex: 'workCenterName',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.workCenterName || '-',
     },
     {
       title: t('app.master-data.warehouses.description'),
@@ -507,6 +640,21 @@ const WarehousesPage: React.FC = () => {
       dataIndex: 'name',
     },
     {
+      title: t('field.warehouse.warehouseType'),
+      dataIndex: 'warehouseType',
+      render: (_, record) => warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+    },
+    {
+      title: t('field.warehouse.workshopName'),
+      dataIndex: 'workshopName',
+      render: (_, record) => record.workshopName || '-',
+    },
+    {
+      title: t('field.warehouse.workCenterName'),
+      dataIndex: 'workCenterName',
+      render: (_, record) => record.workCenterName || '-',
+    },
+    {
       title: t('app.master-data.warehouses.description'),
       dataIndex: 'description',
       span: 2,
@@ -549,7 +697,11 @@ const WarehousesPage: React.FC = () => {
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
             apiParams.isActive = searchFormValues.isActive;
           }
-          
+          // 仓库类型筛选
+          if (searchFormValues?.warehouseType) {
+            apiParams.warehouse_type = searchFormValues.warehouseType;
+          }
+
           try {
             const result = await warehouseApi.list(apiParams);
             return {
@@ -572,8 +724,8 @@ const WarehousesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
-        importHeaders={['*仓库编码', '*仓库名称', '描述']}
-        importExampleRow={['WH001', '成品仓库', '主要用于存储成品']}
+        importHeaders={['*仓库编码', '*仓库名称', '仓库类型', '车间', '工作中心', '描述']}
+        importExampleRow={['WH001', '成品仓库', '普通仓', '', '', '主要用于存储成品']}
         importFieldMap={{
           '仓库编码': 'code',
           '*仓库编码': 'code',

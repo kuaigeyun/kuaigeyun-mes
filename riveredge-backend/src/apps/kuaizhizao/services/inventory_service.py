@@ -2,7 +2,13 @@
 统一库存服务
 
 为领料、退料、入库、出库、盘点、调拨、组装、拆解等业务提供统一的库存增减接口。
-主仓使用 MaterialBatch，线边仓使用 LineSideInventory。
+
+业务逻辑：
+- 主仓（normal/wip，如原材料仓、成品仓）：使用 MaterialBatch
+- 线边仓（line_side）：使用 LineSideInventory，仅发料/配料时写入
+
+采购入库、成品入库等入库操作 → 主仓 MaterialBatch
+发料/配料到线边仓 → LineSideInventory
 
 Author: RiverEdge Team
 Date: 2026-02-28
@@ -41,7 +47,7 @@ class InventoryService:
             tenant_id: 租户ID
             material_id: 物料ID
             quantity: 增加数量
-            warehouse_id: 仓库ID（None=主仓用MaterialBatch，有值=线边仓用LineSideInventory）
+            warehouse_id: 仓库ID。根据 warehouse_type 决定：line_side→LineSideInventory，normal/wip→MaterialBatch
             batch_no: 批号（主仓必填，线边仓可选）
             source_type: 来源类型（如 production_picking, sales_delivery）
             source_doc_id: 来源单据ID
@@ -51,8 +57,16 @@ class InventoryService:
             是否成功
         """
         try:
-            if warehouse_id is None:
-                # 主仓：使用 MaterialBatch
+            # 根据 warehouse_type 决定写入目标：line_side → LineSideInventory，否则 → MaterialBatch
+            use_line_side = False
+            if warehouse_id is not None:
+                from apps.master_data.models.warehouse import Warehouse
+                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                if wh and wh.warehouse_type == "line_side":
+                    use_line_side = True
+
+            if not use_line_side:
+                # 主仓（normal/wip 或 warehouse_id 为空）：使用 MaterialBatch
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 batch_no = batch_no or "DEFAULT"
@@ -78,7 +92,7 @@ class InventoryService:
                     f"qty={quantity} warehouse={warehouse_id} batch={batch_no} source={source_type}"
                 )
             else:
-                # 线边仓：使用 LineSideInventory
+                # 线边仓（warehouse_type=line_side）：使用 LineSideInventory
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
                 inv_filter = dict(
@@ -142,7 +156,15 @@ class InventoryService:
             是否成功
         """
         try:
-            if warehouse_id is None:
+            # 根据 warehouse_type 决定扣减目标：line_side → LineSideInventory，否则 → MaterialBatch
+            use_line_side = False
+            if warehouse_id is not None:
+                from apps.master_data.models.warehouse import Warehouse
+                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                if wh and wh.warehouse_type == "line_side":
+                    use_line_side = True
+
+            if not use_line_side:
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 if batch_no:
@@ -195,6 +217,7 @@ class InventoryService:
                     f"qty={quantity} warehouse={warehouse_id} batch={batch_no}"
                 )
             else:
+                # 线边仓（warehouse_type=line_side）：扣减 LineSideInventory
                 from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
                 inv_filter = dict(
@@ -270,7 +293,15 @@ class InventoryService:
             是否成功
         """
         try:
-            if warehouse_id is None:
+            # 根据 warehouse_type 决定调整目标：line_side → LineSideInventory，否则 → MaterialBatch
+            use_line_side = False
+            if warehouse_id is not None:
+                from apps.master_data.models.warehouse import Warehouse
+                wh = await Warehouse.get_or_none(id=warehouse_id, deleted_at__isnull=True)
+                if wh and wh.warehouse_type == "line_side":
+                    use_line_side = True
+
+            if not use_line_side:
                 from apps.master_data.models.material_batch import MaterialBatch
 
                 batch_no = batch_no or "DEFAULT"

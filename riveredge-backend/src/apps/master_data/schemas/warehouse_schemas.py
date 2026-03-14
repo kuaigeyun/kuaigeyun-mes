@@ -4,9 +4,22 @@
 定义仓库数据的 Pydantic Schema（仓库、库区、库位），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, validator, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, Field, validator, model_validator, ConfigDict
+from typing import Optional, List, Literal
 from datetime import datetime
+
+# 仓库类型枚举（制造业最佳实践）
+WAREHOUSE_TYPE_CHOICES = (
+    "normal",       # 普通仓
+    "line_side",    # 线边仓
+    "wip",          # 在制品仓
+    "outsourcing",  # 委外仓
+    "consignment",  # 寄售仓
+    "vmi",          # VMI仓
+    "defect",       # 不良品仓
+    "quarantine",   # 待检仓
+)
+WarehouseType = Literal["normal", "line_side", "wip", "outsourcing", "consignment", "vmi", "defect", "quarantine"]
 
 
 class WarehouseBase(BaseModel):
@@ -16,6 +29,9 @@ class WarehouseBase(BaseModel):
     name: str = Field(..., max_length=200, description="仓库名称")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用", alias="isActive")
+    warehouse_type: str = Field(default="normal", max_length=20, description="仓库类型", alias="warehouseType")
+    workshop_id: Optional[int] = Field(None, description="关联车间ID（线边仓时必填）", alias="workshopId")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
     
@@ -33,10 +49,23 @@ class WarehouseBase(BaseModel):
             raise ValueError("仓库名称不能为空")
         return v.strip()
 
+    @validator("warehouse_type")
+    def validate_warehouse_type(cls, v):
+        """验证仓库类型"""
+        if v and v not in WAREHOUSE_TYPE_CHOICES:
+            raise ValueError(f"仓库类型无效，可选值: {', '.join(WAREHOUSE_TYPE_CHOICES)}")
+        return v or "normal"
+
 
 class WarehouseCreate(WarehouseBase):
     """创建仓库 Schema"""
-    pass
+
+    @model_validator(mode="after")
+    def validate_line_side_workshop(self):
+        """线边仓时 workshop_id 必填"""
+        if self.warehouse_type == "line_side" and not self.workshop_id:
+            raise ValueError("线边仓必须关联车间")
+        return self
 
 
 class WarehouseUpdate(BaseModel):
@@ -46,6 +75,9 @@ class WarehouseUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="仓库名称")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    warehouse_type: Optional[str] = Field(None, max_length=20, description="仓库类型", alias="warehouseType")
+    workshop_id: Optional[int] = Field(None, description="关联车间ID", alias="workshopId")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
     
@@ -63,6 +95,13 @@ class WarehouseUpdate(BaseModel):
             raise ValueError("仓库名称不能为空")
         return v.strip() if v else None
 
+    @validator("warehouse_type")
+    def validate_warehouse_type(cls, v):
+        """验证仓库类型"""
+        if v is not None and v not in WAREHOUSE_TYPE_CHOICES:
+            raise ValueError(f"仓库类型无效，可选值: {', '.join(WAREHOUSE_TYPE_CHOICES)}")
+        return v
+
 
 class WarehouseResponse(WarehouseBase):
     """仓库响应 Schema"""
@@ -74,6 +113,8 @@ class WarehouseResponse(WarehouseBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    workshop_name: Optional[str] = Field(None, alias="workshopName", description="关联车间名称")
+    work_center_name: Optional[str] = Field(None, alias="workCenterName", description="关联工作中心名称")
     
     model_config = ConfigDict(
         from_attributes=True,

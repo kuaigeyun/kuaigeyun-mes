@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Form as AntForm, InputNumber, Input } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -17,6 +18,7 @@ import CodeField from '../../../../../components/code-field';
 import { warehouseApi, workOrderApi } from '../../../services/production';
 import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { listPurchaseOrders, pushPurchaseOrderToReceipt } from '../../../services/purchase';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
@@ -74,12 +76,28 @@ const InboundPage: React.FC = () => {
 
   // 批量入库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
-  const [batchForm] = Form.useForm();
+  const [batchForm] = AntForm.useForm();
   const [batchInboundType, setBatchInboundType] = useState<'finished_goods' | 'purchase'>('finished_goods');
   const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [purchaseOrderOptions, setPurchaseOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
+
+  // 新建入库单：仓库、供应商选项
+  const [createWarehouseOptions, setCreateWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+
+  const defaultPurchaseItem = {
+    purchase_order_item_id: 0,
+    material_id: undefined,
+    material_code: '',
+    material_name: '',
+    material_unit: '',
+    receipt_quantity: 1,
+    unit_price: 0,
+    qualified_quantity: 1,
+    unqualified_quantity: 0,
+  };
 
   const handleCreate = () => {
     setInboundType('purchase');
@@ -87,6 +105,39 @@ const InboundPage: React.FC = () => {
   };
 
   useNewShortcut(handleCreate);
+
+  /** 新建入库单：加载仓库、供应商 */
+  useEffect(() => {
+    if (!createModalVisible) return;
+    const load = async () => {
+      try {
+        const [whRes, supRes] = await Promise.all([
+          masterWarehouseApi.list({ isActive: true, limit: 500 }),
+          supplierApi.list({ limit: 500 }),
+        ]);
+        const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
+        setCreateWarehouseOptions(
+          (Array.isArray(whList) ? whList : []).map((w: any) => ({
+            label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+            value: w.id,
+            name: w.name || '',
+          }))
+        );
+        const supList = Array.isArray(supRes) ? supRes : (supRes as any)?.data ?? (supRes as any)?.items ?? supRes ?? [];
+        setSupplierOptions(
+          (Array.isArray(supList) ? supList : []).map((s: any) => ({
+            label: `${s.code || ''} ${s.name || ''}`.trim() || String(s.id ?? s.uuid),
+            value: s.id,
+            name: s.name || '',
+          }))
+        );
+      } catch {
+        setCreateWarehouseOptions([]);
+        setSupplierOptions([]);
+      }
+    };
+    load();
+  }, [createModalVisible]);
 
   /** 批量入库：加载工单、采购订单、仓库 */
   useEffect(() => {
@@ -413,12 +464,52 @@ const InboundPage: React.FC = () => {
 
   const handleFormFinish = async (values: any) => {
     try {
+      if (values.type === 'purchase' || inboundType === 'purchase') {
+        const items = (values.items ?? []).filter(
+          (it: any) => it.material_id && (Number(it.receipt_quantity) || 0) > 0
+        );
+        if (items.length === 0) {
+          messageApi.warning('请至少添加一条有效物料明细');
+          throw new Error('请至少添加一条有效物料明细');
+        }
+        const wh = createWarehouseOptions.find((w) => w.value === values.warehouse_id);
+        const sup = supplierOptions.find((s) => s.value === values.supplier_id);
+        if (!wh || !sup) {
+          messageApi.warning('请选择入库仓库和供应商');
+          throw new Error('请选择入库仓库和供应商');
+        }
+        const payload = {
+          receipt_code: values.receipt_code || undefined,
+          purchase_order_id: values.purchase_order_id ?? 0,
+          purchase_order_code: values.purchase_order_code || '手动',
+          supplier_id: sup.value,
+          supplier_name: sup.name,
+          warehouse_id: wh.value,
+          warehouse_name: wh.name,
+          notes: values.notes,
+          items: items.map((it: any) => ({
+            purchase_order_item_id: it.purchase_order_item_id ?? 0,
+            material_id: it.material_id,
+            material_code: it.material_code,
+            material_name: it.material_name,
+            material_spec: it.material_spec || undefined,
+            material_unit: it.material_unit || '个',
+            receipt_quantity: Number(it.receipt_quantity) || 0,
+            unit_price: Number(it.unit_price) || 0,
+            qualified_quantity: Number(it.qualified_quantity) ?? Number(it.receipt_quantity) ?? 0,
+            unqualified_quantity: Number(it.unqualified_quantity) ?? 0,
+          })),
+        };
+        await warehouseApi.purchaseReceipt.create(payload);
+      }
       messageApi.success('入库单创建成功');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      if (error?.message !== '请至少添加一条有效物料明细') {
+        messageApi.error(error?.message || error?.response?.data?.detail || '操作失败');
+      }
       throw error;
     }
   };
@@ -581,48 +672,176 @@ const InboundPage: React.FC = () => {
             />
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="warehouse"
-              label="入库仓库"
-              placeholder="请选择入库仓库"
-              rules={[{ required: true, message: '请选择入库仓库' }]}
-              options={[
-                { label: '原材料仓库', value: 'raw-materials' },
-                { label: '半成品仓库', value: 'semi-finished' },
-                { label: '成品仓库', value: 'finished-goods' },
-              ]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="supplier" label="供应商" placeholder="选择供应商" />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormText name="workOrder" label="关联工单" placeholder="选择工单" />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="batch_number"
-              label="批号"
-              placeholder="请输入批号（批号管理物料必填）"
-              tooltip="如果所选物料启用了批号管理，此字段为必填"
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="expiry_date"
-              label="有效期"
-              placeholder="请选择有效期"
-              tooltip="有保质期要求的物料需要填写有效期"
-            />
-          </Col>
-          <Col span={12} />
-        </Row>
+        {inboundType === 'purchase' && (
+          <>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormSelect
+                  name="warehouse_id"
+                  label="入库仓库"
+                  placeholder="请选择入库仓库"
+                  rules={[{ required: true, message: '请选择入库仓库' }]}
+                  options={createWarehouseOptions}
+                  fieldProps={{ showSearch: true, filterOption: (i: any, o: any) => (o?.label ?? '').toString().toLowerCase().includes((i ?? '').toLowerCase()) }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormSelect
+                  name="supplier_id"
+                  label="供应商"
+                  placeholder="请选择供应商"
+                  rules={[{ required: true, message: '请选择供应商' }]}
+                  options={supplierOptions}
+                  fieldProps={{ showSearch: true, filterOption: (i: any, o: any) => (o?.label ?? '').toString().toLowerCase().includes((i ?? '').toLowerCase()) }}
+                />
+              </Col>
+            </Row>
+            <ProFormItem label="入库明细" required style={{ width: '100%' }}>
+              <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+                <AntForm.List name="items" initialValue={[defaultPurchaseItem]}>
+                  {(fields, { add, remove }) => (
+                    <div>
+                      <Table
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 700 }}
+                        dataSource={fields}
+                        rowKey={(field) => field.key}
+                        columns={[
+                          {
+                            title: '物料',
+                            dataIndex: 'material_id',
+                            width: 260,
+                            render: (_: any, __: any, index: number) => (
+                              <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                                {({ getFieldValue }: any) => {
+                                  const row = getFieldValue('items')?.[index];
+                                  const mid = row?.material_id ? Number(row.material_id) : null;
+                                  const fallback = mid && (row?.material_code || row?.material_name)
+                                    ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                                    : undefined;
+                                  return (
+                                    <UniMaterialSelect
+                                      name={[index, 'material_id']}
+                                      label=""
+                                      placeholder="请选择物料"
+                                      required
+                                      size="small"
+                                      listFieldKey={index}
+                                      listFieldName="items"
+                                      fillMapping={{
+                                        material_code: 'mainCode',
+                                        material_name: 'name',
+                                        material_unit: 'baseUnit',
+                                      }}
+                                      fallbackOption={fallback}
+                                      formItemProps={{ style: { margin: 0 } }}
+                                      showQuickCreate
+                                      showAdvancedSearch
+                                    />
+                                  );
+                                }}
+                              </AntForm.Item>
+                            ),
+                          },
+                          {
+                            title: '单位',
+                            dataIndex: 'material_unit',
+                            width: 70,
+                            render: (_: any, __: any, index: number) => (
+                              <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                                <Input placeholder="单位" size="small" />
+                              </AntForm.Item>
+                            ),
+                          },
+                          {
+                            title: '数量',
+                            dataIndex: 'receipt_quantity',
+                            width: 100,
+                            render: (_: any, __: any, index: number) => (
+                              <AntForm.Item noStyle name={[index, 'receipt_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]}>
+                                <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                              </AntForm.Item>
+                            ),
+                          },
+                          {
+                            title: '单价',
+                            dataIndex: 'unit_price',
+                            width: 100,
+                            render: (_: any, __: any, index: number) => (
+                              <AntForm.Item noStyle name={[index, 'unit_price']}>
+                                <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                              </AntForm.Item>
+                            ),
+                          },
+                          {
+                            title: '操作',
+                            width: 60,
+                            render: (_: any, __: any, index: number) => (
+                              <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                            ),
+                          },
+                        ]}
+                      />
+                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add(defaultPurchaseItem)} block style={{ marginTop: 8 }}>
+                        添加明细
+                      </Button>
+                    </div>
+                  )}
+                </AntForm.List>
+              </AntForm.Item>
+            </ProFormItem>
+            <ProFormItem name="notes" label="备注">
+              <Input.TextArea rows={2} placeholder="可选" />
+            </ProFormItem>
+          </>
+        )}
+        {(inboundType === 'production' || inboundType === 'initial' || inboundType === 'return') && (
+          <>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormSelect
+                  name="warehouse"
+                  label="入库仓库"
+                  placeholder="请选择入库仓库"
+                  rules={[{ required: true, message: '请选择入库仓库' }]}
+                  options={[
+                    { label: '原材料仓库', value: 'raw-materials' },
+                    { label: '半成品仓库', value: 'semi-finished' },
+                    { label: '成品仓库', value: 'finished-goods' },
+                  ]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormText name="supplier" label="供应商" placeholder="选择供应商" />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormText name="workOrder" label="关联工单" placeholder="选择工单" />
+              </Col>
+              <Col span={12}>
+                <ProFormText
+                  name="batch_number"
+                  label="批号"
+                  placeholder="请输入批号（批号管理物料必填）"
+                  tooltip="如果所选物料启用了批号管理，此字段为必填"
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="expiry_date"
+                  label="有效期"
+                  placeholder="请选择有效期"
+                  tooltip="有保质期要求的物料需要填写有效期"
+                />
+              </Col>
+              <Col span={12} />
+            </Row>
+          </>
+        )}
       </FormModalTemplate>
 
       <Modal
@@ -637,8 +856,8 @@ const InboundPage: React.FC = () => {
         <p style={{ marginBottom: 16, color: '#666' }}>
           根据上游单据批量创建入库单。成品入库：从工单下推；采购入库：从采购订单下推。
         </p>
-        <Form form={batchForm} layout="vertical" initialValues={{ batch_inbound_type: 'finished_goods' }}>
-          <Form.Item
+        <AntForm form={batchForm} layout="vertical" initialValues={{ batch_inbound_type: 'finished_goods' }}>
+          <AntForm.Item
             name="batch_inbound_type"
             label="入库类型"
             rules={[{ required: true }]}
@@ -652,10 +871,10 @@ const InboundPage: React.FC = () => {
                 onChange: (v: string) => setBatchInboundType(v as 'finished_goods' | 'purchase'),
               }}
             />
-          </Form.Item>
+          </AntForm.Item>
           {batchInboundType === 'finished_goods' && (
             <>
-              <Form.Item
+              <AntForm.Item
                 name="work_order_ids"
                 label="选择工单"
                 rules={[{ required: true, message: '请选择至少一个工单' }]}
@@ -666,8 +885,8 @@ const InboundPage: React.FC = () => {
                   options={workOrderOptions}
                   fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
                 />
-              </Form.Item>
-              <Form.Item
+              </AntForm.Item>
+              <AntForm.Item
                 name="warehouse_id"
                 label="入库仓库"
                 rules={[{ required: true, message: '请选择入库仓库' }]}
@@ -677,11 +896,11 @@ const InboundPage: React.FC = () => {
                   options={warehouseOptions}
                   fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
                 />
-              </Form.Item>
+              </AntForm.Item>
             </>
           )}
           {batchInboundType === 'purchase' && (
-            <Form.Item
+            <AntForm.Item
               name="purchase_order_ids"
               label="选择采购订单"
               rules={[{ required: true, message: '请选择至少一个采购订单' }]}
@@ -692,9 +911,9 @@ const InboundPage: React.FC = () => {
                 options={purchaseOrderOptions}
                 fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
               />
-            </Form.Item>
+            </AntForm.Item>
           )}
-        </Form>
+        </AntForm>
       </Modal>
 
       <DetailDrawerTemplate
@@ -773,35 +992,50 @@ const InboundPage: React.FC = () => {
                 })()}
               </DetailDrawerSection>
 
-              {/* 入库/退料明细 */}
-              {currentOrder.items && currentOrder.items.length > 0 && (
-                <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
-                  <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-                  <Table
-                    className="warehouse-detail-table"
-                    size="small"
-                    rowKey="id"
-                    pagination={false}
-                    columns={currentOrder.receipt_type === 'production_return'
-                      ? [
-                          { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                          { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                          { title: '单位', dataIndex: 'material_unit', width: 60 },
-                          { title: '退料数量', dataIndex: 'return_quantity', width: 100, align: 'right' as const },
-                          { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
-                          { title: '批次号', dataIndex: 'batch_number', width: 100 },
-                        ]
-                      : [
-                          { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                          { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                          { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' as const },
-                          { title: '单位', dataIndex: 'unit', width: 60 },
-                        ]
-                    }
-                    dataSource={currentOrder.items}
-                  />
-                </Card>
-              )}
+              {/* 入库/退料明细 - 始终显示，有数据时展示表格，无数据时展示空状态 */}
+              <Card title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '入库明细'}>
+                {currentOrder.items && currentOrder.items.length > 0 ? (
+                  <>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <Table
+                      className="warehouse-detail-table"
+                      size="small"
+                      rowKey={(r) => r.id ?? r.material_id ?? Math.random()}
+                      pagination={false}
+                      columns={currentOrder.receipt_type === 'production_return'
+                        ? [
+                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                            { title: '单位', dataIndex: 'material_unit', width: 60 },
+                            { title: '退料数量', dataIndex: 'return_quantity', width: 100, align: 'right' as const },
+                            { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
+                            { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                          ]
+                        : currentOrder.receipt_type === 'purchase'
+                          ? [
+                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                              { title: '数量', dataIndex: 'receipt_quantity', width: 100, align: 'right' as const },
+                              { title: '单位', dataIndex: 'material_unit', width: 60 },
+                              { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
+                              { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },
+                              { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                            ]
+                          : [
+                              { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                              { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                              { title: '数量', dataIndex: 'receipt_quantity', width: 100, align: 'right' as const },
+                              { title: '单位', dataIndex: 'material_unit', width: 60 },
+                              { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                            ]
+                      }
+                      dataSource={currentOrder.items}
+                    />
+                  </>
+                ) : (
+                  <div style={{ padding: '24px 0', color: '#999', textAlign: 'center' }}>暂无物料明细</div>
+                )}
+              </Card>
 
               {/* 操作记录 */}
               {currentOrder?.id && (

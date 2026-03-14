@@ -50,11 +50,11 @@ class Warehouse(BaseModel):
     name = fields.CharField(max_length=200, description="仓库名称")
     description = fields.TextField(null=True, description="描述")
     
-    # 仓库类型（支持线边仓管理）
+    # 仓库类型（支持线边仓、委外仓、寄售仓等）
     warehouse_type = fields.CharField(
         max_length=20,
         default="normal",
-        description="仓库类型（normal=普通仓库, line_side=线边仓, wip=在制品仓）"
+        description="仓库类型（normal=普通仓, line_side=线边仓, wip=在制品仓, outsourcing=委外仓, consignment=寄售仓, vmi=VMI仓, defect=不良品仓, quarantine=待检仓）"
     )
     
     # 关联车间（线边仓专用）

@@ -8,6 +8,7 @@ from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
+from apps.master_data.models.factory import Workshop, WorkCenter
 from apps.master_data.schemas.warehouse_schemas import (
     WarehouseCreate, WarehouseUpdate, WarehouseResponse,
     StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse,
@@ -25,9 +26,32 @@ if TYPE_CHECKING:
 
 class WarehouseService:
     """仓库数据服务"""
-    
+
+    @staticmethod
+    async def _resolve_workshop_work_center_names(
+        tenant_id: int,
+        workshop_id: Optional[int],
+        work_center_id: Optional[int],
+    ) -> tuple[Optional[str], Optional[str]]:
+        """解析 workshop_name 和 work_center_name"""
+        workshop_name = None
+        work_center_name = None
+        if workshop_id:
+            ws = await Workshop.filter(
+                id=workshop_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if ws:
+                workshop_name = ws.name
+        if work_center_id:
+            wc = await WorkCenter.filter(
+                id=work_center_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if wc:
+                work_center_name = wc.name
+        return workshop_name, work_center_name
+
     # ==================== 仓库相关方法 ====================
-    
+
     @staticmethod
     async def create_warehouse(
         tenant_id: int,
@@ -65,18 +89,29 @@ class WarehouseService:
         
         if existing_deleted:
             # 恢复软删除的记录，更新其数据
+            create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+            workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
+                tenant_id, create_data.get("workshop_id"), create_data.get("work_center_id")
+            )
             existing_deleted.deleted_at = None
-            existing_deleted.name = data.name
-            existing_deleted.description = data.description
-            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            for k, v in create_data.items():
+                setattr(existing_deleted, k, v)
+            existing_deleted.workshop_name = workshop_name
+            existing_deleted.work_center_name = work_center_name
             await existing_deleted.save()
             return WarehouseResponse.model_validate(existing_deleted)
-        
+
         # 创建新仓库
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
+            tenant_id, create_data.get("workshop_id"), create_data.get("work_center_id")
+        )
+        create_data["workshop_name"] = workshop_name
+        create_data["work_center_name"] = work_center_name
         try:
             warehouse = await Warehouse.create(
                 tenant_id=tenant_id,
-                **(data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict())
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束或主键冲突错误
@@ -91,10 +126,15 @@ class WarehouseService:
                 
                 if existing_deleted_retry:
                     # 恢复软删除的记录
+                    create_data_retry = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+                    workshop_name_r, work_center_name_r = await WarehouseService._resolve_workshop_work_center_names(
+                        tenant_id, create_data_retry.get("workshop_id"), create_data_retry.get("work_center_id")
+                    )
                     existing_deleted_retry.deleted_at = None
-                    existing_deleted_retry.name = data.name
-                    existing_deleted_retry.description = data.description
-                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    for k, v in create_data_retry.items():
+                        setattr(existing_deleted_retry, k, v)
+                    existing_deleted_retry.workshop_name = workshop_name_r
+                    existing_deleted_retry.work_center_name = work_center_name_r
                     await existing_deleted_retry.save()
                     return WarehouseResponse.model_validate(existing_deleted_retry)
                 
@@ -137,17 +177,19 @@ class WarehouseService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        warehouse_type: Optional[str] = None,
     ) -> List[WarehouseResponse]:
         """
         获取仓库列表
-        
+
         Args:
             tenant_id: 租户ID
             skip: 跳过数量
             limit: 限制数量
             is_active: 是否启用（可选）
-            
+            warehouse_type: 仓库类型（可选）
+
         Returns:
             List[WarehouseResponse]: 仓库列表
         """
@@ -155,12 +197,14 @@ class WarehouseService:
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
+        if warehouse_type:
+            query = query.filter(warehouse_type=warehouse_type)
+
         warehouses = await query.offset(skip).limit(limit).order_by("code").all()
-        
+
         return [WarehouseResponse.model_validate(w) for w in warehouses]
     
     @staticmethod
@@ -192,7 +236,14 @@ class WarehouseService:
         
         if not warehouse:
             raise NotFoundError(f"仓库 {warehouse_uuid} 不存在")
-        
+
+        # 若更新为线边仓，需确保 workshop_id 已设置（来自本次更新或已有值）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        if update_data.get("warehouse_type") == "line_side":
+            new_workshop_id = update_data.get("workshop_id", warehouse.workshop_id)
+            if not new_workshop_id:
+                raise ValidationError("线边仓必须关联车间")
+
         # 如果更新编码，检查是否已存在
         if data.code and data.code != warehouse.code:
             existing = await Warehouse.filter(
@@ -203,12 +254,19 @@ class WarehouseService:
             
             if existing:
                 raise ValidationError(f"仓库编码 {data.code} 已存在")
-        
+
         # 更新字段
-        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(warehouse, key, value)
-        
+
+        # 若更新了 workshop_id 或 work_center_id，解析并更新名称
+        if "workshop_id" in update_data or "work_center_id" in update_data:
+            workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
+                tenant_id, warehouse.workshop_id, warehouse.work_center_id
+            )
+            warehouse.workshop_name = workshop_name
+            warehouse.work_center_name = work_center_name
+
         try:
             await warehouse.save()
         except IntegrityError as e:
@@ -1078,7 +1136,7 @@ class WarehouseService:
         {"code": "RAW", "name": "原料仓", "description": "原材料存储", "warehouse_type": "normal"},
         {"code": "FG", "name": "成品仓", "description": "成品存储", "warehouse_type": "normal"},
         {"code": "WIP", "name": "半成品仓", "description": "在制品/半成品存储", "warehouse_type": "wip"},
-        {"code": "DEFECT", "name": "不良品仓", "description": "不良品隔离存储", "warehouse_type": "normal"},
+        {"code": "DEFECT", "name": "不良品仓", "description": "不良品隔离存储", "warehouse_type": "defect"},
     ]
 
     @staticmethod

@@ -5,9 +5,9 @@
  * 使用批次库存 API 获取库存数据。
  */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Tag, Space, App } from 'antd';
+import { Tag, Space, App, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { WarningOutlined } from '@ant-design/icons';
@@ -32,6 +32,7 @@ interface InventoryItem {
 const InventoryPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<any>(null);
+  const [includeExpired, setIncludeExpired] = useState(false);
 
   const columns: ProColumns<InventoryItem>[] = [
     {
@@ -115,17 +116,23 @@ const InventoryPage: React.FC = () => {
     },
   ];
 
-  const fetchInventory = async (params: any) => {
+  const fetchInventory = async (
+    _params: any,
+    _sort: any,
+    _filter: any,
+    searchFormValues?: Record<string, any>
+  ) => {
+    const search = searchFormValues || _params || {};
     try {
       const response = await apiRequest<{ total: number; items: InventoryItem[] }>(
         '/apps/kuaizhizao/reports/inventory/batch-query',
         {
           method: 'GET',
           params: {
-            material_id: params.material_id,
-            warehouse_id: params.warehouse_id,
-            batch_number: params.batch_no,
-            include_expired: params.include_expired ?? false,
+            material_id: search.material_id,
+            warehouse_id: search.warehouse_id,
+            batch_number: search.batch_no ?? search.batch_number,
+            include_expired: search.include_expired ?? includeExpired,
           },
         }
       );
@@ -156,6 +163,18 @@ const InventoryPage: React.FC = () => {
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         scroll={{ x: 1100 }}
+        toolBarRender={() => [
+          <Button
+            key="includeExpired"
+            type={includeExpired ? 'primary' : 'default'}
+            onClick={() => {
+              setIncludeExpired(!includeExpired);
+              actionRef.current?.reload();
+            }}
+          >
+            {includeExpired ? '隐藏过期批次' : '显示过期批次'}
+          </Button>,
+        ]}
       />
     </ListPageTemplate>
   );

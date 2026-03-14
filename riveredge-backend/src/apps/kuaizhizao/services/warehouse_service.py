@@ -41,12 +41,15 @@ from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
     ProductionPickingCreate, ProductionPickingUpdate, ProductionPickingResponse, ProductionPickingListResponse,
+    ProductionPickingWithItemsResponse,
     ProductionPickingItemCreate, ProductionPickingItemUpdate, ProductionPickingItemResponse,
     # 成品入库单
     FinishedGoodsReceiptCreate, FinishedGoodsReceiptUpdate, FinishedGoodsReceiptResponse,
+    FinishedGoodsReceiptWithItemsResponse,
     FinishedGoodsReceiptItemCreate, FinishedGoodsReceiptItemUpdate, FinishedGoodsReceiptItemResponse,
     # 销售出库单
     SalesDeliveryCreate, SalesDeliveryUpdate, SalesDeliveryResponse,
+    SalesDeliveryWithItemsResponse,
     SalesDeliveryItemCreate, SalesDeliveryItemUpdate, SalesDeliveryItemResponse,
     # 销售退货单
     SalesReturnCreate, SalesReturnUpdate, SalesReturnResponse,
@@ -56,6 +59,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReturnItemCreate, PurchaseReturnItemUpdate, PurchaseReturnItemResponse,
     # 采购入库单
     PurchaseReceiptCreate, PurchaseReceiptUpdate, PurchaseReceiptResponse,
+    PurchaseReceiptWithItemsResponse,
     PurchaseReceiptItemCreate, PurchaseReceiptItemUpdate, PurchaseReceiptItemResponse,
     # 生产退料单
     ProductionReturnCreate, ProductionReturnUpdate, ProductionReturnResponse,
@@ -134,12 +138,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
             return ProductionPickingResponse.model_validate(picking)
 
-    async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingResponse:
-        """根据ID获取生产领料单"""
+    async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingWithItemsResponse:
+        """根据ID获取生产领料单（含明细）"""
         picking = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=picking_id)
         if not picking:
             raise NotFoundError(f"生产领料单不存在: {picking_id}")
-        return ProductionPickingResponse.model_validate(picking)
+        items = await ProductionPickingItem.filter(tenant_id=tenant_id, picking_id=picking_id).all()
+        resp = ProductionPickingWithItemsResponse.model_validate(picking)
+        resp.items = [ProductionPickingItemResponse.model_validate(i) for i in items]
+        return resp
 
     async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProductionPickingListResponse]:
         """获取生产领料单列表"""
@@ -739,12 +746,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             
             return FinishedGoodsReceiptResponse.model_validate(receipt)
 
-    async def get_finished_goods_receipt_by_id(self, tenant_id: int, receipt_id: int) -> FinishedGoodsReceiptResponse:
-        """根据ID获取成品入库单"""
+    async def get_finished_goods_receipt_by_id(self, tenant_id: int, receipt_id: int) -> FinishedGoodsReceiptWithItemsResponse:
+        """根据ID获取成品入库单（含明细）"""
         receipt = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
         if not receipt:
             raise NotFoundError(f"成品入库单不存在: {receipt_id}")
-        return FinishedGoodsReceiptResponse.model_validate(receipt)
+        items = await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
+        resp = FinishedGoodsReceiptWithItemsResponse.model_validate(receipt)
+        resp.items = [FinishedGoodsReceiptItemResponse.model_validate(i) for i in items]
+        return resp
 
     async def list_finished_goods_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsReceiptResponse]:
         """获取成品入库单列表"""
@@ -1200,15 +1210,18 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             
             return SalesDeliveryResponse.model_validate(delivery)
 
-    async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryResponse:
-        """根据ID获取销售出库单"""
+    async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryWithItemsResponse:
+        """根据ID获取销售出库单（含明细）"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_delivery_lifecycle
 
         delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=delivery_id)
         if not delivery:
             raise NotFoundError(f"销售出库单不存在: {delivery_id}")
-        resp = SalesDeliveryResponse.model_validate(delivery)
-        return resp.model_copy(update={"lifecycle": get_sales_delivery_lifecycle(delivery)})
+        items = await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery_id).all()
+        resp = SalesDeliveryWithItemsResponse.model_validate(delivery)
+        resp.lifecycle = get_sales_delivery_lifecycle(delivery)
+        resp.items = [SalesDeliveryItemResponse.model_validate(i) for i in items]
+        return resp
 
     async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesDeliveryResponse]:
         """获取销售出库单列表"""
@@ -1701,15 +1714,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             
             return PurchaseReceiptResponse.model_validate(receipt)
 
-    async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptResponse:
-        """根据ID获取采购入库单"""
+    async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptWithItemsResponse:
+        """根据ID获取采购入库单（含明细）"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_receipt_lifecycle
 
         receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
         if not receipt:
             raise NotFoundError(f"采购入库单不存在: {receipt_id}")
-        resp = PurchaseReceiptResponse.model_validate(receipt)
-        return resp.model_copy(update={"lifecycle": get_purchase_receipt_lifecycle(receipt)})
+        items = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
+        resp = PurchaseReceiptWithItemsResponse.model_validate(receipt)
+        resp.lifecycle = get_purchase_receipt_lifecycle(receipt)
+        resp.items = [PurchaseReceiptItemResponse.model_validate(i) for i in items]
+        return resp
 
     async def list_purchase_receipts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReceiptResponse]:
         """获取采购入库单列表"""
@@ -3043,6 +3059,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
             if inbound.status != "待入库":
                 raise BusinessLogicError("只有待入库状态的其他入库单才能确认入库")
+            if not inbound.items or all((item.inbound_quantity or Decimal(0)) <= 0 for item in inbound.items):
+                raise BusinessLogicError("请至少添加一条有效入库明细（数量大于0）")
 
             receiver_name = await self.get_user_name(confirmed_by)
             await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
@@ -3058,7 +3076,30 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     id=item.id
                 ).update(status="已入库", receipt_time=datetime.now())
 
-            # TODO: 更新库存（增加仓库库存）
+            # 更新库存（增加仓库库存）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
+                wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
+                for item in inbound.items:
+                    qty = item.inbound_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="other_inbound",
+                        source_doc_id=inbound_id,
+                        source_doc_code=inbound_obj.inbound_code,
+                    )
+            except Exception as inv_e:
+                logger.error("其他入库确认-更新库存失败: %s", inv_e)
+                raise
+
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
@@ -3201,6 +3242,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
             if outbound.status != "待出库":
                 raise BusinessLogicError("只有待出库状态的其他出库单才能确认出库")
+            if not outbound.items or all((item.outbound_quantity or Decimal(0)) <= 0 for item in outbound.items):
+                raise BusinessLogicError("请至少添加一条有效出库明细（数量大于0）")
 
             deliverer_name = await self.get_user_name(confirmed_by)
             await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
@@ -3216,7 +3259,33 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     id=item.id
                 ).update(status="已出库", delivery_time=datetime.now())
 
-            # TODO: 更新库存（扣减库存）
+            # 更新库存（扣减库存）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                outbound_obj = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+                wh_id = outbound_obj.warehouse_id if outbound_obj.warehouse_id else None
+                for item in outbound.items:
+                    qty = item.outbound_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="other_outbound",
+                        source_doc_id=outbound_id,
+                        source_doc_code=outbound_obj.outbound_code,
+                    )
+            except ValueError as inv_e:
+                logger.error("其他出库确认-更新库存失败: %s", inv_e)
+                raise BusinessLogicError(str(inv_e) or "库存不足，无法出库")
+            except Exception as inv_e:
+                logger.error("其他出库确认-更新库存失败: %s", inv_e)
+                raise
+
             return OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             )
@@ -3361,7 +3430,33 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     id=item.id
                 ).update(status="已借出", borrow_time=datetime.now())
 
-            # TODO: 更新库存（扣减仓库库存）
+            # 更新库存（扣减仓库库存）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                borrow_obj = await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
+                for item in borrow.items:
+                    qty = item.borrow_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="material_borrow",
+                        source_doc_id=borrow_id,
+                        source_doc_code=borrow_obj.borrow_code,
+                    )
+            except ValueError as inv_e:
+                logger.error("借料确认-更新库存失败: %s", inv_e)
+                raise BusinessLogicError(str(inv_e) or "库存不足，无法借出")
+            except Exception as inv_e:
+                logger.error("借料确认-更新库存失败: %s", inv_e)
+                raise
+
             return MaterialBorrowResponse.model_validate(
                 await MaterialBorrow.get(tenant_id=tenant_id, id=borrow_id)
             )
@@ -3523,7 +3618,30 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         returned_quantity=new_returned
                     )
 
-            # TODO: 更新库存（增加仓库库存）
+            # 更新库存（增加仓库库存）
+            try:
+                from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                return_entity = await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
+                for item in return_obj.items:
+                    qty = item.return_quantity or Decimal(0)
+                    if qty <= 0:
+                        continue
+                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=qty,
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        source_type="material_return",
+                        source_doc_id=return_id,
+                        source_doc_code=return_entity.return_code,
+                    )
+            except Exception as inv_e:
+                logger.error("还料确认-更新库存失败: %s", inv_e)
+                raise
+
             return MaterialReturnResponse.model_validate(
                 await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
             )

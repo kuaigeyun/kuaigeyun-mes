@@ -754,13 +754,25 @@ const OutboundPage: React.FC = () => {
                     size="small"
                     rowKey={(_, idx) => (currentOrder?.items?.[idx] as any)?.id ?? idx}
                     pagination={false}
-                    columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' },
-                      { title: '单位', dataIndex: 'unit', width: 60 },
-                      { title: '备注', dataIndex: 'notes' },
-                    ]}
+                    columns={
+                      currentOrder.outbound_type === 'production_picking'
+                        ? [
+                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                            { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+                            { title: '已领数量', dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
+                            { title: '单位', dataIndex: 'material_unit', width: 60 },
+                            { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
+                            { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                          ]
+                        : [
+                            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                            { title: '出库数量', dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
+                            { title: '单位', dataIndex: 'material_unit', width: 60 },
+                            { title: '备注', dataIndex: 'notes' },
+                          ]
+                    }
                     dataSource={currentOrder.items}
                   />
                 </Card>

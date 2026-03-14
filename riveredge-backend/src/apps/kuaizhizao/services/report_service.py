@@ -725,8 +725,25 @@ class ReportService:
                 Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
             )
         
-        # 获取批次列表
+        # 获取批次列表（主仓 MaterialBatch）
         batches = await query.prefetch_related('material').all()
+        
+        # 同时查询线边仓 LineSideInventory（发料/配料到线边仓时的库存）
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        line_query = LineSideInventory.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="available",
+        )
+        if material_ids:
+            line_query = line_query.filter(material_id__in=material_ids)
+        elif material_id:
+            line_query = line_query.filter(material_id=material_id)
+        if batch_number:
+            line_query = line_query.filter(batch_no__icontains=batch_number)
+        if warehouse_id:
+            line_query = line_query.filter(warehouse_id=warehouse_id)
+        line_items = await line_query.all()
         
         # summary_only：仅返回物料汇总，用于批量检查（销售订单明细视图等）
         if summary_only and (material_ids or material_id):
@@ -738,37 +755,34 @@ class ReportService:
                 mid = batch.material_id
                 if batch.quantity and batch.quantity > 0:
                     material_totals[str(mid)] = material_totals.get(str(mid), 0) + float(batch.quantity)
+            for inv in line_items:
+                mid = inv.material_id
+                qty = float((inv.quantity or 0) - (inv.reserved_quantity or 0))
+                if qty > 0:
+                    material_totals[str(mid)] = material_totals.get(str(mid), 0) + qty
             return {"material_totals": material_totals}
         
-        # 构建返回数据
+        # 构建返回数据：合并主仓 + 线边仓
         items = []
+        
+        # 1. 主仓 MaterialBatch
         for batch in batches:
-            # 获取关联物料
             material = batch.material
-            
-            # 判断状态 - 优先使用计算状态，然后是数据库状态
             status_display = batch.status
-            
-            # 状态映射字典
             status_map = {
                 "in_stock": "在库",
                 "out_stock": "已出库",
                 "expired": "已过期",
                 "scrapped": "已报废"
             }
-            
-            # 先映射数据库状态
             if batch.status in status_map:
                 status_display = status_map[batch.status]
-            
-            # 再根据业务规则覆盖状态
             if batch.expiry_date and batch.expiry_date < date.today():
                 status_display = "已过期"
             elif batch.quantity <= 0:
                 status_display = "无库存"
-            
             items.append({
-                "id": batch.id,
+                "id": 1000000 + batch.id,  # 主仓用大偏移避免与线边仓 id 冲突
                 "material_id": material.id,
                 "material_code": material.main_code or material.code,
                 "material_name": material.name,
@@ -778,8 +792,31 @@ class ReportService:
                 "quantity": float(batch.quantity),
                 "supplier_batch_no": batch.supplier_batch_no,
                 "status": status_display,
-                "warehouse_id": warehouse_id, 
-                "warehouse_name": None, 
+                "warehouse_id": None,
+                "warehouse_name": "主仓",
+            })
+        
+        # 2. 线边仓 LineSideInventory
+        for inv in line_items:
+            if not include_expired and inv.expiry_date and inv.expiry_date < date.today():
+                continue
+            qty = float((inv.quantity or 0) - (inv.reserved_quantity or 0))
+            status_display = "在库" if qty > 0 else "无库存"
+            if inv.expiry_date and inv.expiry_date < date.today():
+                status_display = "已过期"
+            items.append({
+                "id": 2000000 + inv.id,  # 线边仓用不同偏移
+                "material_id": inv.material_id,
+                "material_code": inv.material_code or "",
+                "material_name": inv.material_name or "",
+                "batch_no": inv.batch_no or "DEFAULT",
+                "production_date": inv.production_date.isoformat() if inv.production_date else None,
+                "expiry_date": inv.expiry_date.isoformat() if inv.expiry_date else None,
+                "quantity": qty,
+                "supplier_batch_no": None,
+                "status": status_display,
+                "warehouse_id": inv.warehouse_id,
+                "warehouse_name": inv.warehouse_name or f"仓库{inv.warehouse_id}",
             })
         
         return {

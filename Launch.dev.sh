@@ -1045,7 +1045,7 @@ start_backend() {
     if [ "$QUIET" != "true" ]; then
         log_info "等待后端服务启动..."
     fi
-    if ! wait_for_service "http://localhost:$port/health" "后端服务" 15; then
+    if ! wait_for_service "http://localhost:$port/health" "后端服务" "$BACKEND_START_TIMEOUT"; then
         log_error "后端服务启动失败，请检查 .logs/backend.log"
         if [ -f ".logs/backend.pid" ]; then
             kill $backend_pid 2>/dev/null || true
@@ -1353,7 +1353,7 @@ start_frontend() {
     log_success "前端服务启动中 (PID: $frontend_pid, 端口: $port)"
 
     # 快速等待前端启动（缩短等待时间）
-    if ! wait_for_frontend $port "前端服务" 15; then
+    if ! wait_for_frontend $port "前端服务" "$FRONTEND_START_TIMEOUT"; then
         log_error "前端服务启动失败，请检查 $project_root/.logs/frontend.log"
         if [ -f "$project_root/.logs/frontend.pid" ]; then
             kill $frontend_pid 2>/dev/null || true
