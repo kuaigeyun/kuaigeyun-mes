@@ -11,7 +11,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col, Spin } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
@@ -45,6 +45,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 /** 根据字典 code 和 value 获取标签，无匹配时返回原值（支持大小写不敏感匹配） */
 function getDictLabel(map: Record<string, Record<string, string>>, code: string, value: string | undefined): string {
@@ -95,16 +96,22 @@ function reviewStatusDisplayText(reviewStatus: string | undefined): string {
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const tableSearchFormRef = useRef<any>(null);
   const [searchParams] = useSearchParams();
 
-  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['demandStatistics'] }); };
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['demandStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
   const { data: statistics } = useQuery({
     queryKey: ['demandStatistics'],
     queryFn: getDemandStatistics,
+    enabled: !hasPageMetricConfig,
   });
 
   // Modal 相关状态（新建/编辑）
@@ -524,7 +531,9 @@ const DemandManagementPage: React.FC = () => {
     },
   ];
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards
+    : statistics
     ? [
         { title: '活动需求', value: statistics.active_count },
         {

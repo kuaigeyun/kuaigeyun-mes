@@ -73,9 +73,10 @@ import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
 import { getUserList, type User } from '../../../../../services/user';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 /** 销售明细行（订单 + 明细合并，用于平铺表格） */
 type SalesOrderItemRow = SalesOrderItem & {
@@ -100,6 +101,7 @@ const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -112,11 +114,16 @@ const SalesOrdersPage: React.FC = () => {
   /** 刷新左侧菜单销售订单数量徽章 */
   const invalidateMenuBadge = () => { queryClient.invalidateQueries({ queryKey: ['menuBadgeCounts'] }); };
   /** 刷新销售订单统计（指标卡片） */
-  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] }); };
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
 
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
   const { data: statistics } = useQuery({
     queryKey: ['salesOrderStatistics'],
     queryFn: getSalesOrderStatistics,
+    enabled: true, // 始终拉取，用于 page metric 时合并折线图/description
   });
 
   const { token } = AntdTheme.useToken();
@@ -1368,7 +1375,64 @@ const SalesOrdersPage: React.FC = () => {
     );
   };
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards.map((card) => {
+        const key = card.key;
+        const color = (card.valueStyle as { color?: string } | undefined)?.color ?? '#1890ff';
+        if (!key || !statistics) return card;
+        const trendMap: Record<string, { date: string; value: number }[] | undefined> = {
+          overdue_count: statistics.trend_overdue,
+          today_new_count: statistics.trend_today_new,
+          pending_review_count: statistics.trend_pending_review,
+          unfulfilled_count: statistics.trend_unfulfilled,
+          annual_total_amount: statistics.trend_annual,
+        };
+        const yesterdayMap: Record<string, number | undefined> = {
+          overdue_count: statistics.yesterday_overdue,
+          today_new_count: statistics.yesterday_today_new,
+          pending_review_count: statistics.yesterday_pending_review,
+          unfulfilled_count: statistics.yesterday_unfulfilled,
+        };
+        const trend = trendMap[key];
+        const yesterday = yesterdayMap[key];
+        const val = typeof card.value === 'number' ? card.value : 0;
+        let description: React.ReactNode = undefined;
+        if (key === 'annual_total_amount' && statistics.annual_total_yoy !== undefined) {
+          description = (
+            <div style={{ color: statistics.annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
+              较去年同期 {statistics.annual_total_yoy > 0 ? '+' : ''}{statistics.annual_total_yoy}%
+            </div>
+          );
+        } else if (yesterday !== undefined) {
+          description = (
+            <div>
+              今日: {val} {renderDOD(val, yesterday)}
+            </div>
+          );
+        } else if (key === 'pending_review_count' && val > 0) {
+          description = <div style={{ color: '#faad14' }}>需即时处理</div>;
+        }
+        let onClick: (() => void) | undefined;
+        if (key === 'overdue_count' && val > 0) {
+          onClick = () => {
+            tableSearchFormRef.current?.setFieldsValue?.({ status: 'in_progress' });
+            actionRef.current?.reload?.();
+          };
+        } else if (key === 'pending_review_count' && val > 0) {
+          onClick = () => {
+            tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
+            actionRef.current?.reload?.();
+          };
+        }
+        return {
+          ...card,
+          ...(key === 'annual_total_amount' && { prefix: '¥' }),
+          description,
+          backgroundChart: trend?.length ? renderTrendChart(trend, color) : undefined,
+          onClick,
+        };
+      })
+    : statistics
     ? [
         {
           title: t('app.kuaizhizao.salesOrder.statOverdue', '逾期未交'),

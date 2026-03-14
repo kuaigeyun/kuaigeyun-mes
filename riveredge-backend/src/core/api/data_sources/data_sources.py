@@ -14,7 +14,10 @@ from core.schemas.data_source import (
     DataSourceResponse,
     TestConnectionResponse,
 )
-from core.services.integration.integration_config_service import IntegrationConfigService
+from core.services.integration.integration_config_service import (
+    IntegrationConfigService,
+    build_integration_response,
+)
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -27,21 +30,24 @@ DATA_SOURCE_TYPES = ("postgresql", "mysql", "mongodb", "api")
 
 
 def _ic_to_ds_response(ic) -> DataSourceResponse:
-    """IntegrationConfig -> DataSourceResponse（兼容）"""
+    """IntegrationConfig -> DataSourceResponse（config 脱敏，is_system_default）"""
+    resp = build_integration_response(ic)
     return DataSourceResponse(
-        uuid=UUID(str(ic.uuid)),
-        tenant_id=ic.tenant_id,
-        name=ic.name,
-        code=ic.code,
-        description=ic.description,
-        type=ic.type,
-        config=ic.config or {},
-        is_active=ic.is_active,
-        is_connected=ic.is_connected,
-        last_connected_at=ic.last_connected_at,
-        last_error=ic.last_error,
-        created_at=ic.created_at,
-        updated_at=ic.updated_at,
+        uuid=UUID(str(resp["uuid"])),
+        tenant_id=resp["tenant_id"],
+        name=resp["name"],
+        code=resp["code"],
+        description=resp["description"],
+        type=resp["type"],
+        config=resp["config"],
+        is_active=resp["is_active"],
+        is_connected=resp["is_connected"],
+        last_connected_at=resp["last_connected_at"],
+        last_error=resp["last_error"],
+        created_at=resp["created_at"],
+        updated_at=resp["updated_at"],
+        is_system_default=resp["is_system_default"],
+        is_editable=resp["is_editable"],
     )
 
 
@@ -193,6 +199,8 @@ async def delete_data_source(
         await IntegrationConfigService.delete_integration(tenant_id=tenant_id, uuid=str(data_source_uuid))
     except NotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="数据源不存在")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

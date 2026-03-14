@@ -101,6 +101,8 @@ const DatasetListPage: React.FC = () => {
         name: detail.name,
         code: detail.code,
         description: detail.description,
+        output_type: detail.output_type ?? 'list',
+        display_config: detail.display_config ? JSON.stringify(detail.display_config, null, 2) : '',
         is_active: detail.is_active,
       });
       setModalVisible(true);
@@ -276,17 +278,26 @@ const DatasetListPage: React.FC = () => {
       setFormLoading(true);
       
       if (isEdit && currentDatasetUuid) {
-        await updateDataset(currentDatasetUuid, {
+        const updateData: UpdateDatasetData = {
           name: values.name,
           description: values.description,
           is_active: values.is_active,
-        } as UpdateDatasetData);
+        };
+        if (values.output_type) updateData.output_type = values.output_type;
+        if (values.display_config) {
+          try {
+            updateData.display_config = JSON.parse(values.display_config);
+          } catch {
+            // 忽略无效 JSON
+          }
+        }
+        await updateDataset(currentDatasetUuid, updateData);
         messageApi.success(t('pages.system.datasets.updateSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
       } else {
-        const created = await createDataset({
+        const createData: CreateDatasetData = {
           name: values.name,
           code: values.code,
           query_type: 'sql',
@@ -294,7 +305,16 @@ const DatasetListPage: React.FC = () => {
           description: values.description,
           data_source_uuid: values.data_source_uuid,
           is_active: values.is_active,
-        } as CreateDatasetData);
+        };
+        if (values.output_type) createData.output_type = values.output_type;
+        if (values.display_config) {
+          try {
+            createData.display_config = JSON.parse(values.display_config);
+          } catch {
+            // 忽略无效 JSON
+          }
+        }
+        const created = await createDataset(createData);
         messageApi.success(t('pages.system.datasets.createSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
@@ -332,6 +352,22 @@ const DatasetListPage: React.FC = () => {
       render: (_, record) => {
         const conn = dataConnectionsFlat.find(c => c.uuid === record.data_source_uuid);
         return conn ? conn.name : record.data_source_uuid;
+      },
+    },
+    {
+      title: t('pages.system.datasets.columnOutputType', '输出类型'),
+      dataIndex: 'output_type',
+      width: 120,
+      hideInSearch: true,
+      render: (_, record) => {
+        const typeMap: Record<string, { color: string; text: string }> = {
+          list: { color: 'default', text: t('pages.system.datasets.outputTypeList', '列表') },
+          metric: { color: 'blue', text: t('pages.system.datasets.outputTypeMetric', '单值指标') },
+          multi_metric: { color: 'green', text: t('pages.system.datasets.outputTypeMultiMetric', '多指标') },
+        };
+        const ot = (record as any).output_type || 'list';
+        const info = typeMap[ot] || { color: 'default', text: ot };
+        return <Tag color={info.color}>{info.text}</Tag>;
       },
     },
     {
@@ -468,6 +504,10 @@ const DatasetListPage: React.FC = () => {
             // 查询类型筛选
             if (searchFormValues?.query_type) {
               apiParams.query_type = searchFormValues.query_type;
+            }
+            // 输出类型筛选
+            if (searchFormValues?.output_type) {
+              apiParams.output_type = searchFormValues.output_type;
             }
             
             // 数据源筛选
@@ -644,6 +684,24 @@ const DatasetListPage: React.FC = () => {
             colProps={{ span: 12 }}
           />
         )}
+        <ProFormSelect
+          name="output_type"
+          label={t('pages.system.datasets.labelOutputType', '输出类型')}
+          initialValue="list"
+          options={[
+            { label: t('pages.system.datasets.outputTypeList', '列表'), value: 'list' },
+            { label: t('pages.system.datasets.outputTypeMetric', '单值指标'), value: 'metric' },
+            { label: t('pages.system.datasets.outputTypeMultiMetric', '多指标'), value: 'multi_metric' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="display_config"
+          label={t('pages.system.datasets.labelDisplayConfig', '指标展示配置(JSON)')}
+          placeholder='{"columns":[{"key":"count","label":"数量","formatter":"number","color":"#1890ff"}]}'
+          colProps={{ span: 24 }}
+          fieldProps={{ rows: 4 }}
+        />
         <ProFormTextArea
           name="description"
           label={t('pages.system.datasets.labelRemark')}

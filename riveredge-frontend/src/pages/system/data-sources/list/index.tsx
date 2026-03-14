@@ -432,39 +432,48 @@ const DataSourceListPage: React.FC = () => {
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="edit" title={t('pages.system.dataSources.editDataSource')}>
-            <EditOutlined
-              onClick={() => handleEdit(dataSource)}
-              style={{ fontSize: 16 }}
-            />
-          </Tooltip>,
+          ...(dataSource.is_editable !== false ? [
+            <Tooltip key="edit" title={t('pages.system.dataSources.editDataSource')}>
+              <EditOutlined
+                onClick={() => handleEdit(dataSource)}
+                style={{ fontSize: 16 }}
+              />
+            </Tooltip>,
+          ] : []),
           <Tooltip key="test" title={t('pages.system.dataSources.testConnection')}>
             <ThunderboltOutlined
               onClick={() => handleTestConnection(dataSource)}
               style={{ fontSize: 16, color: '#1890ff' }}
             />
           </Tooltip>,
-          <Popconfirm
-            key="delete"
-            title={t('pages.system.dataSources.deleteConfirmTitle')}
-            onConfirm={() => handleDelete(dataSource)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
-              <DeleteOutlined
-                style={{ fontSize: 16, color: '#ff4d4f' }}
-              />
-            </Tooltip>
-          </Popconfirm>,
+          ...(dataSource.is_editable !== false ? [
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.dataSources.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(dataSource)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Tooltip title={t('pages.system.dataSources.deleteTooltip')}>
+                <DeleteOutlined
+                  style={{ fontSize: 16, color: '#ff4d4f' }}
+                />
+              </Tooltip>
+            </Popconfirm>,
+          ] : []),
         ]}
       >
         <div style={{ marginBottom: 16 }}>
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong style={{ fontSize: 16 }}>
-                {dataSource.name}
-              </Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+              <Space size="small">
+                <Text strong style={{ fontSize: 16 }}>
+                  {dataSource.name}
+                </Text>
+                {dataSource.is_system_default && (
+                  <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
+                )}
+              </Space>
               <Tag color={typeInfo.color} icon={typeInfo.icon}>
                 {typeInfo.text}
               </Tag>
@@ -537,6 +546,14 @@ const DataSourceListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
+      render: (name: string, record: DataSource) => (
+        <Space size="small">
+          <span>{name}</span>
+          {record.is_system_default && (
+            <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: t('pages.system.dataSources.columnCode'),
@@ -641,9 +658,11 @@ const DataSourceListPage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             {t('pages.system.dataSources.view')}
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('pages.system.dataSources.edit')}
-          </Button>
+          {record.is_editable !== false && (
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('pages.system.dataSources.edit')}
+            </Button>
+          )}
           <Dropdown
             menu={{
               items: [
@@ -653,7 +672,7 @@ const DataSourceListPage: React.FC = () => {
                   label: t('pages.system.dataSources.testConnection'),
                   onClick: () => handleTestConnection(record),
                 },
-                {
+                ...(record.is_editable !== false ? [{
                   key: 'delete',
                   icon: <DeleteOutlined />,
                   label: t('pages.system.dataSources.delete'),
@@ -667,7 +686,7 @@ const DataSourceListPage: React.FC = () => {
                       onOk: () => handleDelete(record),
                     });
                   },
-                },
+                }] : []),
               ],
             }}
           >
@@ -684,7 +703,18 @@ const DataSourceListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: t('pages.system.dataSources.detailColumnName'), dataIndex: 'name' },
+    {
+      title: t('pages.system.dataSources.detailColumnName'),
+      dataIndex: 'name',
+      render: (name: string, record: DataSource) => (
+        <Space size="small">
+          <span>{name}</span>
+          {record.is_system_default && (
+            <Tag color="blue">{t('pages.system.dataSources.systemDefault', '系统默认')}</Tag>
+          )}
+        </Space>
+      ),
+    },
     { title: t('pages.system.dataSources.detailColumnCode'), dataIndex: 'code' },
     {
       title: t('pages.system.dataSources.detailColumnType'),
@@ -834,6 +864,9 @@ const DataSourceListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          rowSelectionGetCheckboxProps={(record) =>
+            record.is_system_default ? { disabled: true } : {}
+          }
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.dataSources.batchDelete')}
@@ -1236,20 +1269,24 @@ const DataSourceListPage: React.FC = () => {
         extra={
           detailData && (
             <Space>
-              <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
-                {t('pages.system.dataSources.edit')}
-              </Button>
+              {detailData.is_editable !== false && (
+                <Button type="primary" icon={<EditOutlined />} onClick={() => { setDrawerVisible(false); handleEdit(detailData); }}>
+                  {t('pages.system.dataSources.edit')}
+                </Button>
+              )}
               <Button icon={<ThunderboltOutlined />} onClick={() => handleTestConnection(detailData)}>
                 {t('pages.system.dataSources.testConnection')}
               </Button>
-              <Popconfirm
-                title={t('pages.system.dataSources.deleteConfirmTitle')}
-                onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
-                okText={t('common.confirm')}
-                cancelText={t('common.cancel')}
-              >
-                <Button danger icon={<DeleteOutlined />}>{t('pages.system.dataSources.delete')}</Button>
-              </Popconfirm>
+              {detailData.is_editable !== false && (
+                <Popconfirm
+                  title={t('pages.system.dataSources.deleteConfirmTitle')}
+                  onConfirm={() => { handleDelete(detailData); setDrawerVisible(false); }}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                >
+                  <Button danger icon={<DeleteOutlined />}>{t('pages.system.dataSources.delete')}</Button>
+                </Popconfirm>
+              )}
             </Space>
           )
         }

@@ -38,7 +38,18 @@ class Dataset(BaseModel):
     
     query_type = fields.CharField(max_length=20, description="查询类型（sql、api）")
     query_config = fields.JSONField(description="查询配置（JSON格式）")
-    
+
+    # 指标型数据集扩展
+    output_type = fields.CharField(
+        max_length=20,
+        default="list",
+        description="输出类型：list(默认)/metric/multi_metric",
+    )
+    display_config = fields.JSONField(
+        null=True,
+        description="指标展示配置（仅 metric/multi_metric 使用）",
+    )
+
     is_active = fields.BooleanField(default=True, description="是否启用")
     last_executed_at = fields.DatetimeField(null=True, description="最后执行时间")
     last_error = fields.TextField(null=True, description="最后执行错误信息")

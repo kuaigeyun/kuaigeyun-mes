@@ -11,6 +11,7 @@
 
 import React, { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import {
   ActionType,
   ProColumns,
@@ -78,6 +79,7 @@ import { getDemandComputationLifecycle } from '../../../utils/demandComputationL
 import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 
 const { Panel } = Collapse
 
@@ -232,13 +234,19 @@ const InventoryParamsForm: React.FC<{
 const DemandComputationPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp()
   const queryClient = useQueryClient()
+  const location = useLocation()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
 
-  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] }) }
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics()
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['demandComputationStatistics'] })
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] })
+  }
   const { data: statistics } = useQuery({
     queryKey: ['demandComputationStatistics'],
     queryFn: getDemandComputationStatistics,
+    enabled: !hasPageMetricConfig,
   })
 
   // Modal 相关状态（新建计算）
@@ -951,7 +959,9 @@ const DemandComputationPage: React.FC = () => {
     },
   ]
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards
+    : statistics
     ? [
         { title: '总计算数', value: statistics.total_count },
         { title: '按预测计划', value: statistics.mrp_count },

@@ -79,6 +79,7 @@ class IntegrationConfigResponse(IntegrationConfigBase):
     集成配置响应 Schema
     
     用于返回集成配置信息。
+    config 已脱敏，密码等敏感字段不暴露。
     """
     uuid: str = Field(..., description="集成配置UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织ID")
@@ -87,6 +88,8 @@ class IntegrationConfigResponse(IntegrationConfigBase):
     last_error: Optional[str] = Field(None, description="最后错误信息")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    is_system_default: bool = Field(False, description="是否系统默认数据源（密码来自ENV，不可编辑）")
+    is_editable: bool = Field(True, description="是否可编辑")
     
     model_config = ConfigDict(from_attributes=True)
 

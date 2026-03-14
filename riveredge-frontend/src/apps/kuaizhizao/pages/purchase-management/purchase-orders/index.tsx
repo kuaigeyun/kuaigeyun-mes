@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown } from 'antd';
@@ -40,6 +40,7 @@ import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 // 使用从服务文件导入的接口
 type PurchaseOrderDetail = PurchaseOrder;
@@ -72,13 +73,18 @@ const PurchaseOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const navigate = useNavigate();
+  const location = useLocation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['purchaseOrderStatistics'] }); };
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['purchaseOrderStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
 
   useEffect(() => {
     const loadSuppliers = async () => {
@@ -128,6 +134,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['purchaseOrderStatistics'],
     queryFn: getPurchaseOrderStatistics,
+    enabled: !hasPageMetricConfig,
   });
 
   // Modal 相关状态
@@ -915,7 +922,9 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   ];
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards
+    : statistics
     ? [
         {
           title: t('app.kuaizhizao.purchase.statArrivalRate'),

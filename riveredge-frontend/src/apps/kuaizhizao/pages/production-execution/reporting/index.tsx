@@ -8,7 +8,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio, theme as AntdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -19,6 +20,7 @@ import { getReportingLifecycle } from '../../../utils/reportingLifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -337,7 +339,15 @@ const ReportingPage: React.FC = () => {
   const { t } = useTranslation();
   const { token } = AntdTheme.useToken();
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
+  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
+
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics();
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['reportingStatistics'] });
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] });
+  };
 
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
@@ -1297,9 +1307,12 @@ const ReportingPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['reportingStatistics'],
     queryFn: getReportingStatistics,
+    enabled: !hasPageMetricConfig,
   });
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards
+    : statistics
     ? [
         {
           title: t('app.kuaizhizao.reporting.statCumulativeHours'),

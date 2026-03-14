@@ -17,6 +17,8 @@ import { STAT_CARD_CONFIG } from './constants';
  * 统计卡片数据
  */
 export interface StatCard {
+  /** 数据字段 key，用于页面合并原生统计的 trend/description */
+  key?: string;
   /** 标题 */
   title: string;
   /** 数值 */

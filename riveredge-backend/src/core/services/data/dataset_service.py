@@ -15,8 +15,17 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.dataset import Dataset
 from core.models.integration_config import IntegrationConfig
+from core.models.page_metric_config import PageMetricConfig
 from core.models.api import API
-from core.schemas.dataset import DatasetCreate, DatasetUpdate, ExecuteQueryRequest, ExecuteQueryResponse
+from core.schemas.dataset import (
+    DatasetCreate,
+    DatasetUpdate,
+    ExecuteQueryRequest,
+    ExecuteQueryResponse,
+    OUTPUT_TYPE_LIST,
+    OUTPUT_TYPE_METRIC,
+    OUTPUT_TYPE_MULTI_METRIC,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 # 应用连接器类型（与 application_connections API 一致）
@@ -145,6 +154,7 @@ class DatasetService:
         page_size: int = 20,
         search: Optional[str] = None,
         query_type: Optional[str] = None,
+        output_type: Optional[str] = None,
         data_source_uuid: Optional[UUID] = None,
         is_active: Optional[bool] = None,
     ) -> tuple[List[Dataset], int]:
@@ -179,7 +189,11 @@ class DatasetService:
         # 查询类型筛选
         if query_type:
             query = query.filter(query_type=query_type)
-        
+
+        # 输出类型筛选（指标型：metric/multi_metric）
+        if output_type:
+            query = query.filter(output_type=output_type)
+
         # 数据连接/数据源筛选
         if data_source_uuid:
             integration_config = await IntegrationConfig.filter(
@@ -358,7 +372,9 @@ class DatasetService:
         await dataset.fetch_related('integration_config')
         integration_config = dataset.integration_config
 
-        if not integration_config.is_connected:
+        # 系统默认数据源使用应用主库，视为始终可用，跳过 is_connected 检查
+        is_system_default = (integration_config.get_config() or {}).get('_system_default')
+        if not is_system_default and not integration_config.is_connected:
             return ExecuteQueryResponse(
                 success=False,
                 data=[],
@@ -411,7 +427,7 @@ class DatasetService:
                     }
             
             elapsed_time = time.time() - start_time
-            
+
             # 更新执行状态
             dataset.last_executed_at = datetime.now()
             if not result['success']:
@@ -419,10 +435,21 @@ class DatasetService:
             else:
                 dataset.last_error = None
             await dataset.save()
-            
+
+            # 按 output_type 处理返回结构
+            data = result.get('data', [])
+            output_type = getattr(dataset, 'output_type', None) or OUTPUT_TYPE_LIST
+            if result['success'] and output_type != OUTPUT_TYPE_LIST:
+                data = self._transform_metric_output(
+                    data=data,
+                    output_type=output_type,
+                    display_config=getattr(dataset, 'display_config', None) or {},
+                    columns=result.get('columns'),
+                )
+
             return ExecuteQueryResponse(
                 success=result['success'],
-                data=result.get('data', []),
+                data=data,
                 total=result.get('total'),
                 columns=result.get('columns'),
                 elapsed_time=round(elapsed_time, 3),
@@ -446,14 +473,44 @@ class DatasetService:
             )
     
     @staticmethod
+    def _transform_metric_output(
+        data: List[Dict[str, Any]],
+        output_type: str,
+        display_config: Dict[str, Any],
+        columns: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        按 output_type 转换查询结果为指标格式。
+
+        - metric: 取 data[0][first_column]，返回 [{"value": v}]
+        - multi_metric: 返回 [data[0]]，保留原始行供 display_config.columns 映射
+        """
+        if not data:
+            if output_type == OUTPUT_TYPE_METRIC:
+                return [{"value": None}]
+            return [{}]
+
+        row = data[0] if isinstance(data[0], dict) else {}
+        if output_type == OUTPUT_TYPE_METRIC:
+            cols = columns or list(row.keys())
+            first_col = cols[0] if cols else None
+            val = row.get(first_col) if first_col else None
+            return [{"value": val}]
+        if output_type == OUTPUT_TYPE_MULTI_METRIC:
+            return [row]
+        return data
+
+    @staticmethod
     def _convert_named_params_to_positional(sql: str, params: Dict[str, Any]) -> Tuple[str, list]:
-        """将 :param 占位符转为 asyncpg 的 $1,$2 格式，按 SQL 中首次出现顺序，返回 (sql, args)"""
+        """将 :param 占位符转为 asyncpg 的 $1,$2 格式，按 SQL 中首次出现顺序，返回 (sql, args)。
+        使用 (?<!:) 排除 PostgreSQL 类型转换 ::type（如 ::int、::numeric）被误识别为参数。"""
         if not params:
             return sql, []
-        param_names = list(dict.fromkeys(re.findall(r":(\w+)\b", sql)))
+        # 仅匹配 :param，不匹配 ::type（PostgreSQL 类型转换）
+        param_names = list(dict.fromkeys(re.findall(r"(?<!:):(\w+)\b", sql)))
         args = [params[n] for n in param_names]
         for i, name in enumerate(param_names, 1):
-            sql = re.sub(rf":{re.escape(name)}\b", f"${i}", sql)
+            sql = re.sub(rf"(?<!:):{re.escape(name)}\b", f"${i}", sql)
         return sql, args
 
     @staticmethod
@@ -562,9 +619,14 @@ class DatasetService:
             # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
             sql, args = self._convert_named_params_to_positional(sql, query_params)
 
-            # 使用 asyncpg 直接连接执行
+            # 使用 asyncpg 直接连接执行（系统默认数据源密码从 ENV 读取）
             import asyncpg
+            from core.services.integration.integration_config_service import (
+                _get_system_default_pg_config,
+            )
             config = integration_config.get_config()
+            if config.get('_system_default'):
+                config = _get_system_default_pg_config()
             conn = await asyncpg.connect(
                 host=config.get('host', 'localhost'),
                 port=int(config.get('port', 5432)),
@@ -1091,6 +1153,237 @@ class DatasetService:
             "elapsed_time": test_result.get("data", {}).get("elapsed_time", 0) if isinstance(test_result.get("data"), dict) else 0,
         }
     
+    async def get_metrics_by_page(
+        self,
+        tenant_id: int,
+        page_path: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        按页面路径获取指标卡。
+
+        查 page_metric_config -> 执行绑定的 multi_metric 数据集 -> 按 display_config 映射为 stat_cards。
+        无配置时返回 None。
+
+        Returns:
+            {"stat_cards": [...], "dataset_code": "xxx"} 或 None
+        """
+        config = await PageMetricConfig.filter(
+            tenant_id=tenant_id,
+            page_path=page_path,
+            deleted_at__isnull=True,
+        ).first()
+        if not config:
+            return None
+
+        dataset = await Dataset.filter(
+            tenant_id=tenant_id,
+            code=config.dataset_code,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).prefetch_related('integration_config').first()
+        if not dataset:
+            return None
+
+        output_type = getattr(dataset, 'output_type', None) or OUTPUT_TYPE_LIST
+        if output_type != OUTPUT_TYPE_MULTI_METRIC:
+            return None
+
+        resp = await self.execute_query(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset.uuid,
+            execute_request=ExecuteQueryRequest(parameters=None, limit=1, offset=0),
+        )
+        if not resp.success or not resp.data:
+            return {"stat_cards": [], "dataset_code": config.dataset_code}
+
+        row = resp.data[0]
+        display_config = getattr(dataset, 'display_config', None) or {}
+        columns_config = display_config.get('columns') or []
+        stat_cards = []
+        for col in columns_config:
+            key = col.get('key')
+            if key is None:
+                continue
+            val = row.get(key)
+            stat_cards.append({
+                "key": key,
+                "title": col.get('label', key),
+                "value": val,
+                "suffix": col.get('suffix'),
+                "color": col.get('color'),
+                "precision": col.get('precision'),
+                "formatter": col.get('formatter', 'number'),
+                "filter_key": col.get('filter_key'),
+                "filter_value": col.get('filter_value'),
+            })
+        return {"stat_cards": stat_cards, "dataset_code": config.dataset_code}
+
+    async def bind_page_metric(
+        self,
+        tenant_id: int,
+        page_path: str,
+        dataset_code: str,
+        sort_order: int = 0,
+    ) -> "PageMetricConfig":
+        """
+        绑定页面与指标型数据集。
+        若已存在则更新，否则创建。
+        """
+        from core.models.page_metric_config import PageMetricConfig
+        from datetime import datetime
+
+        dataset = await Dataset.filter(
+            tenant_id=tenant_id,
+            code=dataset_code,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).first()
+        if not dataset:
+            raise NotFoundError(f"数据集不存在或未启用: {dataset_code}")
+        ot = getattr(dataset, 'output_type', None) or OUTPUT_TYPE_LIST
+        if ot != OUTPUT_TYPE_MULTI_METRIC:
+            raise ValidationError(f"数据集 {dataset_code} 必须是 multi_metric 类型")
+
+        config = await PageMetricConfig.filter(
+            tenant_id=tenant_id,
+            page_path=page_path,
+            deleted_at__isnull=True,
+        ).first()
+        if config:
+            config.dataset_code = dataset_code
+            config.sort_order = sort_order
+            await config.save()
+        else:
+            config = await PageMetricConfig.create(
+                tenant_id=tenant_id,
+                page_path=page_path,
+                dataset_code=dataset_code,
+                sort_order=sort_order,
+            )
+        return config
+
+    async def list_page_metric_configs(
+        self,
+        tenant_id: int,
+    ) -> List["PageMetricConfig"]:
+        """列出当前租户的页面指标配置"""
+        return await PageMetricConfig.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).order_by("sort_order", "page_path").all()
+
+    async def unbind_page_metric(
+        self,
+        tenant_id: int,
+        page_path: str,
+    ) -> None:
+        """解除页面与指标数据集的绑定（软删除）"""
+        from datetime import datetime
+
+        config = await PageMetricConfig.filter(
+            tenant_id=tenant_id,
+            page_path=page_path,
+            deleted_at__isnull=True,
+        ).first()
+        if config:
+            config.deleted_at = datetime.now()
+            await config.save()
+
+    async def init_sales_order_metrics(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        一键初始化销售订单指标：创建 sales_order_metrics 数据集并绑定到销售订单页面。
+        若数据集已存在则跳过创建，仅确保页面绑定存在。
+        """
+        SALES_ORDER_PAGE_PATH = "/apps/kuaizhizao/sales-management/sales-orders"
+        DATASET_CODE = "sales_order_metrics"
+
+        # 优先使用系统默认数据源，否则取第一个 postgresql 类型的 IntegrationConfig
+        integration_config = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code="system_default",
+            deleted_at__isnull=True,
+        ).first()
+        if not integration_config:
+            integration_config = await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                type="postgresql",
+                deleted_at__isnull=True,
+            ).first()
+        if not integration_config:
+            raise ValidationError("未找到 PostgreSQL 数据连接，请先在数据源管理中配置")
+
+        # 检查数据集是否已存在
+        existing_dataset = await Dataset.filter(
+            tenant_id=tenant_id,
+            code=DATASET_CODE,
+            deleted_at__isnull=True,
+        ).first()
+
+        if not existing_dataset:
+            query_config = {
+                "sql": """
+SELECT
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_orders
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND delivery_date < CURRENT_DATE
+     AND status IN ('AUDITED','已审核','CONFIRMED','已确认')
+     AND review_status NOT IN ('REJECTED','已驳回','审核驳回','驳回')
+     AND status NOT IN ('COMPLETED','已完成','FINISHED')) AS overdue_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_orders
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL AND order_date = CURRENT_DATE) AS today_new_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_orders
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND review_status IN ('PENDING','PENDING_REVIEW','待审核')) AS pending_review_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_orders
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND status NOT IN ('CANCELLED','已取消','COMPLETED','已完成','FINISHED')
+     AND review_status NOT IN ('REJECTED','已驳回','审核驳回','驳回')) AS unfulfilled_count,
+  (SELECT COALESCE(SUM(total_amount), 0)::numeric(18,2) FROM apps_kuaizhizao_sales_orders
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND order_date >= date_trunc('year', CURRENT_DATE)::date
+     AND status NOT IN ('CANCELLED','已取消')
+     AND review_status NOT IN ('REJECTED','已驳回','审核驳回','驳回')) AS annual_total_amount
+"""
+            }
+            display_config = {
+                "columns": [
+                    {"key": "overdue_count", "label": "逾期未交", "formatter": "number", "color": "#ff4d4f"},
+                    {"key": "today_new_count", "label": "今日新签", "formatter": "number", "suffix": "单", "color": "#1890ff"},
+                    {"key": "pending_review_count", "label": "待审核", "formatter": "number", "color": "#faad14"},
+                    {"key": "unfulfilled_count", "label": "未履约", "formatter": "number", "color": "#2f54eb"},
+                    {"key": "annual_total_amount", "label": "本年累计", "formatter": "number", "precision": 2, "color": "#1890ff"},
+                ]
+            }
+            dataset_data = DatasetCreate(
+                name="销售订单指标",
+                code=DATASET_CODE,
+                description="销售订单列表页指标卡数据",
+                query_type="sql",
+                query_config=query_config,
+                output_type=OUTPUT_TYPE_MULTI_METRIC,
+                display_config=display_config,
+                is_active=True,
+                data_source_uuid=UUID(str(integration_config.uuid)),
+            )
+            await self.create_dataset(tenant_id=tenant_id, dataset_data=dataset_data)
+            created = True
+        else:
+            created = False
+
+        # 确保页面绑定存在（若已绑定则更新 sort_order）
+        await self.bind_page_metric(
+            tenant_id=tenant_id,
+            page_path=SALES_ORDER_PAGE_PATH,
+            dataset_code=DATASET_CODE,
+            sort_order=0,
+        )
+
+        return {
+            "created": created,
+            "dataset_code": DATASET_CODE,
+            "message": "销售订单指标已初始化" if created else "销售订单指标已存在，已更新页面绑定",
+        }
+
     @staticmethod
     async def query_dataset_by_code(
         tenant_id: int,

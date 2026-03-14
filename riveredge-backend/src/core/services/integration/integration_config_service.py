@@ -2,6 +2,7 @@
 集成配置管理服务模块
 
 提供集成配置的 CRUD 操作和连接测试功能。
+系统默认数据源（code=system_default）：密码来自环境变量，不可编辑/删除。
 """
 
 from typing import Optional, List, Dict, Any  # noqa: F401
@@ -12,6 +13,55 @@ import httpx
 from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+# 系统默认数据源代码（密码从 ENV 读取，不可编辑）
+SYSTEM_DEFAULT_CODE = "system_default"
+
+
+def _get_system_default_pg_config() -> Dict[str, Any]:
+    """从环境变量获取系统默认 PostgreSQL 连接配置（密码不落库）"""
+    from infra.config.infra_config import infra_settings
+    return {
+        "host": infra_settings.DB_HOST,
+        "port": infra_settings.DB_PORT,
+        "user": infra_settings.DB_USER,
+        "username": infra_settings.DB_USER,
+        "password": infra_settings.DB_PASSWORD,
+        "database": infra_settings.DB_NAME,
+    }
+
+
+def _mask_config_password(config: Dict[str, Any]) -> Dict[str, Any]:
+    """脱敏：将 config 中的敏感字段替换为占位符，避免 API 暴露"""
+    if not config:
+        return {}
+    out = dict(config)
+    for key in ("password", "app_secret", "client_secret", "secret"):
+        if key in out and out[key]:
+            out[key] = "****"
+    return out
+
+
+def build_integration_response(integration: IntegrationConfig) -> Dict[str, Any]:
+    """构建 API 响应（config 脱敏，is_system_default/is_editable）"""
+    is_system_default = integration.code == SYSTEM_DEFAULT_CODE
+    return {
+        "uuid": str(integration.uuid),
+        "tenant_id": integration.tenant_id,
+        "name": integration.name,
+        "code": integration.code,
+        "type": integration.type,
+        "description": integration.description,
+        "config": _mask_config_password(integration.config or {}),
+        "is_active": integration.is_active,
+        "is_connected": integration.is_connected,
+        "last_connected_at": integration.last_connected_at,
+        "last_error": integration.last_error,
+        "created_at": integration.created_at,
+        "updated_at": integration.updated_at,
+        "is_system_default": is_system_default,
+        "is_editable": not is_system_default,
+    }
 
 
 class IntegrationConfigService:
@@ -154,6 +204,8 @@ class IntegrationConfigService:
             NotFoundError: 当集成配置不存在时抛出
         """
         integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.code == SYSTEM_DEFAULT_CODE:
+            raise ValidationError("系统默认数据源不可编辑，密码来自环境变量")
         
         update_data = data.model_dump(exclude_unset=True)
         
@@ -179,6 +231,8 @@ class IntegrationConfigService:
             NotFoundError: 当集成配置不存在时抛出
         """
         integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.code == SYSTEM_DEFAULT_CODE:
+            raise ValidationError("系统默认数据源不可删除")
         
         # 软删除
         from datetime import datetime
@@ -473,6 +527,8 @@ class IntegrationConfigService:
                 "error": f"Schema 暂仅支持 PostgreSQL，当前类型: {integration.type}",
             }
         config = integration.get_config()
+        if config.get("_system_default"):
+            config = _get_system_default_pg_config()
         try:
             import asyncpg
             host = config.get("host", "localhost")
@@ -515,8 +571,10 @@ class IntegrationConfigService:
 
     @staticmethod
     async def _test_postgresql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
-        """测试 PostgreSQL 连接（config: host, port, database, user/username, password）"""
+        """测试 PostgreSQL 连接（config: host, port, database, user/username, password；系统默认从 ENV 读取）"""
         config = integration.get_config()
+        if config.get("_system_default"):
+            config = _get_system_default_pg_config()
         try:
             import asyncpg
             host = config.get("host", "localhost")

@@ -14,13 +14,17 @@ export interface DataSource {
   code: string;
   description?: string;
   type: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
-  config: Record<string, any>;
+  config: Record<string, any>; // 已脱敏，密码不暴露
   is_active: boolean;
   is_connected: boolean;
   last_connected_at?: string;
   last_error?: string;
   created_at: string;
   updated_at: string;
+  /** 是否系统默认数据源（密码来自ENV，不可编辑） */
+  is_system_default?: boolean;
+  /** 是否可编辑 */
+  is_editable?: boolean;
 }
 
 export interface DataSourceListParams {

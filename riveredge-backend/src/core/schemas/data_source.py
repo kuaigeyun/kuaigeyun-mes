@@ -45,7 +45,7 @@ class DataSourceUpdate(BaseModel):
 
 
 class DataSourceResponse(DataSourceBase):
-    """数据源响应 Schema"""
+    """数据源响应 Schema（config 已脱敏，密码不暴露）"""
     uuid: UUID = Field(..., description="数据源UUID")
     tenant_id: int = Field(..., description="组织ID")
     is_connected: bool = Field(..., description="是否已连接")
@@ -53,6 +53,8 @@ class DataSourceResponse(DataSourceBase):
     last_error: Optional[str] = Field(None, description="最后连接错误信息")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    is_system_default: bool = Field(False, description="是否系统默认数据源（密码来自ENV，不可编辑）")
+    is_editable: bool = Field(True, description="是否可编辑")
     
     model_config = ConfigDict(from_attributes=True)
 

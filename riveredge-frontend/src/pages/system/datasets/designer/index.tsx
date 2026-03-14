@@ -293,20 +293,34 @@ const DatasetDesignerPage: React.FC = () => {
             {t('pages.system.datasets.clickExecuteTip')}
           </div>
         ) : executeResult.success && executeResult.data && executeResult.data.length > 0 ? (
-          <Table
-            dataSource={executeResult.data}
-            columns={
-              executeResult.columns?.map((col) => ({
-                title: col,
-                dataIndex: col,
-                key: col,
-                ellipsis: true,
-              })) || []
-            }
-            pagination={{ pageSize: 20, showSizeChanger: true }}
-            scroll={{ x: 'max-content' }}
-            size="small"
-          />
+          (dataset?.output_type === 'metric' || dataset?.output_type === 'multi_metric') ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              {(dataset.output_type === 'metric'
+                ? [{ key: 'value', label: '值', value: (executeResult.data[0] as any)?.value }]
+                : Object.entries(executeResult.data[0] || {}).map(([k, v]) => ({ key: k, label: k, value: v }))
+              ).map(({ key, label, value }) => (
+                <Card key={key} size="small" style={{ minWidth: 140 }}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 600 }}>{value ?? '-'}</div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Table
+              dataSource={executeResult.data}
+              columns={
+                executeResult.columns?.map((col) => ({
+                  title: col,
+                  dataIndex: col,
+                  key: col,
+                  ellipsis: true,
+                })) || []
+              }
+              pagination={{ pageSize: 20, showSizeChanger: true }}
+              scroll={{ x: 'max-content' }}
+              size="small"
+            />
+          )
         ) : executeResult.success && (!executeResult.data || executeResult.data.length === 0) ? (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>{t('pages.system.datasets.emptyResult')}</div>
         ) : null}

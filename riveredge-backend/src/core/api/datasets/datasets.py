@@ -14,6 +14,10 @@ from core.schemas.dataset import (
     DatasetResponse,
     ExecuteQueryRequest,
     ExecuteQueryResponse,
+    PageMetricsResponse,
+    StatCardItem,
+    PageMetricConfigCreate,
+    PageMetricConfigItem,
 )
 from core.schemas.api import APITestResponse
 from core.schemas.data_source import TestConnectionResponse
@@ -39,6 +43,7 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
     """
     # 兼容历史错误数据：query_type 仅支持 sql/api，其他值（如 visual）归一为 sql
     query_type = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
+    output_type = getattr(dataset, 'output_type', 'list') or 'list'
     return DatasetResponse(
         uuid=dataset.uuid,
         tenant_id=dataset.tenant_id,
@@ -47,6 +52,8 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
         description=dataset.description,
         query_type=query_type,
         query_config=dataset.query_config,
+        output_type=output_type,
+        display_config=getattr(dataset, 'display_config', None),
         is_active=dataset.is_active,
         data_source_uuid=data_source_uuid,
         last_executed_at=dataset.last_executed_at,
@@ -105,6 +112,7 @@ async def list_datasets(
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     search: Optional[str] = Query(None, description="搜索关键词（名称、代码）"),
     query_type: Optional[str] = Query(None, description="查询类型筛选"),
+    output_type: Optional[str] = Query(None, description="输出类型筛选：list/metric/multi_metric"),
     data_source_uuid: Optional[UUID] = Query(None, description="数据源UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     current_user: User = Depends(soil_get_current_user),
@@ -141,6 +149,7 @@ async def list_datasets(
             page_size=page_size,
             search=search,
             query_type=query_type,
+            output_type=output_type,
             data_source_uuid=data_source_uuid,
             is_active=is_active,
         )
@@ -161,6 +170,101 @@ async def list_datasets(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取数据集列表失败: {str(e)}"
+        )
+
+
+@router.get("/metrics/by-page", response_model=PageMetricsResponse)
+async def get_metrics_by_page(
+    page_path: str = Query(..., description="页面路由，如 /apps/kuaizhizao/sales-orders"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按页面路径获取指标卡。
+
+    查 page_metric_config -> 执行绑定的 multi_metric 数据集 -> 返回 stat_cards。
+    无配置时返回空列表。
+    """
+    result = await DatasetService().get_metrics_by_page(
+        tenant_id=tenant_id,
+        page_path=page_path,
+    )
+    if not result:
+        return PageMetricsResponse(stat_cards=[], dataset_code=None)
+    return PageMetricsResponse(
+        stat_cards=[StatCardItem(**c) for c in result["stat_cards"]],
+        dataset_code=result.get("dataset_code"),
+    )
+
+
+@router.get("/page-metric-configs", response_model=list)
+async def list_page_metric_configs(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """列出当前租户的页面指标配置"""
+    configs = await DatasetService().list_page_metric_configs(tenant_id=tenant_id)
+    return [
+        PageMetricConfigItem(
+            uuid=str(c.uuid),
+            page_path=c.page_path,
+            dataset_code=c.dataset_code,
+            sort_order=c.sort_order,
+        )
+        for c in configs
+    ]
+
+
+@router.post("/page-metric-config", status_code=status.HTTP_201_CREATED)
+async def bind_page_metric_config(
+    data: PageMetricConfigCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    绑定页面与指标型数据集。
+    若该页面已有配置则更新，否则创建。
+    """
+    try:
+        await DatasetService().bind_page_metric(
+            tenant_id=tenant_id,
+            page_path=data.page_path,
+            dataset_code=data.dataset_code,
+            sort_order=data.sort_order,
+        )
+        return {"success": True, "message": "配置已保存"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/page-metric-config", status_code=status.HTTP_204_NO_CONTENT)
+async def unbind_page_metric_config(
+    page_path: str = Query(..., description="页面路由"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """解除页面与指标数据集的绑定"""
+    await DatasetService().unbind_page_metric(tenant_id=tenant_id, page_path=page_path)
+
+
+@router.post("/init-sales-order-metrics")
+async def init_sales_order_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    一键初始化销售订单指标：创建 sales_order_metrics 数据集并绑定到销售订单页面。
+    若数据集已存在则跳过创建，仅确保页面绑定存在。
+    """
+    try:
+        result = await DatasetService().init_sales_order_metrics(tenant_id=tenant_id)
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
         )
 
 

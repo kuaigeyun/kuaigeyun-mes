@@ -7,6 +7,9 @@
 
 import { apiRequest } from './api';
 
+/** 输出类型：list=列表，metric=单值指标，multi_metric=多指标 */
+export type OutputType = 'list' | 'metric' | 'multi_metric';
+
 export interface Dataset {
   uuid: string;
   tenant_id: number;
@@ -15,6 +18,8 @@ export interface Dataset {
   description?: string;
   query_type: 'sql' | 'api';
   query_config: Record<string, any>;
+  output_type?: OutputType;
+  display_config?: Record<string, any>;
   is_active: boolean;
   data_source_uuid: string;
   last_executed_at?: string;
@@ -28,6 +33,7 @@ export interface DatasetListParams {
   page_size?: number;
   search?: string;
   query_type?: string;
+  output_type?: OutputType;
   data_source_uuid?: string;
   is_active?: boolean;
 }
@@ -45,6 +51,8 @@ export interface CreateDatasetData {
   description?: string;
   query_type: 'sql' | 'api';
   query_config: Record<string, any>;
+  output_type?: OutputType;
+  display_config?: Record<string, any>;
   data_source_uuid: string;
   is_active?: boolean;
 }
@@ -55,6 +63,8 @@ export interface UpdateDatasetData {
   description?: string;
   query_type?: 'sql' | 'api';
   query_config?: Record<string, any>;
+  output_type?: OutputType;
+  display_config?: Record<string, any>;
   is_active?: boolean;
 }
 
@@ -71,6 +81,78 @@ export interface ExecuteQueryResponse {
   columns?: string[];
   elapsed_time: number;
   error?: string;
+}
+
+/** 指标卡单项（与 ListPageTemplate StatCard 兼容） */
+export interface StatCardItem {
+  /** 数据字段 key，用于前端匹配原生统计的 trend/description */
+  key?: string;
+  title: string;
+  value?: number | string;
+  suffix?: string;
+  color?: string;
+  precision?: number;
+  formatter?: string;
+  filter_key?: string;
+  filter_value?: string;
+}
+
+export interface PageMetricsResponse {
+  stat_cards: StatCardItem[];
+  dataset_code?: string;
+}
+
+/**
+ * 按页面路径获取指标卡
+ * 无配置时返回 { stat_cards: [], dataset_code: null }
+ */
+export async function getPageMetrics(pagePath: string): Promise<PageMetricsResponse> {
+  return apiRequest<PageMetricsResponse>('/core/datasets/metrics/by-page', {
+    params: { page_path: pagePath },
+  });
+}
+
+export interface PageMetricConfigItem {
+  uuid: string;
+  page_path: string;
+  dataset_code: string;
+  sort_order: number;
+}
+
+/** 列出页面指标配置 */
+export async function listPageMetricConfigs(): Promise<PageMetricConfigItem[]> {
+  return apiRequest<PageMetricConfigItem[]>('/core/datasets/page-metric-configs');
+}
+
+/** 绑定页面与指标数据集 */
+export async function bindPageMetricConfig(data: {
+  page_path: string;
+  dataset_code: string;
+  sort_order?: number;
+}): Promise<{ success: boolean; message: string }> {
+  return apiRequest('/core/datasets/page-metric-config', {
+    method: 'POST',
+    data,
+  });
+}
+
+/** 解除页面指标绑定 */
+export async function unbindPageMetricConfig(pagePath: string): Promise<void> {
+  return apiRequest<void>('/core/datasets/page-metric-config', {
+    method: 'DELETE',
+    params: { page_path: pagePath },
+  });
+}
+
+/** 一键初始化销售订单指标（创建数据集并绑定到销售订单页面） */
+export async function initSalesOrderMetrics(): Promise<{
+  created: boolean;
+  dataset_code: string;
+  message: string;
+}> {
+  return apiRequest('/core/datasets/init-sales-order-metrics', {
+    method: 'POST',
+  });
 }
 
 /**

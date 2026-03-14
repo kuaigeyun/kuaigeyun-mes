@@ -115,7 +115,7 @@ import { operationApi, processRouteApi } from '../../../../master-data/services/
 import { workshopApi } from '../../../../master-data/services/factory'
 import { supplierApi } from '../../../../master-data/services/supply-chain'
 import { materialApi } from '../../../../master-data/services/material'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
 import SmartSuggestionFloatPanel from '../../../../../components/smart-suggestion-float-panel'
@@ -129,6 +129,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import { getWorkOrderLifecycle } from '../../../utils/workOrderLifecycle'
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
+import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
 
 interface WorkOrder {
   id?: number
@@ -173,14 +174,20 @@ const WorkOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
+  const location = useLocation()
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
-  const invalidateStatistics = () => { queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] }) }
+  const { statCards: pageMetricCards, hasConfig: hasPageMetricConfig } = usePageMetrics()
+  const invalidateStatistics = () => {
+    queryClient.invalidateQueries({ queryKey: ['workOrderStatistics'] })
+    queryClient.invalidateQueries({ queryKey: ['pageMetrics', location.pathname] })
+  }
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
+    enabled: !hasPageMetricConfig,
     staleTime: 30_000, // 30 秒内不重复请求统计接口
   })
 
@@ -2945,7 +2952,9 @@ const WorkOrdersPage: React.FC = () => {
     );
   };
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = hasPageMetricConfig
+    ? pageMetricCards
+    : statistics
     ? [
         {
           title: t('app.kuaizhizao.workOrder.statOverdue', '逾期工单'),

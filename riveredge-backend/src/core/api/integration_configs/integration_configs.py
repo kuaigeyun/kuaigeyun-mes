@@ -14,7 +14,10 @@ from core.schemas.integration_config import (
     TestConfigRequest,
     TestConnectionResponse,
 )
-from core.services.integration.integration_config_service import IntegrationConfigService
+from core.services.integration.integration_config_service import (
+    IntegrationConfigService,
+    build_integration_response,
+)
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -70,7 +73,7 @@ async def create_integration(
             tenant_id=tenant_id,
             data=data
         )
-        return IntegrationConfigResponse.model_validate(integration)
+        return IntegrationConfigResponse(**build_integration_response(integration))
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -108,7 +111,7 @@ async def list_integrations(
         type=type,
         is_active=is_active
     )
-    return [IntegrationConfigResponse.model_validate(integration) for integration in integrations]
+    return [IntegrationConfigResponse(**build_integration_response(i)) for i in integrations]
 
 
 @router.get("/{uuid}", response_model=IntegrationConfigResponse)
@@ -136,7 +139,7 @@ async def get_integration(
             tenant_id=tenant_id,
             uuid=uuid
         )
-        return IntegrationConfigResponse.model_validate(integration)
+        return IntegrationConfigResponse(**build_integration_response(integration))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -172,7 +175,7 @@ async def update_integration(
             uuid=uuid,
             data=data
         )
-        return IntegrationConfigResponse.model_validate(integration)
+        return IntegrationConfigResponse(**build_integration_response(integration))
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

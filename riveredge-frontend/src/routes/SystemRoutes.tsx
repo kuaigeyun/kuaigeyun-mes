@@ -118,6 +118,7 @@ const DataSourcesPage = React.lazy(() => import('../pages/system/data-sources/li
 const ApplicationConnectionsPage = React.lazy(() => import('../pages/system/application-connections/list'));
 const DatasetsPage = React.lazy(() => import('../pages/system/datasets/list'));
 const DatasetDesignerPage = React.lazy(() => import('../pages/system/datasets/designer'));
+const PageMetricsPage = React.lazy(() => import('../pages/system/datasets/page-metrics'));
 const DataBackupsPage = React.lazy(() => import('../pages/system/data-backups'));
 const CustomFieldsPage = React.lazy(() => import('../pages/system/custom-fields/list'));
 const ApiServicesPage = React.lazy(() => import('../pages/system/apis/list'));
@@ -197,6 +198,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/application-connections" element={withSuspense(ApplicationConnectionsPage)} />
     <Route path="/system/datasets" element={withSuspense(DatasetsPage)} />
     <Route path="/system/datasets/designer" element={withSuspense(DatasetDesignerPage)} />
+    <Route path="/system/datasets/page-metrics" element={withSuspense(PageMetricsPage)} />
     <Route path="/system/data-backups" element={withSuspense(DataBackupsPage)} />
     <Route path="/system/custom-fields" element={withSuspense(CustomFieldsPage)} />
     <Route path="/system/api-services" element={withSuspense(ApiServicesPage)} />
