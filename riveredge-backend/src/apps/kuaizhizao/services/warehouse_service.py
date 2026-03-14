@@ -677,19 +677,22 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if items:
                 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
                 from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
                 
                 for item_data in items:
-                    # 验证批号管理
                     material = await Material.get_or_none(
                         tenant_id=tenant_id,
-                        id=item_data.material_id
+                        id=item_data.material_id,
+                        deleted_at__isnull=True,
                     )
-                    if material and material.batch_managed:
-                        batch_number = getattr(item_data, 'batch_number', None)
-                        if not batch_number:
-                            raise ValidationError(
-                                f"物料 {material.name}（{material.main_code}）启用了批号管理，必须提供批号"
-                            )
+                    batch_number = getattr(item_data, 'batch_number', None)
+                    if material:
+                        batch_number = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=None,
+                        ) or batch_number
                     
                     await FinishedGoodsReceiptItem.create(
                         tenant_id=tenant_id,
@@ -704,7 +707,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         unqualified_quantity=item_data.unqualified_quantity,
                         location_id=getattr(item_data, 'location_id', None),
                         location_code=getattr(item_data, 'location_code', None),
-                        batch_number=getattr(item_data, 'batch_number', None),
+                        batch_number=batch_number,
                         expiry_date=getattr(item_data, 'expiry_date', None),
                         quality_status=getattr(item_data, 'quality_status', '合格'),
                         quality_inspection_id=getattr(item_data, 'quality_inspection_id', None),
@@ -909,7 +912,24 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 updated_by=created_by
             )
             
-            # 6. 创建入库单明细
+            # 6. 创建入库单明细（批号管理物料自动生成批号）
+            batch_number = None
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+            material = await Material.get_or_none(
+                tenant_id=tenant_id,
+                id=work_order.product_id,
+                deleted_at__isnull=True,
+            )
+            if material:
+                class _ItemData:
+                    batch_number = None
+                batch_number = await ensure_batch_no_for_item(
+                    tenant_id=tenant_id,
+                    material=material,
+                    item_data=_ItemData(),
+                    supplier_code=None,
+                )
             await FinishedGoodsReceiptItem.create(
                 tenant_id=tenant_id,
                 receipt_id=receipt.id,
@@ -920,8 +940,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 receipt_quantity=Decimal(str(receipt_quantity)),
                 qualified_quantity=Decimal(str(receipt_quantity)),
                 unqualified_quantity=Decimal('0'),
-                warehouse_id=warehouse_id,
-                warehouse_name=warehouse_name or '',
+                batch_number=batch_number,
                 status='待入库'
             )
 
@@ -1654,11 +1673,34 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
             
+            # 获取供应商编码（用于批号规则变量）
+            supplier_code = None
+            supplier_id = getattr(receipt_data, "supplier_id", None)
+            if supplier_id:
+                from apps.master_data.models.supplier import Supplier
+                supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id, deleted_at__isnull=True)
+                if supplier:
+                    supplier_code = supplier.code
+
             for item_data in receipt_data.items or []:
                 item_dict = item_data.model_dump(exclude_unset=True)
                 # 确保数量字段是Decimal类型
                 receipt_quantity = Decimal(str(item_data.receipt_quantity))
                 unit_price = Decimal(str(item_data.unit_price))
+                
+                # 批号管理物料：未填写批号时自动生成
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id, deleted_at__isnull=True)
+                if material:
+                    batch_no = await ensure_batch_no_for_item(
+                        tenant_id=tenant_id,
+                        material=material,
+                        item_data=item_data,
+                        supplier_code=supplier_code,
+                    )
+                    if batch_no is not None:
+                        item_dict["batch_number"] = batch_no
                 
                 item_dict.update({
                     'tenant_id': tenant_id,
@@ -2958,17 +3000,34 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             items = getattr(inbound_data, "items", None) or []
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
+            from apps.master_data.models.material import Material
+            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
             for item_data in items:
                 qty = Decimal(str(item_data.inbound_quantity))
                 price = Decimal(str(item_data.unit_price))
                 amt = qty * price
+                item_dict = item_data.model_dump(exclude_unset=True, exclude={"inbound_quantity", "unit_price", "total_amount"})
+                material = await Material.get_or_none(
+                    tenant_id=tenant_id,
+                    id=item_data.material_id,
+                    deleted_at__isnull=True,
+                )
+                if material:
+                    batch_no = await ensure_batch_no_for_item(
+                        tenant_id=tenant_id,
+                        material=material,
+                        item_data=item_data,
+                        supplier_code=None,
+                    )
+                    if batch_no is not None:
+                        item_dict["batch_number"] = batch_no
                 await OtherInboundItem.create(
                     tenant_id=tenant_id,
                     inbound_id=inbound.id,
                     inbound_quantity=qty,
                     unit_price=price,
                     total_amount=amt,
-                    **item_data.model_dump(exclude_unset=True, exclude={"inbound_quantity", "unit_price", "total_amount"})
+                    **item_dict
                 )
                 total_quantity += qty
                 total_amount += amt

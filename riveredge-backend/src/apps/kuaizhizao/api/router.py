@@ -42,8 +42,7 @@ from .maintenance_reminders.maintenance_reminders import router as maintenance_r
 
 # 成本核算路由已迁移至 kuaicaiwu
 
-# 导入财务管理路由（应收、应付、采购发票已迁移至 kuaicaiwu，仅保留销售发票）
-from .finance.invoices import router as invoices_router
+# 发票管理已迁移至 kuaicaiwu
 
 # 导入期初数据导入路由
 from .initial_data.initial_data import router as initial_data_router
@@ -85,9 +84,6 @@ router.include_router(molds_router)
 router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
-
-# 注册财务管理路由（销售发票）
-router.include_router(invoices_router)
 
 # 注册期初数据导入路由
 router.include_router(initial_data_router)

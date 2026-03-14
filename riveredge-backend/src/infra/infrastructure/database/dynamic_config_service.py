@@ -254,6 +254,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.payable",
                 f"apps.{module_code}.models.purchase_invoice",
                 f"apps.{module_code}.models.receivable",
+                f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
                 # 销售管理模块
                 f"apps.{module_code}.models.sales_forecast",
                 f"apps.{module_code}.models.sales_forecast_item",
@@ -447,6 +448,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.payable",
                 f"apps.{module_code}.models.purchase_invoice",
                 f"apps.{module_code}.models.receivable",
+                f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
                 # 销售管理模块
                 f"apps.{module_code}.models.sales_forecast",
                 f"apps.{module_code}.models.sales_forecast_item",

@@ -1,27 +1,25 @@
 """
-发票管理 API 路由
+发票管理 API 路由（销项/进项统一，从快制造迁移）
 
 提供发票的 CRUD 操作。
-
-Author: Antigravity
-Date: 2026-02-02
 """
 
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from apps.kuaizhizao.schemas.invoice import (
+from apps.kuaicaiwu.schemas.invoice import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceListResponse
 )
-from apps.kuaizhizao.services.invoice_service import InvoiceService
+from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/invoices", tags=["Kuaige Zhizao Finance"])
+router = APIRouter(prefix="/invoices", tags=["Kuaicaiwu Finance"])
 
 invoice_service = InvoiceService()
+
 
 @router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_invoice(

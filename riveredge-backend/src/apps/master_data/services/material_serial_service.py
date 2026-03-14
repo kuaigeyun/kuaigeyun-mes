@@ -257,20 +257,18 @@ class MaterialSerialService:
         tenant_id: int,
         material_uuid: str,
         count: int = 1,
-        rule: Optional[str] = None,
         rule_id: Optional[int] = None,
         rule_uuid: Optional[str] = None,
     ) -> List[str]:
         """
         生成序列号（批量生成）
 
-        优先使用规则：rule_id/rule_uuid > 物料默认序列号规则 > 传入的 rule 字符串 > 系统默认
+        优先使用规则：rule_id/rule_uuid > 物料默认序列号规则 > 系统默认
 
         Args:
             tenant_id: 租户ID
             material_uuid: 物料UUID
             count: 生成数量（默认：1）
-            rule: 序列号生成规则字符串（可选，向后兼容）
             rule_id: 序列号规则ID（可选）
             rule_uuid: 序列号规则UUID（可选）
 
@@ -311,29 +309,15 @@ class MaterialSerialService:
                 count=count,
             )
 
-        # 向后兼容：使用字符串规则
-        if not rule:
-            rule = "{物料编码}-{YYYYMMDD}-{6位序号}"
-        today = datetime.now().strftime("%Y%m%d")
-        year = datetime.now().strftime("%Y")
-        today_serials = await MaterialSerial.filter(
+        # 使用系统默认序列号规则（未配置时）
+        default_rule = await SerialRuleService.get_or_create_system_default(tenant_id)
+        return await SerialRuleService.generate_by_rule(
             tenant_id=tenant_id,
-            material_id=material.id,
-            serial_no__contains=today,
-            deleted_at__isnull=True
-        ).count()
-
-        serial_nos = []
-        for i in range(count):
-            sequence = today_serials + i + 1
-            sequence_str = f"{sequence:06d}"
-            serial_no = rule.replace("{物料编码}", material_code)
-            serial_no = serial_no.replace("{YYYYMMDD}", today)
-            serial_no = serial_no.replace("{YYYY}", year)
-            serial_no = serial_no.replace("{6位序号}", sequence_str)
-            serial_nos.append(serial_no)
-
-        return serial_nos
+            rule=default_rule,
+            context=context,
+            scope_key=str(material.id),
+            count=count,
+        )
     
     @staticmethod
     async def trace_serial(

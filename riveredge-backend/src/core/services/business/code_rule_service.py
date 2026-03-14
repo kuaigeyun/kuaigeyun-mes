@@ -43,31 +43,15 @@ class CodeRuleService:
         try:
             rule_data = data.model_dump()
             
-            # 处理新旧格式转换
             rule_components = rule_data.get("rule_components")
-            expression = rule_data.get("expression")
-            
-            # 如果提供了rule_components，自动生成expression（向后兼容）
-            if rule_components:
-                expression = CodeRuleComponentService.components_to_expression(rule_components)
-                rule_data["expression"] = expression
-                
-                # 从自动计数组件读取seq_start和seq_reset_rule（向后兼容）
-                counter_config = CodeRuleComponentService.get_counter_component_config(rule_components)
-                if counter_config:
-                    rule_data["seq_start"] = counter_config.get("initial_value", 1)
-                    rule_data["seq_reset_rule"] = counter_config.get("reset_cycle", "never")
-            
-            # 如果只提供了expression，尝试解析为rule_components（向后兼容）
-            elif expression and not rule_components:
-                rule_components = CodeRuleComponentService.expression_to_components(expression)
-                rule_data["rule_components"] = rule_components
-                
-                # 从解析的组件中提取seq_start和seq_reset_rule（向后兼容）
-                counter_config = CodeRuleComponentService.get_counter_component_config(rule_components)
-                if counter_config:
-                    rule_data["seq_start"] = counter_config.get("initial_value", 1)
-                    rule_data["seq_reset_rule"] = counter_config.get("reset_cycle", "never")
+            if not rule_components:
+                raise ValidationError("规则组件(rule_components)为必填项")
+            expression = CodeRuleComponentService.components_to_expression(rule_components)
+            rule_data["expression"] = expression
+            counter_config = CodeRuleComponentService.get_counter_component_config(rule_components)
+            if counter_config:
+                rule_data["seq_start"] = counter_config.get("initial_value", 1)
+                rule_data["seq_reset_rule"] = counter_config.get("reset_cycle", "never")
             
             rule = CodeRule(
                 tenant_id=tenant_id,
@@ -188,46 +172,19 @@ class CodeRuleService:
         
         update_data = data.model_dump(exclude_unset=True)
         
-        # 处理新旧格式转换
         rule_components = update_data.get("rule_components")
-        expression = update_data.get("expression")
-        
-        # 如果更新了rule_components，自动生成expression（向后兼容）
         if rule_components is not None:
-            # 验证器已经将空列表转换为None，所以这里rule_components不会是空列表
-            # 如果rule_components是None（由验证器转换），跳过处理
-            if rule_components is None:
-                # 空列表被验证器转换为None，表示不更新rule_components
+            if rule_components is None or (isinstance(rule_components, list) and len(rule_components) == 0):
                 update_data.pop("rule_components", None)
             else:
-                # 验证rule_components是否有效
-                if isinstance(rule_components, list):
-                    # 允许没有自动计数组件的规则（如BOM使用物料号+版本号区分）
-                    pass
-                
                 expression = CodeRuleComponentService.components_to_expression(rule_components)
-                # 如果生成的表达式为空，抛出错误
                 if not expression:
                     raise ValidationError("规则组件无法生成有效的表达式")
-                
                 update_data["expression"] = expression
-                
-                # 从自动计数组件读取seq_start和seq_reset_rule（向后兼容）
                 counter_config = CodeRuleComponentService.get_counter_component_config(rule_components)
                 if counter_config:
                     update_data["seq_start"] = counter_config.get("initial_value", 1)
                     update_data["seq_reset_rule"] = counter_config.get("reset_cycle", "never")
-        
-        # 如果只更新了expression，尝试解析为rule_components（向后兼容）
-        elif expression is not None and rule_components is None:
-            rule_components = CodeRuleComponentService.expression_to_components(expression)
-            update_data["rule_components"] = rule_components
-            
-            # 从解析的组件中提取seq_start和seq_reset_rule（向后兼容）
-            counter_config = CodeRuleComponentService.get_counter_component_config(rule_components)
-            if counter_config:
-                update_data["seq_start"] = counter_config.get("initial_value", 1)
-                update_data["seq_reset_rule"] = counter_config.get("reset_cycle", "never")
         
         # 如果更新了表达式，需要验证
         if 'expression' in update_data:

@@ -1,7 +1,12 @@
 import { apiRequest } from '../../../../services/api';
-import { Invoice, InvoiceListParams, InvoiceCreateData, InvoiceUpdateData } from '../../types/finance/invoice';
+import {
+  Invoice,
+  InvoiceListParams,
+  InvoiceCreateData,
+  InvoiceUpdateData,
+} from '../../types/finance/invoice';
 
-const INVOICE_API = '/apps/kuaizhizao/invoices'; // Correct API path based on other services
+const INVOICE_API = '/apps/kuaicaiwu/invoices';
 
 export const invoiceService = {
   createInvoice: (data: InvoiceCreateData) => {

@@ -6,7 +6,7 @@
 """
 
 from typing import Optional, Dict, List, Any
-from datetime import datetime, date
+from datetime import date
 import re
 import importlib
 
@@ -164,17 +164,11 @@ class CodeGenerationService:
         sequence.current_seq += seq_step
         await sequence.save()
         
-        # 生成编码
-        if components:
-            # 使用新格式（组件）
-            return CodeRuleComponentService.render_components(
-                components, sequence.current_seq, context
-            )
-        else:
-            # 使用旧格式（表达式）
-            return await CodeGenerationService._render_expression(
-                rule, sequence.current_seq, context
-            )
+        if not components:
+            raise ValidationError(f"编码规则 {rule_code} 缺少 rule_components，请在编码规则页面重新保存")
+        return CodeRuleComponentService.render_components(
+            components, sequence.current_seq, context
+        )
     
     @staticmethod
     async def test_generate_code(
@@ -280,44 +274,27 @@ class CodeGenerationService:
                         if sequence.reset_date.year != now.year:
                              base_seq = seq_start - seq_step
             test_seq = base_seq + seq_step
-        if components:
-            # 使用新格式（组件）
-            test_code = CodeRuleComponentService.render_components(
-                components, test_seq, context
-            )
-        else:
-            # 使用旧格式（表达式）
-            test_code = await CodeGenerationService._render_expression(
-                rule, test_seq, context
-            )
+        if not components:
+            raise ValidationError(f"编码规则 {rule_code} 缺少 rule_components，请在编码规则页面重新保存")
+        test_code = CodeRuleComponentService.render_components(
+            components, test_seq, context
+        )
         
-        # 如果需要检查重复，自动递增直到找到不重复的编码
         if check_duplicate and entity_type:
-            max_attempts = 100  # 最多尝试100次
+            max_attempts = 100
             attempt = 0
-            
             while attempt < max_attempts:
-                # 检查编码是否已存在
                 is_duplicate = await CodeGenerationService._check_code_exists(
                     tenant_id=tenant_id,
                     code=test_code,
                     entity_type=entity_type
                 )
-                
                 if not is_duplicate:
-                    # 找到不重复的编码，返回
                     return test_code
-                
-                # 编码已存在，递增序号继续尝试
                 test_seq += seq_step
-                if components:
-                    test_code = CodeRuleComponentService.render_components(
-                        components, test_seq, context
-                    )
-                else:
-                    test_code = await CodeGenerationService._render_expression(
-                        rule, test_seq, context
-                    )
+                test_code = CodeRuleComponentService.render_components(
+                    components, test_seq, context
+                )
                 attempt += 1
             
             # 如果尝试100次仍然重复，返回最后一次生成的编码（虽然理论上不应该发生）
@@ -431,76 +408,6 @@ class CodeGenerationService:
         # 其他实体类型的检查可以在这里扩展
         return False
     
-    @staticmethod
-    async def _render_expression(
-        rule: CodeRule,
-        current_seq: int,
-        context: Optional[Dict] = None
-    ) -> str:
-        """
-        渲染编码表达式
-        
-        Args:
-            rule: 编码规则
-            current_seq: 当前序号
-            context: 上下文变量（可选）
-            
-        Returns:
-            str: 生成的编码
-        """
-        code = rule.expression
-        now = datetime.now()
-        
-        # 替换日期变量
-        code = code.replace("{YYYY}", now.strftime("%Y"))
-        code = code.replace("{YY}", now.strftime("%y"))
-        code = code.replace("{MM}", now.strftime("%m"))
-        code = code.replace("{DD}", now.strftime("%d"))
-        
-        # 替换序号变量
-        seq_pattern = r'\{SEQ(?::(\d+))?\}'
-        def replace_seq(match):
-            width = int(match.group(1)) if match.group(1) else 0
-            seq_str = str(current_seq)
-            if width > 0:
-                seq_str = seq_str.zfill(width)
-            return seq_str
-        
-        code = re.sub(seq_pattern, replace_seq, code)
-        
-        # 替换字典变量（需要数据字典支持，暂时返回空）
-        dict_pattern = r'\{DICT:([^}]+)\}'
-        def replace_dict(match):
-            dict_code = match.group(1)
-            # TODO: 从数据字典获取值
-            # dict_value = await DataDictionaryService.get_dict_value(tenant_id, dict_code)
-            # return dict_value or ""
-            return f"[DICT:{dict_code}]"  # 临时占位符
-        
-        code = re.sub(dict_pattern, replace_dict, code)
-        
-        # 替换字段引用变量 {FIELD:field_name}
-        # 例如：{FIELD:group_code} 表示引用物料分组编码
-        field_pattern = r'\{FIELD:([^}]+)\}'
-        def replace_field(match):
-            field_name = match.group(1)
-            if context and field_name in context:
-                return str(context[field_name])
-            # 如果字段不存在，返回空字符串或占位符
-            return f"[FIELD:{field_name}]"  # 字段不存在时的占位符
-        
-        code = re.sub(field_pattern, replace_field, code)
-        
-        # 替换上下文变量（兼容旧格式，直接使用变量名）
-        # 例如：{group_code} 等同于 {FIELD:group_code}
-        if context:
-            for key, value in context.items():
-                # 避免重复替换已经被 FIELD: 格式替换的变量
-                if f"{{FIELD:{key}}}" not in rule.expression:
-                    code = code.replace(f"{{{key}}}", str(value))
-        
-        return code
-
     @staticmethod
     def _get_prefix_for_rule(rule: CodeRule, components: Optional[List[Dict[str, Any]]]) -> Optional[str]:
         """

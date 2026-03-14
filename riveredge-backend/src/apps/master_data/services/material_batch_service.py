@@ -259,7 +259,6 @@ class MaterialBatchService:
     async def generate_batch_no(
         tenant_id: int,
         material_uuid: str,
-        rule: Optional[str] = None,
         rule_id: Optional[int] = None,
         rule_uuid: Optional[str] = None,
         supplier_code: Optional[str] = None,
@@ -267,12 +266,11 @@ class MaterialBatchService:
         """
         生成批号
 
-        优先使用规则：rule_id/rule_uuid > 物料默认批号规则 > 传入的 rule 字符串 > 系统默认
+        优先使用规则：rule_id/rule_uuid > 物料默认批号规则 > 系统默认(YYYYMMDD-序号)
 
         Args:
             tenant_id: 租户ID
             material_uuid: 物料UUID
-            rule: 批号生成规则字符串（可选，向后兼容）
             rule_id: 批号规则ID（可选）
             rule_uuid: 批号规则UUID（可选）
             supplier_code: 供应商编码（可选，用于规则变量）
@@ -314,24 +312,14 @@ class MaterialBatchService:
                 scope_key=str(material.id),
             )
 
-        # 向后兼容：使用字符串规则
-        if not rule:
-            rule = "{YYYYMMDD}-{序号}"
-        today = datetime.now().strftime("%Y%m%d")
-        today_batches = await MaterialBatch.filter(
+        # 使用系统默认批号规则（未配置时）
+        default_rule = await BatchRuleService.get_or_create_system_default(tenant_id)
+        return await BatchRuleService.generate_by_rule(
             tenant_id=tenant_id,
-            material_id=material.id,
-            batch_no__startswith=today,
-            deleted_at__isnull=True
-        ).count()
-        sequence = today_batches + 1
-        sequence_str = f"{sequence:03d}"
-        batch_no = rule.replace("{YYYYMMDD}", today)
-        batch_no = batch_no.replace("{物料编码}", material_code)
-        batch_no = batch_no.replace("{序号}", sequence_str)
-        if supplier_code:
-            batch_no = batch_no.replace("{供应商编码}", supplier_code)
-        return batch_no
+            rule=default_rule,
+            context=context,
+            scope_key=str(material.id),
+        )
     
     @staticmethod
     async def trace_batch(

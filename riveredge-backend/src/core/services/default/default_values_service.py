@@ -24,98 +24,6 @@ class DefaultValuesService:
     为新组织提供默认配置。
     """
     
-    # 默认编码规则配置（符合中国制造业通用实践）
-    DEFAULT_CODE_RULES = [
-        {
-            "name": "工单编码",
-            "code": "work_order",
-            "expression": "WO{YYYYMMDD}{SEQ:4}",
-            "description": "工单编码规则，格式：WO + 日期（YYYYMMDD）+ 4位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "daily",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "物料编码",
-            "code": "material",
-            "expression": "MAT{SEQ:6}",
-            "description": "物料编码规则，格式：MAT + 6位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "never",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "产品编码",
-            "code": "product",
-            "expression": "PRD{SEQ:6}",
-            "description": "产品编码规则，格式：PRD + 6位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "never",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "客户编码",
-            "code": "customer",
-            "expression": "CUST{SEQ:5}",
-            "description": "客户编码规则，格式：CUST + 5位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "never",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "供应商编码",
-            "code": "supplier",
-            "expression": "SUP{SEQ:5}",
-            "description": "供应商编码规则，格式：SUP + 5位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "never",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "采购单编码",
-            "code": "purchase_order",
-            "expression": "PO{YYYYMMDD}{SEQ:4}",
-            "description": "采购单编码规则，格式：PO + 日期（YYYYMMDD）+ 4位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "daily",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "销售单编码",
-            "code": "sales_order",
-            "expression": "SO{YYYYMMDD}{SEQ:4}",
-            "description": "销售单编码规则，格式：SO + 日期（YYYYMMDD）+ 4位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "daily",
-            "is_system": True,
-            "is_active": True,
-        },
-        {
-            "name": "生产任务编码",
-            "code": "production_task",
-            "expression": "PT{YYYYMMDD}{SEQ:4}",
-            "description": "生产任务编码规则，格式：PT + 日期（YYYYMMDD）+ 4位序号",
-            "seq_start": 1,
-            "seq_step": 1,
-            "seq_reset_rule": "daily",
-            "is_system": True,
-            "is_active": True,
-        },
-    ]
-    
     # 默认系统参数配置（符合中国制造业通用实践）
     DEFAULT_SYSTEM_PARAMETERS = [
         # 系统基本信息
@@ -396,24 +304,6 @@ class DefaultValuesService:
             List[Dict[str, Any]]: 创建的编码规则列表
         """
         created_rules = []
-        
-        # 1. 创建旧的默认编码规则（向后兼容）
-        for rule_config in DefaultValuesService.DEFAULT_CODE_RULES:
-            try:
-                rule_data = CodeRuleCreate(**rule_config)
-                rule = await CodeRuleService.create_rule(tenant_id, rule_data)
-                created_rules.append({
-                    "code": rule.code,
-                    "name": rule.name,
-                    "uuid": rule.uuid,
-                })
-                logger.debug(f"为组织 {tenant_id} 创建默认编码规则: {rule.code}")
-            except Exception as e:
-                # 如果规则已存在，跳过（避免重复创建）
-                logger.warning(f"为组织 {tenant_id} 创建编码规则 {rule_config['code']} 失败: {e}")
-                continue
-        
-        # 2. 为每个页面创建预设编码规则（使用新的组件格式）
         for page_config in CODE_RULE_PAGES:
             page_code = page_config.get("page_code")
             page_name = page_config.get("page_name", page_code)

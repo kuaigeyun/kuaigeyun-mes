@@ -32,6 +32,7 @@ const BOMPage = lazy(() => import('./pages/materials/bom'));
 const BOMDesignerPage = lazy(() => import('./pages/materials/bom/designer'));
 const VariantAttributesPage = lazy(() => import('./pages/materials/variant-attributes'));
 const BatchRulesPage = lazy(() => import('./pages/materials/batch-rules'));
+const BatchesPage = lazy(() => import('./pages/materials/batches'));
 const SerialRulesPage = lazy(() => import('./pages/materials/serial-rules'));
 
 // 工艺管理页面
@@ -67,6 +68,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="materials" element={withPageSuspense(MaterialsManagementPage)} />
       <Route path="materials/variant-attributes" element={withPageSuspense(VariantAttributesPage)} />
       <Route path="materials/batch-rules" element={withPageSuspense(BatchRulesPage)} />
+      <Route path="materials/batches" element={withPageSuspense(BatchesPage)} />
       <Route path="materials/serial-rules" element={withPageSuspense(SerialRulesPage)} />
 
       {/* 工艺管理路由 */}

@@ -1,5 +1,5 @@
 /**
- * 发票列表页
+ * 发票列表页（销项/进项统一，从快制造迁移）
  *
  * 路由与筛选对应关系：
  * - /finance-management/invoices         -> 全部发票
@@ -9,7 +9,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Popconfirm, Space } from 'antd';
-import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice, InvoiceCreateData } from '../../../types/finance/invoice';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -37,12 +37,12 @@ const InvoiceList: React.FC = () => {
 
   const columns: ProColumns<Invoice>[] = [
     {
-      title: t('app.kuaizhizao.common.code', { defaultValue: 'Code' }),
+      title: t('common.code', { defaultValue: '编码' }),
       dataIndex: 'invoice_code',
       width: 150,
       fixed: 'left',
       render: (dom, entity) => (
-        <a onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${entity.invoice_code}`)}>{dom}</a>
+        <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${entity.invoice_code}`)}>{dom}</a>
       ),
     },
     {
@@ -107,7 +107,7 @@ const InvoiceList: React.FC = () => {
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${record.invoice_code}`)}
+            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
           >
             详情
           </Button>
@@ -115,7 +115,7 @@ const InvoiceList: React.FC = () => {
             type="link"
             size="small"
             icon={<EditOutlined />}
-            onClick={() => navigate(`/apps/kuaizhizao/finance-management/invoices/${record.invoice_code}`)}
+            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
           >
             编辑
           </Button>
@@ -137,45 +137,20 @@ const InvoiceList: React.FC = () => {
   return (
     <ListPageTemplate
       statCards={[
-        {
-          title: '总发票数',
-          value: 125,
-          prefix: <FileTextOutlined />,
-          valueStyle: { color: '#1890ff' },
-        },
-        {
-          title: '进项金额',
-          value: 45678.90,
-          prefix: <AccountBookOutlined />,
-          valueStyle: { color: '#52c41a' },
-          precision: 2,
-        },
-        {
-          title: '销项金额',
-          value: 89012.34,
-          prefix: <AccountBookOutlined />,
-          valueStyle: { color: '#faad14' },
-          precision: 2,
-        },
-        {
-          title: '待认证',
-          value: 8,
-          prefix: <PayCircleOutlined />,
-          suffix: '张',
-          valueStyle: { color: '#f5222d' },
-        },
+        { title: '总发票数', value: 125, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
+        { title: '进项金额', value: 45678.9, prefix: <AccountBookOutlined />, valueStyle: { color: '#52c41a' }, precision: 2 },
+        { title: '销项金额', value: 89012.34, prefix: <AccountBookOutlined />, valueStyle: { color: '#faad14' }, precision: 2 },
+        { title: '待认证', value: 8, prefix: <PayCircleOutlined />, suffix: '张', valueStyle: { color: '#f5222d' } },
       ]}
     >
       <UniTable<Invoice>
         headerTitle={headerTitle}
         actionRef={actionRef}
         rowKey="invoice_code"
-        search={{
-          labelWidth: 120,
-        }}
+        search={{ labelWidth: 120 }}
         showCreateButton
         createButtonText="新建发票"
-        onCreate={() => navigate('/apps/kuaizhizao/finance-management/invoices/new')}
+        onCreate={() => navigate('/apps/kuaicaiwu/finance-management/invoices/new')}
         enableRowSelection
         showDeleteButton
         deleteButtonText="批量删除"
@@ -204,11 +179,7 @@ const InvoiceList: React.FC = () => {
             category: activeTabKey === 'all' ? undefined : activeTabKey as 'IN' | 'OUT',
             ...rest,
           });
-          return {
-            data: res.items,
-            total: res.total,
-            success: true,
-          };
+          return { data: res.items, total: res.total, success: true };
         }}
         columns={columns}
         showImportButton
@@ -297,11 +268,8 @@ const InvoiceList: React.FC = () => {
           try {
             const res = await invoiceService.listInvoices({ skip: 0, limit: 10000, category: activeTabKey === 'all' ? undefined : activeTabKey as 'IN' | 'OUT' });
             let items = res.items || [];
-            if (type === 'currentPage' && pageData?.length) {
-              items = pageData;
-            } else if (type === 'selected' && keys?.length) {
-              items = items.filter((d: Invoice) => d.invoice_code && keys.includes(d.invoice_code));
-            }
+            if (type === 'currentPage' && pageData?.length) items = pageData;
+            else if (type === 'selected' && keys?.length) items = items.filter((d: Invoice) => d.invoice_code && keys.includes(d.invoice_code));
             if (items.length === 0) {
               messageApi.warning('暂无数据可导出');
               return;

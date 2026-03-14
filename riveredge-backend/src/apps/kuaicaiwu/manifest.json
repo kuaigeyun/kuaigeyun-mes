@@ -20,7 +20,8 @@
         "children": [
           {"title": "app.kuaicaiwu.menu.finance-management.receivables", "path": "/apps/kuaicaiwu/finance-management/receivables", "permission": "kuaicaiwu:receivable:view", "sort_order": 1},
           {"title": "app.kuaicaiwu.menu.finance-management.payables", "path": "/apps/kuaicaiwu/finance-management/payables", "permission": "kuaicaiwu:payable:view", "sort_order": 2},
-          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 3}
+          {"title": "app.kuaicaiwu.menu.finance-management.purchase-invoices", "path": "/apps/kuaicaiwu/finance-management/purchase-invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 3},
+          {"title": "app.kuaicaiwu.menu.finance-management.invoices", "path": "/apps/kuaicaiwu/finance-management/invoices", "permission": "kuaicaiwu:invoice:view", "sort_order": 4}
         ]
       },
       {

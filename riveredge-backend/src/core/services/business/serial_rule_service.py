@@ -66,6 +66,39 @@ class SerialRuleService:
         rules = await qs.offset((page - 1) * page_size).limit(page_size).all()
         return rules, total
 
+    # 系统默认序列号规则代码（未配置时使用）
+    SYSTEM_DEFAULT_CODE = "SERIAL_DEFAULT"
+
+    @staticmethod
+    async def get_or_create_system_default(tenant_id: int) -> SerialRule:
+        """
+        获取或创建系统默认序列号规则。
+        格式：物料编码-YYYYMMDD-序号（6位，每日重置）
+        """
+        rule = await SerialRuleService.get_rule_by_code(tenant_id, SerialRuleService.SYSTEM_DEFAULT_CODE)
+        if rule:
+            return rule
+        default_components = [
+            {"type": "form_field", "order": 0, "field_name": "material_code"},
+            {"type": "fixed_text", "order": 1, "text": "-"},
+            {"type": "date", "order": 2, "format_type": "preset", "preset_format": "YYYYMMDD"},
+            {"type": "fixed_text", "order": 3, "text": "-"},
+            {"type": "auto_counter", "order": 4, "digits": 6, "fixed_width": True, "reset_cycle": "daily", "initial_value": 1},
+        ]
+        rule = await SerialRuleService.create_rule(
+            tenant_id,
+            {
+                "name": "系统默认序列号规则",
+                "code": SerialRuleService.SYSTEM_DEFAULT_CODE,
+                "rule_components": default_components,
+                "description": "未配置专属规则时使用，格式：物料编码-YYYYMMDD-序号（6位，每日重置）",
+                "is_system": True,
+                "is_active": True,
+            },
+        )
+        logger.info(f"为租户 {tenant_id} 创建系统默认序列号规则: {rule.code}")
+        return rule
+
     @staticmethod
     async def create_rule(tenant_id: int, data: dict) -> SerialRule:
         """创建序列号规则"""
@@ -78,6 +111,7 @@ class SerialRuleService:
             seq_start=data.get("seq_start", 1),
             seq_step=data.get("seq_step", 1),
             seq_reset_rule=data.get("seq_reset_rule"),
+            is_system=data.get("is_system", False),
             is_active=data.get("is_active", True),
         )
         return rule

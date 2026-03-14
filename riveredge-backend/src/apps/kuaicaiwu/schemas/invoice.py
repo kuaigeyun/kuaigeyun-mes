@@ -1,9 +1,9 @@
+"""发票 Schema（销项/进项统一，从快制造迁移）"""
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, ConfigDict
 
-# --- InvoiceItem Schemas ---
 
 class InvoiceItemBase(BaseModel):
     item_name: str = Field(..., description="货物或应税劳务名称")
@@ -15,8 +15,10 @@ class InvoiceItemBase(BaseModel):
     tax_rate: Decimal = Field(..., description="税率")
     tax_amount: Decimal = Field(..., description="税额")
 
+
 class InvoiceItemCreate(InvoiceItemBase):
     pass
+
 
 class InvoiceItemUpdate(BaseModel):
     item_name: Optional[str] = None
@@ -28,43 +30,39 @@ class InvoiceItemUpdate(BaseModel):
     tax_rate: Optional[Decimal] = None
     tax_amount: Optional[Decimal] = None
 
+
 class InvoiceItemResponse(InvoiceItemBase):
     id: int
     invoice_id: int
-
     model_config = ConfigDict(from_attributes=True)
 
-
-# --- Invoice Schemas ---
 
 class InvoiceBase(BaseModel):
     invoice_number: str = Field(..., description="发票号码")
     invoice_details_code: Optional[str] = Field(None, description="发票代码")
     category: str = Field(default="IN", description="IN=进项(采购), OUT=销项(销售)")
     invoice_type: str = Field(default="VAT_SPECIAL", description="发票类型")
-    
     partner_id: int = Field(..., description="往来单位ID")
     partner_name: str = Field(..., description="往来单位名称")
     partner_tax_no: Optional[str] = Field(None, description="往来单位税号")
     partner_bank_info: Optional[str] = Field(None, description="往来单位开户行及账号")
     partner_address_phone: Optional[str] = Field(None, description="往来单位地址及电话")
-
     amount_excluding_tax: Decimal = Field(..., description="不含税金额")
     tax_amount: Decimal = Field(..., description="税额")
     total_amount: Decimal = Field(..., description="价税合计")
     tax_rate: Decimal = Field(default=0.13, description="税率")
-    
     invoice_date: date = Field(..., description="开票日期")
     received_date: Optional[date] = Field(None, description="收票/开具日期")
-    
     status: str = Field(default="DRAFT", description="状态")
     verification_date: Optional[date] = Field(None, description="认证日期")
     source_document_code: Optional[str] = Field(None, description="来源单据号")
     attachment_uuid: Optional[str] = Field(None, description="附件ID")
     description: Optional[str] = Field(None, description="备注")
 
+
 class InvoiceCreate(InvoiceBase):
     items: List[InvoiceItemCreate] = []
+
 
 class InvoiceUpdate(BaseModel):
     invoice_number: Optional[str] = None
@@ -88,6 +86,7 @@ class InvoiceUpdate(BaseModel):
     attachment_uuid: Optional[str] = None
     description: Optional[str] = None
 
+
 class InvoiceResponse(InvoiceBase):
     id: int
     tenant_id: int
@@ -97,8 +96,8 @@ class InvoiceResponse(InvoiceBase):
     updated_at: datetime
     created_by: Optional[int]
     updated_by: Optional[int]
-
     model_config = ConfigDict(from_attributes=True)
+
 
 class InvoiceListResponse(BaseModel):
     items: List[InvoiceResponse]

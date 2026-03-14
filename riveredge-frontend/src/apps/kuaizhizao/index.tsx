@@ -77,9 +77,7 @@ const ToolMaintenancesPage = lazy(() => import('./pages/equipment-management/too
 const ToolCalibrationsPage = lazy(() => import('./pages/equipment-management/tool-calibrations'));
 const ToolMaintenanceRemindersPage = lazy(() => import('./pages/equipment-management/tool-maintenance-reminders'));
 
-// 财务管理页面（销售发票保留，应收应付已迁至 kuaicaiwu）
-const InvoiceListPage = lazy(() => import('./pages/finance-management/invoices'));
-const InvoiceDetailPage = lazy(() => import('./pages/finance-management/invoices/detail'));
+// 财务管理（发票、应收应付已迁至 kuaicaiwu）
 
 // 仓储管理页面
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
@@ -187,11 +185,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/tool-calibrations" element={withPageSuspense(ToolCalibrationsPage)} />
       <Route path="equipment-management/tool-maintenance-reminders" element={withPageSuspense(ToolMaintenanceRemindersPage)} />
 
-      {/* 财务管理路由（销售发票保留，应收应付已迁至 kuaicaiwu） */}
-      <Route path="finance-management/invoices" element={withPageSuspense(InvoiceListPage)} />
-      <Route path="finance-management/invoices/:code" element={withPageSuspense(InvoiceDetailPage)} />
-      <Route path="finance-management/sales-invoices" element={withPageSuspense(InvoiceListPage)} />
-
       {/* 绩效管理路由 */}
       <Route path="performance/holidays" element={withPageSuspense(HolidaysPage)} />
       <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
@@ -277,12 +270,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/reports/outbound-summary" element={<PlaceholderPage title="出库明细汇总" />} />
       <Route path="warehouse-management/reports/stocktaking-history" element={<PlaceholderPage title="盘点单历史与差异" />} />
       <Route path="warehouse-management/reports/transfer-tracking" element={<PlaceholderPage title="调拨单跟踪" />} />
-      <Route path="finance-management/reports/receivable-age-analysis" element={<PlaceholderPage title="应收账款账龄分析" />} />
-      <Route path="finance-management/reports/receivable-reconciliation" element={<PlaceholderPage title="应收账款对账" />} />
-      <Route path="finance-management/reports/sales-receipt-detail" element={<PlaceholderPage title="销售回款明细" />} />
-      <Route path="finance-management/reports/payable-age-analysis" element={<PlaceholderPage title="应付账款账龄分析" />} />
-      <Route path="finance-management/reports/payable-reconciliation" element={<PlaceholderPage title="应付账款对账" />} />
-      <Route path="finance-management/reports/three-way-match" element={<PlaceholderPage title="三单匹配" />} />
       <Route path="analysis-center/reports/sales-order-full-trace" element={<PlaceholderPage title="销售订单全链路跟踪" />} />
       <Route path="analysis-center/reports/purchase-order-full-trace" element={<PlaceholderPage title="采购订单全链路跟踪" />} />
       <Route path="analysis-center/reports/material-lifecycle-trace" element={<PlaceholderPage title="物料全生命周期跟踪" />} />

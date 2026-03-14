@@ -427,9 +427,9 @@ ROLE_SCENARIOS: Dict[str, Dict[str, Any]] = {
         ],
         "dashboard": {
             "widgets": [
-                {"type": "statistics", "title": "应收账款", "api": "/apps/kuaizhizao/receivables/statistics"},
-                {"type": "statistics", "title": "应付账款", "api": "/apps/kuaizhizao/payables/statistics"},
-                {"type": "list", "title": "待处理账款列表", "api": "/apps/kuaizhizao/receivables?status=pending&limit=10"},
+                {"type": "statistics", "title": "应收账款", "api": "/apps/kuaicaiwu/receivables/statistics"},
+                {"type": "statistics", "title": "应付账款", "api": "/apps/kuaicaiwu/payables/statistics"},
+                {"type": "list", "title": "待处理账款列表", "api": "/apps/kuaicaiwu/receivables?status=pending&limit=10"},
             ],
         },
     },

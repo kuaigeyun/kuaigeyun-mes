@@ -75,8 +75,7 @@ from .finished_goods_inspection import FinishedGoodsInspection
 from .quality_standard import QualityStandard
 from .inspection_plan import InspectionPlan, InspectionPlanStep
 
-# 财务协同模块（Payable, PurchaseInvoice, Receivable 已迁移至 kuaicaiwu）
-from .invoice import Invoice, InvoiceItem
+# 财务协同模块（Payable, PurchaseInvoice, Receivable, Invoice 已迁移至 kuaicaiwu）
 
 # 销售管理模块
 from .sales_forecast import SalesForecast
@@ -254,8 +253,6 @@ __all__ = [
     'ToolCalibration',
     'MoldCalibration',
     'EquipmentCalibration',
-    'Invoice',
-    'InvoiceItem',
 
     # 状态流转
     'StateTransitionRule',

@@ -157,6 +157,7 @@ class WorkOrderResponse(WorkOrderBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    manufacturing_mode: Optional[str] = Field(None, description="制造模式（fabrication加工型/assembly装配型，来自产品物料的 source_config）")
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -329,6 +330,17 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     
     # 工序关联的不良品项（从 master_data 获取）
     defect_types: List[DefectTypeMinimal] = Field(default_factory=list, description="工序关联的不良品类型")
+    
+    # 物料汇总（工序卡片人机料法用，后端按需填充）
+    material_picked_count: Optional[int] = Field(None, description="已领料物料种类数（首道工序）")
+    material_remaining: Optional[Decimal] = Field(None, description="当前工序剩余数量")
+    material_scrap_qty: Optional[Decimal] = Field(None, description="本道工序报废数量")
+    next_op_planned_qty: Optional[Decimal] = Field(None, description="下道工序计划/实际数量（本道产出）")
+    next_op_has_reporting: Optional[bool] = Field(None, description="下道是否已报工（虚线/实线）")
+    assembly_kit_sets: Optional[int] = Field(None, description="可装配套数（装配型首道工序，可选）")
+    sop_id: Optional[int] = Field(None, description="关联SOP ID（法）")
+    sop_uuid: Optional[str] = Field(None, description="关联SOP UUID（用于跳转查看）")
+    sop_name: Optional[str] = Field(None, description="关联SOP 名称")
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

@@ -95,10 +95,16 @@
                         "sort_order": 3
                     },
                     {
+                        "title": "app.master-data.menu.materials.batches",
+                        "path": "/apps/master-data/materials/batches",
+                        "permission": "master-data:material:batch:view",
+                        "sort_order": 4
+                    },
+                    {
                         "title": "app.master-data.menu.materials.serial-rules",
                         "path": "/apps/master-data/materials/serial-rules",
                         "permission": "master-data:material:serial:view",
-                        "sort_order": 4
+                        "sort_order": 5
                     }
                 ]
             },

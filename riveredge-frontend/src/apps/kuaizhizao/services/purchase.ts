@@ -204,12 +204,32 @@ export async function submitPurchaseOrder(id: number): Promise<PurchaseOrder> {
 }
 
 /**
- * 下推到采购入库
+ * 下推采购入库预览（返回批号等，供弹窗展示）
  */
-export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?: Record<number, number>): Promise<any> {
-  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`, {
+export async function pushPurchaseOrderToReceiptPreview(
+  id: number,
+  receiptQuantities?: Record<number, number>
+): Promise<{ items: Array<{ item_id: number; material_code: string; material_name: string; receipt_quantity: number; batch_number?: string }> }> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt-preview`, {
     method: 'POST',
     data: receiptQuantities || {},
+  });
+}
+
+/**
+ * 下推到采购入库
+ */
+export async function pushPurchaseOrderToReceipt(
+  id: number,
+  receiptQuantities?: Record<number, number>,
+  batchNumbers?: Record<number, string>
+): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`, {
+    method: 'POST',
+    data: {
+      receipt_quantities: receiptQuantities || {},
+      ...(batchNumbers && Object.keys(batchNumbers).length > 0 ? { batch_numbers: batchNumbers } : {}),
+    },
   });
 }
 

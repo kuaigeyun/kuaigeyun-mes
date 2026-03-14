@@ -69,6 +69,8 @@ import {
   TeamOutlined,
   ShoppingOutlined,
   FileTextOutlined,
+  CloseCircleOutlined,
+  InboxOutlined,
 } from '@ant-design/icons'
 import {
   DndContext,
@@ -167,6 +169,8 @@ interface WorkOrder {
   remarks?: string
   created_at?: string
   updated_at?: string
+  /** 制造模式（fabrication加工型/assembly装配型），来自产品物料 */
+  manufacturing_mode?: 'fabrication' | 'assembly'
 }
 
 const WorkOrdersPage: React.FC = () => {
@@ -435,6 +439,7 @@ const WorkOrdersPage: React.FC = () => {
   // 行展开相关状态
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([])
   const [expandedOperationsMap, setExpandedOperationsMap] = useState<Record<number, any[]>>({})
+  const [expandedWorkOrderDetailMap, setExpandedWorkOrderDetailMap] = useState<Record<number, WorkOrder>>({})
   const [loadingOperationsMap, setLoadingOperationsMap] = useState<Record<number, boolean>>({})
 
   // 创建返工单相关状态
@@ -663,11 +668,15 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleExpand = async (expanded: boolean, record: WorkOrder) => {
     if (expanded && record.id) {
-      // 展开时加载工序数据
+      // 展开时加载工序数据及工单详情（含制造模式）
       if (!expandedOperationsMap[record.id]) {
         setLoadingOperationsMap(prev => ({ ...prev, [record.id!]: true }))
         try {
-          const operations = await workOrderApi.getOperations(record.id!.toString())
+          const [detail, operations] = await Promise.all([
+            workOrderApi.get(record.id!.toString()),
+            workOrderApi.getOperations(record.id!.toString()),
+          ])
+          setExpandedWorkOrderDetailMap(prev => ({ ...prev, [record.id!]: detail as WorkOrder }))
           setExpandedOperationsMap(prev => ({ ...prev, [record.id!]: operations || [] }))
         } catch (error) {
           console.error('获取工单工序列表失败:', error)
@@ -796,13 +805,14 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   /**
-   * 渲染工序卡片
+   * 渲染工序卡片（人机料法，按制造模式区分展示）
    */
   const renderOperationCard = (
     operation: any,
     workOrder: WorkOrder,
     index: number,
-    total: number
+    total: number,
+    manufacturingMode: 'fabrication' | 'assembly' = 'fabrication'
   ) => {
     const progress = calculateProgress(operation, workOrder)
     const qualifiedRate = calculateQualifiedRate(operation)
@@ -823,7 +833,7 @@ const WorkOrdersPage: React.FC = () => {
               operation.status === 'completed'
                 ? '2px solid #52c41a'
                 : operation.status === 'in_progress'
-                  ? `2px solid ${token.colorPrimary}`
+                  ? '2px solid #ff4d4f'
                   : `1px solid ${token.colorBorder}`,
             backgroundColor: token.colorBgContainer,
           }}
@@ -840,7 +850,7 @@ const WorkOrdersPage: React.FC = () => {
               backgroundColor: token.colorFillTertiary,
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{operation.operation_name}</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{operation.operation_name}</div>
             <Tag
               color={
                 operation.status === 'completed'
@@ -858,24 +868,25 @@ const WorkOrdersPage: React.FC = () => {
             </Tag>
           </div>
 
-          {/* 中部：进度与信息 */}
+          {/* 中部：进度与信息（参考图：环形图左、文字右） */}
           <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden', minHeight: 0 }}>
-            {/* 环状图进度显示 */}
-            <div style={{ textAlign: 'center', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              {/* 左侧：环形进度 */}
               <Progress
                 type="circle"
                 percent={progress}
-                size={64}
+                size={56}
                 strokeColor={progressColor}
                 format={percent => `${percent}%`}
               />
-              <div style={{ marginTop: 2, fontSize: 11, color: token.colorTextSecondary, lineHeight: 1.4 }}>
+              {/* 右侧：完成/合格/合格率文字 */}
+              <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: token.colorTextSecondary, lineHeight: 1.5 }}>
                 {operation.reporting_type === 'status' ? (
                   <div style={{ whiteSpace: 'nowrap' }}>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
                 ) : (
-                  <div>
-                    <div style={{ whiteSpace: 'nowrap' }}>完成：{operation.completed_quantity || 0} / {workOrder.quantity}</div>
-                    <div style={{ whiteSpace: 'nowrap' }}>合格：{operation.qualified_quantity || 0} / 不合格：{operation.unqualified_quantity || 0}</div>
+                  <>
+                    <div style={{ whiteSpace: 'nowrap' }}>完成: {Number(operation.completed_quantity || 0)} / {Number(workOrder.quantity || 0)}</div>
+                    <div style={{ whiteSpace: 'nowrap' }}>合格: {Number(operation.qualified_quantity || 0)} / 不合格: {Number(operation.unqualified_quantity || 0)}</div>
                     <div
                       style={{
                         whiteSpace: 'nowrap',
@@ -889,63 +900,111 @@ const WorkOrdersPage: React.FC = () => {
                             : token.colorTextTertiary,
                       }}
                     >
-                      合格率：{operation.completed_quantity > 0 ? `${qualifiedRate}%` : '-'}
+                      合格率: {operation.completed_quantity > 0 ? `${qualifiedRate}%` : '-'}
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* 工序信息 */}
-            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
-              <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                <strong>车间：</strong>
-                {operation.workshop_name || '-'}
-              </div>
-              <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                <strong>工作中心：</strong>
-                {operation.work_center_name || '-'}
-              </div>
-              <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
-                <strong>计划时间：</strong>
-                {operation.planned_start_date
-                  ? new Date(operation.planned_start_date).toLocaleString('zh-CN', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '-'}
-              </div>
-              <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
-                <strong>实际开始：</strong>
-                {operation.actual_start_date
-                  ? new Date(operation.actual_start_date).toLocaleString('zh-CN', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : '-'}
-              </div>
-              {/* 派工信息 */}
+            {/* 工序信息：人机料法 + 车间/时间 */}
+            <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
               <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
+                {/* 料：合格/不合格/剩余物料（参考图：图标+文字，数字着色） */}
+                {(manufacturingMode === 'fabrication' || manufacturingMode === 'assembly') && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {manufacturingMode === 'assembly' && index === 0 ? (
+                      operation.material_picked_count != null && operation.material_picked_count > 0 ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 12 }}>
+                          <InboxOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} />
+                          已领 {operation.material_picked_count} 种物料
+                          {operation.assembly_kit_sets != null && ` / 可装配 ${operation.assembly_kit_sets} 套`}
+                        </span>
+                      ) : null
+                    ) : (
+                      <>
+                        {manufacturingMode === 'fabrication' && (operation.material_remaining != null || (index < total - 1 && operation.next_op_planned_qty != null)) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, fontSize: 12, flexWrap: 'wrap' }}>
+                            <InboxOutlined style={{ marginRight: 4, color: token.colorText }} />
+                            {operation.material_remaining != null && (
+                              <span style={{ marginRight: 8 }}>剩余物料 {Number(operation.material_remaining)}</span>
+                            )}
+                            {index < total - 1 && operation.next_op_planned_qty != null && (
+                              <>转下道: <span style={{ borderBottom: operation.next_op_has_reporting ? '1px solid' : '1px dashed', borderColor: token.colorTextTertiary }}>{Number(operation.next_op_planned_qty)}</span></>
+                            )}
+                          </span>
+                        )}
+                        {manufacturingMode === 'fabrication' && operation.material_scrap_qty != null && Number(operation.material_scrap_qty) > 0 && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 12 }}>
+                            <CloseCircleOutlined style={{ marginRight: 4, color: token.colorError }} />
+                            报废 <span style={{ color: token.colorError }}>{operation.material_scrap_qty}</span>
+                          </span>
+                        )}
+                        {manufacturingMode === 'assembly' && index > 0 && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 12 }}>
+                            计划 {workOrder.quantity} / 已产出 {operation.qualified_quantity ?? 0}
+                            {operation.material_scrap_qty != null && Number(operation.material_scrap_qty) > 0 && (
+                              <span style={{ marginLeft: 4, color: token.colorError }}>报废 {operation.material_scrap_qty}</span>
+                            )}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {manufacturingMode === 'fabrication' && index === 0 && operation.material_picked_count != null && operation.material_picked_count > 0 && (
+                  <div style={{ marginBottom: 2, fontSize: 12 }}>
+                    <InboxOutlined style={{ marginRight: 4, color: token.colorTextSecondary }} />
+                    已领 {operation.material_picked_count} 种物料
+                  </div>
+                )}
                 <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <strong>负责人：</strong>
-                  {operation.assigned_worker_name || <span style={{ color: token.colorTextQuaternary }}>未分配</span>}
+                  <strong>分配人员: </strong>
+                  {operation.assigned_worker_name || '-'}
                 </div>
                 <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <strong>设备：</strong>
-                  {operation.assigned_equipment_name || (
-                    <span style={{ color: token.colorTextQuaternary }}>未分配</span>
-                  )}
+                  <strong>设备: </strong>
+                  {operation.assigned_equipment_name || '-'}
+                </div>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <strong>车间: </strong>
+                  {operation.workshop_name || '-'}
+                </div>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <strong>工作中心: </strong>
+                  {operation.work_center_name || '-'}
+                </div>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
+                  <strong>计划时间: </strong>
+                  {operation.planned_start_date
+                    ? (() => {
+                        const d = new Date(operation.planned_start_date)
+                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                      })()
+                    : '-'}
+                </div>
+                <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
+                  <strong>实际开始: </strong>
+                  {operation.actual_start_date
+                    ? (() => {
+                        const d = new Date(operation.actual_start_date)
+                        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                      })()
+                    : '-'}
                 </div>
               </div>
             </div>
-
           </div>
 
-          {/* 底部：与卡片融合的两个按钮 */}
+          {/* 底部：派工红底、进行中浅红底红字（参考图） */}
           <div
             style={{
               display: 'flex',
@@ -961,13 +1020,13 @@ const WorkOrdersPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '8px 4px',
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 500,
                 color: operation.status !== 'completed' ? '#fff' : token.colorTextDisabled,
-                backgroundColor: operation.status !== 'completed' ? token.colorPrimary : token.colorFillTertiary,
+                backgroundColor: operation.status !== 'completed' ? '#ff4d4f' : token.colorFillTertiary,
                 cursor: operation.status !== 'completed' ? 'pointer' : 'default',
                 borderRight: `1px solid ${token.colorBorderSecondary}`,
-                transition: 'background-color 0.2s, opacity 0.2s',
+                transition: 'opacity 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (operation.status !== 'completed') {
@@ -978,7 +1037,7 @@ const WorkOrdersPage: React.FC = () => {
                 e.currentTarget.style.opacity = '1'
               }}
             >
-              <TeamOutlined style={{ marginRight: 4, fontSize: 12 }} />
+              <TeamOutlined style={{ marginRight: 4, fontSize: 13 }} />
               派工
             </div>
             <div
@@ -1006,21 +1065,21 @@ const WorkOrdersPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '8px 4px',
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: 500,
                 color:
                   operation.status === 'pending'
                     ? '#fff'
                     : operation.status === 'in_progress'
-                      ? token.colorPrimary
+                      ? '#ff4d4f'
                       : operation.status === 'completed'
                         ? token.colorSuccess
                         : token.colorText,
                 backgroundColor:
                   operation.status === 'pending'
-                    ? token.colorPrimary
+                    ? '#ff4d4f'
                     : operation.status === 'in_progress'
-                      ? token.colorPrimaryBg
+                      ? '#fff1f0'
                       : operation.status === 'completed'
                         ? token.colorSuccessBg
                         : 'transparent',
@@ -1036,7 +1095,7 @@ const WorkOrdersPage: React.FC = () => {
                 e.currentTarget.style.opacity = '1'
               }}
             >
-              {operation.status === 'pending' && <PlayCircleOutlined style={{ marginRight: 4, fontSize: 12 }} />}
+              {operation.status === 'pending' && <PlayCircleOutlined style={{ marginRight: 4, fontSize: 13 }} />}
               {operation.status === 'pending' ? '开始' : operation.status === 'in_progress' ? '进行中' : '已完成'}
             </div>
           </div>
@@ -1080,11 +1139,12 @@ const WorkOrdersPage: React.FC = () => {
       return <div style={{ padding: '20px', textAlign: 'center', color: token.colorTextTertiary }}>暂无工序信息</div>
     }
 
+    const manufacturingMode = (expandedWorkOrderDetailMap[record.id!]?.manufacturing_mode || 'fabrication') as 'fabrication' | 'assembly'
     return (
       <div style={{ padding: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
           {operations.map((operation: any, index: number) =>
-            renderOperationCard(operation, record, index, operations.length)
+            renderOperationCard(operation, record, index, operations.length, manufacturingMode)
           )}
         </div>
       </div>

@@ -939,7 +939,6 @@ async def delete_material_batch(
 @router.post("/batches/generate", summary="生成批号")
 async def generate_batch_no(
     material_uuid: str = Query(..., description="物料UUID"),
-    rule: Optional[str] = Query(None, description="批号生成规则字符串（可选，向后兼容）"),
     rule_id: Optional[int] = Query(None, description="批号规则ID（可选，优先于物料默认规则）"),
     rule_uuid: Optional[str] = Query(None, description="批号规则UUID（可选）"),
     supplier_code: Optional[str] = Query(None, description="供应商编码（可选，用于规则变量）"),
@@ -949,11 +948,11 @@ async def generate_batch_no(
     """
     生成批号
 
-    优先使用：rule_id/rule_uuid > 物料默认批号规则 > rule 字符串 > 系统默认
+    优先使用：rule_id/rule_uuid > 物料默认批号规则 > 系统默认(YYYYMMDD-序号)
     """
     try:
         batch_no = await MaterialBatchService.generate_batch_no(
-            tenant_id, material_uuid, rule=rule,
+            tenant_id, material_uuid,
             rule_id=rule_id, rule_uuid=rule_uuid, supplier_code=supplier_code
         )
         return {"batch_no": batch_no}
@@ -1092,7 +1091,6 @@ async def delete_material_serial(
 async def generate_serial_nos(
     material_uuid: str = Query(..., description="物料UUID"),
     count: int = Query(1, ge=1, le=1000, description="生成数量"),
-    rule: Optional[str] = Query(None, description="序列号生成规则字符串（可选，向后兼容）"),
     rule_id: Optional[int] = Query(None, description="序列号规则ID（可选，优先于物料默认规则）"),
     rule_uuid: Optional[str] = Query(None, description="序列号规则UUID（可选）"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1101,11 +1099,11 @@ async def generate_serial_nos(
     """
     生成序列号（批量生成）
 
-    优先使用：rule_id/rule_uuid > 物料默认序列号规则 > rule 字符串 > 系统默认
+    优先使用：rule_id/rule_uuid > 物料默认序列号规则 > 系统默认
     """
     try:
         serial_nos = await MaterialSerialService.generate_serial_no(
-            tenant_id, material_uuid, count, rule=rule,
+            tenant_id, material_uuid, count,
             rule_id=rule_id, rule_uuid=rule_uuid
         )
         return {"serial_nos": serial_nos, "count": len(serial_nos)}

@@ -67,6 +67,37 @@ class BatchRuleService:
         rules = await qs.offset((page - 1) * page_size).limit(page_size).all()
         return rules, total
 
+    # 系统默认批号规则代码（未配置时使用）
+    SYSTEM_DEFAULT_CODE = "BATCH_DEFAULT"
+
+    @staticmethod
+    async def get_or_create_system_default(tenant_id: int) -> BatchRule:
+        """
+        获取或创建系统默认批号规则。
+        格式：YYYYMMDD-序号（3位，每日重置）
+        """
+        rule = await BatchRuleService.get_rule_by_code(tenant_id, BatchRuleService.SYSTEM_DEFAULT_CODE)
+        if rule:
+            return rule
+        default_components = [
+            {"type": "date", "order": 0, "format_type": "preset", "preset_format": "YYYYMMDD"},
+            {"type": "fixed_text", "order": 1, "text": "-"},
+            {"type": "auto_counter", "order": 2, "digits": 3, "fixed_width": True, "reset_cycle": "daily", "initial_value": 1},
+        ]
+        rule = await BatchRuleService.create_rule(
+            tenant_id,
+            {
+                "name": "系统默认批号规则",
+                "code": BatchRuleService.SYSTEM_DEFAULT_CODE,
+                "rule_components": default_components,
+                "description": "未配置专属规则时使用，格式：YYYYMMDD-序号（3位，每日重置）",
+                "is_system": True,
+                "is_active": True,
+            },
+        )
+        logger.info(f"为租户 {tenant_id} 创建系统默认批号规则: {rule.code}")
+        return rule
+
     @staticmethod
     async def create_rule(tenant_id: int, data: dict) -> BatchRule:
         """创建批号规则"""
@@ -80,6 +111,7 @@ class BatchRuleService:
             seq_start=data.get("seq_start", 1),
             seq_step=data.get("seq_step", 1),
             seq_reset_rule=data.get("seq_reset_rule"),
+            is_system=data.get("is_system", False),
             is_active=data.get("is_active", True),
         )
         return rule

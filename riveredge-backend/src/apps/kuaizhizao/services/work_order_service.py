@@ -44,9 +44,12 @@ from apps.kuaizhizao.schemas.work_order import (
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
+from apps.kuaizhizao.models.production_picking import ProductionPicking
+from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
+from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
-from apps.master_data.models.process import ProcessRoute, Operation
+from apps.master_data.models.process import ProcessRoute, Operation, SOP
 from apps.master_data.services.process_service import _get_operation_defect_types_via_table
 from core.services.business.code_generation_service import CodeGenerationService
 from apps.kuaizhizao.utils.material_source_helper import (
@@ -746,6 +749,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         response = WorkOrderResponse.model_validate(work_order)
         from apps.kuaizhizao.services.document_lifecycle_service import get_work_order_lifecycle
         response.lifecycle = get_work_order_lifecycle(work_order)
+        # 从产品物料获取制造模式（加工型/装配型）
+        if work_order.product_id:
+            product = await Material.get_or_none(
+                id=work_order.product_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if product and product.source_config and isinstance(product.source_config, dict):
+                response.manufacturing_mode = product.source_config.get("manufacturing_mode") or "fabrication"
+            else:
+                response.manufacturing_mode = "fabrication"
+        else:
+            response.manufacturing_mode = "fabrication"
         return response
 
     async def list_work_orders(
@@ -1680,7 +1696,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         work_order_id: int
     ) -> list[WorkOrderOperationResponse]:
         """
-        获取工单工序列表
+        获取工单工序列表（含物料汇总，供工序卡片人机料法展示）
 
         Args:
             tenant_id: 组织ID
@@ -1689,18 +1705,95 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         Returns:
             list[WorkOrderOperationResponse]: 工单工序列表
         """
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order_id,
+            deleted_at__isnull=True
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        plan_qty = float(work_order.quantity or 1)
+
+        # 已领料物料种类数（首道工序用）
+        picked_material_count = 0
+        pickings = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status="已领料",
+            deleted_at__isnull=True
+        ).all()
+        if pickings:
+            picking_ids = [p.id for p in pickings]
+            items = await ProductionPickingItem.filter(
+                tenant_id=tenant_id,
+                picking_id__in=picking_ids
+            ).all()
+            material_ids = set()
+            for it in items:
+                if it.material_id and (float(it.picked_quantity or 0) > 0):
+                    material_ids.add(it.material_id)
+            picked_material_count = len(material_ids)
+
+        # 按工序汇总报废数量
+        scrap_records = await ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status__in=["draft", "confirmed"],
+            deleted_at__isnull=True
+        ).all()
+        scrap_by_op = {}
+        for sr in scrap_records:
+            k = sr.operation_id
+            scrap_by_op[k] = scrap_by_op.get(k, Decimal("0")) + (sr.scrap_quantity or Decimal("0"))
+
         operations = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             deleted_at__isnull=True
         ).order_by('sequence').all()
-        
+
+        # 批量查询工序关联的 SOP（法）
+        op_ids = [op.operation_id for op in operations]
+        sops = await SOP.filter(
+            tenant_id=tenant_id,
+            operation_id__in=op_ids,
+            is_active=True,
+            deleted_at__isnull=True
+        ).all()
+        sop_by_op = {s.operation_id: s for s in sops}
+
+        prev_qualified = Decimal(str(plan_qty))
         result = []
-        for op in operations:
+        for idx, op in enumerate(operations):
             defect_types_raw = await _get_operation_defect_types_via_table(op.operation_id)
             defect_types = [DefectTypeMinimal(uuid=dt["uuid"], code=dt["code"], name=dt["name"]) for dt in defect_types_raw]
             op_data = {f: getattr(op, f, None) for f in WorkOrderOperationResponse.model_fields if hasattr(op, f)}
             op_data["defect_types"] = defect_types
+
+            qualified = op.qualified_quantity or Decimal("0")
+            # 物料剩余：上道合格 - 本道合格；首道为 计划 - 本道合格
+            material_remaining = prev_qualified - qualified
+            if material_remaining < 0:
+                material_remaining = Decimal("0")
+            op_data["material_remaining"] = material_remaining
+
+            op_data["material_scrap_qty"] = scrap_by_op.get(op.operation_id)
+
+            if idx == 0 and picked_material_count > 0:
+                op_data["material_picked_count"] = picked_material_count
+
+            next_op = operations[idx + 1] if idx + 1 < len(operations) else None
+            op_data["next_op_planned_qty"] = qualified
+            op_data["next_op_has_reporting"] = bool(next_op and (next_op.completed_quantity or 0) > 0) if next_op else None
+
+            sop = sop_by_op.get(op.operation_id)
+            if sop:
+                op_data["sop_id"] = sop.id
+                op_data["sop_uuid"] = getattr(sop, "uuid", None)
+                op_data["sop_name"] = sop.name
+
+            prev_qualified = qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
         return result
 

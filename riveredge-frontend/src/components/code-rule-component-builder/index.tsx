@@ -51,6 +51,10 @@ interface CodeRuleComponentBuilderProps {
   value?: CodeRuleComponent[];
   onChange?: (components: CodeRuleComponent[]) => void;
   availableFields?: Array<{ field_name: string; field_label: string; field_type: string }>;
+  /** 卡片标题，默认「流水号规则」 */
+  title?: string;
+  /** 当 value 为空时的默认组件，用于批号规则等场景 */
+  defaultComponents?: CodeRuleComponent[];
 }
 
 /**
@@ -157,6 +161,8 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   value = [],
   onChange,
   availableFields = [],
+  title = '流水号规则',
+  defaultComponents,
 }) => {
   const { token } = theme.useToken();
   const [components, setComponents] = useState<CodeRuleComponent[]>(value);
@@ -182,10 +188,12 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
         setComponents(value);
       }
     } else if (components.length === 0) {
-      // 如果没有组件，添加默认的自动计数组件
-      const defaultComponent = createDefaultAutoCounterComponent(0);
-      setComponents([defaultComponent]);
-      onChange?.([defaultComponent]);
+      // 如果没有组件，使用 defaultComponents 或默认的自动计数组件
+      const fallback = defaultComponents && defaultComponents.length > 0
+        ? defaultComponents
+        : [createDefaultAutoCounterComponent(0)];
+      setComponents(fallback);
+      onChange?.(fallback);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -327,7 +335,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   return (
     <div>
       <Card
-        title="流水号规则"
+        title={title}
         size="small"
       >
         <DndContext

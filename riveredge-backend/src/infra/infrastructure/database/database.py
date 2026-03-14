@@ -209,6 +209,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.payable",  # 应付账款模型
                 "apps.kuaicaiwu.models.receivable",  # 应收账款模型
                 "apps.kuaicaiwu.models.purchase_invoice",  # 采购发票模型
+                "apps.kuaicaiwu.models.invoice",  # 销项/进项发票模型（从快制造迁移）
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型

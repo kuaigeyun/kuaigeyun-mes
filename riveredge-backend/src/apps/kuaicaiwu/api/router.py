@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from .finance.receivables import router as receivables_router
 from .finance.payables import router as payables_router
 from .finance.purchase_invoices import router as purchase_invoices_router
+from .finance.invoices import router as invoices_router
 
 # 导入成本核算路由
 from .cost import (
@@ -30,6 +31,7 @@ router = APIRouter(tags=["Kuaicaiwu"])
 router.include_router(receivables_router)
 router.include_router(payables_router)
 router.include_router(purchase_invoices_router)
+router.include_router(invoices_router)
 
 # 注册成本核算路由
 router.include_router(cost_rules_router)

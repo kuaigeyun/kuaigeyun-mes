@@ -319,25 +319,19 @@ async def confirm_purchase_order(
     )
 
 
-@router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
-async def push_purchase_order_to_receipt(
+@router.post("/purchase-orders/{order_id}/push-to-receipt-preview", summary="下推采购入库预览")
+async def push_purchase_order_to_receipt_preview(
     order_id: int = Path(..., description="采购订单ID"),
     receipt_quantities: Optional[dict] = Body(None, description="入库数量字典 {item_id: quantity}"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    从采购单下推到采购入库
-    
-    自动生成采购入库单，支持指定入库数量
-    
-    - **order_id**: 采购订单ID
-    - **receipt_quantities**: 入库数量字典 {item_id: quantity}（可选，如果不提供则使用订单未入库数量）
+    下推采购入库预览：返回将生成的明细及预生成批号（供下推弹窗展示）
     """
     from fastapi import status
     from fastapi.responses import JSONResponse
 
-    # JSON 键为字符串，转换为 int 以匹配 item.id
     normalized = None
     if receipt_quantities:
         try:
@@ -346,11 +340,61 @@ async def push_purchase_order_to_receipt(
             normalized = receipt_quantities
 
     service = PurchaseService()
+    result = await service.push_to_receipt_preview(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        receipt_quantities=normalized
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
+@router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
+async def push_purchase_order_to_receipt(
+    order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[dict] = Body(None, description="receipt_quantities 和可选的 batch_numbers"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从采购单下推到采购入库
+    
+    自动生成采购入库单，支持指定入库数量及预生成批号
+    
+    body 格式：{ "receipt_quantities": {item_id: quantity}, "batch_numbers": {item_id: batch_number} }
+    或直接传 receipt_quantities 字典（向后兼容）
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    if not body:
+        body = {}
+    # 兼容：body 直接为 receipt_quantities，或 body.receipt_quantities
+    receipt_quantities = body.get("receipt_quantities")
+    if receipt_quantities is None and "receipt_quantities" not in body and "batch_numbers" not in body:
+        receipt_quantities = body  # 向后兼容：直接传 {item_id: quantity}
+    batch_numbers = body.get("batch_numbers")
+
+    normalized = None
+    if receipt_quantities:
+        try:
+            normalized = {int(k): float(v) for k, v in receipt_quantities.items()}
+        except (ValueError, TypeError):
+            normalized = receipt_quantities
+
+    batch_normalized = None
+    if batch_numbers:
+        try:
+            batch_normalized = {int(k): str(v) for k, v in batch_numbers.items() if v}
+        except (ValueError, TypeError):
+            batch_normalized = None
+
+    service = PurchaseService()
     result = await service.push_to_receipt(
         tenant_id=tenant_id,
         order_id=order_id,
         created_by=current_user.id,
-        receipt_quantities=normalized
+        receipt_quantities=normalized,
+        batch_numbers=batch_normalized
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

@@ -22,7 +22,6 @@ from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
-from apps.kuaizhizao.models.invoice import Invoice, InvoiceItem
 from apps.kuaizhizao.models.state_transition import StateTransitionLog
 from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
@@ -1853,8 +1852,8 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法下推销售发票")
 
-        from apps.kuaizhizao.services.invoice_service import InvoiceService
-        from apps.kuaizhizao.schemas.invoice import InvoiceCreate, InvoiceItemCreate
+        from apps.kuaicaiwu.services.invoice_service import InvoiceService
+        from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceItemCreate
 
         total_excl = Decimal("0")
         total_tax = Decimal("0")

@@ -622,12 +622,94 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     related_entity_id=order_id,
                 )
 
+    async def push_to_receipt_preview(
+        self,
+        tenant_id: int,
+        order_id: int,
+        receipt_quantities: Optional[Dict[int, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        下推采购入库预览：返回将生成的明细及预生成批号（供下推弹窗展示）
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 采购单ID
+            receipt_quantities: 入库数量字典 {item_id: quantity}
+            
+        Returns:
+            Dict: items 列表，每项含 item_id, material_code, material_name, receipt_quantity, batch_number
+        """
+        from apps.kuaizhizao.models.purchase_order_item import PurchaseOrderItem
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.supplier import Supplier
+        from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+        from decimal import Decimal
+
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        if order.status not in LEGACY_AUDITED_VALUES:
+            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
+
+        order_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id=order_id
+        ).all()
+
+        if not order_items:
+            raise BusinessLogicError("采购单没有明细，无法生成入库单")
+
+        supplier_code = None
+        if order.supplier_id:
+            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order.supplier_id, deleted_at__isnull=True)
+            if supplier:
+                supplier_code = supplier.code
+
+        class _ItemData:
+            def __init__(self, batch_number=None):
+                self.batch_number = batch_number
+
+        items = []
+        for item in order_items:
+            if receipt_quantities and item.id in receipt_quantities:
+                receipt_quantity = Decimal(str(receipt_quantities[item.id]))
+            else:
+                receipt_quantity = item.outstanding_quantity
+            if receipt_quantity <= 0:
+                continue
+            if receipt_quantity > item.outstanding_quantity:
+                continue
+
+            material = await Material.get_or_none(
+                tenant_id=tenant_id,
+                id=item.material_id,
+                deleted_at__isnull=True,
+            )
+            batch_number = None
+            if material:
+                batch_number = await ensure_batch_no_for_item(
+                    tenant_id=tenant_id,
+                    material=material,
+                    item_data=_ItemData(),
+                    supplier_code=supplier_code,
+                )
+
+            items.append({
+                "item_id": item.id,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "receipt_quantity": float(receipt_quantity),
+                "batch_number": batch_number,
+            })
+
+        return {"items": items}
+
     async def push_to_receipt(
         self,
         tenant_id: int,
         order_id: int,
         created_by: int,
-        receipt_quantities: Optional[Dict[int, float]] = None
+        receipt_quantities: Optional[Dict[int, float]] = None,
+        batch_numbers: Optional[Dict[int, str]] = None
     ) -> Dict[str, Any]:
         """
         下推到采购入库
@@ -639,6 +721,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_id: 采购单ID
             created_by: 创建人ID
             receipt_quantities: 入库数量字典 {item_id: quantity}，如果不提供则使用订单数量
+            batch_numbers: 预生成批号字典 {item_id: batch_number}（可选，来自预览时使用以避免重复生成）
             
         Returns:
             Dict: 包含创建的采购入库单信息
@@ -689,7 +772,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             # 验证入库数量不超过未入库数量
             if receipt_quantity > item.outstanding_quantity:
                 raise ValidationError(f"物料 {item.material_code} 的入库数量 {receipt_quantity} 超过未入库数量 {item.outstanding_quantity}")
-            
+
+            batch_number = batch_numbers.get(item.id) if batch_numbers else None
+
             receipt_items.append(PurchaseReceiptItemCreate(
                 purchase_order_item_id=item.id,
                 material_id=item.material_id,
@@ -700,7 +785,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 unit_price=item.unit_price,
                 total_amount=receipt_quantity * item.unit_price,
                 qualified_quantity=receipt_quantity,  # 默认全部合格，后续可通过检验调整
-                unqualified_quantity=Decimal('0')  # 默认无不合格数量
+                unqualified_quantity=Decimal('0'),  # 默认无不合格数量
+                batch_number=batch_number,
             ))
         
         if not receipt_items:
@@ -743,15 +829,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             created_by=created_by
         )
         
-        # 获取receipt的id（PurchaseReceiptResponse有id字段）
+        # 获取入库单详情（含明细及批号），供前端展示
         receipt_id = receipt.id if hasattr(receipt, 'id') else None
         receipt_code = receipt.receipt_code if hasattr(receipt, 'receipt_code') else None
+        receipt_with_items = await receipt_service.get_purchase_receipt_by_id(tenant_id, receipt_id) if receipt_id else None
+        items_with_batch = [
+            {"material_code": i.material_code, "material_name": i.material_name, "batch_number": getattr(i, "batch_number", None)}
+            for i in (receipt_with_items.items or [])
+        ] if receipt_with_items else []
         
         return {
             "order_id": order_id,
             "order_code": order.order_code,
             "receipt_id": receipt_id,
             "receipt_code": receipt_code,
+            "items": items_with_batch,
             "message": "采购入库单创建成功"
         }
 

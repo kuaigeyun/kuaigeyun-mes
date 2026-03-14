@@ -2,20 +2,24 @@
  * 批号规则管理页面
  *
  * 提供批号规则的 CRUD 功能，用于配置批号生成规则。
+ * 支持可视化规则组件构建器（拖拽式配置）。
  */
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeRuleComponentBuilder from '../../../../../components/code-rule-component-builder';
 import { batchRuleApi } from '../../../services/batchSerialRules';
+import { BATCH_RULE_AVAILABLE_FIELDS, DEFAULT_BATCH_RULE_COMPONENTS } from '../../../constants/batchRuleConstants';
 import type { BatchRule, BatchRuleCreate, BatchRuleUpdate } from '../../../services/batchSerialRules';
+import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
 
 const BatchRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -32,6 +36,7 @@ const BatchRulesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
+  const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -39,6 +44,7 @@ const BatchRulesPage: React.FC = () => {
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ seqStart: 1, seqStep: 1, isActive: true });
+    setRuleComponents([...DEFAULT_BATCH_RULE_COMPONENTS]);
   };
 
   useNewShortcut(handleCreate);
@@ -58,6 +64,11 @@ const BatchRulesPage: React.FC = () => {
         seqResetRule: detail.seqResetRule,
         isActive: detail.isActive,
       });
+      setRuleComponents(
+        detail.ruleComponents && Array.isArray(detail.ruleComponents) && detail.ruleComponents.length > 0
+          ? (detail.ruleComponents as CodeRuleComponent[])
+          : [...DEFAULT_BATCH_RULE_COMPONENTS]
+      );
     } catch (e: any) {
       messageApi.error(e?.message || t('app.master-data.seqRules.getDetailFailed'));
     }
@@ -65,27 +76,24 @@ const BatchRulesPage: React.FC = () => {
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     try {
+      const basePayload = {
+        name: values.name as string,
+        code: values.code as string,
+        description: values.description as string,
+        seqStart: (values.seqStart as number) ?? 1,
+        seqStep: (values.seqStep as number) ?? 1,
+        seqResetRule: values.seqResetRule as string,
+        isActive: (values.isActive as boolean) ?? true,
+      };
+      const payload = ruleComponents.length > 0
+        ? { ...basePayload, ruleComponents: ruleComponents as Record<string, unknown>[] }
+        : basePayload;
+
       if (isEdit && currentUuid) {
-        await batchRuleApi.update(currentUuid, {
-          name: values.name as string,
-          code: values.code as string,
-          description: values.description as string,
-          seqStart: values.seqStart as number,
-          seqStep: values.seqStep as number,
-          seqResetRule: values.seqResetRule as string,
-          isActive: values.isActive as boolean,
-        });
+        await batchRuleApi.update(currentUuid, payload as BatchRuleUpdate);
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await batchRuleApi.create({
-          name: values.name as string,
-          code: values.code as string,
-          description: values.description as string,
-          seqStart: (values.seqStart as number) ?? 1,
-          seqStep: (values.seqStep as number) ?? 1,
-          seqResetRule: values.seqResetRule as string,
-          isActive: (values.isActive as boolean) ?? true,
-        });
+        await batchRuleApi.create(payload as BatchRuleCreate);
         messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
@@ -183,6 +191,7 @@ const BatchRulesPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid={true}
       >
         <ProFormText name="name" label={t('app.master-data.seqRules.ruleName')} rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormText name="code" label={t('app.master-data.seqRules.ruleCode')} rules={[{ required: true }]} colProps={{ span: 12 }} />
@@ -205,6 +214,15 @@ const BatchRulesPage: React.FC = () => {
           initialValue={true}
           colProps={{ span: 12 }}
         />
+        <ProForm.Item label=" " colon={false} colProps={{ span: 24 }}>
+          <CodeRuleComponentBuilder
+            title="批号规则"
+            value={ruleComponents}
+            onChange={setRuleComponents}
+            availableFields={[...BATCH_RULE_AVAILABLE_FIELDS]}
+            defaultComponents={DEFAULT_BATCH_RULE_COMPONENTS}
+          />
+        </ProForm.Item>
       </FormModalTemplate>
     </ListPageTemplate>
   );

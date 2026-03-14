@@ -26,7 +26,7 @@ import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import dayjs from 'dayjs';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, pushPurchaseOrderToReceiptPreview, pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, getPurchaseOrderStatistics, PurchaseOrder, PurchaseOrderItem } from '../../../services/purchase';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
@@ -167,6 +167,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToReceiptVisible, setPushToReceiptVisible] = useState(false);
   const [pushToReceiptOrder, setPushToReceiptOrder] = useState<PurchaseOrderDetail | null>(null);
   const [pushToReceiptQuantities, setPushToReceiptQuantities] = useState<Record<number, number>>({});
+  const [pushToReceiptBatchNumbers, setPushToReceiptBatchNumbers] = useState<Record<number, string>>({});
+  const [pushToReceiptPreviewLoading, setPushToReceiptPreviewLoading] = useState(false);
   const [pushToReceiptLoading, setPushToReceiptLoading] = useState(false);
 
   // 下推收货通知 Modal
@@ -343,7 +345,7 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // 打开下推入库 Modal（加载订单明细，初始化可编辑数量）
+  // 打开下推入库 Modal（加载订单明细，初始化可编辑数量，预拉批号）
   const handlePushToReceipt = async (record: PurchaseOrder) => {
     try {
       const detail = await getPurchaseOrder(record.id!);
@@ -363,6 +365,20 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToReceiptOrder(detail as PurchaseOrderDetail);
       setPushToReceiptQuantities(quantities);
       setPushToReceiptVisible(true);
+      setPushToReceiptBatchNumbers({});
+      setPushToReceiptPreviewLoading(true);
+      try {
+        const preview = await pushPurchaseOrderToReceiptPreview(record.id!, quantities);
+        const batchMap: Record<number, string> = {};
+        (preview.items || []).forEach((it: { item_id: number; batch_number?: string }) => {
+          if (it.batch_number) batchMap[it.item_id] = it.batch_number;
+        });
+        setPushToReceiptBatchNumbers(batchMap);
+      } catch {
+        // 预览失败不影响弹窗展示，批号将在确认时生成
+      } finally {
+        setPushToReceiptPreviewLoading(false);
+      }
     } catch {
       messageApi.error('加载采购订单详情失败');
     }
@@ -384,13 +400,20 @@ const PurchaseOrdersPage: React.FC = () => {
         return;
       }
     }
+    const batchNumbers: Record<number, string> = {};
+    items.forEach((it: PurchaseOrderItem) => {
+      if (it.id != null && (pushToReceiptQuantities[it.id] ?? 0) > 0 && pushToReceiptBatchNumbers[it.id]) {
+        batchNumbers[it.id] = pushToReceiptBatchNumbers[it.id];
+      }
+    });
     setPushToReceiptLoading(true);
     try {
-      const result = await pushPurchaseOrderToReceipt(pushToReceiptOrder.id, pushToReceiptQuantities);
+      const result = await pushPurchaseOrderToReceipt(pushToReceiptOrder.id, pushToReceiptQuantities, Object.keys(batchNumbers).length > 0 ? batchNumbers : undefined);
       messageApi.success(`成功生成采购入库单：${result.receipt_code || '已创建'}`);
       setPushToReceiptVisible(false);
       setPushToReceiptOrder(null);
       setPushToReceiptQuantities({});
+      setPushToReceiptBatchNumbers({});
       invalidateStatistics();
       actionRef.current?.reload();
       if (detailDrawerVisible && orderDetail?.id === pushToReceiptOrder.id) {
@@ -1835,6 +1858,7 @@ const PurchaseOrdersPage: React.FC = () => {
           setPushToReceiptVisible(false);
           setPushToReceiptOrder(null);
           setPushToReceiptQuantities({});
+          setPushToReceiptBatchNumbers({});
         }}
         onOk={handlePushToReceiptConfirm}
         confirmLoading={pushToReceiptLoading}
@@ -1861,6 +1885,12 @@ const PurchaseOrdersPage: React.FC = () => {
                 { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
                 { title: '已到货', dataIndex: 'received_quantity', width: 90, align: 'right' },
                 { title: '未到货', dataIndex: 'outstanding_quantity', width: 90, align: 'right' },
+                {
+                  title: '批号',
+                  width: 140,
+                  render: (_: any, record: PurchaseOrderItem) =>
+                    record.id != null ? (pushToReceiptBatchNumbers[record.id] ?? (pushToReceiptPreviewLoading ? '加载中...' : '-')) : '-',
+                },
                 {
                   title: '入库数量',
                   width: 140,

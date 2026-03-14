@@ -509,16 +509,39 @@ export const materialCodeMappingApi = {
 export const materialBatchApi = {
   /**
    * 创建物料批号
+   * 后端使用 snake_case，自动转换
    */
   create: async (data: MaterialBatchCreate): Promise<MaterialBatch> => {
-    return api.post('/apps/master-data/materials/batches', data);
+    const payload: Record<string, unknown> = {
+      material_uuid: data.materialUuid ?? (data as any).material_uuid,
+      batch_no: data.batchNo ?? (data as any).batch_no,
+      supplier_batch_no: data.supplierBatchNo ?? (data as any).supplier_batch_no,
+      quantity: data.quantity ?? (data as any).quantity ?? 0,
+      status: data.status ?? (data as any).status ?? 'in_stock',
+      remark: data.remark ?? (data as any).remark,
+    };
+    const prod = data.productionDate ?? (data as any).production_date;
+    const exp = data.expiryDate ?? (data as any).expiry_date;
+    if (prod != null) payload.production_date = prod;
+    if (exp != null) payload.expiry_date = exp;
+    return api.post('/apps/master-data/materials/batches', payload);
   },
 
   /**
    * 获取物料批号列表
+   * 后端使用 snake_case 参数：material_uuid, batch_no, status, page, page_size
    */
   list: async (params?: MaterialBatchListParams): Promise<MaterialBatchListResponse> => {
-    return api.get('/apps/master-data/materials/batches', { params });
+    const backendParams = params
+      ? {
+          material_uuid: params.materialUuid,
+          batch_no: params.batchNo,
+          status: params.status,
+          page: params.page ?? 1,
+          page_size: params.pageSize ?? 20,
+        }
+      : undefined;
+    return api.get('/apps/master-data/materials/batches', { params: backendParams });
   },
 
   /**
@@ -545,14 +568,13 @@ export const materialBatchApi = {
   /**
    * 生成批号
    * @param materialUuid 物料UUID
-   * @param options 可选：rule(向后兼容)、rule_id、rule_uuid、supplier_code
+   * @param options 可选：rule_id、rule_uuid、supplier_code
    */
   generate: async (
     materialUuid: string,
-    options?: { rule?: string; ruleId?: number; ruleUuid?: string; supplierCode?: string }
+    options?: { ruleId?: number; ruleUuid?: string; supplierCode?: string }
   ): Promise<{ batch_no: string }> => {
     const params: Record<string, string | number | undefined> = { material_uuid: materialUuid };
-    if (options?.rule) params.rule = options.rule;
     if (options?.ruleId != null) params.rule_id = options.ruleId;
     if (options?.ruleUuid) params.rule_uuid = options.ruleUuid;
     if (options?.supplierCode) params.supplier_code = options.supplierCode;
@@ -623,15 +645,14 @@ export const materialSerialApi = {
    * 生成序列号（批量）
    * @param materialUuid 物料UUID
    * @param count 生成数量
-   * @param options 可选：rule(向后兼容)、rule_id、rule_uuid
+   * @param options 可选：rule_id、rule_uuid
    */
   generate: async (
     materialUuid: string,
     count: number = 1,
-    options?: { rule?: string; ruleId?: number; ruleUuid?: string }
+    options?: { ruleId?: number; ruleUuid?: string }
   ): Promise<{ serial_nos: string[]; count: number }> => {
     const params: Record<string, string | number | undefined> = { material_uuid: materialUuid, count };
-    if (options?.rule) params.rule = options.rule;
     if (options?.ruleId != null) params.rule_id = options.ruleId;
     if (options?.ruleUuid) params.rule_uuid = options.ruleUuid;
     return api.post('/apps/master-data/materials/serials/generate', null, { params });

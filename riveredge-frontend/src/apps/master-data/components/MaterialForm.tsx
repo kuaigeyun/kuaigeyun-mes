@@ -43,6 +43,9 @@ import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 
 const { Panel } = Collapse;
 
+/** 系统默认规则占位值（提交时转为 null） */
+const SYSTEM_DEFAULT_RULE_VALUE = '__SYSTEM_DEFAULT__';
+
 /** 每种物料来源类型的合法字段白名单（用于过滤混合字段） */
 const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
@@ -787,9 +790,17 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,
         batch_managed: restValues.batchManaged,
-        default_batch_rule_id: restValues.defaultBatchRuleId || null,
+        default_batch_rule_id: restValues.batchManaged
+          ? (restValues.defaultBatchRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultBatchRuleId == null
+            ? null
+            : restValues.defaultBatchRuleId)
+          : null,
         serial_managed: restValues.serialManaged,
-        default_serial_rule_id: restValues.defaultSerialRuleId || null,
+        default_serial_rule_id: restValues.serialManaged
+          ? (restValues.defaultSerialRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultSerialRuleId == null
+            ? null
+            : restValues.defaultSerialRuleId)
+          : null,
         variant_managed: restValues.variantManaged,
         variant_attributes: restValues.variantAttributes,
         description: restValues.description,
@@ -1648,7 +1659,10 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
                 name="defaultBatchRuleId"
                 label={t('app.master-data.materialForm.defaultBatchRule')}
                 placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
-                options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                options={[
+                  { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
+                  ...batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                ]}
                 allowClear
               />
             </Col>
@@ -1663,7 +1677,10 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
                 name="defaultSerialRuleId"
                 label={t('app.master-data.materialForm.defaultSerialRule')}
                 placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
-                options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                options={[
+                  { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
+                  ...serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                ]}
                 allowClear
               />
             </Col>

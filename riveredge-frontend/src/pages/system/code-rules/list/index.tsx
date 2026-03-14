@@ -7,9 +7,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse, Spin } from 'antd';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Collapse, Spin } from 'antd';
 import { SearchOutlined, DatabaseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   getCodeRuleList,
@@ -62,152 +61,8 @@ const CodeRuleListPage: React.FC = () => {
   const pageRuleFormRef = useRef<ProFormInstance>();
   const [pageRuleFormLoading, setPageRuleFormLoading] = useState(false);
 
-  // 表达式构建器状态（旧格式，向后兼容）
-  const [expressionMode, setExpressionMode] = useState<'component' | 'advanced'>('component');
-  const [expressionBuilder, setExpressionBuilder] = useState({
-    prefix: '',
-    dateFormat: 'YYYYMMDD',
-    separator: '-',
-    seqFormat: '4',
-    suffix: '',
-    fields: [] as string[], // 选中的字段列表
-  });
-
-  // 规则组件状态（新格式）
+  // 规则组件状态（唯一数据源）
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
-
-  /**
-   * 根据构建器配置生成表达式
-   */
-  const buildExpressionFromBuilder = (builder: typeof expressionBuilder): string => {
-    const parts: string[] = [];
-
-    // 前缀
-    if (builder.prefix) {
-      parts.push(builder.prefix);
-    }
-
-    // 字段引用（在前缀之后、日期之前）
-    if (builder.fields && builder.fields.length > 0) {
-      builder.fields.forEach(field => {
-        if (parts.length > 0 && builder.separator) {
-          parts.push(builder.separator);
-        }
-        parts.push(`{FIELD:${field}}`);
-      });
-    }
-
-    // 日期格式
-    if (builder.dateFormat !== 'none') {
-      if (parts.length > 0 && builder.separator) {
-        parts.push(builder.separator);
-      }
-      const dateMap: Record<string, string> = {
-        'YYYYMMDD': '{YYYY}{MM}{DD}',
-        'YYYYMM': '{YYYY}{MM}',
-        'YYYY': '{YYYY}',
-        'YYMMDD': '{YY}{MM}{DD}',
-        'YYMM': '{YY}{MM}',
-        'YY': '{YY}',
-      };
-      parts.push(dateMap[builder.dateFormat] || '');
-    }
-
-    // 分隔符和序号
-    if (builder.seqFormat && builder.seqFormat !== 'none') {
-      if (parts.length > 0 && builder.separator) {
-        parts.push(builder.separator);
-      }
-      const seqWidth = parseInt(builder.seqFormat);
-      if (seqWidth > 0) {
-        parts.push(`{SEQ:${seqWidth}}`);
-      } else {
-        parts.push('{SEQ}');
-      }
-    }
-
-    // 后缀
-    if (builder.suffix) {
-      if (parts.length > 0 && builder.separator) {
-        parts.push(builder.separator);
-      }
-      parts.push(builder.suffix);
-    }
-
-    return parts.join('');
-  };
-
-  /**
-   * 解析表达式到构建器配置
-   */
-  const parseExpressionToBuilder = (expression: string): typeof expressionBuilder => {
-    // 简单的解析逻辑，尝试识别常见模式
-    const builder = {
-      prefix: '',
-      dateFormat: 'YYYYMMDD',
-      separator: '-',
-      seqFormat: '4',
-      suffix: '',
-      fields: [] as string[],
-    };
-
-    // 解析字段引用 {FIELD:field_name}
-    const fieldPattern = /\{FIELD:([^}]+)\}/g;
-    const fieldMatches = expression.matchAll(fieldPattern);
-    const fields: string[] = [];
-    for (const match of fieldMatches) {
-      fields.push(match[1]);
-    }
-    builder.fields = fields;
-
-    // 匹配日期格式
-    if (expression.includes('{YYYY}{MM}{DD}')) {
-      builder.dateFormat = 'YYYYMMDD';
-    } else if (expression.includes('{YYYY}{MM}')) {
-      builder.dateFormat = 'YYYYMM';
-    } else if (expression.includes('{YYYY}')) {
-      builder.dateFormat = 'YYYY';
-    } else if (expression.includes('{YY}{MM}{DD}')) {
-      builder.dateFormat = 'YYMMDD';
-    } else if (expression.includes('{YY}{MM}')) {
-      builder.dateFormat = 'YYMM';
-    } else if (expression.includes('{YY}')) {
-      builder.dateFormat = 'YY';
-    } else {
-      builder.dateFormat = 'none';
-    }
-
-    // 匹配序号格式
-    const seqMatch = expression.match(/\{SEQ:(\d+)\}/);
-    if (seqMatch) {
-      builder.seqFormat = seqMatch[1];
-    } else if (expression.includes('{SEQ}')) {
-      builder.seqFormat = '0';
-    } else {
-      builder.seqFormat = 'none';
-    }
-
-    // 提取前缀和后缀（简单处理）
-    const datePattern = /\{Y{2,4}\}\{M{2}\}\{D{2}\}|\{Y{2,4}\}\{M{2}\}|\{Y{2,4}\}/;
-    const seqPattern = /\{SEQ(?::\d+)?\}/;
-    const beforeDate = expression.split(datePattern)[0];
-    const afterSeq = expression.split(seqPattern).pop() || '';
-
-    if (beforeDate && !beforeDate.match(/[\{\}]/)) {
-      builder.prefix = beforeDate.replace(/[-_]/g, '').trim();
-    }
-    if (afterSeq && !afterSeq.match(/[\{\}]/)) {
-      builder.suffix = afterSeq.replace(/[-_]/g, '').trim();
-    }
-
-    // 提取分隔符
-    const separatorMatch = expression.match(/[-\_]/);
-    if (separatorMatch) {
-      builder.separator = separatorMatch[0];
-    }
-
-    return builder;
-  };
 
   /**
    * 获取所有编码规则（包括禁用的）
@@ -391,23 +246,12 @@ const CodeRuleListPage: React.FC = () => {
               is_active: rule.is_active,
             });
 
-            // 优先使用新格式（rule_components），如果没有则解析表达式
             if (rule.rule_components && Array.isArray(rule.rule_components) && rule.rule_components.length > 0) {
               setRuleComponents(rule.rule_components);
-              setExpressionMode('component');
             } else if (rule.expression) {
-              // 解析旧表达式格式为组件格式
-              const components = CodeRuleComponentService.expressionToComponents(rule.expression);
-              setRuleComponents(components);
-              setExpressionMode('component');
-              // 同时保留旧格式的解析（向后兼容）
-              const parsed = parseExpressionToBuilder(rule.expression);
-              setExpressionBuilder(parsed);
+              setRuleComponents(CodeRuleComponentService.expressionToComponents(rule.expression));
             } else {
-              // 如果没有表达式，使用默认组件
-              const defaultComponents = [createDefaultAutoCounterComponent(0)];
-              setRuleComponents(defaultComponents);
-              setExpressionMode('component');
+              setRuleComponents([createDefaultAutoCounterComponent(0)]);
             }
           } else {
             // 如果规则不存在，使用预设的默认规则组件（根据页面类型）
@@ -437,9 +281,7 @@ const CodeRuleListPage: React.FC = () => {
             }
 
             setRuleComponents(defaultComponents);
-            setExpressionMode('component');
 
-            // 生成表达式（向后兼容）
             const defaultExpression = CodeRuleComponentService.componentsToExpression(defaultComponents);
             pageRuleFormRef.current?.setFieldsValue({
               name: t('pages.system.codeRules.ruleNameTemplate', { pageName: pageConfig?.pageName || '' }),
@@ -482,13 +324,8 @@ const CodeRuleListPage: React.FC = () => {
       seq_reset_rule: 'never',
       is_active: true,
     });
-    // 初始化规则组件（新格式）
     const defaultComponents = CodeRuleComponentService.expressionToComponents(defaultExpression);
     setRuleComponents(defaultComponents);
-    setExpressionMode('component');
-    // 同时保留旧格式的解析（向后兼容）
-    const parsed = parseExpressionToBuilder(defaultExpression);
-    setExpressionBuilder(parsed);
   };
 
   /**
@@ -511,25 +348,13 @@ const CodeRuleListPage: React.FC = () => {
         ...values,
       };
 
-      // 如果使用组件模式，将组件转换为表达式（向后兼容），同时保存组件格式
-      if (expressionMode === 'component' && ruleComponents.length > 0) {
-        // 保存新格式（rule_components）
+      if (ruleComponents.length > 0) {
         saveData.rule_components = ruleComponents;
-        // 同时生成表达式（向后兼容）
-        const expression = CodeRuleComponentService.componentsToExpression(ruleComponents);
-        saveData.expression = expression;
-
-        // 从自动计数组件读取seq_start和seq_reset_rule（向后兼容）
+        saveData.expression = CodeRuleComponentService.componentsToExpression(ruleComponents);
         const counterComponent = ruleComponents.find(c => c.type === 'auto_counter') as any;
         if (counterComponent) {
           saveData.seq_start = counterComponent.initial_value || 1;
           saveData.seq_reset_rule = counterComponent.reset_cycle || 'never';
-        }
-      } else if (values.expression) {
-        // 如果使用高级模式，尝试将表达式解析为组件格式
-        const components = CodeRuleComponentService.expressionToComponents(values.expression);
-        if (components.length > 0) {
-          saveData.rule_components = components;
         }
       }
 
@@ -705,16 +530,6 @@ const CodeRuleListPage: React.FC = () => {
 
   return (
     <>
-      {/* 设置 Radio.Button 默认高度为 32px */}
-      <style>{`
-        .code-rule-management-page .ant-radio-button-wrapper {
-          height: 32px !important;
-          line-height: 30px !important;
-        }
-        .code-rule-management-page .ant-radio-button-wrapper span {
-          line-height: 30px !important;
-        }
-      `}</style>
       <div
         className="code-rule-management-page"
         style={{
@@ -1062,124 +877,44 @@ const CodeRuleListPage: React.FC = () => {
                       />
 
                       <div>
-                        <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label style={{ fontWeight: 500 }}>{t('pages.system.codeRules.expressionLabel')}</label>
-                          <Radio.Group
-                            value={expressionMode}
-                            onChange={(e) => {
-                              setExpressionMode(e.target.value);
-                              if (e.target.value === 'component') {
-                                // 切换到组件模式时，尝试解析当前表达式为组件
-                                const currentExpression = pageRuleFormRef.current?.getFieldValue('expression') || '';
-                                if (currentExpression) {
-                                  const components = CodeRuleComponentService.expressionToComponents(currentExpression);
-                                  setRuleComponents(components);
-                                  // 同时更新旧格式的构建器（向后兼容）
-                                  const parsed = parseExpressionToBuilder(currentExpression);
-                                  setExpressionBuilder(parsed);
-                                } else if (ruleComponents.length === 0) {
-                                  // 如果没有组件，创建默认组件
-                                  const defaultComponents = [createDefaultAutoCounterComponent(0)];
-                                  setRuleComponents(defaultComponents);
-                                }
-                              }
+                        <label style={{ fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                          {t('pages.system.codeRules.expressionLabel')}
+                        </label>
+                        <div style={{ marginBottom: '16px' }}>
+                          <CodeRuleComponentBuilder
+                            value={ruleComponents}
+                            onChange={(components) => {
+                              setRuleComponents(components);
+                              pageRuleFormRef.current?.setFieldValue(
+                                'expression',
+                                CodeRuleComponentService.componentsToExpression(components)
+                              );
                             }}
-                            size="small"
-                          >
-                            <Radio.Button value="component">{t('pages.system.codeRules.modeComponent')}</Radio.Button>
-                            <Radio.Button value="advanced">{t('pages.system.codeRules.modeAdvanced')}</Radio.Button>
-                          </Radio.Group>
+                            availableFields={(() => {
+                              const currentPageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
+                              return (currentPageConfig?.availableFields || []).map(field => ({
+                                field_name: field.fieldName,
+                                field_label: field.fieldLabel,
+                                field_type: field.fieldType,
+                              }));
+                            })()}
+                          />
                         </div>
-
-                        {expressionMode === 'component' ? (
-                          <div style={{ marginBottom: '16px' }}>
-                            <CodeRuleComponentBuilder
-                              value={ruleComponents}
-                              onChange={(components) => {
-                                setRuleComponents(components);
-                                // 同时更新表达式（向后兼容）
-                                const expression = CodeRuleComponentService.componentsToExpression(components);
-                                pageRuleFormRef.current?.setFieldValue('expression', expression);
-                              }}
-                              availableFields={(() => {
-                                const currentPageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
-                                return (currentPageConfig?.availableFields || []).map(field => ({
-                                  field_name: field.fieldName,
-                                  field_label: field.fieldLabel,
-                                  field_type: field.fieldType,
-                                }));
-                              })()}
-                            />
-                          </div>
-                        ) : (
-                          <div style={{
-                            padding: '20px',
-                            backgroundColor: token.colorFillAlter,
-                            borderRadius: token.borderRadius,
-                            marginBottom: '8px',
-                            border: `1px solid ${token.colorBorderSecondary}`
-                          }}>
-                            {/* 高级模式：直接编辑表达式 */}
-                            <ProFormTextArea
-                              name="expression"
-                              label={t('pages.system.codeRules.expressionLabel')}
-                              rules={[{ required: true, message: t('pages.system.codeRules.expressionRequired') }]}
-                              placeholder={t('pages.system.codeRules.expressionPlaceholder')}
-                              fieldProps={{ rows: 3 }}
-                              extra={t('pages.system.codeRules.expressionExtra')}
-                            />
-                          </div>
-                        )}
-
-                        {/* 隐藏的表达式字段，用于表单验证 */}
                         <ProFormText name="expression" hidden />
                       </div>
 
-                      {/* 隐藏字段：规则描述，自动填充 */}
-                      <ProFormTextArea
-                        name="description"
-                        hidden
-                      />
+                      <ProFormTextArea name="description" hidden />
 
-                      {/* 序号配置（向后兼容，从自动计数组件读取） */}
-                      {expressionMode === 'component' ? (
-                        <div style={{
-                          padding: '12px',
-                          backgroundColor: token.colorFillAlter,
-                          borderRadius: token.borderRadius,
-                          marginBottom: '16px'
-                        }}>
-                          <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                            {t('pages.system.codeRules.seqIntegratedHint')}
-                          </div>
+                      <div style={{
+                        padding: '12px',
+                        backgroundColor: token.colorFillAlter,
+                        borderRadius: token.borderRadius,
+                        marginBottom: '16px'
+                      }}>
+                        <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                          {t('pages.system.codeRules.seqIntegratedHint')}
                         </div>
-                      ) : (
-                        <Space style={{ width: '100%' }} size="large">
-                          <ProFormDigit
-                            name="seq_start"
-                            label={t('pages.system.codeRules.seqStart')}
-                            fieldProps={{ min: 0 }}
-                            width="md"
-                          />
-                          <ProFormDigit
-                            name="seq_step"
-                            label={t('pages.system.codeRules.seqStep')}
-                            fieldProps={{ min: 1 }}
-                            width="md"
-                          />
-                          <SafeProFormSelect
-                            name="seq_reset_rule"
-                            label={t('pages.system.codeRules.seqResetRule')}
-                            options={[
-                              { label: t('pages.system.codeRules.seqResetNever'), value: 'never' },
-                              { label: t('pages.system.codeRules.seqResetDaily'), value: 'daily' },
-                              { label: t('pages.system.codeRules.seqResetMonthly'), value: 'monthly' },
-                              { label: t('pages.system.codeRules.seqResetYearly'), value: 'yearly' },
-                            ]}
-                            width="md"
-                          />
-                        </Space>
-                      )}
+                      </div>
 
                       <ProFormSwitch
                         name="is_active"

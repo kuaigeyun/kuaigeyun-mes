@@ -23,6 +23,8 @@ const PayableListPage = lazy(() => import('./pages/finance-management/payables')
 const PayableDetailPage = lazy(() => import('./pages/finance-management/payables/detail'));
 const PurchaseInvoiceListPage = lazy(() => import('./pages/finance-management/purchase-invoices'));
 const PurchaseInvoiceDetailPage = lazy(() => import('./pages/finance-management/purchase-invoices/detail'));
+const InvoiceListPage = lazy(() => import('./pages/finance-management/invoices'));
+const InvoiceDetailPage = lazy(() => import('./pages/finance-management/invoices/detail'));
 
 // 成本管理页面
 const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
@@ -43,6 +45,9 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/payables/:id" element={withPageSuspense(PayableDetailPage)} />
       <Route path="finance-management/purchase-invoices" element={withPageSuspense(PurchaseInvoiceListPage)} />
       <Route path="finance-management/purchase-invoices/:id" element={withPageSuspense(PurchaseInvoiceDetailPage)} />
+      <Route path="finance-management/invoices" element={withPageSuspense(InvoiceListPage)} />
+      <Route path="finance-management/invoices/:code" element={withPageSuspense(InvoiceDetailPage)} />
+      <Route path="finance-management/sales-invoices" element={withPageSuspense(InvoiceListPage)} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={withPageSuspense(CostRulesPage)} />
