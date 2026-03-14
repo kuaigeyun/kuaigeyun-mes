@@ -761,8 +761,8 @@ class OnboardingService:
         try:
             from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
             from apps.kuaizhizao.models.work_order import WorkOrder
-            from apps.kuaizhizao.models.receivable import Receivable
-            from apps.kuaizhizao.models.payable import Payable
+            from apps.kuaicaiwu.models.receivable import Receivable
+            from apps.kuaicaiwu.models.payable import Payable
 
             initial_inventory_count = await PurchaseReceipt.filter(
                 tenant_id=tenant_id,

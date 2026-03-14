@@ -204,9 +204,10 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
                 "apps.kuaizhizao.models.finished_goods_inspection",  # 成品检验模型
-                "apps.kuaizhizao.models.payable",  # 应付账款模型
-                "apps.kuaizhizao.models.purchase_invoice",  # 采购发票模型
-                "apps.kuaizhizao.models.receivable",  # 应收账款模型
+                # Payable/Receivable/PurchaseInvoice 已迁移至 kuaicaiwu
+                "apps.kuaicaiwu.models.payable",  # 应付账款模型
+                "apps.kuaicaiwu.models.receivable",  # 应收账款模型
+                "apps.kuaicaiwu.models.purchase_invoice",  # 采购发票模型
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型
