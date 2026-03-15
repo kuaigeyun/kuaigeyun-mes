@@ -4,14 +4,15 @@
  * 以图形化方式展示工厂层级结构：厂区 → 车间 → 产线 → 工位，以及工作中心与工位的关联。
  */
 
-import React, { useState } from 'react';
-import { Space, Empty, Spin, message, Descriptions, Tag, Button, theme, Select } from 'antd';
+import React, { useState, useEffect, useRef } from 'react';
+import { Space, Empty, Spin, message, Descriptions, Tag, Button, theme, Select, Segmented } from 'antd';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { FlowGraph } from '@ant-design/graphs';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { factoryTopologyApi, type FactoryTopologyNode } from '../../../services/factory';
+import Topology3D from './Topology3D';
 
 const { useToken } = theme;
 
@@ -122,6 +123,9 @@ const FactoryTopologyPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedNode, setSelectedNode] = useState<FactoryTopologyNode | null>(null);
   const [isActiveFilter, setIsActiveFilter] = useState<boolean | undefined>(undefined);
+  const [viewMode, setViewMode] = useState<'flat' | '3d'>('flat');
+  const [flatGraphReady, setFlatGraphReady] = useState(false);
+  const fitTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { data, loading, run } = useRequest(
     () =>
@@ -135,6 +139,13 @@ const FactoryTopologyPage: React.FC = () => {
       },
     }
   );
+
+  useEffect(() => {
+    setFlatGraphReady(false);
+    return () => {
+      if (fitTimeoutRef.current) clearTimeout(fitTimeoutRef.current);
+    };
+  }, [data]);
 
   const handleNodeClick = (nodeData: FactoryTopologyNode) => {
     setSelectedNode(nodeData);
@@ -157,6 +168,7 @@ const FactoryTopologyPage: React.FC = () => {
   const config = {
     direction: 'vertical' as const,
     padding: 32,
+    autoResize: true,
     data: data
       ? {
           nodes: data.nodes.map((n) => {
@@ -242,21 +254,34 @@ const FactoryTopologyPage: React.FC = () => {
     },
     markerCfg: () => ({ show: false }),
     onReady: (graph: any) => {
+      if (fitTimeoutRef.current) clearTimeout(fitTimeoutRef.current);
       graph.on('node:click', (evt: any) => {
         const model = evt.item.getModel();
         const node = data?.nodes.find((n) => n.id === model.id);
         if (node) handleNodeClick(node);
       });
-      const fitToCanvas = () => graph.fitView?.();
-      graph.once?.('afterlayout', fitToCanvas);
-      setTimeout(fitToCanvas, 150);
+      const fitAndShow = () => {
+        graph.fitView?.(undefined, false);
+        setFlatGraphReady(true);
+      };
+      graph.once?.('afterlayout', fitAndShow);
+      queueMicrotask(fitAndShow);
+      fitTimeoutRef.current = setTimeout(fitAndShow, 350);
     },
   };
 
   return (
     <ListPageTemplate>
       <div style={{ margin: 0, padding: '0' }}>
-        <Space style={{ marginBottom: 16 }}>
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Segmented
+            value={viewMode}
+            onChange={(v) => setViewMode(v as 'flat' | '3d')}
+            options={[
+              { value: 'flat', label: t('pages.factoryTopology.viewFlat', { defaultValue: '平面拓扑' }) },
+              { value: '3d', label: t('pages.factoryTopology.view3D', { defaultValue: '3D拓扑' }) },
+            ]}
+          />
           <Select
             value={isActiveFilter === undefined ? 'all' : isActiveFilter}
             style={{ width: 160 }}
@@ -301,7 +326,27 @@ const FactoryTopologyPage: React.FC = () => {
             />
           )}
 
-          {data && data.nodes.length > 0 && <FlowGraph {...config} />}
+          {data && data.nodes.length > 0 &&
+            (viewMode === 'flat' ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  opacity: flatGraphReady ? 1 : 0,
+                  transition: 'opacity 0.12s ease-out',
+                }}
+              >
+                <FlowGraph {...config} />
+              </div>
+            ) : (
+              <Topology3D
+                nodes={data.nodes}
+                edges={data.edges}
+                onNodeClick={handleNodeClick}
+              />
+            ))}
         </div>
 
         <DetailDrawerTemplate

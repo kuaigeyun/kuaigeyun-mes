@@ -325,6 +325,30 @@ const techStackData: TechStackItem[] = [
     category: 'frontend',
   },
   {
+    name: 'Three.js',
+    version: '^0.183.2',
+    description: '3D 图形库，用于工厂拓扑 3D 可视化',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@react-three/fiber',
+    version: '^8.18.0',
+    description: 'React 声明式 Three.js 渲染器',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@react-three/drei',
+    version: '^9.117.0',
+    description: 'Three.js React 辅助库（OrbitControls、useGLTF 等）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
     name: '@svar-ui/react-gantt',
     version: '^2.5.2',
     description: '甘特图组件，工单排程',
@@ -742,6 +766,65 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             <Text type="warning" strong>
               {t('components.techStackModal.copyright.warning')}
             </Text>
+          </Paragraph>
+        </div>
+      ),
+    },
+    {
+      key: 'attribution',
+      label: t('components.techStackModal.tabAttribution'),
+      children: (
+        <div style={tabContentStyle}>
+          <Title level={5}>{t('components.techStackModal.copyright.model3dTitle')}</Title>
+          <Paragraph>
+            {t('components.techStackModal.copyright.model3dDesc')}
+          </Paragraph>
+          <Paragraph style={{ paddingLeft: token.paddingLG }}>
+            <Text strong>Kenney — City Kit (Industrial)</Text>
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
+            {t('components.techStackModal.copyright.model3dKenney')}
+          </Paragraph>
+          
+          <Divider />
+          
+          <Title level={5}>{t('components.techStackModal.copyright.fontTitle')}</Title>
+          <Paragraph>
+            {t('components.techStackModal.copyright.fontDesc')}
+          </Paragraph>
+          <Paragraph style={{ paddingLeft: token.paddingLG }}>
+            <Text strong>JetBrains Mono</Text>
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
+            {t('components.techStackModal.copyright.fontJetBrains')}
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG, marginTop: 8 }}>
+            {t('components.techStackModal.copyright.fontSystem')}
+          </Paragraph>
+          <Paragraph style={{ paddingLeft: token.paddingLG, marginTop: 12 }}>
+            <Text strong>wx-icons（SVAR 甘特图图标）</Text>
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
+            {t('components.techStackModal.copyright.fontWxIcons')}
+          </Paragraph>
+          
+          <Divider />
+          
+          <Title level={5}>{t('components.techStackModal.copyright.assetsTitle')}</Title>
+          <Paragraph>
+            {t('components.techStackModal.copyright.assetsDesc')}
+          </Paragraph>
+          <Paragraph style={{ paddingLeft: token.paddingLG }}>
+            <Text strong>Lottie 动画</Text>
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
+            {t('components.techStackModal.copyright.assetsLottie')}
+          </Paragraph>
+          <Paragraph style={{ paddingLeft: token.paddingLG, marginTop: 8 }}>
+            <Text strong>社交平台图标</Text>
+          </Paragraph>
+          <Paragraph type="secondary" style={{ paddingLeft: token.paddingLG }}>
+            {t('components.techStackModal.copyright.assetsSocial')}
           </Paragraph>
         </div>
       ),
