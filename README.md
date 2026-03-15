@@ -30,14 +30,17 @@
 ---
 ## 近期更新
 
+**实验性3D内容展示 20260315**：
+
+![实验性3D内容展示](docs/screenshots/update/update20260315.png)
 
 **应用规划更新 20260314**：
 
-![运营规划更新](docs/screenshots/update/update20260314.png)
+![应用规划更新](docs/screenshots/update/update20260314.png)
 
 **工单指标卡视觉体验优化 20260312**：
 
-![工单指标卡](docs/screenshots/update/update20260312.png)
+![工单指标卡视觉体验优化](docs/screenshots/update/update20260312.png)
 
 
 ---
@@ -59,9 +62,13 @@
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 18 + TypeScript + Vite、Ant Design Pro |
+| 前端 | React 18 + TypeScript + Vite、Ant Design Pro、Three.js（3D 拓扑） |
 | 后端 | FastAPI、Tortoise ORM + PostgreSQL |
 | 架构 | 多租户 SaaS、插件化应用 |
+
+**3D 模型来源**：工厂拓扑 3D 视图使用 [Kenney City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial)（CC0 公共领域）。
+
+**第三方资源与许可**：字体、图标、动画等第三方资源声明见 [NOTICE](NOTICE) 及系统内「关于 → 版权声明」。
 
 ---
 
