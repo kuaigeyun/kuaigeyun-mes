@@ -142,7 +142,7 @@ const VariantAttributesPage: React.FC = () => {
       width: 80,
     },
     {
-      title: '描述',
+      title: '备注',
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
@@ -442,24 +442,6 @@ const VariantAttributesPage: React.FC = () => {
           min={0}
           colProps={{ span: 12 }}
         />
-        <ProFormTextArea
-          name="description"
-          label="描述"
-          placeholder="请输入属性描述"
-          colProps={{ span: 24 }}
-        />
-        <ProFormSwitch
-          name="is_required"
-          label="是否必填"
-          initialValue={false}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-          initialValue={true}
-          colProps={{ span: 12 }}
-        />
         <ProForm.Item
           noStyle
           shouldUpdate={(prevValues: any, currentValues: any) => prevValues.attribute_type !== currentValues.attribute_type}
@@ -481,6 +463,24 @@ const VariantAttributesPage: React.FC = () => {
             return null;
           }}
         </ProForm.Item>
+        <ProFormTextArea
+          name="description"
+          label="备注"
+          placeholder="请输入备注"
+          colProps={{ span: 24 }}
+        />
+        <ProFormSwitch
+          name="is_required"
+          label="是否必填"
+          initialValue={false}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+          initialValue={true}
+          colProps={{ span: 12 }}
+        />
       </FormModalTemplate>
 
 

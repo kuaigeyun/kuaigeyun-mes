@@ -1572,7 +1572,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             ]}
           />
         </Col>
-        <Col span={6}>
+        <Col span={6} style={{ minWidth: 0 }}>
           <SafeProFormSelect
             name="groupId"
             label={t('app.master-data.materialForm.materialGroup')}
@@ -1581,17 +1581,16 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               label: `${g.code} - ${g.name}`,
               value: g.id,
             }))}
-            fieldProps={{ showSearch: true, allowClear: true }}
+            fieldProps={{ showSearch: true, allowClear: true, style: { width: '100%' } }}
           />
         </Col>
-        <Col span={6}>
+        <Col span={6} style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="MATERIAL_TYPE"
             name="materialType"
             label={t('app.master-data.materialForm.materialType')}
             placeholder={t('app.master-data.materialForm.materialTypePlaceholder')}
             formRef={formRef}
-            colProps={{ span: 24 }}
           />
         </Col>
         <Col span={6}>
