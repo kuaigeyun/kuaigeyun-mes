@@ -350,3 +350,30 @@ export const workGroupApi = {
   },
 };
 
+/** 工厂拓扑图节点/边类型 */
+export interface FactoryTopologyNode {
+  id: string;
+  label: string;
+  type: 'root' | 'plant' | 'workshop' | 'production_line' | 'workstation' | 'work_center';
+  data?: { uuid?: string; code?: string; name?: string; depth?: number };
+}
+
+export interface FactoryTopologyEdge {
+  source: string;
+  target: string;
+}
+
+export interface FactoryTopologyResponse {
+  nodes: FactoryTopologyNode[];
+  edges: FactoryTopologyEdge[];
+}
+
+/**
+ * 工厂拓扑 API 服务
+ */
+export const factoryTopologyApi = {
+  getTopology: async (params?: { is_active?: boolean }): Promise<FactoryTopologyResponse> => {
+    return api.get('/apps/master-data/factory/topology', { params });
+  },
+};
+

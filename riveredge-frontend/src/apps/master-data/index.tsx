@@ -21,6 +21,7 @@ const ProductionLinesPage = lazy(() => import('./pages/factory/production-lines'
 const WorkstationsPage = lazy(() => import('./pages/factory/workstations'));
 const WorkCentersPage = lazy(() => import('./pages/factory/work-centers'));
 const WorkGroupsPage = lazy(() => import('./pages/factory/work-groups'));
+const FactoryTopologyPage = lazy(() => import('./pages/factory/topology'));
 
 // 仓库管理页面
 const WarehousesPage = lazy(() => import('./pages/warehouse/warehouses'));
@@ -60,6 +61,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="factory/workstations" element={withPageSuspense(WorkstationsPage)} />
       <Route path="factory/work-centers" element={withPageSuspense(WorkCentersPage)} />
       <Route path="factory/work-groups" element={withPageSuspense(WorkGroupsPage)} />
+      <Route path="factory/topology" element={withPageSuspense(FactoryTopologyPage)} />
 
       {/* 仓库管理路由 */}
       <Route path="warehouse/warehouses" element={withPageSuspense(WarehousesPage)} />

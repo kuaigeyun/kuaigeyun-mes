@@ -17,7 +17,8 @@ from apps.master_data.schemas.factory_schemas import (
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
     WorkCenterCreate, WorkCenterUpdate, WorkCenterResponse,
-    WorkshopTreeResponse, BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest,
+    WorkshopTreeResponse, FactoryTopologyResponse,
+    BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest,
     BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest,
     BatchDeleteWorkCentersRequest
 )
@@ -917,4 +918,20 @@ async def get_factory_tree(
     ```
     """
     return await FactoryService.get_factory_tree(tenant_id, is_active)
+
+
+@router.get("/topology", response_model=FactoryTopologyResponse, summary="获取工厂拓扑图数据")
+async def get_factory_topology(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+):
+    """
+    获取工厂拓扑图数据（nodes + edges），用于图形化展示。
+    
+    层级：厂区 → 车间 → 产线 → 工位；工作中心关联工位。
+    返回格式适配 @ant-design/graphs FlowGraph 等图组件。
+    """
+    result = await FactoryService.get_factory_topology(tenant_id, is_active)
+    return FactoryTopologyResponse(**result)
 

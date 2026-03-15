@@ -215,6 +215,20 @@ async def delete_menu(
         )
 
 
+@router.post("/sync-all", status_code=status.HTTP_200_OK)
+async def sync_all_menus(
+    _auth: object = Depends(require_access("system.menu", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    根据已安装应用的菜单配置，重新同步所有菜单到数据库。
+    用于 manifest 更新后，确保菜单与数据库一致。
+    """
+    count = await MenuService.sync_all_menus_from_applications(tenant_id)
+    return {"success": True, "message": f"已同步 {count} 个应用菜单", "count": count}
+
+
 @router.post("/update-order", status_code=status.HTTP_200_OK)
 async def update_menu_order(
     menu_orders: List[Dict[str, Any]] = Body(..., description="菜单排序列表"),

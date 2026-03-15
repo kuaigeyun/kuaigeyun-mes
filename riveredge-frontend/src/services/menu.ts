@@ -138,3 +138,12 @@ export async function updateMenuOrder(menuOrders: MenuOrderItem[]): Promise<{ su
   });
 }
 
+/**
+ * 根据已安装应用的菜单配置，重新同步所有菜单到数据库
+ */
+export async function syncAllMenus(): Promise<{ success: boolean; message: string; count?: number }> {
+  return apiRequest<{ success: boolean; message: string; count?: number }>('/core/menus/sync-all', {
+    method: 'POST',
+  });
+}
+

@@ -292,7 +292,7 @@ class PerformanceCalcService:
             from infra.exceptions.exceptions import ValidationError
             raise ValidationError("工作小组无有效成员")
 
-        def _add_distribution(member, amt: Decimal):
+        async def _add_distribution(member, amt: Decimal):
             existing = await PerformanceSummary.filter(
                 tenant_id=tenant_id,
                 employee_id=member.employee_id,

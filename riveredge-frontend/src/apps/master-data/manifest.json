@@ -51,6 +51,12 @@
                         "path": "/apps/master-data/factory/work-groups",
                         "permission": "master-data:factory:work-group:view",
                         "sort_order": 5
+                    },
+                    {
+                        "title": "app.master-data.menu.factory.topology",
+                        "path": "/apps/master-data/factory/topology",
+                        "permission": "master-data:factory:plant:view",
+                        "sort_order": 6
                     }
                 ]
             },

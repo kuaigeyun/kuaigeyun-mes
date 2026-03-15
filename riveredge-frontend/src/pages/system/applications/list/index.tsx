@@ -46,6 +46,7 @@ import {
   scanApplications,
   Application,
 } from '../../../../services/application';
+import { syncAllMenus } from '../../../../services/menu';
 
 /** 卡片内图标尺寸（缩小以显得更精致，圆角背景保持 88x88） */
 const CARD_ICON_SIZE = 52;
@@ -174,6 +175,12 @@ const ApplicationListPage: React.FC = () => {
           errors.push(`${code}: ${e?.message || String(e)}`);
         }
       }
+      // 再执行一次「同步全部菜单」，确保菜单与数据库完全一致（解决 manifest 更新后菜单未显示的问题）
+      try {
+        await syncAllMenus();
+      } catch (e: any) {
+        errors.push(`sync-all: ${e?.message || String(e)}`);
+      }
       if (errors.length > 0) {
         messageApi.warning({
           content: t('pages.system.applications.syncAllPartial', {
@@ -195,6 +202,7 @@ const ApplicationListPage: React.FC = () => {
       }
       actionRef.current?.reload();
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
       useGlobalStore.getState().incrementApplicationMenuVersion();
     } catch (error: any) {
       messageApi.error({

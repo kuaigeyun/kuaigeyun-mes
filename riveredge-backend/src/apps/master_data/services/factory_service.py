@@ -1963,3 +1963,123 @@ class FactoryService:
         
         return result
 
+    @staticmethod
+    async def get_factory_topology(
+        tenant_id: int,
+        is_active: Optional[bool] = None
+    ) -> dict:
+        """
+        获取工厂拓扑图数据（nodes + edges），用于图形化展示。
+        
+        层级：厂区 → 车间 → 产线 → 工位；工作中心关联工位。
+        
+        Returns:
+            dict: {"nodes": [...], "edges": [...]}，适配 FlowGraph 等图组件
+        """
+        from apps.master_data.schemas.factory_schemas import (
+            FactoryTopologyNode,
+            FactoryTopologyEdge,
+        )
+        
+        nodes: List[FactoryTopologyNode] = []
+        edges: List[FactoryTopologyEdge] = []
+        root_id = "root"
+        
+        # 虚拟根节点（depth=0）
+        nodes.append(FactoryTopologyNode(
+            id=root_id,
+            label="工厂",
+            type="root",
+            data={"depth": 0}
+        ))
+        
+        # 查询所有数据
+        plant_q = Plant.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        workshop_q = Workshop.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        line_q = ProductionLine.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        ws_q = Workstation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        wc_q = WorkCenter.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        
+        if is_active is not None:
+            plant_q = plant_q.filter(is_active=is_active)
+            workshop_q = workshop_q.filter(is_active=is_active)
+            line_q = line_q.filter(is_active=is_active)
+            ws_q = ws_q.filter(is_active=is_active)
+            wc_q = wc_q.filter(is_active=is_active)
+        
+        plants = await plant_q.order_by("code").all()
+        workshops = await workshop_q.order_by("code").all()
+        lines = await line_q.prefetch_related("workshop").order_by("code").all()
+        workstations = await ws_q.prefetch_related("production_line").order_by("code").all()
+        work_centers = await wc_q.order_by("code").all()
+        
+        # 厂区节点 + 根→厂区边（depth=1）
+        for p in plants:
+            nid = f"plant_{p.uuid}"
+            nodes.append(FactoryTopologyNode(
+                id=nid,
+                label=f"{p.code} - {p.name}",
+                type="plant",
+                data={"uuid": p.uuid, "code": p.code, "name": p.name, "depth": 1}
+            ))
+            edges.append(FactoryTopologyEdge(source=root_id, target=nid))
+        
+        # 车间节点 + 厂区→车间 或 根→车间（无厂区）（depth=2）
+        plant_by_id = {p.id: p for p in plants}
+        for w in workshops:
+            nid = f"workshop_{w.uuid}"
+            nodes.append(FactoryTopologyNode(
+                id=nid,
+                label=f"{w.code} - {w.name}",
+                type="workshop",
+                data={"uuid": w.uuid, "code": w.code, "name": w.name, "depth": 2}
+            ))
+            if w.plant_id and (p := plant_by_id.get(w.plant_id)):
+                edges.append(FactoryTopologyEdge(source=f"plant_{p.uuid}", target=nid))
+            else:
+                edges.append(FactoryTopologyEdge(source=root_id, target=nid))
+        
+        # 产线节点 + 车间→产线（depth=3）
+        for pl in lines:
+            nid = f"production_line_{pl.uuid}"
+            nodes.append(FactoryTopologyNode(
+                id=nid,
+                label=f"{pl.code} - {pl.name}",
+                type="production_line",
+                data={"uuid": pl.uuid, "code": pl.code, "name": pl.name, "depth": 3}
+            ))
+            edges.append(FactoryTopologyEdge(source=f"workshop_{pl.workshop.uuid}", target=nid))
+        
+        # 工位节点 + 产线→工位（depth=4）
+        for ws in workstations:
+            nid = f"workstation_{ws.uuid}"
+            nodes.append(FactoryTopologyNode(
+                id=nid,
+                label=f"{ws.code} - {ws.name}",
+                type="workstation",
+                data={"uuid": ws.uuid, "code": ws.code, "name": ws.name, "depth": 4}
+            ))
+            edges.append(FactoryTopologyEdge(source=f"production_line_{ws.production_line.uuid}", target=nid))
+        
+        # 工作中心节点（depth=4，与工位同层级）
+        for wc in work_centers:
+            nid = f"work_center_{wc.uuid}"
+            nodes.append(FactoryTopologyNode(
+                id=nid,
+                label=f"{wc.code} - {wc.name}",
+                type="work_center",
+                data={"uuid": wc.uuid, "code": wc.code, "name": wc.name, "depth": 4}
+            ))
+        
+        # 工作中心 → 工位（仅保留与工位的关联）
+        for ws in workstations:
+            if ws.work_center_id:
+                wc = next((c for c in work_centers if c.id == ws.work_center_id), None)
+                if wc:
+                    edges.append(FactoryTopologyEdge(
+                        source=f"work_center_{wc.uuid}",
+                        target=f"workstation_{ws.uuid}"
+                    ))
+        
+        return {"nodes": nodes, "edges": edges}
+

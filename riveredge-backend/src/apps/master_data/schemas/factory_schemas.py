@@ -345,7 +345,7 @@ class WorkCenterBase(BaseModel):
 class WorkCenterCreate(WorkCenterBase):
     """创建工作中心 Schema"""
 
-    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="所属工位ID列表")
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="包含工位ID列表")
 
 
 class WorkCenterUpdate(BaseModel):
@@ -355,7 +355,7 @@ class WorkCenterUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
-    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="所属工位ID列表")
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="包含工位ID列表")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -384,7 +384,7 @@ class WorkCenterResponse(WorkCenterBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
-    workstation_ids: List[int] = Field(default_factory=list, alias="workstationIds", description="所属工位ID列表")
+    workstation_ids: List[int] = Field(default_factory=list, alias="workstationIds", description="包含工位ID列表")
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -449,3 +449,25 @@ class BatchDeleteWorkstationsRequest(BaseModel):
 class BatchDeleteWorkCentersRequest(BaseModel):
     """批量删除工作中心请求"""
     uuids: List[str] = Field(..., description="要删除的工作中心UUID列表", min_items=1, max_items=100)
+
+
+# ==================== 工厂拓扑图 Schema ====================
+
+class FactoryTopologyNode(BaseModel):
+    """工厂拓扑图节点"""
+    id: str = Field(..., description="节点唯一标识")
+    label: str = Field(..., description="节点显示标签")
+    type: str = Field(..., description="节点类型: root/plant/workshop/production_line/workstation/work_center")
+    data: Optional[dict] = Field(default_factory=dict, description="扩展数据（uuid、code 等）")
+
+
+class FactoryTopologyEdge(BaseModel):
+    """工厂拓扑图边"""
+    source: str = Field(..., description="源节点ID")
+    target: str = Field(..., description="目标节点ID")
+
+
+class FactoryTopologyResponse(BaseModel):
+    """工厂拓扑图响应"""
+    nodes: List[FactoryTopologyNode] = Field(default_factory=list, description="节点列表")
+    edges: List[FactoryTopologyEdge] = Field(default_factory=list, description="边列表")
