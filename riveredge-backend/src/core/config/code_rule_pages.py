@@ -14,6 +14,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-factory-production-line": "CX", # 产线
     "master-data-factory-workstation": "GW",     # 工位
     "master-data-factory-work-center": "GZZX",   # 工作中心
+    "master-data-factory-work-group": "GZXZ",    # 工作小组
     "master-data-warehouse-warehouse": "CK",     # 仓库
     "master-data-warehouse-storage-area": "KQ",  # 库区
     "master-data-warehouse-storage-location": "KW",  # 库位
@@ -130,6 +131,20 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "WORK_CENTER_CODE",
         "allow_manual_edit": True,
         "skip_date": True,  # 工作中心：GZZX+4位流水，不含日期
+    },
+    # 主数据管理 - 工作小组（GZXZ+4位流水，参考工作中心）
+    {
+        "page_code": "master-data-factory-work-group",
+        "page_name": "工作小组",
+        "page_path": "/apps/master-data/factory/work-groups",
+        "code_field": "code",
+        "code_field_label": "工作小组编码",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": True,
+        "rule_code": "WORK_GROUP_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 工作小组：GZXZ+4位流水，不含日期
     },
     # 主数据管理 - 仓库管理
     {
@@ -836,5 +851,7 @@ RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
     "TOOL_CODE": ("apps.kuaizhizao.models.tool", "Tool", "code"),
     "WORK_CENTER_CODE": ("apps.master_data.models.factory", "WorkCenter", "code"),
     "master-data-factory-work-center": ("apps.master_data.models.factory", "WorkCenter", "code"),
+    "WORK_GROUP_CODE": ("apps.master_data.models.factory", "WorkGroup", "code"),
+    "master-data-factory-work-group": ("apps.master_data.models.factory", "WorkGroup", "code"),
 }
 

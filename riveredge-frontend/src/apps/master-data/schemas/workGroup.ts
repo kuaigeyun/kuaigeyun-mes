@@ -1,10 +1,14 @@
 /**
  * 工作小组表单 Schema 配置
+ *
+ * 拆分为 basic（编码、名称）和 rest（备注、启用状态），
+ * 中间插入成员列表区块，顺序为：basic -> 成员 -> rest
  */
 
 import type { FieldConfig } from './form-schemas';
 
-export const workGroupFormSchema: FieldConfig[] = [
+/** 基础字段：编码、名称（成员列表之前） */
+export const workGroupFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -23,6 +27,10 @@ export const workGroupFormSchema: FieldConfig[] = [
     colSpan: 12,
     rules: [{ required: true, messageKey: 'field.workGroup.nameRequired' }],
   },
+];
+
+/** 备注及之后字段（成员列表之后） */
+export const workGroupFormSchemaRest: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
@@ -36,4 +44,10 @@ export const workGroupFormSchema: FieldConfig[] = [
     labelKey: 'field.workGroup.isActive',
     colSpan: 12,
   },
+];
+
+/** 完整 schema（兼容旧用法） */
+export const workGroupFormSchema: FieldConfig[] = [
+  ...workGroupFormSchemaBasic,
+  ...workGroupFormSchemaRest,
 ];

@@ -31,6 +31,7 @@ class WarehouseBase(BaseModel):
     is_active: bool = Field(True, description="是否启用", alias="isActive")
     warehouse_type: str = Field(default="normal", max_length=20, description="仓库类型", alias="warehouseType")
     workshop_id: Optional[int] = Field(None, description="关联车间ID（线边仓时必填）", alias="workshopId")
+    workstation_id: Optional[int] = Field(None, description="关联工位ID（工位级线边仓可选）", alias="workstationId")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -77,6 +78,7 @@ class WarehouseUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     warehouse_type: Optional[str] = Field(None, max_length=20, description="仓库类型", alias="warehouseType")
     workshop_id: Optional[int] = Field(None, description="关联车间ID", alias="workshopId")
+    workstation_id: Optional[int] = Field(None, description="关联工位ID", alias="workstationId")
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -114,6 +116,7 @@ class WarehouseResponse(WarehouseBase):
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     workshop_name: Optional[str] = Field(None, alias="workshopName", description="关联车间名称")
+    workstation_name: Optional[str] = Field(None, alias="workstationName", description="关联工位名称")
     work_center_name: Optional[str] = Field(None, alias="workCenterName", description="关联工作中心名称")
     
     model_config = ConfigDict(

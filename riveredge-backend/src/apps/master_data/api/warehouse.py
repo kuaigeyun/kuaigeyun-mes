@@ -85,6 +85,23 @@ async def load_preset_warehouses(
     return {"created": count, "message": f"已加载 {count} 个仓库"}
 
 
+@router.post("/warehouses/sync-line-side", summary="同步线边仓")
+async def sync_line_side_warehouses(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据车间/工位/工作中心自动建立线边仓。
+    为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
+    """
+    result = await WarehouseService.sync_line_side_warehouses(tenant_id)
+    return {
+        "created": result["created"],
+        "skipped": result["skipped"],
+        "message": f"已同步 {result['created']} 个线边仓" + (f"，跳过 {result['skipped']} 个" if result["skipped"] else ""),
+    }
+
+
 @router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, response_model_by_alias=True, summary="获取仓库详情")
 async def get_warehouse(
     warehouse_uuid: str,

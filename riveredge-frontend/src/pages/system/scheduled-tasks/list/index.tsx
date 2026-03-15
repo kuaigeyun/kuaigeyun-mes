@@ -144,48 +144,34 @@ const ScheduledTaskListPage: React.FC = () => {
   /**
    * 处理批量删除定时任务
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.selectFirst'));
-      return;
-    }
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
 
-    Modal.confirm({
-      title: t('field.scheduledTask.batchDeleteTitle'),
-      content: t('field.scheduledTask.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+      for (const key of keys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await deleteScheduledTask(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('pages.system.deleteSuccess'));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await deleteScheduledTask(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          failCount++;
+          errors.push(error.message || t('pages.system.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('pages.system.deleteSuccess'));
+      }
+      if (failCount > 0) {
+        messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    }
   };
 
   /**
@@ -510,6 +496,8 @@ const ScheduledTaskListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('field.scheduledTask.batchDeleteButton')}
+          deleteConfirmTitle={t('field.scheduledTask.batchDeleteConfirmTitle')}
+          deleteConfirmDescription={(c) => t('field.scheduledTask.batchDeleteConfirmDescription', { count: c })}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {

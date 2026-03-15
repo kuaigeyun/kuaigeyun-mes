@@ -95,30 +95,19 @@ const ReportTemplatesPage: React.FC = () => {
    * 处理删除
    */
   const handleDelete = async (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      messageApi.warning(t('pages.system.reportTemplates.selectToDelete'));
-      return;
+    try {
+      await Promise.all(
+        keys.map((key) =>
+          apiRequest(`/core/reports/templates/${key}`, {
+            method: 'DELETE',
+          })
+        )
+      );
+      messageApi.success(t('pages.system.reportTemplates.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(t('pages.system.reportTemplates.deleteFailed'));
     }
-
-    Modal.confirm({
-      title: t('pages.system.reportTemplates.confirmDelete'),
-      content: t('pages.system.reportTemplates.confirmDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        try {
-          await Promise.all(
-            keys.map((key) =>
-              apiRequest(`/core/reports/templates/${key}`, {
-                method: 'DELETE',
-              })
-            )
-          );
-          messageApi.success(t('pages.system.reportTemplates.deleteSuccess'));
-          actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error(t('pages.system.reportTemplates.deleteFailed'));
-        }
-      },
-    });
   };
 
   /**
@@ -315,7 +304,11 @@ const ReportTemplatesPage: React.FC = () => {
         onCreate={handleCreate}
         onEdit={handleEdit}
         onDetail={handleDetail}
+        showDeleteButton
         onDelete={handleDelete}
+        deleteButtonText={t('common.batchDelete')}
+        deleteConfirmTitle={t('pages.system.reportTemplates.batchDeleteTitle')}
+        deleteConfirmDescription={(c) => t('pages.system.reportTemplates.batchDeleteDescription', { count: c })}
         showAdvancedSearch={true}
         showImportButton={false}
         showExportButton={true}

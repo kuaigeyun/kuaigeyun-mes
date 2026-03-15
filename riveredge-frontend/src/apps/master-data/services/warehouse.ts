@@ -70,6 +70,16 @@ export const warehouseApi = {
   },
 
   /**
+   * 同步线边仓：根据车间/工位/工作中心自动建立线边仓
+   */
+  syncLineSide: async (): Promise<{ created: number; skipped?: number; message: string }> => {
+    return apiRequest<{ created: number; skipped?: number; message: string }>(
+      '/apps/master-data/warehouse/warehouses/sync-line-side',
+      { method: 'POST' }
+    );
+  },
+
+  /**
    * 批量删除仓库
    */
   batchDelete: async (uuids: string[]): Promise<{

@@ -141,40 +141,28 @@ const EquipmentFaultListPage: React.FC = () => {
   /**
    * 批量删除故障记录
    */
-  const handleBatchDelete = (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      messageApi.warning(t('pages.system.equipmentFaults.selectToDelete'));
-      return;
-    }
-    Modal.confirm({
-      title: t('pages.system.equipmentFaults.confirmDeleteContent', { count: keys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0;
+      let fail = 0;
+      for (const uuid of keys) {
         try {
-          let done = 0;
-          let fail = 0;
-          for (const uuid of keys) {
-            try {
-              await deleteEquipmentFault(String(uuid));
-              done++;
-            } catch {
-              fail++;
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.equipmentFaults.batchDeletePartial', { done, fail }));
-          } else {
-            messageApi.success(t('pages.system.equipmentFaults.batchDeleteSuccess', { count: done }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('common.batchDeleteFailed'));
+          await deleteEquipmentFault(String(uuid));
+          done++;
+        } catch {
+          fail++;
         }
-      },
-    });
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.equipmentFaults.batchDeletePartial', { done, fail }));
+      } else {
+        messageApi.success(t('pages.system.equipmentFaults.batchDeleteSuccess', { count: done }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -404,6 +392,8 @@ const EquipmentFaultListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.equipmentFaults.batchDelete')}
+          deleteConfirmTitle={t('pages.system.equipmentFaults.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.equipmentFaults.batchDeleteDescription', { count: c })}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {

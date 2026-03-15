@@ -124,40 +124,28 @@ const MoldListPage: React.FC = () => {
   /**
    * 批量删除模具
    */
-  const handleBatchDelete = (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      messageApi.warning(t('pages.system.molds.selectToDelete'));
-      return;
-    }
-    Modal.confirm({
-      title: t('pages.system.molds.confirmDeleteContent', { count: keys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0;
+      let fail = 0;
+      for (const uuid of keys) {
         try {
-          let done = 0;
-          let fail = 0;
-          for (const uuid of keys) {
-            try {
-              await deleteMold(String(uuid));
-              done++;
-            } catch {
-              fail++;
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.molds.batchDeletePartial', { done, fail }));
-          } else {
-            messageApi.success(t('pages.system.molds.batchDeleteSuccess', { count: done }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('common.batchDeleteFailed'));
+          await deleteMold(String(uuid));
+          done++;
+        } catch {
+          fail++;
         }
-      },
-    });
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.molds.batchDeletePartial', { done, fail }));
+      } else {
+        messageApi.success(t('pages.system.molds.batchDeleteSuccess', { count: done }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -365,6 +353,8 @@ const MoldListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.molds.batchDelete')}
+          deleteConfirmTitle={t('pages.system.molds.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.molds.batchDeleteDescription', { count: c })}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {

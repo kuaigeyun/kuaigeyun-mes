@@ -259,40 +259,28 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 批量删除数据源
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.dataSources.selectToDelete'));
-      return;
-    }
-    Modal.confirm({
-      title: t('pages.system.dataSources.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0;
+      let fail = 0;
+      for (const uuid of keys) {
         try {
-          let done = 0;
-          let fail = 0;
-          for (const uuid of selectedRowKeys) {
-            try {
-              await deleteDataSource(String(uuid));
-              done++;
-            } catch {
-              fail++;
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.dataSources.batchDeleteDone', { done, fail }));
-          } else {
-            messageApi.success(t('pages.system.dataSources.batchDeleteSuccessCount', { count: done }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('pages.system.dataSources.batchDeleteFailed'));
+          await deleteDataSource(String(uuid));
+          done++;
+        } catch {
+          fail++;
         }
-      },
-    });
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.dataSources.batchDeleteDone', { done, fail }));
+      } else {
+        messageApi.success(t('pages.system.dataSources.batchDeleteSuccessCount', { count: done }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.dataSources.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -870,6 +858,8 @@ const DataSourceListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.dataSources.batchDelete')}
+          deleteConfirmTitle={t('pages.system.dataSources.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.dataSources.batchDeleteDescription', { count: c })}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [

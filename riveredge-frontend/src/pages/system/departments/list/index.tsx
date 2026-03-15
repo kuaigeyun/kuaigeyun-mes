@@ -221,16 +221,11 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.selectFirst'));
-      return;
-    }
-
+  const handleBatchDelete = async (keys: React.Key[]) => {
     const cannotDeleteNames: string[] = [];
     const canDeleteKeys: string[] = [];
 
-    selectedRowKeys.forEach((key) => {
+    keys.forEach((key) => {
       const dept = allDepts.find((d) => d.uuid === key);
       if (dept) {
         const check = checkCanDelete(dept);
@@ -260,24 +255,15 @@ const DepartmentListPage: React.FC = () => {
       return;
     }
 
-    modal.confirm({
-      title: t('common.confirm'),
-      content: t('field.department.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await Promise.all(canDeleteKeys.map((key) => deleteDepartment(key)));
-          messageApi.success(t('pages.system.deleteSuccess'));
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
-          actionRef.current?.reload();
-        }
-      },
-    });
+    try {
+      await Promise.all(canDeleteKeys.map((key) => deleteDepartment(key)));
+      messageApi.success(t('pages.system.deleteSuccess'));
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
+      actionRef.current?.reload();
+    }
   };
 
   const handleImport = async (data: any[][]) => {
@@ -471,6 +457,8 @@ const DepartmentListPage: React.FC = () => {
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.batchDelete')}
+        deleteConfirmTitle={t('field.department.batchDeleteTitle')}
+        deleteConfirmDescription={(c) => t('field.department.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
           <Button
             key="loadPreset"

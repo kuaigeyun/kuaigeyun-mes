@@ -326,7 +326,9 @@
             "code_field_label": "工作小组编码",
             "module": "主数据管理",
             "module_icon": "database",
-            "auto_generate": false
+            "auto_generate": true,
+            "rule_code": "WORK_GROUP_CODE",
+            "skip_date": true
         },
         {
             "page_code": "master-data-warehouse-warehouse",

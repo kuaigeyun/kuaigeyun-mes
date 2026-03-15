@@ -15,6 +15,8 @@ export interface Warehouse {
   warehouseType?: string;
   workshopId?: number;
   workshopName?: string;
+  workstationId?: number;
+  workstationName?: string;
   workCenterId?: number;
   workCenterName?: string;
   createdAt: string;
@@ -29,6 +31,7 @@ export interface WarehouseCreate {
   isActive?: boolean;
   warehouseType?: string;
   workshopId?: number;
+  workstationId?: number;
   workCenterId?: number;
 }
 
@@ -39,6 +42,7 @@ export interface WarehouseUpdate {
   isActive?: boolean;
   warehouseType?: string;
   workshopId?: number;
+  workstationId?: number;
   workCenterId?: number;
 }
 

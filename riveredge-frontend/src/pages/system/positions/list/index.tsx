@@ -100,44 +100,31 @@ const PositionListPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.selectFirst'));
-      return;
-    }
-    Modal.confirm({
-      title: t('common.confirm'),
-      content: t('field.position.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+      for (const key of keys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-          for (const key of selectedRowKeys) {
-            try {
-              await deletePosition(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
-            }
-          }
-          if (successCount > 0) messageApi.success(t('pages.system.deleteSuccess'));
-          if (failCount > 0) {
-            messageApi.error(
-              `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
-            );
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await deletePosition(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          failCount++;
+          errors.push(error.message || t('pages.system.deleteFailed'));
         }
-      },
-    });
+      }
+      if (successCount > 0) messageApi.success(t('pages.system.deleteSuccess'));
+      if (failCount > 0) {
+        messageApi.error(
+          `${t('pages.system.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
+        );
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    }
   };
 
   const columns: ProColumns<Position>[] = [
@@ -295,6 +282,8 @@ const PositionListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.batchDelete')}
+          deleteConfirmTitle={t('field.position.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('field.position.batchDeleteDescription', { count: c })}
           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           showImportButton={true}
           onImport={handleImport}

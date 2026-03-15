@@ -341,50 +341,35 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 处理批量删除字段
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.selectFirst'));
-      return;
-    }
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
 
-    Modal.confirm({
-      title: t('field.customField.batchDeleteTitle'),
-      content: t('field.customField.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+      for (const key of keys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await deleteCustomField(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('pages.system.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('pages.system.deleteSuccess'));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? t('field.customField.errorDetailPrefix') + errors.join('; ') : ''));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-          // 更新字段数量
-          updatePageFieldCounts();
+          await deleteCustomField(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
+          failCount++;
+          errors.push(error.message || t('pages.system.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('pages.system.deleteSuccess'));
+      }
+      if (failCount > 0) {
+        messageApi.error(t('pages.system.deleteFailed') + (errors.length > 0 ? t('field.customField.errorDetailPrefix') + errors.join('; ') : ''));
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      updatePageFieldCounts();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    }
   };
 
   /**
@@ -1247,6 +1232,8 @@ const CustomFieldListPage: React.FC = () => {
                     showDeleteButton
                     onDelete={handleBatchDelete}
                     deleteButtonText={t('field.customField.batchDeleteButton')}
+                    deleteConfirmTitle={t('field.customField.batchDeleteConfirmTitle')}
+                    deleteConfirmDescription={(c) => t('field.customField.batchDeleteConfirmDescription', { count: c })}
                     showImportButton={false}
                     showExportButton={true}
                     onExport={async (type, keys, pageData) => {

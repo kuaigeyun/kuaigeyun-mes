@@ -14,6 +14,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
 import { StorageLocationFormModal } from '../../../components/StorageLocationFormModal';
+import { BatchCreateStorageLocationModal } from '../../../components/BatchCreateStorageLocationModal';
 import type { StorageLocation, StorageLocationCreate, StorageArea } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
 
@@ -35,6 +36,7 @@ const StorageLocationsPage: React.FC = () => {
   // Modal 相关状态（创建/编辑库位）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [batchCreateModalVisible, setBatchCreateModalVisible] = useState(false);
   
   // 库区列表（用于导入等）
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
@@ -748,21 +750,36 @@ const StorageLocationsPage: React.FC = () => {
         showCreateButton
         createButtonText={t('app.master-data.storageLocations.create')}
         onCreate={handleCreate}
+        toolBarRender={() => [
+          <Button
+            key="batchCreate"
+            icon={<PlusOutlined />}
+            onClick={() => setBatchCreateModalVisible(true)}
+          >
+            {t('app.master-data.storageLocations.batchCreate')}
+          </Button>,
+          <Popconfirm
+            key="batchDelete"
+            title={t('app.master-data.storageLocations.batchDeleteTitle')}
+            description={t('app.master-data.storageLocations.batchDeleteDescription', { count: selectedRowKeys.length })}
+            onConfirm={() => handleBatchDelete()}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+            okButtonProps={{ danger: true }}
+            disabled={selectedRowKeys.length === 0}
+          >
+            <Button
+              type="default"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+            >
+              {t('common.batchDelete')}
+            </Button>
+          </Popconfirm>,
+        ]}
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButton
-        onDelete={(keys) => {
-          if (keys.length === 0) return;
-          Modal.confirm({
-            title: t('app.master-data.storageLocations.batchDeleteTitle'),
-            content: t('app.master-data.storageLocations.batchDeleteDescription', { count: keys.length }),
-            okText: t('common.confirm'),
-            cancelText: t('common.cancel'),
-            okType: 'danger',
-            onOk: async () => await handleBatchDelete(keys),
-          });
-        }}
-        deleteButtonText={t('common.batchDelete')}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,
@@ -787,6 +804,13 @@ const StorageLocationsPage: React.FC = () => {
         onClose={() => { setModalVisible(false); setEditUuid(null); }}
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
+      />
+
+      {/* 批量建位 Modal */}
+      <BatchCreateStorageLocationModal
+        open={batchCreateModalVisible}
+        onClose={() => setBatchCreateModalVisible(false)}
+        onSuccess={() => handleModalSuccess()}
       />
     </>
   );

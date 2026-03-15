@@ -220,46 +220,37 @@ const MenuListPage: React.FC = () => {
   /**
    * 批量删除
    */
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) return;
-    
-    // 简单校验
+  const handleBatchDelete = async (keys: React.Key[]) => {
     const canDeleteKeys: string[] = [];
     const cannotDeleteNames: string[] = [];
-    
-    selectedRowKeys.forEach(key => {
-        const menu = allMenus.find(m => m.uuid === key);
-        if (menu) {
-            if (menu.application_uuid) {
-                cannotDeleteNames.push(menu.name + '(' + t('pages.system.menus.appMenuSuffix') + ')');
-            } else if (allMenus.some(m => m.parent_uuid === menu.uuid)) {
-                cannotDeleteNames.push(menu.name);
-            } else {
-                canDeleteKeys.push(menu.uuid);
-            }
+
+    keys.forEach((key) => {
+      const menu = allMenus.find((m) => m.uuid === key);
+      if (menu) {
+        if (menu.application_uuid) {
+          cannotDeleteNames.push(menu.name + '(' + t('pages.system.menus.appMenuSuffix') + ')');
+        } else if (allMenus.some((m) => m.parent_uuid === menu.uuid)) {
+          cannotDeleteNames.push(menu.name);
+        } else {
+          canDeleteKeys.push(menu.uuid);
         }
+      }
     });
 
     if (cannotDeleteNames.length > 0) {
-        messageApi.warning(t('pages.system.menus.cannotDeleteMenus', { names: cannotDeleteNames.join(', ') }));
-        return;
+      messageApi.warning(t('pages.system.menus.cannotDeleteMenus', { names: cannotDeleteNames.join(', ') }));
+      return;
     }
 
-    modal.confirm({
-      title: t('pages.system.menus.batchDeleteConfirm'),
-      content: t('pages.system.menus.batchDeleteCountConfirm', { count: canDeleteKeys.length }),
-      onOk: async () => {
-         try {
-             await Promise.all(canDeleteKeys.map(key => deleteMenu(key)));
-             messageApi.success(t('pages.system.menus.batchDeleteSuccess'));
-             setSelectedRowKeys([]);
-             refreshLayoutMenus();
-             actionRef.current?.reload();
-         } catch (e: any) {
-             messageApi.error(e.message || t('pages.system.menus.batchDeleteFailed'));
-         }
-      }
-    });
+    try {
+      await Promise.all(canDeleteKeys.map((key) => deleteMenu(key)));
+      messageApi.success(t('pages.system.menus.batchDeleteSuccess'));
+      setSelectedRowKeys([]);
+      refreshLayoutMenus();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e.message || t('pages.system.menus.batchDeleteFailed'));
+    }
   };
 
   const handleCreate = (parentUuid?: string) => {
@@ -489,6 +480,8 @@ const MenuListPage: React.FC = () => {
             showDeleteButton
             onDelete={handleBatchDelete}
             deleteButtonText={t('pages.system.menus.batchDelete')}
+            deleteConfirmTitle={t('pages.system.menus.batchDeleteTitle')}
+            deleteConfirmDescription={(c) => t('pages.system.menus.batchDeleteDescription', { count: c })}
             enableRowSelection
             onRowSelectionChange={setSelectedRowKeys}
             showImportButton={false}

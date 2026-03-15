@@ -214,40 +214,28 @@ const APIListPage: React.FC = () => {
   /**
    * 批量删除接口（系统接口会由后端拒绝）
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.apis.selectToDelete'))
-      return
-    }
-    Modal.confirm({
-      title: t('pages.system.apis.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0
+      let fail = 0
+      for (const uuid of keys) {
         try {
-          let done = 0
-          let fail = 0
-          for (const uuid of selectedRowKeys) {
-            try {
-              await deleteAPI(String(uuid))
-              done++
-            } catch {
-              fail++
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.apis.batchDeleteDone', { done, fail }))
-          } else {
-            messageApi.success(t('pages.system.apis.batchDeleteSuccessCount', { count: done }))
-          }
-          setSelectedRowKeys([])
-          actionRef.current?.reload()
-        } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.apis.batchDeleteFailed'))
+          await deleteAPI(String(uuid))
+          done++
+        } catch {
+          fail++
         }
-      },
-    })
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.apis.batchDeleteDone', { done, fail }))
+      } else {
+        messageApi.success(t('pages.system.apis.batchDeleteSuccessCount', { count: done }))
+      }
+      setSelectedRowKeys([])
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.apis.batchDeleteFailed'))
+    }
   }
 
   /**
@@ -543,6 +531,8 @@ const APIListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.apis.batchDelete')}
+          deleteConfirmTitle={t('pages.system.apis.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.apis.batchDeleteDescription', { count: c })}
           showCreateButton
           onCreate={handleCreate}
           createButtonText={t('pages.system.apis.createButton')}

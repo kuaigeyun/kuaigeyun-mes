@@ -143,40 +143,28 @@ const MaintenancePlanListPage: React.FC = () => {
   /**
    * 批量删除维护计划
    */
-  const handleBatchDelete = (keys: React.Key[]) => {
-    if (keys.length === 0) {
-      messageApi.warning(t('pages.system.maintenancePlans.selectToDelete'));
-      return;
-    }
-    Modal.confirm({
-      title: t('pages.system.maintenancePlans.confirmBatchDelete', { count: keys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0;
+      let fail = 0;
+      for (const uuid of keys) {
         try {
-          let done = 0;
-          let fail = 0;
-          for (const uuid of keys) {
-            try {
-              await deleteMaintenancePlan(String(uuid));
-              done++;
-            } catch {
-              fail++;
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.maintenancePlans.batchDeletePartial', { done, fail }));
-          } else {
-            messageApi.success(t('pages.system.maintenancePlans.batchDeleteSuccess', { count: done }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('pages.system.maintenancePlans.batchDeleteFailed'));
+          await deleteMaintenancePlan(String(uuid));
+          done++;
+        } catch {
+          fail++;
         }
-      },
-    });
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.maintenancePlans.batchDeletePartial', { done, fail }));
+      } else {
+        messageApi.success(t('pages.system.maintenancePlans.batchDeleteSuccess', { count: done }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.maintenancePlans.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -419,6 +407,8 @@ const MaintenancePlanListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.maintenancePlans.batchDelete')}
+          deleteConfirmTitle={t('pages.system.maintenancePlans.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.maintenancePlans.batchDeleteDescription', { count: c })}
           showImportButton={false}
           showExportButton={true}
           onExport={async (type, keys, pageData) => {

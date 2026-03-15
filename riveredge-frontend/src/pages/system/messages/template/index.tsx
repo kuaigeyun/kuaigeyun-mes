@@ -125,48 +125,34 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 处理批量删除消息模板
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.selectFirst'));
-      return;
-    }
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
 
-    Modal.confirm({
-      title: t('pages.system.messageConfig.batchDeleteConfirmTitle'),
-      content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+      for (const key of keys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await deleteMessageTemplate(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('pages.system.messageConfig.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('pages.system.messageConfig.batchDeleteSuccessCount', { count: successCount }));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('pages.system.messageConfig.batchDeleteFailCount', { count: failCount }) + (errors.length > 0 ? '：' + errors.join('; ') : ''));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await deleteMessageTemplate(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.messageConfig.batchDeleteFailed'));
+          failCount++;
+          errors.push(error.message || t('pages.system.messageConfig.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('pages.system.messageConfig.batchDeleteSuccessCount', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(t('pages.system.messageConfig.batchDeleteFailCount', { count: failCount }) + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.messageConfig.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -453,6 +439,8 @@ const MessageTemplateListPage: React.FC = () => {
         showDeleteButton
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.messageTemplate.batchDeleteButton')}
+        deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteTitle')}
+        deleteConfirmDescription={(c) => t('pages.system.messageConfig.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
           <Button
             key="loadPreset"

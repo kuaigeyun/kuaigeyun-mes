@@ -184,48 +184,34 @@ const IntegrationConfigListPage: React.FC = () => {
   /**
    * 处理批量删除集成配置
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.integrationConfigs.selectToDelete'));
-      return;
-    }
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
 
-    Modal.confirm({
-      title: t('pages.system.integrationConfigs.confirmBatchDelete'),
-      content: t('pages.system.integrationConfigs.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+      for (const key of keys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await deleteIntegrationConfig(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('pages.system.integrationConfigs.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('pages.system.integrationConfigs.batchDeleteSuccess', { count: successCount }));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('pages.system.integrationConfigs.batchDeleteFailed', { count: failCount }) + (errors.length > 0 ? ': ' + errors.join('; ') : ''));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await deleteIntegrationConfig(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.integrationConfigs.batchDeleteError'));
+          failCount++;
+          errors.push(error.message || t('pages.system.integrationConfigs.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('pages.system.integrationConfigs.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(t('pages.system.integrationConfigs.batchDeleteFailed', { count: failCount }) + (errors.length > 0 ? ': ' + errors.join('; ') : ''));
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.integrationConfigs.batchDeleteError'));
+    }
   };
 
   /**
@@ -692,6 +678,8 @@ const IntegrationConfigListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.integrationConfigs.batchDelete')}
+          deleteConfirmTitle={t('pages.system.integrationConfigs.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.integrationConfigs.batchDeleteDescription', { count: c })}
           toolBarRender={() => [
             <Button key="wizard" icon={<ThunderboltOutlined />} onClick={() => setWizardVisible(true)}>
               {t('pages.system.integrationConfigs.createByWizard')}

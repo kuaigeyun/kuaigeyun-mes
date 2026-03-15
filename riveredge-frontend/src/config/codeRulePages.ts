@@ -139,8 +139,10 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '工作小组编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'WORK_GROUP_CODE',
     allowManualEdit: true,
+    skipDate: true,
   },
   // 主数据管理 - 仓库管理
   {

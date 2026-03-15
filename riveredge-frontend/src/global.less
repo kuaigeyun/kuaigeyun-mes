@@ -123,6 +123,18 @@
   overflow-y: visible;
 }
 
+/* 确认类弹窗（Modal.confirm 等）：内容简短，排除限高和滚动条，避免点击确认时出现多余滚动条 */
+.ant-modal-confirm .ant-modal-body {
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* 批量建位预览：内容随行数自适应，不产生多余滚动条 */
+.batch-create-storage-location-modal .ant-modal-body {
+  max-height: none;
+  overflow: visible;
+}
+
 /* ant-pro-layout-container：隐藏滚动条且不占宽度 */
 .ant-pro-layout-container {
   scrollbar-width: none;

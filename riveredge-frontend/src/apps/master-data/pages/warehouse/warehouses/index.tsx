@@ -39,6 +39,7 @@ const WarehousesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [syncLineSideLoading, setSyncLineSideLoading] = useState(false);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -779,6 +780,24 @@ const WarehousesPage: React.FC = () => {
             }}
           >
             {t('field.warehouse.loadPreset')}
+          </Button>,
+          <Button
+            key="syncLineSide"
+            loading={syncLineSideLoading}
+            onClick={async () => {
+              try {
+                setSyncLineSideLoading(true);
+                const res = await warehouseApi.syncLineSide();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setSyncLineSideLoading(false);
+              }
+            }}
+          >
+            {t('field.warehouse.syncLineSide')}
           </Button>,
           <Popconfirm
             key="batchDelete"

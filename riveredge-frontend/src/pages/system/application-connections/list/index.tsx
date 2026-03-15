@@ -264,40 +264,28 @@ const ApplicationConnectionsListPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      messageApi.warning(t('pages.system.applicationConnections.selectToDelete'));
-      return;
-    }
-    Modal.confirm({
-      title: t('pages.system.applicationConnections.confirmDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let done = 0;
+      let fail = 0;
+      for (const uuid of keys) {
         try {
-          let done = 0;
-          let fail = 0;
-          for (const uuid of selectedRowKeys) {
-            try {
-              await deleteApplicationConnection(String(uuid));
-              done++;
-            } catch {
-              fail++;
-            }
-          }
-          if (fail > 0) {
-            messageApi.warning(t('pages.system.applicationConnections.batchDeletePartial', { done, fail }));
-          } else {
-            messageApi.success(t('pages.system.applicationConnections.batchDeleteSuccess', { count: done }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('common.batchDeleteFailed'));
+          await deleteApplicationConnection(String(uuid));
+          done++;
+        } catch {
+          fail++;
         }
-      },
-    });
+      }
+      if (fail > 0) {
+        messageApi.warning(t('pages.system.applicationConnections.batchDeletePartial', { done, fail }));
+      } else {
+        messageApi.success(t('pages.system.applicationConnections.batchDeleteSuccess', { count: done }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
+    }
   };
 
   const handleTestConnectionInForm = async () => {
@@ -821,6 +809,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText="批量删除"
+          deleteConfirmTitle={t('pages.system.applicationConnections.batchDeleteTitle')}
+          deleteConfirmDescription={(c) => t('pages.system.applicationConnections.batchDeleteDescription', { count: c })}
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [

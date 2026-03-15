@@ -61,6 +61,10 @@ class Warehouse(BaseModel):
     workshop_id = fields.IntField(null=True, description="关联车间ID（线边仓时必填）")
     workshop_name = fields.CharField(max_length=100, null=True, description="关联车间名称")
     
+    # 关联工位（可选，工位级线边仓）
+    workstation_id = fields.IntField(null=True, description="关联工位ID")
+    workstation_name = fields.CharField(max_length=100, null=True, description="关联工位名称")
+
     # 关联工作中心（可选，更精确的线边仓关联）
     work_center_id = fields.IntField(null=True, description="关联工作中心ID")
     work_center_name = fields.CharField(max_length=100, null=True, description="关联工作中心名称")

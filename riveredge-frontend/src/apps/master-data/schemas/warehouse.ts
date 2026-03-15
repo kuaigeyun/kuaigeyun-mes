@@ -1,5 +1,7 @@
 /**
  * 仓库表单 Schema 配置
+ *
+ * 线边仓时：关联车间、关联工位、关联工作中心 置于备注之前
  */
 
 import type { FieldConfig } from './form-schemas';
@@ -15,7 +17,8 @@ export const WAREHOUSE_TYPE_OPTIONS = [
   { labelKey: 'warehouse.type.quarantine', value: 'quarantine' },
 ];
 
-export const warehouseFormSchema: FieldConfig[] = [
+/** 基础字段：编码、名称、仓库类型（线边仓关联字段之前） */
+export const warehouseFormSchemaBasic: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -44,6 +47,10 @@ export const warehouseFormSchema: FieldConfig[] = [
     colSpan: 12,
     options: WAREHOUSE_TYPE_OPTIONS,
   },
+];
+
+/** 备注及之后字段（线边仓关联字段之后） */
+export const warehouseFormSchemaRest: FieldConfig[] = [
   {
     name: 'description',
     type: 'textarea',
@@ -57,4 +64,10 @@ export const warehouseFormSchema: FieldConfig[] = [
     labelKey: 'field.warehouse.isActive',
     colSpan: 12,
   },
+];
+
+/** 完整 schema（兼容旧用法） */
+export const warehouseFormSchema: FieldConfig[] = [
+  ...warehouseFormSchemaBasic,
+  ...warehouseFormSchemaRest,
 ];

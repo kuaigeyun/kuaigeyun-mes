@@ -4,7 +4,7 @@
  * 使用 Three.js 以 3D 方式展示工厂层级结构，采用 Kenney 开源工业模型（CC0）。
  */
 
-import React, { useMemo, useLayoutEffect, Suspense } from 'react';
+import React, { useMemo, useLayoutEffect, Suspense, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html, useGLTF, Grid, QuadraticBezierLine } from '@react-three/drei';
 import * as THREE from 'three';
@@ -19,13 +19,13 @@ const LEVEL_COLORS: Record<number, { fill: string; stroke: string }> = {
   4: { fill: '#FFF1F0', stroke: '#F5222D' },
 };
 
-/** 节点类型对应的 Kenney 工业模型（CC0），工作中心为虚拟概念不占模型 */
+/** 节点类型对应的 Kenney 工业模型（CC0），工作中心为虚拟概念不占模型。工位优先用 workstation-robot.glb，缺失时用程序化机械臂 */
 const MODEL_BY_TYPE: Record<string, string> = {
   root: '/models/building-a.glb',
   plant: '/models/building-b.glb',
   workshop: '/models/building-c.glb',
   production_line: '/models/building-d.glb',
-  workstation: '/models/building-h.glb',
+  workstation: '/models/workstation-robot.glb', // 机械臂成品模型，需手动下载，见 README-workstation.md
 };
 
 /** 各类型模型缩放比例（真实车间尺度，模型为主体） */
@@ -41,11 +41,11 @@ const X_SPACING = 8;
 const Y_SPACING = 9;
 const NODE_SIZE = 0.8;
 
-/** 预加载所有模型 */
+/** 预加载所有模型（工位模型由 WorkstationNodeWrapper 按需解析） */
 function preloadModels() {
-  Object.values(MODEL_BY_TYPE).forEach((url) => {
-    useGLTF.preload(url);
-  });
+  [MODEL_BY_TYPE.root, MODEL_BY_TYPE.plant, MODEL_BY_TYPE.workshop, MODEL_BY_TYPE.production_line].forEach((url) =>
+    useGLTF.preload(url)
+  );
 }
 
 const FLOOR_Y = 0; // 地面高度，所有节点放置在此平面上
@@ -110,6 +110,167 @@ function computeLayout(
 
   return { posMap, bounds };
 }
+
+/** 工位模型是否存在：检测 workstation-robot.glb，不存在则用程序化机械臂 */
+let workstationModelExistsCache: boolean | null = null;
+async function checkWorkstationModelExists(): Promise<boolean> {
+  if (workstationModelExistsCache !== null) return workstationModelExistsCache;
+  try {
+    const res = await fetch(MODEL_BY_TYPE.workstation, { method: 'HEAD' });
+    const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+    const isHtml = contentType.includes('text/html');
+    workstationModelExistsCache = res.ok && !isHtml && (contentType.includes('model/gltf') || contentType.includes('octet-stream'));
+  } catch {
+    workstationModelExistsCache = false;
+  }
+  return workstationModelExistsCache;
+}
+
+/** 工位节点包装：有 workstation-robot.glb 则用 GLB，否则用程序化机械臂 */
+const WorkstationNodeWrapper: React.FC<{
+  node: FactoryTopologyNode;
+  position: [number, number, number];
+  onClick: (node: FactoryTopologyNode) => void;
+}> = ({ node, position, onClick }) => {
+  const [useGlb, setUseGlb] = useState<boolean | null>(workstationModelExistsCache);
+  useEffect(() => {
+    if (useGlb !== null) return;
+    checkWorkstationModelExists().then(setUseGlb);
+  }, [useGlb]);
+  if (useGlb === null) return <ModelFallback node={node} position={position} onClick={onClick} />;
+  if (!useGlb) return <WorkstationMachine node={node} position={position} onClick={onClick} />;
+  return (
+    <Suspense fallback={<ModelFallback node={node} position={position} onClick={onClick} />}>
+      <WorkstationModelNode node={node} position={position} onClick={onClick} modelUrl={MODEL_BY_TYPE.workstation} />
+    </Suspense>
+  );
+};
+
+/** 工位 GLB 模型节点（workstation-robot.glb 或 detail-tank 备选） */
+const WorkstationModelNode: React.FC<{
+  node: FactoryTopologyNode;
+  position: [number, number, number];
+  onClick: (node: FactoryTopologyNode) => void;
+  modelUrl: string;
+}> = ({ node, position, onClick, modelUrl }) => {
+  const scale = SCALE_BY_TYPE.workstation ?? 1.4;
+  const { scene } = useGLTF(modelUrl);
+  const clone = useMemo(() => cloneScene(scene), [scene]);
+  const depth = (node.data as { depth?: number })?.depth ?? 0;
+  const colors = LEVEL_COLORS[depth] ?? { fill: '#f0f0f0', stroke: '#d9d9d9' };
+  const code = (node.data as { code?: string })?.code;
+  const name = (node.data as { name?: string })?.name;
+
+  useLayoutEffect(() => {
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (mat?.color) mat.color.set(colors.stroke);
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((m) => {
+            if ((m as THREE.MeshStandardMaterial).color) {
+              (m as THREE.MeshStandardMaterial).color.set(colors.stroke);
+            }
+          });
+        }
+      }
+    });
+  }, [clone, colors.stroke]);
+
+  return (
+    <group
+      position={position}
+      scale={scale}
+      onClick={(e) => { e.stopPropagation(); onClick(node); }}
+      onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'default'; }}
+    >
+      <primitive object={clone} />
+      <Html position={[0, 2.2, 0]} center zIndexRange={[50, 1]} style={{ pointerEvents: 'none', userSelect: 'none', textAlign: 'center', fontSize: 11, color: '#fff', fontWeight: 600, textShadow: '0 1px 3px rgba(0,0,0,0.8)', padding: '4px 8px', background: 'rgba(0,0,0,0.5)', borderRadius: 4 }}>
+        {code && name ? <><div style={{ whiteSpace: 'nowrap' }}>{code}</div><div style={{ whiteSpace: 'nowrap' }}>{name}</div></> : <div style={{ whiteSpace: 'nowrap' }}>{node.label}</div>}
+      </Html>
+    </group>
+  );
+};
+
+/** 工位专用：程序化机械臂/设备模型（基座+立柱+横臂），模型文件缺失时的备选 */
+const WorkstationMachine: React.FC<{
+  node: FactoryTopologyNode;
+  position: [number, number, number];
+  onClick: (node: FactoryTopologyNode) => void;
+}> = ({ node, position, onClick }) => {
+  const depth = (node.data as { depth?: number })?.depth ?? 0;
+  const colors = LEVEL_COLORS[depth] ?? { fill: '#f0f0f0', stroke: '#d9d9d9' };
+  const code = (node.data as { code?: string })?.code;
+  const name = (node.data as { name?: string })?.name;
+  const scale = SCALE_BY_TYPE.workstation ?? 1.4;
+
+  return (
+    <group
+      position={position}
+      scale={scale}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(node);
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'default';
+      }}
+    >
+      {/* 基座 */}
+      <mesh position={[0, 0.15, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.8, 0.2, 0.6]} />
+        <meshStandardMaterial color={colors.stroke} metalness={0.4} roughness={0.6} />
+      </mesh>
+      {/* 立柱 */}
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <cylinderGeometry args={[0.12, 0.15, 0.7, 8]} />
+        <meshStandardMaterial color={colors.stroke} metalness={0.5} roughness={0.5} />
+      </mesh>
+      {/* 横臂（机械臂） */}
+      <mesh position={[0.25, 1.0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 0.5, 6]} />
+        <meshStandardMaterial color={colors.stroke} metalness={0.5} roughness={0.5} />
+      </mesh>
+      {/* 末端执行器 */}
+      <mesh position={[0.5, 1.0, 0]} castShadow>
+        <boxGeometry args={[0.12, 0.1, 0.12]} />
+        <meshStandardMaterial color={colors.stroke} metalness={0.6} roughness={0.4} />
+      </mesh>
+      <Html
+        position={[0, 1.5, 0]}
+        center
+        zIndexRange={[50, 1]}
+        style={{
+          pointerEvents: 'none',
+          userSelect: 'none',
+          textAlign: 'center',
+          fontSize: 11,
+          color: '#fff',
+          fontWeight: 600,
+          textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+          padding: '4px 8px',
+          background: 'rgba(0,0,0,0.5)',
+          borderRadius: 4,
+        }}
+      >
+        {code && name ? (
+          <>
+            <div style={{ whiteSpace: 'nowrap' }}>{code}</div>
+            <div style={{ whiteSpace: 'nowrap' }}>{name}</div>
+          </>
+        ) : (
+          <div style={{ whiteSpace: 'nowrap' }}>{node.label}</div>
+        )}
+      </Html>
+    </group>
+  );
+};
 
 /** 带 GLB 模型的 3D 节点 */
 const ModelNode3D: React.FC<{
@@ -497,6 +658,9 @@ const Topology3DContent: React.FC<Topology3DProps> = ({
         }
         const pos = posMap.get(n.id);
         if (!pos) return null;
+        if (n.type === 'workstation') {
+          return <WorkstationNodeWrapper key={n.id} node={n} position={pos} onClick={onNodeClick} />;
+        }
         return (
           <Suspense key={n.id} fallback={<ModelFallback node={n} position={pos} onClick={onNodeClick} />}>
             <ModelNode3D node={n} position={pos} onClick={onNodeClick} />

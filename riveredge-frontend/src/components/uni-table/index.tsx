@@ -15,7 +15,7 @@ import {
   ProFormInstance,
   ProTableProps,
 } from '@ant-design/pro-components'
-import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider, Dropdown } from 'antd'
+import { Button, Space, Radio, App, Input, theme, Empty, ConfigProvider, Dropdown, Popconfirm } from 'antd'
 import type { MenuProps } from 'antd'
 import {
   PlusOutlined,
@@ -415,6 +415,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   deleteButtonText?: string
   /**
+   * 批量删除二次确认标题（与仓库管理页 Popconfirm 模式对齐，不传则用 common.confirmBatchDelete）
+   */
+  deleteConfirmTitle?: string | ((count: number) => string)
+  /**
+   * 批量删除二次确认描述（不传则用 common.confirmBatchDeleteContent）
+   */
+  deleteConfirmDescription?: string | ((count: number) => string)
+  /**
    * 默认分页大小（默认：20）
    */
   defaultPageSize?: number
@@ -606,6 +614,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showDeleteButton = false,
   onDelete,
   deleteButtonText,
+  deleteConfirmTitle,
+  deleteConfirmDescription,
   defaultPageSize: defaultPageSizeProp,
   showQuickJumper = true,
   viewTypes = ['table', 'help'],
@@ -1146,23 +1156,38 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       actions.push(...toolBarActions)
     }
 
-    // 批量删除按钮（排在新建/自定义按钮后）
+    // 批量删除按钮（排在新建/自定义按钮后，使用 Popconfirm 二次确认，与仓库管理页模式对齐）
     if (showDeleteButton && onDelete) {
+      const count = selectedRowKeys.length
+      const title =
+        typeof deleteConfirmTitle === 'function'
+          ? deleteConfirmTitle(count)
+          : (deleteConfirmTitle ?? t('common.confirmBatchDelete'))
+      const description =
+        typeof deleteConfirmDescription === 'function'
+          ? deleteConfirmDescription(count)
+          : (deleteConfirmDescription ?? t('common.confirmBatchDeleteContent', { count }))
       actions.push(
-        <Button
+        <Popconfirm
           key="delete"
-          danger
-          icon={<DeleteOutlined />}
-          size={toolBarButtonSize}
-          onClick={() => {
-            if (selectedRowKeys.length > 0) {
-              onDelete(selectedRowKeys)
-            }
-          }}
-          disabled={selectedRowKeys.length === 0}
+          title={title}
+          description={description}
+          onConfirm={() => onDelete(selectedRowKeys)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+          okButtonProps={{ danger: true }}
+          disabled={count === 0}
         >
-          {deleteButtonText ?? t('components.uniTable.delete')}
-        </Button>
+          <Button
+            type="default"
+            danger
+            icon={<DeleteOutlined />}
+            size={toolBarButtonSize}
+            disabled={count === 0}
+          >
+            {deleteButtonText ?? t('components.uniTable.delete')}
+          </Button>
+        </Popconfirm>
       )
     }
 

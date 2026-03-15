@@ -8,7 +8,7 @@ from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
-from apps.master_data.models.factory import Workshop, WorkCenter
+from apps.master_data.models.factory import Workshop, WorkCenter, Workstation
 from apps.master_data.schemas.warehouse_schemas import (
     WarehouseCreate, WarehouseUpdate, WarehouseResponse,
     StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse,
@@ -28,13 +28,15 @@ class WarehouseService:
     """仓库数据服务"""
 
     @staticmethod
-    async def _resolve_workshop_work_center_names(
+    async def _resolve_line_side_names(
         tenant_id: int,
         workshop_id: Optional[int],
+        workstation_id: Optional[int],
         work_center_id: Optional[int],
-    ) -> tuple[Optional[str], Optional[str]]:
-        """解析 workshop_name 和 work_center_name"""
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        """解析 workshop_name、workstation_name、work_center_name"""
         workshop_name = None
+        workstation_name = None
         work_center_name = None
         if workshop_id:
             ws = await Workshop.filter(
@@ -42,13 +44,19 @@ class WarehouseService:
             ).first()
             if ws:
                 workshop_name = ws.name
+        if workstation_id:
+            wst = await Workstation.filter(
+                id=workstation_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if wst:
+                workstation_name = wst.name
         if work_center_id:
             wc = await WorkCenter.filter(
                 id=work_center_id, tenant_id=tenant_id, deleted_at__isnull=True
             ).first()
             if wc:
                 work_center_name = wc.name
-        return workshop_name, work_center_name
+        return workshop_name, workstation_name, work_center_name
 
     # ==================== 仓库相关方法 ====================
 
@@ -90,23 +98,25 @@ class WarehouseService:
         if existing_deleted:
             # 恢复软删除的记录，更新其数据
             create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
-            workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
-                tenant_id, create_data.get("workshop_id"), create_data.get("work_center_id")
+            workshop_name, workstation_name, work_center_name = await WarehouseService._resolve_line_side_names(
+                tenant_id, create_data.get("workshop_id"), create_data.get("workstation_id"), create_data.get("work_center_id")
             )
             existing_deleted.deleted_at = None
             for k, v in create_data.items():
                 setattr(existing_deleted, k, v)
             existing_deleted.workshop_name = workshop_name
+            existing_deleted.workstation_name = workstation_name
             existing_deleted.work_center_name = work_center_name
             await existing_deleted.save()
             return WarehouseResponse.model_validate(existing_deleted)
 
         # 创建新仓库
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
-        workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
-            tenant_id, create_data.get("workshop_id"), create_data.get("work_center_id")
+        workshop_name, workstation_name, work_center_name = await WarehouseService._resolve_line_side_names(
+            tenant_id, create_data.get("workshop_id"), create_data.get("workstation_id"), create_data.get("work_center_id")
         )
         create_data["workshop_name"] = workshop_name
+        create_data["workstation_name"] = workstation_name
         create_data["work_center_name"] = work_center_name
         try:
             warehouse = await Warehouse.create(
@@ -127,13 +137,14 @@ class WarehouseService:
                 if existing_deleted_retry:
                     # 恢复软删除的记录
                     create_data_retry = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
-                    workshop_name_r, work_center_name_r = await WarehouseService._resolve_workshop_work_center_names(
-                        tenant_id, create_data_retry.get("workshop_id"), create_data_retry.get("work_center_id")
+                    workshop_name_r, workstation_name_r, work_center_name_r = await WarehouseService._resolve_line_side_names(
+                        tenant_id, create_data_retry.get("workshop_id"), create_data_retry.get("workstation_id"), create_data_retry.get("work_center_id")
                     )
                     existing_deleted_retry.deleted_at = None
                     for k, v in create_data_retry.items():
                         setattr(existing_deleted_retry, k, v)
                     existing_deleted_retry.workshop_name = workshop_name_r
+                    existing_deleted_retry.workstation_name = workstation_name_r
                     existing_deleted_retry.work_center_name = work_center_name_r
                     await existing_deleted_retry.save()
                     return WarehouseResponse.model_validate(existing_deleted_retry)
@@ -259,12 +270,13 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(warehouse, key, value)
 
-        # 若更新了 workshop_id 或 work_center_id，解析并更新名称
-        if "workshop_id" in update_data or "work_center_id" in update_data:
-            workshop_name, work_center_name = await WarehouseService._resolve_workshop_work_center_names(
-                tenant_id, warehouse.workshop_id, warehouse.work_center_id
+        # 若更新了 workshop_id、workstation_id 或 work_center_id，解析并更新名称
+        if "workshop_id" in update_data or "workstation_id" in update_data or "work_center_id" in update_data:
+            workshop_name, workstation_name, work_center_name = await WarehouseService._resolve_line_side_names(
+                tenant_id, warehouse.workshop_id, warehouse.workstation_id, warehouse.work_center_id
             )
             warehouse.workshop_name = workshop_name
+            warehouse.workstation_name = workstation_name
             warehouse.work_center_name = work_center_name
 
         try:
@@ -1131,32 +1143,40 @@ class WarehouseService:
 
     # ==================== 预设数据 ====================
 
-    # 常见制造业仓库预设（原料仓、成品仓、半成品仓、不良品仓）
+    # 常见制造业仓库预设（原料仓、成品仓、半成品仓、不良品仓），编码按编码规则生成
     PRESET_WAREHOUSES = [
-        {"code": "RAW", "name": "原料仓", "description": "原材料存储", "warehouse_type": "normal"},
-        {"code": "FG", "name": "成品仓", "description": "成品存储", "warehouse_type": "normal"},
-        {"code": "WIP", "name": "半成品仓", "description": "在制品/半成品存储", "warehouse_type": "wip"},
-        {"code": "DEFECT", "name": "不良品仓", "description": "不良品隔离存储", "warehouse_type": "defect"},
+        {"name": "原料仓", "description": "原材料存储", "warehouse_type": "normal"},
+        {"name": "成品仓", "description": "成品存储", "warehouse_type": "normal"},
+        {"name": "半成品仓", "description": "在制品/半成品存储", "warehouse_type": "wip"},
+        {"name": "不良品仓", "description": "不良品隔离存储", "warehouse_type": "defect"},
     ]
 
     @staticmethod
     async def load_preset_sme(tenant_id: int) -> int:
         """
         加载中国中小制造业常见仓库预设数据。
-        仅创建不存在的仓库（按 code 去重）。
+        仅创建不存在的仓库（按 name 去重），仓库编码根据编码规则生成。
         """
+        from core.services.business.code_generation_service import CodeGenerationService
+        from core.services.default.default_values_service import DefaultValuesService
+
+        await DefaultValuesService.ensure_code_rule_for_page(tenant_id, "master-data-warehouse-warehouse")
+
         created = 0
         for item in WarehouseService.PRESET_WAREHOUSES:
             exists = await Warehouse.filter(
                 tenant_id=tenant_id,
-                code=item["code"],
+                name=item["name"],
                 deleted_at__isnull=True,
             ).exists()
             if not exists:
                 try:
+                    code = await CodeGenerationService.generate_code(
+                        tenant_id, "MASTER_DATA_WAREHOUSE_WAREHOUSE"
+                    )
                     await Warehouse.create(
                         tenant_id=tenant_id,
-                        code=item["code"],
+                        code=code,
                         name=item["name"],
                         description=item.get("description"),
                         warehouse_type=item.get("warehouse_type", "normal"),
@@ -1166,4 +1186,112 @@ class WarehouseService:
                 except IntegrityError:
                     pass
         return created
+
+    @staticmethod
+    async def sync_line_side_warehouses(tenant_id: int) -> dict:
+        """
+        根据车间/工位/工作中心自动建立线边仓。
+        为每个车间、工位、工作中心创建对应的线边仓（若不存在）。
+        编码规则：LBX-CJ-{车间编码}、LBX-GW-{工位编码}、LBX-GZZX-{工作中心编码}
+        """
+        created = 0
+        skipped = 0
+
+        # 1. 车间级线边仓
+        workshops = await Workshop.filter(
+            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+        ).all()
+        for ws in workshops:
+            code = f"LBX-CJ-{ws.code}"
+            exists = await Warehouse.filter(
+                tenant_id=tenant_id, code=code, deleted_at__isnull=True
+            ).exists()
+            if not exists:
+                try:
+                    await Warehouse.create(
+                        tenant_id=tenant_id,
+                        code=code,
+                        name=f"{ws.name}线边仓",
+                        warehouse_type="line_side",
+                        workshop_id=ws.id,
+                        workshop_name=ws.name,
+                        is_active=True,
+                    )
+                    created += 1
+                except IntegrityError:
+                    skipped += 1
+
+        # 2. 工位级线边仓（工位 -> 产线 -> 车间）
+        workstations = await Workstation.filter(
+            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+        ).prefetch_related("production_line")
+        for wst in workstations:
+            code = f"LBX-GW-{wst.code}"
+            exists = await Warehouse.filter(
+                tenant_id=tenant_id, code=code, deleted_at__isnull=True
+            ).exists()
+            if not exists and wst.production_line:
+                workshop_id = wst.production_line.workshop_id
+                workshop = await Workshop.filter(
+                    id=workshop_id, tenant_id=tenant_id, deleted_at__isnull=True
+                ).first()
+                workshop_name = workshop.name if workshop else None
+                try:
+                    await Warehouse.create(
+                        tenant_id=tenant_id,
+                        code=code,
+                        name=f"{wst.name}线边仓",
+                        warehouse_type="line_side",
+                        workshop_id=workshop_id,
+                        workshop_name=workshop_name,
+                        workstation_id=wst.id,
+                        workstation_name=wst.name,
+                        is_active=True,
+                    )
+                    created += 1
+                except IntegrityError:
+                    skipped += 1
+
+        # 3. 工作中心级线边仓（从关联工位反推车间）
+        work_centers = await WorkCenter.filter(
+            tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+        ).all()
+        for wc in work_centers:
+            code = f"LBX-GZZX-{wc.code}"
+            exists = await Warehouse.filter(
+                tenant_id=tenant_id, code=code, deleted_at__isnull=True
+            ).exists()
+            if exists:
+                continue
+            # 从该工作中心下第一个工位获取车间
+            first_ws = await Workstation.filter(
+                tenant_id=tenant_id,
+                work_center_id=wc.id,
+                deleted_at__isnull=True,
+            ).prefetch_related("production_line").first()
+            if not first_ws or not first_ws.production_line:
+                skipped += 1
+                continue
+            workshop_id = first_ws.production_line.workshop_id
+            workshop = await Workshop.filter(
+                id=workshop_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            workshop_name = workshop.name if workshop else None
+            try:
+                await Warehouse.create(
+                    tenant_id=tenant_id,
+                    code=code,
+                    name=f"{wc.name}线边仓",
+                    warehouse_type="line_side",
+                    workshop_id=workshop_id,
+                    workshop_name=workshop_name,
+                    work_center_id=wc.id,
+                    work_center_name=wc.name,
+                    is_active=True,
+                )
+                created += 1
+            except IntegrityError:
+                skipped += 1
+
+        return {"created": created, "skipped": skipped}
 

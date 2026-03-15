@@ -241,27 +241,18 @@ const UserListPage: React.FC = () => {
    * 处理批量删除用户
    */
   const handleBatchDelete = async (uuids: React.Key[]) => {
-    Modal.confirm({
-      title: t('field.user.batchDeleteTitle'),
-      content: t('field.user.batchDeleteConfirm', { count: uuids.length }),
-      okText: t('common.confirm'),
-      okType: 'danger',
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          const result = await batchDeleteUsers(uuids as string[]);
-          if (result.failure_count > 0) {
-            messageApi.warning(t('field.user.batchDeletePartial', { success: result.success_count, fail: result.failure_count }));
-          } else {
-            messageApi.success(t('field.user.batchDeleteSuccess', { count: result.success_count }));
-          }
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('pages.system.deleteFailed'));
-        }
-      },
-    });
+    try {
+      const result = await batchDeleteUsers(uuids as string[]);
+      if (result.failure_count > 0) {
+        messageApi.warning(t('field.user.batchDeletePartial', { success: result.success_count, fail: result.failure_count }));
+      } else {
+        messageApi.success(t('field.user.batchDeleteSuccess', { count: result.success_count }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    }
   };
 
   /**
@@ -776,6 +767,8 @@ const UserListPage: React.FC = () => {
         onCreate={handleCreate}
         showDeleteButton={true}
         deleteButtonText={t('field.user.batchDeleteButton')}
+        deleteConfirmTitle={t('field.user.batchDeleteConfirmTitle')}
+        deleteConfirmDescription={(c) => t('field.user.batchDeleteConfirmDescription', { count: c })}
         onDelete={handleBatchDelete}
         />
       </ListPageTemplate>
