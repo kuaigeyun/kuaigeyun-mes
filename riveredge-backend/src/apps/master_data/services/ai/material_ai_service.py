@@ -29,7 +29,7 @@ class MaterialAIService:
         material_name: Optional[str] = None,
         specification: Optional[str] = None,
         base_unit: Optional[str] = None,
-        material_type: Optional[str] = None,
+        source_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         生成物料 AI 建议（简易版）
@@ -47,7 +47,7 @@ class MaterialAIService:
             material_name: 物料名称
             specification: 规格（可选）
             base_unit: 基础单位（可选）
-            material_type: 物料类型（可选）
+            source_type: 物料来源类型（可选）
             
         Returns:
             List[Dict]: 建议列表，格式：
@@ -135,10 +135,10 @@ class MaterialAIService:
         except Exception as e:
             logger.warning(f"检查重复物料失败: {e}")
         
-        # 建议2：配置建议（基于物料类型）
-        if material_type:
+        # 建议2：配置建议（基于物料来源类型）
+        if source_type:
             config_suggestions = MaterialAIService._generate_configuration_suggestions(
-                material_type=material_type,
+                source_type=source_type,
                 specification=specification,
             )
             if config_suggestions:
@@ -164,14 +164,14 @@ class MaterialAIService:
     
     @staticmethod
     def _generate_configuration_suggestions(
-        material_type: str,
+        source_type: str,
         specification: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        生成配置建议（基于物料类型）
+        生成配置建议（基于物料来源类型）
         
         Args:
-            material_type: 物料类型（FIN/SEMI/RAW/PACK/AUX）
+            source_type: 物料来源类型（Make/Buy/Outsource/Phantom/Configure）
             specification: 规格（可选）
             
         Returns:
@@ -179,40 +179,39 @@ class MaterialAIService:
         """
         suggestions = []
         
-        # 根据物料类型提供建议
-        if material_type == "RAW":
+        if source_type == "Buy":
             suggestions.append({
                 "type": "configuration",
                 "level": "info",
-                "title": "原材料配置建议",
+                "title": "采购件配置建议",
                 "message": "建议配置安全库存、默认仓库和采购单位",
                 "details": [
-                    "原材料通常需要设置安全库存，避免缺料",
+                    "采购件通常需要设置安全库存，避免缺料",
                     "建议配置默认仓库，便于入库操作",
                     "建议配置采购单位（如：吨、kg），便于采购管理",
                 ],
             })
-        elif material_type == "FIN":
+        elif source_type in ("Make", "Configure"):
             suggestions.append({
                 "type": "configuration",
                 "level": "info",
-                "title": "成品配置建议",
-                "message": "建议配置安全库存、默认仓库和销售单位",
+                "title": "自制件配置建议",
+                "message": "建议配置BOM、工艺路线、安全库存和默认仓库",
                 "details": [
-                    "成品需要设置安全库存，保证及时交付",
-                    "建议配置默认仓库，便于出库操作",
-                    "建议配置销售单位（如：箱、个），便于销售管理",
+                    "自制件需要配置BOM和工艺路线",
+                    "建议配置安全库存，保证及时交付",
+                    "建议配置默认仓库，便于库存管理",
                 ],
             })
-        elif material_type == "SEMI":
+        elif source_type == "Outsource":
             suggestions.append({
                 "type": "configuration",
                 "level": "info",
-                "title": "半成品配置建议",
-                "message": "建议配置工艺路线和默认仓库",
+                "title": "委外件配置建议",
+                "message": "建议配置工艺路线、委外工序和委外供应商",
                 "details": [
-                    "半成品通常需要配置工艺路线，便于生产管理",
-                    "建议配置默认仓库，便于库存管理",
+                    "委外件需要配置工艺路线和委外工序",
+                    "建议配置委外供应商，便于委外管理",
                 ],
             })
         

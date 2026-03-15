@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
@@ -40,6 +40,8 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../service
 import SmartSuggestionFloatPanel from '../../../components/smart-suggestion-float-panel';
 import { getFileDownloadUrlWithToken, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
+import { saveSuspendedModal } from '../utils/suspendedModal';
+import { inspectionPlanApi } from '../../kuaizhizao/services/production';
 
 const { Panel } = Collapse;
 
@@ -52,7 +54,7 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
   Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
   Phantom: [],
-  Configure: [],
+  Service: [],
 };
 
 /**
@@ -75,6 +77,8 @@ export interface MaterialFormProps {
   loading?: boolean;
   /** 表单初始值 */
   initialValues?: Partial<MaterialCreate | MaterialUpdate>;
+  /** 暂存 Modal 时的返回路径，设置后点击表单内链接会先暂存表单再跳转 */
+  suspendedModalReturnPath?: string;
 }
 
 /**
@@ -89,6 +93,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   materialGroups = [],
   loading = false,
   initialValues,
+  suspendedModalReturnPath,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -96,9 +101,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const sourceTypeOptions = useMemo(() => [
     { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
     { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
-    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
     { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
-    { label: t('app.master-data.materialForm.sourceConfigure'), value: 'Configure' },
+    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
   ], [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
@@ -298,12 +303,18 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 生成编码的辅助函数
    * 
    * @param groupId - 物料分组ID
-   * @param materialType - 物料类型
+   * @param sourceType - 物料来源类型
    * @param name - 物料名称
    * @param forceUpdate - 是否强制更新编码（即使字段已有值）
    */
-  const generateCode = useCallback(async (groupId?: number, materialType?: string, name?: string, forceUpdate: boolean = false) => {
+  const generateCode = useCallback(async (groupId?: number, sourceType?: string, name?: string, forceUpdate: boolean = false) => {
     if (isEdit || !isAutoGenerateEnabled('master-data-material')) {
+      return;
+    }
+    // 未选择物料分组时，将提示文字填入主编码（红色显示）
+    if (!groupId) {
+      const hint = t('app.master-data.materialForm.mainCodeSelectGroupHint');
+      formRef.current?.setFieldsValue({ mainCode: hint });
       return;
     }
 
@@ -331,9 +342,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       }
     }
     
-    // 添加物料类型（如果有）
-    if (materialType) {
-      context.material_type = materialType;
+    // 添加物料来源类型（如果有）
+    if (sourceType) {
+      context.source_type = sourceType;
     }
     
     // 添加物料名称（如果有）
@@ -360,7 +371,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     } catch (error) {
       console.warn(t('app.master-data.materialForm.autoGenerateCodeFailed'), error);
     }
-  }, [isEdit, materialGroups]);
+  }, [isEdit, materialGroups, t]);
 
   /**
    * 当物料分组加载完成且已选择分组时，重新生成编码（确保 scope_fields 隔离计数生效）
@@ -372,9 +383,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     if (!groupId) return;
     const group = materialGroups.find(g => g.id === groupId);
     if (group) {
-      const materialType = formRef.current?.getFieldValue('materialType');
+      const sourceType = formRef.current?.getFieldValue('sourceType');
       const name = formRef.current?.getFieldValue('name');
-      generateCode(groupId, materialType, name, true);
+      generateCode(groupId, sourceType, name, true);
     }
   }, [materialGroups, isEdit, generateCode]);
 
@@ -392,7 +403,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
       // 如果是新建模式且启用了自动编码，生成编码
       if (!isEdit) {
-        generateCode(initialValues?.groupId, initialValues?.materialType, initialValues?.name);
+        generateCode(initialValues?.groupId, initialValues?.sourceType, initialValues?.name);
       }
 
       // 如果是编辑模式，加载物料数据
@@ -776,16 +787,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       
       // 组装完整的数据，将驼峰命名转换为蛇形命名
       const { defaults: _defaults, ...restValues } = values;
-      // 物料类型：优先从 restValues 取，兼容条件渲染或 Tab 下字段可能未及时同步的情况
-      // 用户清空时传 null，确保后端能正确清空该字段
-      const materialTypeValue = restValues.materialType ?? formRef.current?.getFieldValue('materialType');
       const submitData: any = {
         // 基础字段转换（驼峰 -> 蛇形）
         main_code: restValues.mainCode,
         name: restValues.name,
         group_id: restValues.groupId,
         process_route_id: sourceType === 'Make' ? (processRouteIdForSubmit ?? (material as any)?.process_route_id ?? (material as any)?.processRouteId ?? null) : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
-        material_type: materialTypeValue ?? null,
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,
@@ -806,6 +813,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         description: restValues.description,
         brand: restValues.brand,
         model: restValues.model,
+        texture: restValues.texture,
         is_active: restValues.isActive,
         images: imageUuids.length > 0 ? imageUuids : null,
         // 部门编码
@@ -832,6 +840,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 物料来源控制
         source_type: sourceType,
         source_config: filteredSourceConfig,
+        // 质检选项
+        inspection_mode: values.inspectionMode || 'none',
+        default_inspection_plan_id: values.inspectionMode === 'plan' ? (values.defaultInspectionPlanId || null) : null,
       };
       
       // 移除 undefined 值
@@ -984,22 +995,30 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         loading={loading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
-        initialValues={
-          !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
+        initialValues={(() => {
+          let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
             ? { ...initialValues, baseUnit: 'PC' }
-            : initialValues
-        }
+            : initialValues;
+          // 新建模式：根据来源类型设置默认税率（服务6%，其他13%）
+          if (!isEdit && vals?.sourceType != null && (vals?.defaults?.defaultTaxRate == null)) {
+            vals = {
+              ...vals,
+              defaults: { ...vals?.defaults, defaultTaxRate: vals.sourceType === 'Service' ? 6 : 13 },
+            };
+          }
+          return vals;
+        })()}
         layout="vertical"
-        grid={true}
+        grid={false}
         onValuesChange={(changedValues, allValues) => {
           if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
             const groupId = allValues.groupId;
-            const materialType = allValues.materialType;
+            const sourceType = allValues.sourceType;
             const name = allValues.name;
             if (changedValues.groupId !== undefined) {
-              setTimeout(() => generateCode(groupId, materialType, name, true), 300);
-            } else if (changedValues.materialType !== undefined || changedValues.name !== undefined) {
-              setTimeout(() => generateCode(groupId, materialType, name, false), 300);
+              setTimeout(() => generateCode(groupId, sourceType, name, true), 300);
+            } else if (changedValues.sourceType !== undefined || changedValues.name !== undefined) {
+              setTimeout(() => generateCode(groupId, sourceType, name, false), 300);
             }
           }
         }}
@@ -1019,7 +1038,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: t('app.master-data.materialForm.basicInfo'),
               children: (
                 <>
-                  <BasicInfoTab part={1} formRef={formRef} materialGroups={materialGroups} isEdit={isEdit} />
+                  <BasicInfoTab part={1} formRef={formRef} materialGroups={materialGroups} isEdit={isEdit} suspendedModalReturnPath={suspendedModalReturnPath} />
                   <MaterialSourceTab
                     ref={materialSourceTabRef}
                     formRef={formRef}
@@ -1033,8 +1052,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                     sourceTypeOptions={sourceTypeOptions}
                     onValidate={validateSourceConfig}
                     onCheckCompleteness={checkCompleteness}
+                    suspendedModalReturnPath={suspendedModalReturnPath}
                   />
-                  <BasicInfoTab part={2} formRef={formRef} materialGroups={[]} variantManaged={variantManaged} onVariantManagedChange={handleVariantManagedChange} isEdit={isEdit} />
+                  <BasicInfoTab part={2} formRef={formRef} materialGroups={[]} variantManaged={variantManaged} onVariantManagedChange={handleVariantManagedChange} isEdit={isEdit} suspendedModalReturnPath={suspendedModalReturnPath} />
                 </>
               ),
             },
@@ -1077,14 +1097,24 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               ),
             },
             {
+              key: 'inspection',
+              label: t('app.master-data.materialForm.inspection'),
+              children: (
+                <MaterialInspectionTab
+                  formRef={formRef}
+                  material={material}
+                  isEdit={isEdit}
+                  suspendedModalReturnPath={suspendedModalReturnPath}
+                />
+              ),
+            },
+            {
               key: 'defaults',
               label: t('app.master-data.materialForm.defaults'),
               children: (
                 <DefaultsTab
-                  suppliers={suppliers}
                   customers={customers}
                   warehouses={warehouses}
-                  suppliersLoading={suppliersLoading}
                   customersLoading={customersLoading}
                   warehousesLoading={warehousesLoading}
                 />
@@ -1094,6 +1124,116 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         />
       </FormModalTemplate>
     </>
+  );
+};
+
+/**
+ * 物料质检选项标签页
+ */
+interface MaterialInspectionTabProps {
+  formRef: any;
+  material?: Material;
+  isEdit: boolean;
+  suspendedModalReturnPath?: string;
+}
+
+const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
+  formRef,
+  material,
+  isEdit,
+  suspendedModalReturnPath,
+}) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [planOptions, setPlanOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+
+  useEffect(() => {
+    const loadPlans = async () => {
+      setLoadingPlans(true);
+      try {
+        let plans: any[] = [];
+        if (material?.id) {
+          try {
+            plans = await inspectionPlanApi.getByMaterial(String(material.id)) || [];
+          } catch {
+            plans = await inspectionPlanApi.list({ limit: 200, is_active: true }) || [];
+          }
+        } else {
+          plans = await inspectionPlanApi.list({ limit: 200, is_active: true }) || [];
+        }
+        setPlanOptions(
+          (Array.isArray(plans) ? plans : []).map((p: any) => ({
+            label: `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() || String(p.id),
+            value: p.id,
+          }))
+        );
+      } catch (e) {
+        console.warn('加载质检方案失败:', e);
+        setPlanOptions([]);
+      } finally {
+        setLoadingPlans(false);
+      }
+    };
+    loadPlans();
+  }, [material?.id]);
+
+  const handleGotoNewPlan = () => {
+    const materialId = material?.id;
+    const path = materialId
+      ? `/apps/kuaizhizao/quality-management/inspection-plans?materialId=${materialId}`
+      : '/apps/kuaizhizao/quality-management/inspection-plans';
+    if (suspendedModalReturnPath) {
+      saveSuspendedModal({ returnPath: suspendedModalReturnPath, formRef });
+    }
+    navigate(path);
+  };
+
+  return (
+    <div style={{ padding: '0 0 16px 0' }}>
+      <ProFormSelect
+        name="inspectionMode"
+        label={t('app.master-data.materialForm.inspectionMode')}
+        options={[
+          { label: t('app.master-data.materialForm.inspectionModeNone'), value: 'none' },
+          { label: t('app.master-data.materialForm.inspectionModeSimple'), value: 'simple' },
+          { label: t('app.master-data.materialForm.inspectionModePlan'), value: 'plan' },
+        ]}
+        fieldProps={{ style: { width: 280 } }}
+      />
+      <ProFormDependency name={['inspectionMode']}>
+        {({ inspectionMode }) =>
+          inspectionMode === 'simple' ? (
+            <Alert
+              type="info"
+              showIcon
+              message={t('app.master-data.materialForm.inspectionModeSimpleHint')}
+              style={{ marginBottom: 16 }}
+            />
+          ) : inspectionMode === 'plan' ? (
+            <>
+              <ProFormSelect
+                name="defaultInspectionPlanId"
+                label={t('app.master-data.materialForm.defaultInspectionPlan')}
+                options={planOptions}
+                fieldProps={{
+                  loading: loadingPlans,
+                  allowClear: true,
+                  showSearch: true,
+                  optionFilterProp: 'label',
+                  style: { width: 360 },
+                }}
+              />
+              <div style={{ marginTop: 8 }}>
+                <Button type="link" size="small" onClick={handleGotoNewPlan}>
+                  {t('app.master-data.materialForm.gotoInspectionPlans')}
+                </Button>
+              </div>
+            </>
+          ) : null
+        }
+      </ProFormDependency>
+    </div>
   );
 };
 
@@ -1516,6 +1656,7 @@ interface BasicInfoTabProps {
   variantManaged?: boolean;
   onVariantManagedChange?: (checked: boolean) => void;
   isEdit: boolean;
+  suspendedModalReturnPath?: string;
 }
 
 const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
@@ -1524,10 +1665,28 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   materialGroups,
   onVariantManagedChange,
   isEdit,
+  suspendedModalReturnPath,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
+
+  const handleGotoBatchRules = () => {
+    if (suspendedModalReturnPath) {
+      const values = formRef?.current?.getFieldsValue?.() ?? {};
+      saveSuspendedModal(suspendedModalReturnPath, values);
+    }
+    navigate('/apps/master-data/materials/batch-rules');
+  };
+
+  const handleGotoSerialRules = () => {
+    if (suspendedModalReturnPath) {
+      const values = formRef?.current?.getFieldsValue?.() ?? {};
+      saveSuspendedModal(suspendedModalReturnPath, values);
+    }
+    navigate('/apps/master-data/materials/serial-rules');
+  };
 
   useEffect(() => {
     const loadRules = async () => {
@@ -1547,21 +1706,34 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 
   if (part === 1) {
     return (
-      <Row gutter={16}>
-        <Col span={6}>
-          <ProFormText
-            name="mainCode"
-            label={t('app.master-data.materialForm.mainCode')}
-            placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
-            rules={[
-              { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
-              { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
-            ]}
-            fieldProps={{ style: { textTransform: 'uppercase' } }}
-            extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeExtra') : undefined}
-          />
-        </Col>
-        <Col span={6}>
+      <Row gutter={16} style={{ width: '100%' }}>
+        <ProFormDependency name={['groupId']}>
+          {({ groupId }) => (
+            <Col span={6} style={{ minWidth: 0 }}>
+              <ProFormText
+                name="mainCode"
+                label={t('app.master-data.materialForm.mainCode')}
+                placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
+                rules={[
+                  { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
+                  { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
+                  {
+                    validator: (_, value) => {
+                      if (value === t('app.master-data.materialForm.mainCodeSelectGroupHint')) {
+                        return Promise.reject(new Error(t('app.master-data.materialForm.mainCodeSelectGroupHint')));
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+                fieldProps={{
+                  style: !groupId ? { color: 'red' } : { textTransform: 'uppercase' },
+                }}
+              />
+            </Col>
+          )}
+        </ProFormDependency>
+        <Col span={6} style={{ minWidth: 0 }}>
           <ProFormText
             name="name"
             label={t('app.master-data.materialForm.materialName')}
@@ -1586,31 +1758,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         </Col>
         <Col span={6} style={{ minWidth: 0 }}>
           <DictionarySelect
-            dictionaryCode="MATERIAL_TYPE"
-            name="materialType"
-            label={t('app.master-data.materialForm.materialType')}
-            placeholder={t('app.master-data.materialForm.materialTypePlaceholder')}
-            formRef={formRef}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormText
-            name="specification"
-            label={t('app.master-data.materialForm.specification')}
-            placeholder={t('app.master-data.materialForm.specificationPlaceholder')}
-            rules={[{ max: 500, message: t('app.master-data.materialForm.specificationMax') }]}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormText
-            name="model"
-            label={t('app.master-data.materialForm.model')}
-            placeholder={t('app.master-data.materialForm.modelPlaceholder')}
-            rules={[{ max: 100, message: t('app.master-data.materialForm.modelMax') }]}
-          />
-        </Col>
-        <Col span={6}>
-          <DictionarySelect
             dictionaryCode="MATERIAL_UNIT"
             name="baseUnit"
             label={t('app.master-data.materialForm.baseUnit')}
@@ -1620,12 +1767,36 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             colProps={{ span: 24 }}
           />
         </Col>
-        <Col span={6}>
+        <Col span={6} style={{ minWidth: 0 }}>
+          <ProFormText
+            name="specification"
+            label={t('app.master-data.materialForm.specification')}
+            placeholder={t('app.master-data.materialForm.specificationPlaceholder')}
+            rules={[{ max: 500, message: t('app.master-data.materialForm.specificationMax') }]}
+          />
+        </Col>
+        <Col span={6} style={{ minWidth: 0 }}>
+          <ProFormText
+            name="model"
+            label={t('app.master-data.materialForm.model')}
+            placeholder={t('app.master-data.materialForm.modelPlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.modelMax') }]}
+          />
+        </Col>
+        <Col span={6} style={{ minWidth: 0 }}>
           <ProFormText
             name="brand"
             label={t('app.master-data.materialForm.brand')}
             placeholder={t('app.master-data.materialForm.brandPlaceholder')}
             rules={[{ max: 100, message: t('app.master-data.materialForm.brandMax') }]}
+          />
+        </Col>
+        <Col span={6} style={{ minWidth: 0 }}>
+          <ProFormText
+            name="texture"
+            label={t('app.master-data.materialForm.texture')}
+            placeholder={t('app.master-data.materialForm.texturePlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
           />
         </Col>
       </Row>
@@ -1656,7 +1827,21 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             <Col span={12}>
               <ProFormSelect
                 name="defaultBatchRuleId"
-                label={t('app.master-data.materialForm.defaultBatchRule')}
+                label={
+                  <Space>
+                    <span>{t('app.master-data.materialForm.defaultBatchRule')}</span>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<LinkOutlined />}
+                      onClick={handleGotoBatchRules}
+                      title={t('app.master-data.materialForm.gotoBatchRules')}
+                      style={{ padding: 0, height: 'auto' }}
+                    >
+                      {t('app.master-data.materialForm.createRule')}
+                    </Button>
+                  </Space>
+                }
                 placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
                 options={[
                   { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
@@ -1674,7 +1859,21 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             <Col span={12}>
               <ProFormSelect
                 name="defaultSerialRuleId"
-                label={t('app.master-data.materialForm.defaultSerialRule')}
+                label={
+                  <Space>
+                    <span>{t('app.master-data.materialForm.defaultSerialRule')}</span>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<LinkOutlined />}
+                      onClick={handleGotoSerialRules}
+                      title={t('app.master-data.materialForm.gotoSerialRules')}
+                      style={{ padding: 0, height: 'auto' }}
+                    >
+                      {t('app.master-data.materialForm.createRule')}
+                    </Button>
+                  </Space>
+                }
                 placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
                 options={[
                   { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
@@ -2508,97 +2707,41 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
  * 默认值设置标签页
  */
 interface DefaultsTabProps {
-  suppliers: Supplier[];
   customers: Customer[];
   warehouses: Warehouse[];
-  suppliersLoading: boolean;
   customersLoading: boolean;
   warehousesLoading: boolean;
 }
 
 const DefaultsTab: React.FC<DefaultsTabProps> = ({
-  suppliers,
   customers,
   warehouses,
-  suppliersLoading,
   customersLoading,
   warehousesLoading,
 }) => {
   const { t } = useTranslation();
   return (
-    <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
+    <Collapse defaultActiveKey={['finance', 'sale', 'inventory']}>
         <Panel header={t('app.master-data.defaults.finance')} key="finance">
           <Row gutter={16}>
             <Col span={12}>
-              <ProFormDigit
+              <ProFormSelect
                 name="defaults.defaultTaxRate"
                 label={t('app.master-data.defaults.defaultTaxRate')}
                 placeholder={t('app.master-data.defaults.defaultTaxRatePlaceholder')}
-                min={0}
-                max={100}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="defaults.defaultAccount"
-                label={t('app.master-data.defaults.defaultAccount')}
-                placeholder={t('app.master-data.defaults.defaultAccountPlaceholder')}
-              />
-            </Col>
-          </Row>
-        </Panel>
-
-        {/* 采购默认值 */}
-        <Panel header={t('app.master-data.defaults.purchase')} key="purchase">
-          <Alert
-            message={t('app.master-data.defaults.purchaseAlert')}
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect
-                name="defaults.defaultSupplierIds"
-                label={t('app.master-data.defaults.defaultSuppliers')}
-                placeholder={t('app.master-data.defaults.selectSuppliers')}
-                options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                fieldProps={{
-                  mode: 'multiple',
-                  loading: suppliersLoading,
-                  showSearch: true,
-                  filterOption: (input: string, option: any) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                }}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormDigit
-                name="defaults.defaultPurchasePrice"
-                label={t('app.master-data.defaults.defaultPurchasePrice')}
-                placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
-                min={0}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="defaults.defaultPurchaseUnit"
-                label={t('app.master-data.defaults.defaultPurchaseUnit')}
-                placeholder={t('app.master-data.defaults.defaultPurchaseUnitPlaceholder')}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormDigit
-                name="defaults.defaultPurchaseLeadTime"
-                label={t('app.master-data.defaults.defaultPurchaseLeadTime')}
-                placeholder={t('app.master-data.defaults.defaultPurchaseLeadTimePlaceholder')}
-                min={0}
+                options={[
+                  { label: t('app.master-data.defaults.taxRate0'), value: 0 },
+                  { label: t('app.master-data.defaults.taxRate3'), value: 3 },
+                  { label: t('app.master-data.defaults.taxRate6'), value: 6 },
+                  { label: t('app.master-data.defaults.taxRate9'), value: 9 },
+                  { label: t('app.master-data.defaults.taxRate13'), value: 13 },
+                ]}
               />
             </Col>
           </Row>
         </Panel>
 
-        {/* 销售默认值 */}
+        {/* 销售默认值：单位已在【多单位管理】标签配置 */}
         <Panel header={t('app.master-data.defaults.sale')} key="sale">
           <Row gutter={16}>
             <Col span={12}>
@@ -2607,13 +2750,6 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 label={t('app.master-data.defaults.defaultSalePrice')}
                 placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
                 min={0}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="defaults.defaultSaleUnit"
-                label={t('app.master-data.defaults.defaultSaleUnit')}
-                placeholder={t('app.master-data.defaults.defaultSaleUnitPlaceholder')}
               />
             </Col>
             <Col span={12}>
@@ -2675,27 +2811,6 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 min={0}
               />
             </Col>
-            <Col span={12}>
-              <ProFormDigit
-                name="defaults.minStock"
-                label={t('app.master-data.defaults.minStock')}
-                placeholder={t('app.master-data.defaults.minStockPlaceholder')}
-                min={0}
-              />
-            </Col>
-          </Row>
-        </Panel>
-
-        {/* 生产默认值：默认工艺路线仅在【基本信息】中的物料来源区域（自制件时）配置，此处仅保留默认生产单位 */}
-        <Panel header={t('app.master-data.defaults.production')} key="production">
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormText
-                name="defaults.defaultProductionUnit"
-                label={t('app.master-data.defaults.defaultProductionUnit')}
-                placeholder={t('app.master-data.defaults.defaultProductionUnitPlaceholder')}
-              />
-            </Col>
           </Row>
         </Panel>
       </Collapse>
@@ -2717,15 +2832,17 @@ interface MaterialSourceTabProps {
   sourceTypeOptions: Array<{ label: string; value: string }>;
   onValidate?: () => void;
   onCheckCompleteness?: () => void;
+  suspendedModalReturnPath?: string;
 }
 
 const MaterialSourceTab = forwardRef<
   { applySuggestion: (type: string, manufacturingMode?: string) => void },
   MaterialSourceTabProps
 >(
-  ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, sourceTypeOptions, onValidate, onCheckCompleteness }, ref) => {
+  ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, sourceTypeOptions, onValidate, onCheckCompleteness, suspendedModalReturnPath }, ref) => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const { token } = theme.useToken();
     const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
     const manufacturingModeOptions = useMemo(() => [
       { label: t('app.master-data.materialForm.manufacturingFabrication'), value: 'fabrication' },
@@ -2733,6 +2850,10 @@ const MaterialSourceTab = forwardRef<
     ], [t]);
 
     const handleGotoProcessRoutes = () => {
+      if (suspendedModalReturnPath) {
+        const values = formRef?.current?.getFieldsValue?.() ?? {};
+        saveSuspendedModal(suspendedModalReturnPath, values);
+      }
       navigate('/apps/master-data/process/routes');
     };
 
@@ -2746,8 +2867,9 @@ const MaterialSourceTab = forwardRef<
     formRef.current?.setFieldsValue({
       sourceType: value,
       source_type: value, // 向后兼容
+      'defaults.defaultTaxRate': value === 'Service' ? 6 : 13, // 服务类6%，其他13%
     });
-    
+
     // Initialize config based on source type
     const currentConfig = formRef.current?.getFieldValue('sourceConfig') || formRef.current?.getFieldValue('source_config') || {};
     let newConfig = { ...currentConfig };
@@ -2780,13 +2902,6 @@ const MaterialSourceTab = forwardRef<
         outsource_price: newConfig.outsource_price,
         material_provided_by: newConfig.material_provided_by || 'enterprise',
       };
-    } else if (value === 'Configure') {
-      // Configurable items: keep variant config
-      newConfig = {
-        ...newConfig,
-        bom_variants: newConfig.bom_variants,
-        default_variant: newConfig.default_variant,
-      };
     }
     
     formRef.current?.setFieldsValue({
@@ -2806,8 +2921,17 @@ const MaterialSourceTab = forwardRef<
   }));
 
   return (
-    <div>
-      <Row gutter={16} style={{ marginTop: 8 }}>
+    <Card
+      bordered
+      style={{
+        marginBottom: 16,
+        backgroundColor: '#fafafa',
+        borderColor: token.colorBorder,
+        borderRadius: token.borderRadius,
+      }}
+      styles={{ body: { padding: 16 } }}
+    >
+      <Row gutter={16}>
         <Col span={12}>
           <ProFormSelect
             name="sourceType"
@@ -2828,46 +2952,49 @@ const MaterialSourceTab = forwardRef<
           if (currentSourceType === 'Make') {
             return (
               <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={6}>
-                  <ProFormSelect
-                    name="sourceConfig.manufacturing_mode"
-                    label={t('app.master-data.materialForm.manufacturingMode')}
-                    placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
-                    options={manufacturingModeOptions}
-                    fieldProps={{ allowClear: true }}
-                    extra={t('app.master-data.materialForm.manufacturingModeExtra')}
-                  />
-                </Col>
                 <Col span={12}>
-                  <ProFormSelect
-                    name="defaults.defaultProcessRouteUuid"
-                    label={
-                      <Space>
-                        <span>{t('app.master-data.source.defaultProcessRoute')}</span>
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<LinkOutlined />}
-                          onClick={handleGotoProcessRoutes}
-                          title={t('app.master-data.source.gotoRoutes')}
-                          style={{ padding: 0, height: 'auto' }}
-                        >
-                          {t('app.master-data.source.routes')}
-                        </Button>
-                      </Space>
-                    }
-                    placeholder={t('app.master-data.source.selectProcessRoute')}
-                    options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
-                    fieldProps={{
-                      loading: processRoutesLoading,
-                      showSearch: true,
-                      filterOption: (input: string, option: any) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                      allowClear: true,
-                    }}
-                  />
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <ProFormSelect
+                        name="sourceConfig.manufacturing_mode"
+                        label={t('app.master-data.materialForm.manufacturingMode')}
+                        placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
+                        options={manufacturingModeOptions}
+                        fieldProps={{ allowClear: true }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <ProFormSelect
+                        name="defaults.defaultProcessRouteUuid"
+                        label={
+                          <Space>
+                            <span>{t('app.master-data.source.defaultProcessRoute')}</span>
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<LinkOutlined />}
+                              onClick={handleGotoProcessRoutes}
+                              title={t('app.master-data.source.gotoRoutes')}
+                              style={{ padding: 0, height: 'auto' }}
+                            >
+                              {t('app.master-data.source.routes')}
+                            </Button>
+                          </Space>
+                        }
+                        placeholder={t('app.master-data.source.selectProcessRoute')}
+                        options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+                        fieldProps={{
+                          loading: processRoutesLoading,
+                          showSearch: true,
+                          filterOption: (input: string, option: any) =>
+                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                          allowClear: true,
+                        }}
+                      />
+                    </Col>
+                  </Row>
                 </Col>
-                <Col span={6}>
+                <Col span={4}>
                   <ProFormDigit
                     name="sourceConfig.production_lead_time"
                     label={t('app.master-data.source.productionLeadTime')}
@@ -2875,7 +3002,7 @@ const MaterialSourceTab = forwardRef<
                     min={0}
                   />
                 </Col>
-                <Col span={6}>
+                <Col span={4}>
                   <ProFormDigit
                     name="sourceConfig.min_production_batch"
                     label={t('app.master-data.source.minProductionBatch')}
@@ -2883,7 +3010,7 @@ const MaterialSourceTab = forwardRef<
                     min={0}
                   />
                 </Col>
-                <Col span={6}>
+                <Col span={4}>
                   <ProFormDigit
                     name="sourceConfig.production_waste_rate"
                     label={t('app.master-data.source.productionWasteRate')}
@@ -2914,26 +3041,26 @@ const MaterialSourceTab = forwardRef<
                   />
                 </Col>
                 <Col span={4}>
-              <ProFormDigit
-                name="sourceConfig.purchase_lead_time"
-                label={t('app.master-data.source.purchaseLeadTime')}
-                placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                  <ProFormDigit
+                    name="sourceConfig.purchase_lead_time"
+                    label={t('app.master-data.source.purchaseLeadTime')}
+                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={4}>
-              <ProFormDigit
-                name="sourceConfig.min_purchase_batch"
-                label={t('app.master-data.source.minPurchaseBatch')}
-                placeholder={t('app.master-data.source.minBatchPlaceholder')}
+                  <ProFormDigit
+                    name="sourceConfig.min_purchase_batch"
+                    label={t('app.master-data.source.minPurchaseBatch')}
+                    placeholder={t('app.master-data.source.minBatchPlaceholder')}
                     min={0}
                   />
                 </Col>
                 <Col span={4}>
-              <ProFormDigit
-                name="sourceConfig.purchase_price"
-                label={t('app.master-data.source.purchasePrice')}
-                placeholder={t('app.master-data.source.pricePlaceholder')}
+                  <ProFormDigit
+                    name="sourceConfig.purchase_price"
+                    label={t('app.master-data.source.purchasePrice')}
+                    placeholder={t('app.master-data.source.pricePlaceholder')}
                     min={0}
                     fieldProps={{ precision: 2 }}
                   />
@@ -2943,98 +3070,64 @@ const MaterialSourceTab = forwardRef<
           }
           if (currentSourceType === 'Outsource') {
             return (
-              <>
-                <Row gutter={16} style={{ marginTop: 0 }}>
-                  <Col span={6}>
-                    <SafeProFormSelect
-                      name="sourceConfig.outsource_supplier_id"
-                      label={t('app.master-data.source.outsourceSupplier')}
-                      placeholder={t('app.master-data.source.selectOutsourceSupplier')}
-                      rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
-                      options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                      fieldProps={{
-                        loading: suppliersLoading,
-                        showSearch: true,
-                        filterOption: (input: string, option: any) =>
-                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                      }}
-                    />
-                  </Col>
-                  <Col span={6}>
-                    <SafeProFormSelect
-                      name="sourceConfig.outsource_operation"
-                      label={t('app.master-data.source.outsourceOperation')}
-                      placeholder={t('app.master-data.source.selectOutsourceOperation')}
-                      rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
-                      options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
-                      fieldProps={{
-                        loading: operationsLoading,
-                        showSearch: true,
-                        filterOption: (input: string, option: any) =>
-                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                      }}
-                    />
-                  </Col>
-                  <Col span={6}>
-                    <ProFormDigit
-                      name="sourceConfig.outsource_lead_time"
-                      label={t('app.master-data.source.outsourceLeadTime')}
-                      placeholder={t('app.master-data.source.leadTimePlaceholder')}
-                      min={0}
-                    />
-                  </Col>
-                  <Col span={6}>
-                    <ProFormDigit
-                      name="sourceConfig.outsource_price"
-                      label={t('app.master-data.source.outsourcePrice')}
-                      placeholder={t('app.master-data.source.pricePlaceholder')}
-                      min={0}
-                      fieldProps={{ precision: 2 }}
-                    />
-                  </Col>
-                </Row>
-                <Row gutter={16}>
-                  <Col span={6}>
-                    <ProFormSelect
-                      name="sourceConfig.material_provided_by"
-                      label={t('app.master-data.source.materialProvidedBy')}
-                      placeholder={t('app.master-data.source.selectPlaceholder')}
-                      options={[
-                        { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
-                        { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
-                      ]}
-                      initialValue="enterprise"
-                    />
-                  </Col>
-                </Row>
-              </>
-            );
-          }
-          if (currentSourceType === 'Configure') {
-            return (
               <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={24}>
-                  <Alert
-                    message={t('app.master-data.source.configureTip')}
-                    description={t('app.master-data.source.configureTipDesc')}
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <ProFormTextArea
-                    name="sourceConfig.bom_variants"
-                    label={t('app.master-data.source.bomVariantsLabel')}
-                    placeholder={t('app.master-data.source.bomVariantsPlaceholder')}
-                    fieldProps={{ rows: 4 }}
+                <Col span={6}>
+                  <SafeProFormSelect
+                    name="sourceConfig.outsource_supplier_id"
+                    label={t('app.master-data.source.outsourceSupplier')}
+                    placeholder={t('app.master-data.source.selectOutsourceSupplier')}
+                    rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
+                    options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                    fieldProps={{
+                      loading: suppliersLoading,
+                      showSearch: true,
+                      filterOption: (input: string, option: any) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
                   />
                 </Col>
                 <Col span={6}>
-                  <ProFormText
-                    name="sourceConfig.default_variant"
-                    label={t('app.master-data.source.defaultVariant')}
-                    placeholder={t('app.master-data.source.defaultVariantPlaceholder')}
+                  <SafeProFormSelect
+                    name="sourceConfig.outsource_operation"
+                    label={t('app.master-data.source.outsourceOperation')}
+                    placeholder={t('app.master-data.source.selectOutsourceOperation')}
+                    rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
+                    options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                    fieldProps={{
+                      loading: operationsLoading,
+                      showSearch: true,
+                      filterOption: (input: string, option: any) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    }}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormDigit
+                    name="sourceConfig.outsource_lead_time"
+                    label={t('app.master-data.source.outsourceLeadTime')}
+                    placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                    min={0}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormDigit
+                    name="sourceConfig.outsource_price"
+                    label={t('app.master-data.source.outsourcePrice')}
+                    placeholder={t('app.master-data.source.pricePlaceholder')}
+                    min={0}
+                    fieldProps={{ precision: 2 }}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormSelect
+                    name="sourceConfig.material_provided_by"
+                    label={t('app.master-data.source.materialProvidedBy')}
+                    placeholder={t('app.master-data.source.selectPlaceholder')}
+                    options={[
+                      { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
+                      { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
+                    ]}
+                    initialValue="enterprise"
                   />
                 </Col>
               </Row>
@@ -3054,10 +3147,24 @@ const MaterialSourceTab = forwardRef<
               </Row>
             );
           }
+          if (currentSourceType === 'Service') {
+            return (
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={24}>
+                  <Alert
+                    message={t('app.master-data.source.serviceTip')}
+                    description={t('app.master-data.source.serviceTipDesc')}
+                    type="info"
+                    showIcon
+                  />
+                </Col>
+              </Row>
+            );
+          }
           return null;
         }}
       </ProFormDependency>
-    </div>
+    </Card>
   );
 });
 

@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -63,6 +63,7 @@ const PLAN_TYPE_FALLBACK = [
 
 const InspectionPlansPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
@@ -84,6 +85,36 @@ const InspectionPlansPage: React.FC = () => {
     load();
   }, []);
 
+  /** 当 URL 含 materialId 或 operationId 时，自动打开新建弹窗（仅首次） */
+  const hasAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoOpenedRef.current) return;
+    const materialId = searchParams.get('materialId');
+    const operationId = searchParams.get('operationId');
+    if (materialId || operationId) {
+      hasAutoOpenedRef.current = true;
+      setIsEdit(false);
+      setCurrentPlan(null);
+      setSteps([]);
+      setModalVisible(true);
+      const prefill: Record<string, any> = {};
+      if (operationId) {
+        prefill.plan_type = 'process';
+        prefill.operation_id = parseInt(operationId, 10) || operationId;
+      }
+      if (materialId) {
+        const mid = parseInt(materialId, 10);
+        if (!isNaN(mid)) prefill.material_id = mid;
+      }
+      setTimeout(() => {
+        formRef.current?.resetFields();
+        if (Object.keys(prefill).length > 0) {
+          formRef.current?.setFieldsValue(prefill);
+        }
+      }, 100);
+    }
+  }, [searchParams]);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<InspectionPlan | null>(null);
@@ -93,13 +124,31 @@ const InspectionPlansPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [planDetail, setPlanDetail] = useState<InspectionPlan | null>(null);
 
-  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码 */
-  const handleCreate = () => {
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编码。支持 URL 参数 materialId/operationId 预填 */
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentPlan(null);
     setSteps([]);
     setModalVisible(true);
-    setTimeout(() => formRef.current?.resetFields(), 0);
+    const materialId = searchParams.get('materialId');
+    const operationId = searchParams.get('operationId');
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      const prefill: Record<string, any> = {};
+      if (operationId) {
+        prefill.plan_type = 'process';
+        prefill.operation_id = parseInt(operationId, 10) || operationId;
+      }
+      if (materialId) {
+        const mid = parseInt(materialId, 10);
+        if (!isNaN(mid)) {
+          prefill.material_id = mid;
+        }
+      }
+      if (Object.keys(prefill).length > 0) {
+        formRef.current?.setFieldsValue(prefill);
+      }
+    }, 0);
   };
 
   const handleEdit = async (record: InspectionPlan) => {
@@ -319,6 +368,12 @@ const InspectionPlansPage: React.FC = () => {
           .inspection-plan-modal .inspection-steps-form-item .ant-form-item-control-input { width: 100%; min-width: 0; }
           .inspection-plan-modal .inspection-steps-form-item .ant-form-item-control-input-content { width: 100%; min-width: 0; }
         `}</style>
+        <ProFormItem name="material_id" hidden>
+          <input type="hidden" />
+        </ProFormItem>
+        <ProFormItem name="operation_id" hidden>
+          <input type="hidden" />
+        </ProFormItem>
         <Row gutter={16}>
           <Col span={12}>
             <ProFormText name="plan_code" label="方案编码" placeholder="留空则自动生成" />

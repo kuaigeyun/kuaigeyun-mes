@@ -220,10 +220,10 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
                 "description": "物料所属分组的名称"
             },
             {
-                "field_name": "material_type",
-                "field_label": "物料类型",
+                "field_name": "source_type",
+                "field_label": "物料来源类型",
                 "field_type": "string",
-                "description": "物料类型（FIN/SEMI/RAW/PACK/AUX）"
+                "description": "物料来源类型（Make/Buy/Outsource/Phantom/Configure）"
             },
             {
                 "field_name": "name",

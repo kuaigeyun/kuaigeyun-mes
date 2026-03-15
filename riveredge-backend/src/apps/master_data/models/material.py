@@ -123,8 +123,7 @@ class Material(BaseModel):
             ("uuid",),
             ("group_id",),
             ("process_route_id",),
-            ("material_type",),
-            ("source_type",),  # 物料来源类型索引（核心功能，新增）
+            ("source_type",),  # 物料来源类型索引（核心功能）
         ]
         # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
         # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
@@ -134,9 +133,8 @@ class Material(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
-    main_code = fields.CharField(max_length=50, description="主编码（系统内部唯一标识，格式：MAT-{类型}-{序号}）")
+    main_code = fields.CharField(max_length=50, description="主编码（系统内部唯一标识，格式：MAT-{分组}-{序号}）")
     name = fields.CharField(max_length=200, description="物料名称")
-    material_type = fields.CharField(max_length=20, null=True, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification = fields.CharField(max_length=500, null=True, description="规格")
     base_unit = fields.CharField(max_length=20, description="基础单位")
     
@@ -182,10 +180,22 @@ class Material(BaseModel):
     # 默认值设置（JSON格式存储）
     defaults = fields.JSONField(null=True, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
+    # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
+    inspection_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="质检模式（none:无质检, simple:简易质检, plan:方案质检）"
+    )
+    default_inspection_plan_id = fields.IntField(
+        null=True,
+        description="默认质检方案ID（方案质检时使用，关联 kuaizhizao.InspectionPlan）"
+    )
+    
     # 扩展信息
     description = fields.TextField(null=True, description="描述")
     brand = fields.CharField(max_length=100, null=True, description="品牌")
     model = fields.CharField(max_length=100, null=True, description="型号")
+    texture = fields.CharField(max_length=100, null=True, description="材质（如：钢、塑料、铝合金等）")
     images = fields.JSONField(null=True, description="产品图片列表")
     
     # 关联关系（ForeignKeyField 会自动创建 group_id 字段）

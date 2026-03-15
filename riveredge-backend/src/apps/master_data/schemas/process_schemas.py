@@ -105,6 +105,8 @@ class OperationBase(BaseModel):
     reporting_type: str = Field("quantity", alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
     allow_jump: bool = Field(False, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    inspection_mode: str = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（方案质检时使用）")
     
     @field_validator("reporting_type")
     @classmethod
@@ -152,6 +154,8 @@ class OperationUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
     defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
     default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
+    inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
     model_config = ConfigDict(populate_by_name=True)
     
     @field_validator("reporting_type")
@@ -192,6 +196,9 @@ class OperationResponse(OperationBase):
     default_operator_ids: List[int] = Field(default_factory=list, alias="defaultOperatorIds", description="默认生产人员（用户ID列表）")
     default_operator_uuids: List[str] = Field(default_factory=list, alias="defaultOperatorUuids", description="默认生产人员 UUID列表")
     default_operator_names: List[str] = Field(default_factory=list, alias="defaultOperatorNames", description="默认生产人员姓名列表")
+    inspection_mode: str = Field("none", alias="inspectionMode", description="质检模式")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
+    default_inspection_plan_name: Optional[str] = Field(None, alias="defaultInspectionPlanName", description="默认质检方案名称（冗余）")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 

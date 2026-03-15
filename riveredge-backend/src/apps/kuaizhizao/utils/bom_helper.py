@@ -179,7 +179,7 @@ async def calculate_material_requirements_from_bom(
             component_id=item.component_id,
             component_code=component.code,
             component_name=component.name,
-            component_type=component.material_type or "原材料",
+            component_type=(component.source_type or "Buy") if hasattr(component, "source_type") else "Buy",
             gross_requirement=gross_requirement,
             net_requirement=gross_requirement,  # 暂时不考虑库存和计划入库
             available_inventory=0.0,  # TODO: 从库存系统获取

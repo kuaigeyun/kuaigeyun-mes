@@ -8,6 +8,7 @@ import React, { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
+import SuspendedModalFloatingButton from './components/SuspendedModalFloatingButton';
 
 /** 页面懒加载包装：Suspense + PageSkeleton fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -53,6 +54,7 @@ const MasterDataApp: React.FC = () => {
   const { t } = useTranslation();
 
   return (
+    <>
     <Routes>
       {/* 工厂建模路由 */}
       <Route path="factory/plants" element={withPageSuspense(PlantsPage)} />
@@ -98,6 +100,8 @@ const MasterDataApp: React.FC = () => {
         </div>
       } />
     </Routes>
+    <SuspendedModalFloatingButton />
+    </>
   );
 };
 

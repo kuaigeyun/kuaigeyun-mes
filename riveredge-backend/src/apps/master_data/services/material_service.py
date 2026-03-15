@@ -24,6 +24,37 @@ from core.config.code_rule_pages import CODE_RULE_PAGES
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+# source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Configure->FIN, Phantom->SEMI, Service->SVC）
+_SOURCE_TYPE_TO_TYPE_CODE = {
+    "Buy": "RAW",
+    "Make": "SEMI",
+    "Outsource": "SEMI",
+    "Configure": "FIN",
+    "Phantom": "SEMI",
+    "Service": "SVC",
+}
+
+
+def _source_type_to_type_code(source_type: Optional[str]) -> str:
+    """将物料来源类型映射为编码规则使用的 type_code（用于回退生成）"""
+    if not source_type:
+        return "RAW"
+    return _SOURCE_TYPE_TO_TYPE_CODE.get(source_type, "RAW")
+
+
+async def _enrich_inspection_plan_name(resp_data: Dict[str, Any]) -> None:
+    """当有 default_inspection_plan_id 时，填充 default_inspection_plan_name"""
+    plan_id = resp_data.get("default_inspection_plan_id")
+    if not plan_id:
+        return
+    try:
+        from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+        plan = await InspectionPlan.filter(id=plan_id, deleted_at__isnull=True).first()
+        if plan:
+            resp_data["default_inspection_plan_name"] = plan.plan_name
+    except Exception:
+        pass
+
 
 def _material_to_response_data(material) -> Dict[str, Any]:
     """
@@ -38,7 +69,6 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "main_code": material.main_code or (getattr(material, "code", None) or ""),
         "code": getattr(material, "code", None),
         "name": material.name,
-        "material_type": getattr(material, "material_type", None),
         "group_id": getattr(material, "group_id", None),
         "specification": getattr(material, "specification", None),
         "base_unit": material.base_unit,
@@ -52,11 +82,14 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "description": getattr(material, "description", None),
         "brand": getattr(material, "brand", None),
         "model": getattr(material, "model", None),
+        "texture": getattr(material, "texture", None),
         "images": getattr(material, "images", None),
         "is_active": getattr(material, "is_active", True),
         "defaults": getattr(material, "defaults", None),
         "source_type": getattr(material, "source_type", None),
         "source_config": getattr(material, "source_config", None),
+        "inspection_mode": getattr(material, "inspection_mode", None) or "none",
+        "default_inspection_plan_id": getattr(material, "default_inspection_plan_id", None),
         "process_route_id": getattr(material, "process_route_id", None) or (getattr(pr, "id", None) if pr else None),
         "process_route_name": getattr(pr, "name", None) if pr else None,
         "created_at": material.created_at,
@@ -406,8 +439,9 @@ class MaterialService:
                         context["group_code"] = group.code
                         context["group_name"] = group.name
                     
-                    # 添加物料类型
-                    context["material_type"] = data.material_type
+                    # 添加物料来源类型（用于编码规则，可选）
+                    if getattr(data, "source_type", None):
+                        context["source_type"] = data.source_type
                     
                     # 添加物料名称（如果需要）
                     context["name"] = data.name
@@ -424,13 +458,13 @@ class MaterialService:
                     logger.warning(f"使用编码规则生成物料编码失败: {e}，回退到默认生成方式")
                     data.main_code = await MaterialCodeService.generate_main_code(
                         tenant_id=tenant_id,
-                        material_type=data.material_type
+                        material_type=_source_type_to_type_code(getattr(data, "source_type", None))
                     )
             else:
                 # 如果没有配置编码规则，使用默认生成方式
                 data.main_code = await MaterialCodeService.generate_main_code(
                     tenant_id=tenant_id,
-                    material_type=data.material_type
+                    material_type=_source_type_to_type_code(getattr(data, "source_type", None))
                 )
         else:
             logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
@@ -533,7 +567,8 @@ class MaterialService:
                     if group:
                         context["group_code"] = group.code
                         context["group_name"] = group.name
-                    context["material_type"] = data.material_type
+                    if getattr(data, "source_type", None):
+                        context["source_type"] = data.source_type
                     context["name"] = data.name
                     
                     max_attempts = 20
@@ -550,12 +585,12 @@ class MaterialService:
                                 logger.warning(f"使用编码规则重新生成物料编码失败: {e}，回退到默认生成方式")
                                 data.main_code = await MaterialCodeService.generate_main_code(
                                     tenant_id=tenant_id,
-                                    material_type=data.material_type
+                                    material_type=_source_type_to_type_code(getattr(data, "source_type", None))
                                 )
                         else:
                             data.main_code = await MaterialCodeService.generate_main_code(
                                 tenant_id=tenant_id,
-                                material_type=data.material_type
+                                material_type=_source_type_to_type_code(getattr(data, "source_type", None))
                             )
                         
                         existing_check = await Material.filter(
@@ -726,6 +761,7 @@ class MaterialService:
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        await _enrich_inspection_plan_name(resp_data)
         response = MaterialResponse.model_validate(resp_data)
         
         # 发送 Inngest 事件，触发 AI 建议工作流（异步处理）
@@ -741,7 +777,7 @@ class MaterialService:
                         "material_id": material.id,
                         "material_uuid": str(material.uuid),
                         "material_name": material.name,
-                        "material_type": material.material_type,
+                        "source_type": getattr(material, "source_type", None),
                         "specification": material.specification,
                         "base_unit": material.base_unit,
                     }
@@ -868,6 +904,7 @@ class MaterialService:
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        await _enrich_inspection_plan_name(resp_data)
         return MaterialResponse.model_validate(resp_data)
     
     @staticmethod
@@ -880,7 +917,7 @@ class MaterialService:
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
-        material_type: Optional[str] = None,
+        source_type: Optional[str] = None,
         specification: Optional[str] = None,
         brand: Optional[str] = None,
         model: Optional[str] = None,
@@ -898,7 +935,7 @@ class MaterialService:
             keyword: 搜索关键词（物料编码或名称）
             code: 物料编码（精确匹配）
             name: 物料名称（模糊匹配）
-            material_type: 物料类型（可选，用于过滤）
+            source_type: 物料来源类型（可选，用于过滤）
             specification: 规格（可选，模糊匹配）
             brand: 品牌（可选，模糊匹配）
             model: 型号（可选，模糊匹配）
@@ -939,8 +976,8 @@ class MaterialService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        if material_type is not None:
-            query = query.filter(material_type=material_type)
+        if source_type is not None:
+            query = query.filter(source_type=source_type)
 
         if base_unit is not None:
             query = query.filter(base_unit=base_unit)
@@ -1220,6 +1257,7 @@ class MaterialService:
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        await _enrich_inspection_plan_name(resp_data)
         response = MaterialResponse.model_validate(resp_data)
 
         # 发送 Inngest 事件，触发物料变更通知工作流（下游单据提示）

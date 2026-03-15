@@ -84,7 +84,6 @@ export interface Material {
   mainCode?: string; // 主编码（系统内部唯一标识）
   name: string;
   groupId?: number;
-  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
   units?: MaterialUnits;
@@ -97,6 +96,7 @@ export interface Material {
   description?: string;
   brand?: string;
   model?: string;
+  texture?: string;
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
   codeAliases?: MaterialCodeAlias[]; // 编码别名列表
@@ -108,6 +108,13 @@ export interface Material {
   processRouteName?: string; // 默认工艺路线名称
   process_route_id?: number;
   process_route_name?: string;
+  /** 质检模式（none:无质检, simple:简易质检, plan:方案质检） */
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  inspection_mode?: string;
+  /** 默认质检方案ID（方案质检时使用） */
+  defaultInspectionPlanId?: number | null;
+  default_inspection_plan_id?: number | null;
+  defaultInspectionPlanName?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -189,7 +196,6 @@ export interface MaterialCreate {
   mainCode?: string; // 主编码（如果未提供，系统会根据编码规则自动生成）
   name: string;
   groupId?: number;
-  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
   units?: MaterialUnits;
@@ -202,6 +208,7 @@ export interface MaterialCreate {
   description?: string;
   brand?: string;
   model?: string;
+  texture?: string;
   isActive?: boolean;
   // 编码映射
   departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
@@ -218,7 +225,6 @@ export interface MaterialUpdate {
   code?: string;
   name?: string;
   groupId?: number;
-  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit?: string;
   units?: MaterialUnits;
@@ -231,6 +237,7 @@ export interface MaterialUpdate {
   description?: string;
   brand?: string;
   model?: string;
+  texture?: string;
   isActive?: boolean;
   // 编码映射
   departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
@@ -251,6 +258,7 @@ export interface MaterialListParams {
   keyword?: string;
   code?: string;
   name?: string;
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/Configure）
 }
 
 /**

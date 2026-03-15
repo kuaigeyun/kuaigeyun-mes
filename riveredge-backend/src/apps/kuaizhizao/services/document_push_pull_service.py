@@ -539,7 +539,7 @@ class DocumentPushPullService:
                 material_id=item.material_id,
                 material_code=item.material_code,
                 material_name=item.material_name,
-                material_type="成品",
+                source_type=item.material_source_type or "Make",
                 planned_quantity=Decimal(str(qty)),
                 planned_date=planned_date,
                 available_inventory=item.available_inventory or Decimal(0),

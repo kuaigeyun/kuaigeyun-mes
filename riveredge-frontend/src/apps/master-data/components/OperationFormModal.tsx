@@ -4,11 +4,13 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { ProFormInstance } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, Button } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { operationApi, defectTypeApi } from '../services/process';
+import { inspectionPlanApi } from '../../kuaizhizao/services/production';
 import { getUserList } from '../../../services/user';
 import { testGenerateCode, generateCode } from '../../../services/codeRule';
 import { getCodeRulePageConfig } from '../../../services/codeRule';
@@ -33,20 +35,24 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [defectTypeOptions, setDefectTypeOptions] = useState<{ label: string; value: string }[]>([]);
   const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
+  const [inspectionPlanOptions, setInspectionPlanOptions] = useState<{ label: string; value: number }[]>([]);
+  const [currentOperationId, setCurrentOperationId] = useState<number | null>(null);
 
   const isEdit = Boolean(editUuid);
 
-  const loadFormOptions = async () => {
+  const loadFormOptions = async (operationId?: number) => {
     try {
-      const [defectsRes, usersRes] = await Promise.all([
+      const [defectsRes, usersRes, plansRes] = await Promise.all([
         defectTypeApi.list({ limit: 500, isActive: true }),
         getUserList({ is_active: true, page_size: 100 }),
+        inspectionPlanApi.list({ limit: 200, plan_type: 'process', operation_id: operationId, is_active: true }),
       ]);
       const defects = Array.isArray(defectsRes) ? defectsRes : (defectsRes?.data ?? []);
       setDefectTypeOptions(
@@ -59,18 +65,27 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           value: u.uuid as string,
         }))
       );
+      const plans = Array.isArray(plansRes) ? plansRes : plansRes?.data ?? [];
+      setInspectionPlanOptions(
+        plans.map((p: any) => ({
+          label: `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() || String(p.id),
+          value: p.id,
+        }))
+      );
     } catch (e) {
-      console.warn('加载不良品项/用户选项失败:', e);
+      console.warn('加载不良品项/用户/质检方案选项失败:', e);
     }
   };
 
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
+    setCurrentOperationId(null);
     formRef.current?.setFieldsValue({
       isActive: true,
       reportingType: 'quantity',
       allowJump: false,
+      inspectionMode: 'none',
     });
     loadFormOptions();
 
@@ -121,6 +136,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         const defectTypeUuids = Array.isArray(dts) ? dts.map((d: DefectTypeMinimal) => d.uuid) : [];
         const defaultOperatorUuids = detail.defaultOperatorUuids ?? detail.default_operator_uuids ?? [];
         const defaultOperatorUuidsArr = Array.isArray(defaultOperatorUuids) ? defaultOperatorUuids : [];
+        setCurrentOperationId(detail.id);
+        loadFormOptions(detail.id);
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -128,6 +145,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           reportingType: detail.reportingType || 'quantity',
           allowJump: detail.allowJump ?? false,
           isActive: detail.isActive ?? true,
+          inspectionMode: detail.inspectionMode ?? detail.inspection_mode ?? 'none',
+          defaultInspectionPlanId: detail.defaultInspectionPlanId ?? detail.default_inspection_plan_id ?? undefined,
           defectTypeUuids: defectTypeUuids.length ? defectTypeUuids : undefined,
           defaultOperatorUuids: defaultOperatorUuidsArr.length ? defaultOperatorUuidsArr : undefined,
         });
@@ -143,6 +162,12 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       const formValues = formRef.current?.getFieldsValue?.() ?? {};
       const defectTypeUuids = Array.isArray(formValues.defectTypeUuids) ? formValues.defectTypeUuids : (Array.isArray(values?.defectTypeUuids) ? values.defectTypeUuids : []);
       const defaultOperatorUuids = Array.isArray(formValues.defaultOperatorUuids) ? formValues.defaultOperatorUuids : (Array.isArray(values?.defaultOperatorUuids) ? values.defaultOperatorUuids : []);
+      const inspectionMode = formValues.inspectionMode ?? values?.inspectionMode ?? 'none';
+      const defaultInspectionPlanId = formValues.defaultInspectionPlanId ?? values?.defaultInspectionPlanId;
+      const inspectionPayload =
+        inspectionMode === 'plan'
+          ? { inspectionMode, defaultInspectionPlanId: defaultInspectionPlanId || null }
+          : { inspectionMode, defaultInspectionPlanId: null };
 
       if (isEdit && editUuid) {
         const updatePayload: OperationUpdate = {
@@ -150,6 +175,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           ...values,
           defectTypeUuids,
           defaultOperatorUuids,
+          ...inspectionPayload,
         };
         await operationApi.update(editUuid, updatePayload);
         messageApi.success(t('common.updateSuccess'));
@@ -187,6 +213,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           ...values,
           defectTypeUuids,
           defaultOperatorUuids,
+          ...inspectionPayload,
         };
         const created = await operationApi.create(createPayload);
         messageApi.success(t('common.createSuccess'));
@@ -206,11 +233,18 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    setCurrentOperationId(null);
   };
 
   const optionsMap: Record<string, Array<{ value: any; label: string }>> = {
     defectTypeUuids: defectTypeOptions,
     defaultOperatorUuids: userOptions,
+    defaultInspectionPlanId: inspectionPlanOptions,
+  };
+
+  const handleGotoInspectionPlans = () => {
+    const opId = currentOperationId;
+    navigate(`/apps/kuaizhizao/quality-management/inspection-plans${opId ? `?operationId=${opId}` : ''}`);
   };
 
   return (
@@ -236,6 +270,11 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         allowEditCodeWhenEdit={true}
         optionsMap={optionsMap}
       />
+      <div style={{ marginTop: -8, marginBottom: 16 }}>
+        <Button type="link" size="small" onClick={handleGotoInspectionPlans}>
+          {t('field.operation.gotoInspectionPlans')}
+        </Button>
+      </div>
     </FormModalTemplate>
   );
 };

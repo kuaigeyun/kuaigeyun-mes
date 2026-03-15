@@ -50,7 +50,7 @@ async def material_ai_suggestion_workflow(event: Event) -> Dict[str, Any]:
     material_id = data.get("material_id")
     material_uuid = data.get("material_uuid")
     material_name = data.get("material_name")
-    material_type = data.get("material_type")
+    source_type = data.get("source_type")
     
     if not material_id:
         logger.warning(f"物料AI建议工作流：缺少 material_id，事件数据: {data}")
@@ -69,7 +69,7 @@ async def material_ai_suggestion_workflow(event: Event) -> Dict[str, Any]:
             tenant_id=tenant_id,
             material_id=material_id,
             material_name=material_name,
-            material_type=material_type,
+            source_type=source_type,
         )
         
         logger.info(

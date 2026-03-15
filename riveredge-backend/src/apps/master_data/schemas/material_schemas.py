@@ -95,10 +95,9 @@ class MaterialGroupResponse(MaterialGroupBase):
 class MaterialBase(BaseModel):
     """物料基础 Schema"""
     
-    main_code: Optional[str] = Field(None, alias="mainCode", max_length=50, description="主编码（系统自动生成，格式：MAT-{类型}-{序号}）")
+    main_code: Optional[str] = Field(None, alias="mainCode", max_length=50, description="主编码（系统自动生成，格式：MAT-{分组}-{序号}）")
     code: Optional[str] = Field(None, max_length=50, description="物料编码（已废弃，保留用于向后兼容，建议使用部门编码）")
     name: str = Field(..., max_length=200, description="物料名称")
-    material_type: Optional[str] = Field(None, alias="materialType", max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     group_id: Optional[int] = Field(None, alias="groupId", description="物料分组ID")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: str = Field(..., alias="baseUnit", max_length=20, description="基础单位")
@@ -112,6 +111,7 @@ class MaterialBase(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
+    texture: Optional[str] = Field(None, max_length=100, description="材质（如：钢、塑料、铝合金等）")
     images: Optional[List[str]] = Field(None, description="产品图片列表")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
@@ -131,19 +131,13 @@ class MaterialBase(BaseModel):
     source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode（fabrication加工型/assembly装配型）、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序；配置件含变体属性等")
     
+    # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
+    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（方案质检时使用）")
+    
     model_config = ConfigDict(
         populate_by_name=True,  # 允许同时使用字段名和别名
     )
-    
-    @validator("material_type")
-    def validate_material_type(cls, v):
-        """验证物料类型"""
-        if v is None:
-            return None
-        valid_types = ["FIN", "SEMI", "RAW", "PACK", "AUX"]
-        if v not in valid_types:
-            raise ValueError(f"物料类型必须是以下之一: {', '.join(valid_types)}")
-        return v
     
     @validator("name")
     def validate_name(cls, v):
@@ -172,7 +166,6 @@ class MaterialUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
     group_id: Optional[int] = Field(None, description="物料分组ID")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="默认工艺路线ID（自制件时使用）")
-    material_type: Optional[str] = Field(None, alias="materialType", max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: Optional[str] = Field(None, max_length=20, description="基础单位")
     units: Optional[Dict[str, Any]] = Field(None, description="多单位管理（JSON格式）")
@@ -185,6 +178,7 @@ class MaterialUpdate(BaseModel):
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
+    texture: Optional[str] = Field(None, max_length=100, description="材质")
     images: Optional[List[str]] = Field(None, description="产品图片列表")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
@@ -203,6 +197,10 @@ class MaterialUpdate(BaseModel):
     # 物料来源控制（与 MaterialBase 一致，支持更新时保存）
     source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
+
+    # 质检选项
+    inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式（none/simple/plan）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
 
     model_config = ConfigDict(populate_by_name=True)
     
@@ -261,6 +259,11 @@ class MaterialResponse(MaterialBase):
     
     # 默认值设置（从数据库加载）
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
+    
+    # 质检选项
+    inspection_mode: Optional[str] = Field("none", alias="inspectionMode", description="质检模式（none/simple/plan）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
+    default_inspection_plan_name: Optional[str] = Field(None, alias="defaultInspectionPlanName", description="默认质检方案名称（冗余）")
     
     # 编码别名列表（可选，需要时加载）
     code_aliases: Optional[List[MaterialCodeAliasResponse]] = Field(None, description="编码别名列表")

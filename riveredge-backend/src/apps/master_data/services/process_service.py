@@ -128,7 +128,7 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
                         default_operator_names.append(u.full_name or u.username)
         except Exception:
             pass
-    return {
+    result = {
         "id": op.id,
         "uuid": str(op.uuid),
         "tenant_id": op.tenant_id,
@@ -145,7 +145,20 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "default_operator_ids": default_operator_ids,
         "default_operator_uuids": default_operator_uuids,
         "default_operator_names": default_operator_names,
+        "inspection_mode": getattr(op, "inspection_mode", None) or "none",
+        "default_inspection_plan_id": getattr(op, "default_inspection_plan_id", None),
+        "default_inspection_plan_name": None,
     }
+    plan_id = getattr(op, "default_inspection_plan_id", None)
+    if plan_id:
+        try:
+            from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+            plan = await InspectionPlan.filter(id=plan_id, deleted_at__isnull=True).first()
+            if plan:
+                result["default_inspection_plan_name"] = plan.plan_name
+        except Exception:
+            pass
+    return result
 
 
 class ProcessService:
@@ -539,6 +552,8 @@ class ProcessService:
             existing_deleted.reporting_type = reporting_type
             existing_deleted.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
             existing_deleted.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
+            existing_deleted.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
+            existing_deleted.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
             _apply_default_operator_ids(existing_deleted, oids)
             await _sync_operation_defect_types(existing_deleted.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
             await existing_deleted.save()
@@ -587,6 +602,8 @@ class ProcessService:
                     retry.reporting_type = reporting_type
                     retry.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
                     retry.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
+                    retry.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
+                    retry.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
                     _apply_default_operator_ids(retry, oids)
                     await _sync_operation_defect_types(retry.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
                     await retry.save()

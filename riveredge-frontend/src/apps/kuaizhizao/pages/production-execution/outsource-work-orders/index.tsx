@@ -1144,7 +1144,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               rules={[{ required: true, message: '请选择原材料' }]}
               request={async () => {
                 try {
-                  const materials = await materialApi.list({ isActive: true, materialType: 'RAW' });
+                  const materials = await materialApi.list({ isActive: true, sourceType: 'Buy' });
                   return materials.map((m: any) => ({
                     label: `${m.code || m.mainCode} - ${m.name}`,
                     value: m.id,

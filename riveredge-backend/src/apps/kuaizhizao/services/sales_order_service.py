@@ -1205,7 +1205,7 @@ class SalesOrderService:
                 material_id=it.material_id,
                 material_code=it.material_code,
                 material_name=it.material_name,
-                material_type="成品",
+                source_type="Make",
                 planned_quantity=Decimal(str(qty)),
                 planned_date=it.delivery_date or plan_start,
                 available_inventory=Decimal(0),

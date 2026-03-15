@@ -19,7 +19,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_MAKE, SOURCE_TYPE_BUY, SOURCE_TYPE_PHANTOM,
-    SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE,
+    SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_SERVICE,
     MANUFACTURING_MODE_FABRICATION, MANUFACTURING_MODE_ASSEMBLY,
     VALID_SOURCE_TYPES,
     validate_material_source_config,
@@ -336,35 +336,7 @@ class MaterialSourceSuggestionService:
         suggestions = []
         reasons = []
         
-        # 基于物料类型建议
-        if material.material_type == "FIN":
-            # 成品通常建议自制件
-            suggestions.append({
-                "source_type": SOURCE_TYPE_MAKE,
-                "confidence": 0.8,
-                "reason": "成品通常需要自制",
-            })
-        elif material.material_type == "RAW":
-            # 原材料通常建议采购件
-            suggestions.append({
-                "source_type": SOURCE_TYPE_BUY,
-                "confidence": 0.9,
-                "reason": "原材料通常需要采购",
-            })
-        elif material.material_type == "SEMI":
-            # 半成品可能自制或采购
-            suggestions.append({
-                "source_type": SOURCE_TYPE_MAKE,
-                "confidence": 0.6,
-                "reason": "半成品通常自制，但也可以采购",
-            })
-            suggestions.append({
-                "source_type": SOURCE_TYPE_BUY,
-                "confidence": 0.4,
-                "reason": "半成品也可以采购",
-            })
-        
-        # 基于BOM结构建议
+        # 基于BOM结构建议（物料类型已移除，仅保留来源相关建议）
         bom_count = await BOM.filter(
             tenant_id=tenant_id,
             material_id=material.id,
@@ -388,13 +360,7 @@ class MaterialSourceSuggestionService:
                 "reason": "已配置工艺路线，建议设为自制件",
             })
         
-        # 基于变体管理建议
-        if material.variant_managed:
-            suggestions.append({
-                "source_type": SOURCE_TYPE_CONFIGURE,
-                "confidence": 0.7,
-                "reason": "已启用变体管理，建议设为配置件",
-            })
+        # 变体管理由「变体管理」标签页控制，不再建议配置件（Configure 已移除）
         
         # 选择置信度最高的建议
         if suggestions:
@@ -514,7 +480,11 @@ class MaterialSourceSuggestionService:
                 
                 if not source_config.get("bom_variants"):
                     missing_configs.append("BOM变体配置")
-        
+
+            elif material.source_type == SOURCE_TYPE_SERVICE:
+                # 服务类物料无需额外配置
+                pass
+
         return {
             "is_complete": len(missing_configs) == 0,
             "missing_configs": missing_configs,

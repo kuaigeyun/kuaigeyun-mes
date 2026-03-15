@@ -219,10 +219,10 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
         description: '物料所属分组的名称',
       },
       {
-        fieldName: 'material_type',
-        fieldLabel: '物料类型',
+        fieldName: 'source_type',
+        fieldLabel: '物料来源类型',
         fieldType: 'string',
-        description: '物料类型（FIN/SEMI/RAW/PACK/AUX）',
+        description: '物料来源类型（Make/Buy/Outsource/Phantom/Configure）',
       },
       {
         fieldName: 'name',

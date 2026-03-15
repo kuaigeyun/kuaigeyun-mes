@@ -1,0 +1,43 @@
+/**
+ * 返回继续填写悬浮按钮样式
+ * 流动光泽动效，提醒用户按钮存在
+ */
+
+.wrapper {
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+
+/* 流动光泽效果：从左到右的白色高光扫过 */
+
+.wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient( 90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shine 2.5s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes shine {
+    0% {
+        left: -100%;
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        left: 150%;
+        opacity: 0;
+    }
+}

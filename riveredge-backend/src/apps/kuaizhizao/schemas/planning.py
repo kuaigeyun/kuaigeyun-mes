@@ -25,7 +25,7 @@ class ProductionPlanItemBase(BaseSchema):
     material_id: Optional[int] = Field(None, description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
-    material_type: Optional[str] = Field("Finished", max_length=20, description="物料类型")
+    source_type: Optional[str] = Field("Make", max_length=20, description="物料来源类型")
     planned_quantity: float = Field(..., gt=0, description="计划数量")
     planned_date: date = Field(..., description="计划日期")
     available_inventory: float = Field(0, ge=0, description="可用库存")

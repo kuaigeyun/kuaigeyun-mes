@@ -1174,7 +1174,7 @@ async def list_materials(
     keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
     code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
     name: Optional[str] = Query(None, description="物料名称（模糊匹配）"),
-    material_type: Optional[str] = Query(None, alias="materialType", description="物料类型（过滤）"),
+    source_type: Optional[str] = Query(None, alias="sourceType", description="物料来源类型（过滤）"),
     specification: Optional[str] = Query(None, description="规格（模糊匹配）"),
     brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
     model: Optional[str] = Query(None, description="型号（模糊匹配）"),
@@ -1192,7 +1192,7 @@ async def list_materials(
     - **keyword**: 搜索关键词（物料编码或名称）
     - **code**: 物料编码（精确匹配）
     - **name**: 物料名称（模糊匹配）
-    - **material_type**: 物料类型（可选，用于过滤）
+    - **source_type**: 物料来源类型（可选，用于过滤）
     - **specification**: 规格（可选，模糊匹配）
     - **brand**: 品牌（可选，模糊匹配）
     - **model**: 型号（可选，模糊匹配）
@@ -1200,7 +1200,7 @@ async def list_materials(
     """
     return await MaterialService.list_materials(
         tenant_id, skip, limit, group_id, is_active, keyword, code, name,
-        material_type, specification, brand, model, base_unit
+        source_type, specification, brand, model, base_unit
     )
 
 
@@ -1287,7 +1287,7 @@ async def preview_ai_suggestions(
     material_name: str = Query(..., description="物料名称"),
     specification: Optional[str] = Query(None, description="规格"),
     base_unit: Optional[str] = Query(None, description="基础单位"),
-    material_type: Optional[str] = Query(None, description="物料类型")
+    source_type: Optional[str] = Query(None, description="物料来源类型")
 ):
     """
     预览 AI 建议（创建前）
@@ -1299,7 +1299,7 @@ async def preview_ai_suggestions(
     - **material_name**: 物料名称（必填）
     - **specification**: 规格（可选）
     - **base_unit**: 基础单位（可选）
-    - **material_type**: 物料类型（可选）
+    - **source_type**: 物料来源类型（可选）
     """
     try:
         suggestions = await MaterialAIService.generate_suggestions(
@@ -1308,7 +1308,7 @@ async def preview_ai_suggestions(
             material_name=material_name,
             specification=specification,
             base_unit=base_unit,
-            material_type=material_type,
+            source_type=source_type,
         )
         return {
             "suggestions": suggestions,
@@ -1347,7 +1347,7 @@ async def get_material_ai_suggestions(
             material_name=material.name,
             specification=material.specification,
             base_unit=material.base_unit,
-            material_type=material.material_type,
+            source_type=getattr(material, "source_type", None),
         )
         return {
             "material_uuid": material_uuid,

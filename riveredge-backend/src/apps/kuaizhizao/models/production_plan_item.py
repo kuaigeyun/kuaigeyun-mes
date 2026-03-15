@@ -24,7 +24,7 @@ class ProductionPlanItem(BaseModel):
     material_id = fields.IntField(null=True, description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
-    material_type = fields.CharField(max_length=20, description="物料类型")
+    source_type = fields.CharField(max_length=20, null=True, description="物料来源类型（Make/Buy/Outsource等）")
 
     # 计划信息
     planned_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="计划数量")

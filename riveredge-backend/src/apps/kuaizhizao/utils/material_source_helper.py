@@ -75,6 +75,7 @@ SOURCE_TYPE_BUY = "Buy"  # 采购件
 SOURCE_TYPE_PHANTOM = "Phantom"  # 虚拟件
 SOURCE_TYPE_OUTSOURCE = "Outsource"  # 委外件
 SOURCE_TYPE_CONFIGURE = "Configure"  # 配置件
+SOURCE_TYPE_SERVICE = "Service"  # 服务
 
 VALID_SOURCE_TYPES = [
     SOURCE_TYPE_MAKE,
@@ -82,6 +83,7 @@ VALID_SOURCE_TYPES = [
     SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_CONFIGURE,
+    SOURCE_TYPE_SERVICE,
 ]
 
 # 自制件制造模式（存于 source_config.manufacturing_mode）
@@ -225,7 +227,11 @@ async def validate_material_source_config(
             
         if not bom_variants:
             errors.append(f"配置件必须有BOM变体配置，物料: {material.main_code} ({material.name})")
-    
+
+    elif source_type == SOURCE_TYPE_SERVICE:
+        # 服务类物料无需额外配置
+        pass
+
     return len(errors) == 0, errors
 
 
@@ -338,7 +344,6 @@ async def expand_bom_with_source_control(
                     "material_id": component.id,
                     "material_code": component.main_code or component.code,
                     "material_name": component.name,
-                    "material_type": component.material_type,
                     "source_type": component.source_type,
                     "required_quantity": component_qty,
                     "unit": bom_item.unit or component.base_unit,
@@ -414,7 +419,6 @@ async def expand_bom_with_source_control(
                 "material_id": component.id,
                 "material_code": component.main_code or component.code,
                 "material_name": component.name,
-                "material_type": component.material_type,
                 "source_type": component_source_type,
                 "required_quantity": component_qty,
                 "unit": bom_item.unit or component.base_unit,

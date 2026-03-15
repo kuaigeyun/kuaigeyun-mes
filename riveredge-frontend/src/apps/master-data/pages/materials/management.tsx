@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import {
   App,
   Button,
@@ -69,6 +69,7 @@ import { batchImport } from '../../../../utils/batchOperations'
 import { downloadFile } from '../../../../utils'
 import { useNewShortcut } from '../../../../hooks/useNewShortcut'
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
+import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 
 
 /**
@@ -79,6 +80,7 @@ const MaterialsManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp()
   const { token } = theme.useToken()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([])
@@ -101,6 +103,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [groupFormLoading, setGroupFormLoading] = useState(false)
 
   const [materialModalVisible, setMaterialModalVisible] = useState(false)
+  const [materialRestoreInitialValues, setMaterialRestoreInitialValues] = useState<Record<string, any> | null>(null)
   const [materialIsEdit, setMaterialIsEdit] = useState(false)
   const [materialFormLoading, setMaterialFormLoading] = useState(false)
   const [materialDrawerVisible, setMaterialDrawerVisible] = useState(false)
@@ -117,6 +120,25 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null)
 
+  // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
+  useEffect(() => {
+    const state = getSuspendedModal()
+    const isRestoreUrl = searchParams.get('restore') === '1'
+    const isMaterialsPath = location.pathname.endsWith('/materials') && !location.pathname.includes('/materials/')
+    if (state?.formData && (isRestoreUrl || (isMaterialsPath && state.returnPath?.endsWith('/materials')))) {
+      setMaterialRestoreInitialValues(state.formData)
+      setMaterialModalVisible(true)
+      setMaterialIsEdit(false)
+      setCurrentMaterial(null)
+      clearSuspendedModal()
+      if (isRestoreUrl) {
+        const next = new URLSearchParams(searchParams)
+        next.delete('restore')
+        setSearchParams(next, { replace: true })
+      }
+    }
+  }, [location.pathname, searchParams])
+
   // 点击外部关闭右键菜单
   useEffect(() => {
     const handleClickOutside = () => {
@@ -131,14 +153,17 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [contextMenuVisible])
 
-  // 数据字典选项状态（用于搜索下拉框）
-  const [materialTypeOptions, setMaterialTypeOptions] = useState<
-    Array<{ label: string; value: string }>
-  >([])
+  // 物料来源类型选项（用于搜索下拉框和列表展示，使用 i18n）
+  const sourceTypeOptions = useMemo(() => [
+    { label: t('app.master-data.materialForm.sourceMake'), value: 'Make' },
+    { label: t('app.master-data.materialForm.sourceBuy'), value: 'Buy' },
+    { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
+    { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
+    { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
+  ], [t])
   const [baseUnitOptions, setBaseUnitOptions] = useState<Array<{ label: string; value: string }>>(
     []
   )
-  const [loadingMaterialTypeOptions, setLoadingMaterialTypeOptions] = useState(false)
   const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false)
 
   /**
@@ -211,25 +236,9 @@ const MaterialsManagementPage: React.FC = () => {
   }, [messageApi, convertToTreeData])
 
   /**
-   * 加载数据字典选项（物料类型和基础单位）
+   * 加载数据字典选项（基础单位）
    */
   const loadDictionaryOptions = useCallback(async () => {
-    // 加载物料类型选项
-    try {
-      setLoadingMaterialTypeOptions(true)
-      const materialTypeDict = await getDataDictionaryByCode('MATERIAL_TYPE')
-      const materialTypeItems = await getDictionaryItemList(materialTypeDict.uuid, true)
-      setMaterialTypeOptions(
-        materialTypeItems
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map(item => ({ label: item.label, value: item.value }))
-      )
-    } catch (error: any) {
-      console.error('加载物料类型选项失败:', error)
-    } finally {
-      setLoadingMaterialTypeOptions(false)
-    }
-
     // 加载基础单位选项
     try {
       setLoadingBaseUnitOptions(true)
@@ -649,7 +658,7 @@ const MaterialsManagementPage: React.FC = () => {
         name,
         baseUnit: unit,
         specification: spec || undefined,
-        materialType: matType || undefined,
+        sourceType: matType || undefined,
         groupId,
         isActive: true,
       })
@@ -731,7 +740,7 @@ const MaterialsManagementPage: React.FC = () => {
         t('app.master-data.materials.materialName'),
         t('app.master-data.materials.specification'),
         t('app.master-data.materials.baseUnit'),
-        t('app.master-data.materials.materialType'),
+        t('app.master-data.materials.sourceType'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ]
@@ -741,7 +750,7 @@ const MaterialsManagementPage: React.FC = () => {
         const name = r.name || ''
         const spec = (r as any).specification || ''
         const unit = (r as any).baseUnit || ''
-        const matType = (r as any).materialType || ''
+        const matType = (r as any).sourceType ?? (r as any).source_type ?? ''
         const isActive = r?.isActive ?? (r as any)?.is_active
         const status = isActive ? t('common.enabled') : t('common.disabled')
         const createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : ''
@@ -875,11 +884,11 @@ const MaterialsManagementPage: React.FC = () => {
           (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
       },
       {
-        title: t('app.master-data.materials.materialType'),
-        dataIndex: 'materialType',
+        title: t('app.master-data.materials.sourceType'),
+        dataIndex: 'sourceType',
         width: 120,
         valueType: 'select',
-        valueEnum: materialTypeOptions.reduce(
+        valueEnum: sourceTypeOptions.reduce(
           (acc, option) => {
             acc[option.value] = { text: option.label }
             return acc
@@ -887,13 +896,13 @@ const MaterialsManagementPage: React.FC = () => {
           {} as Record<string, { text: string }>
         ),
         fieldProps: {
-          loading: loadingMaterialTypeOptions,
           showSearch: true,
           allowClear: true,
         },
         render: (_, record) => {
-          const option = materialTypeOptions.find(opt => opt.value === record.materialType)
-          return option ? option.label : record.materialType || '-'
+          const st = (record as any).sourceType ?? (record as any).source_type
+          const option = sourceTypeOptions.find(opt => opt.value === st)
+          return option ? option.label : st || '-'
         },
       },
       {
@@ -1013,10 +1022,8 @@ const MaterialsManagementPage: React.FC = () => {
     [
       t,
       materialGroups,
-      materialTypeOptions,
+      sourceTypeOptions,
       baseUnitOptions,
-      loadingMaterialTypeOptions,
-      loadingBaseUnitOptions,
       handleViewMaterial,
       handleEditMaterial,
       handleDeleteMaterial,
@@ -1140,13 +1147,13 @@ const MaterialsManagementPage: React.FC = () => {
                   apiParams.name = searchFormValues.name.trim()
                 }
 
-                // 物料类型搜索
+                // 物料来源类型搜索
                 if (
-                  searchFormValues?.materialType !== undefined &&
-                  searchFormValues.materialType !== null &&
-                  searchFormValues.materialType !== ''
+                  searchFormValues?.sourceType !== undefined &&
+                  searchFormValues.sourceType !== null &&
+                  searchFormValues.sourceType !== ''
                 ) {
-                  apiParams.materialType = searchFormValues.materialType
+                  apiParams.sourceType = searchFormValues.sourceType
                 }
 
                 // 规格搜索
@@ -1213,16 +1220,16 @@ const MaterialsManagementPage: React.FC = () => {
                 `*${t('app.master-data.materials.materialName')}`,
                 `*${t('app.master-data.materials.baseUnit')}`,
                 t('app.master-data.materials.specification'),
-                t('app.master-data.materials.materialType'),
+                t('app.master-data.materials.sourceType'),
                 t('app.master-data.materials.materialGroup'),
               ]}
-              importExampleRow={['MAT001', '产品A', '个', '规格A', 'FIN', '']}
+              importExampleRow={['MAT001', '产品A', '个', '规格A', 'Make', '']}
               importFieldMap={{
                 [t('app.master-data.materials.materialCode')]: 'mainCode',
                 [t('app.master-data.materials.materialName')]: 'name',
                 [t('app.master-data.materials.baseUnit')]: 'baseUnit',
                 [t('app.master-data.materials.specification')]: 'specification',
-                [t('app.master-data.materials.materialType')]: 'materialType',
+                [t('app.master-data.materials.sourceType')]: 'sourceType',
                 [t('app.master-data.materials.materialGroup')]: 'groupCode',
               }}
               importFieldRules={{
@@ -1316,23 +1323,30 @@ const MaterialsManagementPage: React.FC = () => {
 
       {/* 物料创建/编辑 Modal - 使用新的多标签页表单组件 */}
       <MaterialForm
+        key={materialRestoreInitialValues ? 'restore' : (materialIsEdit ? `edit-${currentMaterial?.id}` : 'create')}
         open={materialModalVisible}
-        onClose={() => setMaterialModalVisible(false)}
+        onClose={() => {
+          setMaterialModalVisible(false)
+          setMaterialRestoreInitialValues(null)
+        }}
         onFinish={handleMaterialSubmit}
         isEdit={materialIsEdit}
         material={currentMaterial || undefined}
         materialGroups={materialGroups}
         loading={materialFormLoading}
+        suspendedModalReturnPath="/apps/master-data/materials"
         initialValues={
-          materialIsEdit && currentMaterial
+          materialRestoreInitialValues
+            ? materialRestoreInitialValues
+            : materialIsEdit && currentMaterial
             ? {
                 // 兼容后端 snake_case：编辑时 API 返回 main_code 等，表单需要 mainCode
                 mainCode: currentMaterial.mainCode ?? (currentMaterial as any).main_code,
                 name: currentMaterial.name,
                 groupId: currentMaterial.groupId ?? (currentMaterial as any).group_id,
-                materialType:
-                  (currentMaterial as any).materialType ??
-                  (currentMaterial as any).material_type ??
+                sourceType:
+                  (currentMaterial as any).sourceType ??
+                  (currentMaterial as any).source_type ??
                   undefined,
                 specification: currentMaterial.specification,
                 baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
@@ -1351,7 +1365,16 @@ const MaterialsManagementPage: React.FC = () => {
                 description: currentMaterial.description,
                 brand: currentMaterial.brand,
                 model: currentMaterial.model,
+                texture: currentMaterial.texture ?? (currentMaterial as any).texture,
                 isActive: currentMaterial.isActive ?? (currentMaterial as any).is_active,
+                inspectionMode:
+                  (currentMaterial as any).inspectionMode ??
+                  (currentMaterial as any).inspection_mode ??
+                  'none',
+                defaultInspectionPlanId:
+                  (currentMaterial as any).defaultInspectionPlanId ??
+                  (currentMaterial as any).default_inspection_plan_id ??
+                  undefined,
               }
             : {
                 groupId: selectedGroupId || undefined,
@@ -1359,8 +1382,9 @@ const MaterialsManagementPage: React.FC = () => {
                 batchManaged: false,
                 serialManaged: false,
                 variantManaged: false,
-                materialType: undefined,
+                sourceType: undefined,
                 baseUnit: 'PC', // 默认值：件
+                inspectionMode: 'none',
               }
         }
       />
@@ -1413,6 +1437,10 @@ const MaterialsManagementPage: React.FC = () => {
                 {
                   title: t('app.master-data.materials.model'),
                   dataIndex: 'model',
+                },
+                {
+                  title: t('app.master-data.materials.texture'),
+                  dataIndex: 'texture',
                 },
                 {
                   title: t('app.master-data.materials.batchManaged'),

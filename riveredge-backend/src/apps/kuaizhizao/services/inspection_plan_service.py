@@ -116,6 +116,7 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         limit: int = 100,
         plan_type: Optional[str] = None,
         material_id: Optional[int] = None,
+        operation_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         plan_code: Optional[str] = None,
         plan_name: Optional[str] = None,
@@ -130,6 +131,8 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
             query = query.filter(plan_type=plan_type)
         if material_id is not None:
             query = query.filter(material_id=material_id)
+        if operation_id is not None:
+            query = query.filter(Q(operation_id=operation_id) | Q(operation_id__isnull=True))
         if is_active is not None:
             query = query.filter(is_active=is_active)
         if plan_code:

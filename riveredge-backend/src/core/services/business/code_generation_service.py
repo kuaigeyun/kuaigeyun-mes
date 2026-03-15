@@ -23,7 +23,7 @@ from infra.exceptions.exceptions import ValidationError
 _SCOPE_FIELD_ALIASES = {
     "group_code": "groupCode",
     "group_name": "groupName",
-    "material_type": "materialType",
+    "source_type": "sourceType",
 }
 
 

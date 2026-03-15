@@ -67,6 +67,13 @@ export interface Operation {
   /** 允许绑定的不良品项（API 可能返回 defect_types） */
   defectTypes?: DefectTypeMinimal[];
   defect_types?: DefectTypeMinimal[];
+  /** 质检模式（none:无质检, simple:简易质检, plan:方案质检） */
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  inspection_mode?: string;
+  /** 默认质检方案ID（方案质检时使用） */
+  defaultInspectionPlanId?: number | null;
+  default_inspection_plan_id?: number | null;
+  defaultInspectionPlanName?: string;
   defaultOperatorId?: number;
   default_operator_id?: number;
   defaultOperatorUuids?: string[];
@@ -85,6 +92,8 @@ export interface OperationCreate {
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
   isActive?: boolean;
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  defaultInspectionPlanId?: number | null;
   defectTypeUuids?: string[];
   defaultOperatorUuids?: string[];
 }
@@ -96,6 +105,8 @@ export interface OperationUpdate {
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
   isActive?: boolean;
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  defaultInspectionPlanId?: number | null;
   defectTypeUuids?: string[];
   defaultOperatorUuids?: string[];
 }

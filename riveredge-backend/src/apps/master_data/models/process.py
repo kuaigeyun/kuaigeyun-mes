@@ -213,6 +213,17 @@ class Operation(BaseModel):
         description="允许绑定的不良品项",
     )
     
+    # 质检选项（简易质检与不良品类型联动，方案质检与快制造质检模块联动）
+    inspection_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="质检模式（none:无质检, simple:简易质检, plan:方案质检）"
+    )
+    default_inspection_plan_id = fields.IntField(
+        null=True,
+        description="默认质检方案ID（方案质检时使用，关联 kuaizhizao.InspectionPlan）"
+    )
+    
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     

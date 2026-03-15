@@ -25,6 +25,26 @@ export const operationFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.operation.nameRequired' }],
   },
   {
+    name: 'inspectionMode',
+    type: 'select',
+    labelKey: 'field.operation.inspectionMode',
+    placeholderKey: 'field.operation.inspectionModePlaceholder',
+    colSpan: 12,
+    options: [
+      { labelKey: 'field.operation.inspectionModeNone', value: 'none' },
+      { labelKey: 'field.operation.inspectionModeSimple', value: 'simple' },
+      { labelKey: 'field.operation.inspectionModePlan', value: 'plan' },
+    ],
+  },
+  {
+    name: 'defaultInspectionPlanId',
+    type: 'select',
+    labelKey: 'field.operation.defaultInspectionPlan',
+    placeholderKey: 'field.operation.defaultInspectionPlanPlaceholder',
+    colSpan: 24,
+    fieldProps: { allowClear: true },
+  },
+  {
     name: 'defectTypeUuids',
     type: 'select',
     labelKey: 'field.operation.defectTypeUuids',
@@ -32,6 +52,7 @@ export const operationFormSchema: FieldConfig[] = [
     colSpan: 24,
     mode: 'multiple',
     fieldProps: { allowClear: true },
+    extraKey: 'field.operation.defectTypeUuidsSimpleHint',
   },
   {
     name: 'defaultOperatorUuids',

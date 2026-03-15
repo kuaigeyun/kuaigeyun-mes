@@ -50,6 +50,7 @@ const SOURCE_TYPE_COLORS: Record<string, string> = {
   Phantom: 'default',
   Outsource: 'orange',
   Configure: 'purple',
+  Service: 'cyan',
 };
 
 /** 物料来源类型对应的节点背景色（用于画板节点颜色提示，偏深色便于区分） */
@@ -59,6 +60,7 @@ const SOURCE_TYPE_NODE_COLORS: Record<string, { bg: string; border: string }> = 
   Phantom: { bg: '#bfbfbf', border: '#8c8c8c' },
   Outsource: { bg: '#ffd591', border: '#fa8c16' },
   Configure: { bg: '#d3adf7', border: '#722ed1' },
+  Service: { bg: '#87e8de', border: '#13c2c2' },
 };
 
 const KBD_STYLE: React.CSSProperties = {
@@ -97,6 +99,7 @@ const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
   Phantom: 'app.master-data.bom.sourcePhantom',
   Outsource: 'app.master-data.bom.sourceOutsource',
   Configure: 'app.master-data.bom.sourceConfigure',
+  Service: 'app.master-data.bom.sourceService',
 };
 
 const BOMDesignerPage: React.FC = () => {
@@ -1684,9 +1687,9 @@ const BOMDesignerPage: React.FC = () => {
                 '',
               name: materialToEdit.name ?? '',
               groupId: materialToEdit.groupId ?? (materialToEdit as any).group_id ?? undefined,
-              materialType:
-                (materialToEdit as any).materialType ??
-                (materialToEdit as any).material_type ??
+              sourceType:
+                (materialToEdit as any).sourceType ??
+                (materialToEdit as any).source_type ??
                 undefined,
               specification: materialToEdit.specification ?? (materialToEdit as any).specification,
               baseUnit:
@@ -1701,6 +1704,7 @@ const BOMDesignerPage: React.FC = () => {
               description: materialToEdit.description ?? (materialToEdit as any).description,
               brand: materialToEdit.brand ?? (materialToEdit as any).brand,
               model: materialToEdit.model ?? (materialToEdit as any).model,
+              texture: materialToEdit.texture ?? (materialToEdit as any).texture,
               isActive:
                 materialToEdit.isActive ?? (materialToEdit as any).is_active ?? true,
             }

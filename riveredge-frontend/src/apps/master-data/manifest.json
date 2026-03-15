@@ -393,7 +393,7 @@
                     "description": "物料所属分组的名称"
                 },
                 {
-                    "field_name": "material_type",
+                    "field_name": "source_type",
                     "field_label": "物料类型",
                     "field_type": "string",
                     "description": "物料类型（FIN/SEMI/RAW/PACK/AUX）"
