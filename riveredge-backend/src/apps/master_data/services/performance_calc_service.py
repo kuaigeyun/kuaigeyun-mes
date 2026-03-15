@@ -260,3 +260,79 @@ class PerformanceCalcService:
             summary=PerformanceSummaryResponse.model_validate(summary) if summary else None,
             items=items,
         )
+
+    @staticmethod
+    async def distribute_by_work_group(
+        tenant_id: int,
+        work_group_uuid: str,
+        period: str,
+        total_amount: Decimal,
+        custom_distribution: Optional[Dict[int, Decimal]] = None,
+    ) -> List[PerformanceSummaryResponse]:
+        """
+        按工作小组分配绩效（混合模式：支持权重分配或自定义分配）
+
+        - 若提供 custom_distribution（employee_id -> amount），则按自定义金额分配
+        - 否则按成员 performance_weight 比例分配
+        """
+        from apps.master_data.models.factory import WorkGroup, WorkGroupMember
+
+        work_group = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            uuid=work_group_uuid,
+            deleted_at__isnull=True
+        ).prefetch_related("members").first()
+
+        if not work_group:
+            from infra.exceptions.exceptions import NotFoundError
+            raise NotFoundError(f"工作小组 {work_group_uuid} 不存在")
+
+        members = [m for m in work_group.members if m.deleted_at is None]
+        if not members:
+            from infra.exceptions.exceptions import ValidationError
+            raise ValidationError("工作小组无有效成员")
+
+        def _add_distribution(member, amt: Decimal):
+            existing = await PerformanceSummary.filter(
+                tenant_id=tenant_id,
+                employee_id=member.employee_id,
+                period=period,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                existing.total_amount = (existing.total_amount or Decimal("0")) + amt
+                await existing.save()
+                return existing
+            return await PerformanceSummary.create(
+                tenant_id=tenant_id,
+                employee_id=member.employee_id,
+                employee_name=member.employee_name,
+                period=period,
+                total_hours=Decimal("0"),
+                total_pieces=Decimal("0"),
+                total_unqualified=Decimal("0"),
+                time_amount=Decimal("0"),
+                piece_amount=Decimal("0"),
+                total_amount=amt,
+                status="calculated",
+            )
+
+        results = []
+
+        if custom_distribution is not None and len(custom_distribution) > 0:
+            for member in members:
+                amt = custom_distribution.get(member.employee_id) or Decimal("0")
+                summary = await _add_distribution(member, amt)
+                results.append(PerformanceSummaryResponse.model_validate(summary))
+        else:
+            weight_sum = sum(m.performance_weight or Decimal("1") for m in members)
+            if weight_sum <= 0:
+                weight_sum = Decimal("1")
+
+            for member in members:
+                w = member.performance_weight or Decimal("1")
+                amt = (total_amount * w / weight_sum).quantize(Decimal("0.01"))
+                summary = await _add_distribution(member, amt)
+                results.append(PerformanceSummaryResponse.model_validate(summary))
+
+        return results

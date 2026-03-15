@@ -131,6 +131,17 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     allowManualEdit: true,
     skipDate: true,
   },
+  {
+    pageCode: 'master-data-factory-work-group',
+    pageName: '工作小组',
+    pagePath: '/apps/master-data/factory/work-groups',
+    codeField: 'code',
+    codeFieldLabel: '工作小组编码',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: false,
+    allowManualEdit: true,
+  },
   // 主数据管理 - 仓库管理
   {
     pageCode: 'master-data-warehouse-warehouse',

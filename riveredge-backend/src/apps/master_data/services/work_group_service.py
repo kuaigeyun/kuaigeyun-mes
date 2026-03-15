@@ -1,0 +1,279 @@
+"""
+工作小组服务模块
+
+提供工作小组的业务逻辑处理，支持多组织隔离。
+"""
+
+from typing import List, Optional
+from tortoise.exceptions import IntegrityError
+from tortoise.models import Q
+
+from apps.master_data.models.factory import WorkGroup, WorkGroupMember
+from apps.master_data.schemas.work_group_schemas import (
+    WorkGroupCreate,
+    WorkGroupUpdate,
+    WorkGroupResponse,
+    WorkGroupMemberItem,
+    WorkGroupMemberResponse,
+)
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+class WorkGroupService:
+    """工作小组服务"""
+
+    @staticmethod
+    async def _resolve_employee_name(tenant_id: int, employee_id: int) -> str:
+        """根据员工ID解析员工姓名"""
+        from infra.models.user import User
+        user = await User.filter(id=employee_id, tenant_id=tenant_id).first()
+        return user.full_name if user else str(employee_id)
+
+    @staticmethod
+    async def create_work_group(
+        tenant_id: int,
+        data: WorkGroupCreate
+    ) -> WorkGroupResponse:
+        """创建工作小组"""
+        existing_active = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=True
+        ).first()
+
+        if existing_active:
+            raise ValidationError(f"工作小组编码 {data.code} 已存在")
+
+        existing_deleted = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+
+        if existing_deleted:
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.is_active = data.is_active
+            await existing_deleted.save()
+            work_group = existing_deleted
+            await WorkGroupMember.filter(work_group_id=work_group.id).delete()
+        else:
+            create_data = data.model_dump(by_alias=False, exclude={"members"})
+            work_group = await WorkGroup.create(tenant_id=tenant_id, **create_data)
+
+        members = getattr(data, "members", None) or []
+        for i, m in enumerate(members):
+            item = m if isinstance(m, WorkGroupMemberItem) else WorkGroupMemberItem(**m)
+            emp_name = item.employee_name
+            if not emp_name:
+                emp_name = await WorkGroupService._resolve_employee_name(tenant_id, item.employee_id)
+            await WorkGroupMember.create(
+                tenant_id=tenant_id,
+                work_group_id=work_group.id,
+                employee_id=item.employee_id,
+                employee_name=emp_name,
+                performance_weight=item.performance_weight,
+                sort_order=item.sort_order if hasattr(item, "sort_order") else i,
+            )
+
+        return await WorkGroupService.get_work_group_by_uuid(tenant_id, work_group.uuid)
+
+    @staticmethod
+    async def get_work_group_by_uuid(
+        tenant_id: int,
+        work_group_uuid: str
+    ) -> WorkGroupResponse:
+        """根据UUID获取工作小组"""
+        work_group = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            uuid=work_group_uuid,
+            deleted_at__isnull=True
+        ).prefetch_related("members").first()
+
+        if not work_group:
+            raise NotFoundError(f"工作小组 {work_group_uuid} 不存在")
+
+        members_data = []
+        for m in work_group.members:
+            if m.deleted_at:
+                continue
+            members_data.append(WorkGroupMemberResponse(
+                id=m.id,
+                work_group_id=work_group.id,
+                employee_id=m.employee_id,
+                employee_name=m.employee_name,
+                performance_weight=m.performance_weight,
+                sort_order=m.sort_order,
+            ))
+
+        members_data.sort(key=lambda x: x.sort_order)
+        resp = WorkGroupResponse.model_validate(work_group)
+        return resp.model_copy(update={"members": members_data})
+
+    @staticmethod
+    async def list_work_groups(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
+    ) -> List[WorkGroupResponse]:
+        """获取工作小组列表"""
+        query = WorkGroup.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+
+        if keyword:
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        if code:
+            query = query.filter(code__icontains=code)
+
+        if name:
+            query = query.filter(name__icontains=name)
+
+        work_groups = await query.offset(skip).limit(limit).prefetch_related("members").order_by("code").all()
+        result = []
+        for wg in work_groups:
+            members_data = [
+                WorkGroupMemberResponse(
+                    id=m.id,
+                    work_group_id=wg.id,
+                    employee_id=m.employee_id,
+                    employee_name=m.employee_name,
+                    performance_weight=m.performance_weight,
+                    sort_order=m.sort_order,
+                )
+                for m in wg.members if m.deleted_at is None
+            ]
+            members_data.sort(key=lambda x: x.sort_order)
+            resp = WorkGroupResponse.model_validate(wg)
+            result.append(resp.model_copy(update={"members": members_data}))
+        return result
+
+    @staticmethod
+    async def update_work_group(
+        tenant_id: int,
+        work_group_uuid: str,
+        data: WorkGroupUpdate
+    ) -> WorkGroupResponse:
+        """更新工作小组"""
+        work_group = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            uuid=work_group_uuid,
+            deleted_at__isnull=True
+        ).first()
+
+        if not work_group:
+            raise NotFoundError(f"工作小组 {work_group_uuid} 不存在")
+
+        if data.code and data.code != work_group.code:
+            existing = await WorkGroup.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=True
+            ).first()
+            if existing:
+                raise ValidationError(f"工作小组编码 {data.code} 已存在")
+
+        update_data = data.model_dump(exclude_unset=True, exclude={"members"}, by_alias=False)
+        for key, value in update_data.items():
+            setattr(work_group, key, value)
+
+        try:
+            await work_group.save()
+        except IntegrityError as e:
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工作小组编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
+
+        members = getattr(data, "members", None)
+        if members is not None:
+            await WorkGroupMember.filter(work_group_id=work_group.id).delete()
+            for i, m in enumerate(members):
+                item = m if isinstance(m, WorkGroupMemberItem) else WorkGroupMemberItem(**m)
+                emp_name = item.employee_name
+                if not emp_name:
+                    emp_name = await WorkGroupService._resolve_employee_name(tenant_id, item.employee_id)
+                await WorkGroupMember.create(
+                    tenant_id=tenant_id,
+                    work_group_id=work_group.id,
+                    employee_id=item.employee_id,
+                    employee_name=emp_name,
+                    performance_weight=item.performance_weight,
+                    sort_order=item.sort_order if hasattr(item, "sort_order") else i,
+                )
+
+        return await WorkGroupService.get_work_group_by_uuid(tenant_id, work_group.uuid)
+
+    @staticmethod
+    async def delete_work_group(
+        tenant_id: int,
+        work_group_uuid: str
+    ) -> None:
+        """删除工作小组（软删除）"""
+        work_group = await WorkGroup.filter(
+            tenant_id=tenant_id,
+            uuid=work_group_uuid,
+            deleted_at__isnull=True
+        ).first()
+
+        if not work_group:
+            raise NotFoundError(f"工作小组 {work_group_uuid} 不存在")
+
+        from tortoise import timezone
+        work_group.deleted_at = timezone.now()
+        await work_group.save()
+
+    @staticmethod
+    async def batch_delete_work_groups(
+        tenant_id: int,
+        work_group_uuids: List[str]
+    ) -> dict:
+        """批量删除工作小组（软删除）"""
+        from tortoise import timezone
+        from loguru import logger
+
+        success_records = []
+        failed_records = []
+
+        for work_group_uuid in work_group_uuids:
+            try:
+                work_group = await WorkGroup.filter(
+                    tenant_id=tenant_id,
+                    uuid=work_group_uuid,
+                    deleted_at__isnull=True
+                ).first()
+
+                if not work_group:
+                    failed_records.append({
+                        "uuid": work_group_uuid,
+                        "reason": "工作小组不存在"
+                    })
+                    continue
+
+                work_group.deleted_at = timezone.now()
+                await work_group.save()
+                success_records.append({"uuid": work_group_uuid})
+            except Exception as e:
+                logger.exception(f"删除工作小组 {work_group_uuid} 失败: {e}")
+                failed_records.append({
+                    "uuid": work_group_uuid,
+                    "reason": str(e)
+                })
+
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }

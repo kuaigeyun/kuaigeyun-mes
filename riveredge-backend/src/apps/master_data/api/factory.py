@@ -21,6 +21,11 @@ from apps.master_data.schemas.factory_schemas import (
     BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest,
     BatchDeleteWorkCentersRequest
 )
+from apps.master_data.schemas.work_group_schemas import (
+    WorkGroupCreate, WorkGroupUpdate, WorkGroupResponse,
+    BatchDeleteWorkGroupsRequest
+)
+from apps.master_data.services.work_group_service import WorkGroupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/factory", tags=["Factory"])
@@ -722,6 +727,148 @@ async def delete_work_center(
     try:
         await FactoryService.delete_work_center(tenant_id, work_center_uuid)
         return {"message": "工作中心删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 工作小组相关接口 ====================
+
+@router.post("/work-groups", response_model=WorkGroupResponse, response_model_by_alias=True, summary="创建工作小组")
+async def create_work_group(
+    data: WorkGroupCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建工作小组
+
+    - **code**: 工作小组编码（必填，组织内唯一）
+    - **name**: 工作小组名称（必填）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（默认：true）
+    - **members**: 成员列表（含绩效权重）
+    """
+    try:
+        return await WorkGroupService.create_work_group(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/work-groups", response_model=List[WorkGroupResponse], response_model_by_alias=True, summary="获取工作小组列表")
+async def list_work_groups(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（工作小组编码或名称）"),
+    code: Optional[str] = Query(None, description="工作小组编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="工作小组名称（模糊匹配）")
+):
+    """
+    获取工作小组列表
+
+    - **skip**: 跳过数量（默认：0）
+    - **limit**: 限制数量（默认：100，最大：1000）
+    - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（工作小组编码或名称）
+    - **code**: 工作小组编码（精确匹配）
+    - **name**: 工作小组名称（模糊匹配）
+    """
+    try:
+        return await WorkGroupService.list_work_groups(tenant_id, skip, limit, is_active, keyword, code, name)
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"获取工作小组列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取工作小组列表失败: {str(e)}"
+        )
+
+
+@router.get("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="获取工作小组详情")
+async def get_work_group(
+    work_group_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取工作小组详情
+
+    - **work_group_uuid**: 工作小组UUID
+    """
+    try:
+        return await WorkGroupService.get_work_group_by_uuid(tenant_id, work_group_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/work-groups/{work_group_uuid}", response_model=WorkGroupResponse, response_model_by_alias=True, summary="更新工作小组")
+async def update_work_group(
+    work_group_uuid: str,
+    data: WorkGroupUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新工作小组
+
+    - **work_group_uuid**: 工作小组UUID
+    - **code**: 工作小组编码（可选）
+    - **name**: 工作小组名称（可选）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（可选）
+    - **members**: 成员列表（可选）
+    """
+    try:
+        return await WorkGroupService.update_work_group(tenant_id, work_group_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/work-groups/batch-delete", summary="批量删除工作小组")
+async def batch_delete_work_groups(
+    request: BatchDeleteWorkGroupsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除工作小组（软删除）
+
+    - **uuids**: 要删除的工作小组UUID列表（最多100条）
+    """
+    try:
+        result = await WorkGroupService.batch_delete_work_groups(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个工作小组，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除工作小组失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除工作小组失败: {str(e)}"
+        )
+
+
+@router.delete("/work-groups/{work_group_uuid}", summary="删除工作小组")
+async def delete_work_group(
+    work_group_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除工作小组（软删除）
+
+    - **work_group_uuid**: 工作小组UUID
+    """
+    try:
+        await WorkGroupService.delete_work_group(tenant_id, work_group_uuid)
+        return {"message": "工作小组删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

@@ -45,6 +45,12 @@
                         "path": "/apps/master-data/factory/work-centers",
                         "permission": "master-data:factory:work-center:view",
                         "sort_order": 4
+                    },
+                    {
+                        "title": "app.master-data.menu.factory.work-groups",
+                        "path": "/apps/master-data/factory/work-groups",
+                        "permission": "master-data:factory:work-group:view",
+                        "sort_order": 5
                     }
                 ]
             },
@@ -185,6 +191,10 @@
         "master-data:factory:work-center:create",
         "master-data:factory:work-center:update",
         "master-data:factory:work-center:delete",
+        "master-data:factory:work-group:view",
+        "master-data:factory:work-group:create",
+        "master-data:factory:work-group:update",
+        "master-data:factory:work-group:delete",
         "master-data:warehouse:warehouse:view",
         "master-data:warehouse:warehouse:create",
         "master-data:warehouse:warehouse:update",
@@ -301,6 +311,16 @@
             "auto_generate": true,
             "rule_code": "WORK_CENTER_CODE",
             "skip_date": true
+        },
+        {
+            "page_code": "master-data-factory-work-group",
+            "page_name": "工作小组",
+            "page_path": "/apps/master-data/factory/work-groups",
+            "code_field": "code",
+            "code_field_label": "工作小组编码",
+            "module": "主数据管理",
+            "module_icon": "database",
+            "auto_generate": false
         },
         {
             "page_code": "master-data-warehouse-warehouse",

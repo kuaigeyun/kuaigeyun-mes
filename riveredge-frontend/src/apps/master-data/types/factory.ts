@@ -189,3 +189,49 @@ export interface WorkCenterListParams {
   name?: string;
 }
 
+export interface WorkGroupMemberItem {
+  employeeId: number;
+  employeeName?: string;
+  performanceWeight: number;
+  sortOrder?: number;
+}
+
+export interface WorkGroup {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  members?: WorkGroupMemberItem[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface WorkGroupCreate {
+  code: string;
+  name: string;
+  description?: string;
+  isActive?: boolean;
+  members?: WorkGroupMemberItem[];
+}
+
+export interface WorkGroupUpdate {
+  code?: string;
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+  members?: WorkGroupMemberItem[];
+}
+
+export interface WorkGroupListParams {
+  skip?: number;
+  limit?: number;
+  isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
+}
+

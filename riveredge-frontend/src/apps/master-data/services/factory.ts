@@ -26,6 +26,10 @@ import type {
   WorkCenterCreate,
   WorkCenterUpdate,
   WorkCenterListParams,
+  WorkGroup,
+  WorkGroupCreate,
+  WorkGroupUpdate,
+  WorkGroupListParams,
 } from '../types/factory';
 
 /**
@@ -299,6 +303,47 @@ export const workCenterApi = {
     };
   }> => {
     return apiRequest('/apps/master-data/factory/work-centers/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
+};
+
+/**
+ * 工作小组 API 服务
+ */
+export const workGroupApi = {
+  create: async (data: WorkGroupCreate): Promise<WorkGroup> => {
+    return api.post('/apps/master-data/factory/work-groups', data);
+  },
+
+  list: async (params?: WorkGroupListParams): Promise<WorkGroup[]> => {
+    return api.get('/apps/master-data/factory/work-groups', { params });
+  },
+
+  get: async (uuid: string): Promise<WorkGroup> => {
+    return api.get(`/apps/master-data/factory/work-groups/${uuid}`);
+  },
+
+  update: async (uuid: string, data: WorkGroupUpdate): Promise<WorkGroup> => {
+    return api.put(`/apps/master-data/factory/work-groups/${uuid}`, data);
+  },
+
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/factory/work-groups/${uuid}`);
+  },
+
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/work-groups/batch-delete', {
       method: 'DELETE',
       data: { uuids },
     });

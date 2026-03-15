@@ -4,8 +4,9 @@
 提供绩效数据的 RESTful API 接口（假期、技能、员工绩效），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
+from typing import List, Optional, Dict
+from decimal import Decimal
 from datetime import date
 
 from core.api.deps.deps import get_current_user, get_current_tenant
@@ -597,4 +598,44 @@ async def calculate_performance(
 ):
     """触发指定周期的绩效计算，汇总报工并计算应发金额"""
     return await PerformanceCalcService.calculate_period(tenant_id, period)
+
+
+@router.post(
+    "/work-groups/{work_group_uuid}/distribute",
+    response_model=List[PerformanceSummaryResponse],
+    summary="按工作小组分配绩效",
+)
+async def distribute_by_work_group(
+    work_group_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    period: str = Query(..., description="周期（YYYY-MM）"),
+    total_amount: float = Query(..., description="待分配总金额（元）"),
+    custom_distribution: Optional[Dict[str, float]] = Body(
+        None,
+        description="自定义分配（employee_id -> amount），不传则按成员权重比例分配",
+    ),
+):
+    """
+    按工作小组分配绩效（混合模式）
+
+    - 若提供 custom_distribution，则按自定义金额分配
+    - 否则按成员 performance_weight 比例分配
+    """
+    try:
+        amount_decimal = Decimal(str(total_amount))
+        custom_map = None
+        if custom_distribution:
+            custom_map = {int(k): Decimal(str(v)) for k, v in custom_distribution.items()}
+        return await PerformanceCalcService.distribute_by_work_group(
+            tenant_id=tenant_id,
+            work_group_uuid=work_group_uuid,
+            period=period,
+            total_amount=amount_decimal,
+            custom_distribution=custom_map,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

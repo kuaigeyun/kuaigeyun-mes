@@ -303,3 +303,67 @@ class WorkCenter(BaseModel):
         """字符串表示"""
         return f"{self.code} - {self.name}"
 
+
+class WorkGroup(BaseModel):
+    """
+    工作小组模型
+
+    将生产人员编制为工作小组，支持绩效权重，用于绩效计算时的分配。
+    一个员工可属于多个工作小组。
+    """
+
+    class Meta:
+        table = "apps_master_data_work_groups"
+        table_description = "基础数据管理 - 工作小组"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+        ]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    code = fields.CharField(max_length=50, description="工作小组编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="工作小组名称")
+    description = fields.TextField(null=True, description="描述")
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class WorkGroupMember(BaseModel):
+    """
+    工作小组成员模型
+
+    关联工作小组与员工，支持绩效权重。同一员工可属于多个工作小组。
+    """
+
+    class Meta:
+        table = "apps_master_data_work_group_members"
+        table_description = "基础数据管理 - 工作小组成员"
+        indexes = [
+            ("tenant_id",),
+            ("work_group_id",),
+            ("employee_id",),
+        ]
+        unique_together = [("work_group_id", "employee_id")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    work_group = fields.ForeignKeyField(
+        "models.WorkGroup",
+        related_name="members",
+        description="工作小组"
+    )
+    employee_id = fields.IntField(description="员工ID（User.id）")
+    employee_name = fields.CharField(max_length=100, null=True, description="员工姓名（冗余）")
+    performance_weight = fields.DecimalField(
+        max_digits=6, decimal_places=4, default=1,
+        description="绩效权重（如 0.4 表示 40%）"
+    )
+    sort_order = fields.IntField(default=0, description="排序")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
+    def __str__(self):
+        return f"WorkGroup#{self.work_group_id} Employee#{self.employee_id}"
+
