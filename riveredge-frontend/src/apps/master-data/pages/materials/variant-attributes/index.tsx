@@ -83,6 +83,18 @@ const VariantAttributesPage: React.FC = () => {
       },
     },
     {
+      title: '允许多选',
+      dataIndex: 'allow_multiple',
+      width: 90,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.attribute_type === 'enum' ? (
+          <Tag color={record.allow_multiple ? 'blue' : 'default'}>
+            {record.allow_multiple ? '是' : '否'}
+          </Tag>
+        ) : '-',
+    },
+    {
       title: '是否必填',
       dataIndex: 'is_required',
       width: 100,
@@ -216,6 +228,7 @@ const VariantAttributesPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         ...detail,
         enum_values: detail.enum_values ? (Array.isArray(detail.enum_values) ? detail.enum_values.join(',') : detail.enum_values) : '',
+        allow_multiple: detail.allow_multiple ?? false,
       });
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.variantAttributes.getDetailFailed'));
@@ -314,6 +327,7 @@ const VariantAttributesPage: React.FC = () => {
       const submitData = {
         ...values,
         enum_values: enumValues,
+        allow_multiple: values.attribute_type === 'enum' ? (values.allow_multiple ?? false) : false,
       };
 
       if (isEdit && currentUuid) {
@@ -450,14 +464,23 @@ const VariantAttributesPage: React.FC = () => {
             const attributeType = getFieldValue('attribute_type');
             if (attributeType === 'enum') {
               return (
-                <ProFormText
-                  name="enum_values"
-                  label="枚举值"
-                  placeholder="请输入枚举值，多个值用逗号分隔（如：红色,蓝色,绿色）"
-                  rules={[{ required: true, message: '请输入枚举值' }]}
-                  extra="多个值用逗号分隔"
-                  colProps={{ span: 24 }}
-                />
+                <>
+                  <ProFormText
+                    name="enum_values"
+                    label="枚举值"
+                    placeholder="请输入枚举值，多个值用逗号分隔（如：红色,蓝色,绿色）"
+                    rules={[{ required: true, message: '请输入枚举值' }]}
+                    extra="多个值用逗号分隔"
+                    colProps={{ span: 24 }}
+                  />
+                  <ProFormSwitch
+                    name="allow_multiple"
+                    label="允许多选"
+                    initialValue={false}
+                    extra="物料编辑变体时，该属性是否支持选择多个枚举值"
+                    colProps={{ span: 12 }}
+                  />
+                </>
               );
             }
             return null;

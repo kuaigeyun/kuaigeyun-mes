@@ -220,7 +220,7 @@ const WorkOrdersPage: React.FC = () => {
   const [productSourceData, setProductSourceData] = useState<{
     type: string
     materials: any[]
-    items?: { productId: number; quantity: number }[]
+    items?: { productId: number; quantity: number; variant_attributes?: Record<string, unknown> }[]
   } | null>(null)
   // 选择文档弹窗
   const [productSourceModalVisible, setProductSourceModalVisible] = useState(false)
@@ -324,6 +324,11 @@ const WorkOrdersPage: React.FC = () => {
     formRef.current.setFieldsValue({
       product_id: first.productId,
       quantity: first.quantity,
+      variant_attributes: first.variant_attributes != null
+        ? (typeof first.variant_attributes === 'string'
+            ? first.variant_attributes
+            : JSON.stringify(first.variant_attributes, null, 2))
+        : undefined,
     })
     // 同步加载物料来源信息
     const selectedMaterial = productSourceData.materials.find((p: any) => p.id === first.productId)
@@ -349,6 +354,7 @@ const WorkOrdersPage: React.FC = () => {
             validationErrors.push('虚拟件不应创建工单')
           } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
           else if (sourceType === 'Outsource') validationErrors.push('委外件需配置委外供应商和工序')
+          else if (sourceType === 'Configure') validationErrors.push('配置件需填写变体属性')
           setSelectedMaterialSourceInfo({
             sourceType,
             sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
@@ -630,10 +636,12 @@ const WorkOrdersPage: React.FC = () => {
         console.error('加载工单工序失败', e)
         setSelectedOperations([])
       }
+      // 编辑时 product_id 禁用，不加载物料来源（变体属性字段在编辑时也不展示）
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
         setProductionMode(mode)
+        const variantAttrs = detail.variant_attributes
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -642,6 +650,9 @@ const WorkOrdersPage: React.FC = () => {
           product_name: detail.product_name,
           quantity: detail.quantity,
           production_mode: mode,
+          variant_attributes: variantAttrs != null
+            ? (typeof variantAttrs === 'string' ? variantAttrs : JSON.stringify(variantAttrs, null, 2))
+            : undefined,
           sales_order_id: detail.sales_order_id,
           sales_order_code: detail.sales_order_code,
           sales_order_name: detail.sales_order_name,
@@ -1474,9 +1485,28 @@ const WorkOrdersPage: React.FC = () => {
       if (values.product_id && !isEdit) {
         const selectedProduct = productList.find(product => product.id === values.product_id)
         if (selectedProduct) {
-          values.product_code = selectedProduct.code
+          values.product_code = selectedProduct.mainCode || selectedProduct.code
           values.product_name = selectedProduct.name
         }
+      }
+
+      // 配置件：解析 variant_attributes（表单可能为 JSON 字符串）
+      if (values.variant_attributes != null) {
+        const va = values.variant_attributes
+        if (typeof va === 'string') {
+          try {
+            values.variant_attributes = va.trim() ? JSON.parse(va) : undefined
+          } catch {
+            values.variant_attributes = undefined
+          }
+        }
+        if (values.variant_attributes && Object.keys(values.variant_attributes).length === 0) {
+          values.variant_attributes = undefined
+        }
+      }
+      // 编辑时变体属性字段不展示，保留原有值
+      if (isEdit && currentWorkOrder?.id && values.variant_attributes == null && (currentWorkOrder as any).variant_attributes != null) {
+        values.variant_attributes = (currentWorkOrder as any).variant_attributes
       }
 
       if (isEdit && currentWorkOrder?.id) {
@@ -3430,6 +3460,8 @@ const WorkOrdersPage: React.FC = () => {
                       validationErrors.push('自制件需配置BOM和工艺路线')
                     else if (sourceType === 'Outsource')
                       validationErrors.push('委外件需配置委外供应商和工序')
+                    else if (sourceType === 'Configure')
+                      validationErrors.push('配置件需填写变体属性')
                     setSelectedMaterialSourceInfo({
                       sourceType,
                       sourceTypeName: sourceType
@@ -3449,6 +3481,31 @@ const WorkOrdersPage: React.FC = () => {
           }}
           colProps={{ span: 10 }}
         />
+        {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
+          <ProFormText
+            name="variant_attributes"
+            label="变体属性"
+            placeholder='配置件必填，如 {"color":"red","size":"M"}'
+            rules={[
+              { required: true, message: '配置件必须填写变体属性' },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve()
+                  try {
+                    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+                    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                      return Promise.reject(new Error('请输入有效的 JSON 对象，如 {"color":"red","size":"M"}'))
+                    }
+                    return Promise.resolve()
+                  } catch {
+                    return Promise.reject(new Error('请输入有效的 JSON 格式'))
+                  }
+                },
+              },
+            ]}
+            colProps={{ span: 12 }}
+          />
+        )}
         <ProFormGroup colProps={{ span: 14 }} style={{ marginBottom: 0 }}>
           <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
             <Space size="middle" wrap={false} style={{ flexWrap: 'nowrap' }}>
@@ -3695,7 +3752,7 @@ const WorkOrdersPage: React.FC = () => {
               if (!docId) return
               try {
                 const sourceItems = productSourceDocList.filter((r: any) => r._doc_id === docId)
-                const itemsWithQty: { productId: number; quantity: number }[] = []
+                const itemsWithQty: { productId: number; quantity: number; variant_attributes?: Record<string, unknown> }[] = []
                 const materials: any[] = []
                 for (const it of sourceItems) {
                   const product = productList.find(
@@ -3707,7 +3764,11 @@ const WorkOrdersPage: React.FC = () => {
                     productSourceModalType === 'sales_forecast'
                       ? (it.forecast_quantity ?? 0)
                       : (it.required_quantity ?? 0)
-                  itemsWithQty.push({ productId: product.id, quantity: Number(qty) || 0 })
+                  itemsWithQty.push({
+                    productId: product.id,
+                    quantity: Number(qty) || 0,
+                    variant_attributes: it.variant_attributes ?? undefined,
+                  })
                   if (!materials.some((m: any) => m.id === product.id)) materials.push(product)
                 }
                 setProductSourceData({

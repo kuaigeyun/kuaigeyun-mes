@@ -42,6 +42,7 @@ export interface VariantAttributeDefinitionBase {
   is_required: boolean;
   display_order: number;
   enum_values?: string[];
+  allow_multiple?: boolean;
   validation_rules?: ValidationRules;
   default_value?: string;
   dependencies?: AttributeDependency;

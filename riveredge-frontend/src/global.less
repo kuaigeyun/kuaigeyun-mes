@@ -124,9 +124,16 @@
 }
 
 /* 确认类弹窗（Modal.confirm 等）：内容简短，排除限高和滚动条，避免点击确认时出现多余滚动条 */
-.ant-modal-confirm .ant-modal-body {
-  max-height: none;
-  overflow-y: visible;
+.ant-modal-confirm {
+  .ant-modal-content {
+    max-height: none;
+    overflow: visible;
+  }
+  .ant-modal-body {
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+  }
 }
 
 /* 批量建位预览：内容随行数自适应，不产生多余滚动条 */

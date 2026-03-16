@@ -117,6 +117,8 @@ export interface DemandItem {
   delivery_status?: string;
   work_order_id?: number;
   work_order_code?: string;
+  /** 变体属性（配置件专用，如 {"color":"red","size":"M"}） */
+  variant_attributes?: Record<string, unknown>;
   notes?: string;
   created_at?: string;
   updated_at?: string;

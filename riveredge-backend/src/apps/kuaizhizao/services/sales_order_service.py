@@ -310,6 +310,7 @@ class SalesOrderService:
                     total_amount=item_amt,
                     delivery_date=item_data.delivery_date,
                     delivery_status="待交货",
+                    variant_attributes=getattr(item_data, "variant_attributes", None),
                     notes=item_data.notes,
                 )
             discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
@@ -661,6 +662,7 @@ class SalesOrderService:
                         total_amount=item_amt,
                         delivery_date=item_data.delivery_date,
                         delivery_status="待交货",
+                        variant_attributes=getattr(item_data, "variant_attributes", None),
                         notes=item_data.notes,
                     )
                 discount = getattr(sales_order_data, "discount_amount", None) or Decimal("0")
@@ -1063,6 +1065,7 @@ class SalesOrderService:
                 "item_amount": it.total_amount,
                 "remaining_quantity": it.order_quantity,
                 "delivery_status": it.delivery_status or "待交货",
+                "variant_attributes": getattr(it, "variant_attributes", None),
             })
 
         demand = await Demand.create(
@@ -1362,12 +1365,14 @@ class SalesOrderService:
             if bom and bom.bom_code:
                 # 有BOM：展开，成品+半成品（Make/Outsource/Configure）生成工单
                 _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                variant_attrs = getattr(it, "variant_attributes", None)
                 requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=it.material_id,
                     required_quantity=qty,
                     only_approved=True,
                     use_default_bom=True,
+                    variant_attributes=variant_attrs,
                 )
                 for req in requirements:
                     st = req.get("source_type")
@@ -1508,12 +1513,14 @@ class SalesOrderService:
             )
             if bom and bom.bom_code:
                 _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                variant_attrs = getattr(it, "variant_attributes", None)
                 requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=it.material_id,
                     required_quantity=qty,
                     only_approved=True,
                     use_default_bom=True,
+                    variant_attributes=variant_attrs,
                 )
                 for req in requirements:
                     st = req.get("source_type")

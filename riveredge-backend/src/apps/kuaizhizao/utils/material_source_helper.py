@@ -16,11 +16,13 @@ Author: Auto (AI Assistant)
 Date: 2026-01-16
 """
 
+from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from decimal import Decimal
 from loguru import logger
 
 from apps.master_data.models.material import Material, BOM
+from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _bom_effective_filter
 
 
 async def _get_bom_for_material(
@@ -30,6 +32,7 @@ async def _get_bom_for_material(
     bom_version: Optional[str],
     use_default_bom: bool,
     material_bom_versions: Optional[Dict[int, str]],
+    as_of_date: Optional[datetime] = None,
 ) -> Optional[BOM]:
     """根据版本参数获取物料的 BOM（支持指定版本或默认版本）"""
     versions = material_bom_versions or {}
@@ -46,6 +49,9 @@ async def _get_bom_for_material(
         material_id=material_id,
         deleted_at__isnull=True
     )
+    eff_filter = _bom_effective_filter(as_of_date)
+    if eff_filter:
+        query = query.filter(eff_filter)
     if only_approved:
         query = query.filter(approval_status="approved")
 
@@ -62,11 +68,49 @@ async def _get_bom_for_material(
             material_id=material_id,
             deleted_at__isnull=True
         )
+        if eff_filter:
+            fallback = fallback.filter(eff_filter)
         if only_approved:
             fallback = fallback.filter(approval_status="approved")
         return await fallback.order_by("-created_at").first()
     return await query.order_by("-version", "-created_at").first()
 from infra.exceptions.exceptions import ValidationError, NotFoundError
+
+
+def _resolve_configure_variant(
+    variant_attributes: Optional[Dict[str, Any]],
+    bom_variants: Optional[Dict[str, Any]],
+    default_variant: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    根据变体属性匹配 bom_variants，返回对应的 BOM 版本配置。
+    bom_variants 格式: { "color=red,size=M": { "version": "1.0" }, ... }
+    variant_attributes 格式: { "color": "red", "size": "M" }
+    未匹配时回退到 default_variant 对应的 key。
+    """
+    if not bom_variants or not isinstance(bom_variants, dict):
+        return None
+    attrs = variant_attributes or {}
+    if isinstance(attrs, str):
+        try:
+            import json
+            attrs = json.loads(attrs) if attrs.strip() else {}
+        except Exception:
+            attrs = {}
+    if not isinstance(attrs, dict):
+        attrs = {}
+    # 构建变体 key：按属性名排序，格式 "attr1=val1,attr2=val2"
+    key_parts = sorted(f"{k}={v}" for k, v in attrs.items() if v is not None and str(v).strip())
+    variant_key = ",".join(key_parts) if key_parts else None
+    if variant_key and variant_key in bom_variants:
+        return bom_variants[variant_key]
+    if default_variant and default_variant in bom_variants:
+        return bom_variants[default_variant]
+    if not variant_key and bom_variants:
+        first_key = next(iter(bom_variants), None)
+        if first_key:
+            return bom_variants[first_key]
+    return None
 
 
 # 物料来源类型常量
@@ -244,7 +288,9 @@ async def expand_bom_with_source_control(
     max_level: int = 10,
     bom_version: Optional[str] = None,
     use_default_bom: bool = False,
-    material_bom_versions: Optional[Dict[int, str]] = None
+    material_bom_versions: Optional[Dict[int, str]] = None,
+    variant_attributes: Optional[Dict[str, Any]] = None,
+    as_of_date: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     """
     展开BOM，自动跳过虚拟件（物料来源控制）
@@ -259,6 +305,8 @@ async def expand_bom_with_source_control(
         bom_version: 全局 BOM 版本（可选），用于顶层物料
         use_default_bom: 是否使用默认版本（is_default=True），当 bom_version 未指定时生效
         material_bom_versions: 按物料ID指定版本（可选），格式 {material_id: version}
+        variant_attributes: 配置件变体属性（可选），格式 {attr: value}，用于匹配 bom_variants
+        as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
         
     Returns:
         List[Dict]: 展开后的物料需求列表，虚拟件已跳过
@@ -274,6 +322,16 @@ async def expand_bom_with_source_control(
     
     source_type = material.source_type
 
+    # 配置件：根据变体属性解析 BOM 版本
+    effective_material_bom_versions = dict(material_bom_versions) if material_bom_versions else {}
+    if source_type == SOURCE_TYPE_CONFIGURE:
+        source_config = material.source_config or {}
+        bom_variants = source_config.get("bom_variants")
+        default_variant = source_config.get("default_variant")
+        resolved = _resolve_configure_variant(variant_attributes, bom_variants, default_variant)
+        if resolved and resolved.get("version"):
+            effective_material_bom_versions[material_id] = resolved["version"]
+
     # 如果是虚拟件，自动跳过，直接展开下层物料
     if source_type == SOURCE_TYPE_PHANTOM:
         logger.debug(f"跳过虚拟件，直接展开下层物料，物料ID: {material_id}, 物料编码: {material.main_code}")
@@ -281,7 +339,8 @@ async def expand_bom_with_source_control(
         # 获取虚拟件的BOM（支持版本参数）
         target_bom = await _get_bom_for_material(
             tenant_id, material_id, only_approved,
-            bom_version, use_default_bom, material_bom_versions
+            bom_version, use_default_bom, effective_material_bom_versions,
+            as_of_date=as_of_date,
         )
         if not target_bom:
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
@@ -302,17 +361,17 @@ async def expand_bom_with_source_control(
                 version=target_bom.version,
                 deleted_at__isnull=True
             )
+        eff_filter = _bom_effective_filter(as_of_date)
+        if eff_filter:
+            bom_items_query = bom_items_query.filter(eff_filter)
         if only_approved:
             bom_items_query = bom_items_query.filter(approval_status="approved")
         bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
+        bom_items = _select_alternatives(bom_items)
         
         # 递归展开下层物料
         requirements = []
         for bom_item in bom_items:
-            # 跳过替代料
-            if bom_item.is_alternative:
-                continue
-            
             component = await bom_item.component
             if not component:
                 continue
@@ -322,7 +381,7 @@ async def expand_bom_with_source_control(
             if bom_item.waste_rate:
                 component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
             
-            # 递归展开子物料（传递版本参数）
+            # 递归展开子物料（传递版本参数和变体属性）
             child_requirements = await expand_bom_with_source_control(
                 tenant_id=tenant_id,
                 material_id=component.id,
@@ -332,7 +391,9 @@ async def expand_bom_with_source_control(
                 max_level=max_level,
                 bom_version=bom_version,
                 use_default_bom=use_default_bom,
-                material_bom_versions=material_bom_versions,
+                material_bom_versions=effective_material_bom_versions,
+                variant_attributes=variant_attributes,
+                as_of_date=as_of_date,
             )
             
             # 合并需求（如果有子物料展开的结果，使用子物料的结果；否则添加当前物料）
@@ -357,7 +418,8 @@ async def expand_bom_with_source_control(
     # 非虚拟件，正常展开BOM
     target_bom = await _get_bom_for_material(
         tenant_id, material_id, only_approved,
-        bom_version, use_default_bom, material_bom_versions
+        bom_version, use_default_bom, effective_material_bom_versions,
+        as_of_date=as_of_date,
     )
     if not target_bom:
         return []
@@ -377,16 +439,16 @@ async def expand_bom_with_source_control(
             version=target_bom.version,
             deleted_at__isnull=True
         )
+    eff_filter = _bom_effective_filter(as_of_date)
+    if eff_filter:
+        bom_items_query = bom_items_query.filter(eff_filter)
     if only_approved:
         bom_items_query = bom_items_query.filter(approval_status="approved")
     bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
+    bom_items = _select_alternatives(bom_items)
 
     requirements = []
     for bom_item in bom_items:
-        # 跳过替代料
-        if bom_item.is_alternative:
-            continue
-        
         component = await bom_item.component
         if not component:
             continue
@@ -410,7 +472,9 @@ async def expand_bom_with_source_control(
                 max_level=max_level,
                 bom_version=bom_version,
                 use_default_bom=use_default_bom,
-                material_bom_versions=material_bom_versions,
+                material_bom_versions=effective_material_bom_versions,
+                variant_attributes=variant_attributes,
+                as_of_date=as_of_date,
             )
             requirements.extend(child_requirements)
         else:
@@ -432,6 +496,9 @@ async def expand_bom_with_source_control(
                 material_id=component.id,
                 deleted_at__isnull=True
             )
+            child_eff_filter = _bom_effective_filter(as_of_date)
+            if child_eff_filter:
+                child_bom_query = child_bom_query.filter(child_eff_filter)
             if only_approved:
                 child_bom_query = child_bom_query.filter(approval_status="approved")
             child_bom_count = await child_bom_query.count()
@@ -446,7 +513,9 @@ async def expand_bom_with_source_control(
                     max_level=max_level,
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
-                    material_bom_versions=material_bom_versions,
+                    material_bom_versions=effective_material_bom_versions,
+                    variant_attributes=variant_attributes,
+                    as_of_date=as_of_date,
                 )
                 requirements.extend(child_requirements)
 

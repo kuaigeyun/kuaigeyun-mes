@@ -445,6 +445,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onViewTypeChange?: (viewType: string) => void
   /**
+   * 使用表格展示的视图类型（除 table/detailTable 外，自定义视图也可复用 ProTable 展示）
+   * 例如：['productBom', 'allBom'] 时，成品BOM/全部BOM 切换时仍显示同一表格，仅数据过滤不同
+   */
+  tableViewTypes?: string[]
+  /**
    * 帮助视图配置（仅当 viewTypes 包含 'help' 时生效）
    */
   helpViewConfig?: {
@@ -621,6 +626,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   viewTypes = ['table', 'help'],
   defaultViewType = 'table',
   onViewTypeChange,
+  tableViewTypes,
   detailTableColumns,
   ganttViewConfig,
   helpViewConfig,
@@ -769,16 +775,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       if (isOperationColumn(col)) {
         const { width, ...rest } = col
-        // 操作列通常有 3–5 个按钮，200px 易被裁切；固定列必须有 width
-        const OPERATION_MIN_WIDTH = 280
-        const widthConfig =
-          col.fixed === 'right'
-            ? { width: Math.max(width ?? OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
-            : { minWidth: Math.max(width ?? OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
+        // 操作列统一规范：内容不换行、宽度自适应（width: auto + scroll.x: max-content 由浏览器根据内容计算）
         return {
           ...rest,
-          ...widthConfig,
-          onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+          width: 'auto',
+          resizable: false,
+          ellipsis: false,
+          onCell: () => ({
+            style: {
+              whiteSpace: 'nowrap',
+              overflow: 'visible',
+            },
+          }),
         }
       }
       return col
@@ -824,15 +832,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [tableId, resetColumns, refresh, syncTablePreference])
 
-  // 最终传给 ProTable 的列：强制操作列宽度不小于 280，避免被持久化的小值覆盖导致裁切
-  const OPERATION_MIN_WIDTH = 280
+  // 最终传给 ProTable 的列：操作列始终 width: auto 以自适应内容，忽略持久化的数值宽度
   const effectiveTableColumns = React.useMemo(() => {
     const cols = resizableColumns.length > 0 ? resizableColumns : processedColumns
     return cols.map((col: any) => {
       if (!isOperationColumn(col)) return col
-      const w = col.width ?? col.minWidth
-      if (w != null && Number(w) >= OPERATION_MIN_WIDTH) return col
-      return { ...col, width: Math.max(Number(w) || OPERATION_MIN_WIDTH, OPERATION_MIN_WIDTH) }
+      return { ...col, width: 'auto', resizable: false }
     })
   }, [resizableColumns, processedColumns])
 
@@ -1563,7 +1568,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           <ConfigProvider getPopupContainer={() => document.body}>
             <div
               style={{
-                display: currentViewType === 'table' || currentViewType === 'detailTable' ? 'block' : 'none',
+                display:
+                  currentViewType === 'table' ||
+                  currentViewType === 'detailTable' ||
+                  (tableViewTypes && tableViewTypes.includes(currentViewType))
+                    ? 'block'
+                    : 'none',
                 width: '100%',
               }}
             >
@@ -1966,10 +1976,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           )}
 
           {/* 自定义视图（customViews）- 与表格视图保持相同容器结构（操作按钮、导入导出等） */}
+          {/* 若视图在 tableViewTypes 中，则已由 ProTable 展示，不重复渲染 */}
           {customViews?.map(
             cv =>
               currentViewType === cv.key &&
-              viewTypes.includes(cv.key) && (
+              viewTypes.includes(cv.key) &&
+              !(tableViewTypes && tableViewTypes.includes(cv.key)) && (
                 <div
                   key={cv.key}
                   className="uni-table-pro-table"

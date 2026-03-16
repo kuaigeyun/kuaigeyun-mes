@@ -944,6 +944,7 @@ class DemandComputationService:
                 logger.debug(f"处理虚拟件，物料ID: {material_id}, 物料编码: {material.main_code}")
                 
                 # 使用物料来源控制的BOM展开逻辑
+                variant_attrs = getattr(demand_item, "variant_attributes", None)
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -952,6 +953,7 @@ class DemandComputationService:
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
+                    variant_attributes=variant_attrs,
                 )
                 
                 # 合并到总需求中
@@ -969,10 +971,9 @@ class DemandComputationService:
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体展开BOM（TODO: 需要从需求中获取配置信息）
+                # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
                 logger.debug(f"处理配置件，物料ID: {material_id}, 物料编码: {material.main_code}")
-                
-                # 暂时按标准BOM展开处理（后续需要支持变体选择）
+                variant_attrs = getattr(demand_item, "variant_attributes", None)
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -981,6 +982,7 @@ class DemandComputationService:
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
+                    variant_attributes=variant_attrs,
                 )
                 
                 # 合并到总需求中
@@ -1031,6 +1033,7 @@ class DemandComputationService:
 
                 if bom_items:
                     # 展开BOM（使用物料来源控制逻辑）
+                    variant_attrs = getattr(demand_item, "variant_attributes", None)
                     expanded_requirements = await expand_bom_with_source_control(
                         tenant_id=tenant_id,
                         material_id=material_id,
@@ -1039,6 +1042,7 @@ class DemandComputationService:
                         bom_version=bom_version,
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
+                        variant_attributes=variant_attrs,
                     )
 
                     # 合并到总需求中
@@ -1239,6 +1243,7 @@ class DemandComputationService:
             # 处理不同来源类型的物料（类似MRP逻辑）
             if source_type == SOURCE_TYPE_PHANTOM:
                 # 虚拟件：自动跳过，直接展开下层物料
+                variant_attrs = getattr(demand_item, "variant_attributes", None)
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -1247,6 +1252,7 @@ class DemandComputationService:
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
+                    variant_attributes=variant_attrs,
                 )
                 
                 for req in expanded_requirements:
@@ -1264,7 +1270,8 @@ class DemandComputationService:
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体展开BOM（TODO: 需要从需求中获取配置信息）
+                # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
+                variant_attrs = getattr(demand_item, "variant_attributes", None)
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -1273,6 +1280,7 @@ class DemandComputationService:
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
+                    variant_attributes=variant_attrs,
                 )
                 
                 for req in expanded_requirements:
@@ -1322,6 +1330,7 @@ class DemandComputationService:
                 )
 
                 if bom_items:
+                    variant_attrs = getattr(demand_item, "variant_attributes", None)
                     expanded_requirements = await expand_bom_with_source_control(
                         tenant_id=tenant_id,
                         material_id=material_id,
@@ -1330,6 +1339,7 @@ class DemandComputationService:
                         bom_version=bom_version,
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
+                        variant_attributes=variant_attrs,
                     )
 
                     for req in expanded_requirements:

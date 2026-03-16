@@ -60,6 +60,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_OUTSOURCE,
     SOURCE_TYPE_BUY,
     SOURCE_TYPE_PHANTOM,
+    SOURCE_TYPE_CONFIGURE,
 )
 from loguru import logger
 
@@ -562,6 +563,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     error_msg = f"虚拟件不应创建工单，物料: {product_code} ({product_name})，虚拟件会自动展开到下层物料"
                     logger.warning(f"工单创建失败 - {error_msg}")
                     raise ValidationError(error_msg)
+                elif source_type == SOURCE_TYPE_CONFIGURE:
+                    # 配置件：必须提供变体属性以确定具体 BOM 变体
+                    variant_attrs = getattr(work_order_data, "variant_attributes", None)
+                    if not variant_attrs or not isinstance(variant_attrs, dict) or len(variant_attrs) == 0:
+                        error_msg = f"配置件必须提供变体属性（variant_attributes），物料: {product_code} ({product_name})，例如 {{\"color\":\"red\",\"size\":\"M\"}}"
+                        logger.warning(f"工单创建失败 - {error_msg}")
+                        raise ValidationError(error_msg)
                 
                 logger.info(f"物料来源验证通过，物料: {product_code} ({product_name}), 来源类型: {source_type}")
             else:
@@ -595,6 +603,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 completed_quantity=work_order_data.completed_quantity,
                 qualified_quantity=work_order_data.qualified_quantity,
                 unqualified_quantity=work_order_data.unqualified_quantity,
+                variant_attributes=getattr(work_order_data, "variant_attributes", None),
                 remarks=work_order_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -1196,13 +1205,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-        # 获取BOM物料需求
+        # 获取BOM物料需求（配置件时传入 variant_attributes）
         try:
+            variant_attrs = getattr(work_order, "variant_attributes", None)
             material_requirements = await calculate_material_requirements_from_bom(
                 tenant_id=tenant_id,
                 material_id=work_order.product_id,
                 required_quantity=float(work_order.quantity),
-                only_approved=True
+                only_approved=True,
+                variant_attributes=variant_attrs,
             )
         except NotFoundError:
             # 如果没有BOM，返回无缺料

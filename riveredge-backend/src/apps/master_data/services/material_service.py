@@ -1645,10 +1645,23 @@ class MaterialService:
         
         if not bom:
             raise NotFoundError(f"BOM {bom_uuid} 不存在")
-            
-        # 检查BOM状态：已审核的BOM不可编辑
+        
+        # 兼容 Pydantic v1/v2，并统一为 snake_case
+        if hasattr(data, "model_dump"):
+            update_data = data.model_dump(exclude_unset=True, by_alias=False)
+        else:
+            update_data = data.dict(exclude_unset=True)
+        # 前端可能传 isDefault (camelCase)，统一转为 is_default
+        if "isDefault" in update_data and "is_default" not in update_data:
+            update_data["is_default"] = update_data.pop("isDefault")
+        # 检查BOM状态：已审核的BOM不可编辑（但允许仅更新 is_default 设为默认版本）
         if bom.approval_status == 'approved':
-            raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止修改。请先反审核或创建新版本。")
+            only_set_default = (
+                set(update_data.keys()) <= {"is_default"}
+                and update_data.get("is_default") is True
+            )
+            if not only_set_default:
+                raise ValidationError(f"BOM {bom.bom_code} (版本 {bom.version}) 已审核通过，禁止修改。请先反审核或创建新版本。")
         
         # 如果更新主物料ID，检查主物料是否存在
         if data.material_id and data.material_id != bom.material_id:
@@ -1680,7 +1693,6 @@ class MaterialService:
             raise ValidationError("主物料和子物料不能相同")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
         is_default_updated = "is_default" in update_data and update_data["is_default"] is True
         
         if is_default_updated:
@@ -1696,16 +1708,14 @@ class MaterialService:
                 version=bom.version,
                 deleted_at__isnull=True
             ).update(is_default=True)
-            # 已批量更新，跳过单条 setattr
+            # 已批量更新，跳过单条 setattr；必须同步内存对象，否则 bom.save() 会覆盖数据库
             update_data.pop("is_default", None)
+            bom.is_default = True
         
         for key, value in update_data.items():
             setattr(bom, key, value)
         
         await bom.save()
-        
-        if is_default_updated:
-            await bom.refresh_from_db()
         
         return BOMResponse.model_validate(bom)
     

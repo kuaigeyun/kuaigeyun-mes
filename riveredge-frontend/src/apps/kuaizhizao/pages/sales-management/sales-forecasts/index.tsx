@@ -131,7 +131,7 @@ const SalesForecastsPage: React.FC = () => {
    * 处理新建销售预测
    * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编码（不占用序号）
    */
-  const defaultForecastItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', forecast_quantity: 1, forecast_date: dayjs(), historical_sales: undefined, notes: '' };
+  const defaultForecastItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', forecast_quantity: 1, forecast_date: dayjs(), historical_sales: undefined, variant_attributes: '', notes: '' };
 
   const handleCreate = async () => {
     setIsEdit(false);
@@ -195,6 +195,11 @@ const SalesForecastsPage: React.FC = () => {
       const itemsForm = items.map((it: SalesForecastItem) => ({
         ...it,
         forecast_date: it.forecast_date ? dayjs(it.forecast_date) : undefined,
+        variant_attributes: (() => {
+          const va = (it as any).variant_attributes;
+          if (va == null) return '';
+          return typeof va === 'string' ? va : JSON.stringify(va, null, 2);
+        })(),
       }));
       formRef.current?.setFieldsValue({
         forecast_code: data.forecast_code,
@@ -309,6 +314,12 @@ const SalesForecastsPage: React.FC = () => {
       forecast_quantity: Number(it.forecast_quantity) || 0,
       forecast_date: forecastDateStr,
       historical_sales: it.historical_sales != null ? Number(it.historical_sales) : undefined,
+      variant_attributes: (() => {
+        const va = (it as any).variant_attributes;
+        if (va == null) return undefined;
+        if (typeof va === 'object') return va;
+        try { return va ? JSON.parse(va) : undefined; } catch { return undefined; }
+      })(),
       notes: it.notes ?? undefined,
     };
   };
@@ -585,7 +596,35 @@ const SalesForecastsPage: React.FC = () => {
                                 formItemProps={{ style: { margin: 0 } }}
                                 showQuickCreate
                                 showAdvancedSearch
+                                onChange={(val, material) => {
+                                  formRef.current?.setFieldValue(['items', index, '_sourceType'], material?.sourceType || (material as any)?.source_type);
+                                }}
                               />
+                            );
+                          }}
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '变体属性',
+                      dataIndex: 'variant_attributes',
+                      width: 140,
+                      render: (_: any, __: any, index: number) => (
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                          {({ getFieldValue }: any) => {
+                            const row = getFieldValue('items')?.[index];
+                            const mid = row?.material_id ? Number(row.material_id) : null;
+                            const st = row?._sourceType ?? materials.find((m: any) => m.id === mid)?.sourceType ?? materials.find((m: any) => m.id === mid)?.source_type;
+                            const isConfigure = st === 'Configure';
+                            if (!isConfigure) return <span style={{ color: '#999' }}>-</span>;
+                            return (
+                              <AntForm.Item name={[index, 'variant_attributes']} style={{ margin: 0 }}>
+                                <Input
+                                  placeholder='配置件需填写，如 {"color":"red","size":"M"}'
+                                  size="small"
+                                  allowClear
+                                />
+                              </AntForm.Item>
                             );
                           }}
                         </AntForm.Item>
@@ -701,6 +740,7 @@ const SalesForecastsPage: React.FC = () => {
                                   forecast_quantity: undefined,
                                   forecast_date: defaultDate,
                                   historical_sales: undefined,
+                                  variant_attributes: '',
                                   notes: '',
                                 });
                               }}

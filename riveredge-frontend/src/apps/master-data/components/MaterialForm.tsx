@@ -53,6 +53,7 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
   Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
+  Configure: ['default_variant', 'bom_variants'],
   Phantom: [],
   Service: [],
 };
@@ -549,7 +550,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             // 将 sourceConfig 的每个字段展开为扁平 key（如 sourceConfig.manufacturing_mode）
             if (materialSourceConfig && typeof materialSourceConfig === 'object') {
               Object.keys(materialSourceConfig).forEach(key => {
-                fieldsToSet[`sourceConfig.${key}`] = materialSourceConfig[key];
+                let val = materialSourceConfig[key];
+                if (key === 'bom_variants' && val != null && typeof val === 'object') {
+                  val = JSON.stringify(val, null, 2);
+                }
+                fieldsToSet[`sourceConfig.${key}`] = val;
               });
             }
             
@@ -688,7 +693,15 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const filteredSourceConfig: Record<string, any> = {};
       for (const key of Object.keys(sourceConfig)) {
         if (allowedFields.includes(key)) {
-          filteredSourceConfig[key] = sourceConfig[key];
+          let val = sourceConfig[key];
+          if (key === 'bom_variants' && typeof val === 'string' && val.trim()) {
+            try {
+              val = JSON.parse(val);
+            } catch {
+              messageApi.warning(t('app.master-data.source.bomVariantsLabel') + ': JSON 格式无效');
+            }
+          }
+          filteredSourceConfig[key] = val;
         }
       }
       // 同步名称字段，便于后端与下游使用
@@ -1986,6 +1999,7 @@ const VariantManagementTab: React.FC = () => {
                   placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
                   required={def.is_required}
                   tooltip={def.description}
+                  fieldProps={{ mode: def.allow_multiple ? 'multiple' : undefined }}
                   options={def.enum_values?.map(v => ({ label: v, value: v }))}
                   rules={[
                     {
@@ -3137,6 +3151,37 @@ const MaterialSourceTab = forwardRef<
                       { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
                     ]}
                     initialValue="enterprise"
+                  />
+                </Col>
+              </Row>
+            );
+          }
+          if (currentSourceType === 'Configure') {
+            return (
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={24}>
+                  <Alert
+                    message={t('app.master-data.source.configureTip')}
+                    description={t('app.master-data.source.configureTipDesc')}
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <ProFormText
+                    name="sourceConfig.default_variant"
+                    label={t('app.master-data.source.defaultVariant')}
+                    placeholder={t('app.master-data.source.defaultVariantPlaceholder')}
+                    tooltip={t('app.master-data.materialForm.configVariantFirst')}
+                  />
+                </Col>
+                <Col span={24}>
+                  <ProFormTextArea
+                    name="sourceConfig.bom_variants"
+                    label={t('app.master-data.source.bomVariantsLabel')}
+                    placeholder={t('app.master-data.source.bomVariantsPlaceholder')}
+                    fieldProps={{ rows: 4 }}
                   />
                 </Col>
               </Row>

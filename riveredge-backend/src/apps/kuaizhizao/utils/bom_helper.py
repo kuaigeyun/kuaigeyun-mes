@@ -7,13 +7,46 @@ Author: Luigi Lu
 Date: 2025-01-01
 """
 
+from collections import defaultdict
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from loguru import logger
 
+from tortoise.expressions import Q
+
 from apps.master_data.models.material import BOM
+
+
+def _select_alternatives(bom_items: List[BOM]) -> List[BOM]:
+    """
+    替代料组内互斥选择：主料优先，否则按 priority 升序选第一个。
+    按 alternative_group_id 分组；None 视为独立组（仅自身）。
+    """
+    by_group = defaultdict(list)
+    for b in bom_items:
+        gid = getattr(b, "alternative_group_id", None)
+        by_group[gid].append(b)
+    result = []
+    for group in by_group.values():
+        mains = [x for x in group if not getattr(x, "is_alternative", False)]
+        if mains:
+            result.append(mains[0])
+        else:
+            chosen = min(group, key=lambda x: (getattr(x, "priority", 0) or 0, x.id))
+            result.append(chosen)
+    return result
 from apps.master_data.schemas.material_schemas import BOMResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+def _bom_effective_filter(as_of_date: Optional[datetime]):
+    """构建 BOM 生效/失效过滤条件：effective_date <= as_of_date 且 (expiry_date is null or expiry_date >= as_of_date)"""
+    if not as_of_date:
+        return None
+    return (Q(effective_date__isnull=True) | Q(effective_date__lte=as_of_date)) & (
+        Q(expiry_date__isnull=True) | Q(expiry_date__gte=as_of_date)
+    )
 
 
 async def get_bom_by_material_id(
@@ -21,7 +54,8 @@ async def get_bom_by_material_id(
     material_id: int,
     only_approved: bool = True,
     version: Optional[str] = None,
-    use_default: bool = False
+    use_default: bool = False,
+    as_of_date: Optional[datetime] = None,
 ) -> Optional[BOM]:
     """
     根据物料ID获取BOM（从master_data）
@@ -32,6 +66,7 @@ async def get_bom_by_material_id(
         only_approved: 是否只返回已审核的BOM（默认：True）
         version: 指定版本号（可选），若提供则按版本查询
         use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
+        as_of_date: 基准日期（可选），仅返回该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
 
     Returns:
         BOM对象或None
@@ -41,6 +76,9 @@ async def get_bom_by_material_id(
         material_id=material_id,
         deleted_at__isnull=True
     )
+    eff_filter = _bom_effective_filter(as_of_date)
+    if eff_filter:
+        query = query.filter(eff_filter)
     
     if only_approved:
         query = query.filter(approval_status="approved")
@@ -55,6 +93,8 @@ async def get_bom_by_material_id(
                 material_id=material_id,
                 deleted_at__isnull=True,
             )
+            if eff_filter:
+                fallback = fallback.filter(eff_filter)
             if only_approved:
                 fallback = fallback.filter(approval_status="approved")
             bom = await fallback.filter(is_default=True).first()
@@ -70,6 +110,8 @@ async def get_bom_by_material_id(
                 material_id=material_id,
                 deleted_at__isnull=True
             )
+            if eff_filter:
+                query = query.filter(eff_filter)
             if only_approved:
                 query = query.filter(approval_status="approved")
             bom = await query.order_by("-created_at").first()
@@ -85,7 +127,9 @@ async def get_bom_items_by_material_id(
     material_id: int,
     only_approved: bool = True,
     version: Optional[str] = None,
-    use_default: bool = False
+    use_default: bool = False,
+    apply_alternative_selection: bool = True,
+    as_of_date: Optional[datetime] = None,
 ) -> List[BOM]:
     """
     根据物料ID获取BOM明细列表（从master_data）
@@ -96,6 +140,8 @@ async def get_bom_items_by_material_id(
         only_approved: 是否只返回已审核的BOM（默认：True）
         version: 指定版本号（可选）
         use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
+        apply_alternative_selection: 是否应用替代料选择（默认：True），同组互斥选一
+        as_of_date: 基准日期（可选），仅返回该日期生效的 BOM 明细
 
     Returns:
         BOM明细列表
@@ -105,7 +151,8 @@ async def get_bom_items_by_material_id(
         material_id=material_id,
         only_approved=only_approved,
         version=version,
-        use_default=use_default
+        use_default=use_default,
+        as_of_date=as_of_date,
     )
     if not bom:
         return []
@@ -125,9 +172,14 @@ async def get_bom_items_by_material_id(
             version=bom.version,
             deleted_at__isnull=True
         )
+    eff_filter = _bom_effective_filter(as_of_date)
+    if eff_filter:
+        items_query = items_query.filter(eff_filter)
     if only_approved:
         items_query = items_query.filter(approval_status="approved")
     items = await items_query.prefetch_related("component").order_by("priority", "id").all()
+    if apply_alternative_selection:
+        items = _select_alternatives(items)
     return items
 
 
@@ -135,7 +187,9 @@ async def calculate_material_requirements_from_bom(
     tenant_id: int,
     material_id: int,
     required_quantity: float,
-    only_approved: bool = True
+    only_approved: bool = True,
+    as_of_date: Optional[datetime] = None,
+    variant_attributes: Optional[Dict[str, Any]] = None,
 ) -> List[Any]:
     """
     根据BOM计算物料需求（从master_data）
@@ -145,16 +199,67 @@ async def calculate_material_requirements_from_bom(
         material_id: 物料ID（成品物料ID）
         required_quantity: 需求数量
         only_approved: 是否只使用已审核的BOM（默认：True）
+        as_of_date: 基准日期（可选），仅使用该日期生效的 BOM
+        variant_attributes: 配置件变体属性（可选），当产品为 Configure 时用于 BOM 变体匹配
 
     Returns:
         物料需求列表，返回MaterialRequirement对象列表（兼容原BOMService的返回格式）
     """
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
-    
+    from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
+
+    # 当提供 variant_attributes 时，使用 expand_bom_with_source_control（支持 Configure、Phantom 等）
+    if variant_attributes and isinstance(variant_attributes, dict) and len(variant_attributes) > 0:
+        expanded = await expand_bom_with_source_control(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            required_quantity=required_quantity,
+            only_approved=only_approved,
+            variant_attributes=variant_attributes,
+            as_of_date=as_of_date,
+        )
+        if not expanded:
+            raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配变体）")
+
+        # 按 component_id 聚合（同一物料可能从多路径展开）
+        by_component: Dict[int, Dict[str, Any]] = {}
+        for item in expanded:
+            mid = item.get("material_id")
+            if not mid:
+                continue
+            if mid not in by_component:
+                by_component[mid] = {
+                    "material_id": mid,
+                    "material_code": item.get("material_code", ""),
+                    "material_name": item.get("material_name", ""),
+                    "source_type": item.get("source_type", "Buy"),
+                    "required_quantity": 0.0,
+                    "unit": item.get("unit", ""),
+                }
+            by_component[mid]["required_quantity"] += float(item.get("required_quantity", 0))
+
+        requirements = []
+        for req in by_component.values():
+            requirements.append(MaterialRequirement(
+                component_id=req["material_id"],
+                component_code=req["material_code"],
+                component_name=req["material_name"],
+                component_type=req["source_type"],
+                gross_requirement=req["required_quantity"],
+                net_requirement=req["required_quantity"],
+                available_inventory=0.0,
+                planned_receipt=0.0,
+                unit=req["unit"] or "",
+                lead_time=0,
+            ))
+        return requirements
+
     bom_items = await get_bom_items_by_material_id(
         tenant_id=tenant_id,
         material_id=material_id,
-        only_approved=only_approved
+        only_approved=only_approved,
+        apply_alternative_selection=True,
+        as_of_date=as_of_date,
     )
     
     if not bom_items:
@@ -162,10 +267,6 @@ async def calculate_material_requirements_from_bom(
     
     requirements = []
     for item in bom_items:
-        # 跳过替代料（只使用主料）
-        if item.is_alternative:
-            continue
-        
         # 计算需求数量
         component = await item.component
         if not component:

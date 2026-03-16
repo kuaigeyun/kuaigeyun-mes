@@ -54,6 +54,7 @@ class MaterialVariantAttributeDefinition(BaseModel):
     
     # 使用 JSONField 存储配置
     enum_values = fields.JSONField(null=True, description="枚举值列表（JSON数组，如果type=enum）")
+    allow_multiple = fields.BooleanField(default=False, description="枚举类型是否允许多选（仅 attribute_type=enum 时有效）")
     validation_rules = fields.JSONField(null=True, description="验证规则（JSON格式，如：{'max_length': 50, 'min': 0, 'max': 100}）")
     default_value = fields.CharField(max_length=200, null=True, description="默认值")
     dependencies = fields.JSONField(null=True, description="依赖关系（JSON格式，如：{'depends_on': '颜色', 'rules': {...}}）")

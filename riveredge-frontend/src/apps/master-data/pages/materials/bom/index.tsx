@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined, StarOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -47,6 +47,13 @@ interface BOMGroupRow {
   firstItem: BOM;
   items: BOM[];
   children?: BOM[]; // 树形数据的子节点
+}
+
+/** 按物料分组的行：一物料一行，版本通过下拉切换，默认显示默认版本或最新版本 */
+interface MaterialBOMRow extends BOMGroupRow {
+  materialId: number;
+  versions: BOMGroupRow[];
+  selectedVersion: BOMGroupRow;
 }
 
 /**
@@ -89,6 +96,7 @@ const BOMPage: React.FC = () => {
   const [versionCompareModalVisible, setVersionCompareModalVisible] = useState(false);
   const [versionHistoryModalVisible, setVersionHistoryModalVisible] = useState(false);
   const [currentMaterialId, setCurrentMaterialId] = useState<number | null>(null);
+  const createVersionRecordRef = useRef<BOM | null>(null); // 创建新版本时当前操作的 BOM 记录（用于快速创建）
   const versionFormRef = useRef<ProFormInstance>();
   
   // 递归审核选项Ref（批量操作用）
@@ -120,11 +128,14 @@ const BOMPage: React.FC = () => {
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
-  /** BOM 视图类型：成品BOM（仅一级）| 全部BOM，默认成品BOM */
-  const [bomViewType, setBomViewType] = useState<'product' | 'all'>('product');
+  /** BOM 视图类型（与 UniTable 视图联动）：productBom=成品 | semiProductBom=半成品 | allBom=全部 */
+  const bomViewTypeRef = useRef<'productBom' | 'semiProductBom' | 'allBom'>('productBom');
 
   /** 分组行 groupKey -> 该组内所有 BOM 的 uuid，用于批量删除时解析 */
   const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
+
+  /** 物料选中的版本 materialId -> groupKey，切换版本时更新并 reload */
+  const [selectedVersionByMaterial, setSelectedVersionByMaterial] = useState<Record<number, string>>({});
 
   /**
    * 加载物料列表
@@ -351,19 +362,6 @@ const BOMPage: React.FC = () => {
       }, 150);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.bom.getFailed'));
-    }
-  };
-  
-  /**
-   * 处理复制BOM
-   */
-  const handleCopy = async (record: BOM) => {
-    try {
-      const newBom = await bomApi.copy(record.uuid);
-      messageApi.success(t('app.master-data.bom.copySuccess'));
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.master-data.bom.copyFailed'));
     }
   };
   
@@ -938,24 +936,121 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 成品BOM视图：仅保留一级BOM（level === 0）的子件，过滤掉无一级子件的分组
+   * 按物料分组：一物料一行，版本下拉切换，默认显示默认版本或最新版本
+   * @param groupRows 当前视图过滤后的分组行（成品或半成品）
+   * @param selectedMap 物料选中的版本
+   * @param allGroupRows 全部 BOM 分组行（用于构建半成品 componentId 的版本/编码/审核状态）
    */
-  const filterToProductBomView = (groupRows: BOMGroupRow[]): BOMGroupRow[] => {
-    return groupRows
-      .map((row) => {
-        const level0Items = row.items.filter((i) => (i.level ?? 0) === 0);
-        if (level0Items.length === 0) return null;
-        const level0Children = level0Items.map((item, idx) => ({
-          ...item,
-          key: `${item.uuid}-child-${idx}`,
-        }));
-        return {
-          ...row,
-          items: level0Items,
-          children: level0Children,
-        };
-      })
-      .filter((r): r is BOMGroupRow => r !== null);
+  const groupBomsByMaterial = (
+    groupRows: BOMGroupRow[],
+    selectedMap: Record<number, string>,
+    allGroupRows?: BOMGroupRow[]
+  ): MaterialBOMRow[] => {
+    const byMaterial = new Map<number, BOMGroupRow[]>();
+    for (const row of groupRows) {
+      const list = byMaterial.get(row.materialId) ?? [];
+      list.push(row);
+      byMaterial.set(row.materialId, list);
+    }
+    // 半成品（componentId）的 BOM 信息，用于子行显示版本、BOM 编码、审核状态；需从全部 BOM 构建
+    const rowsForBomInfo = allGroupRows ?? groupRows;
+    const materialIdToBomInfo = new Map<number, { version: string; bomCode: string; approvalStatus: BOM['approvalStatus'] }>();
+    const byMaterialAll = new Map<number, BOMGroupRow[]>();
+    for (const row of rowsForBomInfo) {
+      const list = byMaterialAll.get(row.materialId) ?? [];
+      list.push(row);
+      byMaterialAll.set(row.materialId, list);
+    }
+    byMaterialAll.forEach((versionRows, mid) => {
+      const defaultRow = versionRows.find((v) => v.firstItem?.isDefault) ?? versionRows[0]!;
+      if (defaultRow) {
+        materialIdToBomInfo.set(mid, {
+          version: defaultRow.version ?? '1.0',
+          bomCode: defaultRow.bomCode ?? '-',
+          approvalStatus: defaultRow.approvalStatus ?? 'draft',
+        });
+      }
+    });
+
+    /** 按物料编码排序子件 */
+    const getComponentCode = (componentId: number) =>
+      materials.find((m) => m.id === componentId)?.mainCode ||
+      materials.find((m) => m.id === componentId)?.code ||
+      '';
+    const sortItemsByCode = (items: BOM[] | undefined) =>
+      [...(items ?? [])].sort((a, b) =>
+        getComponentCode(a.componentId).localeCompare(getComponentCode(b.componentId), undefined, { numeric: true })
+      );
+
+    /** 递归构建子项（含半成品展开）：半成品作为 componentId 时，将其 BOM 子件作为 children */
+    const buildItemWithChildren = (
+      item: BOM,
+      idx: number,
+      parentKey: string,
+      depth: number,
+      visitedIds: Set<number>
+    ): Record<string, any> => {
+      const bomInfo = materialIdToBomInfo.get(item.componentId);
+      const base = {
+        ...item,
+        key: `${parentKey}-${item.uuid}-${idx}`,
+        ...(bomInfo && {
+          _bomVersion: bomInfo.version,
+          _bomCode: bomInfo.bomCode,
+          _bomApprovalStatus: bomInfo.approvalStatus,
+        }),
+      };
+      if (!bomInfo || depth >= 20 || visitedIds.has(item.componentId)) return base;
+      const versionRows = byMaterialAll.get(item.componentId);
+      if (!versionRows?.length) return base;
+      const defaultRow = versionRows.find((v) => v.firstItem?.isDefault) ?? versionRows[0]!;
+      const nextVisited = new Set(visitedIds).add(item.componentId);
+      const sortedSubItems = sortItemsByCode(defaultRow.items);
+      base.children = sortedSubItems.map((sub, subIdx) =>
+        buildItemWithChildren(sub, subIdx, base.key, depth + 1, nextVisited)
+      );
+      return base;
+    };
+
+    const result: MaterialBOMRow[] = [];
+    Array.from(byMaterial.entries())
+      .sort(([a], [b]) => a - b)
+      .forEach(([materialId, versionRows]) => {
+        versionRows.sort((a, b) => (a.version || '').localeCompare(b.version || ''));
+        const defaultVer = versionRows.find((v) => v.firstItem?.isDefault) ?? versionRows[versionRows.length - 1]!;
+        const selectedKey = selectedMap[materialId];
+        const selectedVersion =
+          (selectedKey ? versionRows.find((v) => v.groupKey === selectedKey) : null) ?? defaultVer;
+        const sortedItems = sortItemsByCode(selectedVersion.items);
+        result.push({
+          ...selectedVersion,
+          materialId,
+          versions: versionRows,
+          selectedVersion,
+          children: sortedItems.map((item, idx) =>
+            buildItemWithChildren(item, idx, `root-${materialId}`, 0, new Set())
+          ),
+        });
+      });
+    return result;
+  };
+
+  /**
+   * 成品BOM视图：主件没有上级主件的 BOM 视为成品
+   * 即主件（materialId）不作为任何其他 BOM 的子件（componentId）出现
+   */
+  const filterToProductBomView = (groupRows: BOMGroupRow[], allBomList: BOM[]): BOMGroupRow[] => {
+    const componentIds = new Set(allBomList.map((b) => b.componentId));
+    return groupRows.filter((row) => !componentIds.has(row.materialId));
+  };
+
+  /**
+   * 半成品BOM视图：主件有上级主件的 BOM 视为半成品
+   * 即主件（materialId）作为其他 BOM 的子件（componentId）出现
+   */
+  const filterToSemiProductBomView = (groupRows: BOMGroupRow[], allBomList: BOM[]): BOMGroupRow[] => {
+    const componentIds = new Set(allBomList.map((b) => b.componentId));
+    return groupRows.filter((row) => componentIds.has(row.materialId));
   };
 
   /**
@@ -1095,11 +1190,12 @@ const BOMPage: React.FC = () => {
 
 
   /**
-   * 处理创建新版本
+   * 打开创建新版本弹窗（整合原升版、复制、手工新建版本）
    */
   const handleCreateVersion = async (record: BOM) => {
     try {
       setCurrentMaterialId(record.materialId);
+      createVersionRecordRef.current = record;
       setVersionModalVisible(true);
       // 获取当前版本号，建议新版本号
       const currentVersion = record.version;
@@ -1115,6 +1211,30 @@ const BOMPage: React.FC = () => {
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.openVersionCreateFailed'));
+    }
+  };
+
+  /**
+   * 快速创建新版本：基于当前版本一键复制（原升版/复制逻辑）
+   */
+  const handleQuickCreateVersion = async () => {
+    const record = createVersionRecordRef.current;
+    if (!record) {
+      messageApi.error(t('app.master-data.bom.getRecordFailed'));
+      return;
+    }
+    try {
+      setVersionLoading(true);
+      await bomApi.copy(record.uuid);
+      messageApi.success(t('app.master-data.bom.copySuccess'));
+      setVersionModalVisible(false);
+      createVersionRecordRef.current = null;
+      versionFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.bom.copyFailed'));
+    } finally {
+      setVersionLoading(false);
     }
   };
 
@@ -1144,28 +1264,6 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理BOM升版 (Revision)
-   */
-  const handleRevise = async (record: BOM) => {
-    Modal.confirm({
-      title: t('app.master-data.bom.reviseConfirmTitle'),
-      content: t('app.master-data.bom.reviseConfirmContent', { bomCode: record.bomCode, version: record.version }),
-      okText: t('app.master-data.bom.okRevise'),
-      cancelText: t('app.master-data.bom.cancel'),
-      onOk: async () => {
-        try {
-          const newBom = await bomApi.revise(record.uuid);
-          messageApi.success(t('app.master-data.bom.upgradeSuccess', { version: newBom.version }));
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.master-data.bom.upgradeFailed'));
-        }
-      }
-    });
-  };
-
-
-  /**
    * 处理版本创建提交
    */
   const handleVersionCreateSubmit = async (values: BOMVersionCreate) => {
@@ -1179,6 +1277,7 @@ const BOMPage: React.FC = () => {
       await bomApi.createVersion(currentMaterialId, values);
       messageApi.success(t('app.master-data.bom.versionCreateSuccess'));
       setVersionModalVisible(false);
+      createVersionRecordRef.current = null;
       versionFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -1294,64 +1393,77 @@ const BOMPage: React.FC = () => {
   /**
    * 分组行表格列（同一 BOM 编码折叠为一行）
    */
-  const groupColumns: ProColumns<BOMGroupRow>[] = [
-    { 
-      title: 'BOM编码', 
-      dataIndex: 'bomCode', 
-      width: 150, 
-      hideInSearch: true, 
-      render: (_, r: any) => {
-        // 判断是主行还是子行
-        if ('groupKey' in r) {
-          return r.bomCode || '-';
-        }
-        return '-'; // 子行不显示 BOM 编码
-      }
-    },
-    { 
-      title: t('app.master-data.bom.versionTitle'), 
-      dataIndex: 'version', 
-      width: 100, 
-      hideInSearch: true, 
-      render: (_, r: any) => {
-        if ('groupKey' in r) {
-          const first = r.firstItem;
-          return (
-            <Space size={4}>
-              <Tag>{r.version}</Tag>
-              {first?.isDefault && <Tag color="gold">{t('app.master-data.bom.defaultTag')}</Tag>}
-            </Space>
-          );
-        }
-        return '-';
-      }
-    },
-    {
-      title: t('app.master-data.bom.approvalStatusTitle'),
-      dataIndex: 'approvalStatus',
-      width: 120,
-      valueType: 'select',
-      valueEnum: { draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' }, pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' }, approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' }, rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' } },
-      render: (_, r: any) => {
-        if ('groupKey' in r) {
-          return getApprovalStatusTag(r.approvalStatus);
-        }
-        return '-';
-      }
-    },
+  const isRootRow = (r: any) => 'versions' in r && Array.isArray(r.versions);
+  const isBomItemRow = (r: any) => !isRootRow(r);
+
+  const groupColumns: ProColumns<MaterialBOMRow>[] = [
     { 
       title: t('app.master-data.bom.materialTitle'), 
       dataIndex: 'materialId', 
       width: 200, 
       hideInSearch: true, 
       render: (_, r: any) => {
-        if ('groupKey' in r) {
-          // 主行：显示主物料
-          return getMaterialName(r.materialId);
-        } else {
-          // 子行：显示子物料
-          return getMaterialName(r.componentId);
+        if (isRootRow(r)) return <span style={{ fontWeight: 500 }}>{getMaterialName(r.materialId)}</span>;
+        return getMaterialName(r.componentId);
+      }
+    },
+    { 
+      title: t('app.master-data.bom.versionTitle'), 
+      dataIndex: 'version', 
+      width: 140, 
+      hideInSearch: true, 
+      render: (_, r: any) => {
+        if (isRootRow(r)) {
+          const versions = r.versions as BOMGroupRow[];
+          if (!versions?.length) return '-';
+          const defaultTagText = t('app.master-data.bom.defaultTag');
+          const versionOptions = versions.map((v) => {
+            const isDefault = v.firstItem?.isDefault ?? v.items?.some((i) => i.isDefault);
+            return {
+              value: v.groupKey,
+              label: isDefault ? `${v.version} (${defaultTagText})` : v.version,
+              version: v.version,
+              isDefault: !!isDefault,
+            };
+          });
+          return (
+            <Select
+              value={r.selectedVersion?.groupKey}
+              size="middle"
+              style={{ width: '100%', minWidth: 100 }}
+              options={versionOptions}
+              optionRender={(option, info) => {
+                const groupKey = (option as { value?: string })?.value ?? versionOptions[info?.index ?? 0]?.value;
+                const verRow = versions.find((v) => v.groupKey === groupKey);
+                const ver = verRow?.version ?? (option as { version?: string })?.version ?? '';
+                const isDef = verRow?.firstItem?.isDefault ?? (option as { isDefault?: boolean })?.isDefault ?? false;
+                return (
+                  <Space size={4}>
+                    <span>{ver}</span>
+                    {isDef && <Tag color="gold">{defaultTagText}</Tag>}
+                  </Space>
+                );
+              }}
+              onChange={(groupKey) => {
+                setSelectedVersionByMaterial((prev) => ({ ...prev, [r.materialId]: groupKey }));
+                actionRef.current?.reload();
+              }}
+            />
+          );
         }
+        if (r._bomVersion) return <Tag>{r._bomVersion}</Tag>;
+        return '-';
+      }
+    },
+    { 
+      title: 'BOM编码', 
+      dataIndex: 'bomCode', 
+      width: 150, 
+      hideInSearch: true, 
+      render: (_, r: any) => {
+        if (isRootRow(r)) return r.bomCode || '-';
+        if (r._bomCode) return r._bomCode;
+        return '-';
       }
     },
     { 
@@ -1360,10 +1472,9 @@ const BOMPage: React.FC = () => {
       width: 100, 
       hideInSearch: true,
       render: (_, r: any) => {
-        if ('groupKey' in r) {
-          return '-';
-        }
-        return `${r.quantity} ${r.unit || ''}`;
+        if (isRootRow(r)) return '-';
+        const unitLabel = r.unit ? (unitValueToLabel[r.unit] || r.unit) : '';
+        return `${r.quantity} ${unitLabel}`.trim() || '-';
       }
     },
     { 
@@ -1372,9 +1483,7 @@ const BOMPage: React.FC = () => {
       width: 80, 
       hideInSearch: true,
       render: (_, r: any) => {
-        if ('groupKey' in r) {
-          return '-';
-        }
+        if (isRootRow(r)) return '-';
         return (r.unit && unitValueToLabel[r.unit]) ? unitValueToLabel[r.unit] : (r.unit || '-');
       }
     },
@@ -1384,10 +1493,44 @@ const BOMPage: React.FC = () => {
       width: 90, 
       hideInSearch: true,
       render: (_, r: any) => {
-        if ('groupKey' in r) {
-          return '-';
-        }
+        if (isRootRow(r)) return '-';
         return r.wasteRate ? `${r.wasteRate}%` : '0%';
+      }
+    },
+    {
+      title: t('app.master-data.bom.alternativeTitle'),
+      dataIndex: 'isAlternative',
+      width: 90,
+      hideInSearch: true,
+      render: (_, r: any) => {
+        if (isRootRow(r)) return '-';
+        return (
+          <Tag color={r.isAlternative ? 'orange' : 'default'}>
+            {r.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('app.master-data.bom.alternativeGroupIdLabel'),
+      dataIndex: 'alternativeGroupId',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r: any) => {
+        if (isRootRow(r)) return '-';
+        return (r.isAlternative && r.alternativeGroupId != null) ? r.alternativeGroupId : '-';
+      },
+    },
+    {
+      title: t('app.master-data.bom.approvalStatusTitle'),
+      dataIndex: 'approvalStatus',
+      width: 120,
+      valueType: 'select',
+      valueEnum: { draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' }, pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' }, approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' }, rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' } },
+      render: (_, r: any) => {
+        if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
+        if (r._bomApprovalStatus) return getApprovalStatusTag(r._bomApprovalStatus);
+        return '-';
       }
     },
     {
@@ -1396,11 +1539,8 @@ const BOMPage: React.FC = () => {
       width: 300,
       fixed: 'right',
       render: (_, record: any) => {
-        // 子行不显示操作
-        if (!('groupKey' in record)) {
-          return null;
-        }
-        const r = record.firstItem;
+        if (isBomItemRow(record)) return null;
+        const r = record.selectedVersion?.firstItem ?? record.firstItem;
         const goDesigner = () => {
           const p = new URLSearchParams();
           p.set('materialId', String(r.materialId));
@@ -1423,16 +1563,8 @@ const BOMPage: React.FC = () => {
             label: t('app.master-data.bom.versionManage'),
             children: [
               { key: 'setDefault', icon: <StarOutlined />, label: t('app.master-data.bom.setDefault'), onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
-              { key: 'revise', icon: <BranchesOutlined />, label: t('app.master-data.bom.revise'), onClick: () => handleRevise(r), disabled: !isApproved },
-              { key: 'newVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.newVersion'), onClick: () => handleCreateVersion(r) },
+              { key: 'createNewVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.createNewVersion'), onClick: () => handleCreateVersion(r) },
               { key: 'versionHistory', icon: <HistoryOutlined />, label: t('app.master-data.bom.versionHistory'), onClick: () => handleViewVersionHistory(r) },
-            ],
-          },
-          {
-            type: 'group',
-            label: t('app.master-data.bom.other'),
-            children: [
-              { key: 'copy', icon: <CopyOutlined />, label: t('app.master-data.bom.copy'), onClick: () => handleCopy(r) },
             ],
           },
           { type: 'divider' },
@@ -1583,6 +1715,11 @@ const BOMPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.master-data.bom.alternativeGroupIdLabel'),
+      dataIndex: 'alternativeGroupId',
+      render: (_, record) => (record.isAlternative && record.alternativeGroupId != null) ? record.alternativeGroupId : '-',
+    },
+    {
       title: t('app.master-data.bom.priorityTitle'),
       dataIndex: 'priority',
     },
@@ -1637,21 +1774,23 @@ const BOMPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        <Tabs
-          activeKey={bomViewType}
-          onChange={(key) => {
-            setBomViewType(key as 'product' | 'all');
-            setTimeout(() => actionRef.current?.reload(), 0);
-          }}
-          items={[
-            { key: 'product', label: t('app.master-data.bom.viewProductBom') },
-            { key: 'all', label: t('app.master-data.bom.viewAllBom') },
-          ]}
-          style={{ marginBottom: 16 }}
-        />
-        <UniTable<BOMGroupRow>
+        <UniTable<MaterialBOMRow>
         actionRef={actionRef}
         columns={groupColumns}
+        viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}
+        defaultViewType="productBom"
+        tableViewTypes={['productBom', 'semiProductBom', 'allBom']}
+        customViews={[
+          { key: 'productBom', label: t('app.master-data.bom.viewProductBom'), icon: ProductOutlined, render: () => null },
+          { key: 'semiProductBom', label: t('app.master-data.bom.viewSemiProductBom'), icon: ClusterOutlined, render: () => null },
+          { key: 'allBom', label: t('app.master-data.bom.viewAllBom'), icon: UnorderedListOutlined, render: () => null },
+        ]}
+        onViewTypeChange={(key) => {
+          if (key === 'productBom' || key === 'semiProductBom' || key === 'allBom') {
+            bomViewTypeRef.current = key;
+            actionRef.current?.reload();
+          }
+        }}
         request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
@@ -1681,10 +1820,14 @@ const BOMPage: React.FC = () => {
           
           try {
             const result = await bomApi.list(apiParams);
-            let { groupRows, keyToUuids } = groupBomsByCode(result);
-            if (bomViewType === 'product') {
-              groupRows = filterToProductBomView(groupRows);
+            const { groupRows: allGroupRows, keyToUuids } = groupBomsByCode(result);
+            let groupRows = allGroupRows;
+            if (bomViewTypeRef.current === 'productBom') {
+              groupRows = filterToProductBomView(groupRows, result);
+            } else if (bomViewTypeRef.current === 'semiProductBom') {
+              groupRows = filterToSemiProductBomView(groupRows, result);
             }
+            groupRows = groupBomsByMaterial(groupRows, selectedVersionByMaterial, allGroupRows);
             groupKeyToUuidsRef.current = keyToUuids;
             return {
               data: groupRows,
@@ -1701,7 +1844,7 @@ const BOMPage: React.FC = () => {
             };
           }
         }}
-        rowKey="groupKey"
+        rowKey={(record: any) => record.groupKey ?? record.key ?? record.uuid ?? String(Math.random())}
         defaultExpandAllRows={true}
         showAdvancedSearch={true}
         pagination={{
@@ -1757,16 +1900,18 @@ const BOMPage: React.FC = () => {
         showExportButton={true}
         onExport={async (type, selectedRowKeys, currentPageData) => {
           try {
-            let toExport: BOMGroupRow[] = [];
+            let toExport: (BOMGroupRow | MaterialBOMRow)[] = [];
             if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
-              toExport = currentPageData.filter((r) => selectedRowKeys.includes(r.groupKey));
+              toExport = currentPageData.filter((r: any) => selectedRowKeys.includes(r.groupKey));
             } else if (type === 'currentPage' && currentPageData) {
               toExport = currentPageData;
             } else {
               const result = await bomApi.list({ skip: 0, limit: 10000 });
               let { groupRows } = groupBomsByCode(result);
-              if (bomViewType === 'product') {
-                groupRows = filterToProductBomView(groupRows);
+              if (bomViewTypeRef.current === 'productBom') {
+                groupRows = filterToProductBomView(groupRows, result);
+              } else if (bomViewTypeRef.current === 'semiProductBom') {
+                groupRows = filterToSemiProductBomView(groupRows, result);
               }
               toExport = groupRows;
             }
@@ -1785,6 +1930,9 @@ const BOMPage: React.FC = () => {
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
+          getCheckboxProps: (record: any) => ({
+            disabled: isBomItemRow(record),
+          }),
         }}
       />
       </ListPageTemplate>
@@ -1885,6 +2033,28 @@ const BOMPage: React.FC = () => {
                               dataIndex: 'level',
                               width: 80,
                               render: (_, record) => record.level ?? 0,
+                            },
+                            {
+                              title: t('app.master-data.bom.alternativeTitle'),
+                              dataIndex: 'isAlternative',
+                              width: 80,
+                              render: (_, record) => (
+                                <Tag color={record.isAlternative ? 'orange' : 'default'}>
+                                  {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                                </Tag>
+                              ),
+                            },
+                            {
+                              title: t('app.master-data.bom.alternativeGroupIdLabel'),
+                              dataIndex: 'alternativeGroupId',
+                              width: 100,
+                              render: (_, record) => (record.isAlternative && record.alternativeGroupId != null) ? record.alternativeGroupId : '-',
+                            },
+                            {
+                              title: t('app.master-data.bom.priorityTitle'),
+                              dataIndex: 'priority',
+                              width: 80,
+                              render: (_, record) => record.priority ?? 0,
                             },
                             {
                               title: t('app.master-data.bom.descTitle'),
@@ -2210,6 +2380,36 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
+                      title: t('app.master-data.bom.alternativeGroupIdLabel'),
+                      dataIndex: 'alternativeGroupId',
+                      width: 100,
+                      render: (_, record, index) => (
+                        <AntForm.Item
+                          name={[index, 'alternativeGroupId']}
+                          style={{ margin: 0 }}
+                          rules={[
+                            {
+                              validator: async (_, value) => {
+                                const items = formRef.current?.getFieldValue('items') || [];
+                                const item = items[index];
+                                if (item?.isAlternative && (value === undefined || value === null || value === '')) {
+                                  throw new Error(t('app.master-data.bom.alternativeGroupIdRequired'));
+                                }
+                              },
+                            },
+                          ]}
+                        >
+                          <InputNumber
+                            placeholder={t('app.master-data.bom.alternativeGroupIdPlaceholder')}
+                            precision={0}
+                            size="small"
+                            style={{ width: '100%' }}
+                            min={0}
+                          />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
                       title: t('app.master-data.bom.priorityLabel'),
                       dataIndex: 'priority',
                       width: 80,
@@ -2312,6 +2512,7 @@ const BOMPage: React.FC = () => {
                                 wasteRate: 0,
                                 isRequired: true,
                                 isAlternative: false,
+                                alternativeGroupId: undefined,
                                 priority: 0,
                               })}
                               block
@@ -2401,6 +2602,7 @@ const BOMPage: React.FC = () => {
         open={versionModalVisible}
         onClose={() => {
           setVersionModalVisible(false);
+          createVersionRecordRef.current = null;
           versionFormRef.current?.resetFields();
         }}
         onFinish={handleVersionCreateSubmit}
@@ -2411,7 +2613,15 @@ const BOMPage: React.FC = () => {
         initialValues={{
           applyStrategy: 'new_only',
         }}
+        extraFooter={
+          <Button onClick={handleQuickCreateVersion} loading={versionLoading}>
+            {t('app.master-data.bom.createVersionQuickCreate')}
+          </Button>
+        }
       >
+        <div style={{ marginBottom: 16, color: 'var(--ant-color-text-secondary)', fontSize: 13 }}>
+          {t('app.master-data.bom.createVersionHint')}
+        </div>
         <ProFormText
           name="version"
           label={t('app.master-data.bom.versionLabel')}

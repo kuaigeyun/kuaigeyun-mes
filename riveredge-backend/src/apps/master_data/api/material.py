@@ -30,6 +30,13 @@ from apps.master_data.schemas.material_schemas import (
     MaterialSerialCreate, MaterialSerialUpdate, MaterialSerialResponse, MaterialSerialListResponse
 )
 from apps.master_data.services.ai.material_ai_service import MaterialAIService
+from apps.master_data.services.bom_change_service import BOMChangeService
+from apps.master_data.schemas.bom_change_schemas import (
+    BOMChangeCreate,
+    BOMChangeUpdate,
+    BOMChangeResponse,
+    BOMChangeListResponse,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/materials", tags=["Material"])
@@ -519,6 +526,137 @@ async def batch_import_bom(
         return await MaterialService.batch_import_bom(tenant_id, data)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== BOM 工程变更（ECN）相关接口 ====================
+
+@router.post("/bom/changes", response_model=BOMChangeResponse, summary="创建BOM工程变更记录")
+async def create_bom_change(
+    data: BOMChangeCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """
+    创建 BOM 工程变更记录（ECN）
+
+    - **material_uuid**: 主物料UUID（必填）
+    - **change_type**: 变更类型（item_add/item_remove/item_modify/version_change/effective_change/other）
+    - **change_content**: 变更内容（JSON格式，可选）
+    - **change_reason**: 变更原因（可选）
+    - **change_impact**: 变更影响分析（JSON格式，可选）
+    - **bom_code**: 关联的 BOM 编码（可选）
+    - **from_version** / **to_version**: 版本变更时填写（可选）
+    """
+    try:
+        return await BOMChangeService.create_change(tenant_id, data, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom/changes", response_model=BOMChangeListResponse, summary="获取BOM工程变更记录列表")
+async def list_bom_changes(
+    material_uuid: Optional[str] = Query(None, description="主物料UUID（筛选条件）"),
+    change_type: Optional[str] = Query(None, description="变更类型（筛选条件）"),
+    status: Optional[str] = Query(None, description="变更状态（筛选条件）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
+):
+    """获取 BOM 工程变更记录列表，支持按物料、变更类型、状态筛选"""
+    try:
+        return await BOMChangeService.list_changes(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid,
+            change_type=change_type,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取变更记录列表失败: {str(e)}",
+        )
+
+
+@router.get("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="获取BOM工程变更记录详情")
+async def get_bom_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """获取 BOM 工程变更记录详情"""
+    try:
+        return await BOMChangeService.get_change_by_uuid(tenant_id, change_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/bom/changes/{change_uuid}", response_model=BOMChangeResponse, summary="更新BOM工程变更记录")
+async def update_bom_change(
+    change_uuid: str,
+    data: BOMChangeUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """更新 BOM 工程变更记录"""
+    try:
+        return await BOMChangeService.update_change(tenant_id, change_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/changes/{change_uuid}/approve", response_model=BOMChangeResponse, summary="审批BOM工程变更记录")
+async def approve_bom_change(
+    change_uuid: str,
+    approved: bool = Query(..., description="是否同意（true:同意, false:拒绝）"),
+    approval_comment: Optional[str] = Query(None, description="审批意见（可选）"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None,
+):
+    """审批 BOM 工程变更记录"""
+    try:
+        return await BOMChangeService.approve_change(
+            tenant_id, change_uuid, current_user.id, approved, approval_comment
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/changes/{change_uuid}/execute", response_model=BOMChangeResponse, summary="执行BOM工程变更记录")
+async def execute_bom_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """执行 BOM 工程变更记录（将已审批的变更标记为已执行）"""
+    try:
+        return await BOMChangeService.execute_change(tenant_id, change_uuid, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/bom/changes/{change_uuid}", summary="删除BOM工程变更记录")
+async def delete_bom_change(
+    change_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """删除 BOM 工程变更记录（软删除）"""
+    try:
+        await BOMChangeService.delete_change(tenant_id, change_uuid)
+        return {"message": "删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

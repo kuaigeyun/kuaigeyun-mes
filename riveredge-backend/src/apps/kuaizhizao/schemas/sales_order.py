@@ -31,6 +31,7 @@ class SalesOrderItemBase(BaseSchema):
     unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
     item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
+    variant_attributes: Optional[dict] = Field(None, description="变体属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -51,6 +52,7 @@ class SalesOrderItemUpdate(BaseSchema):
     unit_price: Optional[Decimal] = Field(None, ge=0)
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     item_amount: Optional[Decimal] = Field(None, ge=0)
+    variant_attributes: Optional[dict] = None
     notes: Optional[str] = None
 
 

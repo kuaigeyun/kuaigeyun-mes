@@ -1109,6 +1109,17 @@ const DemandManagementPage: React.FC = () => {
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               { title: '物料规格', dataIndex: 'material_spec', width: 120 },
                               {
+                                title: '变体属性',
+                                dataIndex: 'variant_attributes',
+                                width: 140,
+                                ellipsis: true,
+                                render: (v: Record<string, unknown> | string | undefined) => {
+                                  if (v == null) return '-';
+                                  if (typeof v === 'string') return v || '-';
+                                  return Object.keys(v).length > 0 ? JSON.stringify(v) : '-';
+                                },
+                              },
+                              {
                                 title: '单位',
                                 dataIndex: 'material_unit',
                                 width: 80,

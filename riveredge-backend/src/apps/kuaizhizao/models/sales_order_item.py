@@ -44,6 +44,9 @@ class SalesOrderItem(BaseModel):
     work_order_id = fields.IntField(null=True, description="工单ID")
     work_order_code = fields.CharField(max_length=50, null=True, description="工单编码")
 
+    # 配置件变体属性（Configure 物料时用于 BOM 变体匹配，格式 {"color":"red","size":"M"}）
+    variant_attributes = fields.JSONField(null=True, description="变体属性（配置件专用）")
+
     notes = fields.TextField(null=True, description="备注")
 
     class Meta:

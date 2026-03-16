@@ -127,6 +127,9 @@ class WorkOrder(BaseModel):
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
 
+    # 配置件变体属性（Configure 产品时用于 BOM 变体匹配）
+    variant_attributes = fields.JSONField(null=True, description="变体属性（配置件专用）")
+
     # 备注和附件
     remarks = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

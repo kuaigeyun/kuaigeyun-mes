@@ -36,6 +36,7 @@ class MaterialVariantAttributeService:
         is_required: bool = False,
         display_order: int = 0,
         enum_values: Optional[List[str]] = None,
+        allow_multiple: bool = False,
         validation_rules: Optional[Dict[str, Any]] = None,
         default_value: Optional[str] = None,
         dependencies: Optional[Dict[str, Any]] = None,
@@ -91,6 +92,7 @@ class MaterialVariantAttributeService:
                 is_required=is_required,
                 display_order=display_order,
                 enum_values=enum_values,
+                allow_multiple=allow_multiple,
                 validation_rules=validation_rules,
                 default_value=default_value,
                 dependencies=dependencies,
@@ -187,6 +189,7 @@ class MaterialVariantAttributeService:
         is_required: Optional[bool] = None,
         display_order: Optional[int] = None,
         enum_values: Optional[List[str]] = None,
+        allow_multiple: Optional[bool] = None,
         validation_rules: Optional[Dict[str, Any]] = None,
         default_value: Optional[str] = None,
         dependencies: Optional[Dict[str, Any]] = None,
@@ -258,6 +261,8 @@ class MaterialVariantAttributeService:
             update_data["display_order"] = display_order
         if enum_values is not None:
             update_data["enum_values"] = enum_values
+        if allow_multiple is not None:
+            update_data["allow_multiple"] = allow_multiple
         if validation_rules is not None:
             update_data["validation_rules"] = validation_rules
         if default_value is not None:
@@ -387,8 +392,14 @@ class MaterialVariantAttributeService:
         # 类型验证
         if attribute_def.attribute_type == "enum":
             enum_values = attribute_def.get_enum_values()
-            if attribute_value not in enum_values:
-                return False, f"属性值 '{attribute_value}' 不在枚举值列表中: {enum_values}"
+            allow_multiple = getattr(attribute_def, 'allow_multiple', False)
+            if allow_multiple and isinstance(attribute_value, list):
+                for v in attribute_value:
+                    if v not in enum_values:
+                        return False, f"属性值 '{v}' 不在枚举值列表中: {enum_values}"
+            elif not allow_multiple or not isinstance(attribute_value, list):
+                if attribute_value not in enum_values:
+                    return False, f"属性值 '{attribute_value}' 不在枚举值列表中: {enum_values}"
         
         elif attribute_def.attribute_type == "number":
             try:

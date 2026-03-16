@@ -312,7 +312,7 @@ const SalesOrdersPage: React.FC = () => {
    * 处理新建销售订单
    * 若启用编码规则，用 testGenerateCode 预填订单编码（不占用序号）
    */
-  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0 };
+  const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '' };
 
   const handleCreate = async () => {
     setIsEdit(false);
@@ -377,6 +377,11 @@ const SalesOrdersPage: React.FC = () => {
             unit_price: item.unit_price != null ? Number(item.unit_price) : undefined,
             tax_rate: item.tax_rate != null ? Number(item.tax_rate) : 0,
             delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
+            variant_attributes: (() => {
+              const va = (item as any).variant_attributes;
+              if (va == null) return '';
+              return typeof va === 'string' ? va : JSON.stringify(va, null, 2);
+            })(),
           };
           return base;
         });
@@ -591,6 +596,12 @@ const SalesOrdersPage: React.FC = () => {
           material_code: (it as any).material_code ?? '',
           material_name: (it as any).material_name ?? '',
           material_spec: (it as any).material_spec,
+          variant_attributes: (() => {
+            const va = (it as any).variant_attributes;
+            if (va == null) return undefined;
+            if (typeof va === 'object') return va;
+            try { return va ? JSON.parse(va) : undefined; } catch { return undefined; }
+          })(),
           material_unit: (it as any).material_unit,
           required_quantity: q(it),
           delivery_date: deliveryDateStr ?? mainDeliveryStr ?? dayjs().format('YYYY-MM-DD'),
@@ -2148,9 +2159,37 @@ const SalesOrdersPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
+                                    onChange={(val, material) => {
+                                      formRef.current?.setFieldValue(['items', index, '_sourceType'], material?.sourceType || (material as any)?.source_type);
+                                    }}
                                   />
                                 </div>
                               </div>
+                            );
+                          }}
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.salesOrder.variantAttributes'),
+                      dataIndex: 'variant_attributes',
+                      width: 140,
+                      render: (_: any, __: any, index: number) => (
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                          {({ getFieldValue }: any) => {
+                            const row = getFieldValue('items')?.[index];
+                            const mid = row?.material_id ? Number(row.material_id) : null;
+                            const st = row?._sourceType ?? materials.find((m: any) => m.id === mid)?.sourceType ?? materials.find((m: any) => m.id === mid)?.source_type;
+                            const isConfigure = st === 'Configure';
+                            if (!isConfigure) return <span style={{ color: '#999' }}>-</span>;
+                            return (
+                              <AntForm.Item name={[index, 'variant_attributes']} style={{ margin: 0 }}>
+                                <Input
+                                  placeholder={t('app.kuaizhizao.salesOrder.variantAttributesPlaceholder')}
+                                  size="small"
+                                  allowClear
+                                />
+                              </AntForm.Item>
                             );
                           }}
                         </AntForm.Item>
@@ -2416,6 +2455,7 @@ const SalesOrdersPage: React.FC = () => {
                                   delivery_date: defaultDelivery,
                                   unit_price: 0,
                                   tax_rate: 0,
+                                  variant_attributes: '',
                                 });
                               }}
                               block
