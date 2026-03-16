@@ -10,8 +10,14 @@ from tortoise import Tortoise
 from tortoise.exceptions import OperationalError
 from loguru import logger
 import asyncio
+import os
 
 from infra.config.infra_config import infra_settings as settings
+
+# aerich 迁移时仅用 1 个连接，避免连接数超限（需设置 AERICH_MIGRATE=1）
+_is_aerich = os.environ.get("AERICH_MIGRATE") == "1"
+_pool_min = 1 if _is_aerich else 5
+_pool_max = 2 if _is_aerich else 20
 
 
 # Tortoise ORM 配置
@@ -84,8 +90,8 @@ TORTOISE_ORM = {
                 "database": settings.DB_NAME,
                 # 连接池配置（解决连接中断问题）
                 # 这些参数会传递给 asyncpg.create_pool()
-                "min_size": 5,  # 最小连接池大小
-                "max_size": 20,  # 最大连接池大小（增加以支持并发请求）
+                "min_size": _pool_min,  # aerich 迁移时仅 1 个连接，避免 too many clients
+                "max_size": _pool_max,
                 "max_queries": 50000,  # 每个连接最大查询次数
                 "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒，必须是浮点数）
                 "command_timeout": 300,  # 命令超时（秒），aerich 迁移需更长时间
