@@ -38,6 +38,8 @@ export const positionFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.position.remark',
     placeholderKey: 'field.position.remarkPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 2 },
   },
   {
     name: 'is_active',

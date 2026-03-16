@@ -372,6 +372,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
+                scroll={{ x: 560 }}
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>

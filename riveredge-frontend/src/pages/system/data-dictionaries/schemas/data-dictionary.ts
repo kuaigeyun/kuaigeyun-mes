@@ -26,6 +26,8 @@ export const dataDictionaryFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.dataDictionary.remark',
     placeholderKey: 'field.dataDictionary.remarkPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 2 },
   },
   {
     name: 'is_active',

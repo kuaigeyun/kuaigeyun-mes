@@ -34,7 +34,7 @@ export const defectTypeFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.defectType.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

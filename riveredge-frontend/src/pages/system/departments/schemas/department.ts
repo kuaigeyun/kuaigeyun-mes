@@ -38,6 +38,8 @@ export const departmentFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.department.remark',
     placeholderKey: 'field.department.remarkPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 2 },
   },
   {
     name: 'is_active',

@@ -7,15 +7,18 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeRuleComponentBuilder from '../../../../../components/code-rule-component-builder';
 import { serialRuleApi } from '../../../services/batchSerialRules';
+import { SERIAL_RULE_AVAILABLE_FIELDS, DEFAULT_SERIAL_RULE_COMPONENTS } from '../../../constants/serialRuleConstants';
 import type { SerialRule, SerialRuleCreate, SerialRuleUpdate } from '../../../services/batchSerialRules';
+import type { CodeRuleComponent } from '../../../../../types/codeRuleComponent';
 
 const SerialRulesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -32,6 +35,7 @@ const SerialRulesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
+  const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -39,6 +43,7 @@ const SerialRulesPage: React.FC = () => {
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ seqStart: 1, seqStep: 1, isActive: true });
+    setRuleComponents([...DEFAULT_SERIAL_RULE_COMPONENTS]);
   };
 
   useNewShortcut(handleCreate);
@@ -58,6 +63,11 @@ const SerialRulesPage: React.FC = () => {
         seqResetRule: detail.seqResetRule,
         isActive: detail.isActive,
       });
+      setRuleComponents(
+        detail.ruleComponents && Array.isArray(detail.ruleComponents) && detail.ruleComponents.length > 0
+          ? (detail.ruleComponents as CodeRuleComponent[])
+          : [...DEFAULT_SERIAL_RULE_COMPONENTS]
+      );
     } catch (e: any) {
       messageApi.error(e?.message || t('app.master-data.seqRules.getDetailFailed'));
     }
@@ -65,27 +75,24 @@ const SerialRulesPage: React.FC = () => {
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     try {
+      const basePayload = {
+        name: values.name as string,
+        code: values.code as string,
+        description: values.description as string,
+        seqStart: (values.seqStart as number) ?? 1,
+        seqStep: (values.seqStep as number) ?? 1,
+        seqResetRule: values.seqResetRule as string,
+        isActive: (values.isActive as boolean) ?? true,
+      };
+      const payload = ruleComponents.length > 0
+        ? { ...basePayload, ruleComponents: ruleComponents as Record<string, unknown>[] }
+        : basePayload;
+
       if (isEdit && currentUuid) {
-        await serialRuleApi.update(currentUuid, {
-          name: values.name as string,
-          code: values.code as string,
-          description: values.description as string,
-          seqStart: values.seqStart as number,
-          seqStep: values.seqStep as number,
-          seqResetRule: values.seqResetRule as string,
-          isActive: values.isActive as boolean,
-        });
+        await serialRuleApi.update(currentUuid, payload as SerialRuleUpdate);
         messageApi.success(t('common.updateSuccess'));
       } else {
-        await serialRuleApi.create({
-          name: values.name as string,
-          code: values.code as string,
-          description: values.description as string,
-          seqStart: (values.seqStart as number) ?? 1,
-          seqStep: (values.seqStep as number) ?? 1,
-          seqResetRule: values.seqResetRule as string,
-          isActive: (values.isActive as boolean) ?? true,
-        });
+        await serialRuleApi.create(payload as SerialRuleCreate);
         messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
@@ -170,7 +177,7 @@ const SerialRulesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('pages.system.create') + NEW_SHORTCUT_HINT}
+            {t('app.master-data.serialRules.createTitle') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
       />
@@ -183,28 +190,31 @@ const SerialRulesPage: React.FC = () => {
         isEdit={isEdit}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid={true}
       >
         <ProFormText name="name" label={t('app.master-data.seqRules.ruleName')} rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormText name="code" label={t('app.master-data.seqRules.ruleCode')} rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} />
-        <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 12 }} />
-        <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 12 }} />
+        <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 8 }} />
+        <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 8 }} />
         <ProFormSelect
           name="seqResetRule"
           label={t('app.master-data.seqRules.seqResetRule')}
           options={seqResetOptions}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
         />
-        <ProFormSelect
-          name="isActive"
-          label={t('app.master-data.seqRules.status')}
-          options={[
-            { label: t('app.master-data.seqRules.enabled'), value: true },
-            { label: t('app.master-data.seqRules.disabled'), value: false },
-          ]}
-          initialValue={true}
-          colProps={{ span: 12 }}
-        />
+        <ProForm.Item label={null} colon={false} colProps={{ span: 24 }} style={{ width: '100%', marginBottom: 24 }}>
+          <div style={{ width: '100%', paddingLeft: 8, paddingRight: 8 }}>
+            <CodeRuleComponentBuilder
+              title="序列号规则"
+              value={ruleComponents}
+              onChange={setRuleComponents}
+              availableFields={[...SERIAL_RULE_AVAILABLE_FIELDS]}
+              defaultComponents={DEFAULT_SERIAL_RULE_COMPONENTS}
+            />
+          </div>
+        </ProForm.Item>
+        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
+        <ProFormSwitch name="isActive" label={t('app.master-data.seqRules.status')} colProps={{ span: 12 }} initialValue={true} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

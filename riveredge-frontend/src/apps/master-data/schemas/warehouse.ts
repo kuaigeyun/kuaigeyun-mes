@@ -56,7 +56,7 @@ export const warehouseFormSchemaRest: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.warehouse.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

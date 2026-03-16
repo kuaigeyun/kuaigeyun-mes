@@ -38,7 +38,7 @@ export const plantFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.plant.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

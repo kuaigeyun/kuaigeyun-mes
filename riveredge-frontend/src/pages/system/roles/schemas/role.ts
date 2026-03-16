@@ -30,6 +30,8 @@ export const roleFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.role.description',
     placeholderKey: 'field.role.descriptionPlaceholder',
+    colSpan: 24,
+    fieldProps: { rows: 2 },
   },
   {
     name: 'is_active',

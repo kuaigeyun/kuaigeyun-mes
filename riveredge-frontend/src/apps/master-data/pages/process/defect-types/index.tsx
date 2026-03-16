@@ -485,7 +485,7 @@ const DefectTypesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
-            {'新建不良品' + NEW_SHORTCUT_HINT}
+            {t('field.defectType.createTitle') + NEW_SHORTCUT_HINT}
           </Button>,
           <Button
             key="loadPreset"

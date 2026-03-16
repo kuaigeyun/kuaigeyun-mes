@@ -1220,25 +1220,25 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
               style={{ marginBottom: 16 }}
             />
           ) : inspectionMode === 'plan' ? (
-            <>
-              <ProFormSelect
-                name="defaultInspectionPlanId"
-                label={t('app.master-data.materialForm.defaultInspectionPlan')}
-                options={planOptions}
-                fieldProps={{
-                  loading: loadingPlans,
-                  allowClear: true,
-                  showSearch: true,
-                  optionFilterProp: 'label',
-                  style: { width: 360 },
-                }}
-              />
-              <div style={{ marginTop: 8 }}>
-                <Button type="link" size="small" onClick={handleGotoNewPlan}>
-                  {t('app.master-data.materialForm.gotoInspectionPlans')}
-                </Button>
-              </div>
-            </>
+            <ProFormSelect
+              name="defaultInspectionPlanId"
+              label={
+                <Space size="small">
+                  <span>{t('app.master-data.materialForm.defaultInspectionPlan')}</span>
+                  <Button type="link" size="small" onClick={handleGotoNewPlan}>
+                    {t('app.master-data.materialForm.gotoInspectionPlans')}
+                  </Button>
+                </Space>
+              }
+              options={planOptions}
+              fieldProps={{
+                loading: loadingPlans,
+                allowClear: true,
+                showSearch: true,
+                optionFilterProp: 'label',
+                style: { width: 360 },
+              }}
+            />
           ) : null
         }
       </ProFormDependency>

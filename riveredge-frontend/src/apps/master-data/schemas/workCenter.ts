@@ -39,7 +39,7 @@ export const workCenterFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.workCenter.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

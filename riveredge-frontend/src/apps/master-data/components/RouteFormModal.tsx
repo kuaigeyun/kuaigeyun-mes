@@ -318,7 +318,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       className="process-route-modal"
     >
       <style>{`
-        .process-route-modal .operation-sequence-form-item .ant-form-item-control-input { padding-left: 8px; width: 100%; min-width: 0; }
+        .process-route-modal .modal-content-scroll { overflow-x: auto; }
+        .process-route-modal .operation-sequence-form-item .ant-form-item-control-input { padding-left: 8px; padding-right: 8px; width: 100%; min-width: 0; }
         .process-route-modal .operation-sequence-form-item .ant-form-item-control-input-content { width: 100%; min-width: 0; }
         .process-route-modal .operation-sequence-form-item .ant-form-item-label { padding-left: 8px; }
       `}</style>
@@ -333,10 +334,10 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         label={t('field.route.operationSequence')}
         colProps={{ span: 24 }}
         className="operation-sequence-form-item"
-        style={{ width: '100%' }}
+        style={{ width: '100%', minWidth: 0 }}
       >
         <div style={{ width: '100%', minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
             <Tag color={operationSequence.length > 0 ? 'processing' : 'default'}>
               {t('app.master-data.operationsConfigured', { count: operationSequence.length })}
             </Tag>

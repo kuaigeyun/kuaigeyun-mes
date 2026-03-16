@@ -8,7 +8,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -178,7 +178,7 @@ const BatchRulesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('pages.system.create') + NEW_SHORTCUT_HINT}
+            {t('app.master-data.batchRules.createTitle') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
       />
@@ -195,34 +195,27 @@ const BatchRulesPage: React.FC = () => {
       >
         <ProFormText name="name" label={t('app.master-data.seqRules.ruleName')} rules={[{ required: true }]} colProps={{ span: 12 }} />
         <ProFormText name="code" label={t('app.master-data.seqRules.ruleCode')} rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} />
-        <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 12 }} />
-        <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 12 }} />
+        <ProFormDigit name="seqStart" label={t('app.master-data.seqRules.seqStart')} initialValue={1} colProps={{ span: 8 }} />
+        <ProFormDigit name="seqStep" label={t('app.master-data.seqRules.seqStep')} initialValue={1} colProps={{ span: 8 }} />
         <ProFormSelect
           name="seqResetRule"
           label={t('app.master-data.seqRules.seqResetRule')}
           options={seqResetOptions}
-          colProps={{ span: 12 }}
+          colProps={{ span: 8 }}
         />
-        <ProFormSelect
-          name="isActive"
-          label={t('app.master-data.seqRules.status')}
-          options={[
-            { label: t('app.master-data.seqRules.enabled'), value: true },
-            { label: t('app.master-data.seqRules.disabled'), value: false },
-          ]}
-          initialValue={true}
-          colProps={{ span: 12 }}
-        />
-        <ProForm.Item label=" " colon={false} colProps={{ span: 24 }}>
-          <CodeRuleComponentBuilder
-            title="批号规则"
-            value={ruleComponents}
-            onChange={setRuleComponents}
-            availableFields={[...BATCH_RULE_AVAILABLE_FIELDS]}
-            defaultComponents={DEFAULT_BATCH_RULE_COMPONENTS}
-          />
+        <ProForm.Item label={null} colon={false} colProps={{ span: 24 }} style={{ width: '100%', marginBottom: 24 }}>
+          <div style={{ width: '100%', paddingLeft: 8, paddingRight: 8 }}>
+            <CodeRuleComponentBuilder
+              title="批号规则"
+              value={ruleComponents}
+              onChange={setRuleComponents}
+              availableFields={[...BATCH_RULE_AVAILABLE_FIELDS]}
+              defaultComponents={DEFAULT_BATCH_RULE_COMPONENTS}
+            />
+          </div>
         </ProForm.Item>
+        <ProFormTextArea name="description" label={t('app.master-data.seqRules.description')} colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
+        <ProFormSwitch name="isActive" label={t('app.master-data.seqRules.status')} colProps={{ span: 12 }} initialValue={true} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

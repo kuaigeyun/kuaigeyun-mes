@@ -33,7 +33,7 @@ export const skillFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.skill.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

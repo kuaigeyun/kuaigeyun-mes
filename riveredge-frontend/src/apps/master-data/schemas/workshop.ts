@@ -37,7 +37,7 @@ export const workshopFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.workshop.description',
     colSpan: 24,
-    fieldProps: { rows: 4, maxLength: 1000 },
+    fieldProps: { rows: 2, maxLength: 1000 },
   },
   {
     name: 'isActive',

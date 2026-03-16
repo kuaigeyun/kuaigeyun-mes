@@ -32,7 +32,7 @@ export const holidayFormSchema: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.holiday.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

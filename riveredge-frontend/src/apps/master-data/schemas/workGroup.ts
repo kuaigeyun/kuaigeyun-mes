@@ -36,7 +36,7 @@ export const workGroupFormSchemaRest: FieldConfig[] = [
     type: 'textarea',
     labelKey: 'field.workGroup.description',
     colSpan: 24,
-    fieldProps: { rows: 3 },
+    fieldProps: { rows: 2 },
   },
   {
     name: 'isActive',

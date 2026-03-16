@@ -50,6 +50,8 @@ export interface FieldConfig {
   options?: Array<{ labelKey: string; value: any }>;
   /** 扩展：表单项下方说明文案的 i18n key */
   extraKey?: string;
+  /** 扩展：当为 true 且 extraKey 存在时，将 extra 内容以 tooltip 形式显示在标题后的问号图标上，而非表单项下方 */
+  extraAsTooltip?: boolean;
   /** 扩展：自定义组件类型 */
   component?: string;
   /** 扩展：fieldProps 透传 */
