@@ -4,9 +4,9 @@
  * 提供厂区的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -18,6 +18,8 @@ import { PlantFormModal } from '../../../components/PlantFormModal';
 import type { Plant, PlantCreate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../../utils';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsDetailSection } from '../../../../../components/custom-fields';
 
 /**
  * 厂区管理列表页面组件
@@ -37,6 +39,21 @@ const PlantsPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Plant>({ tableName: 'master_data_factory_plants' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -62,6 +79,7 @@ const PlantsPage: React.FC = () => {
       setDetailLoading(true);
       const detail = await plantApi.get(record.uuid);
       setPlantDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.plants.getDetailFailed'));
     } finally {
@@ -75,6 +93,7 @@ const PlantsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setPlantDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
@@ -440,66 +459,69 @@ const PlantsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Plant>[] = [
-    {
-      title: t('app.master-data.plants.code'),
-      dataIndex: 'code',
-      width: 150,
-      fixed: 'left',
-      ellipsis: true,
-      copyable: true,
-    },
-    {
-      title: t('app.master-data.plants.name'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: t('app.master-data.plants.address'),
-      dataIndex: 'address',
-      width: 300,
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.master-data.plants.description'),
-      dataIndex: 'description',
-      width: 250,
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.master-data.plants.status'),
-      dataIndex: 'isActive',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
-        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
+  const columns: ProColumns<Plant>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
+      {
+        title: t('app.master-data.plants.code'),
+        dataIndex: 'code',
+        width: 150,
+        fixed: 'left' as const,
+        ellipsis: true,
+        copyable: true,
       },
-      render: (_, record) => {
-        return (
-          <Tag color={record?.isActive ? 'success' : 'default'}>
-            {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
-          </Tag>
-        );
+      {
+        title: t('app.master-data.plants.name'),
+        dataIndex: 'name',
+        width: 200,
+        ellipsis: true,
       },
-    },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: t('common.actions'),
-      valueType: 'option',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
+      {
+        title: t('app.master-data.plants.address'),
+        dataIndex: 'address',
+        width: 300,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.master-data.plants.description'),
+        dataIndex: 'description',
+        width: 250,
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.master-data.plants.status'),
+        dataIndex: 'isActive',
+        width: 100,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+          false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
+        },
+        render: (_, record) => {
+          return (
+            <Tag color={record?.isActive ? 'success' : 'default'}>
+              {record?.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
+            </Tag>
+          );
+        },
+      },
+      ...customFieldColumns,
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'createdAt',
+        width: 180,
+        valueType: 'dateTime',
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 150,
+        fixed: 'right' as const,
+        render: (_, record) => (
         <Space>
           <Button
             type="link"
@@ -535,7 +557,8 @@ const PlantsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   /**
    * 详情 Drawer 的列定义
@@ -558,6 +581,24 @@ const PlantsPage: React.FC = () => {
     { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
+
+  /**
+   * 详情 Drawer 的自定义内容（包含自定义字段）
+   */
+  const renderDetailContent = () => {
+    if (!plantDetail) return null;
+    return (
+      <>
+        <ProDescriptions<Plant>
+          dataSource={plantDetail}
+          loading={detailLoading}
+          column={2}
+          columns={detailColumns}
+        />
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+      </>
+    );
+  };
 
   return (
     <>
@@ -582,11 +623,11 @@ const PlantsPage: React.FC = () => {
 
             try {
               const result = await plantApi.list(apiParams);
-              
+              const enrichedData = await enrichRecordsWithCustomFields(result);
               return {
-                data: result,
+                data: enrichedData,
                 success: true,
-                total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
+                total: result.length,
               };
             } catch (error: any) {
               console.error('Failed to fetch plant list:', error);
@@ -677,6 +718,7 @@ const PlantsPage: React.FC = () => {
         columns={detailColumns}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        customContent={renderDetailContent()}
       />
 
       {/* 创建/编辑厂区 Modal */}

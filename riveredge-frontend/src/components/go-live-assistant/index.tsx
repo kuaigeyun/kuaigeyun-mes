@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Modal, Button, Space, Typography, Collapse, List, Tag, Spin, message } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, RocketOutlined, ReloadOutlined, LinkOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, LinkOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -150,12 +150,7 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
 
   return (
     <Modal
-      title={
-        <Space>
-          <RocketOutlined />
-          <span>{t('goLiveAssistant.title') || '上线助手'}</span>
-        </Space>
-      }
+      title={t('goLiveAssistant.title') || '上线助手'}
       open={open}
       onCancel={onClose}
       footer={[

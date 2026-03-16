@@ -5,25 +5,26 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { createForm, FormProvider, FormConsumer, Field } from '@formily/react';
-import { createSchemaField } from '@formily/react';
+import { createForm } from '@formily/core';
+import { FormProvider, FormConsumer, createSchemaField } from '@formily/react';
 import {
   FormItem,
   Input,
-  InputNumber,
+  NumberPicker,
   DatePicker,
   Select,
   FormLayout,
 } from '@formily/antd-v5';
 import { App } from 'antd';
-import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../services/customField';
-import { customFieldsToFormilySchema, fieldValuesToFormilyValues, formilyValuesToFieldValues } from '../../../utils/customFieldToFormily';
+import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../services/customField';
+import { customFieldsToFormilySchema, fieldValuesToFormilyValues, formilyValuesToFieldValues } from '../../utils/customFieldToFormily';
 
 const SchemaField = createSchemaField({
   components: {
     FormItem,
     Input,
-    InputNumber,
+    InputNumber: NumberPicker, // schema 使用 InputNumber，映射到 Formily 的 NumberPicker
+    NumberPicker,
     DatePicker,
     Select,
   },

@@ -31,6 +31,7 @@ export const workshopFormSchema: FieldConfig[] = [
     colSpan: 12,
     allowClear: true,
   },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
   {
     name: 'description',
     type: 'textarea',

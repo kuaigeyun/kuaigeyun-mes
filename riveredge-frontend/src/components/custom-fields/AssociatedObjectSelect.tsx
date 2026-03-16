@@ -13,7 +13,9 @@ import type { CustomField } from '../../services/customField';
 export interface AssociatedObjectSelectProps {
   field: CustomField;
   name: string;
-  label: string;
+  label: React.ReactNode;
+  /** 用于 placeholder/校验文案，当 label 为 ReactNode 时必传 */
+  labelText?: string;
   placeholder?: string;
   required?: boolean;
   colProps?: { span?: number };
@@ -24,6 +26,7 @@ export const AssociatedObjectSelect: React.FC<AssociatedObjectSelectProps> = ({
   field,
   name,
   label,
+  labelText,
   placeholder,
   required = false,
   colProps = { span: 12 },
@@ -63,11 +66,12 @@ export const AssociatedObjectSelect: React.FC<AssociatedObjectSelectProps> = ({
     };
   }, [tableName, displayField]);
 
+  const textForMessage = labelText ?? (typeof label === 'string' ? label : '');
   return (
     <ProFormSelect
       name={name}
       label={label}
-      placeholder={placeholder || `请选择${label}`}
+      placeholder={placeholder || `请选择${textForMessage}`}
       options={options}
       fieldProps={{
         loading,
@@ -76,7 +80,7 @@ export const AssociatedObjectSelect: React.FC<AssociatedObjectSelectProps> = ({
           (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
       }}
       colProps={colProps}
-      rules={required ? [{ required: true, message: `请选择${label}` }] : []}
+      rules={required ? [{ required: true, message: `请选择${textForMessage}` }] : []}
       initialValue={initialValue}
     />
   );

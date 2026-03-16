@@ -14,7 +14,8 @@ export type FieldType =
   | 'switch'
   | 'select'
   | 'treeSelect'
-  | 'upload';
+  | 'upload'
+  | 'slot';
 
 export interface RuleConfig {
   required?: boolean;
@@ -31,7 +32,9 @@ export interface RuleConfig {
 export interface FieldConfig {
   name: string;
   type: FieldType;
-  labelKey: string;
+  labelKey?: string;
+  /** slot 类型时使用，对应 slots 的 key */
+  slotKey?: string;
   placeholderKey?: string;
   required?: boolean;
   maxLength?: number;

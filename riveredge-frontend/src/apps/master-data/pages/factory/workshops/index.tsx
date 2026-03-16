@@ -18,7 +18,8 @@ import { WorkshopFormModal } from '../../../components/WorkshopFormModal';
 import { workshopApi, plantApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { getCustomFieldsByTable, getFieldValues, CustomField } from '../../../../../services/customField';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsDetailSection } from '../../../../../components/custom-fields';
 
 /**
  * 车间管理列表页面组件
@@ -37,31 +38,16 @@ const WorkshopsPage: React.FC = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [editUuid, setEditUuid] = useState<string | null>(null);
 
-    const [customFields, setCustomFields] = useState<CustomField[]>([]);
-    const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
     const [plants, setPlants] = useState<Plant[]>([]);
 
-  /**
-   * 加载自定义字段
-   */
-  useEffect(() => {
-    const loadCustomFields = async () => {
-      try {
-        const fields = await getCustomFieldsByTable('master_data_factory_workshops', true).catch((error) => {
-          // 如果是401错误，静默忽略（token可能在其他地方被验证）
-          if (error?.response?.status === 401) {
-            console.warn('⚠️ 自定义字段加载失败（401），跳过加载');
-            return [];
-          }
-          throw error; // 其他错误重新抛出
-        });
-        setCustomFields(fields);
-      } catch (error) {
-        console.error('加载自定义字段失败:', error);
-      }
-    };
-    loadCustomFields();
-  }, []);
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Workshop>({ tableName: 'master_data_factory_workshops' });
 
   /**
    * 加载厂区列表
@@ -115,18 +101,9 @@ const WorkshopsPage: React.FC = () => {
     try {
       setDrawerVisible(true);
       setDetailLoading(true);
-      
       const detail = await workshopApi.get(record.uuid);
       setWorkshopDetail(detail);
-      
-      // 加载自定义字段值
-      try {
-        const fieldValues = await getFieldValues('master_data_factory_workshops', detail.id);
-        setCustomFieldValues(fieldValues);
-      } catch (error) {
-        console.error('加载自定义字段值失败:', error);
-        setCustomFieldValues({});
-      }
+      await loadFieldValuesForDetail(detail.id);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.workshops.getDetailFailed'));
     } finally {
@@ -140,6 +117,7 @@ const WorkshopsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setWorkshopDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
@@ -576,39 +554,6 @@ const WorkshopsPage: React.FC = () => {
   };
 
   /**
-   * 生成自定义字段列
-   */
-  const generateCustomFieldColumns = (): ProColumns<Workshop>[] => {
-    return customFields
-      .filter(field => field.is_active) // 只显示启用的自定义字段
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(field => ({
-        title: field.label || field.name,
-        dataIndex: `custom_${field.code}`,
-        width: 150,
-        hideInSearch: !field.is_searchable,
-        sorter: field.is_sortable,
-        render: (value: any) => {
-          if (value === null || value === undefined || value === '') {
-            return <Typography.Text type="secondary">-</Typography.Text>;
-          }
-          // 根据字段类型格式化显示
-          if (field.field_type === 'date' && value) {
-            return new Date(value).toLocaleDateString('zh-CN');
-          }
-          if (field.field_type === 'datetime' && value) {
-            return new Date(value).toLocaleString('zh-CN');
-          }
-          if (field.field_type === 'select' && field.config?.options && Array.isArray(field.config.options)) {
-            const option = field.config.options.find((opt: any) => opt.value === value);
-            return option ? option.label : String(value);
-          }
-          return String(value);
-        },
-      }));
-  };
-
-  /**
    * 表格列定义（使用 useMemo 确保 customFields 和 plants 变化时重新计算）
    */
   const columns: ProColumns<Workshop>[] = useMemo(() => {
@@ -773,7 +718,6 @@ const WorkshopsPage: React.FC = () => {
    */
   const renderDetailContent = () => {
     if (!workshopDetail) return null;
-
     return (
       <>
         <ProDescriptions<Workshop>
@@ -782,30 +726,7 @@ const WorkshopsPage: React.FC = () => {
           column={2}
           columns={detailColumns}
         />
-        
-        {/* 自定义字段 */}
-        {customFields.length > 0 && Object.keys(customFieldValues).length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <Typography.Title level={5}>自定义字段</Typography.Title>
-            <ProDescriptions
-              column={2}
-              dataSource={customFieldValues}
-              columns={customFields
-                .filter(field => field.is_active && customFieldValues[field.code] !== undefined)
-                .sort((a, b) => a.sort_order - b.sort_order)
-                .map(field => ({
-                  title: field.label || field.name,
-                  dataIndex: field.code,
-                  render: (value: any) => {
-                    if (value === null || value === undefined || value === '') {
-                      return <Typography.Text type="secondary">-</Typography.Text>;
-                    }
-                    return String(value);
-                  },
-                }))}
-            />
-          </div>
-        )}
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
       </>
     );
   };
@@ -870,48 +791,11 @@ const WorkshopsPage: React.FC = () => {
 
           try {
             const result = await workshopApi.list(apiParams);
-            
-            // 批量加载自定义字段值
-            if (customFields.length > 0 && result.length > 0) {
-              try {
-                // 为每条记录加载自定义字段值
-                const recordsWithCustomFields = await Promise.all(
-                  result.map(async (record: Workshop) => {
-                    try {
-                      const fieldValues = await getFieldValues('master_data_factory_workshops', record.id);
-                      // 将自定义字段值合并到记录中
-                      const recordWithCustomFields: any = { ...record };
-                      Object.keys(fieldValues).forEach(fieldCode => {
-                        recordWithCustomFields[`custom_${fieldCode}`] = fieldValues[fieldCode];
-                      });
-                      return recordWithCustomFields;
-                    } catch (error) {
-                      console.error(`加载记录 ${record.id} 的自定义字段值失败:`, error);
-                      return record;
-                    }
-                  })
-                );
-                
-                return {
-                  data: recordsWithCustomFields,
-                  success: true,
-                  total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
-                };
-              } catch (error) {
-                console.error('批量加载自定义字段值失败:', error);
-                // 如果加载失败，返回原始数据
-                return {
-                  data: result,
-                  success: true,
-                  total: result.length,
-                };
-              }
-            }
-            
+            const enrichedData = await enrichRecordsWithCustomFields(result);
             return {
-              data: result,
+              data: enrichedData,
               success: true,
-              total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
+              total: result.length,
             };
           } catch (error: any) {
             console.error('获取车间列表失败:', error);
