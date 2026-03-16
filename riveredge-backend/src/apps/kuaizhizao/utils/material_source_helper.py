@@ -22,7 +22,7 @@ from decimal import Decimal
 from loguru import logger
 
 from apps.master_data.models.material import Material, BOM
-from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _bom_effective_filter
+from apps.kuaizhizao.utils.bom_helper import _select_alternatives, _select_configurable, _bom_effective_filter
 
 
 async def _get_bom_for_material(
@@ -290,6 +290,7 @@ async def expand_bom_with_source_control(
     use_default_bom: bool = False,
     material_bom_versions: Optional[Dict[int, str]] = None,
     variant_attributes: Optional[Dict[str, Any]] = None,
+    configurable_selections: Optional[Dict[str, int]] = None,
     as_of_date: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
     """
@@ -306,6 +307,7 @@ async def expand_bom_with_source_control(
         use_default_bom: 是否使用默认版本（is_default=True），当 bom_version 未指定时生效
         material_bom_versions: 按物料ID指定版本（可选），格式 {material_id: version}
         variant_attributes: 配置件变体属性（可选），格式 {attr: value}，用于匹配 bom_variants
+        configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
         
     Returns:
@@ -368,6 +370,7 @@ async def expand_bom_with_source_control(
             bom_items_query = bom_items_query.filter(approval_status="approved")
         bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
         bom_items = _select_alternatives(bom_items)
+        bom_items = _select_configurable(bom_items, material_id, configurable_selections)
         
         # 递归展开下层物料
         requirements = []
@@ -393,6 +396,7 @@ async def expand_bom_with_source_control(
                 use_default_bom=use_default_bom,
                 material_bom_versions=effective_material_bom_versions,
                 variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
                 as_of_date=as_of_date,
             )
             
@@ -446,6 +450,7 @@ async def expand_bom_with_source_control(
         bom_items_query = bom_items_query.filter(approval_status="approved")
     bom_items = await bom_items_query.prefetch_related("component").order_by("priority", "id").all()
     bom_items = _select_alternatives(bom_items)
+    bom_items = _select_configurable(bom_items, material_id, configurable_selections)
 
     requirements = []
     for bom_item in bom_items:
@@ -474,6 +479,7 @@ async def expand_bom_with_source_control(
                 use_default_bom=use_default_bom,
                 material_bom_versions=effective_material_bom_versions,
                 variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
                 as_of_date=as_of_date,
             )
             requirements.extend(child_requirements)
@@ -514,9 +520,10 @@ async def expand_bom_with_source_control(
                     bom_version=bom_version,
                     use_default_bom=use_default_bom,
                     material_bom_versions=effective_material_bom_versions,
-                    variant_attributes=variant_attributes,
-                    as_of_date=as_of_date,
-                )
+                variant_attributes=variant_attributes,
+                configurable_selections=configurable_selections,
+                as_of_date=as_of_date,
+            )
                 requirements.extend(child_requirements)
 
     return requirements

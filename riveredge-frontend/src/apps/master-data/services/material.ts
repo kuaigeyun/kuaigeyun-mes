@@ -93,6 +93,9 @@ function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyI
     isRequired: (raw.is_required ?? raw.isRequired) !== false,
     level: Number(raw.level ?? 0),
     path: raw.path ? String(raw.path) : '',
+    isConfigurable: (raw.is_configurable ?? raw.isConfigurable) === true,
+    configurableGroupId: raw.configurable_group_id ?? raw.configurableGroupId ?? null,
+    isDefaultConfigurable: (raw.is_default_configurable ?? raw.isDefaultConfigurable) === true,
     children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 }
@@ -368,6 +371,9 @@ export const bomApi = {
         unit: item.unit,
         waste_rate: item.wasteRate,
         is_required: item.isRequired,
+        is_configurable: item.isConfigurable,
+        configurable_group_id: item.configurableGroupId,
+        is_default_configurable: item.isDefaultConfigurable,
         remark: item.remark,
       })),
       version: data.version,

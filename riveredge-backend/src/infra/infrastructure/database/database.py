@@ -88,7 +88,7 @@ TORTOISE_ORM = {
                 "max_size": 20,  # 最大连接池大小（增加以支持并发请求）
                 "max_queries": 50000,  # 每个连接最大查询次数
                 "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒，必须是浮点数）
-                "command_timeout": 60,  # 命令超时（秒）
+                "command_timeout": 300,  # 命令超时（秒），aerich 迁移需更长时间
                 "server_settings": {
                     "application_name": "riveredge_asyncpg",
                     "timezone": settings.TIMEZONE  # 使用与Tortoise ORM相同的时区

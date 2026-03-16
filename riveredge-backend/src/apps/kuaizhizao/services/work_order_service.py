@@ -604,6 +604,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 qualified_quantity=work_order_data.qualified_quantity,
                 unqualified_quantity=work_order_data.unqualified_quantity,
                 variant_attributes=getattr(work_order_data, "variant_attributes", None),
+                configurable_selections=getattr(work_order_data, "configurable_selections", None),
                 remarks=work_order_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -1205,15 +1206,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-        # 获取BOM物料需求（配置件时传入 variant_attributes）
+        # 获取BOM物料需求（配置件时传入 variant_attributes，配置位时传入 configurable_selections）
         try:
             variant_attrs = getattr(work_order, "variant_attributes", None)
+            cfg_selections = getattr(work_order, "configurable_selections", None)
+            if cfg_selections and isinstance(cfg_selections, dict):
+                try:
+                    cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
+                except (TypeError, ValueError):
+                    cfg_selections = None
             material_requirements = await calculate_material_requirements_from_bom(
                 tenant_id=tenant_id,
                 material_id=work_order.product_id,
                 required_quantity=float(work_order.quantity),
                 only_approved=True,
                 variant_attributes=variant_attrs,
+                configurable_selections=cfg_selections,
             )
         except NotFoundError:
             # 如果没有BOM，返回无缺料

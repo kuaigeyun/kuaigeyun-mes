@@ -393,6 +393,9 @@ export interface BOMBatchImportItem {
   unit?: string; // 子件单位（可选，如：个、kg、m等）
   wasteRate?: number; // 损耗率（可选，百分比，如：5%表示5.00）
   isRequired?: boolean; // 是否必选（可选，是/否，默认：是）
+  isConfigurable?: boolean; // 是否为配置位（用户在下单/开工单时选择）
+  configurableGroupId?: number | null; // 配置位组ID（同组多行=该位置的可选物料）
+  isDefaultConfigurable?: boolean; // 配置位组内是否为默认选项
   remark?: string; // 备注（可选）
 }
 
@@ -487,6 +490,9 @@ export interface BOMHierarchyItem {
   isRequired: boolean;
   level: number;
   path: string;
+  isConfigurable?: boolean;
+  configurableGroupId?: number | null;
+  isDefaultConfigurable?: boolean;
   children: BOMHierarchyItem[]; // 子项（递归结构）
 }
 

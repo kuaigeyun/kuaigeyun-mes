@@ -32,6 +32,7 @@ class SalesOrderItemBase(BaseSchema):
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
     item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
     variant_attributes: Optional[dict] = Field(None, description="变体属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
+    configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -53,6 +54,7 @@ class SalesOrderItemUpdate(BaseSchema):
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     item_amount: Optional[Decimal] = Field(None, ge=0)
     variant_attributes: Optional[dict] = None
+    configurable_selections: Optional[dict] = None
     notes: Optional[str] = None
 
 
@@ -62,6 +64,7 @@ class SalesOrderItemResponse(SalesOrderItemBase):
     uuid: str
     tenant_id: int
     sales_order_id: int
+    configurable_selections: Optional[dict] = Field(None, description="配置位选择")
     delivered_quantity: Optional[Decimal] = Field(None, description="已交货数量")
     remaining_quantity: Optional[Decimal] = Field(None, description="剩余数量")
     delivery_status: Optional[str] = Field(None, max_length=20, description="交货状态")

@@ -36,6 +36,43 @@ def _select_alternatives(bom_items: List[BOM]) -> List[BOM]:
             chosen = min(group, key=lambda x: (getattr(x, "priority", 0) or 0, x.id))
             result.append(chosen)
     return result
+
+
+def _select_configurable(
+    bom_items: List[BOM],
+    material_id: int,
+    configurable_selections: Optional[Dict[str, int]] = None,
+) -> List[BOM]:
+    """
+    配置位组内选择：按用户选择或默认选项保留。
+    configurable_selections 格式: { "parentMaterialId_configurableGroupId": componentId }
+    非配置位行保持；配置位行按选择或 is_default_configurable 保留。
+    """
+    configurable_selections = configurable_selections or {}
+    result = []
+    by_cfg_group = defaultdict(list)
+    for b in bom_items:
+        is_cfg = getattr(b, "is_configurable", False)
+        cfg_gid = getattr(b, "configurable_group_id", None)
+        if is_cfg and cfg_gid is not None:
+            by_cfg_group[cfg_gid].append(b)
+        else:
+            result.append(b)
+    for cfg_gid, group in by_cfg_group.items():
+        key = f"{material_id}_{cfg_gid}"
+        selected_component_id = configurable_selections.get(key) or configurable_selections.get(str(key))
+        if selected_component_id is not None:
+            try:
+                target_id = int(selected_component_id)
+            except (TypeError, ValueError):
+                target_id = None
+            chosen = next((x for x in group if x.component_id == target_id), None) if target_id is not None else None
+            if chosen:
+                result.append(chosen)
+                continue
+        default_item = next((x for x in group if getattr(x, "is_default_configurable", False)), None)
+        result.append(default_item if default_item else group[0])
+    return result
 from apps.master_data.schemas.material_schemas import BOMResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -190,6 +227,7 @@ async def calculate_material_requirements_from_bom(
     only_approved: bool = True,
     as_of_date: Optional[datetime] = None,
     variant_attributes: Optional[Dict[str, Any]] = None,
+    configurable_selections: Optional[Dict[str, int]] = None,
 ) -> List[Any]:
     """
     根据BOM计算物料需求（从master_data）
@@ -201,6 +239,7 @@ async def calculate_material_requirements_from_bom(
         only_approved: 是否只使用已审核的BOM（默认：True）
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM
         variant_attributes: 配置件变体属性（可选），当产品为 Configure 时用于 BOM 变体匹配
+        configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
 
     Returns:
         物料需求列表，返回MaterialRequirement对象列表（兼容原BOMService的返回格式）
@@ -208,14 +247,18 @@ async def calculate_material_requirements_from_bom(
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
     from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
 
-    # 当提供 variant_attributes 时，使用 expand_bom_with_source_control（支持 Configure、Phantom 等）
-    if variant_attributes and isinstance(variant_attributes, dict) and len(variant_attributes) > 0:
+    # 当提供 variant_attributes 或 configurable_selections 时，使用 expand_bom_with_source_control（支持 Configure、Phantom、配置位等）
+    use_expand = (variant_attributes and isinstance(variant_attributes, dict) and len(variant_attributes) > 0) or (
+        configurable_selections and isinstance(configurable_selections, dict) and len(configurable_selections) > 0
+    )
+    if use_expand:
         expanded = await expand_bom_with_source_control(
             tenant_id=tenant_id,
             material_id=material_id,
             required_quantity=required_quantity,
             only_approved=only_approved,
             variant_attributes=variant_attributes,
+            configurable_selections=configurable_selections,
             as_of_date=as_of_date,
         )
         if not expanded:

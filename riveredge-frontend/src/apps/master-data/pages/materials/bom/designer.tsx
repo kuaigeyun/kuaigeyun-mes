@@ -226,16 +226,20 @@ const BOMDesignerPage: React.FC = () => {
         name: item.componentName,
       };
       const pathKey = path.join('-');
+      const code = (material as any).mainCode ?? (material as any).main_code ?? material.code ?? item.componentCode;
 
       const node: MindMapNode = {
         id: `material_${item.componentId}_${pathKey}`,
-        value: `${material.code} - ${material.name}`,
+        value: `${code} - ${material.name}`,
         material,
         quantity: item.quantity,
         unit: item.unit,
         wasteRate: item.wasteRate,
         isRequired: item.isRequired,
         componentId: item.componentId,
+        isConfigurable: item.isConfigurable,
+        configurableGroupId: item.configurableGroupId ?? null,
+        isDefaultConfigurable: item.isDefaultConfigurable,
       };
 
       if (item.children && item.children.length > 0) {
@@ -485,7 +489,7 @@ const BOMDesignerPage: React.FC = () => {
   /**
    * 添加同级节点
    */
-  const handleAddSiblingNodeCallback = useCallback((siblingNodeId: string) => {
+  const handleAddSiblingNodeCallback = useCallback((siblingNodeId: string, configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean }) => {
     handleAddSiblingNode(
       siblingNodeId,
       mindMapDataRef,
@@ -494,9 +498,25 @@ const BOMDesignerPage: React.FC = () => {
       mindMapInstanceRef,
       selectedIdInGraphRef,
       nodeConfigForm,
-      t('app.master-data.bom.materialNotSelected')
+      t('app.master-data.bom.materialNotSelected'),
+      configurableOverrides
     );
   }, [nodeConfigForm, t]);
+
+  /**
+   * 添加配置位可选物料（添加同级节点，继承 configurableGroupId）
+   */
+  const handleAddConfigurableOptionCallback = useCallback(() => {
+    if (!selectedNodeId || selectedNodeId === 'root') return;
+    const node = findNode(mindMapDataRef.current!, selectedNodeId);
+    if (!node) return;
+    const groupId = node.configurableGroupId ?? Date.now();
+    handleAddSiblingNodeCallback(selectedNodeId, {
+      isConfigurable: true,
+      configurableGroupId: typeof groupId === 'number' ? groupId : Date.now(),
+      isDefaultConfigurable: false,
+    });
+  }, [selectedNodeId, handleAddSiblingNodeCallback]);
 
   /**
    * 删除节点
@@ -536,17 +556,25 @@ const BOMDesignerPage: React.FC = () => {
 
     nodeConfigForm.validateFields().then((values) => {
       const material = materials.find(m => m.id === values.materialId);
+      const code = material ? ((material as any).mainCode ?? (material as any).main_code ?? material.code ?? '') : '';
 
       const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node: MindMapNode) => {
+        let configurableGroupId = values.configurableGroupId ?? node.configurableGroupId;
+        if (values.isConfigurable && !configurableGroupId) {
+          configurableGroupId = Date.now();
+        }
         return {
           ...node,
-          value: material ? `${material.code} - ${material.name}` : t('app.master-data.bom.materialNotSelected'),
+          value: material ? `${code} - ${material.name}` : t('app.master-data.bom.materialNotSelected'),
           material,
           quantity: values.quantity,
           unit: values.unit,
           wasteRate: values.wasteRate || 0,
           isRequired: values.isRequired !== false,
-        componentId: values.materialId,
+          componentId: values.materialId,
+          isConfigurable: values.isConfigurable ?? false,
+          configurableGroupId: values.isConfigurable ? configurableGroupId : null,
+          isDefaultConfigurable: values.isDefaultConfigurable ?? false,
         };
       });
 
@@ -562,17 +590,22 @@ const BOMDesignerPage: React.FC = () => {
    */
   const convertMindMapToBOMItems = useCallback((data: MindMapNode, parentMaterial: Material): any[] => {
     const items: any[] = [];
+    const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
 
     if (data.children) {
       data.children.forEach((child: MindMapNode) => {
         if (child.material && child.componentId) {
+          const compCode = (child.material as any).mainCode ?? (child.material as any).main_code ?? child.material.code ?? '';
           items.push({
-            parentCode: parentMaterial.code,
-            componentCode: child.material.code,
+            parentCode,
+            componentCode: compCode,
             quantity: child.quantity || 1,
             unit: child.unit || undefined,
             wasteRate: child.wasteRate || undefined,
             isRequired: child.isRequired !== false,
+            isConfigurable: child.isConfigurable ?? false,
+            configurableGroupId: child.isConfigurable ? (child.configurableGroupId ?? undefined) : undefined,
+            isDefaultConfigurable: child.isConfigurable ? (child.isDefaultConfigurable ?? false) : undefined,
           });
 
           // 递归处理子节点
@@ -955,7 +988,7 @@ const BOMDesignerPage: React.FC = () => {
       const out: any = { 
         id: n.id, 
         value,
-        data: { ...n, isSelected: n.id === selectedNodeId, sourceType }
+        data: { ...n, isSelected: n.id === selectedNodeId, sourceType, isConfigurable: n.isConfigurable }
       };
       if (n.children?.length) {
         out.children = n.children.map(strip);
@@ -997,6 +1030,7 @@ const BOMDesignerPage: React.FC = () => {
             // 物料来源对应节点颜色（子节点）
             const sourceType = data.data?.sourceType;
             const sourceColors = sourceType ? SOURCE_TYPE_NODE_COLORS[sourceType] : null;
+            const isConfigurable = data.data?.isConfigurable;
             // 判断是否处于激活状态（拖拽目标）
             // 注意：G6更新这种自定义组件状态比较麻烦，这里尝试用 data 注入
             // G6 的 setItemState 会更新 item 的 state，但 React 组件需要重绘才能感知
@@ -1041,7 +1075,7 @@ const BOMDesignerPage: React.FC = () => {
                    e.preventDefault();
                    if (data.id) {
                       e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
-                      e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9'));
+                      e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (isConfigurable ? '#13c2c2' : (sourceColors?.border ?? '#d9d9d9')));
                       e.currentTarget.style.background = isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff');
                    }
                 }}
@@ -1053,7 +1087,7 @@ const BOMDesignerPage: React.FC = () => {
                    
                    // Reset style
                    e.currentTarget.style.boxShadow = isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : 'none';
-                   e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9'));
+                   e.currentTarget.style.borderColor = isSelected ? '#722ed1' : (isRoot ? '#722ed1' : (isConfigurable ? '#13c2c2' : (sourceColors?.border ?? '#d9d9d9')));
                    e.currentTarget.style.background = isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff');
 
                    if (draggedNodeId && targetId && draggedNodeId !== targetId) {
@@ -1071,13 +1105,13 @@ const BOMDesignerPage: React.FC = () => {
                    display: 'flex',
                    alignItems: 'center',
                    background: isRoot ? '#722ed1' : (sourceColors?.bg ?? '#fff'),
-                   border: `1px solid ${isRoot ? '#722ed1' : (sourceColors?.border ?? '#d9d9d9')}`,
+                   border: `1px solid ${isRoot ? '#722ed1' : (isConfigurable ? '#13c2c2' : (sourceColors?.border ?? '#d9d9d9'))}`,
                    borderRadius: 4,
                    padding: '4px 8px',
                    minWidth: 'fit-content',
                    // Add visual cue for selection or active (drop target)
                    boxShadow: isSelected ? `0 0 0 2px rgba(114, 46, 209, 0.4)` : (data.data?.active ? `0 0 0 2px rgba(24, 144, 255, 0.4)` : 'none'),
-                   borderColor: isSelected ? '#722ed1' : (data.data?.active ? '#1890ff' : (isRoot ? '#722ed1' : '#d9d9d9')),
+                   borderColor: isSelected ? '#722ed1' : (data.data?.active ? '#1890ff' : (isRoot ? '#722ed1' : (isConfigurable ? '#13c2c2' : '#d9d9d9'))),
                 }}
               >
                 {!isRoot && (
@@ -1092,6 +1126,9 @@ const BOMDesignerPage: React.FC = () => {
                     whiteSpace: 'nowrap',
                 }}>
                   {label}
+                  {!isRoot && isConfigurable && (
+                    <Tag color="cyan" style={{ marginLeft: 6, fontSize: 10 }}>{t('app.master-data.bom.isConfigurable')}</Tag>
+                  )}
                 </span>
               </div>
             );
@@ -1545,7 +1582,11 @@ const BOMDesignerPage: React.FC = () => {
                   onChange={(id) => {
                     const mat = materials.find((m) => m.id === id);
                     const base = mat ? ((mat as Record<string, unknown>).base_unit ?? mat.baseUnit) : '';
-                    nodeConfigForm.setFieldsValue({ unit: base ?? '' });
+                    const variantManaged = mat ? ((mat as Record<string, unknown>).variant_managed ?? mat.variantManaged ?? false) : false;
+                    nodeConfigForm.setFieldsValue({
+                      unit: base ?? '',
+                      isConfigurable: variantManaged ? true : nodeConfigForm.getFieldValue('isConfigurable'),
+                    });
                   }}
                   onSelect={(val) => {
                     const mat = materials.find(m => m.id === val);
@@ -1620,6 +1661,40 @@ const BOMDesignerPage: React.FC = () => {
               </Form.Item>
               <Form.Item name="isRequired" label={t('app.master-data.bom.isRequired')} valuePropName="checked">
                 <Switch checkedChildren={t('app.master-data.bom.yes')} unCheckedChildren={t('app.master-data.bom.no')} />
+              </Form.Item>
+              <Form.Item
+                name="isConfigurable"
+                label={t('app.master-data.bom.isConfigurable')}
+                valuePropName="checked"
+                tooltip={t('app.master-data.bom.isConfigurableTooltip')}
+              >
+                <Switch checkedChildren={t('app.master-data.bom.yes')} unCheckedChildren={t('app.master-data.bom.no')} />
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(prev, curr) => prev?.isConfigurable !== curr?.isConfigurable}>
+                {({ getFieldValue }) =>
+                  getFieldValue('isConfigurable') ? (
+                    <>
+                      <Form.Item
+                        name="isDefaultConfigurable"
+                        label={t('app.master-data.bom.isDefaultConfigurable')}
+                        valuePropName="checked"
+                        tooltip={t('app.master-data.bom.isDefaultConfigurableTooltip')}
+                      >
+                        <Switch checkedChildren={t('app.master-data.bom.yes')} unCheckedChildren={t('app.master-data.bom.no')} />
+                      </Form.Item>
+                      <Form.Item>
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={handleAddConfigurableOptionCallback}
+                          block
+                        >
+                          {t('app.master-data.bom.addConfigurableOption')}
+                        </Button>
+                      </Form.Item>
+                    </>
+                  ) : null
+                }
               </Form.Item>
               
               {/* Visual Focus Hint */}

@@ -108,6 +108,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   ], [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
+
+  // 打开表单时同步 variantManaged 状态（编辑已有变体物料时，变体标签页需可用）
+  useEffect(() => {
+    if (open) {
+      const vm = material?.variantManaged ?? (material as any)?.variant_managed ?? initialValues?.variantManaged ?? initialValues?.variant_managed ?? false;
+      setVariantManaged(!!vm);
+    }
+  }, [open, material?.variantManaged, (material as any)?.variant_managed, initialValues?.variantManaged, initialValues?.variant_managed]);
   
   // 客户和供应商列表
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -830,7 +838,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             : restValues.defaultSerialRuleId)
           : null,
         variant_managed: restValues.variantManaged,
-        variant_attributes: restValues.variantAttributes,
+        variant_attributes: (() => {
+          if (!restValues.variantManaged) return undefined;
+          const va = restValues.variantAttributes;
+          if (va == null) return undefined;
+          if (typeof va !== 'object') return undefined;
+          const filtered = Object.fromEntries(
+            Object.entries(va).filter(([, v]) => v != null && v !== '' && (!Array.isArray(v) || v.length > 0))
+          );
+          return Object.keys(filtered).length > 0 ? filtered : null;
+        })(),
         description: restValues.description,
         brand: restValues.brand,
         model: restValues.model,
@@ -1997,33 +2014,24 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   fieldProps={{ mode: def.allow_multiple ? 'multiple' : undefined }}
                   options={def.enum_values?.map(v => ({ label: v, value: v }))}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_: any, value: any) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (!value) return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },
@@ -2039,34 +2047,25 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   fieldProps={{
                     maxLength: def.validation_rules?.max_length,
                   }}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_: any, value: any) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (!value) return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },
@@ -2082,7 +2081,7 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   fieldProps={{
                     min: def.validation_rules?.min,
@@ -2090,27 +2089,18 @@ const VariantManagementTab: React.FC = () => {
                   }}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_: any, value: any) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (value == null || value === '') return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },
@@ -2126,34 +2116,25 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   fieldProps={{
                     type: 'date',
                   }}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_: any, value: any) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (!value) return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },
@@ -2169,7 +2150,7 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.selectAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   options={[
                     { label: t('app.master-data.bom.yes'), value: true },
@@ -2177,27 +2158,18 @@ const VariantManagementTab: React.FC = () => {
                   ]}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.selectAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_, value) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.selectAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value !== undefined && value !== null) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (value === undefined || value === null) return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },
@@ -2213,31 +2185,22 @@ const VariantManagementTab: React.FC = () => {
                   name={fieldName}
                   label={def.display_name}
                   placeholder={t('app.master-data.materialForm.enterAttr', { name: def.display_name })}
-                  required={def.is_required}
+                  required={false}
                   tooltip={def.description}
                   rules={[
                     {
-                      required: def.is_required,
-                      message: t('app.master-data.materialForm.enterAttr', { name: def.display_name }),
-                    },
-                    {
                       validator: async (_: any, value: any) => {
-                        if (!value && def.is_required) {
-                          throw new Error(t('app.master-data.materialForm.enterAttr', { name: def.display_name }));
-                        }
-                        // 验证属性值
-                        if (value) {
-                          try {
-                            const result = await variantAttributeApi.validate({
-                              attribute_name: def.attribute_name,
-                              attribute_value: value,
-                            });
-                            if (!result.is_valid) {
-                              throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
-                            }
-                          } catch (error: any) {
-                            throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
+                        if (!value) return;
+                        try {
+                          const result = await variantAttributeApi.validate({
+                            attribute_name: def.attribute_name,
+                            attribute_value: value,
+                          });
+                          if (!result.is_valid) {
+                            throw new Error(result.error_message || t('app.master-data.materialForm.attrValidationFailed'));
                           }
+                        } catch (error: any) {
+                          throw new Error(error.message || t('app.master-data.materialForm.attrValidationFailed'));
                         }
                       },
                     },

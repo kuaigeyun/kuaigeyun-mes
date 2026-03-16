@@ -54,6 +54,8 @@ class DemandItem(BaseModel):
 
     # 配置件变体属性（Configure 物料时用于 BOM 变体匹配，格式 {"color":"red","size":"M"}）
     variant_attributes = fields.JSONField(null=True, description="变体属性（配置件专用）")
+    # 配置位选择（BOM 配置位，格式 {"parentMaterialId_configurableGroupId": componentId}）
+    configurable_selections = fields.JSONField(null=True, description="配置位选择（用户选择的配置位物料）")
 
     notes = fields.TextField(null=True, description="备注")
     

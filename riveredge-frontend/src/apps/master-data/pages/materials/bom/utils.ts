@@ -10,6 +10,9 @@ export interface MindMapNode {
   wasteRate?: number;
   isRequired?: boolean;
   componentId?: number;
+  isConfigurable?: boolean;
+  configurableGroupId?: number | null;
+  isDefaultConfigurable?: boolean;
   children?: MindMapNode[];
   [key: string]: any;
 }
@@ -110,6 +113,7 @@ export const handleMoveNodeLogic = (
 
 /**
  * 处理添加子节点
+ * @param configurableOverrides 可选，配置位相关覆盖（用于添加可选物料）
  */
 export const handleAddChildNode = (
   parentNodeId: string,
@@ -119,7 +123,8 @@ export const handleAddChildNode = (
   mindMapInstanceRef: React.MutableRefObject<any>,
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
   nodeConfigForm: any,
-  materialNotSelectedLabel: string = '未选择物料'
+  materialNotSelectedLabel: string = '未选择物料',
+  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean }
 ) => {
   if (!mindMapDataRef.current) return;
 
@@ -130,6 +135,7 @@ export const handleAddChildNode = (
     unit: '',
     wasteRate: 0,
     isRequired: true,
+    ...(configurableOverrides || {}),
   };
 
   const updated = updateNode(mindMapDataRef.current, parentNodeId, (node) => {
@@ -190,7 +196,8 @@ export const handleAddSiblingNode = (
   mindMapInstanceRef: React.MutableRefObject<any>,
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
   nodeConfigForm: any,
-  materialNotSelectedLabel: string = '未选择物料'
+  materialNotSelectedLabel: string = '未选择物料',
+  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean }
 ) => {
   if (!mindMapDataRef.current) return;
 
@@ -204,7 +211,8 @@ export const handleAddSiblingNode = (
       mindMapInstanceRef,
       selectedIdInGraphRef,
       nodeConfigForm,
-      materialNotSelectedLabel
+      materialNotSelectedLabel,
+      configurableOverrides
     );
     return;
   }
@@ -217,7 +225,8 @@ export const handleAddSiblingNode = (
     mindMapInstanceRef,
     selectedIdInGraphRef,
     nodeConfigForm,
-    materialNotSelectedLabel
+    materialNotSelectedLabel,
+    configurableOverrides
   );
 };
 
@@ -266,6 +275,9 @@ export const handleNodeSelect = (
         unit: node.unit || '',
         wasteRate: node.wasteRate || 0,
         isRequired: node.isRequired !== false,
+        isConfigurable: node.isConfigurable ?? false,
+        configurableGroupId: node.configurableGroupId ?? null,
+        isDefaultConfigurable: node.isDefaultConfigurable ?? false,
       });
     }
   }

@@ -4,7 +4,7 @@
 定义物料数据的 Pydantic Schema（物料分组、物料、BOM），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, validator, ConfigDict
+from pydantic import BaseModel, Field, validator, model_validator, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -342,6 +342,11 @@ class BOMBase(BaseModel):
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
     priority: int = Field(0, description="优先级（数字越小优先级越高）")
     
+    # 配置位管理（与替代料互斥）
+    is_configurable: bool = Field(False, description="是否为配置位（用户在下单/开工单时选择）")
+    configurable_group_id: Optional[int] = Field(None, description="配置位组ID（同组多行=该位置的可选物料）")
+    is_default_configurable: bool = Field(False, description="配置位组内是否为默认选项")
+    
     # 扩展信息
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
@@ -378,6 +383,13 @@ class BOMBase(BaseModel):
             if v <= values["effective_date"]:
                 raise ValueError("失效日期必须晚于生效日期")
         return v
+    
+    @model_validator(mode="after")
+    def validate_configurable_vs_alternative(self):
+        """配置位与替代料互斥"""
+        if self.is_configurable and self.is_alternative:
+            raise ValueError("配置位与替代料互斥，不能同时启用")
+        return self
 
 
 class BOMCreate(BOMBase):
@@ -430,6 +442,11 @@ class BOMUpdate(BaseModel):
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
     priority: Optional[int] = Field(None, description="优先级")
     
+    # 配置位管理
+    is_configurable: Optional[bool] = Field(None, description="是否为配置位")
+    configurable_group_id: Optional[int] = Field(None, description="配置位组ID")
+    is_default_configurable: Optional[bool] = Field(None, description="配置位组内是否为默认选项")
+    
     # 扩展信息
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
@@ -465,6 +482,15 @@ class BOMUpdate(BaseModel):
             if v <= values["effective_date"]:
                 raise ValueError("失效日期必须晚于生效日期")
         return v
+
+    @model_validator(mode="after")
+    def validate_configurable_vs_alternative(self):
+        """配置位与替代料互斥"""
+        is_alt = self.is_alternative if self.is_alternative is not None else False
+        is_cfg = self.is_configurable if self.is_configurable is not None else False
+        if is_alt and is_cfg:
+            raise ValueError("配置位与替代料互斥，不能同时启用")
+        return self
 
 
 class BOMResponse(BOMBase):
@@ -502,8 +528,18 @@ class BOMItemCreate(BaseModel):
     is_alternative: bool = Field(False, description="是否为替代料")
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
     priority: int = Field(0, description="优先级（数字越小优先级越高）")
+    is_configurable: bool = Field(False, description="是否为配置位")
+    configurable_group_id: Optional[int] = Field(None, description="配置位组ID")
+    is_default_configurable: bool = Field(False, description="配置位组内是否为默认选项")
     description: Optional[str] = Field(None, description="描述")
     remark: Optional[str] = Field(None, description="备注")
+    
+    @model_validator(mode="after")
+    def validate_configurable_vs_alternative(self):
+        """配置位与替代料互斥"""
+        if self.is_configurable and self.is_alternative:
+            raise ValueError("配置位与替代料互斥，不能同时启用")
+        return self
     
     @validator("quantity")
     def validate_quantity(cls, v):
@@ -597,6 +633,9 @@ class BOMBatchImportItem(BaseModel):
     unit: Optional[str] = Field(None, description="子件单位（可选，如：个、kg、m等）")
     waste_rate: Optional[Decimal] = Field(None, description="损耗率（可选，百分比，如：5%表示5.00）")
     is_required: Optional[bool] = Field(True, description="是否必选（可选，是/否，默认：是）")
+    is_configurable: Optional[bool] = Field(False, description="是否为配置位（用户在下单/开工单时选择）")
+    configurable_group_id: Optional[int] = Field(None, description="配置位组ID（同组多行=该位置的可选物料）")
+    is_default_configurable: Optional[bool] = Field(False, description="配置位组内是否为默认选项")
     remark: Optional[str] = Field(None, description="备注（可选）")
     
     @validator("quantity")

@@ -1406,6 +1406,7 @@ class DemandService(AppBaseService[Demand]):
                             delivered_quantity=Decimal("0"),
                             delivery_status="待交货",
                             variant_attributes=getattr(it, "variant_attributes", None),
+                            configurable_selections=getattr(it, "configurable_selections", None),
                         )
                 else:
                     raise ValidationError(f"不支持的上游类型: {source_type}")

@@ -328,6 +328,11 @@ class BOM(BaseModel):
     alternative_group_id = fields.IntField(null=True, description="替代料组ID（同一组的替代料互斥）")
     priority = fields.IntField(default=0, description="优先级（数字越小优先级越高）")
     
+    # 配置位管理（与替代料互斥：同一位置可配置多种物料，用户在下单/开工单时选择）
+    is_configurable = fields.BooleanField(default=False, description="是否为配置位（用户选择）")
+    configurable_group_id = fields.IntField(null=True, description="配置位组ID（同组多行=该位置的可选物料）")
+    is_default_configurable = fields.BooleanField(default=False, description="配置位组内是否为默认选项")
+    
     # 扩展信息
     description = fields.TextField(null=True, description="描述")
     remark = fields.TextField(null=True, description="备注")

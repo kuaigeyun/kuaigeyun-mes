@@ -45,6 +45,21 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 
 
+def _safe_configurable_selections(cfg: Any) -> Optional[Dict[str, int]]:
+    """安全转换 configurable_selections，JSON 中 value 可能为字符串"""
+    if not cfg or not isinstance(cfg, dict):
+        return None
+    result = {}
+    for k, v in cfg.items():
+        if v is None:
+            continue
+        try:
+            result[str(k)] = int(v)
+        except (TypeError, ValueError):
+            pass
+    return result if result else None
+
+
 class _PreviewResultCarrier(Exception):
     """用于预览时携带结果并触发事务回滚（不持久化）"""
     def __init__(self, preview_data: Dict[str, Any]):
@@ -945,6 +960,7 @@ class DemandComputationService:
                 
                 # 使用物料来源控制的BOM展开逻辑
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
+                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -954,6 +970,7 @@ class DemandComputationService:
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     variant_attributes=variant_attrs,
+                    configurable_selections=cfg_selections,
                 )
                 
                 # 合并到总需求中
@@ -974,6 +991,7 @@ class DemandComputationService:
                 # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
                 logger.debug(f"处理配置件，物料ID: {material_id}, 物料编码: {material.main_code}")
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
+                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -983,6 +1001,7 @@ class DemandComputationService:
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     variant_attributes=variant_attrs,
+                    configurable_selections=cfg_selections,
                 )
                 
                 # 合并到总需求中
@@ -1034,6 +1053,7 @@ class DemandComputationService:
                 if bom_items:
                     # 展开BOM（使用物料来源控制逻辑）
                     variant_attrs = getattr(demand_item, "variant_attributes", None)
+                    cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                     expanded_requirements = await expand_bom_with_source_control(
                         tenant_id=tenant_id,
                         material_id=material_id,
@@ -1043,6 +1063,7 @@ class DemandComputationService:
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
                         variant_attributes=variant_attrs,
+                        configurable_selections=cfg_selections,
                     )
 
                     # 合并到总需求中
@@ -1244,6 +1265,7 @@ class DemandComputationService:
             if source_type == SOURCE_TYPE_PHANTOM:
                 # 虚拟件：自动跳过，直接展开下层物料
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
+                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -1253,6 +1275,7 @@ class DemandComputationService:
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     variant_attributes=variant_attrs,
+                    configurable_selections=cfg_selections,
                 )
                 
                 for req in expanded_requirements:
@@ -1272,6 +1295,7 @@ class DemandComputationService:
             elif source_type == SOURCE_TYPE_CONFIGURE:
                 # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
+                cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                 expanded_requirements = await expand_bom_with_source_control(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -1281,6 +1305,7 @@ class DemandComputationService:
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     variant_attributes=variant_attrs,
+                    configurable_selections=cfg_selections,
                 )
                 
                 for req in expanded_requirements:
@@ -1331,6 +1356,7 @@ class DemandComputationService:
 
                 if bom_items:
                     variant_attrs = getattr(demand_item, "variant_attributes", None)
+                    cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                     expanded_requirements = await expand_bom_with_source_control(
                         tenant_id=tenant_id,
                         material_id=material_id,
@@ -1340,6 +1366,7 @@ class DemandComputationService:
                         use_default_bom=use_default_bom,
                         material_bom_versions=material_bom_versions,
                         variant_attributes=variant_attrs,
+                        configurable_selections=cfg_selections,
                     )
 
                     for req in expanded_requirements:

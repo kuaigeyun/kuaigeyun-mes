@@ -793,21 +793,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     })
   }, [effectiveColumns, dateFormatKey])
 
-  // 列宽拖拽：至少一列不能拖动（width 不设置），确保满足 use-antd-resizable-header 要求
-  // 固定列必须有 width，不能移除；从最后一列往前找第一个非固定列以移除其 width
+  // 列宽拖拽：遵循 use-antd-resizable-header 与 ProTable 固定列规范
+  // - 至少一列不设置 width（自适应），固定列必须保留 width
+  // - 操作列不参与拖拽，排除后单独合并，避免其宽度被持久化为过小值导致内容裁剪
   const columnsForResize = React.useMemo(() => {
     if (!processedColumns.length) return []
-    const allHaveWidth = processedColumns.every((c: any) => c.width != null)
-    if (!allHaveWidth) return processedColumns
+    const nonOpCols = processedColumns.filter((c: any) => !isOperationColumn(c))
+    if (nonOpCols.length === 0) return []
+    const allHaveWidth = nonOpCols.every((c: any) => c.width != null)
+    if (!allHaveWidth) return nonOpCols
     let idxToRemove = -1
-    for (let i = processedColumns.length - 1; i >= 0; i--) {
-      if (!processedColumns[i].fixed) {
+    for (let i = nonOpCols.length - 1; i >= 0; i--) {
+      if (!nonOpCols[i].fixed) {
         idxToRemove = i
         break
       }
     }
-    if (idxToRemove < 0) return processedColumns
-    return processedColumns.map((col: any, i: number) =>
+    if (idxToRemove < 0) return nonOpCols
+    return nonOpCols.map((col: any, i: number) =>
       i === idxToRemove ? (() => { const { width, ...rest } = col; return rest })() : col
     )
   }, [processedColumns])
@@ -832,13 +835,52 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [tableId, resetColumns, refresh, syncTablePreference])
 
-  // 最终传给 ProTable 的列：操作列始终 width: auto 以自适应内容，忽略持久化的数值宽度
+  // 操作列：宽度自适应内容、不换行（不参与拖拽，不设固定 width）
   const effectiveTableColumns = React.useMemo(() => {
-    const cols = resizableColumns.length > 0 ? resizableColumns : processedColumns
-    return cols.map((col: any) => {
-      if (!isOperationColumn(col)) return col
-      return { ...col, width: 'auto', resizable: false }
-    })
+    const baseCols = resizableColumns.length > 0 ? resizableColumns : processedColumns.filter((c: any) => !isOperationColumn(c))
+    const opCols = processedColumns.filter((c: any) => isOperationColumn(c))
+    if (opCols.length === 0) return baseCols
+    // 将操作列按原顺序插回（通常为最后一列）
+    const opIndices = processedColumns
+      .map((c: any, i: number) => (isOperationColumn(c) ? i : -1))
+      .filter((i: number) => i >= 0)
+    const result: any[] = []
+    let baseIdx = 0
+    let opIdx = 0
+    for (let i = 0; i < processedColumns.length; i++) {
+      if (opIndices.includes(i)) {
+        const opCol = opCols[opIdx++]
+        const baseOnCell = opCol.onCell
+        const mergedOnCell =
+          baseOnCell && typeof baseOnCell === 'function'
+            ? (cellProps: any) => {
+                const base = baseOnCell(cellProps)
+                return {
+                  ...base,
+                  className: `uni-table-operation-cell ${base?.className || ''}`.trim(),
+                  style: {
+                    whiteSpace: 'nowrap',
+                    overflow: 'visible',
+                    ...(base?.style || {}),
+                  },
+                }
+              }
+            : () => ({
+                className: 'uni-table-operation-cell',
+                style: { whiteSpace: 'nowrap', overflow: 'visible' },
+              })
+        const { width: _w, ...opRest } = opCol
+        result.push({
+          ...opRest,
+          resizable: false,
+          ellipsis: false,
+          onCell: mergedOnCell,
+        })
+      } else {
+        result.push(baseCols[baseIdx++] ?? processedColumns[i])
+      }
+    }
+    return result
   }, [resizableColumns, processedColumns])
 
   // 导入配置：优先使用传入的 importHeaders/importExampleRow，否则从 columns 自动生成
@@ -872,6 +914,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     })
   }, [effectiveColumns])
+
+  // 有操作列时：scroll.x 用 max-content 让表格自适应内容宽度，操作列不换行
+  const effectiveTableWidth =
+    hasActionColumn ? 'max-content' : resizableColumns.length > 0 ? (tableWidth ?? 'max-content') : undefined
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -1478,6 +1524,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           height: 32px !important;
           line-height: 30px !important;
         }
+        /* 操作列：强制不换行，所有子元素（含 ProTable 的 flex 布局）均不换行 */
+        .uni-table-container .uni-table-operation-cell {
+          white-space: nowrap !important;
+          overflow: visible !important;
+          min-width: min-content !important;
+        }
+        .uni-table-container .uni-table-operation-cell * {
+          white-space: nowrap !important;
+          flex-wrap: nowrap !important;
+        }
         /* 确保滚动条在隐藏时不占位 */
         .uni-table-container, .uni-table-root {
           /* scrollbar-gutter: auto !important; */
@@ -1681,20 +1737,30 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 pageSizeOptions: ['10', '20', '50', '100'],
                 showTotal: (total, range) => t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
               }}
-              components={resizableColumns.length > 0 ? resizableComponents : undefined}
-              scroll={
-                resizableColumns.length > 0
-                  ? { x: tableWidth ?? 'max-content' }
-                  : hasActionColumn
-                    ? { x: 'max-content' }
-                    : undefined
-              }
               {...(() => {
-                // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
-                // toolBarRender 已经在左侧处理了
-                // search 中的 showAdvancedSearch 会传递到DOM，导致React警告
-                const { toolBarRender, search, ...otherProps } = restProps
-                return otherProps
+                // 过滤 toolBarRender/search，合并 components/scroll 以遵守原生 ProTable 设定
+                // （固定列、scroll.y 等由 rc-table 处理，仅注入列宽拖拽的 header.cell 与 scroll.x）
+                const { toolBarRender, search, scroll: userScroll, components: userComponents, ...otherProps } = restProps
+                const mergedComponents =
+                  resizableColumns.length > 0
+                    ? {
+                        ...(userComponents || {}),
+                        header: {
+                          ...(userComponents?.header || {}),
+                          cell: resizableComponents.header.cell,
+                        },
+                      }
+                    : userComponents
+                const ourScrollX = effectiveTableWidth
+                const mergedScroll =
+                  ourScrollX != null
+                    ? { ...(userScroll || {}), x: ourScrollX }
+                    : userScroll
+                return {
+                  ...otherProps,
+                  components: mergedComponents,
+                  ...(mergedScroll != null ? { scroll: mergedScroll } : {}),
+                }
               })()}
               />
             </div>

@@ -491,7 +491,7 @@ class MaterialService:
             # 验证变体属性值
             from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
             for attr_name, attr_value in data.variant_attributes.items():
-                is_valid, error_message = await MaterialVariantAttributeService.validate_variant_attribute_value(
+                is_valid, error_message = await MaterialVariantAttributeService.validate_attribute_value(
                     tenant_id=tenant_id,
                     attribute_name=attr_name,
                     attribute_value=attr_value,
@@ -1103,7 +1103,7 @@ class MaterialService:
             # 验证变体属性值
             from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
             for attr_name, attr_value in data.variant_attributes.items():
-                is_valid, error_message = await MaterialVariantAttributeService.validate_variant_attribute_value(
+                is_valid, error_message = await MaterialVariantAttributeService.validate_attribute_value(
                     tenant_id=tenant_id,
                     attribute_name=attr_name,
                     attribute_value=attr_value,
@@ -1506,6 +1506,9 @@ class MaterialService:
                 is_alternative=item.is_alternative,
                 alternative_group_id=item.alternative_group_id,
                 priority=item.priority,
+                is_configurable=item.is_configurable,
+                configurable_group_id=item.configurable_group_id,
+                is_default_configurable=item.is_default_configurable,
                 description=data.description,
                 remark=item.remark or data.remark,
                 is_active=data.is_active,
@@ -1606,6 +1609,9 @@ class MaterialService:
                 "is_alternative": getattr(b, "is_alternative", False),
                 "alternative_group_id": b.alternative_group_id,
                 "priority": getattr(b, "priority", 0),
+                "is_configurable": getattr(b, "is_configurable", False),
+                "configurable_group_id": getattr(b, "configurable_group_id", None),
+                "is_default_configurable": getattr(b, "is_default_configurable", False),
                 "description": b.description,
                 "remark": b.remark,
                 "is_active": getattr(b, "is_active", True),
@@ -2278,16 +2284,18 @@ class MaterialService:
         # 验证子件数量是否大于0（已在Schema验证）
         # 验证损耗率（已在Schema验证）
         
-        # 步骤3：检测重复子件（同一父件下，子件编码不能重复）
-        parent_component_map = defaultdict(set)  # 父件ID -> 子件编码集合
+        # 步骤3：检测重复子件（同一父件下，非配置位时子件编码不能重复；配置位同组内可有多选项）
+        parent_component_map = defaultdict(set)  # 父件ID -> 子件ID集合（非配置位）
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
             component_id = code_to_material[item.component_code]
-            if component_id in parent_component_map[parent_id]:
+            is_cfg = getattr(item, "is_configurable", False) or False
+            if not is_cfg and component_id in parent_component_map[parent_id]:
                 raise ValidationError(
                     f"父件 {item.parent_code} 下，子件 {item.component_code} 重复"
                 )
-            parent_component_map[parent_id].add(component_id)
+            if not is_cfg:
+                parent_component_map[parent_id].add(component_id)
         
         # 步骤4：检测循环依赖
         # 构建物料依赖图
@@ -2466,6 +2474,9 @@ class MaterialService:
                 level = 1
                 path = f"{parent_id}/{component_id}"
 
+                is_cfg = getattr(item, "is_configurable", False) or False
+                cfg_group_id = getattr(item, "configurable_group_id", None)
+                is_default_cfg = getattr(item, "is_default_configurable", False) or False
                 bom = await BOM.create(
                     tenant_id=tenant_id,
                     material_id=parent_id,
@@ -2482,6 +2493,9 @@ class MaterialService:
                     description=data.description,
                     remark=item.remark,
                     is_active=True,
+                    is_configurable=is_cfg,
+                    configurable_group_id=cfg_group_id if is_cfg else None,
+                    is_default_configurable=is_default_cfg if is_cfg else False,
                 )
                 bom_list.append(bom)
         
@@ -2640,6 +2654,9 @@ class MaterialService:
                     "is_required": bom.is_required,
                     "level": level,
                     "path": current_path,
+                    "is_configurable": getattr(bom, "is_configurable", False),
+                    "configurable_group_id": getattr(bom, "configurable_group_id", None),
+                    "is_default_configurable": getattr(bom, "is_default_configurable", False),
                     "children": []
                 }
                 
@@ -2862,6 +2879,9 @@ class MaterialService:
                     is_alternative=bom.is_alternative,
                     alternative_group_id=bom.alternative_group_id,
                     priority=bom.priority,
+                    is_configurable=getattr(bom, "is_configurable", False),
+                    configurable_group_id=getattr(bom, "configurable_group_id", None),
+                    is_default_configurable=getattr(bom, "is_default_configurable", False),
                     description=data.version_description or bom.description,
                     remark=bom.remark,
                     is_active=bom.is_active,
