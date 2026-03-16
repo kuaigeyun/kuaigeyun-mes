@@ -102,6 +102,11 @@ class CodeGenerationService:
             # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
             scope_fields_raw = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
             scope_fields = [f for f in scope_fields_raw if f and str(f).strip()]
+            # 物料主编码：规则未配置 scope_fields 但 context 有 group_code 时，按分组隔离流水号
+            if not scope_fields and context and _get_context_value(context, "group_code"):
+                _rc = (rule_code or "").upper()
+                if "MATERIAL" in _rc or _rc == "MATERIAL_CODE":
+                    scope_fields = ["group_code"]
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:
@@ -232,6 +237,11 @@ class CodeGenerationService:
             # 计算 Scope Key（兼容 scope_fields 与 scopeFields，用于按字段隔离计数）
             scope_fields_raw = counter_config.get("scope_fields") or counter_config.get("scopeFields") or []
             scope_fields = [f for f in scope_fields_raw if f and str(f).strip()]
+            # 物料主编码：规则未配置 scope_fields 但 context 有 group_code 时，按分组隔离流水号
+            if not scope_fields and context and _get_context_value(context, "group_code"):
+                _rc = (rule_code or "").upper()
+                if "MATERIAL" in _rc or _rc == "MATERIAL_CODE":
+                    scope_fields = ["group_code"]
             if scope_fields and context:
                 scope_values = []
                 for field in scope_fields:

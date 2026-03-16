@@ -3368,7 +3368,7 @@ const WorkOrdersPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid
-        modalRender={modal => <div data-smart-suggestion-anchor="work-order-form">{modal}</div>}
+        modalRender={modal => <div data-smart-suggestion-anchor="work-order-form" style={{ overflow: 'hidden' }}>{modal}</div>}
       >
         <CodeField
           pageCode="kuaizhizao-production-work-order"

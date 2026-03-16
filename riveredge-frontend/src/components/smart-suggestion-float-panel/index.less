@@ -36,6 +36,7 @@
 
   .ant-card-body {
     padding: 16px 18px;
+    overflow: hidden;
   }
 }
 
@@ -59,6 +60,7 @@
 .smart-suggestion-float-panel__conversation {
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-left: 76px;
 }
 
@@ -103,6 +105,8 @@
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
+  /* 裁剪按钮 focus 轮廓，防止点击后出现滚动条 */
+  overflow: hidden;
 }
 
 @keyframes smart-suggestion-bubble-reveal {
