@@ -2620,6 +2620,8 @@ export default {
   'app.master-data.bom.childComponentListTitle': '子物料用量清单（考虑损耗率）',
   'app.master-data.bom.bomDetailTitle': 'BOM详情',
   'app.master-data.bom.batchUnapproveBtn': '批量反审核',
+  'app.master-data.bom.viewProductBom': '成品BOM',
+  'app.master-data.bom.viewAllBom': '全部BOM',
 
   // MaterialForm
   'app.master-data.materialForm.getSuggestionFailed': '获取建议失败',

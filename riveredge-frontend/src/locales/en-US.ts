@@ -2606,6 +2606,8 @@ export default {
   'app.master-data.bom.childComponentListTitle': 'Child Material List (incl. waste)',
   'app.master-data.bom.bomDetailTitle': 'BOM Detail',
   'app.master-data.bom.batchUnapproveBtn': 'Batch Unapprove',
+  'app.master-data.bom.viewProductBom': 'Product BOM',
+  'app.master-data.bom.viewAllBom': 'All BOM',
 
   // MaterialForm
   'app.master-data.materialForm.getSuggestionFailed': 'Get suggestion failed',

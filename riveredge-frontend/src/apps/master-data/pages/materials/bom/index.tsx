@@ -120,6 +120,9 @@ const BOMPage: React.FC = () => {
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
+  /** BOM 视图类型：成品BOM（仅一级）| 全部BOM，默认成品BOM */
+  const [bomViewType, setBomViewType] = useState<'product' | 'all'>('product');
+
   /** 分组行 groupKey -> 该组内所有 BOM 的 uuid，用于批量删除时解析 */
   const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
 
@@ -935,6 +938,27 @@ const BOMPage: React.FC = () => {
   };
 
   /**
+   * 成品BOM视图：仅保留一级BOM（level === 0）的子件，过滤掉无一级子件的分组
+   */
+  const filterToProductBomView = (groupRows: BOMGroupRow[]): BOMGroupRow[] => {
+    return groupRows
+      .map((row) => {
+        const level0Items = row.items.filter((i) => (i.level ?? 0) === 0);
+        if (level0Items.length === 0) return null;
+        const level0Children = level0Items.map((item, idx) => ({
+          ...item,
+          key: `${item.uuid}-child-${idx}`,
+        }));
+        return {
+          ...row,
+          items: level0Items,
+          children: level0Children,
+        };
+      })
+      .filter((r): r is BOMGroupRow => r !== null);
+  };
+
+  /**
    * 处理批量导入（UniTable导入功能）
    */
   const handleBatchImportConfirm = async (data: any[][]) => {
@@ -1613,6 +1637,18 @@ const BOMPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
+        <Tabs
+          activeKey={bomViewType}
+          onChange={(key) => {
+            setBomViewType(key as 'product' | 'all');
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          items={[
+            { key: 'product', label: t('app.master-data.bom.viewProductBom') },
+            { key: 'all', label: t('app.master-data.bom.viewAllBom') },
+          ]}
+          style={{ marginBottom: 16 }}
+        />
         <UniTable<BOMGroupRow>
         actionRef={actionRef}
         columns={groupColumns}
@@ -1645,7 +1681,10 @@ const BOMPage: React.FC = () => {
           
           try {
             const result = await bomApi.list(apiParams);
-            const { groupRows, keyToUuids } = groupBomsByCode(result);
+            let { groupRows, keyToUuids } = groupBomsByCode(result);
+            if (bomViewType === 'product') {
+              groupRows = filterToProductBomView(groupRows);
+            }
             groupKeyToUuidsRef.current = keyToUuids;
             return {
               data: groupRows,
@@ -1725,7 +1764,10 @@ const BOMPage: React.FC = () => {
               toExport = currentPageData;
             } else {
               const result = await bomApi.list({ skip: 0, limit: 10000 });
-              const { groupRows } = groupBomsByCode(result);
+              let { groupRows } = groupBomsByCode(result);
+              if (bomViewType === 'product') {
+                groupRows = filterToProductBomView(groupRows);
+              }
               toExport = groupRows;
             }
             if (toExport.length === 0) {
