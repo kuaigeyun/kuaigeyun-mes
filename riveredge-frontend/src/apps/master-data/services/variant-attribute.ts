@@ -68,4 +68,30 @@ export const variantAttributeApi = {
   validate: async (data: VariantAttributeValidationRequest): Promise<VariantAttributeValidationResponse> => {
     return api.post('/core/variant-attributes/validate', data);
   },
+
+  /**
+   * 获取预设列表（用于预览与勾选）
+   */
+  getPresetPreview: async (): Promise<PresetAttributeItem[]> => {
+    return api.get('/core/variant-attributes/preset-preview');
+  },
+
+  /**
+   * 加载属性定义预设（可仅创建选中的 attribute_names）
+   */
+  loadPreset: async (attribute_names?: string[]): Promise<{ created: number; message: string }> => {
+    return api.post('/core/variant-attributes/load-preset', attribute_names != null ? { attribute_names } : undefined);
+  },
 };
+
+/** 预设项（与后端 PRESET_ATTRIBUTE_DEFINITIONS 结构一致） */
+export interface PresetAttributeItem {
+  attribute_name: string;
+  display_name: string;
+  attribute_type: string;
+  enum_values?: string[];
+  display_order?: number;
+  is_required?: boolean;
+  allow_multiple?: boolean;
+  description?: string;
+}

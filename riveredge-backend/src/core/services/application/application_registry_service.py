@@ -261,10 +261,15 @@ class ApplicationRegistryService:
             logger.info(f"📋 处理应用: {app.get('code')}")
 
         registered_routes = []
+        # 在 main.py 中已静态注册的应用，此处跳过避免重复注册
+        statically_registered_apps = {"master-data", "kuaireport"}
 
         for app in apps:
             app_code = app['code']
             app_name = app['name']
+            if app_code in statically_registered_apps:
+                logger.info(f"⏭️ 应用 {app_code} 已在 main.py 静态注册，跳过动态注册")
+                continue
 
             try:
                 # 构建路由模块路径

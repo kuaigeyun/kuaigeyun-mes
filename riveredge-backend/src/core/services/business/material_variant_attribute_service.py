@@ -21,11 +21,108 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 class MaterialVariantAttributeService:
     """
-属性定义服务类
+    属性定义服务类
 
     提供属性定义的 CRUD 操作和版本管理。
     """
-    
+
+    # 中国中小制造业常见属性定义预设（颜色、规格、材质、等级、表面处理等）
+    PRESET_ATTRIBUTE_DEFINITIONS = [
+        {
+            "attribute_name": "颜色",
+            "display_name": "颜色",
+            "attribute_type": "enum",
+            "enum_values": ["红色", "蓝色", "白色", "黑色", "灰色", "黄色", "绿色", "银色", "其他"],
+            "display_order": 10,
+            "is_required": False,
+            "allow_multiple": False,
+            "description": "产品颜色",
+        },
+        {
+            "attribute_name": "规格",
+            "display_name": "规格",
+            "attribute_type": "enum",
+            "enum_values": ["S", "M", "L", "XL", "定制"],
+            "display_order": 20,
+            "is_required": False,
+            "allow_multiple": False,
+            "description": "规格/尺码",
+        },
+        {
+            "attribute_name": "材质",
+            "display_name": "材质",
+            "attribute_type": "enum",
+            "enum_values": ["不锈钢", "碳钢", "塑料", "铝合金", "铜", "铸铁", "其他"],
+            "display_order": 30,
+            "is_required": False,
+            "allow_multiple": False,
+            "description": "原材料材质",
+        },
+        {
+            "attribute_name": "等级",
+            "display_name": "等级",
+            "attribute_type": "enum",
+            "enum_values": ["一级品", "二级品", "合格品", "等外品"],
+            "display_order": 40,
+            "is_required": False,
+            "allow_multiple": False,
+            "description": "质量等级",
+        },
+        {
+            "attribute_name": "表面处理",
+            "display_name": "表面处理",
+            "attribute_type": "enum",
+            "enum_values": ["镀锌", "喷塑", "阳极氧化", "电泳", "无"],
+            "display_order": 50,
+            "is_required": False,
+            "allow_multiple": False,
+            "description": "表面处理工艺",
+        },
+    ]
+
+    @staticmethod
+    async def load_preset_sme(
+        tenant_id: int,
+        created_by: Optional[int] = None,
+        attribute_names: Optional[List[str]] = None,
+    ) -> int:
+        """
+        加载中国中小制造业常见属性定义预设。
+        仅创建不存在的属性（按 attribute_name 去重）。
+        attribute_names: 若指定则只创建这些属性名称的预设，否则创建全部。
+        """
+        items = MaterialVariantAttributeService.PRESET_ATTRIBUTE_DEFINITIONS
+        if attribute_names is not None:
+            names_set = set(attribute_names)
+            items = [x for x in items if x["attribute_name"] in names_set]
+        created = 0
+        for item in items:
+            exists = await MaterialVariantAttributeDefinition.filter(
+                tenant_id=tenant_id,
+                attribute_name=item["attribute_name"],
+                deleted_at__isnull=True,
+            ).exists()
+            if not exists:
+                try:
+                    await MaterialVariantAttributeDefinition.create(
+                        tenant_id=tenant_id,
+                        attribute_name=item["attribute_name"],
+                        display_name=item["display_name"],
+                        attribute_type=item["attribute_type"],
+                        enum_values=item.get("enum_values"),
+                        display_order=item.get("display_order", 0),
+                        is_required=item.get("is_required", False),
+                        allow_multiple=item.get("allow_multiple", False),
+                        description=item.get("description"),
+                        is_active=True,
+                        version=1,
+                        created_by=created_by,
+                    )
+                    created += 1
+                except IntegrityError:
+                    pass
+        return created
+
     @staticmethod
     async def create_attribute_definition(
         tenant_id: int,

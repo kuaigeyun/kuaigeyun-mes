@@ -4,8 +4,9 @@
 提供仓库数据的 RESTful API 接口（仓库、库区、库位），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from typing import List, Optional, Annotated
+from pydantic import BaseModel, Field
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
@@ -72,16 +73,32 @@ async def list_warehouses(
         )
 
 
-@router.post("/warehouses/load-preset", summary="加载仓库预设")
-async def load_preset_warehouses(
+class LoadWarehousePresetRequest(BaseModel):
+    """加载仓库预设请求：可指定只创建选中的预设名称"""
+    names: Optional[List[str]] = Field(None, description="要创建的预设仓库名称列表，不传则创建全部")
+
+
+@router.get("/warehouses/preset-preview", summary="获取仓库预设预览")
+async def get_warehouse_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
+    """返回预设仓库列表，用于预览与勾选后再确认创建。"""
+    return list(WarehouseService.PRESET_WAREHOUSES)
+
+
+@router.post("/warehouses/load-preset", summary="加载仓库预设")
+async def load_preset_warehouses(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    body: Optional[LoadWarehousePresetRequest] = Body(None),
+):
     """
     加载中国中小制造业常见仓库预设数据（原料仓、成品仓、半成品仓、不良品仓）。
-    仅创建不存在的仓库（按 code 去重）。
+    请求体可传 names 数组，只创建选中的预设项；不传则创建全部。
     """
-    count = await WarehouseService.load_preset_sme(tenant_id)
+    names = body.names if body else None
+    count = await WarehouseService.load_preset_sme(tenant_id, names=names)
     return {"created": count, "message": f"已加载 {count} 个仓库"}
 
 

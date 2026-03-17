@@ -60,12 +60,19 @@ export const warehouseApi = {
   },
 
   /**
-   * 加载仓库预设（原料仓、成品仓、半成品仓、不良品仓）
+   * 获取仓库预设列表（用于预览与勾选）
    */
-  loadPreset: async (): Promise<{ created: number; message: string }> => {
-    return apiRequest<{ created: number; message: string }>(
+  getPresetPreview: async (): Promise<PresetWarehouseItem[]> => {
+    return api.get('/apps/master-data/warehouse/warehouses/preset-preview');
+  },
+
+  /**
+   * 加载仓库预设（可仅创建选中的 names）
+   */
+  loadPreset: async (names?: string[]): Promise<{ created: number; message: string }> => {
+    return api.post(
       '/apps/master-data/warehouse/warehouses/load-preset',
-      { method: 'POST' }
+      names != null ? { names } : undefined
     );
   },
 
@@ -216,4 +223,11 @@ export const storageLocationApi = {
     });
   },
 };
+
+/** 仓库预设项（与后端 PRESET_WAREHOUSES 结构一致） */
+export interface PresetWarehouseItem {
+  name: string;
+  description?: string;
+  warehouse_type?: string;
+}
 

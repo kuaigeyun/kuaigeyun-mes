@@ -720,7 +720,14 @@ app.include_router(performance_router, prefix="/api/v1/core")
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
-# kuaireport 静态注册，确保报表/大屏 API 始终可用（动态注册可能因应用未安装而失败）
+# 以下应用静态注册，确保 API 始终可用（动态注册可能因应用未安装或 DB 未就绪而失败）
+# master-data：基础数据（仓库、物料、工序、工厂等）
+try:
+    from apps.master_data.api.router import router as master_data_router
+    app.include_router(master_data_router, prefix="/api/v1/apps/master-data")
+except ImportError as e:
+    logger.warning(f"⚠️ 无法加载 master-data 路由: {e}")
+# kuaireport：报表/大屏
 try:
     from apps.kuaireport.api.router import router as kuaireport_router
     app.include_router(kuaireport_router, prefix="/api/v1/apps/kuaireport")

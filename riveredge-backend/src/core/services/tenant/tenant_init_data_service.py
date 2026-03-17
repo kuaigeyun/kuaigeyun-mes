@@ -18,7 +18,7 @@ class TenantInitDataService:
     集中管理所有初始化项，支持必选/可选执行。
     """
 
-    # 必选初始化项（系统运行必需，100% 加载）
+    # 必选初始化项（系统级默认加载，新建组织时 100% 执行）
     INIT_ITEMS_REQUIRED: List[Dict[str, Any]] = [
         {
             "key": "data_dictionary",
@@ -40,17 +40,21 @@ class TenantInitDataService:
             "name": "系统参数",
             "description": "系统名称、时区、货币等参数（必选）",
         },
-    ]
-
-    # 可选初始化项（业务预设）
-    INIT_ITEMS_OPTIONAL: List[Dict[str, Any]] = [
         {"key": "code_rule", "name": "编码规则", "description": "工单、物料、销售单等编码规则"},
-        {"key": "department_preset", "name": "部门预设", "description": "中国中小制造业极简部门结构"},
-        {"key": "position_preset", "name": "职位预设", "description": "总经理、生产经理等常用职位"},
-        {"key": "role_preset", "name": "角色预设", "description": "部门经理、普通员工等常用角色"},
         {"key": "approval_process_preset", "name": "审批流程预设", "description": "采购单、销售单等审批流程"},
         {"key": "message_template_preset", "name": "消息模板预设", "description": "审批通知、验证码等消息模板"},
         {"key": "print_template_preset", "name": "打印模板预设", "description": "通用标签、收据等打印模板"},
+    ]
+
+    # 可选初始化项（业务预设，新建组织时由用户勾选是否加载）
+    INIT_ITEMS_OPTIONAL: List[Dict[str, Any]] = [
+        {"key": "department_preset", "name": "部门预设", "description": "中国中小制造业极简部门结构"},
+        {"key": "position_preset", "name": "职位预设", "description": "总经理、生产经理等常用职位"},
+        {"key": "role_preset", "name": "角色预设", "description": "部门经理、普通员工等常用角色"},
+        {"key": "warehouse_preset", "name": "仓库预设", "description": "原料仓、成品仓、半成品仓、不良品仓等"},
+        {"key": "operation_preset", "name": "工序预设", "description": "下料、组装、检验、包装等常见工序"},
+        {"key": "defect_type_preset", "name": "不良品项预设", "description": "尺寸不良、外观不良、功能不良等"},
+        {"key": "variant_attribute_preset", "name": "属性定义预设", "description": "颜色、规格、材质、等级、表面处理等"},
     ]
 
     @classmethod
@@ -195,5 +199,23 @@ class TenantInitDataService:
         if key == "print_template_preset":
             from core.services.print.print_template_service import PrintTemplateService
             return await PrintTemplateService.load_preset_sme(tenant_id)
+
+        if key == "warehouse_preset":
+            from apps.master_data.services.warehouse_service import WarehouseService
+            return await WarehouseService.load_preset_sme(tenant_id)
+
+        if key == "operation_preset":
+            from apps.master_data.services.process_service import ProcessService
+            return await ProcessService.load_preset_operations_sme(tenant_id)
+
+        if key == "defect_type_preset":
+            from apps.master_data.services.process_service import ProcessService
+            return await ProcessService.load_preset_defect_types_sme(tenant_id)
+
+        if key == "variant_attribute_preset":
+            from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
+            return await MaterialVariantAttributeService.load_preset_sme(
+                tenant_id, created_by=current_user_id
+            )
 
         raise ValueError(f"未知的初始化项: {key}")

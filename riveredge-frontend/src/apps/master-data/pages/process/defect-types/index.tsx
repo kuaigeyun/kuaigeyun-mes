@@ -7,14 +7,14 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { DefectTypeFormModal } from '../../../components/DefectTypeFormModal';
-import { defectTypeApi } from '../../../services/process';
+import { defectTypeApi, type PresetDefectTypeItem } from '../../../services/process';
 import type { DefectType, DefectTypeCreate } from '../../../types/process';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode } from '../../../../../services/codeRule';
@@ -40,6 +40,10 @@ const DefectTypesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetDefectTypeItem[]>([]);
+  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -493,9 +497,10 @@ const DefectTypesPage: React.FC = () => {
             onClick={async () => {
               try {
                 setLoadPresetLoading(true);
-                const res = await defectTypeApi.loadPreset();
-                messageApi.success(res.message);
-                actionRef.current?.reload();
+                const list = await defectTypeApi.getPresetPreview();
+                setPresetList(list);
+                setSelectedPresetCodes(list.map((x) => x.code));
+                setPresetModalVisible(true);
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {
@@ -568,6 +573,57 @@ const DefectTypesPage: React.FC = () => {
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
       />
+
+      <Modal
+        title={t('field.defectType.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetCodes.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await defectTypeApi.loadPreset(selectedPresetCodes);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetDefectTypeItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetCodes,
+            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
+          }}
+          columns={[
+            { title: '不良品编码', dataIndex: 'code', width: 120 },
+            { title: '不良品名称', dataIndex: 'name', width: 140 },
+            { title: '分类', dataIndex: 'category', ellipsis: true },
+          ]}
+        />
+      </Modal>
     </ListPageTemplate>
   );
 };

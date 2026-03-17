@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Tag, Space, Button, Popconfirm, Modal } from 'antd';
+import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -17,7 +17,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import type { VariantAttributeDefinition } from '../../../types/variant-attribute';
-import { variantAttributeApi } from '../../../services/variant-attribute';
+import { variantAttributeApi, type PresetAttributeItem } from '../../../services/variant-attribute';
 
 const VariantAttributesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -31,6 +31,11 @@ const VariantAttributesPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [historyUuid, setHistoryUuid] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetAttributeItem[]>([]);
+  const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   /**
    * 获取属性类型选项
@@ -310,11 +315,11 @@ const VariantAttributesPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 处理枚举值（如果是数组，转换为数组；如果是字符串，按逗号分割）
+      // 处理枚举值（如果是数组，转换为数组；如果是字符串，按中英文逗号分割）
       let enumValues = values.enum_values;
       if (values.attribute_type === 'enum') {
         if (typeof enumValues === 'string') {
-          enumValues = enumValues.split(',').map((v: string) => v.trim()).filter((v: string) => v);
+          enumValues = enumValues.split(/[,，]/).map((v: string) => v.trim()).filter((v: string) => v);
         }
         if (!Array.isArray(enumValues) || enumValues.length === 0) {
           messageApi.error(t('app.master-data.variantAttributes.enumValuesRequired'));
@@ -387,6 +392,25 @@ const VariantAttributesPage: React.FC = () => {
                 onClick={handleCreate}
               >
                 {'新建属性定义' + NEW_SHORTCUT_HINT}
+              </Button>
+              <Button
+                key="loadPreset"
+                loading={loadPresetLoading}
+                onClick={async () => {
+                  try {
+                    setLoadPresetLoading(true);
+                    const list = await variantAttributeApi.getPresetPreview();
+                    setPresetList(list);
+                    setSelectedPresetNames(list.map((x) => x.attribute_name));
+                    setPresetModalVisible(true);
+                  } catch (e: any) {
+                    messageApi.error(e?.message || t('common.operationFailed'));
+                  } finally {
+                    setLoadPresetLoading(false);
+                  }
+                }}
+              >
+                {t('app.master-data.variantAttributes.loadPreset')}
               </Button>
               <Button
                 danger
@@ -470,7 +494,7 @@ const VariantAttributesPage: React.FC = () => {
                     label="枚举值"
                     placeholder="请输入枚举值，多个值用逗号分隔（如：红色,蓝色,绿色）"
                     rules={[{ required: true, message: '请输入枚举值' }]}
-                    extra="多个值用逗号分隔"
+                    extra="多个值用逗号分隔，中英文逗号均可"
                     colProps={{ span: 24 }}
                   />
                   <ProFormSwitch
@@ -506,6 +530,73 @@ const VariantAttributesPage: React.FC = () => {
         />
       </FormModalTemplate>
 
+      {/* 加载预设预览 Modal：可去掉不要的预设项后再确认 */}
+      <Modal
+        title={t('app.master-data.variantAttributes.loadPresetModalTitle')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={640}
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetNames.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await variantAttributeApi.loadPreset(selectedPresetNames);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.variantAttributes.loadPresetModalDesc')}
+        </p>
+        <Table<PresetAttributeItem>
+          size="small"
+          rowKey="attribute_name"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 320 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetNames,
+            onChange: (keys) => setSelectedPresetNames(keys as string[]),
+          }}
+          columns={[
+            { title: t('app.master-data.variantAttributes.presetColName'), dataIndex: 'attribute_name', width: 100 },
+            { title: t('app.master-data.variantAttributes.presetColDisplayName'), dataIndex: 'display_name', width: 100 },
+            {
+              title: t('app.master-data.variantAttributes.presetColType'),
+              dataIndex: 'attribute_type',
+              width: 80,
+              render: (type: string) => (
+                <Tag color="blue">{attributeTypeOptions.find((o) => o.value === type)?.label ?? type}</Tag>
+              ),
+            },
+            {
+              title: t('app.master-data.variantAttributes.presetColEnumValues'),
+              dataIndex: 'enum_values',
+              ellipsis: true,
+              render: (vals: string[] | undefined) =>
+                Array.isArray(vals) ? vals.join('、') : '—',
+            },
+          ]}
+        />
+      </Modal>
 
       {/* 版本历史 Drawer - 待实现 */}
       {historyDrawerVisible && historyUuid && (

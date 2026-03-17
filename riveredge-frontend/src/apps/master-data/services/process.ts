@@ -70,12 +70,19 @@ export const defectTypeApi = {
   },
 
   /**
-   * 加载不良品项预设
+   * 获取不良品项预设列表（用于预览与勾选）
    */
-  loadPreset: async (): Promise<{ created: number; message: string }> => {
-    return apiRequest<{ created: number; message: string }>(
+  getPresetPreview: async (): Promise<PresetDefectTypeItem[]> => {
+    return api.get('/apps/master-data/process/defect-types/preset-preview');
+  },
+
+  /**
+   * 加载不良品项预设（可仅创建选中的 codes）
+   */
+  loadPreset: async (codes?: string[]): Promise<{ created: number; message: string }> => {
+    return api.post(
       '/apps/master-data/process/defect-types/load-preset',
-      { method: 'POST' }
+      codes != null ? { codes } : undefined
     );
   },
 
@@ -132,12 +139,19 @@ export const operationApi = {
   },
 
   /**
-   * 加载工序预设
+   * 获取工序预设列表（用于预览与勾选）
    */
-  loadPreset: async (): Promise<{ created: number; message: string }> => {
-    return apiRequest<{ created: number; message: string }>(
+  getPresetPreview: async (): Promise<PresetOperationItem[]> => {
+    return api.get('/apps/master-data/process/operations/preset-preview');
+  },
+
+  /**
+   * 加载工序预设（可仅创建选中的 codes）
+   */
+  loadPreset: async (codes?: string[]): Promise<{ created: number; message: string }> => {
+    return api.post(
       '/apps/master-data/process/operations/load-preset',
-      { method: 'POST' }
+      codes != null ? { codes } : undefined
     );
   },
 
@@ -470,4 +484,18 @@ export const sopExecutionApi = {
     return api.post(`/apps/master-data/process/sop-executions/${uuid}/complete-node`, data);
   },
 };
+
+/** 不良品项预设（与后端 PRESET_DEFECT_TYPES 结构一致） */
+export interface PresetDefectTypeItem {
+  code: string;
+  name: string;
+  category?: string;
+}
+
+/** 工序预设（与后端 PRESET_OPERATIONS 结构一致） */
+export interface PresetOperationItem {
+  code: string;
+  name: string;
+  sort_order?: number;
+}
 

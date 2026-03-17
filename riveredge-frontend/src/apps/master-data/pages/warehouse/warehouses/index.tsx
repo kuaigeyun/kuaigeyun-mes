@@ -7,14 +7,14 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Table } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { warehouseApi } from '../../../services/warehouse';
+import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
 import { workshopApi, workCenterApi } from '../../../services/factory';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -40,6 +40,10 @@ const WarehousesPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
   const [syncLineSideLoading, setSyncLineSideLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetWarehouseItem[]>([]);
+  const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -769,9 +773,10 @@ const WarehousesPage: React.FC = () => {
             onClick={async () => {
               try {
                 setLoadPresetLoading(true);
-                const res = await warehouseApi.loadPreset();
-                messageApi.success(res.message);
-                actionRef.current?.reload();
+                const list = await warehouseApi.getPresetPreview();
+                setPresetList(list);
+                setSelectedPresetNames(list.map((x) => x.name));
+                setPresetModalVisible(true);
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {
@@ -843,6 +848,58 @@ const WarehousesPage: React.FC = () => {
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
       />
+
+      {/* 加载预设预览 Modal：可勾选子项后确认 */}
+      <Modal
+        title={t('field.warehouse.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetNames.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await warehouseApi.loadPreset(selectedPresetNames);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetWarehouseItem>
+          size="small"
+          rowKey="name"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetNames,
+            onChange: (keys) => setSelectedPresetNames(keys as string[]),
+          }}
+          columns={[
+            { title: t('app.master-data.warehouses.name'), dataIndex: 'name', width: 120 },
+            { title: t('app.master-data.warehouses.description'), dataIndex: 'description', ellipsis: true },
+            { title: t('field.warehouse.warehouseType'), dataIndex: 'warehouse_type', width: 100 },
+          ]}
+        />
+      </Modal>
     </>
   );
 };

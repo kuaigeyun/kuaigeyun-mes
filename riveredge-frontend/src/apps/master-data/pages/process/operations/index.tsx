@@ -7,7 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Card, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Card, Modal, Table } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -15,7 +15,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { OperationFormModal } from '../../../components/OperationFormModal';
-import { operationApi, defectTypeApi } from '../../../services/process';
+import { operationApi, defectTypeApi, type PresetOperationItem } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { qrcodeApi } from '../../../../../services/qrcode';
@@ -40,6 +40,10 @@ const OperationsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetOperationItem[]>([]);
+  const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   useEffect(() => {
     const operationUuid = searchParams.get('operationUuid');
@@ -551,9 +555,10 @@ const OperationsPage: React.FC = () => {
             onClick={async () => {
               try {
                 setLoadPresetLoading(true);
-                const res = await operationApi.loadPreset();
-                messageApi.success(res.message);
-                actionRef.current?.reload();
+                const list = await operationApi.getPresetPreview();
+                setPresetList(list);
+                setSelectedPresetCodes(list.map((x) => x.code));
+                setPresetModalVisible(true);
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {
@@ -699,6 +704,57 @@ const OperationsPage: React.FC = () => {
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
       />
+
+      <Modal
+        title={t('field.operation.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        footer={[
+          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetCodes.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await operationApi.loadPreset(selectedPresetCodes);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetOperationItem>
+          size="small"
+          rowKey="code"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetCodes,
+            onChange: (keys) => setSelectedPresetCodes(keys as string[]),
+          }}
+          columns={[
+            { title: '工序编码', dataIndex: 'code', width: 120 },
+            { title: '工序名称', dataIndex: 'name', width: 140 },
+            { title: '排序', dataIndex: 'sort_order', width: 80 },
+          ]}
+        />
+      </Modal>
     </ListPageTemplate>
   );
 };

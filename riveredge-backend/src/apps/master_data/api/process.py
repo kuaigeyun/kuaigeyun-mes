@@ -4,7 +4,7 @@
 提供工艺数据的 RESTful API 接口（不良品、工序、工艺路线、作业程序），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from typing import List, Optional, Annotated
 from pydantic import BaseModel, Field
 
@@ -98,16 +98,31 @@ async def batch_resolve_or_create_defect_types(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/defect-types/load-preset", summary="加载不良品项预设")
-async def load_preset_defect_types(
+class LoadDefectTypePresetRequest(BaseModel):
+    """加载不良品项预设请求：可指定只创建选中的 code 列表"""
+    codes: Optional[List[str]] = Field(None, description="要创建的预设不良品项 code 列表，不传则创建全部")
+
+
+@router.get("/defect-types/preset-preview", summary="获取不良品项预设预览")
+async def get_defect_type_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
+    """返回预设不良品项列表，用于预览与勾选后再确认创建。"""
+    return list(ProcessService.PRESET_DEFECT_TYPES)
+
+
+@router.post("/defect-types/load-preset", summary="加载不良品项预设")
+async def load_preset_defect_types(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    body: Optional[LoadDefectTypePresetRequest] = Body(None),
+):
     """
-    加载中国中小制造业常见不良品项预设数据（尺寸不良、外观不良、功能不良等）。
-    仅创建不存在的不良品项（按 code 去重）。
+    加载中国中小制造业常见不良品项预设数据。请求体可传 codes 数组，只创建选中的预设项；不传则创建全部。
     """
-    count = await ProcessService.load_preset_defect_types_sme(tenant_id)
+    codes = body.codes if body else None
+    count = await ProcessService.load_preset_defect_types_sme(tenant_id, codes=codes)
     return {"created": count, "message": f"已加载 {count} 个不良品项"}
 
 
@@ -219,16 +234,31 @@ async def list_operations(
         )
 
 
-@router.post("/operations/load-preset", summary="加载工序预设")
-async def load_preset_operations(
+class LoadOperationPresetRequest(BaseModel):
+    """加载工序预设请求：可指定只创建选中的 code 列表"""
+    codes: Optional[List[str]] = Field(None, description="要创建的预设工序 code 列表，不传则创建全部")
+
+
+@router.get("/operations/preset-preview", summary="获取工序预设预览")
+async def get_operation_preset_preview(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
+    """返回预设工序列表，用于预览与勾选后再确认创建。"""
+    return list(ProcessService.PRESET_OPERATIONS)
+
+
+@router.post("/operations/load-preset", summary="加载工序预设")
+async def load_preset_operations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    body: Optional[LoadOperationPresetRequest] = Body(None),
+):
     """
-    加载中国中小制造业常见工序预设数据（下料、组装、检验、包装）。
-    仅创建不存在的工序（按 code 去重）。
+    加载中国中小制造业常见工序预设数据。请求体可传 codes 数组，只创建选中的预设项；不传则创建全部。
     """
-    count = await ProcessService.load_preset_operations_sme(tenant_id)
+    codes = body.codes if body else None
+    count = await ProcessService.load_preset_operations_sme(tenant_id, codes=codes)
     return {"created": count, "message": f"已加载 {count} 个工序"}
 
 

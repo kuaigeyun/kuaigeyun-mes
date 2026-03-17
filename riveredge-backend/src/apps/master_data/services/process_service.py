@@ -486,13 +486,17 @@ class ProcessService:
     ]
 
     @staticmethod
-    async def load_preset_defect_types_sme(tenant_id: int) -> int:
+    async def load_preset_defect_types_sme(tenant_id: int, codes: Optional[List[str]] = None) -> int:
         """
         加载中国中小制造业常见不良品项预设数据。
-        仅创建不存在的不良品项（按 code 去重）。
+        仅创建不存在的不良品项（按 code 去重）。codes 若指定则只创建这些 code 的预设。
         """
+        items = ProcessService.PRESET_DEFECT_TYPES
+        if codes is not None:
+            codes_set = set(codes)
+            items = [x for x in items if x["code"] in codes_set]
         created = 0
-        for item in ProcessService.PRESET_DEFECT_TYPES:
+        for item in items:
             exists = await DefectType.filter(
                 tenant_id=tenant_id,
                 code=item["code"],
@@ -818,13 +822,17 @@ class ProcessService:
     ]
 
     @staticmethod
-    async def load_preset_operations_sme(tenant_id: int) -> int:
+    async def load_preset_operations_sme(tenant_id: int, codes: Optional[List[str]] = None) -> int:
         """
         加载中国中小制造业常见工序预设数据。
-        仅创建不存在的工序（按 code 去重）。默认按数量报工，不允许跳转。
+        仅创建不存在的工序（按 code 去重）。codes 若指定则只创建这些 code 的预设。
         """
+        items = ProcessService.PRESET_OPERATIONS
+        if codes is not None:
+            codes_set = set(codes)
+            items = [x for x in items if x["code"] in codes_set]
         created = 0
-        for item in ProcessService.PRESET_OPERATIONS:
+        for item in items:
             exists = await Operation.filter(
                 tenant_id=tenant_id,
                 code=item["code"],

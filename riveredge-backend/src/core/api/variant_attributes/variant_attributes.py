@@ -9,6 +9,7 @@ Date: 2026-01-08
 
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Body
+from pydantic import BaseModel, Field
 
 from core.schemas.material_variant_attribute import (
     MaterialVariantAttributeDefinitionCreate,
@@ -23,6 +24,40 @@ from core.api.deps.deps import get_current_tenant, get_current_user_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/variant-attributes", tags=["Variant Attributes"])
+
+
+# ==================== 预设 ====================
+
+
+class LoadPresetRequest(BaseModel):
+    """加载预设请求：可指定只创建选中的属性名称"""
+    attribute_names: Optional[List[str]] = Field(None, description="要创建的预设属性名称列表，不传则创建全部")
+
+
+@router.get("/preset-preview", summary="获取属性定义预设预览")
+async def get_preset_preview():
+    """
+    返回预设属性定义列表，用于预览与勾选后再确认创建。
+    """
+    return list(MaterialVariantAttributeService.PRESET_ATTRIBUTE_DEFINITIONS)
+
+
+@router.post("/load-preset", summary="加载属性定义预设")
+async def load_preset_attribute_definitions(
+    body: Optional[LoadPresetRequest] = Body(None),
+    tenant_id: int = Depends(get_current_tenant),
+    user_id: Optional[int] = Depends(get_current_user_id),
+):
+    """
+    加载中国中小制造业常见属性定义预设（颜色、规格、材质、等级、表面处理等）。
+    仅创建不存在的属性（按 attribute_name 去重）。
+    请求体可传 attribute_names 数组，只创建选中的预设项；不传则创建全部。
+    """
+    attribute_names = body.attribute_names if body else None
+    count = await MaterialVariantAttributeService.load_preset_sme(
+        tenant_id=tenant_id, created_by=user_id, attribute_names=attribute_names
+    )
+    return {"created": count, "message": f"已加载 {count} 个属性定义"}
 
 
 # ==================== 属性定义 CRUD ====================
