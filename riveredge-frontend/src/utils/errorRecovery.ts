@@ -41,18 +41,25 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   retryDelay: 1000,
   exponentialBackoff: true,
   shouldRetry: (error: any) => {
-    // 网络错误或服务器错误（502, 503, 504）可以重试
-    const isNetworkError = error?.message?.includes('fetch') || 
-                          error?.message?.includes('NetworkError') ||
-                          error?.message?.includes('Failed to fetch');
-    const isServerError = [502, 503, 504].includes(error?.response?.status);
-    
     // 401 和 400 错误不重试
     if ([401, 400].includes(error?.response?.status)) {
       return false;
     }
-    
-    return isNetworkError || isServerError;
+    // 服务器错误（502, 503, 504）可重试
+    const isServerError = [502, 503, 504].includes(error?.response?.status);
+    if (isServerError) return true;
+    // 网络/连接类错误可重试（含连接重置、超时等）
+    const msg = (error?.message || error?.originalError?.message || '').toLowerCase();
+    const isNetworkError =
+      msg.includes('fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('failed to fetch') ||
+      msg.includes('connection reset') ||
+      msg.includes('econnreset') ||
+      msg.includes('err_connection_reset') ||
+      msg.includes('network request failed') ||
+      msg.includes('load failed');
+    return isNetworkError;
   },
 };
 

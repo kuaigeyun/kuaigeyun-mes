@@ -30,6 +30,24 @@
             </div>
         </div>
     </div>
+    <!-- 首屏加载超时提示：网络不稳定或连接重置时，提示用户重试 -->
+    <script>
+      (function(){
+        var timeout = 15000;
+        var t = setTimeout(function(){
+          var root = document.getElementById('root');
+          var loading = document.getElementById('app-loading');
+          if (loading && loading.offsetParent !== null && root && !document.getElementById('app-load-timeout')) {
+            var wrap = document.createElement('div');
+            wrap.id = 'app-load-timeout';
+            wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
+            wrap.innerHTML = '<div style="text-align:center;color:#666;"><p style="margin-bottom:12px;">加载时间较长，可能是网络不稳定</p><p><a href="javascript:location.reload()" style="color:#1890ff;">点击重试</a></p></div>';
+            document.body.appendChild(wrap);
+          }
+        }, timeout);
+        document.addEventListener('DOMContentLoaded', function(){ if (document.getElementById('root').children.length > 1) clearTimeout(t); });
+      })();
+    </script>
     <style>
       html,body{margin:0;padding:0;height:100%;box-sizing:border-box}
       *{box-sizing:border-box}

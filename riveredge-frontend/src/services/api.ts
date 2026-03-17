@@ -7,7 +7,7 @@
 // 使用 Fetch API 进行 HTTP 请求
 import { clearAuth, getToken } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
-import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
+import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 
 /**
  * API 基础 URL
@@ -264,7 +264,7 @@ export async function apiRequest<T = any>(
   }
 
   // 合并其他选项（但排除 data、body 和 headers，因为已经处理过了）
-  const { data, body, headers: userHeaders, ...otherOptions } = options || {};
+  const { data: _optionsData, body: _optionsBody, headers: userHeaders, ...otherOptions } = options || {};
   
   // ⚠️ 关键修复：确保 headers 不被覆盖
   // Object.assign 会覆盖 headers，所以我们需要在最后再次设置 headers
@@ -280,19 +280,31 @@ export async function apiRequest<T = any>(
     incrementPendingRequests();
   }
 
+  let response: Response;
+  let data: any;
+
   try {
-    const response = await fetch(requestUrl, fetchOptions);
+    // 连接重置/不稳定时自动重试，减少「多刷新几次才能出来」的现象
+    const result = await withRetry(
+      async () => {
+        const res = await fetch(requestUrl, fetchOptions);
+        const text = await res.text();
+        const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
+        return { res, data: parsed };
+      },
+      { maxRetries: 2, retryDelay: 800 }
+    );
+    response = result.res;
+    data = result.data;
+  } catch (fetchError: any) {
+    if (!isPublicEndpoint) decrementPendingRequests();
+    handleNetworkError(fetchError?.originalError || fetchError);
+    const err = new Error(fetchError?.message || '网络连接失败') as any;
+    err.originalError = fetchError;
+    throw err;
+  }
 
-    // 读取响应体（无论成功还是失败都需要读取）
-    let data: any;
-    try {
-      const text = await response.text();
-      data = text ? JSON.parse(text) : null;
-    } catch (e) {
-      // 如果响应体不是 JSON，则使用空对象
-      data = null;
-    }
-
+  try {
     // 检查响应状态
     if (!response.ok) {
       // 处理网络错误
