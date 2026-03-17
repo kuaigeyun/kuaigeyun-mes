@@ -13,6 +13,9 @@ export interface MindMapNode {
   isConfigurable?: boolean;
   configurableGroupId?: number | null;
   isDefaultConfigurable?: boolean;
+  isAlternative?: boolean;
+  alternativeGroupId?: number | null;
+  priority?: number;
   children?: MindMapNode[];
   [key: string]: any;
 }
@@ -124,7 +127,8 @@ export const handleAddChildNode = (
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
   nodeConfigForm: any,
   materialNotSelectedLabel: string = '未选择物料',
-  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean }
+  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean },
+  alternativeOverrides?: { isAlternative: boolean; alternativeGroupId: number; priority: number }
 ) => {
   if (!mindMapDataRef.current) return;
 
@@ -135,7 +139,10 @@ export const handleAddChildNode = (
     unit: '',
     wasteRate: 0,
     isRequired: true,
+    isAlternative: false,
+    alternativeGroupId: null,
     ...(configurableOverrides || {}),
+    ...(alternativeOverrides || {}),
   };
 
   const updated = updateNode(mindMapDataRef.current, parentNodeId, (node) => {
@@ -197,7 +204,8 @@ export const handleAddSiblingNode = (
   selectedIdInGraphRef: React.MutableRefObject<string | null>,
   nodeConfigForm: any,
   materialNotSelectedLabel: string = '未选择物料',
-  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean }
+  configurableOverrides?: { isConfigurable: boolean; configurableGroupId: number; isDefaultConfigurable: boolean },
+  alternativeOverrides?: { isAlternative: boolean; alternativeGroupId: number; priority: number }
 ) => {
   if (!mindMapDataRef.current) return;
 
@@ -212,7 +220,8 @@ export const handleAddSiblingNode = (
       selectedIdInGraphRef,
       nodeConfigForm,
       materialNotSelectedLabel,
-      configurableOverrides
+      configurableOverrides,
+      alternativeOverrides
     );
     return;
   }
@@ -226,7 +235,8 @@ export const handleAddSiblingNode = (
     selectedIdInGraphRef,
     nodeConfigForm,
     materialNotSelectedLabel,
-    configurableOverrides
+    configurableOverrides,
+    alternativeOverrides
   );
 };
 
@@ -277,7 +287,9 @@ export const handleNodeSelect = (
         isRequired: node.isRequired !== false,
         isConfigurable: node.isConfigurable ?? false,
         configurableGroupId: node.configurableGroupId ?? null,
-        isDefaultConfigurable: node.isDefaultConfigurable ?? false,
+        isDefaultConfigurable: false,
+        isAlternative: node.isAlternative ?? false,
+        alternativeGroupId: node.alternativeGroupId ?? null,
       });
     }
   }

@@ -390,7 +390,7 @@
                     "field_name": "source_type",
                     "field_label": "物料来源类型",
                     "field_type": "string",
-                    "description": "物料来源类型（Make/Buy/Outsource/Phantom/Configure）"
+                    "description": "物料来源类型（Make/Buy/Outsource/Phantom）"
                 },
                 {
                     "field_name": "name",

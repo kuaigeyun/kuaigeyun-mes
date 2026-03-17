@@ -100,7 +100,7 @@ export interface Material {
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
   codeAliases?: MaterialCodeAlias[]; // 编码别名列表
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   source_type?: string; // 物料来源类型（向后兼容）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   source_config?: Record<string, any>; // 物料来源相关配置（向后兼容）
@@ -217,7 +217,7 @@ export interface MaterialCreate {
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
 
@@ -246,7 +246,7 @@ export interface MaterialUpdate {
   // 默认值设置
   defaults?: MaterialDefaults;
   // 物料来源控制
-  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
 
@@ -258,7 +258,7 @@ export interface MaterialListParams {
   keyword?: string;
   code?: string;
   name?: string;
-  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/Configure）
+  sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom）
 }
 
 /**
@@ -287,6 +287,10 @@ export interface BOM {
   // 有效期管理
   effectiveDate?: string;
   expiryDate?: string;
+  // 失效标记（人为设为失效）
+  isObsolete?: boolean;
+  obsoletedAt?: string;
+  obsoleteReason?: string;
   // 审核管理
   approvalStatus: 'draft' | 'pending' | 'approved' | 'rejected';
   approvedBy?: number;
@@ -296,6 +300,10 @@ export interface BOM {
   isAlternative: boolean;
   alternativeGroupId?: number;
   priority: number;
+  // 配置件（配置位）
+  isConfigurable?: boolean;
+  configurableGroupId?: number | null;
+  isDefaultConfigurable?: boolean;
   // 扩展信息
   description?: string;
   remark?: string;
@@ -347,6 +355,19 @@ export interface BOMListParams {
   limit?: number;
   materialId?: number;
   isActive?: boolean;
+  /** 是否包含已失效的 BOM 版本 */
+  includeObsolete?: boolean;
+}
+
+/** BOM 分组摘要（按 material_id + version，用于列表树） */
+export interface BOMGroupSummary {
+  material_id: number;
+  version: string;
+  bom_code?: string;
+  approval_status: string;
+  is_default: boolean;
+  is_obsolete: boolean;
+  item_count: number;
 }
 
 export interface BOMItemCreate {
@@ -396,6 +417,9 @@ export interface BOMBatchImportItem {
   isConfigurable?: boolean; // 是否为配置位（用户在下单/开工单时选择）
   configurableGroupId?: number | null; // 配置位组ID（同组多行=该位置的可选物料）
   isDefaultConfigurable?: boolean; // 配置位组内是否为默认选项
+  isAlternative?: boolean; // 是否为替代料（同组替代料生产时择一）
+  alternativeGroupId?: number | null; // 替代料组ID（同组填相同ID）
+  priority?: number; // 优先级（替代料顺序，数字越小越优先）
   remark?: string; // 备注（可选）
 }
 
@@ -493,6 +517,9 @@ export interface BOMHierarchyItem {
   isConfigurable?: boolean;
   configurableGroupId?: number | null;
   isDefaultConfigurable?: boolean;
+  isAlternative?: boolean;
+  alternativeGroupId?: number | null;
+  priority?: number;
   children: BOMHierarchyItem[]; // 子项（递归结构）
 }
 

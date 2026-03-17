@@ -896,7 +896,12 @@ const WarehousesPage: React.FC = () => {
           columns={[
             { title: t('app.master-data.warehouses.name'), dataIndex: 'name', width: 120 },
             { title: t('app.master-data.warehouses.description'), dataIndex: 'description', ellipsis: true },
-            { title: t('field.warehouse.warehouseType'), dataIndex: 'warehouse_type', width: 100 },
+            {
+              title: t('field.warehouse.warehouseType'),
+              dataIndex: 'warehouse_type',
+              width: 120,
+              render: (v: string) => (v ? t(`warehouse.type.${v}` as any) : '–'),
+            },
           ]}
         />
       </Modal>

@@ -171,7 +171,7 @@ class MaterialAIService:
         生成配置建议（基于物料来源类型）
         
         Args:
-            source_type: 物料来源类型（Make/Buy/Outsource/Phantom/Configure）
+            source_type: 物料来源类型（Make/Buy/Outsource/Phantom）
             specification: 规格（可选）
             
         Returns:
@@ -191,7 +191,7 @@ class MaterialAIService:
                     "建议配置采购单位（如：吨、kg），便于采购管理",
                 ],
             })
-        elif source_type in ("Make", "Configure"):
+        elif source_type == "Make":
             suggestions.append({
                 "type": "configuration",
                 "level": "info",

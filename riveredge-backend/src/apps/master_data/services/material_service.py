@@ -17,19 +17,19 @@ from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
-    BOMBatchImport, BOMVersionCreate, BOMVersionCompare
+    BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
+    BOMGroupSummary,
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from core.config.code_rule_pages import CODE_RULE_PAGES
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
-# source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Configure->FIN, Phantom->SEMI, Service->SVC）
+# source_type -> 编码回退用 type_code 映射（Buy->RAW, Make/Outsource->SEMI, Phantom->SEMI, Service->SVC，已移除 Configure）
 _SOURCE_TYPE_TO_TYPE_CODE = {
     "Buy": "RAW",
     "Make": "SEMI",
     "Outsource": "SEMI",
-    "Configure": "FIN",
     "Phantom": "SEMI",
     "Service": "SVC",
 }
@@ -1552,7 +1552,8 @@ class MaterialService:
         skip: int = 0,
         limit: int = 100,
         material_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        include_obsolete: bool = False
     ) -> List[BOMResponse]:
         """
         获取BOM列表
@@ -1563,6 +1564,7 @@ class MaterialService:
             limit: 限制数量
             material_id: 主物料ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            include_obsolete: 是否包含已失效版本（默认不包含）
             
         Returns:
             List[BOMResponse]: BOM列表
@@ -1577,6 +1579,9 @@ class MaterialService:
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
+        
+        if not include_obsolete:
+            query = query.filter(is_obsolete=False)
         
         bom_list = await query.offset(skip).limit(limit).order_by(
             "level", "path", "priority", "id"
@@ -1602,6 +1607,9 @@ class MaterialService:
                 "is_default": getattr(b, "is_default", False),
                 "effective_date": b.effective_date,
                 "expiry_date": b.expiry_date,
+                "is_obsolete": getattr(b, "is_obsolete", False),
+                "obsoleted_at": getattr(b, "obsoleted_at", None),
+                "obsolete_reason": getattr(b, "obsolete_reason", None),
                 "approval_status": (b.approval_status or "draft").lower() if b.approval_status else "draft",
                 "approved_by": b.approved_by,
                 "approved_at": b.approved_at,
@@ -1621,6 +1629,143 @@ class MaterialService:
             }
             result.append(BOMResponse.model_validate(d))
         return result
+
+    @staticmethod
+    async def list_bom_groups(
+        tenant_id: int,
+        include_obsolete: bool = False
+    ) -> List[BOMGroupSummary]:
+        """
+        按 material_id + version 分组返回 BOM 摘要（不拉取明细），用于列表树首屏与按需加载子件。
+        """
+        from tortoise import Tortoise
+        conn = Tortoise.get_connection("default")
+        table = BOM._meta.db_table
+        obsolete_filter = "" if include_obsolete else " AND is_obsolete = FALSE"
+        sql = f"""
+            SELECT material_id, version,
+                   MAX(bom_code) AS bom_code,
+                   MAX(approval_status) AS approval_status,
+                   BOOL_OR(is_default) AS is_default,
+                   BOOL_OR(is_obsolete) AS is_obsolete,
+                   COUNT(*)::int AS item_count
+            FROM "{table}"
+            WHERE tenant_id = $1 AND deleted_at IS NULL{obsolete_filter}
+            GROUP BY material_id, version
+            ORDER BY material_id, version
+        """
+        if hasattr(conn, "execute_query_dict"):
+            rows = await conn.execute_query_dict(sql, [tenant_id])
+        else:
+            result = await conn.execute_query(sql, [tenant_id])
+            raw = result[1] if isinstance(result, tuple) and len(result) > 1 else result
+            if not raw:
+                return []
+            rows = [
+                {
+                    "material_id": r[0],
+                    "version": r[1] or "1.0",
+                    "bom_code": r[2],
+                    "approval_status": (r[3] or "draft").lower(),
+                    "is_default": bool(r[4]) if r[4] is not None else False,
+                    "is_obsolete": bool(r[5]) if r[5] is not None else False,
+                    "item_count": int(r[6]) if r[6] is not None else 0,
+                }
+                for r in raw
+            ]
+        return [BOMGroupSummary.model_validate(r) for r in rows]
+
+    @staticmethod
+    async def list_bom_component_ids(tenant_id: int, include_obsolete: bool = False) -> List[int]:
+        """
+        返回在 BOM 中作为子件（component_id）出现过的物料 ID 集合，用于列表区分成品/半成品。
+        """
+        from tortoise import Tortoise
+        conn = Tortoise.get_connection("default")
+        table = BOM._meta.db_table
+        obsolete_filter = "" if include_obsolete else " AND is_obsolete = FALSE"
+        sql = f'''
+            SELECT DISTINCT component_id FROM "{table}"
+            WHERE tenant_id = $1 AND deleted_at IS NULL{obsolete_filter}
+        '''
+        if hasattr(conn, "execute_query_dict"):
+            rows = await conn.execute_query_dict(sql, [tenant_id])
+            return [r["component_id"] for r in rows if r.get("component_id") is not None]
+        result = await conn.execute_query(sql, [tenant_id])
+        raw = result[1] if isinstance(result, tuple) and len(result) > 1 else result
+        return [r[0] for r in (raw or []) if r and r[0] is not None]
+
+    @staticmethod
+    async def list_bom_items_by_materials_batch(
+        tenant_id: int,
+        material_versions: List[Dict[str, Any]],
+        include_obsolete: bool = False,
+    ) -> Dict[str, List[BOMResponse]]:
+        """
+        批量按 (material_id, version) 拉取 BOM 子件明细，用于列表树一次构建完整层级。
+        material_versions: [{"material_id": 1, "version": "1.0"}, ...]
+        返回: {"material_id|version": [BOMResponse, ...], ...}
+        """
+        if not material_versions:
+            return {}
+        keys = [(m["material_id"], m["version"] or "1.0") for m in material_versions]
+        query = BOM.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not include_obsolete:
+            query = query.filter(is_obsolete=False)
+        # 构建 (material_id, version) 的 OR 条件
+        from tortoise.expressions import Q
+        q = Q(material_id=keys[0][0], version=keys[0][1])
+        for mid, ver in keys[1:]:
+            q = q | Q(material_id=mid, version=ver)
+        query = query.filter(q)
+        bom_list = await query.order_by("priority", "id").all()
+        out: Dict[str, List[BOMResponse]] = {}
+        for b in bom_list:
+            k = f"{b.material_id}|{b.version or '1.0'}"
+            if k not in out:
+                out[k] = []
+            d = {
+                "id": b.id,
+                "uuid": str(b.uuid) if b.uuid else "",
+                "tenant_id": b.tenant_id,
+                "material_id": b.material_id,
+                "component_id": b.component_id,
+                "quantity": b.quantity,
+                "unit": (b.unit and str(b.unit).strip()) or None,
+                "waste_rate": getattr(b, "waste_rate", None) or Decimal("0"),
+                "is_required": getattr(b, "is_required", True),
+                "level": getattr(b, "level", 0),
+                "path": b.path,
+                "version": b.version or "1.0",
+                "bom_code": b.bom_code,
+                "is_default": getattr(b, "is_default", False),
+                "effective_date": b.effective_date,
+                "expiry_date": b.expiry_date,
+                "is_obsolete": getattr(b, "is_obsolete", False),
+                "obsoleted_at": getattr(b, "obsoleted_at", None),
+                "obsolete_reason": getattr(b, "obsolete_reason", None),
+                "approval_status": (b.approval_status or "draft").lower() if b.approval_status else "draft",
+                "approved_by": b.approved_by,
+                "approved_at": b.approved_at,
+                "approval_comment": b.approval_comment,
+                "is_alternative": getattr(b, "is_alternative", False),
+                "alternative_group_id": b.alternative_group_id,
+                "priority": getattr(b, "priority", 0),
+                "is_configurable": getattr(b, "is_configurable", False),
+                "configurable_group_id": getattr(b, "configurable_group_id", None),
+                "is_default_configurable": getattr(b, "is_default_configurable", False),
+                "description": b.description,
+                "remark": b.remark,
+                "is_active": getattr(b, "is_active", True),
+                "created_at": b.created_at,
+                "updated_at": b.updated_at,
+                "deleted_at": b.deleted_at,
+            }
+            out[k].append(BOMResponse.model_validate(d))
+        return out
     
     @staticmethod
     async def update_bom(
@@ -1952,7 +2097,7 @@ class MaterialService:
              if exists:
                  raise ValidationError(f"新版本 {new_version} 已存在")
         
-        # 2. 查找源BOM的所有组成部分（同一 material_id + version）
+        # 2. 查找源BOM的所有组成部分（同一 material_id + version，仅当前主件，不包含子件自己的BOM）
         source_boms = await BOM.filter(
             tenant_id=tenant_id,
             material_id=bom.material_id,
@@ -2035,7 +2180,8 @@ class MaterialService:
         tenant_id: int,
         material_id: int,
         version: Optional[str] = None,
-        only_active: bool = True
+        only_active: bool = True,
+        include_obsolete: bool = False
     ) -> List[BOMResponse]:
         """
         根据主物料获取BOM列表（支持版本过滤）
@@ -2045,6 +2191,7 @@ class MaterialService:
             material_id: 主物料ID
             version: 版本号（可选）
             only_active: 是否只返回已审核的BOM
+            include_obsolete: 是否包含已失效的BOM版本（默认不包含）
             
         Returns:
             List[BOMResponse]: BOM列表
@@ -2057,6 +2204,9 @@ class MaterialService:
         
         if version:
             query = query.filter(version=version)
+        
+        if not include_obsolete:
+            query = query.filter(is_obsolete=False)
         
         if only_active:
             query = query.filter(approval_status="approved", is_active=True)
@@ -2101,7 +2251,8 @@ class MaterialService:
     @staticmethod
     async def get_bom_versions(
         tenant_id: int,
-        bom_code: str
+        bom_code: str,
+        include_obsolete: bool = True
     ) -> List[BOMResponse]:
         """
         获取指定BOM编码的所有版本
@@ -2109,17 +2260,58 @@ class MaterialService:
         Args:
             tenant_id: 租户ID
             bom_code: BOM编码
+            include_obsolete: 是否包含已失效版本（默认包含，便于版本列表展示）
             
         Returns:
             List[BOMResponse]: BOM版本列表
         """
-        bom_list = await BOM.filter(
+        query = BOM.filter(
             tenant_id=tenant_id,
             bom_code=bom_code,
             deleted_at__isnull=True
-        ).order_by("-version").all()
-        
+        )
+        if not include_obsolete:
+            query = query.filter(is_obsolete=False)
+        bom_list = await query.order_by("-version").all()
         return [BOMResponse.model_validate(b) for b in bom_list]
+
+    @staticmethod
+    async def set_bom_version_obsolete(
+        tenant_id: int,
+        material_id: int,
+        version: str,
+        reason: Optional[str] = None
+    ) -> int:
+        """
+        将指定物料的指定BOM版本设为失效。
+        若该版本为默认版本，会清除 is_default，避免失效版本仍被选为默认。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID
+            version: BOM版本号
+            reason: 失效原因（可选）
+            
+        Returns:
+            int: 更新的BOM行数
+        """
+        from datetime import datetime
+        qs = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=version,
+            deleted_at__isnull=True
+        )
+        count = await qs.count()
+        if count == 0:
+            raise NotFoundError(f"未找到物料 {material_id} 版本 {version} 的 BOM")
+        await qs.update(
+            is_obsolete=True,
+            obsoleted_at=datetime.utcnow(),
+            obsolete_reason=reason or None,
+            is_default=False
+        )
+        return count
     
     # ==================== 级联查询相关方法 ====================
     
@@ -2392,6 +2584,8 @@ class MaterialService:
                 )
         
         # 步骤6：创建BOM数据 (Refactored: Clean Replace & Auto-Numbering)
+        # 版本策略：请求中的每个 parent_id 都会按 target_version 做全量替换。
+        # 设计器「另存为新版本」时应只传当前主件的直接子件（根级），避免未改动的半成品被误升版。
         from tortoise import timezone
         from datetime import datetime
         
@@ -2477,6 +2671,9 @@ class MaterialService:
                 is_cfg = getattr(item, "is_configurable", False) or False
                 cfg_group_id = getattr(item, "configurable_group_id", None)
                 is_default_cfg = getattr(item, "is_default_configurable", False) or False
+                is_alt = getattr(item, "is_alternative", False) or False
+                alt_group_id = getattr(item, "alternative_group_id", None)
+                prio = getattr(item, "priority", 0) or 0
                 bom = await BOM.create(
                     tenant_id=tenant_id,
                     material_id=parent_id,
@@ -2496,6 +2693,9 @@ class MaterialService:
                     is_configurable=is_cfg,
                     configurable_group_id=cfg_group_id if is_cfg else None,
                     is_default_configurable=is_default_cfg if is_cfg else False,
+                    is_alternative=is_alt,
+                    alternative_group_id=alt_group_id if is_alt else None,
+                    priority=prio,
                 )
                 bom_list.append(bom)
         
@@ -2575,28 +2775,36 @@ class MaterialService:
         """
         from collections import defaultdict
         
-        # 查询BOM数据
+        # 查询BOM数据（不含已失效版本）
         query = BOM.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             deleted_at__isnull=True,
-            is_active=True
+            is_active=True,
+            is_obsolete=False
         )
         
-        if version:
-            query = query.filter(version=version)
+        resolved_version = version
+        if not resolved_version:
+            # 与列表页一致：优先使用默认版本（is_default），否则使用最新版本（均不含失效版本）
+            default_bom = await query.filter(is_default=True).first()
+            if default_bom:
+                resolved_version = default_bom.version
+            else:
+                latest_bom = await query.order_by("-version").first()
+                if latest_bom:
+                    resolved_version = latest_bom.version
+            if resolved_version:
+                query = query.filter(version=resolved_version)
         else:
-            # 使用最新版本
-            latest_bom = await query.order_by("-version").first()
-            if latest_bom:
-                query = query.filter(version=latest_bom.version)
+            query = query.filter(version=version)
         
         bom_items = await query.prefetch_related("component").all()
         
         if not bom_items:
             return {
                 "material_id": material_id,
-                "version": version or "1.0",
+                "version": resolved_version or version or "1.0",
                 "items": []
             }
         
@@ -2612,20 +2820,23 @@ class MaterialService:
                 current_bom_items = [b for b in bom_items if b.material_id == parent_id]
             else:
                 # 后续层级：查询子物料的BOM（优先请求版本，若无则回退到最新版本以实现「升版后子BOM自动获取」）
+                effective_version = use_version or resolved_version or version
                 current_bom_items = await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=parent_id,
-                    version=use_version or version,
+                    version=effective_version,
                     deleted_at__isnull=True,
-                    is_active=True
+                    is_active=True,
+                    is_obsolete=False
                 ).prefetch_related("component").all()
-                if not current_bom_items and (use_version or version):
-                    # 子BOM在请求版本下不存在时，回退到该物料的最新版本
+                if not current_bom_items and effective_version:
+                    # 子BOM在请求版本下不存在时，回退到该物料的最新版本（不含失效）
                     latest_child = await BOM.filter(
                         tenant_id=tenant_id,
                         material_id=parent_id,
                         deleted_at__isnull=True,
-                        is_active=True
+                        is_active=True,
+                        is_obsolete=False
                     ).order_by("-version").first()
                     if latest_child:
                         current_bom_items = await BOM.filter(
@@ -2633,7 +2844,8 @@ class MaterialService:
                             material_id=parent_id,
                             version=latest_child.version,
                             deleted_at__isnull=True,
-                            is_active=True
+                            is_active=True,
+                            is_obsolete=False
                         ).prefetch_related("component").all()
             
             for bom in current_bom_items:
@@ -2643,7 +2855,8 @@ class MaterialService:
                     # 如果预加载失败，则查询
                     component = await Material.get(id=bom.component_id)
                 current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
-                
+                # 开启属性的物料自动视为配置件（与列表/设计器展示一致）
+                is_cfg = getattr(bom, "is_configurable", False) or getattr(component, "variant_managed", False)
                 item_data = {
                     "component_id": bom.component_id,
                     "component_code": component.main_code,
@@ -2654,26 +2867,32 @@ class MaterialService:
                     "is_required": bom.is_required,
                     "level": level,
                     "path": current_path,
-                    "is_configurable": getattr(bom, "is_configurable", False),
-                    "configurable_group_id": getattr(bom, "configurable_group_id", None),
-                    "is_default_configurable": getattr(bom, "is_default_configurable", False),
+                    "is_configurable": is_cfg,
+                    "configurable_group_id": getattr(bom, "configurable_group_id", None) if is_cfg else None,
+                    "is_default_configurable": getattr(bom, "is_default_configurable", False) if is_cfg else False,
+                    "is_alternative": getattr(bom, "is_alternative", False),
+                    "alternative_group_id": getattr(bom, "alternative_group_id", None),
+                    "priority": getattr(bom, "priority", 0),
                     "children": []
                 }
                 
                 # 递归查找子件：查询子物料是否有自己的BOM（优先请求版本，若无则回退最新版本）
+                child_version = use_version or resolved_version or version or bom.version
                 child_bom_items = await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=bom.component_id,
-                    version=use_version or version or bom.version,
+                    version=child_version,
                     deleted_at__isnull=True,
-                    is_active=True
+                    is_active=True,
+                    is_obsolete=False
                 ).prefetch_related("component").all()
                 if not child_bom_items:
                     latest_child_bom = await BOM.filter(
                         tenant_id=tenant_id,
                         material_id=bom.component_id,
                         deleted_at__isnull=True,
-                        is_active=True
+                        is_active=True,
+                        is_obsolete=False
                     ).order_by("-version").first()
                     if latest_child_bom:
                         child_bom_items = await BOM.filter(
@@ -2681,7 +2900,8 @@ class MaterialService:
                             material_id=bom.component_id,
                             version=latest_child_bom.version,
                             deleted_at__isnull=True,
-                            is_active=True
+                            is_active=True,
+                            is_obsolete=False
                         ).prefetch_related("component").all()
                 
                 if child_bom_items:
@@ -2690,7 +2910,7 @@ class MaterialService:
                         bom.component_id,
                         level + 1,
                         current_path,
-                        use_version or version or bom.version
+                        child_version
                     )
                 
                 result.append(item_data)
@@ -2705,7 +2925,7 @@ class MaterialService:
             "material_id": material_id,
             "material_code": material.main_code,
             "material_name": material.name,
-            "version": version or bom_items[0].version,
+            "version": resolved_version or bom_items[0].version,
             "approval_status": bom_items[0].approval_status,
             "items": tree
         }

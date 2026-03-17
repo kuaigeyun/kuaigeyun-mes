@@ -170,7 +170,7 @@ class Material(BaseModel):
     source_type = fields.CharField(
         max_length=20, 
         null=True, 
-        description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)"
+        description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)"
     )
     source_config = fields.JSONField(
         null=True, 
@@ -254,6 +254,9 @@ class BOM(BaseModel):
         bom_code: BOM编码（升版时随版本更新，如 BOM-XXX-1.0 -> BOM-XXX-1.1）
         effective_date: 生效日期
         expiry_date: 失效日期
+        is_obsolete: 是否已失效（人为设置）
+        obsoleted_at: 失效时间
+        obsolete_reason: 失效原因
         approval_status: 审核状态
         approved_by: 审核人ID
         approved_at: 审核时间
@@ -312,6 +315,11 @@ class BOM(BaseModel):
     # 有效期管理
     effective_date = fields.DatetimeField(null=True, description="生效日期")
     expiry_date = fields.DatetimeField(null=True, description="失效日期")
+    
+    # 失效标记（人为设为失效，与 expiry_date 日期失效区分）
+    is_obsolete = fields.BooleanField(default=False, description="是否已失效（人为设置）")
+    obsoleted_at = fields.DatetimeField(null=True, description="失效时间")
+    obsolete_reason = fields.CharField(max_length=500, null=True, description="失效原因")
     
     # 审核管理
     approval_status = fields.CharField(

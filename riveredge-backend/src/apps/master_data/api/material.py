@@ -23,6 +23,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCreate, MaterialUpdate, MaterialResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
+    BOMGroupSummary, BOMBatchItemsRequest,
     MaterialGroupTreeResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse,
@@ -224,12 +225,54 @@ async def create_bom(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.get("/bom/groups", response_model=List[BOMGroupSummary], summary="获取BOM分组摘要（用于列表树按需加载）")
+async def list_bom_groups(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    include_obsolete: bool = Query(False, description="是否包含已失效版本"),
+):
+    """
+    按 material_id + version 返回 BOM 分组摘要，不拉取子件明细。
+    列表页首屏用此接口；展开某行时再调 getByMaterial(materialId, version) 拉取子件。
+    """
+    return await MaterialService.list_bom_groups(tenant_id=tenant_id, include_obsolete=include_obsolete)
+
+
+@router.get("/bom/component-ids", summary="获取作为子件出现的物料ID（用于区分成品/半成品）")
+async def list_bom_component_ids(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    include_obsolete: bool = Query(False, description="是否包含已失效版本"),
+) -> List[int]:
+    """返回在 BOM 中作为 component_id 出现过的物料 ID 列表。"""
+    return await MaterialService.list_bom_component_ids(tenant_id=tenant_id, include_obsolete=include_obsolete)
+
+
+@router.post("/bom/batch-items", summary="批量按物料+版本拉取BOM子件明细")
+async def list_bom_items_batch(
+    body: BOMBatchItemsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+) -> Dict[str, List[BOMResponse]]:
+    """
+    一次请求拉取多组 (material_id, version) 的 BOM 子件明细，用于列表树完整构建，避免 limit 与 N+1。
+    返回 key 为 "material_id|version"，value 为该版本的 BOM 行列表。
+    """
+    material_versions = [{"material_id": i.material_id, "version": i.version or "1.0"} for i in body.items]
+    return await MaterialService.list_bom_items_by_materials_batch(
+        tenant_id=tenant_id,
+        material_versions=material_versions,
+        include_obsolete=body.include_obsolete,
+    )
+
+
 @router.get("/bom", response_model=List[BOMResponse], summary="获取BOM列表")
 async def list_bom(
     skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    limit: int = Query(100, ge=1, le=10000, description="限制数量（树形列表建议 10000 以加载完整层级）"),
     material_id: Optional[int] = Query(None, description="主物料ID（过滤）"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
+    include_obsolete: bool = Query(False, description="是否包含已失效的BOM版本"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -240,8 +283,11 @@ async def list_bom(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **material_id**: 主物料ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **include_obsolete**: 是否包含已失效版本（默认：false）
     """
-    result = await MaterialService.list_bom(tenant_id, skip, limit, material_id, is_active)
+    result = await MaterialService.list_bom(
+        tenant_id, skip, limit, material_id, is_active, include_obsolete
+    )
     return result if result is not None else []
 
 
@@ -447,7 +493,8 @@ async def get_bom_by_material(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     version: Optional[str] = Query(None, description="版本号（可选）"),
-    only_active: bool = Query(True, description="是否只返回已审核的BOM")
+    only_active: bool = Query(True, description="是否只返回已审核的BOM"),
+    include_obsolete: bool = Query(False, description="是否包含已失效的BOM版本")
 ):
     """
     根据主物料获取BOM列表
@@ -455,13 +502,15 @@ async def get_bom_by_material(
     - **material_id**: 主物料ID
     - **version**: 版本号（可选）
     - **only_active**: 是否只返回已审核的BOM（默认：true）
+    - **include_obsolete**: 是否包含已失效版本（默认：false）
     """
     try:
         return await MaterialService.get_bom_by_material(
             tenant_id=tenant_id,
             material_id=material_id,
             version=version,
-            only_active=only_active
+            only_active=only_active,
+            include_obsolete=include_obsolete
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -473,18 +522,51 @@ async def get_bom_by_material(
 async def get_bom_versions(
     bom_code: str,
     current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    include_obsolete: bool = Query(True, description="是否包含已失效版本")
 ):
     """
     获取指定BOM编码的所有版本
     
     - **bom_code**: BOM编码
+    - **include_obsolete**: 是否包含已失效版本（默认：true，便于版本列表展示）
     """
     try:
         return await MaterialService.get_bom_versions(
             tenant_id=tenant_id,
-            bom_code=bom_code
+            bom_code=bom_code,
+            include_obsolete=include_obsolete
         )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/bom/material/{material_id}/version/{version}/obsolete",
+    summary="将指定BOM版本设为失效"
+)
+async def set_bom_version_obsolete(
+    material_id: int,
+    version: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    body: Optional[Dict[str, Any]] = Body(None, description="可选：{ \"reason\": \"失效原因\" }"),
+):
+    """
+    将指定物料的指定BOM版本设为失效。
+    若该版本为默认版本，会清除默认标记。
+    """
+    try:
+        reason = (body or {}).get("reason") if isinstance(body, dict) else None
+        count = await MaterialService.set_bom_version_obsolete(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=version,
+            reason=reason,
+        )
+        return {"updated": count, "message": f"已将该 BOM 版本 {version} 设为失效"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

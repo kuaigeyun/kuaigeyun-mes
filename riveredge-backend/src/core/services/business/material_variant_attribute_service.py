@@ -26,7 +26,7 @@ class MaterialVariantAttributeService:
     提供属性定义的 CRUD 操作和版本管理。
     """
 
-    # 中国中小制造业常见属性定义预设（颜色、规格、材质、等级、表面处理等）
+    # 中国中小制造业常见属性定义预设（颜色、规格、材质、等级、表面处理等）；枚举类型默认支持多选
     PRESET_ATTRIBUTE_DEFINITIONS = [
         {
             "attribute_name": "颜色",
@@ -35,7 +35,7 @@ class MaterialVariantAttributeService:
             "enum_values": ["红色", "蓝色", "白色", "黑色", "灰色", "黄色", "绿色", "银色", "其他"],
             "display_order": 10,
             "is_required": False,
-            "allow_multiple": False,
+            "allow_multiple": True,
             "description": "产品颜色",
         },
         {
@@ -45,7 +45,7 @@ class MaterialVariantAttributeService:
             "enum_values": ["S", "M", "L", "XL", "定制"],
             "display_order": 20,
             "is_required": False,
-            "allow_multiple": False,
+            "allow_multiple": True,
             "description": "规格/尺码",
         },
         {
@@ -55,7 +55,7 @@ class MaterialVariantAttributeService:
             "enum_values": ["不锈钢", "碳钢", "塑料", "铝合金", "铜", "铸铁", "其他"],
             "display_order": 30,
             "is_required": False,
-            "allow_multiple": False,
+            "allow_multiple": True,
             "description": "原材料材质",
         },
         {
@@ -65,7 +65,7 @@ class MaterialVariantAttributeService:
             "enum_values": ["一级品", "二级品", "合格品", "等外品"],
             "display_order": 40,
             "is_required": False,
-            "allow_multiple": False,
+            "allow_multiple": True,
             "description": "质量等级",
         },
         {
@@ -75,7 +75,7 @@ class MaterialVariantAttributeService:
             "enum_values": ["镀锌", "喷塑", "阳极氧化", "电泳", "无"],
             "display_order": 50,
             "is_required": False,
-            "allow_multiple": False,
+            "allow_multiple": True,
             "description": "表面处理工艺",
         },
     ]
@@ -97,30 +97,54 @@ class MaterialVariantAttributeService:
             items = [x for x in items if x["attribute_name"] in names_set]
         created = 0
         for item in items:
+            name = item["attribute_name"]
             exists = await MaterialVariantAttributeDefinition.filter(
                 tenant_id=tenant_id,
-                attribute_name=item["attribute_name"],
+                attribute_name=name,
                 deleted_at__isnull=True,
             ).exists()
-            if not exists:
-                try:
-                    await MaterialVariantAttributeDefinition.create(
-                        tenant_id=tenant_id,
-                        attribute_name=item["attribute_name"],
-                        display_name=item["display_name"],
-                        attribute_type=item["attribute_type"],
-                        enum_values=item.get("enum_values"),
-                        display_order=item.get("display_order", 0),
-                        is_required=item.get("is_required", False),
-                        allow_multiple=item.get("allow_multiple", False),
-                        description=item.get("description"),
-                        is_active=True,
-                        version=1,
-                        created_by=created_by,
-                    )
-                    created += 1
-                except IntegrityError:
-                    pass
+            if exists:
+                continue
+            # 若存在同名且已软删除的记录，恢复并更新为预设内容，避免唯一约束冲突
+            soft_deleted = await MaterialVariantAttributeDefinition.filter(
+                tenant_id=tenant_id,
+                attribute_name=name,
+                deleted_at__isnull=False,
+            ).first()
+            if soft_deleted:
+                await MaterialVariantAttributeDefinition.filter(id=soft_deleted.id).update(
+                    deleted_at=None,
+                    display_name=item["display_name"],
+                    attribute_type=item["attribute_type"],
+                    enum_values=item.get("enum_values"),
+                    display_order=item.get("display_order", 0),
+                    is_required=item.get("is_required", False),
+                    allow_multiple=item.get("allow_multiple", False),
+                    description=item.get("description"),
+                    is_active=True,
+                    version=1,
+                    created_by=created_by,
+                )
+                created += 1
+                continue
+            try:
+                await MaterialVariantAttributeDefinition.create(
+                    tenant_id=tenant_id,
+                    attribute_name=name,
+                    display_name=item["display_name"],
+                    attribute_type=item["attribute_type"],
+                    enum_values=item.get("enum_values"),
+                    display_order=item.get("display_order", 0),
+                    is_required=item.get("is_required", False),
+                    allow_multiple=item.get("allow_multiple", False),
+                    description=item.get("description"),
+                    is_active=True,
+                    version=1,
+                    created_by=created_by,
+                )
+                created += 1
+            except IntegrityError:
+                pass
         return created
 
     @staticmethod
@@ -164,7 +188,7 @@ class MaterialVariantAttributeService:
         Raises:
             ValidationError: 当属性名称已存在或配置无效时抛出
         """
-        # 检查属性名称是否已存在
+        # 检查属性名称是否已存在（未软删除）
         existing = await MaterialVariantAttributeDefinition.filter(
             tenant_id=tenant_id,
             attribute_name=attribute_name,
@@ -177,6 +201,43 @@ class MaterialVariantAttributeService:
         # 验证枚举值（如果类型为 enum）
         if attribute_type == "enum" and (not enum_values or len(enum_values) == 0):
             raise ValidationError("属性类型为 enum 时，枚举值列表不能为空")
+        
+        # 若存在同名的已软删除记录，则恢复并更新该记录，避免唯一约束冲突
+        soft_deleted = await MaterialVariantAttributeDefinition.filter(
+            tenant_id=tenant_id,
+            attribute_name=attribute_name,
+            deleted_at__isnull=False,
+        ).first()
+        
+        if soft_deleted:
+            await MaterialVariantAttributeDefinition.filter(id=soft_deleted.id).update(
+                deleted_at=None,
+                attribute_type=attribute_type,
+                display_name=display_name,
+                description=description,
+                is_required=is_required,
+                display_order=display_order,
+                enum_values=enum_values,
+                allow_multiple=allow_multiple,
+                validation_rules=validation_rules,
+                default_value=default_value,
+                dependencies=dependencies,
+                is_active=is_active,
+                version=1,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            attribute_def = await MaterialVariantAttributeDefinition.get(id=soft_deleted.id)
+            await MaterialVariantAttributeService._save_attribute_history(
+                tenant_id=tenant_id,
+                attribute_definition_id=attribute_def.id,
+                version=1,
+                attribute_config=attribute_def.__dict__,
+                change_description="删除后重新创建（恢复）",
+                changed_by=created_by,
+            )
+            logger.info(f"恢复已删除的属性定义: {attribute_name} (tenant_id={tenant_id})")
+            return attribute_def
         
         try:
             # 创建属性定义

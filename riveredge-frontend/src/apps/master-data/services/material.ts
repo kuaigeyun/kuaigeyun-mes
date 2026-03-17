@@ -18,6 +18,7 @@ import type {
   BOMCreate,
   BOMUpdate,
   BOMListParams,
+  BOMGroupSummary,
   BOMBatchCreate,
   BOMBatchImport,
   BOMHierarchy,
@@ -58,12 +59,18 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     isDefault: (raw.is_default ?? raw.isDefault) === true,
     effectiveDate: (raw.effective_date ?? raw.effectiveDate) as string | undefined,
     expiryDate: (raw.expiry_date ?? raw.expiryDate) as string | undefined,
+    isObsolete: (raw.is_obsolete ?? raw.isObsolete) === true,
+    obsoletedAt: (raw.obsoleted_at ?? raw.obsoletedAt) as string | undefined,
+    obsoleteReason: (raw.obsolete_reason ?? raw.obsoleteReason) as string | undefined,
     approvalStatus: (raw.approval_status ?? raw.approvalStatus) as BOM['approvalStatus'],
     approvedBy: (raw.approved_by ?? raw.approvedBy) as number | undefined,
     approvedAt: (raw.approved_at ?? raw.approvedAt) as string | undefined,
     approvalComment: (raw.approval_comment ?? raw.approvalComment) as string | undefined,
     isAlternative: (raw.is_alternative ?? raw.isAlternative) === true,
     alternativeGroupId: (raw.alternative_group_id ?? raw.alternativeGroupId) as number | undefined,
+    isConfigurable: (raw.is_configurable ?? raw.isConfigurable) === true,
+    configurableGroupId: (raw.configurable_group_id ?? raw.configurableGroupId) as number | undefined,
+    isDefaultConfigurable: (raw.is_default_configurable ?? raw.isDefaultConfigurable) === true,
     priority: Number(raw.priority ?? 0),
     description: (raw.description as string) ?? undefined,
     remark: (raw.remark as string) ?? undefined,
@@ -96,6 +103,9 @@ function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyI
     isConfigurable: (raw.is_configurable ?? raw.isConfigurable) === true,
     configurableGroupId: raw.configurable_group_id ?? raw.configurableGroupId ?? null,
     isDefaultConfigurable: (raw.is_default_configurable ?? raw.isDefaultConfigurable) === true,
+    isAlternative: (raw.is_alternative ?? raw.isAlternative) === true,
+    alternativeGroupId: raw.alternative_group_id ?? raw.alternativeGroupId ?? null,
+    priority: Number(raw.priority ?? 0),
     children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 }
@@ -254,10 +264,65 @@ export const bomApi = {
   },
 
   /**
+   * 获取 BOM 分组摘要（不拉子件明细，用于列表树首屏）
+   */
+  getGroups: async (includeObsolete?: boolean): Promise<BOMGroupSummary[]> => {
+    const raw = await api.get<unknown[]>('/apps/master-data/materials/bom/groups', {
+      params: { include_obsolete: includeObsolete },
+    });
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item: any) => ({
+      material_id: item.material_id ?? item.materialId,
+      version: item.version ?? '1.0',
+      bom_code: item.bom_code ?? item.bomCode,
+      approval_status: (item.approval_status ?? item.approvalStatus) ?? 'draft',
+      is_default: !!(item.is_default ?? item.isDefault),
+      is_obsolete: !!(item.is_obsolete ?? item.isObsolete),
+      item_count: item.item_count ?? item.itemCount ?? 0,
+    }));
+  },
+
+  /**
+   * 获取在 BOM 中作为子件出现过的物料 ID 列表（用于区分成品/半成品）
+   */
+  getComponentIds: async (includeObsolete?: boolean): Promise<number[]> => {
+    const raw = await api.get<number[]>('/apps/master-data/materials/bom/component-ids', {
+      params: { include_obsolete: includeObsolete },
+    });
+    return Array.isArray(raw) ? raw : [];
+  },
+
+  /**
+   * 批量按 (material_id, version) 拉取 BOM 子件明细，用于列表树完整构建
+   */
+  getBatchItems: async (
+    items: Array<{ material_id: number; version?: string }>,
+    includeObsolete?: boolean
+  ): Promise<Record<string, BOM[]>> => {
+    if (!items.length) return {};
+    const payload = {
+      items: items.map((i) => ({ material_id: i.material_id, version: i.version || '1.0' })),
+      include_obsolete: includeObsolete ?? false,
+    };
+    const raw = await api.post<Record<string, unknown[]>>(
+      '/apps/master-data/materials/bom/batch-items',
+      payload
+    );
+    if (!raw || typeof raw !== 'object') return {};
+    const out: Record<string, BOM[]> = {};
+    for (const [key, list] of Object.entries(raw)) {
+      const arr = Array.isArray(list) ? list : [];
+      out[key] = arr.map((item: any) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
+    }
+    return out;
+  },
+
+  /**
    * 获取BOM列表
    */
   list: async (params?: BOMListParams): Promise<BOM[]> => {
-    const raw = await api.get<unknown[]>('/apps/master-data/materials/bom', { params });
+    const apiParams = params ? { ...params, include_obsolete: params.includeObsolete } : undefined;
+    const raw = await api.get<unknown[]>('/apps/master-data/materials/bom', { params: apiParams });
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
@@ -341,9 +406,14 @@ export const bomApi = {
   /**
    * 根据主物料获取BOM列表
    */
-  getByMaterial: async (materialId: number, version?: string, onlyActive?: boolean): Promise<BOM[]> => {
+  getByMaterial: async (
+    materialId: number,
+    version?: string,
+    onlyActive?: boolean,
+    includeObsolete?: boolean
+  ): Promise<BOM[]> => {
     const raw = await api.get<unknown[]>(`/apps/master-data/materials/bom/material/${materialId}`, {
-      params: { version, only_active: onlyActive },
+      params: { version, only_active: onlyActive, include_obsolete: includeObsolete },
     });
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
@@ -352,10 +422,25 @@ export const bomApi = {
   /**
    * 获取BOM所有版本
    */
-  getVersions: async (bomCode: string): Promise<BOM[]> => {
-    const raw = await api.get<unknown[]>(`/apps/master-data/materials/bom/versions/${bomCode}`);
+  getVersions: async (bomCode: string, includeObsolete?: boolean): Promise<BOM[]> => {
+    const raw = await api.get<unknown[]>(`/apps/master-data/materials/bom/versions/${bomCode}`, {
+      params: includeObsolete === false ? { include_obsolete: false } : undefined,
+    });
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
+  },
+
+  /**
+   * 将指定 BOM 版本设为失效
+   */
+  setVersionObsolete: async (
+    materialId: number,
+    version: string,
+    reason?: string
+  ): Promise<{ updated: number; message: string }> => {
+    return api.post(`/apps/master-data/materials/bom/material/${materialId}/version/${encodeURIComponent(version)}/obsolete`, {
+      reason: reason || undefined,
+    });
   },
 
   /**
@@ -374,6 +459,9 @@ export const bomApi = {
         is_configurable: item.isConfigurable,
         configurable_group_id: item.configurableGroupId,
         is_default_configurable: item.isDefaultConfigurable,
+        is_alternative: item.isAlternative,
+        alternative_group_id: item.alternativeGroupId,
+        priority: item.priority ?? 0,
         remark: item.remark,
       })),
       version: data.version,

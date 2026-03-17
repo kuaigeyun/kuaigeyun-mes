@@ -128,8 +128,8 @@ class MaterialBase(BaseModel):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
     # 物料来源控制（核心功能，新增）
-    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)")
-    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode（fabrication加工型/assembly装配型）、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序；配置件含属性等")
+    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)")
+    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序等")
     
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
     inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
@@ -195,7 +195,7 @@ class MaterialUpdate(BaseModel):
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
 
     # 物料来源控制（与 MaterialBase 一致，支持更新时保存）
-    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
+    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource）")
     source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
 
     # 质检选项
@@ -327,6 +327,11 @@ class BOMBase(BaseModel):
     effective_date: Optional[datetime] = Field(None, description="生效日期")
     expiry_date: Optional[datetime] = Field(None, description="失效日期")
     
+    # 失效标记（人为设为失效）
+    is_obsolete: bool = Field(False, description="是否已失效（人为设置）")
+    obsoleted_at: Optional[datetime] = Field(None, description="失效时间")
+    obsolete_reason: Optional[str] = Field(None, max_length=500, description="失效原因")
+    
     # 审核管理
     approval_status: str = Field(
         "draft",
@@ -427,6 +432,11 @@ class BOMUpdate(BaseModel):
     effective_date: Optional[datetime] = Field(None, description="生效日期")
     expiry_date: Optional[datetime] = Field(None, description="失效日期")
     
+    # 失效标记
+    is_obsolete: Optional[bool] = Field(None, description="是否已失效")
+    obsoleted_at: Optional[datetime] = Field(None, description="失效时间")
+    obsolete_reason: Optional[str] = Field(None, max_length=500, description="失效原因")
+    
     # 审核管理
     approval_status: Optional[str] = Field(
         None,
@@ -505,6 +515,29 @@ class BOMResponse(BOMBase):
     
     class Config:
         from_attributes = True
+
+
+class BOMGroupSummary(BaseModel):
+    """BOM 分组摘要（按 material_id + version 一组，用于列表树按需加载）"""
+    material_id: int = Field(..., description="主物料ID")
+    version: str = Field(..., description="版本号")
+    bom_code: Optional[str] = Field(None, description="BOM编码")
+    approval_status: str = Field(..., description="审核状态")
+    is_default: bool = Field(False, description="是否默认版本")
+    is_obsolete: bool = Field(False, description="是否已失效")
+    item_count: int = Field(..., description="该版本子件数量")
+
+
+class BOMMaterialVersionItem(BaseModel):
+    """批量拉取 BOM 子件时的 (material_id, version) 项"""
+    material_id: int = Field(..., description="主物料ID")
+    version: str = Field("1.0", description="版本号")
+
+
+class BOMBatchItemsRequest(BaseModel):
+    """批量按物料+版本拉取 BOM 子件明细的请求体"""
+    items: List[BOMMaterialVersionItem] = Field(..., description="(material_id, version) 列表")
+    include_obsolete: bool = Field(False, description="是否包含已失效版本")
 
 
 class BOMItemCreate(BaseModel):
@@ -636,6 +669,9 @@ class BOMBatchImportItem(BaseModel):
     is_configurable: Optional[bool] = Field(False, description="是否为配置位（用户在下单/开工单时选择）")
     configurable_group_id: Optional[int] = Field(None, description="配置位组ID（同组多行=该位置的可选物料）")
     is_default_configurable: Optional[bool] = Field(False, description="配置位组内是否为默认选项")
+    is_alternative: Optional[bool] = Field(False, description="是否为替代料（同组替代料生产时择一）")
+    alternative_group_id: Optional[int] = Field(None, description="替代料组ID（同组填相同ID）")
+    priority: Optional[int] = Field(0, description="优先级（数字越小越优先，替代料顺序）")
     remark: Optional[str] = Field(None, description="备注（可选）")
     
     @validator("quantity")

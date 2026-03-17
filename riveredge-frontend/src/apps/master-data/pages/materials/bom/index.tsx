@@ -114,6 +114,12 @@ const BOMPage: React.FC = () => {
   const [hierarchyTreeData, setHierarchyTreeData] = useState<DataNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   
+  // 设为失效 Modal 状态
+  const [obsoleteModalVisible, setObsoleteModalVisible] = useState(false);
+  const [obsoleteRecord, setObsoleteRecord] = useState<BOM | null>(null);
+  const [obsoleteReason, setObsoleteReason] = useState('');
+  const [obsoleteLoading, setObsoleteLoading] = useState(false);
+
   // 用量计算Modal状态
   const [quantityModalVisible, setQuantityModalVisible] = useState(false);
   const [quantityLoading, setQuantityLoading] = useState(false);
@@ -1239,6 +1245,39 @@ const BOMPage: React.FC = () => {
   };
 
   /**
+   * 打开「设为失效」弹窗
+   */
+  const handleOpenSetObsolete = (record: BOM) => {
+    if (record.isObsolete) {
+      messageApi.info(t('app.master-data.bom.alreadyObsolete'));
+      return;
+    }
+    setObsoleteRecord(record);
+    setObsoleteReason('');
+    setObsoleteModalVisible(true);
+  };
+
+  /**
+   * 提交设为失效
+   */
+  const handleSetObsoleteSubmit = async () => {
+    if (!obsoleteRecord) return;
+    try {
+      setObsoleteLoading(true);
+      await bomApi.setVersionObsolete(obsoleteRecord.materialId, obsoleteRecord.version, obsoleteReason.trim() || undefined);
+      messageApi.success(t('app.master-data.bom.obsoleteSuccess'));
+      setObsoleteModalVisible(false);
+      setObsoleteRecord(null);
+      setObsoleteReason('');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.master-data.bom.operationFailed'));
+    } finally {
+      setObsoleteLoading(false);
+    }
+  };
+
+  /**
    * 设为默认版本
    */
   const handleSetAsDefault = async (record: BOM) => {
@@ -1293,8 +1332,8 @@ const BOMPage: React.FC = () => {
   const handleViewVersionHistory = async (record: BOM) => {
     try {
       setCurrentMaterialId(record.materialId);
-      // 获取该物料的所有BOM版本
-      const versions = await bomApi.getByMaterial(record.materialId);
+      // 获取该物料的所有BOM版本（含失效版本）
+      const versions = await bomApi.getByMaterial(record.materialId, undefined, false, true);
       // 按版本号排序（降序）
       const sortedVersions = versions.sort((a, b) => {
         const aMatch = a.version.match(/v?(\d+)\.(\d+)/);
@@ -1417,13 +1456,17 @@ const BOMPage: React.FC = () => {
           const versions = r.versions as BOMGroupRow[];
           if (!versions?.length) return '-';
           const defaultTagText = t('app.master-data.bom.defaultTag');
+          const obsoleteTagText = t('app.master-data.bom.obsoleteTag');
           const versionOptions = versions.map((v) => {
             const isDefault = v.firstItem?.isDefault ?? v.items?.some((i) => i.isDefault);
+            const isObsolete = v.firstItem?.isObsolete ?? v.items?.some((i: any) => i.isObsolete);
+            const label = [v.version, isDefault ? `(${defaultTagText})` : null, isObsolete ? `(${obsoleteTagText})` : null].filter(Boolean).join(' ');
             return {
               value: v.groupKey,
-              label: isDefault ? `${v.version} (${defaultTagText})` : v.version,
+              label,
               version: v.version,
               isDefault: !!isDefault,
+              isObsolete: !!isObsolete,
             };
           });
           return (
@@ -1437,10 +1480,12 @@ const BOMPage: React.FC = () => {
                 const verRow = versions.find((v) => v.groupKey === groupKey);
                 const ver = verRow?.version ?? (option as { version?: string })?.version ?? '';
                 const isDef = verRow?.firstItem?.isDefault ?? (option as { isDefault?: boolean })?.isDefault ?? false;
+                const isObs = verRow?.firstItem?.isObsolete ?? (option as { isObsolete?: boolean })?.isObsolete ?? false;
                 return (
                   <Space size={4}>
                     <span>{ver}</span>
                     {isDef && <Tag color="gold">{defaultTagText}</Tag>}
+                    {isObs && <Tag color="default">{obsoleteTagText}</Tag>}
                   </Space>
                 );
               }}
@@ -1465,6 +1510,20 @@ const BOMPage: React.FC = () => {
         if (r._bomCode) return r._bomCode;
         return '-';
       }
+    },
+    {
+      title: t('app.master-data.materials.processRoute'),
+      dataIndex: 'processRoute',
+      width: 140,
+      hideInSearch: true,
+      render: (_: any, r: any) => {
+        // 根行：显示主件工艺路线；子件行（含半成品、加工型等）：显示该行对应物料的工艺路线（componentId）
+        const materialId = isRootRow(r) ? r.materialId : (r.componentId ?? r.materialId);
+        if (materialId == null) return '-';
+        const material = materials.find((m) => m.id === materialId);
+        const name = material?.processRouteName ?? (material as any)?.process_route_name;
+        return name ?? '-';
+      },
     },
     { 
       title: t('app.master-data.bom.quantityTitle'), 
@@ -1512,6 +1571,24 @@ const BOMPage: React.FC = () => {
       },
     },
     {
+      title: t('app.master-data.bom.isConfigurableColumn'),
+      dataIndex: 'isConfigurable',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r: any) => {
+        if (isRootRow(r)) return '-';
+        const manualCfg = r.isConfigurable === true;
+        const componentMaterial = materials.find((m) => m.id === r.componentId);
+        const autoCfg = !!componentMaterial?.variantManaged;
+        const isConfigurableItem = manualCfg || autoCfg;
+        return (
+          <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
+            {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        );
+      },
+    },
+    {
       title: t('app.master-data.bom.alternativeGroupIdLabel'),
       dataIndex: 'alternativeGroupId',
       width: 110,
@@ -1532,6 +1609,15 @@ const BOMPage: React.FC = () => {
         if (r._bomApprovalStatus) return getApprovalStatusTag(r._bomApprovalStatus);
         return '-';
       }
+    },
+    {
+      title: t('app.master-data.bom.includeObsolete'),
+      dataIndex: 'includeObsolete',
+      valueType: 'switch',
+      hideInTable: true,
+      initialValue: false,
+      search: { transform: (v: boolean) => (v ? true : undefined) },
+      fieldProps: { checkedChildren: '', unCheckedChildren: '' },
     },
     {
       title: t('app.master-data.bom.actionTitle'),
@@ -1565,6 +1651,7 @@ const BOMPage: React.FC = () => {
               { key: 'setDefault', icon: <StarOutlined />, label: t('app.master-data.bom.setDefault'), onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
               { key: 'createNewVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.createNewVersion'), onClick: () => handleCreateVersion(r) },
               { key: 'versionHistory', icon: <HistoryOutlined />, label: t('app.master-data.bom.versionHistory'), onClick: () => handleViewVersionHistory(r) },
+              { key: 'setObsolete', icon: <CloseCircleOutlined />, label: t('app.master-data.bom.setObsolete'), onClick: () => handleOpenSetObsolete(r), disabled: r.isObsolete },
             ],
           },
           { type: 'divider' },
@@ -1715,6 +1802,21 @@ const BOMPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.master-data.bom.isConfigurableColumn'),
+      dataIndex: 'isConfigurable',
+      render: (_, record) => {
+        const manualCfg = record.isConfigurable === true;
+        const componentMaterial = materials.find((m) => m.id === record.componentId);
+        const autoCfg = !!componentMaterial?.variantManaged;
+        const isConfigurableItem = manualCfg || autoCfg;
+        return (
+          <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
+            {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+          </Tag>
+        );
+      },
+    },
+    {
       title: t('app.master-data.bom.alternativeGroupIdLabel'),
       dataIndex: 'alternativeGroupId',
       render: (_, record) => (record.isAlternative && record.alternativeGroupId != null) ? record.alternativeGroupId : '-',
@@ -1792,56 +1894,206 @@ const BOMPage: React.FC = () => {
           }
         }}
         request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-          
-          // 启用状态筛选
-          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
-          }
-          
-          // 替代料筛选
-          if (searchFormValues?.isAlternative !== undefined && searchFormValues.isAlternative !== '' && searchFormValues.isAlternative !== null) {
-            apiParams.isAlternative = searchFormValues.isAlternative;
-          }
-          
-          // 审核状态筛选
-          if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus !== null) {
-            apiParams.approvalStatus = searchFormValues.approvalStatus;
-          }
-          
-          // 主物料筛选
-          if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId !== null) {
-            apiParams.materialId = searchFormValues.materialId;
-          }
-          
+          const includeObsolete = searchFormValues?.includeObsolete === true;
+          const is404 = (e: any) =>
+            e?.response?.status === 404 ||
+            (typeof e?.message === 'string' && (e.message.includes('404') || e.message.includes('不存在')));
           try {
-            const result = await bomApi.list(apiParams);
-            const { groupRows: allGroupRows, keyToUuids } = groupBomsByCode(result);
-            let groupRows = allGroupRows;
-            if (bomViewTypeRef.current === 'productBom') {
-              groupRows = filterToProductBomView(groupRows, result);
-            } else if (bomViewTypeRef.current === 'semiProductBom') {
-              groupRows = filterToSemiProductBomView(groupRows, result);
+            // 1) 拉取分组摘要 + 作为子件出现的物料 ID（区分成品/半成品），无 limit 问题
+            let groups: Array<{ material_id: number; version: string; bom_code?: string; approval_status: string; is_default: boolean; is_obsolete: boolean }>;
+            let componentIds: number[];
+            try {
+              const [g, c] = await Promise.all([
+                bomApi.getGroups(includeObsolete),
+                bomApi.getComponentIds(includeObsolete),
+              ]);
+              groups = g;
+              componentIds = c;
+            } catch (apiErr: any) {
+              if (is404(apiErr)) {
+                // 后端未提供 groups/component-ids 接口时回退：用 list 全量拉取再分组
+                const listResult = await bomApi.list({ skip: 0, limit: 10000, includeObsolete });
+                const { groupRows, keyToUuids } = groupBomsByCode(listResult);
+                let filteredGroupRows = groupRows;
+                if (bomViewTypeRef.current === 'productBom') {
+                  filteredGroupRows = filterToProductBomView(groupRows, listResult);
+                } else if (bomViewTypeRef.current === 'semiProductBom') {
+                  filteredGroupRows = filterToSemiProductBomView(groupRows, listResult);
+                }
+                if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
+                  const mid = Number(searchFormValues.materialId);
+                  if (!Number.isNaN(mid)) filteredGroupRows = filteredGroupRows.filter((r) => r.materialId === mid);
+                }
+                if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
+                  filteredGroupRows = filteredGroupRows.filter((r) => r.approvalStatus === searchFormValues.approvalStatus);
+                }
+                groupKeyToUuidsRef.current = keyToUuids;
+                // 传入完整 groupRows 作为 allGroupRows，否则成品下的半成品无法展开
+                const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
+                const pageSize = params.pageSize || 20;
+                const current = params.current || 1;
+                const start = (current - 1) * pageSize;
+                return {
+                  data: materialRows.slice(start, start + pageSize),
+                  success: true,
+                  total: materialRows.length,
+                };
+              }
+              throw apiErr;
             }
-            groupRows = groupBomsByMaterial(groupRows, selectedVersionByMaterial, allGroupRows);
+            const componentIdSet = new Set(componentIds);
+            // 按视图过滤：成品 = material_id 不在 componentIdSet；半成品 = 在
+            let filteredGroups = groups;
+            if (bomViewTypeRef.current === 'productBom') {
+              filteredGroups = groups.filter((g) => !componentIdSet.has(g.material_id));
+            } else if (bomViewTypeRef.current === 'semiProductBom') {
+              filteredGroups = groups.filter((g) => componentIdSet.has(g.material_id));
+            }
+            // 主物料筛选
+            if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
+              const mid = Number(searchFormValues.materialId);
+              if (!Number.isNaN(mid)) filteredGroups = filteredGroups.filter((g) => g.material_id === mid);
+            }
+            // 审核状态筛选
+            if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
+              filteredGroups = filteredGroups.filter((g) => g.approval_status === searchFormValues.approvalStatus);
+            }
+            if (filteredGroups.length === 0) {
+              groupKeyToUuidsRef.current = new Map();
+              const pageSize = params.pageSize || 20;
+              const current = params.current || 1;
+              return { data: [], success: true, total: 0 };
+            }
+            // 2) 批量拉取所有分组对应的 BOM 子件明细，一次请求构建完整树
+            let batchItems: Record<string, BOM[]>;
+            try {
+              batchItems = await bomApi.getBatchItems(
+                filteredGroups.map((g) => ({ material_id: g.material_id, version: g.version })),
+                includeObsolete
+              );
+            } catch (batchErr: any) {
+              if (is404(batchErr)) {
+                const listResult = await bomApi.list({ skip: 0, limit: 10000, includeObsolete });
+                const { groupRows, keyToUuids } = groupBomsByCode(listResult);
+                let filteredGroupRows = groupRows;
+                if (bomViewTypeRef.current === 'productBom') {
+                  filteredGroupRows = filterToProductBomView(groupRows, listResult);
+                } else if (bomViewTypeRef.current === 'semiProductBom') {
+                  filteredGroupRows = filterToSemiProductBomView(groupRows, listResult);
+                }
+                if (searchFormValues?.materialId !== undefined && searchFormValues.materialId !== '' && searchFormValues.materialId != null) {
+                  const mid = Number(searchFormValues.materialId);
+                  if (!Number.isNaN(mid)) filteredGroupRows = filteredGroupRows.filter((r) => r.materialId === mid);
+                }
+                if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus != null) {
+                  filteredGroupRows = filteredGroupRows.filter((r) => r.approvalStatus === searchFormValues.approvalStatus);
+                }
+                groupKeyToUuidsRef.current = keyToUuids;
+                const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
+                const pageSize = params.pageSize || 20;
+                const current = params.current || 1;
+                const start = (current - 1) * pageSize;
+                return {
+                  data: materialRows.slice(start, start + pageSize),
+                  success: true,
+                  total: materialRows.length,
+                };
+              }
+              throw batchErr;
+            }
+            // 3) 将摘要 + 明细组装成 BOMGroupRow[]（与 groupBomsByCode 产出结构一致）
+            const keyToUuids = new Map<string, string[]>();
+            const buildGroupRow = (
+              g: typeof filteredGroups[0],
+              items: BOM[]
+            ): BOMGroupRow => {
+              const firstItem = items[0];
+              const syntheticFirst: BOM = firstItem ?? ({
+                id: 0,
+                uuid: '',
+                tenantId: 0,
+                materialId: g.material_id,
+                componentId: 0,
+                quantity: 0,
+                isRequired: true,
+                level: 0,
+                version: g.version,
+                bomCode: g.bom_code ?? '-',
+                isDefault: g.is_default,
+                approvalStatus: (g.approval_status as BOM['approvalStatus']) ?? 'draft',
+                isAlternative: false,
+                priority: 0,
+                isActive: true,
+                createdAt: '',
+                updatedAt: '',
+                isObsolete: g.is_obsolete,
+              } as BOM);
+              const groupKey = `group:${g.bom_code ?? '-'}|${g.material_id}|${g.version}`;
+              keyToUuids.set(groupKey, items.map((i) => i.uuid));
+              const children = items.map((item, idx) => ({ ...item, key: `${item.uuid}-child-${idx}` }));
+              return {
+                groupKey,
+                bomCode: g.bom_code ?? '-',
+                version: g.version,
+                materialId: g.material_id,
+                approvalStatus: (g.approval_status as BOM['approvalStatus']) ?? 'draft',
+                firstItem: syntheticFirst,
+                items,
+                children: children.length > 0 ? children : undefined,
+              };
+            };
+            const displayGroupRows: BOMGroupRow[] = filteredGroups.map((g) => {
+              const k = `${g.material_id}|${g.version}`;
+              const items: BOM[] = batchItems[k] ?? [];
+              return buildGroupRow(g, items);
+            });
+            // 成品视图下：补拉「当前成品子件中的半成品」的 BOM，否则半成品行无法展开
+            let allGroupRowsForNesting: BOMGroupRow[] = displayGroupRows;
+            const semiFinishedIds = new Set<number>();
+            for (const g of filteredGroups) {
+              const items = batchItems[`${g.material_id}|${g.version}`] ?? [];
+              for (const it of items) {
+                if (componentIdSet.has(it.componentId)) semiFinishedIds.add(it.componentId);
+              }
+            }
+            if (semiFinishedIds.size > 0) {
+              const semiFinishedGroupSummaries = groups.filter((x) => semiFinishedIds.has(x.material_id));
+              const byMid = new Map<number, typeof groups[0]>();
+              for (const x of semiFinishedGroupSummaries) {
+                const cur = byMid.get(x.material_id);
+                if (!cur) byMid.set(x.material_id, x);
+                else if (x.is_default) byMid.set(x.material_id, x);
+              }
+              const toFetch = Array.from(byMid.values());
+              const existingKeys = new Set(filteredGroups.map((g) => `${g.material_id}|${g.version}`));
+              const needFetch = toFetch.filter((g) => !existingKeys.has(`${g.material_id}|${g.version}`));
+              if (needFetch.length > 0) {
+                const semiBatch = await bomApi.getBatchItems(
+                  needFetch.map((g) => ({ material_id: g.material_id, version: g.version })),
+                  includeObsolete
+                );
+                const semiRows: BOMGroupRow[] = needFetch.map((g) => {
+                  const items = semiBatch[`${g.material_id}|${g.version}`] ?? [];
+                  return buildGroupRow(g, items);
+                });
+                allGroupRowsForNesting = [...displayGroupRows, ...semiRows];
+              }
+            }
             groupKeyToUuidsRef.current = keyToUuids;
+            const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
+            const pageSize = params.pageSize || 20;
+            const current = params.current || 1;
+            const start = (current - 1) * pageSize;
+            const pagedData = materialRows.slice(start, start + pageSize);
             return {
-              data: groupRows,
+              data: pagedData,
               success: true,
-              total: groupRows.length,
+              total: materialRows.length,
             };
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);
             messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
+            return { data: [], success: false, total: 0 };
           }
         }}
         rowKey={(record: any) => record.groupKey ?? record.key ?? record.uuid ?? String(Math.random())}
@@ -2043,6 +2295,22 @@ const BOMPage: React.FC = () => {
                                   {record.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
                                 </Tag>
                               ),
+                            },
+                            {
+                              title: t('app.master-data.bom.isConfigurableColumn'),
+                              dataIndex: 'isConfigurable',
+                              width: 100,
+                              render: (_, record) => {
+                                const manualCfg = record.isConfigurable === true;
+                                const componentMaterial = materials.find((m) => m.id === record.componentId);
+                                const autoCfg = !!componentMaterial?.variantManaged;
+                                const isConfigurableItem = manualCfg || autoCfg;
+                                return (
+                                  <Tag color={isConfigurableItem ? 'cyan' : 'default'}>
+                                    {isConfigurableItem ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
+                                  </Tag>
+                                );
+                              },
                             },
                             {
                               title: t('app.master-data.bom.alternativeGroupIdLabel'),
@@ -2700,6 +2968,7 @@ const BOMPage: React.FC = () => {
                   <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                     <div>
                       <Tag color={index === 0 ? 'blue' : 'default'}>{bom.version}</Tag>
+                      {bom.isObsolete && <Tag color="default">{t('app.master-data.bom.obsoleteTag')}</Tag>}
                       <span style={{ marginLeft: 8 }}>
                         {getMaterialName(bom.materialId)} → {getMaterialName(bom.componentId)}
                       </span>
@@ -2728,6 +2997,36 @@ const BOMPage: React.FC = () => {
             </Space>
           )}
         </div>
+      </Modal>
+
+      {/* 设为失效 Modal */}
+      <Modal
+        title={t('app.master-data.bom.setObsoleteTitle')}
+        open={obsoleteModalVisible}
+        onCancel={() => {
+          setObsoleteModalVisible(false);
+          setObsoleteRecord(null);
+          setObsoleteReason('');
+        }}
+        onOk={handleSetObsoleteSubmit}
+        confirmLoading={obsoleteLoading}
+        okText={t('app.master-data.bom.ok')}
+        cancelText={t('app.master-data.bom.cancel')}
+      >
+        <p style={{ marginBottom: 8 }}>{t('app.master-data.bom.setObsoleteConfirm')}</p>
+        {obsoleteRecord && (
+          <p style={{ marginBottom: 12, color: '#666' }}>
+            {obsoleteRecord.bomCode} · {t('app.master-data.bom.versionTitle')} {obsoleteRecord.version}
+          </p>
+        )}
+        <AntForm.Item label={t('app.master-data.bom.obsoleteReason')}>
+          <Input.TextArea
+            rows={3}
+            value={obsoleteReason}
+            onChange={(e) => setObsoleteReason(e.target.value)}
+            placeholder={t('app.master-data.bom.obsoleteReason')}
+          />
+        </AntForm.Item>
       </Modal>
 
       {/* 版本对比Modal */}

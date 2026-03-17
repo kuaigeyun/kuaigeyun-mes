@@ -53,7 +53,6 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
   Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
-  Configure: ['default_variant', 'bom_variants'],
   Phantom: [],
   Service: [],
 };
@@ -3114,37 +3113,6 @@ const MaterialSourceTab = forwardRef<
                       { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
                     ]}
                     initialValue="enterprise"
-                  />
-                </Col>
-              </Row>
-            );
-          }
-          if (currentSourceType === 'Configure') {
-            return (
-              <Row gutter={16} style={{ marginTop: 0 }}>
-                <Col span={24}>
-                  <Alert
-                    message={t('app.master-data.source.configureTip')}
-                    description={t('app.master-data.source.configureTipDesc')}
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                  />
-                </Col>
-                <Col span={12}>
-                  <ProFormText
-                    name="sourceConfig.default_variant"
-                    label={t('app.master-data.source.defaultVariant')}
-                    placeholder={t('app.master-data.source.defaultVariantPlaceholder')}
-                    tooltip={t('app.master-data.materialForm.configVariantFirst')}
-                  />
-                </Col>
-                <Col span={24}>
-                  <ProFormTextArea
-                    name="sourceConfig.bom_variants"
-                    label={t('app.master-data.source.bomVariantsLabel')}
-                    placeholder={t('app.master-data.source.bomVariantsPlaceholder')}
-                    fieldProps={{ rows: 4 }}
                   />
                 </Col>
               </Row>

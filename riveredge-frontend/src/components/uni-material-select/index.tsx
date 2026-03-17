@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Material } from '../../apps/master-data/types/material';
 import { materialApi } from '../../apps/master-data/services/material';
 import { UniDropdown } from '../uni-dropdown';
+import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { NamePath } from 'antd/es/form/interface';
 
 /** 从物料对象获取字段值，兼容 API 返回的 snake_case（如 main_code）与 camelCase（如 mainCode） */
@@ -40,8 +41,10 @@ interface UniMaterialSelectProps {
   listFieldName?: string;
   /** 尺寸 */
   size?: 'large' | 'middle' | 'small';
-  /** 是否显示快速新建入口（跳转物料管理） */
+  /** 是否显示快速新建入口（未传 quickCreate 时默认跳转物料管理） */
   showQuickCreate?: boolean;
+  /** 自定义快速新建（如打开新建物料 Modal）；传入时优先于 showQuickCreate 的默认跳转 */
+  quickCreate?: QuickCreateConfig;
   /** 是否显示高级搜索 */
   showAdvancedSearch?: boolean;
   /** 编辑时预填值对应的选项（当物料不在默认列表中时用于展示） */
@@ -75,6 +78,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   listFieldName,
   size = 'middle',
   showQuickCreate = true,
+  quickCreate: quickCreateProp,
   showAdvancedSearch = true,
   fallbackOption,
   onChange,
@@ -83,6 +87,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 }) => {
   const form = Form.useFormInstance();
   const navigate = useNavigate();
+  const effectiveQuickCreate =
+    quickCreateProp ??
+    (showQuickCreate ? { label: '物料管理', onClick: () => navigate('/apps/master-data/materials') } : undefined);
   const { message } = App.useApp();
   const [data, setData] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
@@ -188,14 +195,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         filterOption={false}
         onSearch={debounceFetch}
         onChange={mergedOnChange}
-        quickCreate={
-          showQuickCreate
-            ? {
-                label: '物料管理',
-                onClick: () => navigate('/apps/master-data/materials'),
-              }
-            : undefined
-        }
+        quickCreate={effectiveQuickCreate}
         advancedSearch={
           showAdvancedSearch
             ? {
