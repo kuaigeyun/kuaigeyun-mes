@@ -644,19 +644,21 @@ const BOMDesignerPage: React.FC = () => {
     [selectedNodeId, handleUpdateBOM, messageApi, t]
   );
 
-  /** 替代料组内按新顺序重排并更新 priority，保存 */
+  /** 替代料组内按新顺序重排并更新 priority，保存（不可变更新，确保 UI 能正确响应新顺序） */
   const applyAlternativeOrder = useCallback(
     (parent: MindMapNode, reordered: MindMapNode[]) => {
       if (!mindMapDataRef.current) return;
-      reordered.forEach((c: MindMapNode, i: number) => {
-        (c as MindMapNode).priority = i;
-      });
-      const altIds = new Set(reordered.map((c: MindMapNode) => c.id));
+      // 为每个节点创建新对象并写入新 priority，避免直接修改 state 导致 UI 不刷新
+      const reorderedWithNewPriority = reordered.map((c: MindMapNode, i: number) => ({
+        ...c,
+        priority: i,
+      }));
+      const altIds = new Set(reorderedWithNewPriority.map((c: MindMapNode) => c.id));
       const newChildren: MindMapNode[] = [];
       let altIdx = 0;
       for (const c of parent.children ?? []) {
         if (altIds.has(c.id)) {
-          newChildren.push(reordered[altIdx++]);
+          newChildren.push(reorderedWithNewPriority[altIdx++]);
         } else {
           newChildren.push(c);
         }
@@ -1326,17 +1328,23 @@ const BOMDesignerPage: React.FC = () => {
       .sort((a: MindMapNode, b: MindMapNode) => (a.priority ?? 0) - (b.priority ?? 0));
   }, [selectedNode, parentNode]);
 
-  /** 替代料拖拽排序：fromIndex → toIndex（ sibling 下标，需在 parentNode、alternativeSiblings 之后定义） */
+  /** 替代料拖拽排序：fromIndex → toIndex（alternativeSiblings 下标）。主料(当前节点)始终在首位、不参与排序。 */
   const handleReorderAlternativeByDrag = useCallback(
     (fromIndex: number, toIndex: number) => {
       if (!parentNode?.children || !selectedNode?.isAlternative || selectedNode.alternativeGroupId == null) return;
       const altSiblings = [...alternativeSiblings];
       if (fromIndex < 0 || fromIndex >= altSiblings.length || toIndex < 0 || toIndex >= altSiblings.length) return;
+      // 主料为 alternativeSiblings[0]（当前选中节点），不允许移动主料或把任意项移到主料位
+      if (fromIndex === 0 || toIndex === 0) return;
       const [removed] = altSiblings.splice(fromIndex, 1);
       altSiblings.splice(toIndex, 0, removed);
-      applyAlternativeOrder(parentNode, altSiblings);
+      // 保证主料(selectedNodeId)始终在首位、priority 0，其余按新顺序排 priority 1,2,…
+      const mainNode = altSiblings.find((c: MindMapNode) => c.id === selectedNodeId);
+      const others = altSiblings.filter((c: MindMapNode) => c.id !== selectedNodeId);
+      const finalOrder = mainNode ? [mainNode, ...others] : altSiblings;
+      applyAlternativeOrder(parentNode, finalOrder);
     },
-    [parentNode, selectedNode, alternativeSiblings, applyAlternativeOrder]
+    [parentNode, selectedNode, alternativeSiblings, selectedNodeId, applyAlternativeOrder]
   );
 
   // 切换节点时同步「表单内选中物料」用于来源与单位展示（UniMaterialSelect 选中后也会通过 onChange 更新）
@@ -1376,15 +1384,18 @@ const BOMDesignerPage: React.FC = () => {
     return [...current, ...siblings.map((n: MindMapNode) => ({ material: n.material, node: n, isCurrent: false }))];
   }, [isAlternativeFromForm, selectedMaterial, selectedNode, alternativeSiblings, selectedNodeId]);
 
-  /** 按「可替代物料列表」展示顺序的索引拖拽（列表首项可能为当前节点，需转换为 sibling 下标） */
+  /** 按「可替代物料列表」展示顺序的索引拖拽。列表首项为「主料」不参与排序，仅替代料之间可拖拽。 */
   const handleReorderAlternativeByListIndices = useCallback(
     (fromListIndex: number, toListIndex: number) => {
       const hasCurrent = effectiveAlternativeOptions.length > 0 && (effectiveAlternativeOptions[0] as any).isCurrent === true;
-      const offset = hasCurrent ? 1 : 0;
-      const fromSib = fromListIndex - offset;
-      const toSib = toListIndex - offset;
-      if (fromSib < 0 || toSib < 0) return;
-      handleReorderAlternativeByDrag(fromSib, toSib);
+      // 有主料时：列表 0=主料(不参与)，1、2…=替代料，对应 alternativeSiblings[1]、[2]…
+      if (hasCurrent) {
+        if (fromListIndex === 0 || toListIndex === 0) return; // 主料不参与拖拽、也不作为落点
+        // 列表下标即 alternativeSiblings 下标
+        handleReorderAlternativeByDrag(fromListIndex, toListIndex);
+      } else {
+        handleReorderAlternativeByDrag(fromListIndex, toListIndex);
+      }
     },
     [effectiveAlternativeOptions, handleReorderAlternativeByDrag]
   );
@@ -2476,6 +2487,9 @@ const BOMDesignerPage: React.FC = () => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 if (!hasNode) return;
+                                // 主料(列表首项)不参与排序，不允许拖到主料行
+                                const isMainRow = (item as any).isCurrent === true;
+                                if (isMainRow) return;
                                 try {
                                   const rawJson = e.dataTransfer.getData('application/json');
                                   const rawText = e.dataTransfer.getData('text/plain');
