@@ -68,8 +68,8 @@ class WorkOrderBase(BaseModel):
     qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
     unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
 
-    # 配置件变体属性
-    variant_attributes: Optional[dict] = Field(None, description="变体属性（配置件专用）")
+    # 配置件属性
+    variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
 
     # 备注和附件
@@ -96,7 +96,7 @@ class WorkOrderCreate(WorkOrderBase):
     product_code: Optional[str] = Field(None, description="产品编码（可选，如果未提供 product_id 则为必填）")
     product_name: Optional[str] = Field(None, description="产品名称（可选，如果未提供则从物料中获取）")
     operations: Optional[List["WorkOrderOperationCreate"]] = Field(None, description="工单工序列表（可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成）")
-    variant_attributes: Optional[dict] = Field(None, description="变体属性（配置件产品必填，如 {\"color\":\"red\",\"size\":\"M\"}）")
+    variant_attributes: Optional[dict] = Field(None, description="属性（配置件产品必填，如 {\"color\":\"red\",\"size\":\"M\"}）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
 
 

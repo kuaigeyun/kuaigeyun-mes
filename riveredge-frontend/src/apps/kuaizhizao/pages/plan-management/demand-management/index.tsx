@@ -1109,7 +1109,7 @@ const DemandManagementPage: React.FC = () => {
                               { title: '物料名称', dataIndex: 'material_name', width: 150 },
                               { title: '物料规格', dataIndex: 'material_spec', width: 120 },
                               {
-                                title: '变体属性',
+                                title: '属性',
                                 dataIndex: 'variant_attributes',
                                 width: 140,
                                 ellipsis: true,

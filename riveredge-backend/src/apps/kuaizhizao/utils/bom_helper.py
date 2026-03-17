@@ -238,7 +238,7 @@ async def calculate_material_requirements_from_bom(
         required_quantity: 需求数量
         only_approved: 是否只使用已审核的BOM（默认：True）
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM
-        variant_attributes: 配置件变体属性（可选），当产品为 Configure 时用于 BOM 变体匹配
+        variant_attributes: 配置件属性（可选），当产品为 Configure 时用于 BOM 匹配
         configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
 
     Returns:
@@ -262,7 +262,7 @@ async def calculate_material_requirements_from_bom(
             as_of_date=as_of_date,
         )
         if not expanded:
-            raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配变体）")
+            raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配属性）")
 
         # 按 component_id 聚合（同一物料可能从多路径展开）
         by_component: Dict[int, Dict[str, Any]] = {}

@@ -50,7 +50,7 @@ export interface SalesForecastItemCreatePayload {
   historical_period?: string;
   confidence_level?: number;
   forecast_method?: string;
-  /** 变体属性（配置件专用，如 {"color":"red","size":"M"}） */
+  /** 属性（配置件专用，如 {"color":"red","size":"M"}） */
   variant_attributes?: Record<string, unknown>;
   notes?: string;
 }
@@ -69,7 +69,7 @@ export interface SalesForecastItem {
   historical_period?: string;
   confidence_level?: number;
   forecast_method?: string;
-  /** 变体属性（配置件专用，如 {"color":"red","size":"M"}） */
+  /** 属性（配置件专用，如 {"color":"red","size":"M"}） */
   variant_attributes?: Record<string, unknown>;
   notes?: string;
 }

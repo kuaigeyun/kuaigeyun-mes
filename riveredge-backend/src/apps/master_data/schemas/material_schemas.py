@@ -106,8 +106,8 @@ class MaterialBase(BaseModel):
     default_batch_rule_id: Optional[int] = Field(None, alias="defaultBatchRuleId", description="默认批号规则ID（可选）")
     serial_managed: bool = Field(False, alias="serialManaged", description="是否启用序列号管理")
     default_serial_rule_id: Optional[int] = Field(None, alias="defaultSerialRuleId", description="默认序列号规则ID（可选）")
-    variant_managed: bool = Field(False, alias="variantManaged", description="是否启用变体管理")
-    variant_attributes: Optional[Dict[str, Any]] = Field(None, alias="variantAttributes", description="变体属性（JSON格式）")
+    variant_managed: bool = Field(False, alias="variantManaged", description="是否启用属性管理")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, alias="variantAttributes", description="属性（JSON格式，如颜色、尺寸等）")
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
@@ -129,7 +129,7 @@ class MaterialBase(BaseModel):
     
     # 物料来源控制（核心功能，新增）
     source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)")
-    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode（fabrication加工型/assembly装配型）、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序；配置件含变体属性等")
+    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode（fabrication加工型/assembly装配型）、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序；配置件含属性等")
     
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
     inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
@@ -173,8 +173,8 @@ class MaterialUpdate(BaseModel):
     default_batch_rule_id: Optional[int] = Field(None, alias="defaultBatchRuleId", description="默认批号规则ID（可选）")
     serial_managed: Optional[bool] = Field(None, description="是否启用序列号管理")
     default_serial_rule_id: Optional[int] = Field(None, alias="defaultSerialRuleId", description="默认序列号规则ID（可选）")
-    variant_managed: Optional[bool] = Field(None, description="是否启用变体管理")
-    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="变体属性（JSON格式）")
+    variant_managed: Optional[bool] = Field(None, description="是否启用属性管理")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="属性（JSON格式）")
     description: Optional[str] = Field(None, description="描述")
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")

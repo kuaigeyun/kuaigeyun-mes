@@ -13,6 +13,8 @@
 ![Tortoise ORM](https://img.shields.io/badge/Tortoise%20ORM-0.21-2E7D32?style=flat-square)
 ![Inngest](https://img.shields.io/badge/Inngest-0.3-6366F1?style=flat-square)
 
+**移动端**：![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo) ![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?style=flat-square&logo=react) ![Ant Design RN](https://img.shields.io/badge/Ant%20Design%20RN-5-0170FE?style=flat-square&logo=antdesign) ![Expo Router](https://img.shields.io/badge/Expo%20Router-6-000020?style=flat-square)
+
 面向中小制造企业的轻量级 MES，基于 RiverEdge SaaS 多租户平台。统一业务流程主线，支持 MTS/MTO，按需选择即可运转。
 
 ---
@@ -63,6 +65,7 @@
 | 层级 | 技术 |
 |------|------|
 | 前端 | React 18 + TypeScript + Vite、Ant Design Pro、Three.js（3D 拓扑） |
+| 移动端 | Expo 54 + React Native 0.81、Ant Design React Native、Expo Router |
 | 后端 | FastAPI、Tortoise ORM + PostgreSQL |
 | 架构 | 多租户 SaaS、插件化应用 |
 

@@ -54,7 +54,7 @@ class CostComparisonService:
         - 采购件（Buy）：对比标准采购成本 vs 实际采购订单成本
         - 委外件（Outsource）：对比标准委外成本 vs 实际委外工单成本
         - 虚拟件（Phantom）：不单独对比，成本计入上层物料
-        - 配置件（Configure）：根据变体BOM对比标准成本和实际成本
+        - 配置件（Configure）：根据属性BOM对比标准成本和实际成本
         
         Args:
             tenant_id: 组织ID
@@ -227,7 +227,7 @@ class CostComparisonService:
                 tenant_id=tenant_id,
                 material_id=material.id,
                 quantity=quantity,
-                variant_attributes=None,  # TODO: 需要变体属性
+                variant_attributes=None,  # TODO: 需要属性
                 calculation_date=calculation_date,
                 created_by=created_by
             )
@@ -339,7 +339,7 @@ class CostComparisonService:
             }
         
         elif source_type == "Configure":
-            # 配置件实际成本（从工单计算，需要变体属性）
+            # 配置件实际成本（从工单计算，需要属性）
             if not work_order_id:
                 raise ValidationError("配置件计算实际成本时必须提供work_order_id")
             
@@ -353,7 +353,7 @@ class CostComparisonService:
             if not work_order:
                 raise NotFoundError(f"工单 {work_order_id} 不存在")
             
-            # TODO: 从工单获取变体属性
+            # TODO: 从工单获取属性
             variant_attributes = None
             
             actual_quantity = work_order.quantity

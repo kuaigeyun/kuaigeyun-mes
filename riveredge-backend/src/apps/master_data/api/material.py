@@ -1290,8 +1290,8 @@ async def create_material(
     - **base_unit**: 基础单位（必填）
     - **units**: 多单位管理（可选，JSON格式）
     - **batch_managed**: 是否启用批号管理（默认：false）
-    - **variant_managed**: 是否启用变体管理（默认：false）
-    - **variant_attributes**: 变体属性（可选，JSON格式）
+    - **variant_managed**: 是否启用属性管理（默认：false）
+    - **variant_attributes**: 属性（可选，JSON格式）
     - **description**: 描述（可选）
     - **brand**: 品牌（可选）
     - **model**: 型号（可选）
@@ -1377,8 +1377,8 @@ async def update_material(
     - **base_unit**: 基础单位（可选）
     - **units**: 多单位管理（可选，JSON格式）
     - **batch_managed**: 是否启用批号管理（可选）
-    - **variant_managed**: 是否启用变体管理（可选）
-    - **variant_attributes**: 变体属性（可选，JSON格式）
+    - **variant_managed**: 是否启用属性管理（可选）
+    - **variant_attributes**: 属性（可选，JSON格式）
     - **description**: 描述（可选）
     - **brand**: 品牌（可选）
     - **model**: 型号（可选）

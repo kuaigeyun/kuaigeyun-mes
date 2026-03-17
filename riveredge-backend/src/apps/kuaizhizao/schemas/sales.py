@@ -85,7 +85,7 @@ class SalesForecastItemBase(BaseSchema):
     historical_period: Optional[str] = Field(None, max_length=20, description="历史周期")
     confidence_level: Optional[float] = Field(None, ge=0, le=100, description="置信度")
     forecast_method: Optional[str] = Field(None, max_length=50, description="预测方法")
-    variant_attributes: Optional[dict] = Field(None, description="变体属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
+    variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
     notes: Optional[str] = Field(None, description="备注")
 
 

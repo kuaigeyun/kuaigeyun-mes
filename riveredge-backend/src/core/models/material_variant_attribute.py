@@ -1,7 +1,7 @@
 """
-变体属性定义模型模块
+属性定义模型模块
 
-提供变体属性定义的数据模型，包括属性定义和版本历史。
+提供属性定义的数据模型，包括属性定义和版本历史。
 
 Author: Luigi Lu
 Date: 2026-01-08
@@ -14,10 +14,10 @@ from .base import BaseModel
 
 class MaterialVariantAttributeDefinition(BaseModel):
     """
-    变体属性定义模型
+    属性定义模型
     
-    用于定义物料变体的属性配置，支持自定义属性类型、枚举值、验证规则等。
-    支持多组织隔离，每个组织可以定义自己的变体属性配置。
+    用于定义物料属性的配置，支持自定义属性类型、枚举值、验证规则等。
+    支持多组织隔离，每个组织可以定义自己的属性配置。
     
     注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
     
@@ -73,7 +73,7 @@ class MaterialVariantAttributeDefinition(BaseModel):
         模型元数据
         """
         table = "apps_master_data_material_variant_attribute_definitions"
-        table_description = "基础数据管理 - 变体属性定义"
+        table_description = "基础数据管理 - 属性定义"
         unique_together = [("tenant_id", "attribute_name")]
         indexes = [
             ("tenant_id",),
@@ -119,9 +119,9 @@ class MaterialVariantAttributeDefinition(BaseModel):
 
 class MaterialVariantAttributeHistory(BaseModel):
     """
-    变体属性定义版本历史模型
+    属性定义版本历史模型
     
-    用于记录变体属性定义的版本变更历史，支持版本对比和回滚。
+    用于记录属性定义的版本变更历史，支持版本对比和回滚。
     
     Attributes:
         id: 历史记录ID（主键，自增ID，内部使用）
@@ -154,7 +154,7 @@ class MaterialVariantAttributeHistory(BaseModel):
         模型元数据
         """
         table = "apps_master_data_material_variant_attribute_history"
-        table_description = "基础数据管理 - 变体属性定义历史"
+        table_description = "基础数据管理 - 属性定义历史"
         unique_together = [("attribute_definition_id", "version")]
         indexes = [
             ("tenant_id",),

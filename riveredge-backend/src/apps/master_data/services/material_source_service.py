@@ -360,7 +360,7 @@ class MaterialSourceSuggestionService:
                 "reason": "已配置工艺路线，建议设为自制件",
             })
         
-        # 变体管理由「变体管理」标签页控制，不再建议配置件（Configure 已移除）
+        # 属性管理由「属性管理」标签页控制，不再建议配置件（Configure 已移除）
         
         # 选择置信度最高的建议
         if suggestions:
@@ -474,12 +474,12 @@ class MaterialSourceSuggestionService:
                     missing_configs.append("委外工序配置")
             
             elif material.source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件需要变体属性和BOM变体
+                # 配置件需要属性和BOM配置
                 if not material.variant_attributes:
-                    missing_configs.append("变体属性配置")
+                    missing_configs.append("属性配置")
                 
                 if not source_config.get("bom_variants"):
-                    missing_configs.append("BOM变体配置")
+                    missing_configs.append("BOM属性配置")
 
             elif material.source_type == SOURCE_TYPE_SERVICE:
                 # 服务类物料无需额外配置

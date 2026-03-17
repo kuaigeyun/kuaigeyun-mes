@@ -99,7 +99,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
 
     // Styles based on the existing BasicLayout input styles（与顶栏上线助手等 32px 高度对齐）
     const inputStyle: React.CSSProperties = {
-        width: 280,
+        width: 220,
         height: 32,
         borderRadius: '16px',
         backgroundColor: isLightModeLightBg ? token?.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
@@ -115,7 +115,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                 // Close if user clicks outside
                 if (!visible) setOpen(false);
             }}
-            styles={{ root: { width: 280 } }}
+            styles={{ root: { width: 220 } }}
             destroyOnHidden
         >
             <Input

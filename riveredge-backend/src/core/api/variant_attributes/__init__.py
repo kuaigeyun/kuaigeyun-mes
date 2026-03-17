@@ -1,5 +1,5 @@
 """
-变体属性定义 API 模块
+属性定义 API 模块
 
 Author: Luigi Lu
 Date: 2026-01-08

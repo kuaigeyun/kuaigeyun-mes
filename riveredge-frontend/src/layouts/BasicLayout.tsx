@@ -4326,25 +4326,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
             { keys: '?', desc: t('common.shortcutHelp') },
           ]}
-          renderItem={({ keys, desc }) => (
-            <List.Item>
-              <Space>
-                <kbd style={{
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: token.colorFillSecondary,
-                  border: `1px solid ${token.colorBorderSecondary}`,
-                  fontSize: 12,
-                  fontFamily: CODE_FONT_FAMILY,
-                  minWidth: 88,
-                  textAlign: 'center',
-                }}>
-                  {keys}
-                </kbd>
-                <span>{desc}</span>
-              </Space>
-            </List.Item>
-          )}
+          renderItem={({ keys, desc }) => {
+            const keyParts = keys.split(/\s*\+\s*/).map((s: string) => s.trim());
+            const keyStyle: React.CSSProperties = {
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '5px 10px',
+              borderRadius: 6,
+              background: isDarkMode ? 'rgba(255,255,255,0.12)' : '#f0f0f0',
+              border: isDarkMode ? '1px solid rgba(255,255,255,0.15)' : '1px solid #e0e0e0',
+              boxShadow: isDarkMode ? '0 2px 4px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.08)',
+              fontSize: 12,
+              fontFamily: CODE_FONT_FAMILY,
+              fontWeight: 500,
+              color: isDarkMode ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.65)',
+            };
+            return (
+              <List.Item>
+                <Space align="center">
+                  <Space size={4}>
+                    {keyParts.map((part, i) => (
+                      <kbd key={i} style={keyStyle}>
+                        {part}
+                      </kbd>
+                    ))}
+                  </Space>
+                  <span>{desc}</span>
+                </Space>
+              </List.Item>
+            );
+          }}
         />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {t('common.shortcutHelpHint')}

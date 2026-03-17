@@ -86,7 +86,7 @@ class Material(BaseModel):
     """
     物料模型
     
-    物料基础信息，支持多单位、批号、变体管理。
+    物料基础信息，支持多单位、批号、属性管理。
     
     Attributes:
         id: 主键ID（自增ID，内部使用）
@@ -99,8 +99,8 @@ class Material(BaseModel):
         base_unit: 基础单位
         units: 多单位管理（JSON格式存储）
         batch_managed: 是否启用批号管理
-        variant_managed: 是否启用变体管理
-        variant_attributes: 变体属性（JSON格式存储）
+        variant_managed: 是否启用属性管理
+        variant_attributes: 属性（JSON格式存储，如颜色、尺寸等）
         description: 描述
         brand: 品牌
         model: 型号
@@ -162,9 +162,9 @@ class Material(BaseModel):
         description="默认序列号规则（可选）"
     )
 
-    # 变体管理
-    variant_managed = fields.BooleanField(default=False, description="是否启用变体管理")
-    variant_attributes = fields.JSONField(null=True, description="变体属性（JSON格式，如颜色、尺寸等）")
+    # 属性管理
+    variant_managed = fields.BooleanField(default=False, description="是否启用属性管理")
+    variant_attributes = fields.JSONField(null=True, description="属性（JSON格式，如颜色、尺寸等）")
     
     # 物料来源控制（核心功能，新增）
     source_type = fields.CharField(
@@ -174,7 +174,7 @@ class Material(BaseModel):
     )
     source_config = fields.JSONField(
         null=True, 
-        description="物料来源相关配置（JSON格式），包含：BOM、工艺路线、供应商、委外供应商、委外工序、变体属性等"
+        description="物料来源相关配置（JSON格式），包含：BOM、工艺路线、供应商、委外供应商、委外工序、属性等"
     )
     
     # 默认值设置（JSON格式存储）

@@ -606,7 +606,7 @@ const SalesForecastsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '变体属性',
+                      title: '属性',
                       dataIndex: 'variant_attributes',
                       width: 140,
                       render: (_: any, __: any, index: number) => (

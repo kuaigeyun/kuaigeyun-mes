@@ -298,7 +298,7 @@ class ProductionCostCalculationRequest(BaseModel):
     """
     material_id: int = Field(..., description="物料ID")
     quantity: Decimal = Field(..., gt=0, description="数量")
-    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="变体属性（配置件时必须提供）")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="属性（配置件时必须提供）")
     calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
 
 
@@ -312,7 +312,7 @@ class ProductionCostCalculationResponse(BaseModel):
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
     source_type: str = Field(..., description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
-    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="变体属性（配置件时提供）")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="属性（配置件时提供）")
     quantity: Decimal = Field(..., description="数量")
     material_cost: Decimal = Field(..., description="材料成本")
     labor_cost: Decimal = Field(..., description="加工成本（工序成本）")

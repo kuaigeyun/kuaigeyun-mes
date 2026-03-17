@@ -127,8 +127,8 @@ class WorkOrder(BaseModel):
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
 
-    # 配置件变体属性（Configure 产品时用于 BOM 变体匹配）
-    variant_attributes = fields.JSONField(null=True, description="变体属性（配置件专用）")
+    # 配置件属性（Configure 产品时用于 BOM 匹配）
+    variant_attributes = fields.JSONField(null=True, description="属性（配置件专用）")
     # 配置位选择（BOM 配置位，格式 {"parentMaterialId_configurableGroupId": componentId}）
     configurable_selections = fields.JSONField(null=True, description="配置位选择（用户在开工单时选择的配置位物料）")
 

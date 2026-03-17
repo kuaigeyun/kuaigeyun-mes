@@ -1,7 +1,7 @@
 """
-变体属性定义 Schema 模块
+属性定义 Schema 模块
 
-定义变体属性定义相关的 Pydantic Schema，用于 API 请求和响应验证。
+定义属性定义相关的 Pydantic Schema，用于 API 请求和响应验证。
 
 Author: Luigi Lu
 Date: 2026-01-08
@@ -16,9 +16,9 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class MaterialVariantAttributeDefinitionBase(BaseModel):
     """
-    变体属性定义基础 Schema
+    属性定义基础 Schema
     
-    包含变体属性定义的基本字段，用于创建和更新操作。
+    包含属性定义的基本字段，用于创建和更新操作。
     """
     attribute_name: str = Field(..., min_length=1, max_length=50, description="属性名称（唯一标识，如：颜色、尺寸）")
     attribute_type: str = Field(..., description="属性类型（enum/text/number/date/boolean）")
@@ -79,18 +79,18 @@ class MaterialVariantAttributeDefinitionBase(BaseModel):
 
 class MaterialVariantAttributeDefinitionCreate(MaterialVariantAttributeDefinitionBase):
     """
-    创建变体属性定义 Schema
+    创建属性定义 Schema
     
-    用于创建新的变体属性定义。
+    用于创建新的属性定义。
     """
     pass
 
 
 class MaterialVariantAttributeDefinitionUpdate(BaseModel):
     """
-    更新变体属性定义 Schema
+    更新属性定义 Schema
     
-    用于更新变体属性定义，所有字段都是可选的。
+    用于更新属性定义，所有字段都是可选的。
     """
     attribute_name: Optional[str] = Field(None, min_length=1, max_length=50, description="属性名称")
     attribute_type: Optional[str] = Field(None, description="属性类型")
@@ -118,9 +118,9 @@ class MaterialVariantAttributeDefinitionUpdate(BaseModel):
 
 class MaterialVariantAttributeDefinitionResponse(MaterialVariantAttributeDefinitionBase):
     """
-    变体属性定义响应 Schema
+    属性定义响应 Schema
     
-    用于返回变体属性定义信息，包含所有字段和系统字段。
+    用于返回属性定义信息，包含所有字段和系统字段。
     """
     uuid: UUID = Field(..., description="业务ID（UUID）")
     tenant_id: int = Field(..., description="组织ID")
@@ -139,9 +139,9 @@ class MaterialVariantAttributeDefinitionResponse(MaterialVariantAttributeDefinit
 
 class MaterialVariantAttributeHistoryResponse(BaseModel):
     """
-    变体属性定义版本历史响应 Schema
+    属性定义版本历史响应 Schema
     
-    用于返回变体属性定义的版本历史信息。
+    用于返回属性定义的版本历史信息。
     """
     uuid: UUID = Field(..., description="业务ID（UUID）")
     tenant_id: int = Field(..., description="组织ID")
@@ -163,9 +163,9 @@ class MaterialVariantAttributeHistoryResponse(BaseModel):
 
 class VariantAttributeValidationRequest(BaseModel):
     """
-    变体属性验证请求 Schema
+    属性验证请求 Schema
     
-    用于验证变体属性值是否符合定义。
+    用于验证属性值是否符合定义。
     """
     attribute_name: str = Field(..., description="属性名称")
     attribute_value: Any = Field(..., description="属性值")
@@ -173,9 +173,9 @@ class VariantAttributeValidationRequest(BaseModel):
 
 class VariantAttributeValidationResponse(BaseModel):
     """
-    变体属性验证响应 Schema
+    属性验证响应 Schema
     
-    用于返回变体属性验证结果。
+    用于返回属性验证结果。
     """
     is_valid: bool = Field(..., description="是否有效")
     error_message: Optional[str] = Field(None, description="错误信息（如果无效）")

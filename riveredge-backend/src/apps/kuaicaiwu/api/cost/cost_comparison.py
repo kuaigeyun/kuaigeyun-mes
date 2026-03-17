@@ -41,7 +41,7 @@ async def compare_standard_vs_actual_cost(
     - 采购件（Buy）：对比标准采购成本 vs 实际采购订单成本
     - 委外件（Outsource）：对比标准委外成本 vs 实际委外工单成本
     - 虚拟件（Phantom）：不单独对比，成本计入上层物料
-    - 配置件（Configure）：根据变体BOM对比标准成本和实际成本
+    - 配置件（Configure）：根据属性BOM对比标准成本和实际成本
     
     Args:
         data: 成本对比请求数据

@@ -1,7 +1,7 @@
 """
-变体属性定义服务模块
+属性定义服务模块
 
-提供变体属性定义的 CRUD 操作、版本管理、属性验证等功能。
+提供属性定义的 CRUD 操作、版本管理、属性验证等功能。
 
 Author: Luigi Lu
 Date: 2026-01-08
@@ -21,9 +21,9 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 class MaterialVariantAttributeService:
     """
-    变体属性定义服务类
-    
-    提供变体属性定义的 CRUD 操作和版本管理。
+属性定义服务类
+
+    提供属性定义的 CRUD 操作和版本管理。
     """
     
     @staticmethod
@@ -44,7 +44,7 @@ class MaterialVariantAttributeService:
         created_by: Optional[int] = None,
     ) -> MaterialVariantAttributeDefinition:
         """
-        创建变体属性定义
+        创建属性定义
         
         Args:
             tenant_id: 组织ID
@@ -111,12 +111,12 @@ class MaterialVariantAttributeService:
                 changed_by=created_by,
             )
             
-            logger.info(f"创建变体属性定义成功: {attribute_name} (tenant_id={tenant_id})")
+            logger.info(f"创建属性定义成功: {attribute_name} (tenant_id={tenant_id})")
             return attribute_def
             
         except IntegrityError as e:
-            logger.error(f"创建变体属性定义失败: {e}")
-            raise ValidationError(f"创建变体属性定义失败: {str(e)}")
+            logger.error(f"创建属性定义失败: {e}")
+            raise ValidationError(f"创建属性定义失败: {str(e)}")
     
     @staticmethod
     async def get_attribute_definition(
@@ -124,7 +124,7 @@ class MaterialVariantAttributeService:
         uuid: str,
     ) -> MaterialVariantAttributeDefinition:
         """
-        根据UUID获取变体属性定义
+        根据UUID获取属性定义
         
         Args:
             tenant_id: 组织ID
@@ -143,7 +143,7 @@ class MaterialVariantAttributeService:
         ).first()
         
         if not attribute_def:
-            raise NotFoundError(f"变体属性定义不存在: {uuid}")
+            raise NotFoundError(f"属性定义不存在: {uuid}")
         
         return attribute_def
     
@@ -154,7 +154,7 @@ class MaterialVariantAttributeService:
         attribute_type: Optional[str] = None,
     ) -> List[MaterialVariantAttributeDefinition]:
         """
-        列出变体属性定义
+        列出属性定义
         
         Args:
             tenant_id: 组织ID
@@ -197,7 +197,7 @@ class MaterialVariantAttributeService:
         updated_by: Optional[int] = None,
     ) -> MaterialVariantAttributeDefinition:
         """
-        更新变体属性定义
+        更新属性定义
         
         Args:
             tenant_id: 组织ID
@@ -292,7 +292,7 @@ class MaterialVariantAttributeService:
                 changed_by=updated_by,
             )
             
-            logger.info(f"更新变体属性定义成功: {uuid} (tenant_id={tenant_id})")
+            logger.info(f"更新属性定义成功: {uuid} (tenant_id={tenant_id})")
         
         return attribute_def
     
@@ -303,7 +303,7 @@ class MaterialVariantAttributeService:
         deleted_by: Optional[int] = None,
     ) -> bool:
         """
-        删除变体属性定义（软删除）
+        删除属性定义（软删除）
         
         Args:
             tenant_id: 组织ID
@@ -327,7 +327,7 @@ class MaterialVariantAttributeService:
             updated_by=deleted_by,
         )
         
-        logger.info(f"删除变体属性定义成功: {uuid} (tenant_id={tenant_id})")
+        logger.info(f"删除属性定义成功: {uuid} (tenant_id={tenant_id})")
         return True
     
     @staticmethod
@@ -336,7 +336,7 @@ class MaterialVariantAttributeService:
         attribute_definition_uuid: str,
     ) -> List[MaterialVariantAttributeHistory]:
         """
-        获取变体属性定义的版本历史
+        获取属性定义的版本历史
         
         Args:
             tenant_id: 组织ID
@@ -365,7 +365,7 @@ class MaterialVariantAttributeService:
         attribute_value: Any,
     ) -> tuple[bool, Optional[str]]:
         """
-        验证变体属性值是否符合定义
+        验证属性值是否符合定义
         
         Args:
             tenant_id: 组织ID
@@ -442,7 +442,7 @@ class MaterialVariantAttributeService:
         changed_by: Optional[int] = None,
     ) -> MaterialVariantAttributeHistory:
         """
-        保存变体属性定义版本历史（内部方法）
+        保存属性定义版本历史（内部方法）
         
         Args:
             tenant_id: 组织ID

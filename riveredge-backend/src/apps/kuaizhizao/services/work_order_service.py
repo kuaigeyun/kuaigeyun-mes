@@ -564,10 +564,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     logger.warning(f"工单创建失败 - {error_msg}")
                     raise ValidationError(error_msg)
                 elif source_type == SOURCE_TYPE_CONFIGURE:
-                    # 配置件：必须提供变体属性以确定具体 BOM 变体
+                    # 配置件：必须提供属性以确定具体 BOM 配置
                     variant_attrs = getattr(work_order_data, "variant_attributes", None)
                     if not variant_attrs or not isinstance(variant_attrs, dict) or len(variant_attrs) == 0:
-                        error_msg = f"配置件必须提供变体属性（variant_attributes），物料: {product_code} ({product_name})，例如 {{\"color\":\"red\",\"size\":\"M\"}}"
+                        error_msg = f"配置件必须提供属性（variant_attributes），物料: {product_code} ({product_name})，例如 {{\"color\":\"red\",\"size\":\"M\"}}"
                         logger.warning(f"工单创建失败 - {error_msg}")
                         raise ValidationError(error_msg)
                 

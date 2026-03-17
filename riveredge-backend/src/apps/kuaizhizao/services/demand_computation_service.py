@@ -884,7 +884,7 @@ class DemandComputationService:
         - 采购件：生成采购订单需求
         - 虚拟件：自动跳过，直接展开下层物料
         - 委外件：生成委外工单需求
-        - 配置件：按变体展开BOM
+        - 配置件：按属性展开BOM
         
         Args:
             tenant_id: 租户ID
@@ -988,7 +988,7 @@ class DemandComputationService:
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
+                # 配置件：按属性展开BOM（从需求明细获取 variant_attributes）
                 logger.debug(f"处理配置件，物料ID: {material_id}, 物料编码: {material.main_code}")
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
                 cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
@@ -1184,7 +1184,7 @@ class DemandComputationService:
         - 采购件：生成采购计划（自动填充默认供应商）
         - 虚拟件：自动跳过，直接展开下层物料
         - 委外件：生成委外计划
-        - 配置件：按变体展开BOM
+        - 配置件：按属性展开BOM
         
         Args:
             tenant_id: 租户ID
@@ -1293,7 +1293,7 @@ class DemandComputationService:
                     all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体展开BOM（从需求明细获取 variant_attributes）
+                # 配置件：按属性展开BOM（从需求明细获取 variant_attributes）
                 variant_attrs = getattr(demand_item, "variant_attributes", None)
                 cfg_selections = _safe_configurable_selections(getattr(demand_item, "configurable_selections", None))
                 expanded_requirements = await expand_bom_with_source_control(
@@ -1854,7 +1854,7 @@ class DemandComputationService:
                     created_wo_material_ids.add(item.material_id)
                     
             elif source_type == SOURCE_TYPE_CONFIGURE:
-                # 配置件：按变体生成生产工单（按物料聚合，避免重复）
+                # 配置件：按属性生成生产工单（按物料聚合，避免重复）
                 if item.material_id in created_wo_material_ids:
                     continue
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:

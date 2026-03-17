@@ -37,7 +37,7 @@ async def calculate_production_cost(
     根据物料来源类型计算生产成本：
     - 自制件（Make）：材料成本（BOM展开）+ 加工成本（工序成本）+ 制造费用
     - 虚拟件（Phantom）：不单独核算，成本直接计入上层物料
-    - 配置件（Configure）：根据选择的变体BOM，按变体计算成本
+    - 配置件（Configure）：根据选择的属性BOM，按属性计算成本
     
     Args:
         data: 生产成本核算请求数据

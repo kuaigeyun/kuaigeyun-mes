@@ -3,7 +3,7 @@
  *
  * 实现物料的新建和编辑功能，包含标签页：
  * 1. 基本信息（含物料来源）
- * 2. 变体管理
+ * 2. 属性管理
  * 3. 多单位管理
  * 4. 编码映射
  * 5. 默认值设置
@@ -109,7 +109,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
 
-  // 打开表单时同步 variantManaged 状态（编辑已有变体物料时，变体标签页需可用）
+  // 打开表单时同步 variantManaged 状态（编辑已有属性物料时，属性管理标签页需可用）
   useEffect(() => {
     if (open) {
       const vm = material?.variantManaged ?? (material as any)?.variant_managed ?? initialValues?.variantManaged ?? initialValues?.variant_managed ?? false;
@@ -904,12 +904,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   /**
-   * 处理变体管理开关变化
+   * 处理属性管理开关变化
    */
   const handleVariantManagedChange = (checked: boolean) => {
     setVariantManaged(checked);
     if (!checked) {
-      // 如果关闭变体管理，清空变体属性
+      // 如果关闭属性管理，清空属性
       formRef.current?.setFieldsValue({
         variantAttributes: undefined,
       });
@@ -1960,7 +1960,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 };
 
 /**
- * 变体管理标签页
+ * 属性管理标签页
  */
 const VariantManagementTab: React.FC = () => {
   const { t } = useTranslation();
@@ -1968,7 +1968,7 @@ const VariantManagementTab: React.FC = () => {
   const [variantAttributeDefinitions, setVariantAttributeDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
 
-  // 加载变体属性定义
+  // 加载属性定义
   useEffect(() => {
     const loadDefinitions = async () => {
       setDefinitionsLoading(true);

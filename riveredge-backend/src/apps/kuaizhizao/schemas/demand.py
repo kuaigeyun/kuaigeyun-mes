@@ -253,8 +253,8 @@ class DemandItemBase(BaseSchema):
     work_order_id: Optional[int] = Field(None, description="工单ID")
     work_order_code: Optional[str] = Field(None, max_length=50, description="工单编码")
 
-    # 配置件变体属性（Configure 物料时用于 BOM 变体匹配）
-    variant_attributes: Optional[dict] = Field(None, description="变体属性（如 {\"color\":\"red\",\"size\":\"M\"}）")
+    # 配置件属性（Configure 物料时用于 BOM 匹配）
+    variant_attributes: Optional[dict] = Field(None, description="属性（如 {\"color\":\"red\",\"size\":\"M\"}）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
 
     notes: Optional[str] = Field(None, description="备注")

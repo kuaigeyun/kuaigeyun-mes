@@ -221,8 +221,8 @@ const ProductionCostPage: React.FC = () => {
         />
         <ProFormTextArea
           name="variant_attributes"
-          label="变体属性（配置件需要）"
-          placeholder='请输入变体属性JSON，例如：{"颜色":"红色","尺寸":"大"}'
+          label="属性（配置件需要）"
+          placeholder='请输入属性JSON，例如：{"颜色":"红色","尺寸":"大"}'
           fieldProps={{
             rows: 3,
           }}

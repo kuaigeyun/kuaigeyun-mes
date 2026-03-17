@@ -39,8 +39,8 @@ class SalesForecastItem(BaseModel):
     confidence_level = fields.DecimalField(max_digits=5, decimal_places=2, null=True, description="置信度")
     forecast_method = fields.CharField(max_length=50, null=True, description="预测方法")
 
-    # 配置件变体属性（Configure 物料时用于 BOM 变体匹配）
-    variant_attributes = fields.JSONField(null=True, description="变体属性（配置件专用）")
+    # 配置件属性（Configure 物料时用于 BOM 匹配）
+    variant_attributes = fields.JSONField(null=True, description="属性（配置件专用）")
 
     notes = fields.TextField(null=True, description="备注")
 

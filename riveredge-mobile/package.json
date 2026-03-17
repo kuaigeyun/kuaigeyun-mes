@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "export:web": "expo export -p web",
+    "build:web": "expo export -p web"
   },
   "dependencies": {
     "@ant-design/icons-react-native": "^2.3.2",

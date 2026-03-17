@@ -10,7 +10,7 @@
 - Buy（采购件）：外部采购获得
 - Phantom（虚拟件）：不实际存在，仅用于BOM展开
 - Outsource（委外件）：委托外部加工
-- Configure（配置件）：按需配置，变体管理
+- Configure（配置件）：按需配置，属性管理
 
 Author: Auto (AI Assistant)
 Date: 2026-01-16
@@ -83,7 +83,7 @@ def _resolve_configure_variant(
     default_variant: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    根据变体属性匹配 bom_variants，返回对应的 BOM 版本配置。
+    根据属性匹配 bom_variants，返回对应的 BOM 版本配置。
     bom_variants 格式: { "color=red,size=M": { "version": "1.0" }, ... }
     variant_attributes 格式: { "color": "red", "size": "M" }
     未匹配时回退到 default_variant 对应的 key。
@@ -99,7 +99,7 @@ def _resolve_configure_variant(
             attrs = {}
     if not isinstance(attrs, dict):
         attrs = {}
-    # 构建变体 key：按属性名排序，格式 "attr1=val1,attr2=val2"
+    # 构建属性 key：按属性名排序，格式 "attr1=val1,attr2=val2"
     key_parts = sorted(f"{k}={v}" for k, v in attrs.items() if v is not None and str(v).strip())
     variant_key = ",".join(key_parts) if key_parts else None
     if variant_key and variant_key in bom_variants:
@@ -262,15 +262,15 @@ async def validate_material_source_config(
             errors.append(f"委外件必须有委外工序配置，物料: {material.main_code} ({material.name})")
             
     elif source_type == SOURCE_TYPE_CONFIGURE:
-        # 配置件必须有变体属性和BOM变体
+        # 配置件必须有属性和BOM配置
         variant_attributes = material.variant_attributes
         bom_variants = source_config.get("bom_variants")
         
         if not variant_attributes:
-            errors.append(f"配置件必须有变体属性配置，物料: {material.main_code} ({material.name})")
+            errors.append(f"配置件必须有属性配置，物料: {material.main_code} ({material.name})")
             
         if not bom_variants:
-            errors.append(f"配置件必须有BOM变体配置，物料: {material.main_code} ({material.name})")
+            errors.append(f"配置件必须有BOM属性配置，物料: {material.main_code} ({material.name})")
 
     elif source_type == SOURCE_TYPE_SERVICE:
         # 服务类物料无需额外配置
@@ -306,7 +306,7 @@ async def expand_bom_with_source_control(
         bom_version: 全局 BOM 版本（可选），用于顶层物料
         use_default_bom: 是否使用默认版本（is_default=True），当 bom_version 未指定时生效
         material_bom_versions: 按物料ID指定版本（可选），格式 {material_id: version}
-        variant_attributes: 配置件变体属性（可选），格式 {attr: value}，用于匹配 bom_variants
+        variant_attributes: 配置件属性（可选），格式 {attr: value}，用于匹配 bom_variants
         configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
         
@@ -324,7 +324,7 @@ async def expand_bom_with_source_control(
     
     source_type = material.source_type
 
-    # 配置件：根据变体属性解析 BOM 版本
+    # 配置件：根据属性解析 BOM 版本
     effective_material_bom_versions = dict(material_bom_versions) if material_bom_versions else {}
     if source_type == SOURCE_TYPE_CONFIGURE:
         source_config = material.source_config or {}
@@ -384,7 +384,7 @@ async def expand_bom_with_source_control(
             if bom_item.waste_rate:
                 component_qty = component_qty * (1 + float(bom_item.waste_rate) / 100)
             
-            # 递归展开子物料（传递版本参数和变体属性）
+            # 递归展开子物料（传递版本参数和属性）
             child_requirements = await expand_bom_with_source_control(
                 tenant_id=tenant_id,
                 material_id=component.id,

@@ -48,13 +48,13 @@ class ProductionCostService:
         根据物料来源类型计算生产成本：
         - 自制件（Make）：材料成本（BOM展开）+ 加工成本（工序成本）+ 制造费用
         - 虚拟件（Phantom）：不单独核算，成本直接计入上层物料
-        - 配置件（Configure）：根据选择的变体BOM，按变体计算成本
+        - 配置件（Configure）：根据选择的属性BOM，按属性计算成本
         
         Args:
             tenant_id: 组织ID
             material_id: 物料ID
             quantity: 数量
-            variant_attributes: 变体属性（配置件时需要）
+            variant_attributes: 属性（配置件时需要）
             calculation_date: 核算日期
             created_by: 创建人ID
             
@@ -97,9 +97,9 @@ class ProductionCostService:
                 calculation_date=calculation_date or date.today()
             )
         elif source_type == "Configure":
-            # 配置件成本核算：根据变体BOM计算
+            # 配置件成本核算：根据属性BOM计算
             if not variant_attributes:
-                raise ValidationError("配置件必须提供变体属性（variant_attributes）")
+                raise ValidationError("配置件必须提供属性（variant_attributes）")
             
             result = await self._calculate_configure_cost(
                 tenant_id=tenant_id,
@@ -256,24 +256,24 @@ class ProductionCostService:
         """
         计算配置件成本
         
-        根据选择的变体BOM，按变体计算成本。
+        根据选择的属性BOM，按属性计算成本。
         
         Args:
             tenant_id: 组织ID
             material: 物料对象
             quantity: 数量
-            variant_attributes: 变体属性
+            variant_attributes: 属性
             calculation_date: 核算日期
             created_by: 创建人ID
             
         Returns:
             Dict[str, Any]: 成本核算结果
         """
-        # 根据变体属性获取对应的BOM版本
-        # TODO: 实现变体BOM匹配逻辑
-        # 这里简化处理：使用默认BOM，后续需要根据variant_attributes匹配对应的变体BOM
+        # 根据属性获取对应的BOM版本
+        # TODO: 实现属性BOM匹配逻辑
+        # 这里简化处理：使用默认BOM，后续需要根据variant_attributes匹配对应的属性BOM
         
-        # 获取配置件的BOM（应该根据变体属性匹配）
+        # 获取配置件的BOM（应该根据属性匹配）
         bom_items = await get_bom_items_by_material_id(
             tenant_id=tenant_id,
             material_id=material.id,
@@ -291,7 +291,7 @@ class ProductionCostService:
                 created_by=created_by
             )
         
-        # 计算材料成本（基于变体BOM）
+        # 计算材料成本（基于属性BOM）
         material_cost, material_cost_breakdown = await self._calculate_material_cost_from_bom(
             tenant_id=tenant_id,
             material=material,
@@ -356,7 +356,7 @@ class ProductionCostService:
             tenant_id: 组织ID
             material: 物料对象
             quantity: 数量
-            variant_attributes: 变体属性（配置件使用）
+            variant_attributes: 属性（配置件使用）
             
         Returns:
             tuple[Decimal, List[Dict[str, Any]]]: (材料成本, 成本明细)
@@ -449,8 +449,8 @@ class ProductionCostService:
                         "level": level + 1,
                     })
                 elif component_source_type == "Configure":
-                    # 配置件：需要变体属性，这里简化处理
-                    # TODO: 实现配置件的变体BOM匹配
+                    # 配置件：需要属性，这里简化处理
+                    # TODO: 实现配置件的属性BOM匹配
                     logger.warning(f"配置件 {component.main_code} 在BOM展开中暂不支持，使用默认单价")
                     unit_price = await self._get_material_unit_price(
                         tenant_id=tenant_id,

@@ -28,7 +28,7 @@ interface TechStackItem {
   description: string;
   license: string;
   commercialUse: boolean;
-  category: 'backend' | 'frontend' | 'database' | 'infrastructure';
+  category: 'backend' | 'frontend' | 'database' | 'infrastructure' | 'mobile';
   isCore?: boolean; // 是否为核心技术组件
 }
 
@@ -566,6 +566,82 @@ const techStackData: TechStackItem[] = [
     commercialUse: true,
     category: 'infrastructure',
   },
+
+  // 移动端技术栈
+  {
+    name: 'Expo',
+    version: '~54.0',
+    description: 'React Native 开发平台，构建、部署与 OTA 更新',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+    isCore: true,
+  },
+  {
+    name: 'React Native',
+    version: '0.81.x',
+    description: '跨平台移动端与 Web 应用框架',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+    isCore: true,
+  },
+  {
+    name: '@ant-design/react-native',
+    version: '^5.4',
+    description: 'Ant Design 移动端 UI 组件库',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'expo-router',
+    version: '~6.0',
+    description: '基于文件的路由，Expo 官方路由方案',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'react-native-reanimated',
+    version: '~4.1',
+    description: '高性能动画库',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'react-native-screens',
+    version: '~4.16',
+    description: '原生导航容器，与 React Navigation 配合',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'react-native-gesture-handler',
+    version: '~2.28',
+    description: '手势处理库',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'expo-secure-store',
+    version: '^55',
+    description: '安全存储（钥匙串/Keystore）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'TypeScript',
+    version: '~5.9',
+    description: '移动端静态类型（riveredge-mobile）',
+    license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'mobile',
+  },
 ];
 
 /**
@@ -599,6 +675,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
   // 按分类分组
   const backendTech = techStackData.filter(item => item.category === 'backend');
   const frontendTech = techStackData.filter(item => item.category === 'frontend');
+  const mobileTech = techStackData.filter(item => item.category === 'mobile');
   const databaseTech = techStackData.filter(item => item.category === 'database');
   const infrastructureTech = techStackData.filter(item => item.category === 'infrastructure');
 
@@ -678,6 +755,12 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             </div>
             <div>
               <Text strong>Ant Design</Text>：{t('components.techStackModal.overview.antd')}
+            </div>
+            <div>
+              <Text strong>Expo</Text>：{t('components.techStackModal.overview.expo')}
+            </div>
+            <div>
+              <Text strong>React Native</Text>：{t('components.techStackModal.overview.reactNative')}
             </div>
           </Space>
           <Divider />
@@ -877,6 +960,21 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
         <div style={tabContentStyle}>
           <Table
             dataSource={frontendTech}
+            columns={columns}
+            rowKey="name"
+            pagination={{ pageSize: 10 }}
+            size="small"
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'mobile',
+      label: t('components.techStackModal.tabMobile', { count: mobileTech.length }),
+      children: (
+        <div style={tabContentStyle}>
+          <Table
+            dataSource={mobileTech}
             columns={columns}
             rowKey="name"
             pagination={{ pageSize: 10 }}

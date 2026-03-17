@@ -28,7 +28,8 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#ffffff"
     },
     "plugins": [
       "expo-router",

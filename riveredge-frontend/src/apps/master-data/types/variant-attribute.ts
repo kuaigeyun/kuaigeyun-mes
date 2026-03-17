@@ -1,12 +1,12 @@
 /**
- * 变体属性定义类型定义
+ * 属性定义类型定义
  *
  * Author: Luigi Lu
  * Date: 2026-01-08
  */
 
 /**
- * 变体属性类型
+ * 属性类型
  */
 export type VariantAttributeType = 'enum' | 'text' | 'number' | 'date' | 'boolean';
 
@@ -32,7 +32,7 @@ export interface AttributeDependency {
 }
 
 /**
- * 变体属性定义基础接口
+ * 属性定义基础接口
  */
 export interface VariantAttributeDefinitionBase {
   attribute_name: string;
@@ -50,17 +50,17 @@ export interface VariantAttributeDefinitionBase {
 }
 
 /**
- * 创建变体属性定义请求
+ * 创建属性定义请求
  */
 export interface VariantAttributeDefinitionCreate extends VariantAttributeDefinitionBase {}
 
 /**
- * 更新变体属性定义请求
+ * 更新属性定义请求
  */
 export interface VariantAttributeDefinitionUpdate extends Partial<VariantAttributeDefinitionBase> {}
 
 /**
- * 变体属性定义响应
+ * 属性定义响应
  */
 export interface VariantAttributeDefinition extends VariantAttributeDefinitionBase {
   uuid: string;
@@ -73,7 +73,7 @@ export interface VariantAttributeDefinition extends VariantAttributeDefinitionBa
 }
 
 /**
- * 变体属性定义列表查询参数
+ * 属性定义列表查询参数
  */
 export interface VariantAttributeDefinitionListParams {
   page?: number;
@@ -83,7 +83,7 @@ export interface VariantAttributeDefinitionListParams {
 }
 
 /**
- * 变体属性定义版本历史
+ * 属性定义版本历史
  */
 export interface VariantAttributeDefinitionHistory {
   uuid: string;

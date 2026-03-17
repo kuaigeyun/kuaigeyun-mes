@@ -354,7 +354,7 @@ const WorkOrdersPage: React.FC = () => {
             validationErrors.push('虚拟件不应创建工单')
           } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
           else if (sourceType === 'Outsource') validationErrors.push('委外件需配置委外供应商和工序')
-          else if (sourceType === 'Configure') validationErrors.push('配置件需填写变体属性')
+          else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
           setSelectedMaterialSourceInfo({
             sourceType,
             sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
@@ -636,7 +636,7 @@ const WorkOrdersPage: React.FC = () => {
         console.error('加载工单工序失败', e)
         setSelectedOperations([])
       }
-      // 编辑时 product_id 禁用，不加载物料来源（变体属性字段在编辑时也不展示）
+      // 编辑时 product_id 禁用，不加载物料来源（属性字段在编辑时也不展示）
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
@@ -1504,7 +1504,7 @@ const WorkOrdersPage: React.FC = () => {
           values.variant_attributes = undefined
         }
       }
-      // 编辑时变体属性字段不展示，保留原有值
+      // 编辑时属性字段不展示，保留原有值
       if (isEdit && currentWorkOrder?.id && values.variant_attributes == null && (currentWorkOrder as any).variant_attributes != null) {
         values.variant_attributes = (currentWorkOrder as any).variant_attributes
       }
@@ -3461,7 +3461,7 @@ const WorkOrdersPage: React.FC = () => {
                     else if (sourceType === 'Outsource')
                       validationErrors.push('委外件需配置委外供应商和工序')
                     else if (sourceType === 'Configure')
-                      validationErrors.push('配置件需填写变体属性')
+                      validationErrors.push('配置件需填写属性')
                     setSelectedMaterialSourceInfo({
                       sourceType,
                       sourceTypeName: sourceType
@@ -3484,10 +3484,10 @@ const WorkOrdersPage: React.FC = () => {
         {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
           <ProFormText
             name="variant_attributes"
-            label="变体属性"
+            label="属性"
             placeholder='配置件必填，如 {"color":"red","size":"M"}'
             rules={[
-              { required: true, message: '配置件必须填写变体属性' },
+              { required: true, message: '配置件必须填写属性' },
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve()

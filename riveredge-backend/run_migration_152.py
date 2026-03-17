@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-手动执行迁移 152：变体属性定义增加 allow_multiple 字段
+手动执行迁移 152：属性定义增加 allow_multiple 字段
 
 用法：cd riveredge-backend && PYTHONPATH=src python run_migration_152.py
 """

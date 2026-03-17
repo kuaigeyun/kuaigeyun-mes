@@ -94,7 +94,7 @@ export interface SalesOrderItem {
   item_amount?: number;
   work_order_id?: number;
   work_order_code?: string;
-  /** 变体属性（配置件专用，如 {"color":"red","size":"M"}） */
+  /** 属性（配置件专用，如 {"color":"red","size":"M"}） */
   variant_attributes?: Record<string, unknown>;
   notes?: string;
   created_at?: string;

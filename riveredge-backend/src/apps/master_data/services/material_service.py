@@ -469,10 +469,10 @@ class MaterialService:
         else:
             logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
         
-        # 变体管理相关验证
+        # 属性管理相关验证
         master_material = None
         if data.variant_managed and data.variant_attributes:
-            # 如果是变体物料，需要找到主物料
+            # 如果是属性物料，需要找到主物料
             # 主物料：variant_managed=True, variant_attributes=null
             master_material = await Material.filter(
                 tenant_id=tenant_id,
@@ -484,11 +484,11 @@ class MaterialService:
             
             if not master_material:
                 raise ValidationError(
-                    f"变体物料必须关联到已存在的主物料。主编码 {data.main_code} 对应的主物料不存在。"
+                    f"属性物料必须关联到已存在的主物料。主编码 {data.main_code} 对应的主物料不存在。"
                     f"请先创建主物料（variant_managed=True, variant_attributes=null）"
                 )
             
-            # 验证变体属性值
+            # 验证属性值
             from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
             for attr_name, attr_value in data.variant_attributes.items():
                 is_valid, error_message = await MaterialVariantAttributeService.validate_attribute_value(
@@ -497,34 +497,34 @@ class MaterialService:
                     attribute_value=attr_value,
                 )
                 if not is_valid:
-                    raise ValidationError(f"变体属性验证失败: {error_message}")
+                    raise ValidationError(f"属性验证失败: {error_message}")
             
-            # 检查变体组合唯一性（同一主物料下，相同的属性组合必须唯一）
+            # 检查属性组合唯一性（同一主物料下，相同的属性组合必须唯一）
             # 注意：PostgreSQL的JSONB字段比较是精确匹配，需要确保属性顺序一致
             # 使用排序后的JSON字符串进行比较，确保键顺序一致
             variant_attributes_json = json.dumps(data.variant_attributes, sort_keys=True)
             
-            # 查询该主物料的所有变体（variant_managed=True, variant_attributes不为null）
+            # 查询该主物料的所有属性物料（variant_managed=True, variant_attributes不为null）
             existing_variants = await Material.filter(
                 tenant_id=tenant_id,
                 main_code=data.main_code,
                 variant_managed=True,
-                variant_attributes__isnull=False,  # 只查询变体物料，不包括主物料
+                variant_attributes__isnull=False,  # 只查询属性物料，不包括主物料
                 deleted_at__isnull=True
             ).all()
             
-            # 检查是否有相同的变体属性组合
+            # 检查是否有相同的属性组合
             for existing in existing_variants:
                 if existing.variant_attributes:
                     # 使用排序后的JSON字符串进行比较，确保键顺序一致
                     existing_attrs_json = json.dumps(existing.variant_attributes, sort_keys=True)
                     if existing_attrs_json == variant_attributes_json:
                         raise ValidationError(
-                            f"变体属性组合已存在: {data.variant_attributes}，"
+                            f"属性组合已存在: {data.variant_attributes}，"
                             f"已存在的物料: {existing.name} ({existing.main_code})"
                         )
         else:
-            # 如果不是变体物料，检查主编码是否已存在（主编码必须唯一，除非是变体物料）
+            # 如果不是属性物料，检查主编码是否已存在（主编码必须唯一，除非是属性物料）
             existing = await Material.filter(
                 tenant_id=tenant_id,
                 main_code=data.main_code,
@@ -533,11 +533,11 @@ class MaterialService:
             
             if existing:
                 # 如果已存在的物料是主物料（variant_managed=True, variant_attributes=null）
-                # 则允许创建变体，但当前逻辑不允许创建非变体物料
+                # 则允许创建属性物料，但当前逻辑不允许创建非属性物料
                 if existing.variant_managed and existing.variant_attributes is None:
                     raise ValidationError(
                         f"主编码 {data.main_code} 已存在主物料。"
-                        f"如需创建变体，请设置 variant_managed=True 并提供 variant_attributes"
+                        f"如需创建属性物料，请设置 variant_managed=True 并提供 variant_attributes"
                     )
                 else:
                     # 如果是用户手动输入的编码，直接报错，不自动重新生成
@@ -651,7 +651,7 @@ class MaterialService:
         # 同步 code = main_code（列表等展示使用 code，需同时落库）
         material_data["code"] = material_data["main_code"]
         
-        # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
+        # 处理属性：确保JSON键顺序一致（用于数据库唯一性索引）
         if material_data.get("variant_attributes"):
             # 使用排序后的JSON，确保键顺序一致
             sorted_attrs = dict(sorted(material_data["variant_attributes"].items()))
@@ -667,11 +667,11 @@ class MaterialService:
             **material_data
         )
         
-        # 如果是变体物料，自动生成变体编码并作为部门编码（类型：VARIANT）存储
+        # 如果是属性物料，自动生成属性编码并作为部门编码（类型：VARIANT）存储
         if data.variant_managed and data.variant_attributes and master_material:
             try:
-                # 生成变体标识（简化版本：使用属性值的首字母或缩写）
-                # TODO: 后续可以通过变体编码规则配置来生成更复杂的变体标识
+                # 生成属性标识（简化版本：使用属性值的首字母或缩写）
+                # TODO: 后续可以通过属性编码规则配置来生成更复杂的标识
                 variant_parts = []
                 for attr_name, attr_value in sorted(data.variant_attributes.items()):
                     # 简化处理：如果是枚举值，使用前3个字符；如果是文本，使用前3个字符；如果是数字，直接使用
@@ -689,18 +689,18 @@ class MaterialService:
                 variant_suffix = "-".join(variant_parts)
                 variant_code = f"{material.main_code}-{variant_suffix}"
                 
-                # 将变体编码作为部门编码（类型：VARIANT）存储
+                # 将属性编码作为部门编码（类型：VARIANT）存储
                 await MaterialCodeService.create_code_alias(
                     tenant_id=tenant_id,
                     material_id=material.id,
                     code_type="VARIANT",
                     code=variant_code,
-                    description=f"变体编码：{', '.join([f'{k}={v}' for k, v in sorted(data.variant_attributes.items())])}"
+                    description=f"属性编码：{', '.join([f'{k}={v}' for k, v in sorted(data.variant_attributes.items())])}"
                 )
-                logger.info(f"自动生成变体编码: {variant_code} (material_id={material.id})")
+                logger.info(f"自动生成属性编码: {variant_code} (material_id={material.id})")
             except Exception as e:
-                # 如果变体编码生成失败，记录警告但不阻止创建
-                logger.warning(f"生成变体编码失败: {e}")
+                # 如果属性编码生成失败，记录警告但不阻止创建
+                logger.warning(f"生成属性编码失败: {e}")
         
         # 创建部门编码别名（如果提供了部门编码）
         if data.department_codes:
@@ -798,16 +798,16 @@ class MaterialService:
         main_code: Optional[str] = None
     ) -> List[MaterialResponse]:
         """
-        获取主物料的所有变体
+        获取主物料的所有属性物料
         
         Args:
             tenant_id: 租户ID
             master_material_id: 主物料ID（可选）
             master_material_uuid: 主物料UUID（可选）
-            main_code: 主编码（可选，如果提供，将查询该主编码下的所有变体）
+            main_code: 主编码（可选，如果提供，将查询该主编码下的所有属性物料）
             
         Returns:
-            List[MaterialResponse]: 变体物料列表
+            List[MaterialResponse]: 属性物料列表
             
         Raises:
             NotFoundError: 当主物料不存在时抛出
@@ -844,12 +844,12 @@ class MaterialService:
             identifier = master_material_id or master_material_uuid or main_code
             raise NotFoundError(f"主物料不存在: {identifier}")
         
-        # 查询该主物料的所有变体（variant_managed=True, variant_attributes不为null）
+        # 查询该主物料的所有属性物料（variant_managed=True, variant_attributes不为null）
         variants = await Material.filter(
             tenant_id=tenant_id,
             main_code=master_material.main_code,
             variant_managed=True,
-            variant_attributes__isnull=False,  # 变体物料的variant_attributes不为null
+            variant_attributes__isnull=False,  # 属性物料的variant_attributes不为null
             deleted_at__isnull=True
         ).prefetch_related("group").all()
         
@@ -1098,9 +1098,9 @@ class MaterialService:
             if existing:
                 raise ValidationError(f"物料编码 {data.code} 已存在")
         
-        # 如果是变体物料，验证变体组合唯一性和属性值
+        # 如果是属性物料，验证属性组合唯一性和属性值
         if data.variant_managed is not None and data.variant_managed and data.variant_attributes is not None:
-            # 验证变体属性值
+            # 验证属性值
             from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
             for attr_name, attr_value in data.variant_attributes.items():
                 is_valid, error_message = await MaterialVariantAttributeService.validate_attribute_value(
@@ -1109,9 +1109,9 @@ class MaterialService:
                     attribute_value=attr_value,
                 )
                 if not is_valid:
-                    raise ValidationError(f"变体属性验证失败: {error_message}")
+                    raise ValidationError(f"属性验证失败: {error_message}")
             
-            # 检查变体组合唯一性（排除当前物料）
+            # 检查属性组合唯一性（排除当前物料）
             variant_attributes_json = json.dumps(data.variant_attributes, sort_keys=True)
             existing_variants = await Material.filter(
                 tenant_id=tenant_id,
@@ -1121,13 +1121,13 @@ class MaterialService:
                 deleted_at__isnull=True
             ).exclude(id=material.id).all()  # 排除当前物料
             
-            # 检查是否有相同的变体属性组合
+            # 检查是否有相同的属性组合
             for existing in existing_variants:
                 if existing.variant_attributes:
                     existing_attrs_json = json.dumps(existing.variant_attributes, sort_keys=True)
                     if existing_attrs_json == variant_attributes_json:
                         raise ValidationError(
-                            f"变体属性组合已存在: {data.variant_attributes}，"
+                            f"属性组合已存在: {data.variant_attributes}，"
                             f"已存在的物料: {existing.name} ({existing.main_code})"
                         )
         
@@ -1138,7 +1138,7 @@ class MaterialService:
         else:
             update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
         
-        # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
+        # 处理属性：确保JSON键顺序一致（用于数据库唯一性索引）
         if "variant_attributes" in update_data and update_data["variant_attributes"]:
             sorted_attrs = dict(sorted(update_data["variant_attributes"].items()))
             update_data["variant_attributes"] = sorted_attrs

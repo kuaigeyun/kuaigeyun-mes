@@ -137,7 +137,7 @@ TORTOISE_ORM = {
                 "core.models.serial_rule",
                 "core.models.serial_rule_sequence",
                 "core.models.material_code_rule",  # 物料编码规则模型
-                "core.models.material_variant_attribute",  # 物料变体属性定义模型
+                "core.models.material_variant_attribute",  # 物料属性定义模型
                 "core.models.custom_field",
                 "core.models.custom_field_value",
                 "core.models.site_setting",

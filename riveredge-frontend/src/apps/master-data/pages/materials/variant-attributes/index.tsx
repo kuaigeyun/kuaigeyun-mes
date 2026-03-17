@@ -1,7 +1,7 @@
 /**
- * 变体属性定义管理页面
+ * 属性定义管理页面
  *
- * 提供变体属性定义的 CRUD 操作、版本管理等功能。
+ * 提供属性定义的 CRUD 操作、版本管理等功能。
  *
  * Author: Luigi Lu
  * Date: 2026-01-08
@@ -352,7 +352,7 @@ const VariantAttributesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
-          headerTitle="变体属性定义"
+          headerTitle="属性定义"
           actionRef={actionRef}
           columns={columns}
           showAdvancedSearch={true}
@@ -477,7 +477,7 @@ const VariantAttributesPage: React.FC = () => {
                     name="allow_multiple"
                     label="允许多选"
                     initialValue={false}
-                    extra="物料编辑变体时，该属性是否支持选择多个枚举值"
+                    extra="物料启用属性管理时，该属性是否支持选择多个枚举值"
                     colProps={{ span: 12 }}
                   />
                 </>
