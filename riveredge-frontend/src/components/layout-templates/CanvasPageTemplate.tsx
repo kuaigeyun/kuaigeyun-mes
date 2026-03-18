@@ -31,21 +31,28 @@ import { useLocation } from 'react-router-dom';
 import { Card } from 'antd';
 import { PAGE_SPACING, CANVAS_PAGE_LAYOUT } from './constants';
 
-/** 右侧面板配置 */
-export interface CanvasPageRightPanelConfig {
+/** 侧边面板配置 */
+export interface CanvasPageSidePanelConfig {
   /** 面板标题 */
   title?: ReactNode;
   /** 面板内容 */
   children: ReactNode;
 }
 
+/** @deprecated 使用 CanvasPageSidePanelConfig */
+export type CanvasPageRightPanelConfig = CanvasPageSidePanelConfig;
+
 export interface CanvasPageTemplateProps {
   /** 操作条内容（如保存、返回、添加、删除等按钮） */
   toolbar: ReactNode;
   /** 画板内容（流程图、MindMap、画布等） */
   canvas: ReactNode;
+  /** 左侧面板（可选，如阶段/表单管理） */
+  leftPanel?: CanvasPageSidePanelConfig;
+  /** 左侧面板宽度，默认 280 */
+  leftPanelWidth?: number;
   /** 右侧配置/属性面板（可选，不传则画板占满宽度，如 pdfme 原生编辑器） */
-  rightPanel?: CanvasPageRightPanelConfig;
+  rightPanel?: CanvasPageSidePanelConfig;
   /** 右侧面板宽度，默认 400 */
   rightPanelWidth?: number;
   /** 画板最小高度，默认 600 */
@@ -66,6 +73,8 @@ export interface CanvasPageTemplateProps {
 export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
   toolbar,
   canvas,
+  leftPanel,
+  leftPanelWidth = CANVAS_PAGE_LAYOUT.LEFT_PANEL_WIDTH,
   rightPanel,
   rightPanelWidth = CANVAS_PAGE_LAYOUT.RIGHT_PANEL_WIDTH,
   canvasMinHeight = CANVAS_PAGE_LAYOUT.CANVAS_MIN_HEIGHT,
@@ -109,7 +118,7 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
         {toolbar}
       </Card>
 
-      {/* 画板 + 右侧面板 */}
+      {/* 左侧面板（可选）+ 画板 + 右侧面板（可选） */}
       <div
         style={{
           display: 'flex',
@@ -119,6 +128,27 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
           minHeight: 0,
         }}
       >
+        {/* 左侧面板（可选） */}
+        {leftPanel && (
+          <Card
+            title={leftPanel.title}
+            style={{
+              width: leftPanelWidth,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            styles={{
+              body: {
+                flex: 1,
+                overflow: 'auto',
+                padding,
+              },
+            }}
+          >
+            {leftPanel.children}
+          </Card>
+        )}
         {/* 画板 */}
         <Card
           style={{

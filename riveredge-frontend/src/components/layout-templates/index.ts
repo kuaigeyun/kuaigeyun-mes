@@ -88,7 +88,7 @@ export type {
 
 // 画板页布局模板
 export { CanvasPageTemplate } from './CanvasPageTemplate'
-export type { CanvasPageTemplateProps, CanvasPageRightPanelConfig } from './CanvasPageTemplate'
+export type { CanvasPageTemplateProps, CanvasPageSidePanelConfig, CanvasPageRightPanelConfig } from './CanvasPageTemplate'
 
 // 高级生产终端布局模板
 export { default as PremiumTerminalTemplate } from './PremiumTerminalTemplate'

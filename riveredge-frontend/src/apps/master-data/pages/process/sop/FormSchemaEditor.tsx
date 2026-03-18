@@ -156,12 +156,12 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
     setEditingIndex(-1);
     fieldForm.resetFields();
     fieldForm.setFieldsValue({
-      code: '',
       label: '',
       type: 'string',
       required: false,
       placeholder: '',
       component: 'Input',
+      options: [{ label: '', value: '' }],
     });
   };
 
@@ -173,7 +173,6 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
     setEditingField(field);
     setEditingIndex(index);
     fieldForm.setFieldsValue({
-      code: field.code,
       label: field.label,
       type: field.type,
       required: field.required || false,
@@ -185,7 +184,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
       max: field.max,
       unit: field.unit || '',
       precision: field.precision,
-      options: field.options ? JSON.stringify(field.options, null, 2) : '',
+      options: field.options && field.options.length > 0 ? field.options : [{ label: '', value: '' }],
     });
   };
 
@@ -203,14 +202,16 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
    */
   const handleSaveField = () => {
     fieldForm.validateFields().then((values) => {
+      const code =
+        editingIndex >= 0 ? fields[editingIndex].code : generateCodeFromLabel(values.label, fields);
       const newField: FormFieldConfig = {
-        code: values.code,
+        code,
         label: values.label,
         type: values.type,
         required: values.required || false,
         placeholder: values.placeholder,
         description: values.description,
-        component: values.component || 'Input',
+        component: values.type === 'string' ? (values.component || 'Input') : getDefaultComponent(values.type),
         default: values.default,
         min: values.min,
         max: values.max,
@@ -218,19 +219,22 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         precision: values.precision,
       };
 
-      // 如果是 select 类型，需要配置选项
-      if (values.type === 'select' && values.options) {
-        try {
-          newField.options = JSON.parse(values.options);
-        } catch {
-          message.error(t('app.master-data.formSchema.optionsFormatErrorMsg'));
+      // 如果是 select 类型，从表单列表取选项（格式 [{ label, value }]）
+      if (values.type === 'select' && Array.isArray(values.options)) {
+        const list = values.options
+          .map((o: any) => {
+            if (!o) return null;
+            const label = String(o.label ?? '').trim();
+            const val = o.value;
+            if (label === '' && (val === undefined || val === '')) return null;
+            return { label: label || String(val), value: val === undefined || val === '' ? label : val };
+          })
+          .filter(Boolean) as Array<{ label: string; value: any }>;
+        if (list.length === 0) {
+          message.error(t('app.master-data.formSchema.optionsRequired'));
           return;
         }
-      }
-
-      // 如果是数字类型，设置默认组件
-      if (values.type === 'number' && !newField.component) {
-        newField.component = 'InputNumber';
+        newField.options = list;
       }
 
       let newFields: FormFieldConfig[];
@@ -238,12 +242,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         // 更新现有字段
         newFields = fields.map((f, i) => (i === editingIndex ? newField : f));
       } else {
-        // 添加新字段
-        // 检查代码是否已存在
-        if (fields.some((f) => f.code === newField.code)) {
-          message.error(t('app.master-data.formSchema.fieldCodeExists'));
-          return;
-        }
+        // 添加新字段（code 已由 generateCodeFromLabel 保证唯一）
         newFields = [...fields, newField];
       }
 
@@ -251,6 +250,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
       updateSchema(newFields);
       setEditingField(null);
       setEditingIndex(-1);
+      fieldForm.resetFields();
       message.success(editingIndex >= 0 ? t('app.master-data.formSchema.fieldUpdated') : t('app.master-data.formSchema.fieldAdded'));
     });
   };
@@ -357,6 +357,29 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
   };
 
   /**
+   * 根据字段标签生成唯一 code（仅字母、数字、下划线，用于 Schema key）
+   */
+  const generateCodeFromLabel = (label: string, existingFields: FormFieldConfig[]): string => {
+    const existingCodes = new Set(existingFields.map((f) => f.code));
+    let base = (label || '')
+      .replace(/[\s\u4e00-\u9fa5]/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 40)
+      .toLowerCase();
+    if (!base) base = 'field';
+    if (!/^[a-zA-Z]/.test(base)) base = 'f_' + base;
+    let code = base;
+    let n = 0;
+    while (existingCodes.has(code)) {
+      n += 1;
+      code = `${base}_${n}`;
+    }
+    return code;
+  };
+
+  /**
    * 获取默认组件
    */
   const getDefaultComponent = (type: string): string => {
@@ -445,19 +468,6 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
       >
         <Form form={fieldForm} layout="vertical">
           <Form.Item
-            name="code"
-            label={t('app.master-data.formSchema.fieldCode')}
-            rules={[
-              { required: true, message: t('app.master-data.formSchema.fieldCodeRequired') },
-              { pattern: /^[a-zA-Z_][a-zA-Z0-9_]*$/, message: t('app.master-data.formSchema.fieldCodePattern') },
-            ]}
-          >
-            <Input
-              placeholder={t('app.master-data.formSchema.fieldCodePlaceholder')}
-              disabled={editingIndex >= 0}
-            />
-          </Form.Item>
-          <Form.Item
             name="label"
             label={t('app.master-data.formSchema.fieldLabel')}
             rules={[{ required: true, message: t('app.master-data.formSchema.fieldLabelRequired') }]}
@@ -478,27 +488,30 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
             </Select>
           </Form.Item>
           <Form.Item
-            name="component"
-            label={t('app.master-data.formSchema.componentType')}
-            rules={[{ required: true, message: t('app.master-data.formSchema.componentTypeRequired') }]}
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
           >
-            <Select>
-              <Select.Option value="Input">{t('app.master-data.formSchema.compInput')}</Select.Option>
-              <Select.Option value="Input.TextArea">{t('app.master-data.formSchema.compTextArea')}</Select.Option>
-              <Select.Option value="InputNumber">{t('app.master-data.formSchema.compInputNumber')}</Select.Option>
-              <Select.Option value="DatePicker">{t('app.master-data.formSchema.compDatePicker')}</Select.Option>
-              <Select.Option value="Select">{t('app.master-data.formSchema.compSelect')}</Select.Option>
-              <Select.Option value="Switch">{t('app.master-data.formSchema.compSwitch')}</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="required" label={t('app.master-data.formSchema.required')} valuePropName="checked">
-            <Switch />
+            {({ getFieldValue }) => {
+              const type = getFieldValue('type');
+              if (type !== 'string') {
+                return null;
+              }
+              return (
+                <Form.Item
+                  name="component"
+                  label={t('app.master-data.formSchema.componentType')}
+                  rules={[{ required: true, message: t('app.master-data.formSchema.componentTypeRequired') }]}
+                >
+                  <Select>
+                    <Select.Option value="Input">{t('app.master-data.formSchema.compInput')}</Select.Option>
+                    <Select.Option value="Input.TextArea">{t('app.master-data.formSchema.compTextArea')}</Select.Option>
+                  </Select>
+                </Form.Item>
+              );
+            }}
           </Form.Item>
           <Form.Item name="placeholder" label={t('app.master-data.formSchema.placeholder')}>
             <Input placeholder={t('app.master-data.formSchema.placeholderInput')} />
-          </Form.Item>
-          <Form.Item name="description" label={t('app.master-data.formSchema.fieldDescription')}>
-            <TextArea rows={2} placeholder={t('app.master-data.formSchema.fieldDescriptionPlaceholder')} />
           </Form.Item>
           <Form.Item
             noStyle
@@ -509,34 +522,58 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
               if (type === 'select') {
                 return (
                   <Form.Item
-                    name="options"
                     label={t('app.master-data.formSchema.optionsJson')}
-                    rules={[
-                      { required: true, message: t('app.master-data.formSchema.optionsRequired') },
-                      {
-                        validator: (_, value) => {
-                          if (!value) return Promise.resolve();
-                          try {
-                            const parsed = JSON.parse(value);
-                            if (!Array.isArray(parsed)) {
-                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsMustBeArray')));
+                    tooltip={t('app.master-data.formSchema.optionsTooltip')}
+                    required
+                  >
+                    <Form.List
+                      name="options"
+                      initialValue={[{ label: '', value: '' }]}
+                      rules={[
+                        {
+                          validator: async (_, list) => {
+                            if (!list || list.length === 0) {
+                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsRequired')));
                             }
-                            if (parsed.some((item) => !item.label || item.value === undefined)) {
+                            const invalid = list.some((item: any) => !item?.label?.trim() && (item?.value === undefined || item?.value === ''));
+                            if (invalid) {
                               return Promise.reject(new Error(t('app.master-data.formSchema.optionsFormatError')));
                             }
-                            return Promise.resolve();
-                          } catch {
-                            return Promise.reject(new Error(t('app.master-data.formSchema.optionsJsonError')));
-                          }
+                          },
                         },
-                      },
-                    ]}
-                    tooltip={t('app.master-data.formSchema.optionsTooltip')}
-                  >
-                    <TextArea
-                      rows={4}
-                      placeholder={t('app.master-data.formSchema.optionsPlaceholder')}
-                    />
+                      ]}
+                    >
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map(({ key, name, ...rest }) => (
+                            <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                              <Form.Item
+                                {...rest}
+                                name={[name, 'label']}
+                                rules={[{ required: true, message: t('app.master-data.formSchema.fieldLabelRequired') }]}
+                                style={{ marginBottom: 0, minWidth: 140 }}
+                              >
+                                <Input placeholder={t('app.master-data.formSchema.optionsLabelPlaceholder')} />
+                              </Form.Item>
+                              <Form.Item
+                                {...rest}
+                                name={[name, 'value']}
+                                rules={[{ required: true, message: t('app.master-data.formSchema.optionsValueRequired') }]}
+                                style={{ marginBottom: 0, minWidth: 140 }}
+                              >
+                                <Input placeholder={t('app.master-data.formSchema.optionsValuePlaceholder')} />
+                              </Form.Item>
+                              <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                            </Space>
+                          ))}
+                          <Form.Item style={{ marginBottom: 0 }}>
+                            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                              {t('app.master-data.formSchema.addOption')}
+                            </Button>
+                          </Form.Item>
+                        </>
+                      )}
+                    </Form.List>
                   </Form.Item>
                 );
               }
@@ -572,6 +609,12 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
               }
               return null;
             }}
+          </Form.Item>
+          <Form.Item name="description" label={t('app.master-data.formSchema.fieldDescription')}>
+            <TextArea rows={2} placeholder={t('app.master-data.formSchema.fieldDescriptionPlaceholder')} />
+          </Form.Item>
+          <Form.Item name="required" label={t('app.master-data.formSchema.required')} valuePropName="checked">
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

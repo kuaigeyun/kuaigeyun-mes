@@ -4,7 +4,7 @@
 定义工艺数据的 Pydantic Schema（不良品、工序、工艺路线、作业程序），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, field_validator, validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, validator, ConfigDict, AliasChoices
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -480,16 +480,25 @@ class SOPBatchCreateFromRouteRequest(BaseModel):
 
 
 class SOPUpdate(BaseModel):
-    """更新作业程序（SOP） Schema"""
-    
+    """更新作业程序（SOP） Schema；请求体支持 snake_case 与 camelCase。"""
+    model_config = ConfigDict(populate_by_name=True)
+
     code: Optional[str] = Field(None, max_length=50, description="SOP编码")
     name: Optional[str] = Field(None, max_length=200, description="SOP名称")
     operation_id: Optional[int] = Field(None, description="关联工序ID")
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
     attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
-    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式）")
-    form_config: Optional[Dict[str, Any]] = Field(None, description="报工数据采集项（Formily Schema）")
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="流程配置（ProFlow JSON格式）",
+        validation_alias=AliasChoices("flow_config", "flowConfig"),
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="报工数据采集项（Formily Schema）",
+        validation_alias=AliasChoices("form_config", "formConfig"),
+    )
     is_active: Optional[bool] = Field(None, description="是否启用")
     material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组 UUID 列表")
     material_uuids: Optional[List[str]] = Field(None, description="绑定的具体物料 UUID 列表")

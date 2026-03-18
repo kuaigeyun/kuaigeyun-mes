@@ -115,6 +115,8 @@ export const TWO_COLUMN_LAYOUT = {
  * 画板页布局配置（审批流设计、BOM 设计等带画布的页面）
  */
 export const CANVAS_PAGE_LAYOUT = {
+  /** 左侧面板默认宽度（阶段/表单管理） */
+  LEFT_PANEL_WIDTH: 280,
   /** 右侧面板默认宽度 */
   RIGHT_PANEL_WIDTH: 400,
   /** 画板最小高度 */
