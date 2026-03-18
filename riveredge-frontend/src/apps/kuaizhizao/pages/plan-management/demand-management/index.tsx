@@ -12,8 +12,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormList, ProFormDigit, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, Select, Tabs, Alert, Row, Col, Spin } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, MergeCellsOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -21,6 +23,7 @@ import { ListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../co
 import {
   listDemands,
   getDemand,
+  createDemand,
   updateDemand,
   deleteDemand,
   submitDemand,
@@ -116,6 +119,8 @@ const DemandManagementPage: React.FC = () => {
 
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
+  const [createPlanModalVisible, setCreatePlanModalVisible] = useState(false);
+  const createPlanFormRef = useRef<any>(null);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [isEditingDraft, setIsEditingDraft] = useState(false); // 当前编辑的需求是否为草稿（草稿可改更多字段）
@@ -169,9 +174,45 @@ const DemandManagementPage: React.FC = () => {
     loadDicts();
   }, []);
 
-  /**
-   * 需求由销售订单/销售预测审核通过后自动产生，不再支持手动新建
-   */
+  /** 新建计划（需求计划）提交 */
+  const handleCreatePlanSubmit = async (values: any) => {
+    try {
+      const items = (values.items || []).map((it: any) => ({
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        material_unit: it.material_unit || 'PCS',
+        required_quantity: Number(it.required_quantity) || 0,
+        delivery_date: it.delivery_date ? dayjs(it.delivery_date).format('YYYY-MM-DD') : undefined,
+      })).filter((it: any) => it.material_id && it.required_quantity > 0);
+      if (items.length === 0) {
+        messageApi.warning('请至少添加一行明细并填写需求数量');
+        return;
+      }
+      await createDemand({
+        demand_type: 'demand_plan',
+        demand_name: values.demand_name,
+        business_mode: values.business_mode || 'MTO',
+        start_date: values.start_date ? dayjs(values.start_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+        end_date: values.end_date ? dayjs(values.end_date).format('YYYY-MM-DD') : undefined,
+        total_quantity: 0,
+        total_amount: 0,
+        status: DemandStatus.DRAFT,
+        review_status: ReviewStatus.PENDING,
+        priority: values.priority ?? 5,
+        notes: values.notes,
+        items,
+      });
+      messageApi.success('计划创建成功');
+      setCreatePlanModalVisible(false);
+      createPlanFormRef.current?.resetFields();
+      invalidateStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || error?.message || '创建失败');
+      throw error;
+    }
+  };
 
   /**
    * 处理编辑需求
@@ -353,8 +394,9 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'demand_type',
       width: 120,
       valueEnum: {
-        'sales_forecast': { text: '销售预测', status: 'Processing' },
-        'sales_order': { text: '销售订单', status: 'Success' },
+        sales_forecast: { text: '销售预测', status: 'Processing' },
+        sales_order: { text: '销售订单', status: 'Success' },
+        demand_plan: { text: '需求计划', status: 'Default' },
       },
     },
     {
@@ -664,6 +706,14 @@ const DemandManagementPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           toolBarActions={[
             <Button
+              key="create-plan"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreatePlanModalVisible(true)}
+            >
+              新建计划
+            </Button>,
+            <Button
               key="merge-computation"
               type="primary"
               icon={<MergeCellsOutlined />}
@@ -675,6 +725,79 @@ const DemandManagementPage: React.FC = () => {
           ]}
         />
       </ListPageTemplate>
+
+      {/* 新建计划 Modal */}
+      <Modal
+        open={createPlanModalVisible}
+        onCancel={() => { setCreatePlanModalVisible(false); createPlanFormRef.current?.resetFields(); }}
+        title="新建计划"
+        width={640}
+        footer={null}
+        destroyOnClose
+      >
+        <ProForm
+          formRef={createPlanFormRef}
+          onFinish={handleCreatePlanSubmit}
+          layout="vertical"
+          initialValues={{ business_mode: 'MTO', priority: 5, items: [{}] }}
+          submitter={{
+            render: (_, dom) => (
+              <div style={{ textAlign: 'right', marginTop: 16 }}>
+                <Space>
+                  <Button onClick={() => { setCreatePlanModalVisible(false); createPlanFormRef.current?.resetFields(); }}>取消</Button>
+                  {dom}
+                </Space>
+              </div>
+            ),
+          }}
+        >
+          <ProFormText name="demand_name" label="计划名称" placeholder="请输入计划名称" rules={[{ required: true, message: '请输入计划名称' }]} />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormDatePicker name="start_date" label="开始日期" rules={[{ required: true, message: '请选择开始日期' }]} />
+            </Col>
+            <Col span={12}>
+              <ProFormDatePicker name="end_date" label="结束日期（选填）" />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect name="business_mode" label="业务模式" options={[{ label: '按库存生产 (MTS)', value: 'MTS' }, { label: '按订单生产 (MTO)', value: 'MTO' }]} />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect name="priority" label="优先级" options={[{ label: '高 (1)', value: 1 }, { label: '中 (5)', value: 5 }, { label: '低 (10)', value: 10 }]} />
+            </Col>
+          </Row>
+          <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+          <ProFormList name="items" label="计划明细" creatorButtonProps={{ creatorButtonText: '添加一行' }} min={1}>
+            {(listDom, listField) => (
+              <Row key={listField.key} gutter={8} style={{ marginBottom: 8, alignItems: 'center' }}>
+                <Col span={12}>
+                  <UniMaterialSelect
+                    name={[listField.name, 'material_id']}
+                    label="物料"
+                    placeholder="请选择物料"
+                    required
+                    listFieldKey={listField.key}
+                    listFieldName="items"
+                    fillMapping={{ material_code: 'mainCode', material_name: 'name', material_unit: 'baseUnit' }}
+                  />
+                  <ProFormText name={[listField.name, 'material_code']} hidden />
+                  <ProFormText name={[listField.name, 'material_name']} hidden />
+                  <ProFormText name={[listField.name, 'material_unit']} hidden />
+                </Col>
+                <Col span={6}>
+                  <ProFormDigit name={[listField.name, 'required_quantity']} label="数量" min={0.0001} placeholder="数量" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true, message: '必填' }]} />
+                </Col>
+                <Col span={5}>
+                  <ProFormDatePicker name={[listField.name, 'delivery_date']} label="需求日期" fieldProps={{ style: { width: '100%' } }} rules={[{ required: true, message: '必填' }]} />
+                </Col>
+                <Col span={1}>{listField.action}</Col>
+              </Row>
+            )}
+          </ProFormList>
+        </ProForm>
+      </Modal>
 
       {/* 编辑需求 Modal：非草稿仅可改优先级和备注；草稿可改更多字段 */}
       <Modal
@@ -952,8 +1075,8 @@ const DemandManagementPage: React.FC = () => {
                       >
                         <ProDescriptions.Item label="需求编码" dataIndex="demand_code" />
                         <ProDescriptions.Item label="需求类型" dataIndex="demand_type">
-                          <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : 'success'}>
-                            {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : '销售订单'}
+                          <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : currentDemand.demand_type === 'sales_order' ? 'success' : 'default'}>
+                            {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : currentDemand.demand_type === 'sales_order' ? '销售订单' : '需求计划'}
                           </Tag>
                         </ProDescriptions.Item>
                         <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />

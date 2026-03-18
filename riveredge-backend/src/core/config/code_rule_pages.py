@@ -43,6 +43,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-receipt-notice": "SHTZ",        # 收货通知单
     "kuaizhizao-sample-trial": "ST",           # 样品试用
     "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
+    "kuaizhizao-demand-plan": "XQJH",           # 需求计划（手工计划）
     "kuaizhizao-sales-return": "XSTH",          # 销售退货
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
     "kuaizhizao-warehouse-production-return": "TL",       # 生产退料
@@ -517,6 +518,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "SALES_FORECAST_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-demand-plan",
+        "page_name": "需求计划",
+        "page_path": "/apps/kuaizhizao/plan-management/demand-management",
+        "code_field": "demand_code",
+        "code_field_label": "需求计划编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DEMAND_PLAN_CODE",
         "allow_manual_edit": True,
     },
     # 快格轻制造 - 仓储管理

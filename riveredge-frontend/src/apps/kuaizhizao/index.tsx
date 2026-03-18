@@ -23,8 +23,6 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-management'));
 const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
 const ComputationConfigPage = lazy(() => import('./pages/plan-management/computation-config'));
-const ComputationHistoryPage = lazy(() => import('./pages/plan-management/computation-history'));
-const ProductionPlansPage = lazy(() => import('./pages/plan-management/production-plans'));
 const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
 
 // 生产执行页面
@@ -90,8 +88,6 @@ const InitialDataImportPage = lazy(() => import('./pages/warehouse-management/in
 const OutboundPage = lazy(() => import('./pages/warehouse-management/outbound'));
 const CustomerMaterialRegistrationPage = lazy(() => import('./pages/warehouse-management/customer-material-registration'));
 const BarcodeMappingRulesPage = lazy(() => import('./pages/warehouse-management/barcode-mapping-rules'));
-const DocumentTimingPage = lazy(() => import('./pages/analysis-center/document-timing'));
-const DocumentEfficiencyPage = lazy(() => import('./pages/analysis-center/document-efficiency'));
 const MaterialShortageExceptionsPage = lazy(() => import('./pages/production-execution/material-shortage-exceptions'));
 const DeliveryDelayExceptionsPage = lazy(() => import('./pages/production-execution/delivery-delay-exceptions'));
 const QualityExceptionsPage = lazy(() => import('./pages/production-execution/quality-exceptions'));
@@ -125,8 +121,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
       <Route path="plan-management/computation-config" element={withPageSuspense(ComputationConfigPage)} />
-      <Route path="plan-management/computation-history" element={withPageSuspense(ComputationHistoryPage)} />
-      <Route path="plan-management/production-plans" element={withPageSuspense(ProductionPlansPage)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
 
       {/* 采购管理路由 */}
@@ -193,10 +187,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/hourly-rates" element={withPageSuspense(HourlyRatesPage)} />
       <Route path="performance/kpi-definitions" element={withPageSuspense(KpiDefinitionsPage)} />
       <Route path="performance/summaries" element={withPageSuspense(SummariesPage)} />
-
-      {/* 分析中心路由 */}
-      <Route path="analysis-center/document-timing" element={withPageSuspense(DocumentTimingPage)} />
-      <Route path="analysis-center/document-efficiency" element={withPageSuspense(DocumentEfficiencyPage)} />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={withPageSuspense(InventoryPage)} />
@@ -270,11 +260,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/reports/outbound-summary" element={<PlaceholderPage title="出库明细汇总" />} />
       <Route path="warehouse-management/reports/stocktaking-history" element={<PlaceholderPage title="盘点单历史与差异" />} />
       <Route path="warehouse-management/reports/transfer-tracking" element={<PlaceholderPage title="调拨单跟踪" />} />
-      <Route path="analysis-center/reports/sales-order-full-trace" element={<PlaceholderPage title="销售订单全链路跟踪" />} />
-      <Route path="analysis-center/reports/purchase-order-full-trace" element={<PlaceholderPage title="采购订单全链路跟踪" />} />
-      <Route path="analysis-center/reports/material-lifecycle-trace" element={<PlaceholderPage title="物料全生命周期跟踪" />} />
-      <Route path="analysis-center/reports/business-status-dashboard" element={<PlaceholderPage title="业务单据状态看板" />} />
-
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
         <div style={{ padding: '24px', textAlign: 'center' }}>

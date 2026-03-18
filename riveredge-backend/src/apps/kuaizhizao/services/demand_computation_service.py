@@ -1569,7 +1569,7 @@ class DemandComputationService:
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.services.demand_service import DemandService
 
-        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition", "production_plan")
+        DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition")
 
         async with in_transaction():
             computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
@@ -2068,14 +2068,12 @@ class DemandComputationService:
             wo_material_ids: set,  # 已有工单的物料ID
             outsource_material_ids: set,  # 已有委外工单的物料ID
             po_material_ids: set,  # 已有采购单包含的物料ID
-            has_production_plan: bool,
             has_purchase_requisition: bool,
         }
         """
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-        from apps.kuaizhizao.models.production_plan import ProductionPlan
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 
@@ -2088,7 +2086,6 @@ class DemandComputationService:
         wo_material_ids = set()
         outsource_material_ids = set()
         po_material_ids = set()
-        has_production_plan = False
         has_purchase_requisition = False
 
         for rel in rels:
@@ -2107,10 +2104,6 @@ class DemandComputationService:
                     items = await PurchaseOrderItem.filter(order_id=tid).all()
                     for poi in items:
                         po_material_ids.add(poi.material_id)
-            elif tt == "production_plan":
-                plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                if plan:
-                    has_production_plan = True
             elif tt == "purchase_requisition":
                 req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
                 if req:
@@ -2120,7 +2113,6 @@ class DemandComputationService:
             "wo_material_ids": wo_material_ids,
             "outsource_material_ids": outsource_material_ids,
             "po_material_ids": po_material_ids,
-            "has_production_plan": has_production_plan,
             "has_purchase_requisition": has_purchase_requisition,
         }
 
@@ -2176,12 +2168,11 @@ class DemandComputationService:
         biz_config = BusinessConfigService()
         can_direct_wo = await biz_config.can_direct_generate_work_order_from_computation(tenant_id)
 
-        default_production = "work_order" if can_direct_wo else "plan"
         default_purchase = "requisition" if purchase_items_without_supplier > 0 else "purchase_order"
 
         production_choices = []
         if has_production_items or has_outsource_items:
-            production_choices = ["plan", "work_order"]
+            production_choices = ["work_order"]
 
         purchase_choices = []
         if has_purchase_items:
@@ -2197,7 +2188,7 @@ class DemandComputationService:
             "purchase_items_with_supplier": purchase_items_with_supplier,
             "purchase_items_without_supplier": purchase_items_without_supplier,
             "can_direct_work_order": can_direct_wo,
-            "default_production": default_production,
+            "default_production": "work_order",
             "default_purchase": default_purchase,
             "production_choices": production_choices,
             "purchase_choices": purchase_choices,
@@ -2228,7 +2219,6 @@ class DemandComputationService:
         purchase = (push_config or {}).get("purchase")
         outsource_only = (push_config or {}).get("outsource_only") is True
 
-        production_plan_count = 0
         work_order_count = 0
         outsource_work_order_count = 0
         purchase_requisition_count = 0
@@ -2271,8 +2261,6 @@ class DemandComputationService:
 
         if outsource_only:
             outsource_work_order_count = outsource_count
-        elif production == "plan" and (make_count > 0 or outsource_count > 0):
-            production_plan_count = 1
         elif production == "work_order":
             work_order_count = make_count
             outsource_work_order_count = outsource_count
@@ -2294,7 +2282,6 @@ class DemandComputationService:
 
         return {
             "computation_id": computation_id,
-            "production_plan_count": production_plan_count,
             "work_order_count": work_order_count,
             "outsource_work_order_count": outsource_work_order_count,
             "purchase_requisition_count": purchase_requisition_count,
@@ -2329,30 +2316,16 @@ class DemandComputationService:
             raise BusinessLogicError("只能对已完成的计算进行下推")
 
         results = {
-            "production_plan": None,
             "work_orders": [],
             "outsource_work_orders": [],
             "purchase_requisition": None,
             "purchase_orders": [],
         }
 
-        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
-        push_service = DocumentPushPullService()
-        exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
-
         if production == "plan":
-            if not exclusions["has_production_plan"]:
-                r = await push_service.push_document(
-                    tenant_id=tenant_id,
-                    source_type="demand_computation",
-                    source_id=computation_id,
-                    target_type="production_plan",
-                    push_params=None,
-                    created_by=created_by,
-                )
-                results["production_plan"] = r.get("target_document")
+            raise BusinessLogicError("生产计划已下线，请使用「直接生成工单」下推")
 
-        elif production == "work_order":
+        if production == "work_order":
             r = await self.generate_work_orders_and_purchase_orders(
                 tenant_id=tenant_id,
                 computation_id=computation_id,

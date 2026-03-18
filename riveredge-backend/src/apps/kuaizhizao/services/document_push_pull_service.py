@@ -81,6 +81,10 @@ class DocumentPushPullService:
             if not self._validate_source_status(source_doc, source_type):
                 raise BusinessLogicError(f"源单据状态不符合下推要求: {source_type}#{source_id}")
             
+            # 生产计划已下线，仅支持需求计算 -> 工单/采购
+            if target_type == "production_plan":
+                raise BusinessLogicError("生产计划已下线，请使用工单下推")
+
             # 根据不同的下推场景执行下推操作
             if source_type == "demand" and target_type == "demand_computation":
                 return await self._push_demand_to_computation(
@@ -92,10 +96,6 @@ class DocumentPushPullService:
                 )
             elif source_type == "demand_computation" and target_type == "purchase_order":
                 return await self._push_computation_to_purchase_order(
-                    tenant_id, source_id, push_params, created_by
-                )
-            elif source_type == "demand_computation" and target_type == "production_plan":
-                return await self._push_computation_to_production_plan(
                     tenant_id, source_id, push_params, created_by
                 )
             elif source_type == "demand_computation" and target_type == "purchase_requisition":

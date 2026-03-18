@@ -31,7 +31,7 @@ export interface Demand {
   uuid?: string;
   tenant_id?: number;
   demand_code?: string;
-  demand_type?: 'sales_forecast' | 'sales_order';
+  demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   demand_name?: string;
   business_mode?: 'MTS' | 'MTO';
   start_date?: string;
@@ -130,7 +130,7 @@ export interface DemandItem {
 export interface DemandListParams {
   skip?: number;
   limit?: number;
-  demand_type?: 'sales_forecast' | 'sales_order';
+  demand_type?: 'sales_forecast' | 'sales_order' | 'demand_plan';
   status?: string;
   pushed_to_computation?: boolean;
   business_mode?: 'MTS' | 'MTO';

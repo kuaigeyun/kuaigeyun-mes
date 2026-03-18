@@ -909,7 +909,7 @@ export default {
   'path.kuaizhizao': '快格轻制造',
   'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
-  'path.demand-management': '需求管理',
+  'path.demand-management': '需求计划',
   'path.scheduling': '计划排程',
   'path.production-execution': '生产执行',
   'path.work-orders': '工单管理',
@@ -1522,8 +1522,8 @@ export default {
 
   // 快制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
-  'app.kuaizhizao.menu.plan-management.demand-management': '需求管理',
-  'app.kuaizhizao.menu.plan-management.unified-demand-management': '统一需求管理',
+  'app.kuaizhizao.menu.plan-management.demand-management': '需求计划',
+  'app.kuaizhizao.menu.plan-management.unified-demand-management': '统一需求计划',
   'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算',
   'app.kuaizhizao.menu.plan-management.production-plans': '生产计划',
   'app.kuaizhizao.menu.plan-management.scheduling': '排程管理',
@@ -6102,7 +6102,7 @@ export default {
   'pages.dashboard.tip4': '消息通知会推送物料变更、审批等，请留意右上角铃铛图标。',
   'pages.dashboard.tip5': '工作台日期切换可查看不同时间段（今天/近7天/近30天）的工单与产量统计。',
   'pages.dashboard.tip6': '左侧快捷入口可拖拽排序，把常用功能放在前面更方便。',
-  'pages.dashboard.tip7': '销售订单审核通过后，在需求管理中创建需求并执行需求计算，再生成工单与采购。',
+  'pages.dashboard.tip7': '销售订单审核通过后，在需求计划中创建需求并执行需求计算，再生成工单与采购。',
   'pages.dashboard.tip8': '工艺路线与 BOM 配置完整后，工单排产与用料计算会更准确。',
   'pages.dashboard.tip9': '自定义字段在「系统-自定义字段」中配置，可扩展各单据的显示与录入项。',
   'pages.dashboard.tip10': '多单位物料在物料管理中维护换算关系，下单与库存会按单位自动换算。',
@@ -6851,6 +6851,7 @@ export default {
 
   // 报表与看板应用
   'app.kuaireport.name': '快报表',
+  'app.kuaireport.menu.selfMadeReports': '自制报表',
   'app.kuaireport.menu.reports': '报表中心',
   'app.kuaireport.menu.dashboards': '大屏中心',
   'app.kuaireport.menu.dashboard-designer': '大屏设计器',

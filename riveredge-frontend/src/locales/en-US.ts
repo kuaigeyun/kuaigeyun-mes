@@ -971,7 +971,7 @@ export default {
   'path.kuaizhizao': 'Kuaimes Manufacturing',
   'path.kuaicaiwu': 'Light Management Accounting',
   'path.plan-management': 'Plan Management',
-  'path.demand-management': 'Demand Management',
+  'path.demand-management': 'Demand Plan',
   'path.scheduling': 'Scheduling',
   'path.production-execution': 'Production Execution',
   'path.work-orders': 'Work Orders',
@@ -1516,8 +1516,8 @@ export default {
 
   // Kuaizhizao application menu translations
   'app.kuaizhizao.menu.plan-management': 'Plan Management',
-  'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Management',
-  'app.kuaizhizao.menu.plan-management.unified-demand-management': 'Unified Demand Management',
+  'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Plan',
+  'app.kuaizhizao.menu.plan-management.unified-demand-management': 'Unified Demand Plan',
   'app.kuaizhizao.menu.plan-management.demand-computation': 'Demand Computation',
   'app.kuaizhizao.menu.plan-management.production-plans': 'Production Plans',
   'app.kuaizhizao.menu.plan-management.scheduling': 'Scheduling',
@@ -6835,6 +6835,7 @@ export default {
 
   // Report & Dashboard application
   'app.kuaireport.name': 'Kuaireport',
+  'app.kuaireport.menu.selfMadeReports': 'Self-made Reports',
   'app.kuaireport.menu.reports': 'Report Center',
   'app.kuaireport.menu.dashboards': 'Dashboard Center',
   'app.kuaireport.menu.dashboard-designer': 'Dashboard Designer',

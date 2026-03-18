@@ -106,8 +106,8 @@ class DemandService(AppBaseService[Demand]):
                             item_dict['item_amount'] = item_amount
                             total_amount += item_amount
                     
-                    # 计算剩余数量（销售订单）
-                    if demand_data.demand_type == "sales_order":
+                    # 计算剩余数量（销售订单、需求计划）
+                    if demand_data.demand_type in ("sales_order", "demand_plan"):
                         item_dict['remaining_quantity'] = Decimal(str(item_dict['required_quantity']))
                     
                     total_quantity += Decimal(str(item_dict['required_quantity']))
@@ -822,25 +822,28 @@ class DemandService(AppBaseService[Demand]):
         生成需求编码
         
         编码规则：
-        - 销售预测：SF-YYYYMMDD-序号（如：SF-20250114-001）
-        - 销售订单：SO-YYYYMMDD-序号（如：SO-20250114-001）
+        - 销售预测：SF-YYYYMMDD-序号
+        - 销售订单：SO-YYYYMMDD-序号
+        - 需求计划：DP-YYYYMMDD-序号
         
         Args:
             tenant_id: 租户ID
-            demand_type: 需求类型（sales_forecast 或 sales_order）
+            demand_type: 需求类型（sales_forecast / sales_order / demand_plan）
             
         Returns:
             str: 生成的需求编码
         """
         today = datetime.now().strftime("%Y%m%d")
         
-        # 根据需求类型确定前缀（与 code_rule_pages 中 kuaizhizao-sales-order/forecast 的 rule_code 一致）
         if demand_type == "sales_forecast":
             prefix = f"SF-{today}"
             code_key = "SALES_FORECAST_CODE"
         elif demand_type == "sales_order":
             prefix = f"SO-{today}"
             code_key = "SALES_ORDER_CODE"
+        elif demand_type == "demand_plan":
+            prefix = f"DP-{today}"
+            code_key = "DEMAND_PLAN_CODE"
         else:
             raise ValidationError(f"无效的需求类型: {demand_type}")
         

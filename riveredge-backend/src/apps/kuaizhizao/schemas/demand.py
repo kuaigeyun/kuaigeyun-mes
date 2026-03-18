@@ -24,7 +24,7 @@ from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 class DemandBase(BaseSchema):
     """统一需求基础schema"""
     demand_code: str = Field(..., max_length=50, description="需求编码")
-    demand_type: Literal["sales_forecast", "sales_order"] = Field(..., description="需求类型")
+    demand_type: Literal["sales_forecast", "sales_order", "demand_plan"] = Field(..., description="需求类型")
     demand_name: str = Field(..., max_length=200, description="需求名称")
     business_mode: Literal["MTS", "MTO"] = Field(..., description="业务模式（MTS/MTO）")
     start_date: date = Field(..., description="开始日期")
@@ -99,6 +99,12 @@ class DemandBase(BaseSchema):
             # 业务模式应该是MTO
             if self.business_mode != "MTO":
                 raise ValueError("销售订单的业务模式必须是MTO")
+        elif self.demand_type == "demand_plan":
+            # 需求计划（手工计划/半成品计划等）：必填名称与开始日期
+            if not self.demand_name or not self.demand_name.strip():
+                raise ValueError("需求计划必须填写计划名称")
+            if not self.start_date:
+                raise ValueError("需求计划必须填写开始日期")
         return self
 
 
@@ -118,6 +124,9 @@ class DemandCreate(DemandBase):
                 elif self.demand_type == "sales_order":
                     if not item.delivery_date:
                         raise ValueError("销售订单明细必须填写交货日期")
+                elif self.demand_type == "demand_plan":
+                    if not item.delivery_date:
+                        raise ValueError("需求计划明细必须填写需求日期")
         return self
 
 

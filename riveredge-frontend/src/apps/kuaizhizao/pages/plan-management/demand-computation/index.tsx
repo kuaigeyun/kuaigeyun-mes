@@ -80,6 +80,7 @@ import { listDemands, getDemand, Demand, DemandStatus, ReviewStatus } from '../.
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics'
+import ComputationHistoryTab from './ComputationHistoryTab'
 
 const { Panel } = Collapse
 
@@ -306,7 +307,7 @@ const DemandComputationPage: React.FC = () => {
   const [pushOptions, setPushOptions] = useState<PushOptions | null>(null)
   const [pushPreviewData, setPushPreviewData] = useState<PushPreview | null>(null)
   const [pushConfig, setPushConfig] = useState<{
-    production?: 'plan' | 'work_order'
+    production?: 'work_order'
     purchase?: 'requisition' | 'purchase_order'
   }>({})
   const [pushPanelLoading, setPushPanelLoading] = useState(false)
@@ -321,7 +322,7 @@ const DemandComputationPage: React.FC = () => {
         const opts = await getPushOptions(pushPanelRecord.id!)
         setPushOptions(opts)
         setPushConfig({
-          production: opts.production_choices.length > 0 ? opts.default_production : undefined,
+          production: opts.production_choices.length > 0 ? 'work_order' : undefined,
           purchase: opts.purchase_choices.length > 0 ? opts.default_purchase : undefined,
         })
       } catch (e) {
@@ -971,8 +972,21 @@ const DemandComputationPage: React.FC = () => {
       ]
     : []
 
+  const [mainTabKey, setMainTabKey] = useState<string>('list')
+
   return (
     <ListPageTemplate statCards={statCards}>
+      <Tabs
+        activeKey={mainTabKey}
+        onChange={setMainTabKey}
+        items={[
+          { key: 'list', label: '计算列表', children: null },
+          { key: 'history', label: '历史与对比', children: <ComputationHistoryTab /> },
+        ]}
+        style={{ marginBottom: 16 }}
+      />
+      {mainTabKey === 'list' && (
+      <>
       <UniTable<DemandComputation>
         actionRef={actionRef}
         columns={columns}
@@ -1181,13 +1195,7 @@ const DemandComputationPage: React.FC = () => {
                 {pushOptions.production_choices.length > 0 && (
                   <div>
                     <div style={{ fontWeight: 'bold', marginBottom: 8 }}>生产路径</div>
-                    <Radio.Group
-                      value={pushConfig.production}
-                      onChange={e => setPushConfig(c => ({ ...c, production: e.target.value }))}
-                    >
-                      <Radio value="plan">转生产计划</Radio>
-                      <Radio value="work_order">仅工单</Radio>
-                    </Radio.Group>
+                    <div style={{ color: '#666' }}>直接生成工单（与委外工单）</div>
                   </div>
                 )}
                 {pushOptions.purchase_choices.length > 0 && (
@@ -1211,9 +1219,6 @@ const DemandComputationPage: React.FC = () => {
               <div>
                 <p style={{ marginBottom: 12 }}>将生成以下单据：</p>
                 <ul style={{ marginBottom: 12, paddingLeft: 20 }}>
-                  {pushPreviewData.production_plan_count > 0 && (
-                    <li>生产计划 {pushPreviewData.production_plan_count} 个</li>
-                  )}
                   {pushPreviewData.work_order_count > 0 && (
                     <li>生产工单 {pushPreviewData.work_order_count} 个</li>
                   )}
@@ -1607,7 +1612,6 @@ const DemandComputationPage: React.FC = () => {
                             work_order: '工单',
                             outsource_work_order: '委外工单',
                             purchase_order: '采购单',
-                            production_plan: '生产计划',
                             purchase_requisition: '采购申请',
                           }
                           return map[t] || t || '-'
@@ -1702,6 +1706,8 @@ const DemandComputationPage: React.FC = () => {
           />
         )}
       </Drawer>
+      </>
+      )}
     </ListPageTemplate>
   )
 }

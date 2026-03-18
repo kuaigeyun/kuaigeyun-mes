@@ -38,10 +38,8 @@ import {
   approveSalesOrder,
   unapproveSalesOrder,
   previewPushSalesOrderToComputation,
-  previewPushSalesOrderToProductionPlan,
   previewPushSalesOrderToWorkOrder,
   pushSalesOrderToComputation,
-  pushSalesOrderToProductionPlan,
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
   pushSalesOrderToInvoice,
@@ -826,16 +824,6 @@ const SalesOrdersPage: React.FC = () => {
     });
   };
 
-  /** 直推生产计划（含预览） */
-  const handlePushToProductionPlan = async (id: number) => {
-    showPushPreviewModal(
-      () => previewPushSalesOrderToProductionPlan(id),
-      () => pushSalesOrderToProductionPlan(id),
-      () => refreshDrawerOrder(id),
-      id,
-    );
-  };
-
   /** 直推工单（含预览） */
   const handlePushToWorkOrder = async (id: number) => {
     showPushPreviewModal(
@@ -1199,7 +1187,6 @@ const SalesOrdersPage: React.FC = () => {
               menu={{
                 items: [
                   { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!record.pushed_to_computation, onClick: () => !record.pushed_to_computation && handlePushToComputation(record.id!) },
-                  { key: 'plan', label: t('app.kuaizhizao.salesOrder.pushToProductionPlan'), icon: <ArrowDownOutlined />, onClick: () => handlePushToProductionPlan(record.id!) },
                   { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, onClick: () => handlePushToWorkOrder(record.id!) },
                   { type: 'divider' },
                   { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(record.id!) },
@@ -2636,7 +2623,6 @@ const SalesOrdersPage: React.FC = () => {
                   menu={{
                     items: [
                       { key: 'computation', label: t('app.kuaizhizao.salesOrder.demandComputation'), icon: <ArrowDownOutlined />, disabled: !!currentSalesOrder.pushed_to_computation, onClick: () => !currentSalesOrder.pushed_to_computation && handlePushToComputation(currentSalesOrder.id!) },
-                      { key: 'plan', label: t('app.kuaizhizao.salesOrder.pushToProductionPlan'), icon: <ArrowDownOutlined />, onClick: () => handlePushToProductionPlan(currentSalesOrder.id!) },
                       { key: 'workorder', label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'), icon: <ArrowDownOutlined />, onClick: () => handlePushToWorkOrder(currentSalesOrder.id!) },
                       { type: 'divider' },
                       { key: 'shipment', label: t('app.kuaizhizao.salesOrder.shipmentNotice'), icon: <SendOutlined />, onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!) },
