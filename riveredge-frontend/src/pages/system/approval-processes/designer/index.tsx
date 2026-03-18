@@ -13,9 +13,18 @@ import { App, Button, Tag, Form, Space, Divider, Card, theme } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, UserOutlined, TeamOutlined, ControlOutlined, SendOutlined, ForkOutlined } from '@ant-design/icons';
 import { getUserList } from '../../../../services/user';
 import { getRoleList } from '../../../../services/role';
-import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-design/pro-flow';
+import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
-import { ReactFlowProvider, Handle, Position, addEdge } from 'reactflow';
+import {
+  ReactFlowProvider,
+  ReactFlow,
+  Handle,
+  Position,
+  addEdge,
+  BezierEdge,
+  Background,
+  BackgroundVariant,
+} from 'reactflow';
 import type { Connection } from 'reactflow';
 // @ts-ignore
 import 'reactflow/dist/style.css';
@@ -32,6 +41,8 @@ const { useToken } = theme;
 const LAYOUT_CENTER_X = 280;
 const LAYOUT_BASE_Y = 60;
 const LAYOUT_GAP = 100;
+/** 同一层多分支节点之间的水平间距 */
+const LAYOUT_BRANCH_GAP = 48;
 /** 各类型节点宽度（与组件 minWidth 一致），用于居中对齐 */
 const NODE_WIDTH_BY_TYPE: Record<string, number> = {
   start: 100,
@@ -61,21 +72,133 @@ function getVerticalOrder(edges: Edge[]): string[] {
   return order;
 }
 
-/** 对节点应用垂直排列、居中对齐（与 SOP applyVerticalLayout 一致） */
+/**
+ * 多出边的节点视为条件节点（用于分支列计算）
+ */
+function getConditionIds(edges: Edge[]): Set<string> {
+  const outCount: Record<string, number> = {};
+  edges.forEach((e) => { outCount[e.source] = (outCount[e.source] || 0) + 1; });
+  const ids = new Set<string>();
+  Object.keys(outCount).forEach((id) => { if (outCount[id] > 1) ids.add(id); });
+  return ids;
+}
+
+/**
+ * 按边关系做 BFS 分层，并计算每个节点所属分支列 branchIndex（同一条件分支链共享同一列，便于垂直对齐）
+ */
+function getLayersAndBranches(edges: Edge[]): { layers: string[][]; branchIndex: Map<string, number> } {
+  const conditionIds = getConditionIds(edges);
+  const branchIndex = new Map<string, number>();
+  branchIndex.set('start', 0);
+
+  const layers: string[][] = [['start']];
+  const seen = new Set<string>(['start']);
+  let i = 0;
+  while (i < layers.length) {
+    const curr = layers[i];
+    const nextIds: string[] = [];
+    for (const src of curr) {
+      if (src === 'end') continue;
+      const outEdges = edges.filter((e) => e.source === src);
+      outEdges.forEach((e, edgeIdx) => {
+        const t = e.target;
+        if (!seen.has(t)) {
+          seen.add(t);
+          nextIds.push(t);
+          const parentBranch = branchIndex.get(src) ?? 0;
+          branchIndex.set(t, conditionIds.has(src) ? edgeIdx : parentBranch);
+        }
+      });
+    }
+    if (nextIds.length > 0) {
+      layers.push(nextIds);
+      i++;
+    } else {
+      break;
+    }
+  }
+  if (layers[layers.length - 1]?.indexOf('end') === -1) {
+    const allTargets = new Set(edges.map((e) => e.target));
+    if (allTargets.has('end')) {
+      layers.push(['end']);
+      branchIndex.set('end', 0);
+    }
+  }
+  const last = layers[layers.length - 1];
+  if (last && last.length > 1 && last.includes('end')) {
+    layers[layers.length - 1] = last.filter((id) => id !== 'end');
+    layers.push(['end']);
+    branchIndex.set('end', 0);
+  }
+  return { layers, branchIndex };
+}
+
+/** 默认分支列宽（用于计算分支中心 X） */
+const BRANCH_COLUMN_WIDTH = 180;
+
+/** 从某节点出发 BFS 得到所有后继节点（不含 end），用于条件子树 */
+function getSubtreeFrom(nodeId: string, edges: Edge[]): Set<string> {
+  const out = new Set<string>([nodeId]);
+  let queue = [nodeId];
+  while (queue.length) {
+    const src = queue.shift()!;
+    edges.filter((e) => e.source === src && e.target !== 'end').forEach((e) => {
+      if (!out.has(e.target)) {
+        out.add(e.target);
+        queue.push(e.target);
+      }
+    });
+  }
+  return out;
+}
+
+/**
+ * 整条流程沿竖向中轴线：start、end、条件节点、主干节点（条件前的节点）均在中轴；
+ * 分支在轴线两侧对称展开（奇数分支时中间一列即中轴）。
+ */
 function applyVerticalLayout(nodes: Node[], edges: Edge[]): Node[] {
-  const order = getVerticalOrder(edges);
+  const { layers, branchIndex } = getLayersAndBranches(edges);
+  const conditionIds = getConditionIds(edges);
   const allIds = new Set(nodes.map((n) => n.id));
-  const missing = [...allIds].filter((id) => !order.includes(id));
-  const fullOrder = order.slice(0, -1).concat(missing).concat(['end']);
-  const idToIndex = new Map<string, number>();
-  fullOrder.forEach((id, i) => idToIndex.set(id, i));
-  return nodes.map((node) => {
-    const index = idToIndex.get(node.id) ?? fullOrder.length;
-    const y = LAYOUT_BASE_Y + index * LAYOUT_GAP;
+  const inLayers = new Set(layers.flat());
+  const missing = [...allIds].filter((id) => !inLayers.has(id));
+  if (missing.length > 0) {
+    const endLayerIndex = layers.findIndex((arr) => arr.includes('end'));
+    if (endLayerIndex >= 0) layers.splice(endLayerIndex, 0, missing);
+    else layers.push(missing);
+    missing.forEach((id) => branchIndex.set(id, 0));
+  }
+  const idToLayer = new Map<string, number>();
+  layers.forEach((layer, layerIndex) => {
+    layer.forEach((id) => idToLayer.set(id, layerIndex));
+  });
+  const maxBranch = branchIndex.size > 0 ? Math.max(...Array.from(branchIndex.values())) : 0;
+  const numBranches = Math.max(1, maxBranch + 1);
+  const totalBranchWidth = numBranches * BRANCH_COLUMN_WIDTH + (numBranches - 1) * LAYOUT_BRANCH_GAP;
+  const branchCenterX = (b: number) =>
+    LAYOUT_CENTER_X - totalBranchWidth / 2 + b * (BRANCH_COLUMN_WIDTH + LAYOUT_BRANCH_GAP) + BRANCH_COLUMN_WIDTH / 2;
+
+  const inAnyConditionSubtree = new Set<string>();
+  conditionIds.forEach((cid) => {
+    getSubtreeFrom(cid, edges).forEach((id) => inAnyConditionSubtree.add(id));
+  });
+
+  const result = nodes.map((node) => {
+    const layerIndex = idToLayer.get(node.id) ?? layers.length;
+    const y = LAYOUT_BASE_Y + layerIndex * LAYOUT_GAP;
     const w = getNodeLayoutWidth(node);
-    const x = LAYOUT_CENTER_X - w / 2;
+    const onAxis =
+      node.id === 'start' ||
+      node.id === 'end' ||
+      conditionIds.has(node.id) ||
+      !inAnyConditionSubtree.has(node.id);
+    const x = onAxis
+      ? LAYOUT_CENTER_X - w / 2
+      : branchCenterX(branchIndex.get(node.id) ?? 0) - w / 2;
     return { ...node, position: { x, y }, data: { ...node.data, layoutDirection: 'vertical' as const } };
   });
+
+  return result;
 }
 
 type DesignerToken = {
@@ -352,13 +475,13 @@ const ApprovalProcessDesignerPage: React.FC = () => {
           { id: 'start', type: 'start', position: { x: 0, y: 0 }, data: { label: t('pages.approval.designer.start'), layoutDirection: 'vertical' } },
           { id: 'end', type: 'end', position: { x: 0, y: 0 }, data: { label: t('pages.approval.designer.end'), layoutDirection: 'vertical' } },
         ];
-        edgesData = [{ id: 'e-start-end', source: 'start', target: 'end', type: 'straight' }];
+        edgesData = [{ id: 'e-start-end', source: 'start', target: 'end', type: 'default' }];
       }
 
       const normalizedEdges: Edge[] = (edgesData || []).map((e: Edge, i: number) => ({
         ...e,
         id: e.id || `e-${e.source}-${e.target}-${i}`,
-        type: (e.type as any) || 'straight',
+        type: 'default',
       }));
       const layoutedNodes = applyVerticalLayout(nodesData, normalizedEdges);
       setNodes(layoutedNodes);
@@ -394,15 +517,59 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       },
     };
 
-    const straightEdge = (id: string, source: string, target: string) => ({ id, source, target, type: 'straight' as const });
+    const curveEdge = (id: string, source: string, target: string) => ({ id, source, target, type: 'default' as const });
     const outEdges = edges.filter((e) => e.source === sourceNodeId);
     const restEdges = edges.filter((e) => e.source !== sourceNodeId);
     const newEdges = [
       ...restEdges,
-      straightEdge(`e-${sourceNodeId}-${newId}`, sourceNodeId, newId),
-      ...outEdges.map((e, i) => straightEdge(`e-${newId}-${e.target}-${i}`, newId, e.target)),
+      curveEdge(`e-${sourceNodeId}-${newId}`, sourceNodeId, newId),
+      ...outEdges.map((e, i) => curveEdge(`e-${newId}-${e.target}-${i}`, newId, e.target)),
     ];
     const nextNodes = [...nodes, newNode];
+    const layoutedNodes = applyVerticalLayout(nextNodes, newEdges);
+    setNodes(layoutedNodes);
+    setEdges(newEdges);
+  };
+
+  /**
+   * 条件节点：为某个条件（尚无出边）添加第一个节点，新建 条件→新节点→结束 的边
+   * conditionIndex 对应条件列表中的第几条；若该位置尚无出边，会先补足前面的占位边（条件→结束）以保持顺序
+   */
+  const addFirstNodeForCondition = (conditionIndex: number, type: 'approval' | 'cc' | 'condition') => {
+    if (!selectedNode || selectedNode.type !== 'condition') return;
+    const sourceNodeId = selectedNode.id;
+    const newId = `${type}_${Date.now()}`;
+    let label = t('pages.approval.designer.label');
+    if (type === 'cc') label = t('pages.approval.designer.ccNode');
+    if (type === 'condition') label = t('pages.approval.designer.conditionNode');
+
+    const newNode: Node = {
+      id: newId,
+      type,
+      position: { x: LAYOUT_CENTER_X - getNodeLayoutWidth({ type } as Node) / 2, y: LAYOUT_BASE_Y + LAYOUT_GAP },
+      data: {
+        label,
+        approverType: 'user',
+        approvalType: 'OR',
+        approverIds: [],
+        conditions: [],
+        layoutDirection: 'vertical',
+      },
+    };
+
+    const curveEdge = (id: string, source: string, target: string) => ({ id, source, target, type: 'default' as const });
+    const outEdges = edges.filter((e) => e.source === sourceNodeId);
+    const otherEdges = edges.filter((e) => e.source !== sourceNodeId);
+    const newEdgeToNode = curveEdge(`e-${sourceNodeId}-${newId}`, sourceNodeId, newId);
+    const newEdgeToEnd = curveEdge(`e-${newId}-end`, newId, 'end');
+    // 保持条件与出边顺序一致：若 conditionIndex 超出当前出边数，前面用 条件→结束 占位
+    const padCount = Math.max(0, conditionIndex - outEdges.length);
+    const padEdges = Array.from({ length: padCount }, (_, i) =>
+      curveEdge(`e-${sourceNodeId}-end-pad-${Date.now()}-${i}`, sourceNodeId, 'end')
+    );
+    const newOutEdges = [...outEdges.slice(0, conditionIndex), ...padEdges, newEdgeToNode, ...outEdges.slice(conditionIndex)];
+    const nextNodes = [...nodes, newNode];
+    const newEdges = [...otherEdges, ...newOutEdges, newEdgeToEnd];
     const layoutedNodes = applyVerticalLayout(nextNodes, newEdges);
     setNodes(layoutedNodes);
     setEdges(newEdges);
@@ -435,10 +602,10 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       },
     };
 
-    const straightEdge = (id: string, source: string, target: string) => ({ id, source, target, type: 'straight' as const });
+    const curveEdge = (id: string, source: string, target: string) => ({ id, source, target, type: 'default' as const });
     const newEdges = edges.filter((e) => e.id !== edgeId);
-    newEdges.push(straightEdge(`e-${sourceNodeId}-${newId}`, sourceNodeId, newId));
-    newEdges.push(straightEdge(`e-${newId}-${edge.target}`, newId, edge.target));
+    newEdges.push(curveEdge(`e-${sourceNodeId}-${newId}`, sourceNodeId, newId));
+    newEdges.push(curveEdge(`e-${newId}-${edge.target}`, newId, edge.target));
 
     const nextNodes = [...nodes, newNode];
     const layoutedNodes = applyVerticalLayout(nextNodes, newEdges);
@@ -584,6 +751,26 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     end: EndNode,
   }), []);
 
+  /** 边类型：贝塞尔曲线（直接弧线） */
+  /** 使用 React Flow 内置 BezierEdge（已 memo），减少拖动时边重绘 */
+  const edgeTypes = useMemo(() => ({ default: BezierEdge }), []);
+
+  /** 传给 ReactFlow 的 nodes（合并选中态），避免每次渲染新建引用导致整图重算 */
+  const nodesForFlow = useMemo(
+    () =>
+      nodes.map((n) => {
+        const mergedData = { ...n.data, selected: selectedNode?.id === n.id };
+        return { ...n, data: mergedData };
+      }),
+    [nodes, selectedNode?.id]
+  );
+
+  /** 传给 ReactFlow 的 edges（统一样式） */
+  const edgesForFlow = useMemo(
+    () => edges.map((e) => ({ ...e, style: { ...e.style, stroke: token.colorBorder } })),
+    [edges, token.colorBorder]
+  );
+
   if (loading) {
     return <div style={{ padding: 16 }}>{t('pages.approval.designer.loading')}</div>;
   }
@@ -622,56 +809,60 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       }
       canvas={
         <ReactFlowProvider>
-          <FlowStoreProvider>
-            <DesignerThemeContext.Provider
-              value={{
-                colorBgContainer: token.colorBgContainer,
-                colorText: token.colorText,
-                colorTextSecondary: token.colorTextSecondary,
-                colorBorder: token.colorBorder,
-                colorBorderSecondary: token.colorBorderSecondary,
-                colorPrimary: token.colorPrimary,
-                colorSuccess: token.colorSuccess,
-                colorError: token.colorError,
-                colorWarning: token.colorWarning,
+          <DesignerThemeContext.Provider
+            value={{
+              colorBgContainer: token.colorBgContainer,
+              colorText: token.colorText,
+              colorTextSecondary: token.colorTextSecondary,
+              colorBorder: token.colorBorder,
+              colorBorderSecondary: token.colorBorderSecondary,
+              colorPrimary: token.colorPrimary,
+              colorSuccess: token.colorSuccess,
+              colorError: token.colorError,
+              colorWarning: token.colorWarning,
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                position: 'relative',
+                backgroundColor: token.colorBgContainer,
+                backgroundImage: `radial-gradient(${token.colorBorderSecondary ?? token.colorBorder} 1px, transparent 1px)`,
+                backgroundSize: '12px 12px',
               }}
             >
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  backgroundColor: token.colorBgContainer,
-                  backgroundImage: `radial-gradient(${token.colorBorderSecondary ?? token.colorBorder} 1px, transparent 1px)`,
-                  backgroundSize: '12px 12px',
+              <ReactFlow
+                nodes={nodesForFlow}
+                edges={edgesForFlow}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={(_event, node) => {
+                  setSelectedEdge(null);
+                  handleNodeConfig(node as Node);
                 }}
+                onEdgeClick={(_event, edge) => setSelectedEdge(edge)}
+                onPaneClick={() => setSelectedEdge(null)}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                defaultEdgeOptions={{ type: 'default', style: { stroke: token.colorBorder } }}
+                onConnect={(connection: Connection) => {
+                  setEdges((eds) => addEdge({ ...connection, type: 'default' }, eds));
+                }}
+                panOnScroll
+                fitView
+                minZoom={0.1}
+                maxZoom={2}
+                onlyRenderVisibleElements
               >
-                <FlowView
-                  nodes={nodes.map((n) => {
-                    const mergedData = { ...n.data, selected: selectedNode?.id === n.id };
-                    const label = mergedData.label ?? n.data?.label;
-                    return { ...n, key: `${n.id}-${label ?? ''}`, label, data: mergedData };
-                  })}
-                  edges={edges.map((e) => ({ ...e, style: { ...e.style, stroke: token.colorBorder } }))}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onNodeClick={(_event, node) => {
-                    setSelectedEdge(null);
-                    handleNodeConfig(node);
-                  }}
-                  onEdgeClick={(_event, edge) => setSelectedEdge(edge)}
-                  onPaneClick={() => setSelectedEdge(null)}
-                  nodeTypes={nodeTypes}
-                  flowProps={{
-                    defaultEdgeOptions: { type: 'straight', style: { stroke: token.colorBorder } },
-                    onConnect: (connection: Connection) => {
-                      setEdges((eds) => addEdge({ ...connection, type: 'straight' }, eds));
-                    },
-                  }}
+                <Background
+                  gap={10}
+                  color={token.colorBorderSecondary ?? token.colorBorder}
+                  variant={BackgroundVariant.Dots}
                 />
-              </div>
-            </DesignerThemeContext.Provider>
-          </FlowStoreProvider>
+              </ReactFlow>
+            </div>
+          </DesignerThemeContext.Provider>
         </ReactFlowProvider>
       }
       rightPanel={{
@@ -731,6 +922,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
             )}
 
             {(selectedNode.type === 'approval' || selectedNode.type === 'cc') && (
+            <>
             <ProFormSelect
               name="approverType"
               label={selectedNode.type === 'cc' ? t('pages.approval.designer.ccRecipients') : t('pages.approval.designer.approverType')}
@@ -744,8 +936,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
               ]}
               initialValue="user"
             />
-            )}
-
             <ProFormDependency name={['approverType']}>
               {({ approverType }) => {
                 if (approverType === 'user') {
@@ -779,6 +969,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
                 return null;
               }}
             </ProFormDependency>
+            </>
+            )}
 
             <Divider style={{ margin: '16px 0' }} />
 
@@ -797,34 +989,37 @@ const ApprovalProcessDesignerPage: React.FC = () => {
                 itemRender={({ listDom, action }, listMeta) => {
                   const index = listMeta?.index ?? 0;
                   const branch = conditionBranches[index];
+                  const addButtons = (
+                    <Space wrap>
+                      <Button type="default" size="small" icon={<PlusOutlined />} onClick={() => branch ? handleAddApprovalNode(branch.edge.id) : addFirstNodeForCondition(index, 'approval')}>
+                        {t('pages.approval.designer.addNode')}
+                      </Button>
+                      <Button type="default" size="small" icon={<SendOutlined />} onClick={() => branch ? handleAddCCNode(branch.edge.id) : addFirstNodeForCondition(index, 'cc')}>
+                        {t('pages.approval.designer.addCCNode')}
+                      </Button>
+                      <Button type="default" size="small" icon={<ForkOutlined />} onClick={() => branch ? handleAddConditionNode(branch.edge.id) : addFirstNodeForCondition(index, 'condition')}>
+                        {t('pages.approval.designer.addConditionNode')}
+                      </Button>
+                    </Space>
+                  );
                   return (
                     <div style={{ marginBottom: 12 }}>
                       <Card
                         size="small"
                         styles={{ body: { padding: 8 } }}
-                        style={{ marginBottom: branch ? 6 : 0, background: (token as any).colorFillQuaternary ?? token.colorFillSecondary ?? '#fafafa' }}
+                        style={{ marginBottom: 6, background: (token as any).colorFillQuaternary ?? token.colorFillSecondary ?? '#fafafa' }}
                         extra={action}
                       >
                         {listDom}
                       </Card>
-                      {branch && (
-                        <Card size="small" style={{ background: (token as any).colorFillQuaternary ?? token.colorFillSecondary ?? '#f5f5f5', marginLeft: 8, borderLeft: `3px solid ${token.colorPrimary}` }}>
-                          <div style={{ marginBottom: 6, fontSize: 12, color: token.colorTextSecondary }}>
-                            {t('pages.approval.designer.branchAfterCondition', { index: index + 1 })} → {branch.targetNode?.data?.label || branch.targetNode?.id || branch.edge.target}
-                          </div>
-                          <Space wrap>
-                            <Button type="default" size="small" icon={<PlusOutlined />} onClick={() => handleAddApprovalNode(branch.edge.id)}>
-                              {t('pages.approval.designer.addNode')}
-                            </Button>
-                            <Button type="default" size="small" icon={<SendOutlined />} onClick={() => handleAddCCNode(branch.edge.id)}>
-                              {t('pages.approval.designer.addCCNode')}
-                            </Button>
-                            <Button type="default" size="small" icon={<ForkOutlined />} onClick={() => handleAddConditionNode(branch.edge.id)}>
-                              {t('pages.approval.designer.addConditionNode')}
-                            </Button>
-                          </Space>
-                        </Card>
-                      )}
+                      <Card size="small" style={{ background: (token as any).colorFillQuaternary ?? token.colorFillSecondary ?? '#f5f5f5', marginLeft: 8, borderLeft: `3px solid ${token.colorPrimary}` }}>
+                        <div style={{ marginBottom: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                          {branch
+                            ? `${t('pages.approval.designer.branchAfterCondition', { index: index + 1 })} → ${branch.targetNode?.data?.label || branch.targetNode?.id || branch.edge.target}`
+                            : t('pages.approval.designer.branchAddFirst', { index: index + 1 })}
+                        </div>
+                        {addButtons}
+                      </Card>
                     </div>
                   );
                 }}
@@ -891,6 +1086,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
               </div>
             )}
 
+            {selectedNode.type !== 'condition' && (
+            <>
             <div style={{ marginBottom: 12, color: token.colorTextSecondary, fontSize: 12 }}>
               {t('pages.approval.designer.addFromCurrentHint')}
             </div>
@@ -905,6 +1102,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
                 {t('pages.approval.designer.addConditionNode')}
               </Button>
             </Space>
+            </>
+            )}
 
             <div style={{ borderTop: `1px solid ${token.colorBorder}`, marginTop: 16, paddingTop: 16 }}>
               <Button

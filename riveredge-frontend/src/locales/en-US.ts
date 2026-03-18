@@ -6903,6 +6903,7 @@ export default {
   'pages.approval.designer.addByBranchHint': 'Add a different approval/CC/condition node for each branch.',
   'pages.approval.designer.branchLabel': 'Branch {{index}}',
   'pages.approval.designer.branchAfterCondition': 'Branch {{index}} (follows condition above)',
+  'pages.approval.designer.branchAddFirst': 'Condition {{index}}: add first node (will connect to end)',
   'pages.approval.designer.extraBranchesHint': 'Branches below have no matching condition yet; you can add next nodes for them.',
   'pages.approval.designer.deleteEdge': 'Delete Edge',
   'pages.approval.designer.edgeDeleted': 'Edge deleted',

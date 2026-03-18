@@ -564,13 +564,38 @@ class ApprovalInstanceService:
     @staticmethod
     async def _create_node_tasks(tenant_id: int, instance: ApprovalInstance, node: dict) -> List[ApprovalTask]:
         """
-        为节点创建审批任务。start/end 不建任务；cc 不建任务，发通知并推进到下一节点再递归。
+        为节点创建审批任务。start/end 不建任务；condition 不建任务，按条件选边后递归下一节点；cc 不建任务，发通知并推进到下一节点再递归。
         """
         node_type = node.get("type") or (node.get("data") or {}).get("type")
         node_id = node.get("id")
 
         if node_type == "start" or node_type == "end":
             return []
+
+        if node_type == "condition":
+            # 条件节点：不创建任务，按 instance.data 与节点 conditions 选一条出边，推进到下一节点再递归
+            nodes_config = (instance.process.nodes or {}) if instance.process else {}
+            next_node = ApprovalInstanceService._get_next_node(
+                nodes_config, node_id, instance=instance
+            )
+            if not next_node:
+                instance.status = "approved"
+                instance.completed_at = datetime.now()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+                return []
+            next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
+            if next_type == "end":
+                instance.status = "approved"
+                instance.completed_at = datetime.now()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+                return []
+            instance.current_node = next_node.get("id")
+            await instance.save()
+            return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
 
         if node_type == "cc":
             # 抄送节点：不创建审批任务，可选通知抄送人，然后推进到下一节点

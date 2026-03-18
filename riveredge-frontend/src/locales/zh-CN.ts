@@ -6919,6 +6919,7 @@ export default {
   'pages.approval.designer.addByBranchHint': '可为每个条件分支单独添加不同的审批/抄送/条件节点。',
   'pages.approval.designer.branchLabel': '分支 {{index}}',
   'pages.approval.designer.branchAfterCondition': '分支 {{index}}（紧跟上方条件）',
+  'pages.approval.designer.branchAddFirst': '条件 {{index}}：添加第一个节点（将连到结束）',
   'pages.approval.designer.extraBranchesHint': '以下分支数多于已配置条件，可为这些分支单独添加下一节点。',
   'pages.approval.designer.deleteEdge': '删除连线',
   'pages.approval.designer.edgeDeleted': '连线已删除',
