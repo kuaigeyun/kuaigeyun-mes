@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs, Checkbox } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs, Checkbox, Row, Col } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -978,15 +978,27 @@ const BOMPage: React.FC = () => {
       }
     });
 
-    /** 按物料编码排序子件 */
+    /** 按物料编码排序子件；同编码时按 path / priority / id 稳定排序，避免乱序 */
     const getComponentCode = (componentId: number) =>
       materials.find((m) => m.id === componentId)?.mainCode ||
       materials.find((m) => m.id === componentId)?.code ||
       '';
-    const sortItemsByCode = (items: BOM[] | undefined) =>
-      [...(items ?? [])].sort((a, b) =>
-        getComponentCode(a.componentId).localeCompare(getComponentCode(b.componentId), undefined, { numeric: true })
-      );
+    const sortItemsByCode = (items: BOM[] | undefined): BOM[] => {
+      const list = [...(items ?? [])];
+      return list.sort((a, b) => {
+        const codeA = getComponentCode(a.componentId);
+        const codeB = getComponentCode(b.componentId);
+        const cmp = codeA.localeCompare(codeB, undefined, { numeric: true });
+        if (cmp !== 0) return cmp;
+        const pathA = (a as any).path ?? a.path ?? '';
+        const pathB = (b as any).path ?? b.path ?? '';
+        if (pathA !== pathB) return pathA.localeCompare(pathB, undefined, { numeric: true });
+        const prioA = (a as any).priority ?? a.priority ?? 0;
+        const prioB = (b as any).priority ?? b.priority ?? 0;
+        if (prioA !== prioB) return prioA - prioB;
+        return (a.id ?? 0) - (b.id ?? 0);
+      });
+    };
 
     /** 递归构建子项（含半成品展开）：半成品作为 componentId 时，将其 BOM 子件作为 children */
     const buildItemWithChildren = (
@@ -2381,7 +2393,7 @@ const BOMPage: React.FC = () => {
         }
       />
 
-      {/* 创建/编辑BOM Modal */}
+      {/* 创建/编辑BOM Modal - 两栏布局：左侧基础信息，右侧子件列表 */}
       <FormModalTemplate
         title={isEdit ? t('app.master-data.bom.editBom') : t('app.master-data.bom.createBom')}
         open={modalVisible}
@@ -2390,6 +2402,7 @@ const BOMPage: React.FC = () => {
         isEdit={isEdit}
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={true}
         formRef={formRef}
         initialValues={isEdit ? undefined : {
           isActive: true,
@@ -2411,114 +2424,100 @@ const BOMPage: React.FC = () => {
             padding-right: 8px;
           }
         `}</style>
-          <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
-            {({ getFieldValue }) => {
-              const materialId = getFieldValue('materialId');
-              const version = getFieldValue('version') || '1.0';
-              
-              // 构建编码规则的上下文
-              const context: Record<string, any> = {
-                version,
-              };
-              
-              // 如果选择了主物料，添加物料信息到上下文
-              if (materialId) {
-                const selectedMaterial = materials.find(m => m.id === materialId);
-                if (selectedMaterial) {
-                  // 优先使用mainCode，如果没有则使用code（向后兼容）
-                  context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
-                  context.material_name = selectedMaterial.name;
+        <Row gutter={24}>
+          <Col xs={24} md={10}>
+            <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
+              {({ getFieldValue }) => {
+                const materialId = getFieldValue('materialId');
+                const version = getFieldValue('version') || '1.0';
+                const context: Record<string, any> = { version };
+                if (materialId) {
+                  const selectedMaterial = materials.find(m => m.id === materialId);
+                  if (selectedMaterial) {
+                    context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
+                    context.material_name = selectedMaterial.name;
+                  }
                 }
-              }
-              
-              return (
-                <CodeField
-                  pageCode="master-data-engineering-bom"
-                  name="bomCode"
-                  label={t('app.master-data.bom.bomCode')}
-                  colProps={{ span: 12 }}
-                  autoGenerateOnCreate={!isEdit}
-                  showGenerateButton={false}
-                  context={context}
-                  fieldProps={{
-                    maxLength: 100,
-                  }}
-                />
-              );
-            }}
-          </ProForm.Item>
-          <SafeProFormSelect
-            name="materialId"
-            label={t('app.master-data.bom.mainMaterialLabel')}
-            placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
-            colProps={{ span: 12 }}
-            options={materials.map(m => ({
-              label: formatMaterialLabel(m),
-              value: m.id,
-            }))}
-            rules={[
-              { required: true, message: t('app.master-data.bom.mainMaterialRequired') },
-            ]}
-            fieldProps={{
-              disabled: isEdit,
-              loading: materialsLoading,
-              showSearch: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-              onChange: () => {
-                if (isEdit) return;
-                setTimeout(() => regenerateBOMCode(), 300);
-              },
-            }}
-          />
-          <ProFormText
-            name="version"
-            label={t('app.master-data.bom.versionLabel')}
-            placeholder={t('app.master-data.bom.versionPlaceholder')}
-            colProps={{ span: 6 }}
-            rules={[
-              { required: true, message: t('app.master-data.bom.versionRequired') },
-              { max: 50, message: t('app.master-data.bom.versionMax') },
-            ]}
-            fieldProps={{
-              disabled: isEdit,
-              onChange: (e) => {
-                if (isEdit) return;
-                const newVersion = e.target.value;
-                if (newVersion) setTimeout(() => regenerateBOMCode(), 300);
-              },
-            }}
-          />
-          <ProFormSelect
-            name="approvalStatus"
-            label={t('app.master-data.bom.approvalStatusLabel')}
-            colProps={{ span: 6 }}
-            options={[
-              { label: t('app.master-data.bom.statusDraft'), value: 'draft' },
-              { label: t('app.master-data.bom.statusPending'), value: 'pending' },
-              { label: t('app.master-data.bom.statusApproved'), value: 'approved' },
-              { label: t('app.master-data.bom.statusRejected'), value: 'rejected' },
-            ]}
-          />
-          <ProFormDateTimePicker
-            name="effectiveDate"
-            label={t('app.master-data.bom.effectiveDateLabel')}
-            colProps={{ span: 6 }}
-            fieldProps={{
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormDateTimePicker
-            name="expiryDate"
-            label={t('app.master-data.bom.expiryDateLabel')}
-            colProps={{ span: 6 }}
-            fieldProps={{
-              style: { width: '100%' },
-            }}
-          />
-          
+                return (
+                  <CodeField
+                    pageCode="master-data-engineering-bom"
+                    name="bomCode"
+                    label={t('app.master-data.bom.bomCode')}
+                    colProps={{ span: 24 }}
+                    autoGenerateOnCreate={!isEdit}
+                    showGenerateButton={false}
+                    context={context}
+                    fieldProps={{ maxLength: 100 }}
+                  />
+                );
+              }}
+            </ProForm.Item>
+            <SafeProFormSelect
+              name="materialId"
+              label={t('app.master-data.bom.mainMaterialLabel')}
+              placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
+              colProps={{ span: 24 }}
+              options={materials.map(m => ({ label: formatMaterialLabel(m), value: m.id }))}
+              rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
+              fieldProps={{
+                disabled: isEdit,
+                loading: materialsLoading,
+                showSearch: true,
+                filterOption: (input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase()),
+                onChange: () => { if (!isEdit) setTimeout(() => regenerateBOMCode(), 300); },
+              }}
+            />
+            <ProFormText
+              name="version"
+              label={t('app.master-data.bom.versionLabel')}
+              placeholder={t('app.master-data.bom.versionPlaceholder')}
+              colProps={{ span: 24 }}
+              rules={[
+                { required: true, message: t('app.master-data.bom.versionRequired') },
+                { max: 50, message: t('app.master-data.bom.versionMax') },
+              ]}
+              fieldProps={{
+                disabled: isEdit,
+                onChange: (e) => { if (!isEdit && e?.target?.value) setTimeout(() => regenerateBOMCode(), 300); },
+              }}
+            />
+            <ProFormSelect
+              name="approvalStatus"
+              label={t('app.master-data.bom.approvalStatusLabel')}
+              colProps={{ span: 24 }}
+              options={[
+                { label: t('app.master-data.bom.statusDraft'), value: 'draft' },
+                { label: t('app.master-data.bom.statusPending'), value: 'pending' },
+                { label: t('app.master-data.bom.statusApproved'), value: 'approved' },
+                { label: t('app.master-data.bom.statusRejected'), value: 'rejected' },
+              ]}
+            />
+            <ProFormDateTimePicker
+              name="effectiveDate"
+              label={t('app.master-data.bom.effectiveDateLabel')}
+              colProps={{ span: 24 }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormDateTimePicker
+              name="expiryDate"
+              label={t('app.master-data.bom.expiryDateLabel')}
+              colProps={{ span: 24 }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormTextArea
+              name="description"
+              label={t('app.master-data.bom.descFormLabel')}
+              placeholder={t('app.master-data.bom.descFormPlaceholder')}
+              colProps={{ span: 24 }}
+              fieldProps={{ rows: 3, maxLength: 500, showCount: true }}
+            />
+            <ProFormSwitch
+              name="isActive"
+              label={t('app.master-data.bom.isEnabledLabel')}
+              colProps={{ span: 24 }}
+            />
+          </Col>
+          <Col xs={24} md={14}>
           <ProForm.Item
             label={t('app.master-data.bom.childMaterialList')}
             rules={[
@@ -2796,23 +2795,8 @@ const BOMPage: React.FC = () => {
               </AntForm.List>
             </ProForm.Item>
           </ProForm.Item>
-          
-          <ProFormTextArea
-            name="description"
-            label={t('app.master-data.bom.descFormLabel')}
-            placeholder={t('app.master-data.bom.descFormPlaceholder')}
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 3,
-              maxLength: 500,
-              showCount: true,
-            }}
-          />
-          
-          <ProFormSwitch
-            name="isActive"
-            label={t('app.master-data.bom.isEnabledLabel')}
-          />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       {/* 审核Modal */}

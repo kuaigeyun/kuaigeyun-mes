@@ -468,7 +468,8 @@ async def revise_bom(
     bom_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    new_version: Optional[str] = Query(None, description="新修订版本号（可选）")
+    new_version: Optional[str] = Query(None, description="新修订版本号（可选）"),
+    version_remark: Optional[str] = Query(None, description="版本变更备注（可选）")
 ):
     """
     BOM升版（根据已审核版本创建新的草稿版本）
@@ -479,7 +480,8 @@ async def revise_bom(
         return await MaterialService.revise_bom(
             tenant_id=tenant_id,
             bom_uuid=bom_uuid,
-            new_version=new_version
+            new_version=new_version,
+            version_remark=version_remark
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

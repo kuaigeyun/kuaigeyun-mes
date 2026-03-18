@@ -106,6 +106,7 @@ function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyI
     isAlternative: (raw.is_alternative ?? raw.isAlternative) === true,
     alternativeGroupId: raw.alternative_group_id ?? raw.alternativeGroupId ?? null,
     priority: Number(raw.priority ?? 0),
+    bomVersion: (raw.bom_version != null || raw.bomVersion != null) ? String(raw.bom_version ?? raw.bomVersion) : undefined,
     children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 }
@@ -393,11 +394,10 @@ export const bomApi = {
   /**
    * BOM升版（Revise）
    */
-  revise: async (uuid: string, newVersion?: string): Promise<BOM> => {
+  revise: async (uuid: string, newVersion?: string, versionRemark?: string): Promise<BOM> => {
     const params: Record<string, any> = {};
-    if (newVersion) {
-      params.new_version = newVersion;
-    }
+    if (newVersion) params.new_version = newVersion;
+    if (versionRemark) params.version_remark = versionRemark;
     const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/revise`, null, { params });
     return mapBomFromApi(raw ?? {});
   },
@@ -468,6 +468,7 @@ export const bomApi = {
       bom_code: data.bomCode,
       effective_date: data.effectiveDate,
       description: data.description,
+      version_remark: data.versionRemark,
     };
     const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', payload);
     const arr = Array.isArray(raw) ? raw : [];

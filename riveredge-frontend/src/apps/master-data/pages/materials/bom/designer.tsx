@@ -11,9 +11,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions } from 'antd';
+import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin } from 'antd';
 import { EditOutlined, LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, UpOutlined, DownOutlined, CopyOutlined, DiffOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { MindMap, RCNode } from '@ant-design/graphs';
 
@@ -25,6 +25,10 @@ const DEFAULT_EXPAND_LEVEL = 5;
 const NODE_V_GAP = 16;
 /** 层级间水平间距 */
 const NODE_H_GAP = 60;
+/** 四级及更深层级：加大垂直间距，避免兄弟节点重叠（depth 0=根 1=二级 2=三级 3=四级） */
+const NODE_V_GAP_DEEP = 28;
+/** 四级及更深层级：加大水平间距，避免与父级/兄弟分支重叠 */
+const NODE_H_GAP_DEEP = 88;
 /** 节点高度：与渲染一致，用于 size/ports 使连线始终从侧面垂直中心连接 */
 const NODE_HEIGHT_SINGLE = 32;
 const NODE_HEIGHT_DOUBLE = 48;
@@ -39,11 +43,12 @@ import {
   updateNode,
   findParentNode,
   handleMoveNodeLogic,
+  removeNode,
 } from './utils';
 import { bomApi, materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi } from '../../../services/process';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
+import type { Material, MaterialCreate, MaterialUpdate, BOMHierarchyItem, MaterialUnits, BOMVersionCompareResult } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 import { CanvasPageTemplate, CANVAS_GRID_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { MaterialForm } from '../../../components/MaterialForm';
@@ -160,6 +165,14 @@ const BOMDesignerPage: React.FC = () => {
   const handleNodeSelectRef = useRef<(id: string) => void>(() => { });
   const selectedIdInGraphRef = useRef<string | null>(null); // 与图内选中状态同步，用于 setElementState 时清除上一节点
   const canvasRef = useRef<HTMLDivElement>(null);
+  const loadingSubBomForNodeRef = useRef<string | null>(null);
+  const [loadingSubBomNodeId, setLoadingSubBomNodeId] = useState<string | null>(null);
+  /** 本会话中修改过的节点 ID，用于升版时仅对涉及变动的上级父件升版并写版本变更备注 */
+  const dirtyNodeIdsRef = useRef<Set<string>>(new Set());
+  /** 标记节点被修改，升版时用于计算需一起升版的上级父件并生成版本变更备注（需在引用它的 useCallback 之前定义） */
+  const addDirtyNode = useCallback((nodeId: string) => {
+    dirtyNodeIdsRef.current.add(nodeId);
+  }, []);
 
   // History state for Undo/Redo
   const [, setHistory] = useState<{ past: any[]; future: any[] }>({ past: [], future: [] });
@@ -192,6 +205,16 @@ const BOMDesignerPage: React.FC = () => {
   const [addConfigurableOptionMaterial, setAddConfigurableOptionMaterial] = useState<Material | null>(null);
   const [addAlternativeOptionModalVisible, setAddAlternativeOptionModalVisible] = useState(false);
   const [addAlternativeOptionMaterial, setAddAlternativeOptionMaterial] = useState<Material | null>(null);
+  /** 复制BOM弹窗：选择新根物料后以当前结构生成新BOM */
+  const [copyBomModalVisible, setCopyBomModalVisible] = useState(false);
+  const [copyBomNewRootMaterial, setCopyBomNewRootMaterial] = useState<Material | null>(null);
+  const [copyBomLoading, setCopyBomLoading] = useState(false);
+  /** 版本比对弹窗 */
+  const [versionCompareModalVisible, setVersionCompareModalVisible] = useState(false);
+  const [versionCompareV1, setVersionCompareV1] = useState<string | null>(null);
+  const [versionCompareV2, setVersionCompareV2] = useState<string | null>(null);
+  const [versionCompareResult, setVersionCompareResult] = useState<BOMVersionCompareResult | null>(null);
+  const [versionCompareLoading, setVersionCompareLoading] = useState(false);
 
   // Load unit dictionary
   useEffect(() => {
@@ -283,6 +306,7 @@ const BOMDesignerPage: React.FC = () => {
         isAlternative: item.isAlternative ?? false,
         alternativeGroupId: item.alternativeGroupId ?? null,
         priority: (item as any).priority ?? 0,
+        bomVersion: (item as any).bomVersion ?? (item as any).bom_version,
       };
 
       if (item.children && item.children.length > 0) {
@@ -302,6 +326,55 @@ const BOMDesignerPage: React.FC = () => {
     };
 
     return rootNode;
+  }, [materials]);
+
+  /**
+   * 将 BOM 层级项列表转为 MindMap 子节点（带路径前缀，用于半成品展开加载）
+   * @param excludeComponentId 半成品自身物料 ID，若子件等于该 ID 则排除（防止自引用）
+   */
+  const convertHierarchyItemsToMindMapNodes = useCallback((
+    items: BOMHierarchyItem[],
+    parentPath: number[],
+    excludeComponentId?: number
+  ): MindMapNode[] => {
+    const convertOne = (item: BOMHierarchyItem, path: number[], excludeId?: number): MindMapNode => {
+      const material = materials.find(m => m.id === item.componentId) || {
+        id: item.componentId,
+        code: item.componentCode,
+        name: item.componentName,
+      };
+      const pathKey = path.join('-');
+      const code = (material as any).mainCode ?? (material as any).main_code ?? material.code ?? item.componentCode;
+      const variantManaged = !!(material && ((material as any).variantManaged ?? (material as any).variant_managed));
+      const node: MindMapNode = {
+        id: `material_${item.componentId}_${pathKey}`,
+        value: `${code} - ${material.name}`,
+        material,
+        quantity: item.quantity,
+        unit: item.unit,
+        wasteRate: item.wasteRate,
+        isRequired: item.isRequired,
+        componentId: item.componentId,
+        isConfigurable: item.isConfigurable || variantManaged,
+        configurableGroupId: item.configurableGroupId ?? null,
+        isDefaultConfigurable: item.isDefaultConfigurable,
+        isAlternative: item.isAlternative ?? false,
+        alternativeGroupId: item.alternativeGroupId ?? null,
+        priority: (item as any).priority ?? 0,
+        bomVersion: (item as any).bomVersion ?? (item as any).bom_version,
+      };
+      if (item.children && item.children.length > 0) {
+        const filteredChildren = excludeId != null
+          ? item.children.filter((c: BOMHierarchyItem) => c.componentId !== excludeId)
+          : item.children;
+        node.children = filteredChildren.map((child, index) => convertOne(child, [...path, index], excludeId));
+      }
+      return node;
+    };
+    const filteredItems = excludeComponentId != null
+      ? items.filter((item) => item.componentId !== excludeComponentId)
+      : items;
+    return filteredItems.map((item, index) => convertOne(item, [...parentPath, index], excludeComponentId));
   }, [materials]);
 
   /**
@@ -412,9 +485,12 @@ const BOMDesignerPage: React.FC = () => {
 
       // 转换为 MindMap 数据
       const data = convertToMindMapData(material, hierarchy.items || []);
+      // 根节点（成品）记录当前 BOM 版本，供节点上显示
+      (data as any).version = actualVersion;
 
       setMindMapData(data);
       setHistory({ past: [], future: [] }); // Reset history on load
+      dirtyNodeIdsRef.current.clear();
 
       // 刷新版本列表（便于切换版本下拉与刷新后一致）
       loadVersionList().catch(() => {});
@@ -509,7 +585,8 @@ const BOMDesignerPage: React.FC = () => {
   }, [materialId, materials.length, loading, loadVersionList]);
 
   /**
-   * Wrapper for updating BOM data with History support
+   * Wrapper for updating BOM data with History support.
+   * 同步更新 ref，确保「另存为新版本」等操作能立即拿到最新树（含刚添加的替代料/配置位）。
    */
   const handleUpdateBOM = useCallback((newData: any) => {
     setHistory(curr => {
@@ -520,6 +597,7 @@ const BOMDesignerPage: React.FC = () => {
         future: []
       };
     });
+    mindMapDataRef.current = newData;
     setMindMapData(newData);
   }, []);
 
@@ -606,7 +684,7 @@ const BOMDesignerPage: React.FC = () => {
   }, []);
 
   /**
-   * 在列表中直接添加可选物料：用已选物料创建同级配置位节点并追加，不切换选中节点
+   * 在列表中直接添加可选物料：用已选物料创建同级配置位节点，插入到当前节点（或同组末尾）紧跟的下一个位置，不追加到 children 末尾
    */
   const handleAddConfigurableOptionWithMaterial = useCallback(
     (material: Material) => {
@@ -615,6 +693,7 @@ const BOMDesignerPage: React.FC = () => {
       const parent = findParentNode(mindMapDataRef.current, selectedNodeId);
       if (!node || !parent) return;
       const groupId = node.configurableGroupId ?? Date.now();
+      const gid = typeof groupId === 'number' ? groupId : Date.now();
       const code = (material as any).mainCode ?? (material as any).main_code ?? material.code ?? '';
       const baseUnit = (material as any).baseUnit ?? (material as any).base_unit ?? '';
       const newNode: MindMapNode = {
@@ -627,21 +706,34 @@ const BOMDesignerPage: React.FC = () => {
         isRequired: true,
         componentId: material.id,
         isConfigurable: true,
-        configurableGroupId: typeof groupId === 'number' ? groupId : Date.now(),
+        configurableGroupId: gid,
         isDefaultConfigurable: false,
         isAlternative: false,
         alternativeGroupId: null,
       };
+      const siblings = parent.children ?? [];
+      const selectedIndex = siblings.findIndex((c: MindMapNode) => c.id === selectedNodeId);
+      if (selectedIndex === -1) return;
+      let insertAt = selectedIndex + 1;
+      for (let i = selectedIndex + 1; i < siblings.length; i++) {
+        if ((siblings[i] as MindMapNode).isConfigurable && (siblings[i] as MindMapNode).configurableGroupId === gid) {
+          insertAt = i + 1;
+        } else {
+          break;
+        }
+      }
+      const newChildren = [...siblings.slice(0, insertAt), newNode, ...siblings.slice(insertAt)];
       const updated = updateNode(mindMapDataRef.current, parent.id, (p) => ({
         ...p,
-        children: [...(p.children ?? []), newNode],
+        children: newChildren,
       }));
       handleUpdateBOM(updated);
+      addDirtyNode(selectedNodeId);
       setAddConfigurableOptionModalVisible(false);
       setAddConfigurableOptionMaterial(null);
       messageApi.success(t('app.master-data.bom.configurableOptionAdded'));
     },
-    [selectedNodeId, handleUpdateBOM, messageApi, t]
+    [selectedNodeId, handleUpdateBOM, addDirtyNode, messageApi, t]
   );
 
   /** 替代料组内按新顺序重排并更新 priority，保存（不可变更新，确保 UI 能正确响应新顺序） */
@@ -665,9 +757,10 @@ const BOMDesignerPage: React.FC = () => {
       }
       const updated = updateNode(mindMapDataRef.current, parent.id, (p) => ({ ...p, children: newChildren }));
       handleUpdateBOM(updated);
+      addDirtyNode(parent.id);
       messageApi.success(t('common.updateSuccess'));
     },
-    [handleUpdateBOM, messageApi, t]
+    [handleUpdateBOM, addDirtyNode, messageApi, t]
   );
 
   /** 替代料组内上移/下移 */
@@ -739,16 +832,29 @@ const BOMDesignerPage: React.FC = () => {
         alternativeGroupId: gid,
         priority: sameGroupCount,
       };
+      const siblings = parent.children ?? [];
+      const selectedIndex = siblings.findIndex((c: MindMapNode) => c.id === selectedNodeId);
+      if (selectedIndex === -1) return;
+      let insertAt = selectedIndex + 1;
+      for (let i = selectedIndex + 1; i < siblings.length; i++) {
+        if ((siblings[i] as MindMapNode).isAlternative && (siblings[i] as MindMapNode).alternativeGroupId === gid) {
+          insertAt = i + 1;
+        } else {
+          break;
+        }
+      }
+      const newChildren = [...siblings.slice(0, insertAt), newNode, ...siblings.slice(insertAt)];
       tree = updateNode(tree, parent.id, (p) => ({
         ...p,
-        children: [...(p.children ?? []), newNode],
+        children: newChildren,
       }));
       handleUpdateBOM(tree);
+      addDirtyNode(selectedNodeId);
       setAddAlternativeOptionModalVisible(false);
       setAddAlternativeOptionMaterial(null);
       messageApi.success(t('app.master-data.bom.configurableOptionAdded'));
     },
-    [selectedNodeId, handleUpdateBOM, nodeConfigForm, messageApi, t]
+    [selectedNodeId, handleUpdateBOM, addDirtyNode, nodeConfigForm, messageApi, t]
   );
 
   /**
@@ -766,6 +872,73 @@ const BOMDesignerPage: React.FC = () => {
   }, [messageApi, t]);
 
   /**
+   * 从已拉取的 BOM 列表中解析版本：默认版本优先，否则最新已审核，否则最新版本
+   */
+  const resolveVersionFromBoms = useCallback((boms: any[]): string => {
+    if (!boms.length) return '1.0';
+    const defaultBom = boms.find((b: any) => b.isDefault === true);
+    if (defaultBom) return defaultBom.version ?? '1.0';
+    const sortDesc = (a: any, b: any) => {
+      const vA = (a.version ?? '').toString();
+      const vB = (b.version ?? '').toString();
+      const ma = vA.match(/v?(\d+)\.(\d+)/);
+      const mb = vB.match(/v?(\d+)\.(\d+)/);
+      if (ma && mb) {
+        if (parseInt(ma[1], 10) !== parseInt(mb[1], 10)) return parseInt(mb[1], 10) - parseInt(ma[1], 10);
+        return parseInt(mb[2], 10) - parseInt(ma[2], 10);
+      }
+      return vB.localeCompare(vA);
+    };
+    const approved = boms.filter((b: any) => (b.approvalStatus ?? b.approval_status) === 'approved');
+    if (approved.length > 0) {
+      approved.sort(sortDesc);
+      return approved[0]?.version ?? '1.0';
+    }
+    boms.sort(sortDesc);
+    return boms[0]?.version ?? '1.0';
+  }, []);
+
+  /**
+   * 选中半成品且无子节点时，自动加载该半成品的子物料（默认版本或最新已审核版本）
+   * 仅请求一次 getByMaterial，用其结果解析版本后再请求 getHierarchy，减少延迟
+   */
+  const loadSemiProductChildrenIfNeeded = useCallback(async (nodeId: string) => {
+    const tree = mindMapDataRef.current;
+    if (!tree) return;
+    const node = findNode(tree, nodeId);
+    if (!node || nodeId === 'root' || !node.componentId) return;
+    if (node.children && node.children.length > 0) return;
+    if (loadingSubBomForNodeRef.current === nodeId) return;
+    loadingSubBomForNodeRef.current = nodeId;
+    setLoadingSubBomNodeId(nodeId);
+    try {
+      const boms = await bomApi.getByMaterial(node.componentId, undefined, false, true);
+      if (!boms || boms.length === 0) return;
+      const version = resolveVersionFromBoms(boms);
+      const hierarchy = await bomApi.getHierarchy(node.componentId, version);
+      const items = hierarchy?.items ?? [];
+      if (items.length === 0) return;
+      const parts = node.id.split('_');
+      const pathKey = parts[0] === 'material' && parts.length >= 3 ? parts.slice(2).join('_') : '';
+      const parentPath = pathKey ? pathKey.split('-').map(Number) : [];
+      const children = convertHierarchyItemsToMindMapNodes(items, parentPath, node.componentId);
+      const updated = updateNode(tree, nodeId, (n) => ({ ...n, children }));
+      if (updated) {
+        handleUpdateBOM(updated);
+        messageApi.success(t('app.master-data.bom.subBomLoaded'));
+      }
+    } catch (e) {
+      console.error('加载半成品子物料失败', e);
+      messageApi.error(t('app.master-data.bom.subBomLoadFailed'));
+    } finally {
+      if (loadingSubBomForNodeRef.current === nodeId) {
+        loadingSubBomForNodeRef.current = null;
+      }
+      setLoadingSubBomNodeId(null);
+    }
+  }, [resolveVersionFromBoms, convertHierarchyItemsToMindMapNodes, handleUpdateBOM, messageApi, t]);
+
+  /**
    * 选择节点
    */
   const handleNodeSelectCallback = useCallback((nodeId: string) => {
@@ -775,7 +948,8 @@ const BOMDesignerPage: React.FC = () => {
       setSelectedNodeId,
       nodeConfigForm
     );
-  }, [nodeConfigForm]);
+    loadSemiProductChildrenIfNeeded(nodeId);
+  }, [nodeConfigForm, loadSemiProductChildrenIfNeeded]);
 
   useEffect(() => {
     handleNodeSelectRef.current = handleNodeSelectCallback;
@@ -815,7 +989,11 @@ const BOMDesignerPage: React.FC = () => {
 
       if (updated) {
         handleUpdateBOM(updated);
+        addDirtyNode(selectedNodeId);
         messageApi.success(t('app.master-data.bom.configUpdated'));
+        if (selectedNodeId && values.materialId) {
+          loadSemiProductChildrenIfNeeded(selectedNodeId);
+        }
       }
     });
   };
@@ -887,6 +1065,127 @@ const BOMDesignerPage: React.FC = () => {
   }, []);
 
   /**
+   * 导出指定节点的直接子件为 BOM 导入项（用于半成品升版时 batchImport）
+   */
+  const getDirectChildrenBOMItems = useCallback((node: MindMapNode): any[] => {
+    const parentMaterial = node.material;
+    if (!parentMaterial) return [];
+    const parentCode = (parentMaterial as any).mainCode ?? (parentMaterial as any).main_code ?? parentMaterial.code ?? '';
+    const items: any[] = [];
+    if (!node.children) return items;
+    node.children.forEach((child: MindMapNode, index: number) => {
+      if (child.material && child.componentId) {
+        const compCode = (child.material as any).mainCode ?? (child.material as any).main_code ?? child.material.code ?? '';
+        items.push({
+          parentCode,
+          componentCode: compCode,
+          quantity: child.quantity || 1,
+          unit: child.unit ?? undefined,
+          wasteRate: child.wasteRate ?? undefined,
+          isRequired: child.isRequired !== false,
+          isConfigurable: child.isConfigurable ?? false,
+          configurableGroupId: child.isConfigurable ? (child.configurableGroupId ?? undefined) : undefined,
+          isDefaultConfigurable: child.isConfigurable ? false : undefined,
+          isAlternative: child.isAlternative ?? false,
+          alternativeGroupId: child.isAlternative ? (child.alternativeGroupId ?? undefined) : undefined,
+          priority: child.priority ?? index,
+        });
+      }
+    });
+    return items;
+  }, []);
+
+  /** 在树中按 componentId 查找第一个匹配的节点（用于取半成品节点导出其子件） */
+  const findNodeByComponentId = useCallback((tree: MindMapNode, componentId: number): MindMapNode | null => {
+    if (tree.componentId === componentId) return tree;
+    if (tree.children) {
+      for (const c of tree.children) {
+        const found = findNodeByComponentId(c, componentId);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+
+  /**
+   * 构建父节点映射与深度，用于计算「受影响需升版的父件」
+   */
+  const buildParentMapAndDepth = useCallback((tree: MindMapNode): { parentMap: Map<string, MindMapNode>; depthMap: Map<string, number> } => {
+    const parentMap = new Map<string, MindMapNode>();
+    const depthMap = new Map<string, number>();
+    depthMap.set(tree.id, 0);
+    const visit = (node: MindMapNode, depth: number) => {
+      if (node.children) {
+        node.children.forEach((child: MindMapNode) => {
+          parentMap.set(child.id, node);
+          depthMap.set(child.id, depth + 1);
+          visit(child, depth + 1);
+        });
+      }
+    };
+    visit(tree, 0);
+    return { parentMap, depthMap };
+  }, []);
+
+  /**
+   * 根据本会话修改过的节点，计算需要一起升版的上级父件（含根）。
+   * 仅包含「有子件的节点」即成品/半成品；未涉及子件变动的半成品不升版。
+   */
+  const getAffectedParentMaterialIds = useCallback((
+    tree: MindMapNode,
+    rootMaterialId: number,
+    dirtyNodeIds: Set<string>
+  ): Array<{ materialId: number; depth: number }> => {
+    const rootId = tree.id;
+    const { parentMap, depthMap } = buildParentMapAndDepth(tree);
+    const seen = new Set<number>();
+    const result: Array<{ materialId: number; depth: number }> = [];
+
+    if (dirtyNodeIds.size === 0) {
+      result.push({ materialId: rootMaterialId, depth: 0 });
+      return result;
+    }
+
+    dirtyNodeIds.forEach((nodeId) => {
+      const node = findNode(tree, nodeId);
+      if (!node) return;
+      let current: MindMapNode | undefined = node;
+      while (current) {
+        const depth = depthMap.get(current.id) ?? 0;
+        const hasChildren = current.children && current.children.length > 0;
+        const materialId = current.id === rootId ? rootMaterialId : (current.componentId ?? (current.material as any)?.id);
+        if (materialId != null && (current.id === rootId || hasChildren) && !seen.has(materialId)) {
+          seen.add(materialId);
+          result.push({ materialId: Number(materialId), depth });
+        }
+        current = parentMap.get(current.id);
+      }
+    });
+
+    return result.sort((a, b) => b.depth - a.depth);
+  }, [buildParentMapAndDepth]);
+
+  /**
+   * 根据修改过的节点生成版本变更备注文案
+   */
+  const buildVersionRemark = useCallback((dirtyNodeIds: Set<string>, tree: MindMapNode): string => {
+    if (dirtyNodeIds.size === 0) return '';
+    const labels: string[] = [];
+    dirtyNodeIds.forEach((id) => {
+      const node = findNode(tree, id);
+      if (node?.material) {
+        const code = (node.material as any).mainCode ?? (node.material as any).main_code ?? node.material.code;
+        const name = (node.material as any).name ?? node.value;
+        labels.push(code ? `${code} ${name || ''}`.trim() : (node.value || id));
+      } else if (node?.value) {
+        labels.push(node.value);
+      }
+    });
+    if (labels.length === 0) return '';
+    return `子件 ${labels.join('、')} 用量/配置变更`;
+  }, []);
+
+  /**
    * 保存BOM设计（草稿/新建场景，直接覆盖）
    */
   const handleSave = async () => {
@@ -915,23 +1214,43 @@ const BOMDesignerPage: React.FC = () => {
   };
 
   /**
-   * 另存为新版本（已审核BOM场景：revise 后 batchImport）。
+   * 版本号语义比较（用于取最大版本）：1.0 < 1.1 < 1.2
+   */
+  const compareVersionDesc = (a: { version: string }, b: { version: string }) => {
+    const aM = a.version.match(/v?(\d+)\.(\d+)/);
+    const bM = b.version.match(/v?(\d+)\.(\d+)/);
+    if (aM && bM) {
+      const am = parseInt(aM[1], 10);
+      const an = parseInt(aM[2], 10);
+      const bm = parseInt(bM[1], 10);
+      const bn = parseInt(bM[2], 10);
+      if (am !== bm) return bm - am;
+      return bn - an;
+    }
+    return (b.version || '').localeCompare(a.version || '');
+  };
+
+  /**
+   * 另存为新版本（已审核BOM场景：在「最大版本」上升版后 batchImport，而非当前选中版本）。
    * 仅导出根级子件，避免同层级未改动的半成品被误升版。
    * 若与当前版本完全无变动则提示无需升版并中止。
    */
   const handleSaveAsNewVersion = async () => {
-    if (!materialId || !rootMaterial || !mindMapData) return;
+    const latestTree = mindMapDataRef.current ?? mindMapData;
+    if (!materialId || !rootMaterial || !latestTree) return;
     const materialIdNum = parseInt(materialId);
 
-    const items = getRootLevelBOMItems(mindMapData as MindMapNode, rootMaterial);
+    // 使用 ref 中的最新树导出，避免添加替代料/配置位后 state 未刷新导致节点丢失
+    const items = getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial);
     if (items.length === 0) {
       messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
       return;
     }
 
     try {
-      const existingBoms = await bomApi.getByMaterial(materialIdNum, resolvedVersion ?? undefined);
-      if (!existingBoms?.length) {
+      // 取当前选中版本的数据用于「有无变动」对比
+      const currentVersionBoms = await bomApi.getByMaterial(materialIdNum, resolvedVersion ?? undefined);
+      if (!currentVersionBoms?.length) {
         messageApi.error(t('app.master-data.bom.cannotUpgrade'));
         return;
       }
@@ -955,7 +1274,7 @@ const BOMDesignerPage: React.FC = () => {
         groupId: o.configurableGroupId ?? null,
         defaultCfg: o.isDefaultConfigurable === true,
       });
-      const currentItems = existingBoms.map((b: any) => {
+      const currentItems = currentVersionBoms.map((b: any) => {
         const compId = b.componentId ?? b.component_id;
         const compCode = materials.find((m) => m.id === compId)?.mainCode ?? (materials.find((m) => m.id === compId) as any)?.main_code ?? '';
         return norm({
@@ -988,23 +1307,43 @@ const BOMDesignerPage: React.FC = () => {
       }
 
       setSaving(true);
-      const firstBom = existingBoms[0];
-      const newBom = await bomApi.revise(firstBom.uuid);
-      const newVersion = newBom.version;
+      const rootMaterialId = rootMaterial.id ?? materialIdNum;
+      const affected = getAffectedParentMaterialIds(latestTree as MindMapNode, rootMaterialId, dirtyNodeIdsRef.current);
+      const versionRemark = buildVersionRemark(dirtyNodeIdsRef.current, latestTree as MindMapNode);
 
-      await bomApi.batchImport({ items, version: newVersion });
+      let rootNewVersion = '';
+      for (const { materialId } of affected) {
+        const isRoot = materialId === rootMaterialId;
+        const node = isRoot ? (latestTree as MindMapNode) : findNodeByComponentId(latestTree as MindMapNode, materialId);
+        if (!node) continue;
+        const partItems = isRoot ? getRootLevelBOMItems(latestTree as MindMapNode, rootMaterial) : getDirectChildrenBOMItems(node);
+        const allBoms = await bomApi.getByMaterial(materialId, undefined, false, true);
+        if (!allBoms?.length) {
+          messageApi.error(t('app.master-data.bom.cannotUpgrade'));
+          setSaving(false);
+          return;
+        }
+        const sorted = [...allBoms].sort(compareVersionDesc);
+        const maxBom = sorted[0];
+        const newBom = await bomApi.revise(maxBom.uuid, undefined, versionRemark || undefined);
+        await bomApi.batchImport({ items: partItems, version: newBom.version, versionRemark: versionRemark || undefined });
+        if (isRoot) rootNewVersion = newBom.version;
+      }
 
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.set('version', newVersion);
-          return next;
-        },
-        { replace: true }
-      );
-      setResolvedVersion(newVersion);
+      dirtyNodeIdsRef.current.clear();
+      if (rootNewVersion) {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('version', rootNewVersion);
+            return next;
+          },
+          { replace: true }
+        );
+        setResolvedVersion(rootNewVersion);
+      }
 
-      messageApi.success(t('app.master-data.bom.saveAsNewVersion', { version: newVersion }));
+      messageApi.success(t('app.master-data.bom.saveAsNewVersion', { version: (rootNewVersion || resolvedVersion) ?? '' }));
       await loadBOMData();
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.saveAsNewVersionFailed'));
@@ -1012,6 +1351,87 @@ const BOMDesignerPage: React.FC = () => {
       setSaving(false);
     }
   };
+
+  /**
+   * 打开复制BOM弹窗（复制为新根物料，强制更换根节点）
+   */
+  const handleOpenCopyBomModal = useCallback(() => {
+    setCopyBomNewRootMaterial(null);
+    setCopyBomModalVisible(true);
+  }, []);
+
+  /**
+   * 复制BOM：以选中的新根物料创建新BOM（结构同当前，根节点强制更换）
+   */
+  const handleCopyBomSubmit = useCallback(async () => {
+    if (!copyBomNewRootMaterial || !mindMapData || !rootMaterial) return;
+    if (copyBomNewRootMaterial.id === rootMaterial.id) {
+      messageApi.warning(t('app.master-data.bom.copyBomNewRootMustDiff'));
+      return;
+    }
+    const items = convertMindMapToBOMItems(mindMapData as MindMapNode, copyBomNewRootMaterial);
+    if (items.length === 0) {
+      messageApi.warning(t('app.master-data.bom.addAtLeastOneChildMaterial'));
+      return;
+    }
+    try {
+      setCopyBomLoading(true);
+      await bomApi.batchImport({ items, version: '1.0' });
+      messageApi.success(t('app.master-data.bom.copyBomSuccess'));
+      setCopyBomModalVisible(false);
+      setCopyBomNewRootMaterial(null);
+      navigate(
+        `/apps/master-data/process/engineering-bom/designer?materialId=${copyBomNewRootMaterial.id}&version=1.0`,
+        { replace: true }
+      );
+    } catch (error: any) {
+      messageApi.error((error?.message) ?? t('app.master-data.bom.copyFailed'));
+    } finally {
+      setCopyBomLoading(false);
+    }
+  }, [copyBomNewRootMaterial, mindMapData, rootMaterial, convertMindMapToBOMItems, navigate, messageApi, t]);
+
+  /** 打开版本比对弹窗 */
+  const handleOpenVersionCompareModal = useCallback(() => {
+    setVersionCompareV1(null);
+    setVersionCompareV2(null);
+    setVersionCompareResult(null);
+    setVersionCompareModalVisible(true);
+  }, []);
+
+  /** 根据物料ID获取显示名（用于版本比对结果） */
+  const getMaterialDisplayName = useCallback((id: number | undefined | null) => {
+    if (id == null) return '-';
+    const m = materials.find((x) => x.id === id);
+    const code = (m as any)?.mainCode ?? (m as any)?.main_code ?? m?.code ?? '';
+    return m ? `${code} - ${m.name}` : String(id);
+  }, [materials]);
+
+  /** 执行版本比对 */
+  const handleVersionCompareSubmit = useCallback(async () => {
+    if (!materialId || !versionCompareV1 || !versionCompareV2) {
+      messageApi.warning(t('app.master-data.bom.versionCompareSelectTwo'));
+      return;
+    }
+    if (versionCompareV1 === versionCompareV2) {
+      messageApi.warning(t('app.master-data.bom.versionCompareMustDiff'));
+      return;
+    }
+    const materialIdNum = parseInt(materialId, 10);
+    if (Number.isNaN(materialIdNum)) return;
+    try {
+      setVersionCompareLoading(true);
+      const result = await bomApi.compareVersions(materialIdNum, {
+        version1: versionCompareV1,
+        version2: versionCompareV2,
+      });
+      setVersionCompareResult(result as BOMVersionCompareResult);
+    } catch (error: any) {
+      messageApi.error((error?.message) ?? t('app.master-data.bom.versionCompareFailed'));
+    } finally {
+      setVersionCompareLoading(false);
+    }
+  }, [materialId, versionCompareV1, versionCompareV2, messageApi, t]);
 
   /**
    * 打开「设为失效」弹窗
@@ -1400,6 +1820,22 @@ const BOMDesignerPage: React.FC = () => {
     [effectiveAlternativeOptions, handleReorderAlternativeByDrag]
   );
 
+  /** 从树中移除可替代料或手动添加的配置件（列表中删除该项） */
+  const handleRemoveAlternativeOrConfigurableNode = useCallback(
+    (nodeId: string) => {
+      if (!mindMapDataRef.current || nodeId === 'root') return;
+      const parent = findParentNode(mindMapDataRef.current, nodeId);
+      const updated = removeNode(mindMapDataRef.current, nodeId);
+      if (updated) {
+        handleUpdateBOM(updated);
+        if (parent) addDirtyNode(parent.id);
+        if (selectedNodeId === nodeId) setSelectedNodeId(null);
+        messageApi.success(t('app.master-data.bom.optionRemoved'));
+      }
+    },
+    [selectedNodeId, handleUpdateBOM, addDirtyNode, messageApi, t]
+  );
+
   /** 当前选中物料的单位选项：基础单位 + 辅助单位，label 使用字典标签（显示名） */
   const unitOptionsFromMaterial = useMemo(() => {
     if (!selectedMaterial) return [];
@@ -1465,9 +1901,13 @@ const BOMDesignerPage: React.FC = () => {
         if (configurableCount === 0 && parent?.children && n.configurableGroupId != null) {
           configurableCount = parent.children.filter((c: MindMapNode) => c.isConfigurable && c.configurableGroupId === n.configurableGroupId).length;
         }
+        if (configurableCount === 0) configurableCount = 1;
       }
-      if (parent?.children && n.isAlternative && n.alternativeGroupId != null) {
-        alternativeCount = parent.children.filter((c: MindMapNode) => c.isAlternative && c.alternativeGroupId === n.alternativeGroupId).length;
+      if (n.isAlternative) {
+        if (parent?.children && n.alternativeGroupId != null) {
+          alternativeCount = parent.children.filter((c: MindMapNode) => c.isAlternative && c.alternativeGroupId === n.alternativeGroupId).length;
+        }
+        if (alternativeCount === 0) alternativeCount = 1;
       }
       const out: any = {
         id: n.id,
@@ -1480,6 +1920,8 @@ const BOMDesignerPage: React.FC = () => {
           isAlternative: n.isAlternative,
           configurableCount,
           alternativeCount,
+          version: (n as any).version,
+          bomVersion: (n as any).bomVersion,
         },
       };
       if (n.children?.length) {
@@ -1527,7 +1969,8 @@ const BOMDesignerPage: React.FC = () => {
               data: { ...stripped.data, alternativeCount: altCount },
             };
           } else {
-            stripped = { ...stripped, data: { ...stripped.data, alternativeCount: altCount } };
+            const totalInGroup = (stripped.data?.alternativeCount as number) ?? 1;
+            stripped = { ...stripped, data: { ...stripped.data, alternativeCount: totalInGroup } };
           }
           result.push(stripped);
         } else {
@@ -1553,8 +1996,24 @@ const BOMDesignerPage: React.FC = () => {
         type: 'mindmap',
         direction: 'H' as const,
         getSide: () => 'right',
-        getVGap: () => NODE_V_GAP,
-        getHGap: () => NODE_H_GAP,
+        getVGap: (data: any) => ((data?.depth ?? data?.data?.depth ?? 0) >= 3 ? NODE_V_GAP_DEEP : NODE_V_GAP),
+        getWidth: (data: any) => {
+          const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
+          const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
+          const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+          return Math.max(textWidth + 50, 140);
+        },
+        getHGap: (data: any) => {
+          const depth = data?.depth ?? data?.data?.depth ?? 0;
+          const base = depth >= 3 ? NODE_H_GAP_DEEP : NODE_H_GAP;
+          const label = (data?.data?.value ?? data?.data?.label ?? data?.value ?? data?.label ?? data?.id ?? data?.data?.id ?? '').toString();
+          const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
+          const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+          const nodeWidth = Math.max(textWidth + 50, 140);
+          const minWidth = 140;
+          const extraByWidth = nodeWidth > minWidth ? Math.min((nodeWidth - minWidth) * 0.2, 36) : 0;
+          return base + extraByWidth;
+        },
         getHeight: (data: any) => {
           const material = data.data?.material;
           const processRouteName = material?.processRouteName ?? (material as any)?.process_route_name;
@@ -1570,11 +2029,11 @@ const BOMDesignerPage: React.FC = () => {
         style: {
           // 节点尺寸与渲染一致，使连线锚点始终在右侧垂直中心（不随高度变化偏移）
           size: (data: any) => {
-            const label = data.value || data.id || '';
+            const label = (data?.data?.value ?? data?.value ?? data?.data?.label ?? data?.label ?? data?.id ?? '').toString();
             const material = data.data?.material;
             const processRouteName = material?.processRouteName ?? (material as any)?.process_route_name;
             const charWidth = (char: string) => (/[^\x00-\xff]/.test(char) ? 14 : 7.5);
-            const textWidth = Array.from(String(label)).reduce((sum: number, char: string) => sum + charWidth(char), 0);
+            const textWidth = Array.from(label).reduce((sum: number, char: string) => sum + charWidth(char), 0);
             const width = Math.max(textWidth + 50, 140);
             const height = processRouteName ? NODE_HEIGHT_DOUBLE : NODE_HEIGHT_SINGLE;
             return [width, height];
@@ -1583,7 +2042,7 @@ const BOMDesignerPage: React.FC = () => {
           ports: [{ placement: [0, 0.5] as [number, number] }, { placement: [1, 0.5] as [number, number] }],
           component: (data: any) => {
             const depth = data.depth ?? 0;
-            const label = data.value || data.id || '';
+            const label = (data?.data?.value ?? data?.value ?? data?.data?.label ?? data?.label ?? data?.id ?? '').toString();
             const isRoot = data.id === 'root' || depth === 0;
             // 通过数据注入和外部状态双重判断选中
             const isSelected = data.data?.isSelected || data.id === selectedNodeId;
@@ -1708,6 +2167,27 @@ const BOMDesignerPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+                {((isRoot && data.data?.version) || (!isRoot && data.data?.bomVersion)) && (
+                  <span
+                    title={t('app.master-data.bom.versionLabel')}
+                    style={{
+                      marginLeft: 6,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      paddingLeft: 6,
+                      paddingRight: 6,
+                      height: 20,
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #d4af37 0%, #b8960c 100%)',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    V{data.data?.version || data.data?.bomVersion}
+                  </span>
+                )}
                 {showStackIcon && (() => {
                   let count = (data.data?.configurableCount ?? data.data?.alternativeCount ?? 0) as number;
                   if (count === 0 && typeof label === 'string') {
@@ -1913,6 +2393,7 @@ const BOMDesignerPage: React.FC = () => {
 
   return (
     <>
+    <style>{`.bom-alternative-list .ant-list-item-main, .bom-configurable-list .ant-list-item-main { min-width: 0; }`}</style>
     <CanvasPageTemplate
       functionalTitle="BOM设计"
       style={{ height: 'calc(100vh - 110px)' }}
@@ -1980,6 +2461,20 @@ const BOMDesignerPage: React.FC = () => {
             title={t('app.master-data.bom.refresh')}
           >
             {t('app.master-data.bom.refresh')}
+          </Button>
+          <Button
+            icon={<CopyOutlined />}
+            onClick={handleOpenCopyBomModal}
+            title={t('app.master-data.bom.copyBomTitle')}
+          >
+            {t('app.master-data.bom.copyBomBtn')}
+          </Button>
+          <Button
+            icon={<DiffOutlined />}
+            onClick={handleOpenVersionCompareModal}
+            title={t('app.master-data.bom.versionCompareTitle')}
+          >
+            {t('app.master-data.bom.versionCompareBtn')}
           </Button>
           <Button icon={<CloseOutlined />} onClick={handleCancel}>
             {t('app.master-data.bom.back')}
@@ -2214,7 +2709,14 @@ const BOMDesignerPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <Form form={nodeConfigForm} layout="vertical">
+            <>
+              {loadingSubBomNodeId === selectedNodeId && (
+                <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Spin size="small" />
+                  <span style={{ color: '#0369a1', fontSize: 13 }}>{t('app.master-data.bom.loadingSubBom')}</span>
+                </div>
+              )}
+              <Form form={nodeConfigForm} layout="vertical">
               <UniMaterialSelect
                 name="materialId"
                 label={t('app.master-data.bom.selectMaterial')}
@@ -2433,23 +2935,37 @@ const BOMDesignerPage: React.FC = () => {
                         })()
                       ) : (
                         <>
-                          <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.bom.optionalMaterialsList')}</div>
+                          <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('app.master-data.bom.optionalMaterialsList')}</div>
                           <List
                             size="small"
                             dataSource={effectiveConfigurableOptions}
+                            style={{ marginBottom: 8, maxHeight: 160, overflow: 'auto' }}
+                            className="bom-configurable-list"
                             renderItem={(item: { material?: Material | null; node?: MindMapNode; isCurrent?: boolean }) => {
                               const mat = item.material;
                               const code = (mat as any)?.mainCode ?? (mat as any)?.main_code ?? '';
                               const name = mat?.name ?? (item.node as MindMapNode)?.value ?? '';
+                              const canRemove = !!(item as any).node;
                               return (
-                                <List.Item>
-                                  <span style={{ fontSize: 12 }}>
+                                <List.Item
+                                  style={{ paddingTop: 4, paddingBottom: 4, alignItems: 'center' }}
+                                  actions={canRemove ? [
+                                    <Button
+                                      type="text"
+                                      size="small"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => (item as any).node?.id && handleRemoveAlternativeOrConfigurableNode((item as any).node.id)}
+                                      aria-label={t('app.master-data.bom.removeOption')}
+                                    />,
+                                  ] : undefined}
+                                >
+                                  <span style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', minWidth: 0 }}>
                                     {code} - {name}
                                   </span>
                                 </List.Item>
                               );
                             }}
-                            style={{ marginBottom: 8, maxHeight: 160, overflow: 'auto' }}
                           />
                           <Form.Item>
                             <Button type="dashed" icon={<PlusOutlined />} onClick={handleOpenAddConfigurableOptionModal} block>
@@ -2466,18 +2982,33 @@ const BOMDesignerPage: React.FC = () => {
                 {({ getFieldValue }) =>
                   getFieldValue('isAlternative') ? (
                     <>
-                      <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.bom.alternativeMaterialsList')}</div>
+                      <div style={{ marginBottom: 6, fontWeight: 500 }}>{t('app.master-data.bom.alternativeMaterialsList')}</div>
                       <List
                         size="small"
                         dataSource={effectiveAlternativeOptions}
                         rowKey={(item: any, idx: number) => (item?.node?.id ?? `current-${idx}`)}
+                        style={{ marginBottom: 8, maxHeight: 160, overflow: 'auto' }}
+                        className="bom-alternative-list"
                         renderItem={(item: { material?: Material | null; node?: MindMapNode; isCurrent?: boolean }, idx: number) => {
                           const mat = item.material;
                           const code = (mat as any)?.mainCode ?? (mat as any)?.main_code ?? '';
                           const name = mat?.name ?? (item.node as MindMapNode)?.value ?? '';
                           const hasNode = !!(item as any).node;
+                          const isMainRow = (item as any).isCurrent === true;
+                          const canRemove = hasNode && !isMainRow;
                           return (
                             <List.Item
+                              style={{ paddingTop: 4, paddingBottom: 4, alignItems: 'center' }}
+                              actions={canRemove ? [
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => (item as any).node?.id && handleRemoveAlternativeOrConfigurableNode((item as any).node.id)}
+                                  aria-label={t('app.master-data.bom.removeOption')}
+                                />,
+                              ] : undefined}
                               onDragOver={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -2487,8 +3018,6 @@ const BOMDesignerPage: React.FC = () => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 if (!hasNode) return;
-                                // 主料(列表首项)不参与排序，不允许拖到主料行
-                                const isMainRow = (item as any).isCurrent === true;
                                 if (isMainRow) return;
                                 try {
                                   const rawJson = e.dataTransfer.getData('application/json');
@@ -2516,14 +3045,15 @@ const BOMDesignerPage: React.FC = () => {
                                 e.dataTransfer.effectAllowed = 'move';
                                 e.stopPropagation();
                                 } : undefined}
-                                style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, cursor: hasNode ? 'grab' : 'default', userSelect: 'none' }}
+                                style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: hasNode ? 'grab' : 'default', userSelect: 'none', minWidth: 0, flex: 1 }}
                               >
                                 <span
                                   style={{
+                                    flexShrink: 0,
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    minWidth: 20,
+                                    width: 20,
                                     height: 20,
                                     borderRadius: 10,
                                     background: '#f59e0b',
@@ -2534,13 +3064,14 @@ const BOMDesignerPage: React.FC = () => {
                                 >
                                   {idx + 1}
                                 </span>
-                                {hasNode && <DragOutlined style={{ color: BOM_COLORS.textMuted, marginRight: 4 }} />}
-                                {code} - {name}
+                                {hasNode && <DragOutlined style={{ flexShrink: 0, color: BOM_COLORS.textMuted }} />}
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                                  {code} - {name}
+                                </span>
                               </div>
                             </List.Item>
                           );
                         }}
-                        style={{ marginBottom: 8, maxHeight: 160, overflow: 'auto' }}
                       />
                       <Form.Item>
                         <Button type="dashed" icon={<PlusOutlined />} onClick={handleOpenAddAlternativeOptionModal} block>
@@ -2586,6 +3117,7 @@ const BOMDesignerPage: React.FC = () => {
                 </Space>
               </Form.Item>
             </Form>
+            </>
           )
         ) : (
           <div style={{ textAlign: 'center', color: BOM_COLORS.textMuted, padding: '40px 0' }}>
@@ -2755,6 +3287,282 @@ const BOMDesignerPage: React.FC = () => {
         allowClear
         onClear={() => setAddAlternativeOptionMaterial(null)}
       />
+    </Modal>
+    {/* 复制BOM：选择新根物料，以当前结构生成新BOM（强制更换根节点） */}
+    <Modal
+      title={t('app.master-data.bom.copyBomTitle')}
+      open={copyBomModalVisible}
+      onCancel={() => {
+        setCopyBomModalVisible(false);
+        setCopyBomNewRootMaterial(null);
+      }}
+      onOk={() => handleCopyBomSubmit()}
+      okText={t('common.confirm')}
+      cancelText={t('common.cancel')}
+      destroyOnClose
+      confirmLoading={copyBomLoading}
+      okButtonProps={{ disabled: !copyBomNewRootMaterial }}
+    >
+      <p style={{ marginBottom: 12 }}>{t('app.master-data.bom.copyBomNewRootHint')}</p>
+      <Form.Item label={t('app.master-data.bom.copyBomNewRootLabel')} required>
+        <Select
+          placeholder={t('app.master-data.bom.copyBomNewRootPlaceholder')}
+          showSearch
+          optionFilterProp="label"
+          value={copyBomNewRootMaterial?.id ?? undefined}
+          onChange={(id) => setCopyBomNewRootMaterial(materials.find((m) => m.id === id) ?? null)}
+          options={materials
+            .filter((m) => m.id !== rootMaterial?.id)
+            .map((m) => ({
+              value: m.id,
+              label: `${(m as any).mainCode ?? (m as any).main_code ?? ''} - ${m.name}`,
+            }))}
+          style={{ width: '100%' }}
+          allowClear
+          onClear={() => setCopyBomNewRootMaterial(null)}
+          notFoundContent={materials.length === 0 ? t('common.loading') : undefined}
+        />
+      </Form.Item>
+    </Modal>
+    {/* 版本比对弹窗 */}
+    <Modal
+      title={t('app.master-data.bom.versionCompareTitle')}
+      open={versionCompareModalVisible}
+      onCancel={() => {
+        setVersionCompareModalVisible(false);
+        setVersionCompareResult(null);
+        setVersionCompareV1(null);
+        setVersionCompareV2(null);
+      }}
+      footer={[
+        versionCompareResult ? (
+          <Button
+            key="again"
+            onClick={() => {
+              setVersionCompareResult(null);
+              setVersionCompareV1(null);
+              setVersionCompareV2(null);
+            }}
+          >
+            {t('app.master-data.bom.versionCompareAgain')}
+          </Button>
+        ) : null,
+        <Button
+          key="close"
+          type={versionCompareResult ? 'primary' : undefined}
+          onClick={() => {
+            setVersionCompareModalVisible(false);
+            setVersionCompareResult(null);
+            setVersionCompareV1(null);
+            setVersionCompareV2(null);
+          }}
+        >
+          {t('common.close')}
+        </Button>,
+      ]}
+      width={720}
+      destroyOnClose
+    >
+      {!versionCompareResult ? (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Form.Item label={t('app.master-data.bom.versionCompareSelectHint')}>
+            <Space wrap>
+              <Select
+                placeholder={t('app.master-data.bom.version1')}
+                value={versionCompareV1 ?? undefined}
+                onChange={setVersionCompareV1}
+                options={versionOptions.map((o) => ({ value: o.value, label: o.label }))}
+                style={{ minWidth: 120 }}
+                allowClear
+              />
+              <span>{t('app.master-data.bom.versionCompareVs')}</span>
+              <Select
+                placeholder={t('app.master-data.bom.version2')}
+                value={versionCompareV2 ?? undefined}
+                onChange={setVersionCompareV2}
+                options={versionOptions.map((o) => ({ value: o.value, label: o.label }))}
+                style={{ minWidth: 120 }}
+                allowClear
+              />
+            </Space>
+          </Form.Item>
+          <Button
+            type="primary"
+            icon={<DiffOutlined />}
+            loading={versionCompareLoading}
+            onClick={() => handleVersionCompareSubmit()}
+            disabled={!versionCompareV1 || !versionCompareV2}
+          >
+            {t('app.master-data.bom.versionCompareDo')}
+          </Button>
+        </Space>
+      ) : (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ marginBottom: 16, color: BOM_COLORS.textMuted, fontSize: 12 }}>
+            {versionCompareResult.version1} ↔ {versionCompareResult.version2}
+          </div>
+          {versionCompareResult.added && versionCompareResult.added.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ color: '#52c41a', marginBottom: 12 }}>
+                {t('app.master-data.bom.versionCompareAdded')}（{versionCompareResult.added.length}{t('app.master-data.bom.versionCompareItem')}）
+              </h4>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                {versionCompareResult.added.map((item: any, index: number) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#f6ffed',
+                      border: '1px solid #b7eb8f',
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Space wrap>
+                      <span>{item.componentName ?? item.component_name ?? getMaterialDisplayName(item.componentId ?? item.component_id)}</span>
+                      <span style={{ color: '#999' }}>
+                        {item.quantity} {item.unit ?? ''}
+                        {item.wasteRate ?? item.waste_rate ? ` (${t('app.master-data.bom.wasteRateTitle')}: ${item.wasteRate ?? item.waste_rate}%)` : ''}
+                      </span>
+                      {(item.is_configurable ?? item.isConfigurable) && <Tag color="cyan">{t('app.master-data.bom.isConfigurable')}</Tag>}
+                      {(item.is_alternative ?? item.isAlternative) && (
+                        <Tag color="orange">{t('app.master-data.bom.alternativeLabel')} ({(item.priority ?? 0)})</Tag>
+                      )}
+                    </Space>
+                  </div>
+                ))}
+              </Space>
+            </div>
+          )}
+          {versionCompareResult.removed && versionCompareResult.removed.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>
+                {t('app.master-data.bom.versionCompareRemoved')}（{versionCompareResult.removed.length}{t('app.master-data.bom.versionCompareItem')}）
+              </h4>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                {versionCompareResult.removed.map((item: any, index: number) => (
+                  <div
+                    key={index}
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#fff1f0',
+                      border: '1px solid #ffccc7',
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Space wrap>
+                      <span>{item.componentName ?? item.component_name ?? getMaterialDisplayName(item.componentId ?? item.component_id)}</span>
+                      <span style={{ color: '#999' }}>
+                        {item.quantity} {item.unit ?? ''}
+                        {item.wasteRate ?? item.waste_rate ? ` (${t('app.master-data.bom.wasteRateTitle')}: ${item.wasteRate ?? item.waste_rate}%)` : ''}
+                      </span>
+                      {(item.is_configurable ?? item.isConfigurable) && <Tag color="cyan">{t('app.master-data.bom.isConfigurable')}</Tag>}
+                      {(item.is_alternative ?? item.isAlternative) && (
+                        <Tag color="orange">{t('app.master-data.bom.alternativeLabel')} ({(item.priority ?? 0)})</Tag>
+                      )}
+                    </Space>
+                  </div>
+                ))}
+              </Space>
+            </div>
+          )}
+          {versionCompareResult.modified && versionCompareResult.modified.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ color: '#1890ff', marginBottom: 12 }}>
+                {t('app.master-data.bom.versionCompareModified')}（{versionCompareResult.modified.length}{t('app.master-data.bom.versionCompareItem')}）
+              </h4>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                {versionCompareResult.modified.map((item: any, index: number) => {
+                  const v1 = item.version1 ?? {};
+                  const v2 = item.version2 ?? {};
+                  const name = item.componentName ?? item.component_name ?? getMaterialDisplayName(item.componentId ?? item.component_id);
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        padding: 12,
+                        backgroundColor: '#e6f7ff',
+                        border: '1px solid #91d5ff',
+                        borderRadius: 4,
+                      }}
+                    >
+                      <div style={{ marginBottom: 8 }}><strong>{name}</strong></div>
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        {v1.quantity !== v2.quantity && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.quantityTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.quantity}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.quantity}</span>
+                          </div>
+                        )}
+                        {v1.unit !== v2.unit && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.unitTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.unit ?? '-'}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.unit ?? '-'}</span>
+                          </div>
+                        )}
+                        {(v1.waste_rate ?? v1.wasteRate) !== (v2.waste_rate ?? v2.wasteRate) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.wasteRateTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.waste_rate ?? v1.wasteRate ?? 0}%</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.waste_rate ?? v2.wasteRate ?? 0}%</span>
+                          </div>
+                        )}
+                        {v1.is_required !== v2.is_required && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.isRequiredTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                          </div>
+                        )}
+                        {(v1.is_configurable ?? v1.isConfigurable) !== (v2.is_configurable ?? v2.isConfigurable) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.isConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_configurable ?? v1.isConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_configurable ?? v2.isConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                          </div>
+                        )}
+                        {(v1.configurable_group_id ?? v1.configurableGroupId) !== (v2.configurable_group_id ?? v2.configurableGroupId) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.configurableGroupIdLabel')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.configurable_group_id ?? v1.configurableGroupId ?? '-'}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.configurable_group_id ?? v2.configurableGroupId ?? '-'}</span>
+                          </div>
+                        )}
+                        {(v1.is_default_configurable ?? v1.isDefaultConfigurable) !== (v2.is_default_configurable ?? v2.isDefaultConfigurable) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.isDefaultConfigurable')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_default_configurable ?? v1.isDefaultConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_default_configurable ?? v2.isDefaultConfigurable ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                          </div>
+                        )}
+                        {(v1.is_alternative ?? v1.isAlternative) !== (v2.is_alternative ?? v2.isAlternative) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.alternativeLabel')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.is_alternative ?? v1.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.is_alternative ?? v2.isAlternative ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}</span>
+                          </div>
+                        )}
+                        {(v1.alternative_group_id ?? v1.alternativeGroupId) !== (v2.alternative_group_id ?? v2.alternativeGroupId) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.alternativeGroupIdLabel')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.alternative_group_id ?? v1.alternativeGroupId ?? '-'}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.alternative_group_id ?? v2.alternativeGroupId ?? '-'}</span>
+                          </div>
+                        )}
+                        {Number(v1.priority ?? 0) !== Number(v2.priority ?? 0) && (
+                          <div style={{ paddingLeft: 16 }}>
+                            {t('app.master-data.bom.priorityTitle')}：<span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>{v1.priority ?? 0}</span>
+                            {' → '}<span style={{ color: '#52c41a', fontWeight: 500 }}>{v2.priority ?? 0}</span>
+                          </div>
+                        )}
+                      </Space>
+                    </div>
+                  );
+                })}
+              </Space>
+            </div>
+          )}
+          {(!versionCompareResult.added || versionCompareResult.added.length === 0) &&
+            (!versionCompareResult.removed || versionCompareResult.removed.length === 0) &&
+            (!versionCompareResult.modified || versionCompareResult.modified.length === 0) && (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: BOM_COLORS.textMuted }}>
+                {t('app.master-data.bom.noVersionDiff')}
+              </div>
+            )}
+        </div>
+      )}
     </Modal>
     {/* 工艺路线编辑弹窗（从节点配置「编辑工艺路线」打开） */}
     <RouteFormModal

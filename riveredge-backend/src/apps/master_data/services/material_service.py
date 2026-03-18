@@ -2054,7 +2054,8 @@ class MaterialService:
     async def copy_bom(
         tenant_id: int,
         bom_uuid: str,
-        new_version: Optional[str] = None
+        new_version: Optional[str] = None,
+        version_remark: Optional[str] = None
     ) -> BOMResponse:
         """
         复制BOM（创建新版本）
@@ -2145,7 +2146,7 @@ class MaterialService:
                  bom_code=new_bom_code,  # 升版时 BOM 编码随版本更新
                  effective_date=timezone.now(), # 生效日期更新为当前
                  description=source.description,
-                 remark=source.remark,
+                 remark=version_remark if version_remark else source.remark,
                  is_active=True,
                  approval_status="draft", # 重置为草稿
                  approved_by=None,
@@ -2161,17 +2162,19 @@ class MaterialService:
     async def revise_bom(
         tenant_id: int,
         bom_uuid: str,
-        new_version: Optional[str] = None
+        new_version: Optional[str] = None,
+        version_remark: Optional[str] = None
     ) -> BOMResponse:
         """
         BOM升版（Revise）
-        
+
         Args:
             tenant_id: 租户ID
             bom_uuid: 源BOM UUID
             new_version: 新版本号（可选）
+            version_remark: 版本变更备注（可选）
         """
-        return await MaterialService.copy_bom(tenant_id, bom_uuid, new_version)
+        return await MaterialService.copy_bom(tenant_id, bom_uuid, new_version, version_remark)
 
 
     
@@ -2476,17 +2479,18 @@ class MaterialService:
         # 验证子件数量是否大于0（已在Schema验证）
         # 验证损耗率（已在Schema验证）
         
-        # 步骤3：检测重复子件（同一父件下，非配置位时子件编码不能重复；配置位同组内可有多选项）
-        parent_component_map = defaultdict(set)  # 父件ID -> 子件ID集合（非配置位）
+        # 步骤3：检测重复子件（同一父件下，非配置位且非替代料时子件编码不能重复；配置位/替代料同组内可有多行）
+        parent_component_map = defaultdict(set)  # 父件ID -> 子件ID集合（排除配置位、替代料）
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
             component_id = code_to_material[item.component_code]
             is_cfg = getattr(item, "is_configurable", False) or False
-            if not is_cfg and component_id in parent_component_map[parent_id]:
+            is_alt = getattr(item, "is_alternative", False) or False
+            if not is_cfg and not is_alt and component_id in parent_component_map[parent_id]:
                 raise ValidationError(
                     f"父件 {item.parent_code} 下，子件 {item.component_code} 重复"
                 )
-            if not is_cfg:
+            if not is_cfg and not is_alt:
                 parent_component_map[parent_id].add(component_id)
         
         # 步骤4：检测循环依赖
@@ -2674,6 +2678,7 @@ class MaterialService:
                 is_alt = getattr(item, "is_alternative", False) or False
                 alt_group_id = getattr(item, "alternative_group_id", None)
                 prio = getattr(item, "priority", 0) or 0
+                row_remark = getattr(data, "version_remark", None) or item.remark
                 bom = await BOM.create(
                     tenant_id=tenant_id,
                     material_id=parent_id,
@@ -2688,7 +2693,7 @@ class MaterialService:
                     bom_code=bom_code,
                     effective_date=data.effective_date,
                     description=data.description,
-                    remark=item.remark,
+                    remark=row_remark,
                     is_active=True,
                     is_configurable=is_cfg,
                     configurable_group_id=cfg_group_id if is_cfg else None,
@@ -2886,6 +2891,7 @@ class MaterialService:
                     is_active=True,
                     is_obsolete=False
                 ).prefetch_related("component").all()
+                effective_child_version = child_version
                 if not child_bom_items:
                     latest_child_bom = await BOM.filter(
                         tenant_id=tenant_id,
@@ -2903,14 +2909,17 @@ class MaterialService:
                             is_active=True,
                             is_obsolete=False
                         ).prefetch_related("component").all()
+                        effective_child_version = latest_child_bom.version
                 
                 if child_bom_items:
+                    # 成品/半成品节点：记录其 BOM 版本，供前端在节点上显示
+                    item_data["bom_version"] = effective_child_version
                     # 递归构建子树
                     item_data["children"] = await build_tree(
                         bom.component_id,
                         level + 1,
                         current_path,
-                        child_version
+                        effective_child_version
                     )
                 
                 result.append(item_data)
@@ -3149,20 +3158,37 @@ class MaterialService:
             deleted_at__isnull=True
         ).prefetch_related("component").all()
         
-        # 构建版本1的映射（component_id -> BOM）
-        version1_map = {bom.component_id: bom for bom in version1_boms}
-        version2_map = {bom.component_id: bom for bom in version2_boms}
+        # 按 path 匹配同一树位置的行，避免同一 component_id 多行时错配（如配置位/替代料导致同物料多行）
+        def _row_key(bom, fallback_id):
+            return bom.path if (bom.path and bom.path.strip()) else f"__id_{fallback_id}"
+        
+        version1_map = {_row_key(b, b.id): b for b in version1_boms}
+        version2_map = {_row_key(b, b.id): b for b in version2_boms}
         
         # 找出差异
         added = []  # 新增的子件
         removed = []  # 删除的子件
         modified = []  # 修改的子件
         
-        # 检查版本2中新增或修改的子件
+        def _bom_extra(bom) -> dict:
+            """配置位、替代料等扩展字段，用于比对与展示"""
+            return {
+                "is_configurable": bom.is_configurable,
+                "configurable_group_id": bom.configurable_group_id,
+                "is_default_configurable": getattr(bom, "is_default_configurable", False),
+                "is_alternative": bom.is_alternative,
+                "alternative_group_id": bom.alternative_group_id,
+                "priority": int(bom.priority or 0),
+            }
+
+        # 检查版本2中新增或修改的子件（按 path 匹配同一树位置）
         for bom2 in version2_boms:
+            key2 = _row_key(bom2, bom2.id)
             component = await Material.get(id=bom2.component_id)
-            if bom2.component_id not in version1_map:
-                # 新增
+            extra2 = _bom_extra(bom2)
+            bom1 = version1_map.get(key2)
+            if bom1 is None:
+                # 该 path 在版本1中不存在，视为新增
                 added.append({
                     "component_id": bom2.component_id,
                     "component_code": component.main_code,
@@ -3170,35 +3196,57 @@ class MaterialService:
                     "quantity": float(bom2.quantity),
                     "unit": bom2.unit,
                     "waste_rate": float(bom2.waste_rate or Decimal("0.00")),
+                    **extra2,
                 })
             else:
-                # 检查是否修改
-                bom1 = version1_map[bom2.component_id]
-                if (bom1.quantity != bom2.quantity or
-                    bom1.unit != bom2.unit or
-                    bom1.waste_rate != bom2.waste_rate or
-                    bom1.is_required != bom2.is_required):
+                # 同一 path 存在，检查是否修改（含配置位、替代料）
+                extra1 = _bom_extra(bom1)
+                v1_quantity = float(bom1.quantity)
+                v2_quantity = float(bom2.quantity)
+                v1_waste = float(bom1.waste_rate or Decimal("0.00"))
+                v2_waste = float(bom2.waste_rate or Decimal("0.00"))
+                quantity_changed = v1_quantity != v2_quantity
+                unit_changed = bom1.unit != bom2.unit
+                waste_changed = v1_waste != v2_waste
+                required_changed = bom1.is_required != bom2.is_required
+                configurable_changed = (
+                    bom1.is_configurable != bom2.is_configurable
+                    or bom1.configurable_group_id != bom2.configurable_group_id
+                    or getattr(bom1, "is_default_configurable", False) != getattr(bom2, "is_default_configurable", False)
+                )
+                alternative_changed = (
+                    bom1.is_alternative != bom2.is_alternative
+                    or bom1.alternative_group_id != bom2.alternative_group_id
+                    or (int(bom1.priority or 0) != int(bom2.priority or 0))
+                )
+                if (
+                    quantity_changed or unit_changed or waste_changed or required_changed
+                    or configurable_changed or alternative_changed
+                ):
                     modified.append({
                         "component_id": bom2.component_id,
                         "component_code": component.main_code,
                         "component_name": component.name,
                         "version1": {
-                            "quantity": float(bom1.quantity),
+                            "quantity": v1_quantity,
                             "unit": bom1.unit,
-                            "waste_rate": float(bom1.waste_rate or Decimal("0.00")),
+                            "waste_rate": v1_waste,
                             "is_required": bom1.is_required,
+                            **extra1,
                         },
                         "version2": {
-                            "quantity": float(bom2.quantity),
+                            "quantity": v2_quantity,
                             "unit": bom2.unit,
-                            "waste_rate": float(bom2.waste_rate or Decimal("0.00")),
+                            "waste_rate": v2_waste,
                             "is_required": bom2.is_required,
+                            **extra2,
                         }
                     })
         
-        # 检查版本1中删除的子件
+        # 检查版本1中删除的子件（按 path 匹配）
         for bom1 in version1_boms:
-            if bom1.component_id not in version2_map:
+            key1 = _row_key(bom1, bom1.id)
+            if key1 not in version2_map:
                 component = await Material.get(id=bom1.component_id)
                 removed.append({
                     "component_id": bom1.component_id,
@@ -3207,6 +3255,7 @@ class MaterialService:
                     "quantity": float(bom1.quantity),
                     "unit": bom1.unit,
                     "waste_rate": float(bom1.waste_rate or Decimal("0.00")),
+                    **_bom_extra(bom1),
                 })
         
         return {

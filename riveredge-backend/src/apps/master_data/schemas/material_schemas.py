@@ -702,6 +702,7 @@ class BOMBatchImport(BaseModel):
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码（可选）")
     effective_date: Optional[datetime] = Field(None, description="生效日期（可选）")
     description: Optional[str] = Field(None, description="描述（可选）")
+    version_remark: Optional[str] = Field(None, description="版本变更备注（可选，写入本版本所有BOM行）")
     
     @validator("items")
     def validate_items(cls, v):

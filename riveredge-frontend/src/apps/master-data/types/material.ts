@@ -435,6 +435,7 @@ export interface BOMBatchImport {
   bomCode?: string; // BOM编码（可选）
   effectiveDate?: string; // 生效日期（可选）
   description?: string; // 描述（可选）
+  versionRemark?: string; // 版本变更备注（可选，写入本版本所有BOM行）
 }
 
 /**
@@ -520,6 +521,8 @@ export interface BOMHierarchyItem {
   isAlternative?: boolean;
   alternativeGroupId?: number | null;
   priority?: number;
+  /** 成品/半成品节点：该物料 BOM 的版本号，用于在节点上显示 */
+  bomVersion?: string;
   children: BOMHierarchyItem[]; // 子项（递归结构）
 }
 
