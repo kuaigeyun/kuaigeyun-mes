@@ -9,8 +9,9 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, message, Input, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message, Input, Typography, Tooltip } from 'antd';
 import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
+import { useGlobalStore } from '../../../../stores';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { theme } from 'antd';
@@ -36,6 +37,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [tableData, setTableData] = useState<ApprovalInstance[]>([]);
@@ -251,17 +253,22 @@ const ApprovalInstanceListPage: React.FC = () => {
               </Button>
             );
           }
-          actions.push(
-            <Button
-              key="cancel"
-              type="link"
-              size="small"
-              icon={<StopOutlined />}
-              onClick={() => handleAction(record, 'cancel')}
-            >
-              {t('pages.system.approvalInstances.cancel')}
-            </Button>
-          );
+          const isSubmitter = currentUser?.id != null && record.submitter_id === currentUser.id;
+          if (isSubmitter) {
+            actions.push(
+              <Tooltip key="cancel-tt" title={t('pages.system.approvalInstances.cancelOnlySubmitter')}>
+                <Button
+                  key="cancel"
+                  type="link"
+                  size="small"
+                  icon={<StopOutlined />}
+                  onClick={() => handleAction(record, 'cancel')}
+                >
+                  {t('pages.system.approvalInstances.cancel')}
+                </Button>
+              </Tooltip>
+            );
+          }
         }
         
         return actions;
@@ -568,9 +575,11 @@ const ApprovalInstanceListPage: React.FC = () => {
         )}
         <ProFormTextArea
           name="comment"
-          label={t('pages.system.approvalInstances.commentLabel')}
+          label={actionType === 'reject' ? t('pages.system.approvalInstances.commentLabelReject') : t('pages.system.approvalInstances.commentLabel')}
+          rules={actionType === 'reject' ? [{ required: true, message: t('pages.system.approvalInstances.commentRequiredWhenReject') }] : undefined}
           fieldProps={{
             rows: 4,
+            placeholder: actionType === 'reject' ? t('pages.system.approvalInstances.commentPlaceholderReject') : undefined,
           }}
         />
       </FormModalTemplate>

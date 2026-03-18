@@ -211,7 +211,13 @@ class ApprovalProcessService:
         approval_process.deleted_at = datetime.now()
         await approval_process.save()
 
-    # 中国中小制造业极简审批流程预设（简单审批：开始→审批→结束）
+    # 中国中小企业常用审批流程预设。
+    # 业务调用 start_approval(process_code=...) 时使用的 code 与下表一致：
+    # - simple_approval: 通用简单审批
+    # - purchase_order: 采购订单审批（与采购业务关联）
+    # - sales_order: 销售订单审批（与销售业务关联）
+    # - work_order: 生产工单审批
+    # - amount_tier_approval: 金额分档审批（按 instance.data.amount 走不同分支）
     PRESET_APPROVAL_PROCESSES = [
         {
             "name": "简单审批",
@@ -356,6 +362,51 @@ class ApprovalProcessService:
                 "edges": [
                     {"source": "start", "target": "approval_1"},
                     {"source": "approval_1", "target": "end"},
+                ],
+            },
+            "config": {},
+            "is_active": True,
+        },
+        {
+            "name": "金额分档审批",
+            "code": "amount_tier_approval",
+            "description": "按金额分支：大额走经理审批，小额走部门审批。提交时 data 需含 amount 字段。",
+            "nodes": {
+                "nodes": [
+                    {"id": "start", "type": "start", "position": {"x": 250, "y": 50}, "data": {"label": "开始", "layoutDirection": "vertical"}},
+                    {
+                        "id": "cond_1",
+                        "type": "condition",
+                        "position": {"x": 250, "y": 150},
+                        "data": {
+                            "label": "条件判断",
+                            "layoutDirection": "vertical",
+                            "conditions": [
+                                {"field": "amount", "operator": ">", "value": 10000},
+                                {"field": "amount", "operator": "<=", "value": 10000},
+                            ],
+                        },
+                    },
+                    {
+                        "id": "approval_manager",
+                        "type": "approval",
+                        "position": {"x": 100, "y": 280},
+                        "data": {"label": "经理审批", "approverType": "manager", "layoutDirection": "vertical"},
+                    },
+                    {
+                        "id": "approval_dept",
+                        "type": "approval",
+                        "position": {"x": 400, "y": 280},
+                        "data": {"label": "部门审批", "approverType": "department", "layoutDirection": "vertical"},
+                    },
+                    {"id": "end", "type": "end", "position": {"x": 250, "y": 400}, "data": {"label": "结束", "layoutDirection": "vertical"}},
+                ],
+                "edges": [
+                    {"source": "start", "target": "cond_1"},
+                    {"source": "cond_1", "target": "approval_manager"},
+                    {"source": "cond_1", "target": "approval_dept"},
+                    {"source": "approval_manager", "target": "end"},
+                    {"source": "approval_dept", "target": "end"},
                 ],
             },
             "config": {},

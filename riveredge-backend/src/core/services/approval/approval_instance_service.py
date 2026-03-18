@@ -5,7 +5,8 @@
 统一入口：start_approval、get_approval_status、execute_approval 供业务单据调用。
 """
 
-from typing import Optional, List, Dict, Any
+import asyncio
+from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 from datetime import datetime
 from loguru import logger
@@ -17,6 +18,9 @@ from tortoise.exceptions import IntegrityError
 from core.models.approval_instance import ApprovalInstance
 from core.models.approval_process import ApprovalProcess
 from core.models.approval_task import ApprovalTask
+from core.models.department import Department
+from core.models.role import Role
+from core.models.user_role import UserRole
 from core.schemas.approval_instance import ApprovalInstanceCreate, ApprovalInstanceUpdate, ApprovalInstanceAction
 from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
@@ -529,20 +533,27 @@ class ApprovalInstanceService:
                 ).update(status="cancelled")
             else:
                 # 节点通过，寻找下一个节点
-                next_node = ApprovalInstanceService._get_next_node(instance.process.nodes, instance.current_node)
-                if next_node:
-                    # 进入下一个节点
-                    instance.current_node = next_node.get("id")
-                    await instance.save()
-                    # 创建新节点的任务
-                    await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
-                else:
-                    # 全部完成
+                next_node = ApprovalInstanceService._get_next_node(
+                    instance.process.nodes, instance.current_node, instance=instance
+                )
+                if not next_node:
                     instance.status = "approved"
                     instance.completed_at = datetime.now()
                     instance.current_node = None
                     instance.current_approver_id = None
                     await instance.save()
+                else:
+                    next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
+                    if next_type == "end":
+                        instance.status = "approved"
+                        instance.completed_at = datetime.now()
+                        instance.current_node = None
+                        instance.current_approver_id = None
+                        await instance.save()
+                    else:
+                        instance.current_node = next_node.get("id")
+                        await instance.save()
+                        await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
             
             # 触发业务回调
             if instance.status in ["approved", "rejected"]:
@@ -552,40 +563,210 @@ class ApprovalInstanceService:
 
     @staticmethod
     async def _create_node_tasks(tenant_id: int, instance: ApprovalInstance, node: dict) -> List[ApprovalTask]:
-        """为节点创建审批任务"""
+        """
+        为节点创建审批任务。start/end 不建任务；cc 不建任务，发通知并推进到下一节点再递归。
+        """
+        node_type = node.get("type") or (node.get("data") or {}).get("type")
+        node_id = node.get("id")
+
+        if node_type == "start" or node_type == "end":
+            return []
+
+        if node_type == "cc":
+            # 抄送节点：不创建审批任务，可选通知抄送人，然后推进到下一节点
+            try:
+                approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+                if approvers:
+                    asyncio.create_task(
+                        ApprovalInstanceService._send_cc_notification(
+                            tenant_id=tenant_id,
+                            instance=instance,
+                            node=node,
+                            approver_ids=approvers,
+                        )
+                    )
+            except Exception as e:
+                logger.warning("抄送通知发送失败: %s", e)
+            next_node = ApprovalInstanceService._get_next_node(
+                instance.process.nodes, node_id, instance=instance
+            )
+            if not next_node:
+                instance.status = "approved"
+                instance.completed_at = datetime.now()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+                return []
+            next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
+            if next_type == "end":
+                instance.status = "approved"
+                instance.completed_at = datetime.now()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+                return []
+            instance.current_node = next_node.get("id")
+            await instance.save()
+            return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
+
         approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
         tasks = []
         for approver_id in approvers:
             task = await ApprovalTask.create(
                 tenant_id=tenant_id,
                 approval_instance=instance,
-                node_id=node.get("id"),
+                node_id=node_id,
                 approver_id=approver_id,
-                status="pending"
+                status="pending",
             )
             tasks.append(task)
-            
-        # 更新实例的当前主审批人（仅作显示用）
+
         if approvers:
             instance.current_approver_id = approvers[0]
             await instance.save()
-            
+
         return tasks
 
     @staticmethod
+    async def _resolve_approver_ids_from_identifiers(
+        tenant_id: int,
+        identifiers: List[Union[str, int]],
+        by_uuid: bool,
+    ) -> List[int]:
+        """
+        将审批人标识（UUID 或 user id）解析为 User.id 列表。
+        by_uuid=True 时 identifiers 为 UUID 字符串，否则为 int user id。
+        """
+        if not identifiers:
+            return []
+        ids: List[int] = []
+        for x in identifiers:
+            if x is None:
+                continue
+            if by_uuid:
+                try:
+                    u = await User.filter(
+                        tenant_id=tenant_id,
+                        uuid=str(x).strip(),
+                        deleted_at__isnull=True,
+                        is_active=True,
+                    ).first()
+                    if u:
+                        ids.append(u.id)
+                except Exception:
+                    pass
+            else:
+                try:
+                    uid = int(x)
+                    if uid > 0:
+                        ids.append(uid)
+                except (TypeError, ValueError):
+                    pass
+        return list(dict.fromkeys(ids))  # 去重保持顺序
+
+    @staticmethod
     async def _resolve_node_approvers(node: dict, instance: ApprovalInstance) -> List[int]:
-        """解析节点审批人"""
+        """
+        解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
+        支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级，用部门负责人）。
+        """
         node_data = node.get("data", {})
-        approver_type = node_data.get("approver_type", "user") # user, role, department, manager
-        
+        approver_type = (
+            node_data.get("approverType")
+            or node_data.get("approver_type")
+            or "user"
+        )
+        approver_ids_raw = (
+            node_data.get("approverIds")
+            or node_data.get("approver_ids")
+            or node_data.get("user_ids")
+            or []
+        )
+        if not approver_ids_raw and "approver_id" in node_data:
+            approver_ids_raw = [node_data["approver_id"]]
+
+        tenant_id = instance.tenant_id
+        submitter_id = instance.submitter_id
+
         if approver_type == "user":
-            user_ids = node_data.get("user_ids", [])
-            if not user_ids and "approver_id" in node_data:
-                user_ids = [node_data["approver_id"]]
-            return user_ids
-            
-        # 默认回退到提交人（演示用）
-        return [instance.submitter_id]
+            # 支持 UUID 或 user id
+            is_uuid = all(
+                isinstance(x, str) and len(str(x).strip()) >= 32
+                for x in approver_ids_raw if x is not None
+            )
+            ids = await ApprovalInstanceService._resolve_approver_ids_from_identifiers(
+                tenant_id, approver_ids_raw or [], by_uuid=is_uuid
+            )
+            if ids:
+                return ids
+            return [submitter_id]
+
+        if approver_type == "role":
+            # approverIds 存角色 UUID，解析该角色下所有用户
+            try:
+                role_uuids = [str(x).strip() for x in approver_ids_raw if x]
+                if not role_uuids:
+                    return [submitter_id]
+                roles = await Role.filter(
+                    tenant_id=tenant_id,
+                    uuid__in=role_uuids,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).all()
+                if not roles:
+                    logger.warning("审批节点配置的角色未找到，回退到提交人")
+                    return [submitter_id]
+                role_ids = [r.id for r in roles]
+                ur = await UserRole.filter(role_id__in=role_ids).values_list("user_id", flat=True)
+                user_ids = list(dict.fromkeys(ur))
+                if user_ids:
+                    return user_ids
+            except Exception as e:
+                logger.warning("解析角色审批人失败: %s，回退到提交人", e)
+            return [submitter_id]
+
+        if approver_type == "department":
+            # 提交人所在部门的负责人
+            try:
+                submitter = await User.filter(
+                    id=submitter_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if submitter and getattr(submitter, "department_id", None):
+                    dept = await Department.filter(
+                        id=submitter.department_id,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if dept and getattr(dept, "manager_id", None):
+                        return [dept.manager_id]
+            except Exception as e:
+                logger.warning("解析部门负责人失败: %s，回退到提交人", e)
+            return [submitter_id]
+
+        if approver_type == "manager":
+            # 直属上级：中小企业实践用部门负责人
+            try:
+                submitter = await User.filter(
+                    id=submitter_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if submitter and getattr(submitter, "department_id", None):
+                    dept = await Department.filter(
+                        id=submitter.department_id,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if dept and getattr(dept, "manager_id", None):
+                        return [dept.manager_id]
+            except Exception as e:
+                logger.warning("解析直属上级失败: %s，回退到提交人", e)
+            return [submitter_id]
+
+        # optional 等未实现类型回退到提交人
+        return [submitter_id]
 
     @staticmethod
     async def _check_node_completion(instance: ApprovalInstance, last_action: str) -> (bool, str):
@@ -605,8 +786,9 @@ class ApprovalInstanceService:
                 
         if not current_node_config:
             return True, "approved"
-            
-        approval_type = current_node_config.get("data", {}).get("approval_type", "OR") # AND (会签), OR (或签)
+
+        data = current_node_config.get("data", {})
+        approval_type = data.get("approvalType") or data.get("approval_type") or "OR"  # AND 会签, OR 或签
         
         # 获取该节点所有任务
         tasks = await ApprovalTask.filter(approval_instance=instance, node_id=node_id).all()
@@ -662,7 +844,9 @@ class ApprovalInstanceService:
         
         # 执行操作
         if action.action == "approve":
-            next_node = ApprovalInstanceService._get_next_node(process.nodes, approval_instance.current_node)
+            next_node = ApprovalInstanceService._get_next_node(
+                process.nodes, approval_instance.current_node, instance=approval_instance
+            )
             if next_node:
                 approval_instance.current_node = next_node.get("id")
                 approval_instance.current_approver_id = ApprovalInstanceService._get_node_approver(next_node, approval_instance)
@@ -750,7 +934,38 @@ class ApprovalInstanceService:
             logger.error(f"发送审批操作事件失败: {e}")
         
         return approval_instance
-    
+
+    @staticmethod
+    async def _send_cc_notification(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        node: dict,
+        approver_ids: List[int],
+    ) -> None:
+        """抄送节点：给抄送人发站内/邮件通知（可选）。"""
+        try:
+            await instance.fetch_related("process")
+            process = instance.process
+            node_label = (node.get("data") or {}).get("label") or "抄送"
+            for uid in approver_ids[:50]:  # 限制人数
+                u = await User.filter(
+                    id=uid,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if u and getattr(u, "email", None):
+                    await MessageService.send_message(
+                        tenant_id=tenant_id,
+                        request=SendMessageRequest(
+                            type="internal",
+                            recipient=u.email,
+                            subject=f"抄送：{instance.title}",
+                            content=f"您被抄送审批「{instance.title}」，节点：{node_label}，流程：{process.name}。",
+                        ),
+                    )
+        except Exception as e:
+            logger.warning("抄送通知失败: %s", e)
+
     @staticmethod
     async def _send_approval_submitted_notification(
         tenant_id: int,
@@ -917,73 +1132,118 @@ class ApprovalInstanceService:
             logger.error(f"发送审批操作通知失败: {str(e)}")
     
     @staticmethod
+    def _evaluate_conditions(instance: ApprovalInstance, conditions: List[Dict[str, Any]]) -> int:
+        """
+        按顺序评估条件，返回第一条满足条件的下标；若无满足则返回 0（默认第一条出边）。
+        条件项：{ "field": str, "operator": str, "value": any }，instance.data 提供字段值。
+        """
+        if not conditions:
+            return 0
+        data = instance.data or {}
+        for i, cond in enumerate(conditions):
+            if not isinstance(cond, dict):
+                continue
+            field = cond.get("field")
+            operator = cond.get("operator")
+            value = cond.get("value")
+            if field is None:
+                continue
+            actual = data.get(field)
+            try:
+                if operator == "==" or operator == "eq":
+                    if actual == value or str(actual) == str(value):
+                        return i
+                elif operator == "!=" or operator == "ne":
+                    if actual != value and str(actual) != str(value):
+                        return i
+                elif operator in (">", "gt"):
+                    if actual is not None and value is not None:
+                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
+                            isinstance(actual, str) and isinstance(value, str)
+                        ):
+                            if actual > value:
+                                return i
+                elif operator in ("<", "lt"):
+                    if actual is not None and value is not None:
+                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
+                            isinstance(actual, str) and isinstance(value, str)
+                        ):
+                            if actual < value:
+                                return i
+                elif operator in (">=", "gte"):
+                    if actual is not None and value is not None:
+                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
+                            isinstance(actual, str) and isinstance(value, str)
+                        ):
+                            if actual >= value:
+                                return i
+                elif operator in ("<=", "lte"):
+                    if actual is not None and value is not None:
+                        if (isinstance(actual, (int, float)) and isinstance(value, (int, float))) or (
+                            isinstance(actual, str) and isinstance(value, str)
+                        ):
+                            if actual <= value:
+                                return i
+                elif operator == "contains":
+                    if value is not None and actual is not None and str(value) in str(actual):
+                        return i
+            except (TypeError, ValueError):
+                continue
+        return 0
+
+    @staticmethod
     def _get_start_node(nodes: dict) -> Optional[dict]:
         """
-        获取起始节点
-        
-        Args:
-            nodes: 流程节点配置
-            
-        Returns:
-            Optional[dict]: 起始节点配置
+        获取起始节点。支持 ProFlow 格式：nodes = { "nodes": [...], "edges": [...] }。
         """
         if not nodes:
             return None
-        
-        # 查找起始节点（通常节点类型为 "start" 或第一个节点）
-        for node_id, node_config in nodes.items():
-            if isinstance(node_config, dict):
-                node_type = node_config.get("type", "")
-                if node_type == "start" or node_id == "start":
-                    return {"id": node_id, **node_config}
-        
-        # 如果没有找到起始节点，返回第一个节点
-        if nodes:
-            first_node_id = list(nodes.keys())[0]
-            first_node = nodes[first_node_id]
-            if isinstance(first_node, dict):
-                return {"id": first_node_id, **first_node}
-        
-        return None
-    
+        node_list = nodes.get("nodes", [])
+        if not node_list:
+            return None
+        for node in node_list:
+            if not isinstance(node, dict):
+                continue
+            if node.get("type") == "start" or node.get("id") == "start":
+                return node
+        return node_list[0] if node_list else None
+
     @staticmethod
-    def _get_next_node(nodes: dict, current_node_id: Optional[str]) -> Optional[dict]:
+    def _get_next_node(
+        nodes: dict,
+        current_node_id: Optional[str],
+        instance: Optional[ApprovalInstance] = None,
+    ) -> Optional[dict]:
         """
-        获取下一个节点
-        
-        Args:
-            nodes: 流程节点配置
-            current_node_id: 当前节点ID
-            
-        Returns:
-            Optional[dict]: 下一个节点配置，如果没有则返回None
+        获取下一个节点。支持 ProFlow 格式；当前节点为 condition 时按 instance.data 与 conditions 选边。
         """
         if not nodes or not current_node_id:
             return None
-        
-        current_node = nodes.get(current_node_id)
-        if not isinstance(current_node, dict):
+        node_list = nodes.get("nodes", [])
+        edges = nodes.get("edges", []) or []
+        out_edges = [e for e in edges if isinstance(e, dict) and e.get("source") == current_node_id]
+        if not out_edges:
             return None
-        
-        # 获取当前节点的出边（edges）
-        edges = current_node.get("edges", [])
-        if not edges:
-            return None
-        
-        # 获取第一个出边指向的节点
-        first_edge = edges[0] if isinstance(edges, list) else None
-        if not first_edge:
-            return None
-        
-        next_node_id = first_edge.get("target") if isinstance(first_edge, dict) else None
+
+        current_node = next((n for n in node_list if isinstance(n, dict) and n.get("id") == current_node_id), None)
+        node_type = (current_node or {}).get("type") if isinstance(current_node, dict) else None
+
+        # 条件节点：按条件选一条出边
+        if node_type == "condition" and instance and current_node:
+            data = current_node.get("data", {})
+            conditions = data.get("conditions") or data.get("condition_list") or []
+            edge_index = ApprovalInstanceService._evaluate_conditions(instance, conditions)
+            if 0 <= edge_index < len(out_edges):
+                next_node_id = out_edges[edge_index].get("target")
+            else:
+                next_node_id = out_edges[0].get("target")
+        else:
+            next_node_id = out_edges[0].get("target")
+
         if not next_node_id:
             return None
-        
-        next_node = nodes.get(next_node_id)
-        if isinstance(next_node, dict):
-            return {"id": next_node_id, **next_node}
-        
-        return None
+        next_node = next((n for n in node_list if isinstance(n, dict) and n.get("id") == next_node_id), None)
+        return next_node
     
     @staticmethod
     def _get_node_approver(node: dict, approval_instance: ApprovalInstance) -> Optional[int]:

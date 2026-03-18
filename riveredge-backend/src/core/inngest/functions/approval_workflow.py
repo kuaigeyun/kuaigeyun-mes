@@ -80,27 +80,45 @@ async def approval_workflow_function(event: Event) -> Dict[str, Any]:
         nodes = process.nodes or {}
         config = process.config or {}
         
-        # 获取起始节点
+        # 获取起始节点，并推进到第一个需处理节点（跳过 start；若 start 后直接 end 则直接通过）
         start_node = _get_start_node(nodes)
         if not start_node:
             return {
                 "success": False,
                 "error": "审批流程没有起始节点"
             }
-        
-        # 设置当前节点
         approval_instance.current_node = start_node.get("id")
         await approval_instance.save()
-        
-        # 创建第一个节点的任务 (支持会签/或签)
-        await ApprovalInstanceService._create_node_tasks(tenant_id, approval_instance, start_node)
-        
-        logger.info(f"审批流程工作流启动: {approval_id}, 当前节点: {start_node.get('id')}")
-        
+
+        next_node = ApprovalInstanceService._get_next_node(
+            nodes, start_node.get("id"), instance=approval_instance
+        )
+        if not next_node:
+            approval_instance.status = "approved"
+            approval_instance.completed_at = datetime.now()
+            approval_instance.current_node = None
+            approval_instance.current_approver_id = None
+            await approval_instance.save()
+            return {"success": True, "approval_id": approval_id, "current_node": None, "tasks_created": False}
+        next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
+        if next_type == "end":
+            approval_instance.status = "approved"
+            approval_instance.completed_at = datetime.now()
+            approval_instance.current_node = None
+            approval_instance.current_approver_id = None
+            await approval_instance.save()
+            return {"success": True, "approval_id": approval_id, "current_node": None, "tasks_created": False}
+
+        approval_instance.current_node = next_node.get("id")
+        await approval_instance.save()
+        await ApprovalInstanceService._create_node_tasks(tenant_id, approval_instance, next_node)
+
+        logger.info(f"审批流程工作流启动: {approval_id}, 当前节点: {approval_instance.current_node}")
+
         return {
             "success": True,
             "approval_id": approval_id,
-            "current_node": start_node.get("id"),
+            "current_node": approval_instance.current_node,
             "tasks_created": True
         }
     except NotFoundError as e:
