@@ -53,6 +53,7 @@ class SalesForecastResponse(SalesForecastBase):
     updated_at: datetime = Field(..., description="更新时间")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    items: Optional[List[SalesForecastItemResponse]] = Field(None, description="预测明细列表")
 
     class Config:
         from_attributes = True
@@ -211,3 +212,4 @@ class SalesOrderItemResponse(SalesOrderItemBase):
 
 # 解析前向引用，使 SalesOrderResponse.items 的 List[SalesOrderItemResponse] 生效
 SalesOrderResponse.model_rebuild()
+SalesForecastResponse.model_rebuild()

@@ -13,7 +13,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
-from infra.exceptions.exceptions import ValidationError, BusinessLogicError
+from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
@@ -697,6 +697,10 @@ async def list_sales_forecasts(
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     status: Optional[str] = Query(None, description="预测状态"),
     forecast_period: Optional[str] = Query(None, description="预测周期"),
+    start_date: Optional[date] = Query(None, description="开始日期"),
+    end_date: Optional[date] = Query(None, description="结束日期"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    include_items: bool = Query(False, description="是否包含明细"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesForecastListResult:

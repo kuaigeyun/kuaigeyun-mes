@@ -82,6 +82,7 @@ export interface SalesForecastListParams {
   start_date?: string;
   end_date?: string;
   keyword?: string;
+  include_items?: boolean;
 }
 
 export interface SalesForecastListResponse {

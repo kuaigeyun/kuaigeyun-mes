@@ -113,17 +113,37 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             query = query.filter(status=filters['status'])
         if filters.get('forecast_period'):
             query = query.filter(forecast_period=filters['forecast_period'])
+        if filters.get('start_date'):
+            query = query.filter(start_date__gte=filters['start_date'])
+        if filters.get('end_date'):
+            query = query.filter(end_date__lte=filters['end_date'])
+        if filters.get('keyword'):
+            query = query.filter(Q(forecast_code__icontains=filters['keyword']) | Q(forecast_name__icontains=filters['keyword']))
 
         # 获取总数
         total = await query.count()
         
         # 获取分页数据
         forecasts = await query.offset(skip).limit(limit).order_by('-created_at')
+        
+        include_items = filters.get('include_items', False)
+        items_by_forecast: Dict[int, List[SalesForecastItem]] = {}
+        if include_items:
+            # 批量获取明细
+            forecast_ids = [f.id for f in forecasts]
+            if forecast_ids:
+                all_items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id__in=forecast_ids).order_by('forecast_date').all()
+                for item in all_items:
+                    items_by_forecast.setdefault(item.forecast_id, []).append(item)
+
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_forecast_lifecycle
         result = []
         for forecast in forecasts:
             resp = SalesForecastListResponse.model_validate(forecast)
             resp.lifecycle = get_sales_forecast_lifecycle(forecast)
+            if include_items:
+                f_items = items_by_forecast.get(forecast.id, [])
+                resp.items = [SalesForecastItemResponse.model_validate(it) for it in f_items]
             result.append(resp.model_dump())
         return {"data": result, "total": total, "success": True}
 
