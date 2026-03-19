@@ -1080,7 +1080,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
   /**
-   * 键盘快捷键：Ctrl+K/ slash 聚焦搜索；Alt+N 新建；Ctrl+Enter/Ctrl+S 提交弹窗；? 显示快捷键帮助
+   * 键盘快捷键：/ 聚焦侧栏搜索；Ctrl+K 同上；Alt+N 新建；Ctrl+Enter/Ctrl+S 提交弹窗；? 显示快捷键帮助
    * 使用捕获阶段并阻止默认，避免 Alt 被系统/浏览器抢走（如 Windows 菜单栏）
    */
   useEffect(() => {
@@ -1093,17 +1093,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return tag === 'input' || tag === 'textarea' || tag === 'select' || role === 'textbox' || editable;
     };
 
+    const focusSearchInput = () => {
+      const sidebarSearch = document.querySelector('.riveredge-sidebar-search-wrapper .ant-input') as HTMLInputElement;
+      if (sidebarSearch) {
+        sidebarSearch.focus();
+        return true;
+      }
+      return false;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
-        if (searchInput) searchInput.focus();
+        focusSearchInput();
         return;
       }
       if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !isInputLike(e.target)) {
         e.preventDefault();
-        const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
-        if (searchInput) searchInput.focus();
+        focusSearchInput();
         return;
       }
       if (e.shiftKey && e.key === '?') {
@@ -3056,7 +3063,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0;
           transition: none !important;
         }
-        /* 顶栏胶囊型按钮统一样式（租户选择器 - 与组织选择器完全一致） */
+        /* 顶栏胶囊型按钮统一样式（租户选择器 - 与组织选择器完全一致），文字跟随系统 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper > span {
           display: flex !important;
@@ -3067,12 +3074,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: 16px !important;
           background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: 14px !important;
+          font-size: 1em !important;
           font-weight: 500 !important;
           height: 32px !important;
           line-height: 24px !important;
         }
-        /* 上线助手按钮 - 橙色系背景，hover 比普通状态更深 */
+        /* 上线助手按钮 - 橙色系背景，hover 比普通状态更深，文字跟随系统 */
         .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn,
         .ant-pro-layout .ant-layout-header .go-live-assistant-btn {
           display: flex !important;
@@ -3083,7 +3090,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: 16px !important;
           background-color: ${isLightModeLightBg ? token.colorWarning : `color-mix(in srgb, ${token.colorWarning} 70%, transparent)`} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: 14px !important;
+          font-size: 1em !important;
           font-weight: 500 !important;
           height: 32px !important;
           line-height: 24px !important;
@@ -3138,13 +3145,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           height: 32px !important;
         }
-        /* 租户选择器文字颜色 - 根据显示模式统一，深色背景时强制浅色 */
+        /* 租户选择器文字颜色与字号 - 根据显示模式统一，深色背景时强制浅色，文字跟随系统 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
+        .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
+          font-size: 1em !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         /* 深色顶栏下组织选择器强制浅色文字（通过 data-header-light-text 标记，覆盖 Ant Design 默认） */
@@ -3296,9 +3306,38 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-layout-sider-children{
           padding-inline: 0 !important;
         }
+        /* 侧栏顶部搜索框：固定高度 38px 与 unitabs 等高，宽度填满，无胶囊背景、聚焦无光晕 */
+        .ant-layout-sider .riveredge-sidebar-search-wrapper {
+          width: 100% !important;
+          box-sizing: border-box;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper,
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box;
+          background: transparent !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper {
+          padding-inline: 4px !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input {
+          padding-left: 4px !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper:hover {
+          background: transparent !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper-focused,
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-affix-wrapper:focus-within {
+          box-shadow: none !important;
+          outline: none !important;
+        }
+        .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon {
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)'} !important;
+        }
         /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
-          min-width: 167px !important;
+          min-width: 180px !important;
           display: flex !important;
           align-items: center !important;
           height: 100% !important;
@@ -3398,7 +3437,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
-          font-size: 14px !important;
+          font-size: 1em !important;
           line-height: 1.5 !important;
           display: flex !important;
           align-items: center !important;
@@ -3653,6 +3692,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         siderWidth={isFullscreen ? 0 : undefined}
         // 全屏时：不渲染菜单，确保折叠的侧边栏也不占据空间
         menuRender={isFullscreen ? () => null : undefined}
+        // 侧栏顶部固定搜索框：总高 38px，输入框 34px、上下各 2px，胶囊圆角 50%，简短文案，拟物按键提示
+        menuExtraRender={isFullscreen || collapsed ? undefined : () => (
+          <div
+            className="riveredge-sidebar-search-wrapper"
+            style={{
+              flexShrink: 0,
+              height: 38,
+              display: 'flex',
+              alignItems: 'center',
+              margin: '-13px 0 0 0',
+              padding: '2px 0 4px 0',
+              borderBottom: `1px solid ${siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.12)' : (isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}`,
+            }}
+          >
+            <TopBarSearch
+              menuData={filteredMenuData}
+              isLightModeLightBg={siderTextColor !== '#ffffff'}
+              token={token}
+              placeholder={t('common.searchPlaceholderShort')}
+              inputHeight={34}
+              borderRadius={17}
+              shortcutKey="/"
+              transparentBg
+            />
+          </div>
+        )}
         // 退出全屏时，强制 ProLayout 重新计算布局
         // 使用 location 作为 key 的一部分，确保路由变化时重新渲染
         // 但这里不使用 key，因为会导致标签丢失
@@ -3738,18 +3803,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 <RocketOutlined />
                 {t('goLiveAssistant.title')}
               </span>
-            </span>
-          );
-
-          // 搜索框（始终展开，与上线助手垂直对齐）
-          actions.push(
-            <span key="search" className="header-search-wrapper" style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <TopBarSearch
-                menuData={filteredMenuData}
-                isLightModeLightBg={isLightModeLightBg}
-                token={token}
-                placeholder={`${t('common.searchPlaceholder')} (Ctrl+K)`}
-              />
             </span>
           );
 
@@ -4068,7 +4121,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   )}
                   <span
                     style={{
-                      fontSize: 14,
+                      fontSize: '1em',
                       color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
                       lineHeight: '32px',
                       height: '32px',
@@ -4076,7 +4129,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       alignItems: 'center',
                     }}
                   >
-                    {/* 优先显示全名，如果全名为空则显示用户名 */}
+                    {/* 优先显示全名，如果全名为空则显示用户名，文字跟随系统 */}
                     {(currentUser.full_name && currentUser.full_name.trim() !== '') ? currentUser.full_name : currentUser.username}
                   </span>
                 </Space>
@@ -4319,8 +4372,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         <List
           size="small"
           dataSource={[
-            { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
             { keys: '/', desc: t('common.shortcutSearch') },
+            { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
             { keys: 'Alt + N', desc: t('common.shortcutNew') },
             { keys: 'Ctrl + Enter', desc: t('common.shortcutSubmit') },
             { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },

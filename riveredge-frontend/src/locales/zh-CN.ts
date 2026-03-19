@@ -1084,6 +1084,7 @@ export default {
   'common.permissionDenied': '无权限访问',
   'common.permissionDeniedDetail': '缺少权限：{{permissions}}',
   'common.searchPlaceholder': '搜索菜单、功能...',
+  'common.searchPlaceholderShort': '搜索菜单',
   'common.mobileExperience': '移动端体验',
   'common.operationFailed': '操作失败',
   'common.loadFailed': '加载失败',

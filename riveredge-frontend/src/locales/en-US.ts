@@ -1077,6 +1077,7 @@ export default {
   'common.permissionDenied': 'Access Denied',
   'common.permissionDeniedDetail': 'Missing permissions: {{permissions}}',
   'common.searchPlaceholder': 'Search menus, features...',
+  'common.searchPlaceholderShort': 'Search menu',
   'common.mobileExperience': 'Mobile experience',
   'common.operationFailed': 'Operation failed',
   'common.loadFailed': 'Load failed',

@@ -10,13 +10,25 @@ export interface TopBarSearchProps {
     isLightModeLightBg?: boolean;
     token?: any;
     placeholder?: string;
+    /** 输入框高度（如侧栏 34px） */
+    inputHeight?: number;
+    /** 圆角（跟随系统传 token.borderRadius；胶囊形传 inputHeight/2 如 17） */
+    borderRadius?: number;
+    /** 右侧拟物按键提示，如 "/"（小尺寸灰色） */
+    shortcutKey?: string;
+    /** 侧栏模式：输入框透明背景、无聚焦光晕 */
+    transparentBg?: boolean;
 }
 
 const TopBarSearch: React.FC<TopBarSearchProps> = ({
     menuData,
     isLightModeLightBg,
     token,
-    placeholder
+    placeholder,
+    inputHeight = 32,
+    borderRadius,
+    shortcutKey,
+    transparentBg,
 }) => {
     const navigate = useNavigate();
     const [searchValue, setSearchValue] = useState('');
@@ -97,22 +109,47 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
         setOpen(!!value.trim());
     };
 
-    // Styles based on the existing BasicLayout input styles（与顶栏上线助手等 32px 高度对齐）
+    const resolvedRadius = borderRadius ?? (inputHeight >= 40 ? 8 : 16);
     const inputStyle: React.CSSProperties = {
         width: 220,
-        height: 32,
-        borderRadius: '16px',
-        backgroundColor: isLightModeLightBg ? token?.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
+        height: inputHeight,
+        borderRadius: resolvedRadius,
+        backgroundColor: transparentBg ? 'transparent' : (isLightModeLightBg ? token?.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'),
         color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
         border: 'none',
     };
+
+    // 拟物按键：与键盘快捷键弹窗一致，浅灰底+细边框+底边阴影，不突兀
+    const shortcutKeySuffix = shortcutKey ? (
+        <span
+            className="topbar-search-shortcut-key"
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 20,
+                height: 20,
+                padding: '0 5px',
+                marginRight: 4,
+                boxSizing: 'border-box',
+                borderRadius: 4,
+                background: token?.colorFillQuaternary ?? '#f5f5f5',
+                border: `1px solid ${token?.colorBorder ?? '#d9d9d9'}`,
+                boxShadow: `0 1px 0 ${token?.colorBorder ?? '#d9d9d9'}`,
+                color: token?.colorTextSecondary ?? 'rgba(0,0,0,0.65)',
+                fontSize: 11,
+                fontWeight: 500,
+            }}
+        >
+            {shortcutKey}
+        </span>
+    ) : null;
 
     return (
         <Dropdown
             menu={{ items }}
             open={open && (items?.length || 0) > 0}
             onOpenChange={(visible) => {
-                // Close if user clicks outside
                 if (!visible) setOpen(false);
             }}
             styles={{ root: { width: 220 } }}
@@ -120,8 +157,9 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
         >
             <Input
                 prefix={<SearchOutlined style={{ fontSize: 16 }} />}
-                placeholder={placeholder || "搜索菜单、功能..."}
-                allowClear
+                placeholder={placeholder ?? "搜索菜单、功能..."}
+                suffix={shortcutKeySuffix}
+                allowClear={!shortcutKey}
                 style={inputStyle}
                 value={searchValue}
                 onChange={handleChange}
