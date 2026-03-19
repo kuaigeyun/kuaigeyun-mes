@@ -17,12 +17,19 @@ import {
   type GoLiveAssistantItem,
 } from '../../services/onboarding';
 
-export interface GoLiveAssistantProps {
+export interface GoLiveAssistantContentProps {
   open?: boolean;
   onClose?: () => void;
+  showRefresh?: boolean;
+  onRefetch?: (refetch: () => void) => void;
 }
 
-const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose }) => {
+export const GoLiveAssistantContent: React.FC<GoLiveAssistantContentProps> = ({
+  open = false,
+  onClose,
+  showRefresh = false,
+  onRefetch,
+}) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -33,6 +40,11 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
     queryFn: getGoLiveAssistant,
     enabled: open,
   });
+
+  React.useEffect(() => {
+    if (!onRefetch) return;
+    onRefetch(() => refetch());
+  }, [onRefetch, refetch]);
 
   // 打开时默认展开所有阶段
   React.useEffect(() => {
@@ -149,21 +161,15 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
   };
 
   return (
-    <Modal
-      title={t('goLiveAssistant.title') || '上线助手'}
-      open={open}
-      onCancel={onClose}
-      footer={[
-        <Button key="refresh" icon={<ReloadOutlined />} onClick={() => refetch()}>
-          {t('common.refresh') || '刷新'}
-        </Button>,
-        <Button key="close" type="primary" onClick={onClose}>
-          {t('common.close') || '关闭'}
-        </Button>,
-      ]}
-      width={640}
-      destroyOnHidden
-    >
+    <div>
+      {showRefresh && (
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
+            {t('common.refresh') || '刷新'}
+          </Button>
+        </div>
+      )}
+
       {isLoading ? (
         <div style={{ padding: 48, textAlign: 'center' }}>
           <Spin size="large" />
@@ -182,7 +188,7 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
         <Collapse
           activeKey={expandedPhases}
           onChange={(keys) => setExpandedPhases(Array.isArray(keys) ? keys : [keys])}
-          items={phases.map((phase, index) => {
+          items={phases.map((phase) => {
             const completedCount = phase.items.filter((i) => i.completed).length;
             const total = phase.items.length;
             const phaseCompleted = completedCount === total;
@@ -213,8 +219,43 @@ const GoLiveAssistant: React.FC<GoLiveAssistantProps> = ({ open = false, onClose
           })}
         />
       )}
+    </div>
+  );
+};
+
+export interface GoLiveAssistantProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export const GoLiveAssistantModal: React.FC<GoLiveAssistantProps> = ({ open = false, onClose }) => {
+  const { t } = useTranslation();
+  const [refetchFn, setRefetchFn] = React.useState<null | (() => void)>(null);
+
+  return (
+    <Modal
+      title={t('goLiveAssistant.title') || '上线助手'}
+      open={open}
+      onCancel={onClose}
+      footer={[
+        <Button key="refresh" icon={<ReloadOutlined />} onClick={() => refetchFn?.()}>
+          {t('common.refresh') || '刷新'}
+        </Button>,
+        <Button key="close" type="primary" onClick={onClose}>
+          {t('common.close') || '关闭'}
+        </Button>,
+      ]}
+      width={640}
+      destroyOnHidden
+    >
+      <GoLiveAssistantContent
+        open={open}
+        onClose={onClose}
+        showRefresh={false}
+        onRefetch={(fn) => setRefetchFn(() => fn)}
+      />
     </Modal>
   );
 };
 
-export default GoLiveAssistant;
+export default GoLiveAssistantModal;

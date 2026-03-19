@@ -158,7 +158,7 @@
             },
             {
                 "title": "app.master-data.menu.supply-chain",
-                "icon": "truck",
+                "icon": "handshake",
                 "sort_order": 5,
                 "children": [{
                         "title": "app.master-data.menu.supply-chain.customers",

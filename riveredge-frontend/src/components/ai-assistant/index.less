@@ -1,0 +1,217 @@
+/* AI 问答弹窗：右下角固定、无遮罩，右侧与底部各 16px 间距，参考 SQLBot 智能客服 */
+.ai-qa-modal-bottom-right {
+  position: fixed !important;
+  top: auto !important;
+  left: auto !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: visible !important;
+}
+
+/* 确保 Modal 本身紧贴右下方并保留 16px 边距 */
+.ai-qa-modal-bottom-right .ant-modal {
+  position: absolute !important;
+  top: auto !important;
+  left: auto !important;
+  right: 14px !important;
+  bottom: 14px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 通过 Root Class 强制覆盖内部默认 padding */
+.ai-qa-modal-root .ant-modal-container,
+.ai-qa-modal-root .ant-modal-content {
+  padding: 40px 8px 8px 8px !important;
+}
+
+.ai-qa-modal-bottom-right .ant-modal-container {
+  transform-origin: bottom right !important; /* 强制缩放动画起点为右下角 */
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.04);
+  background-color: var(--ant-colorBgElevated);
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+/* 同样强制 Ant Design 动画外壳的变换中心 */
+.ai-qa-modal-bottom-right .ant-modal,
+.ai-qa-modal-bottom-right .ant-modal-content {
+  transform-origin: bottom right !important;
+}
+
+/* Lottie 核心动效：增加平滑过渡 */
+.ai-qa-modal-bottom-right .ai-qa-lottie-enhance {
+  transition: filter 0.3s ease;
+}
+
+/* 黑夜模式背光补偿与主体提亮，解决 lottie 过黑问题 */
+[data-theme='dark'] .ai-qa-modal-bottom-right .ai-qa-lottie-enhance {
+  filter: 
+    brightness(2) 
+    contrast(1.2)
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) 
+    drop-shadow(0 0 16px rgba(255, 255, 255, 0.25));
+}
+
+/* 无标题时去掉头部占位 */
+.ai-qa-modal-bottom-right .ant-modal-header {
+  display: none;
+}
+
+.ai-qa-modal-bottom-right .ant-modal-body {
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  max-height: min(600px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 完美复刻的贴边关闭按钮 */
+.ai-qa-modal-bottom-right .ai-qa-fancy-close {
+  position: absolute;
+  top: -1px; /* 向上偏移 1px 遮盖边框 */
+  right: -1px; /* 向右偏移 1px 遮盖右侧泄露内容 */
+  width: 40px;
+  height: 32px;
+  border-top-right-radius: 17px; /* 弥补外层 1px 边框的半径偏差 */
+  border-bottom-left-radius: 16px;
+  background-color: color-mix(in srgb, var(--ant-colorPrimary) 50%, transparent); /* 动态跟随主题色 50% 透明 */
+  backdrop-filter: blur(4px); /* 让 50% 变毛玻璃更有质感 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  color: #fff;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-fancy-close:hover {
+  background-color: var(--ant-colorPrimary);
+  color: #fff;
+}
+
+/* 欢迎区大图标和 CTA 文案 */
+.ai-qa-modal-bottom-right .ai-qa-welcome-cta {
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ant-colorPrimary);
+  padding: 6px 16px;
+  border-radius: 16px;
+  background-color: var(--ant-colorPrimaryBg);
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+/* 推荐问题区域：卡片化，悬浮动效 */
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap {
+  width: 100%;
+  padding: 0 20px;
+  margin-bottom: 20px;
+}
+
+/* 覆盖 Ant Design X Default Prompts Item */
+.ai-qa-modal-bottom-right .ant-prompts-item {
+  white-space: normal !important;
+  word-break: break-word !important;
+  text-align: left !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--ant-colorBorder, #d9d9d9) !important;
+  background-color: var(--ant-colorBgLayout, #fafafa) !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  margin-top: 2px !important; /* 给 hover 向上浮留出空间，防止边框被截断 */
+  margin-bottom: 8px !important;
+  margin-right: 8px !important; /* 水平流式排列时的间距 */
+}
+
+.ai-qa-modal-bottom-right .ant-prompts-item:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--ant-colorPrimary, #1677ff) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  color: var(--ant-colorPrimary, #1677ff) !important;
+}
+
+/* 聊天气泡区域重写：定制用户与机器人的气泡颜色 */
+.ai-qa-modal-bottom-right .ant-bubble-list {
+  padding: 20px;
+}
+
+/* AI 气泡颜色 */
+.ai-qa-modal-bottom-right .ant-bubble[data-role='ai'] .ant-bubble-content {
+  background-color: var(--ant-colorFillQuaternary);
+  border-radius: 14px;
+  border-bottom-left-radius: 4px;
+  padding: 10px 16px;
+}
+
+/* 用户气泡颜色 */
+.ai-qa-modal-bottom-right .ant-bubble[data-role='user'] .ant-bubble-content {
+  background-color: var(--ant-colorPrimary);
+  color: #fff;
+  border-radius: 14px;
+  border-bottom-right-radius: 4px;
+  padding: 10px 16px;
+}
+.ai-qa-modal-bottom-right .ant-bubble[data-role='user'] .ant-bubble-content .ant-typography {
+  color: #fff !important;
+}
+
+/* 输入区：加上一点顶部阴影隔离，输入框加高和圆角 */
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap {
+  flex-shrink: 0;
+  padding: 16px 20px 20px 20px;
+  background-color: var(--ant-colorBgElevated);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.02);
+  z-index: 10;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender {
+  border-radius: 12px;
+  border: 1px solid var(--ant-colorBorder);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+  background-color: var(--ant-colorBgContainer);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender:focus-within {
+  border-color: var(--ant-colorPrimary);
+  box-shadow:
+    0 0 0 2px var(--ant-colorPrimaryBg),
+    0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* 滚动条美化 */
+.ai-qa-modal-bottom-right ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ai-qa-modal-bottom-right ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-qa-modal-bottom-right ::-webkit-scrollbar-thumb {
+  background: var(--ant-colorFillSecondary);
+  border-radius: 3px;
+}
+
+.ai-qa-modal-bottom-right ::-webkit-scrollbar-thumb:hover {
+  background: var(--ant-colorFill);
+}

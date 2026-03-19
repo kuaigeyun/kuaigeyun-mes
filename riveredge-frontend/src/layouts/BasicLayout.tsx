@@ -22,9 +22,8 @@ import {
   LockOutlined,
   BellOutlined,
   DeleteOutlined,
-  RocketOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Alert, Modal } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +56,7 @@ const useSafeTranslation = () => {
 };
 import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
-import GoLiveAssistant from '../components/go-live-assistant';
+import AiAssistant from '../components/ai-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { MobileQRCode } from '../components/mobile-preview';
@@ -79,6 +78,8 @@ import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { getFilePreview } from '../services/file';
+import Lottie from 'lottie-react';
+import assistAnimation from '../../static/lottie/assist.json';
 
 /** LOGO 缓存 TTL：25 分钟（token 1 小时过期，提前刷新避免 403） */
 const SITE_LOGO_CACHE_TTL_MS = 25 * 60 * 1000;
@@ -136,6 +137,19 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/equipment-management/equipment': 'equipment',
   '/apps/kuaizhizao/equipment-management/molds': 'mold',
 };
+
+// 聚焦“搜索框”未输入时展示的固定常用菜单（制造业日常最常用单据 Top8）
+// 说明：使用系统内已存在的 menu `path`，避免依赖“菜单扁平前 N 项”带来的不可控变化
+const TOPBAR_SEARCH_HOT_MENU_PATHS: string[] = [
+  '/apps/kuaizhizao/production-execution/work-orders', // 工单
+  '/apps/kuaizhizao/purchase-management/purchase-orders', // 采购订单
+  '/apps/kuaizhizao/sales-management/sales-orders', // 销售订单
+  '/apps/kuaizhizao/warehouse-management/inbound', // 入库单
+  '/apps/kuaizhizao/plan-management/production-plans', // 生产计划
+  '/apps/kuaizhizao/quality-management/incoming-inspection', // 来料检验
+  '/apps/kuaizhizao/quality-management/process-inspection', // 过程检验
+  '/apps/kuaizhizao/quality-management/finished-goods-inspection', // 成品检验
+];
 
 /** 根据菜单 path 获取徽章 key（兼容尾部斜杠、查询参数等格式差异） */
 function getMenuBadgeKey(path: string | undefined): string | undefined {
@@ -416,6 +430,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaizhizao/performance': ManufacturingIcons.trophy, // 绩效管理 - 奖杯图标（与分析中心区分）
       '/apps/master-data': ManufacturingIcons.database, // 主数据 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 主数据-仓库数据 - 使用归档图标（区别于仓储管理）
+      '/apps/master-data/supply-chain': ManufacturingIcons.handshake, // 主数据-业务伙伴（客户+供应商）- 握手/合作图标
       '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
@@ -606,6 +621,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     updatePreferences({ 'ui.sidebar_collapsed': payload });
   };
 
+  const screens = Grid.useBreakpoint?.() ?? {};
+  const isMobileOrTablet = screens.lg === false;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
@@ -696,7 +713,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 消息下拉菜单状态
   const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
-  const [goLiveAssistantOpen, setGoLiveAssistantOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   // 获取消息统计
@@ -778,12 +795,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 支持应用菜单的国际化翻译
    */
   const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false, depth: number = 0): MenuDataItem => {
-    // 处理图标：仅一级菜单显示图标，二级及以下不设置（避免重复、简化界面）
+    // 处理图标：一级菜单必显图标，有 icon 的二级菜单（如主数据-业务伙伴）也显示
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
 
-    // 仅一级菜单（depth === 0）设置图标
-    if (depth === 0 && menu.icon) {
+    // 同等级菜单：优先使用固定的 path 映射（避免 menu.icon 数据不一致）
+    if (depth === 0 && menu.path) {
+      const normalizedMenuPath = typeof menu.path === 'string' ? menu.path.replace(/\/$/, '') : menu.path;
+      const iconFromPath = getMenuIcon(menu.name ?? '', normalizedMenuPath as string);
+      // getMenuIcon 找不到匹配时会返回 dashboard 默认图标，这里用它来判断是否命中映射
+      if (React.isValidElement(iconFromPath) && (iconFromPath as any).type !== ManufacturingIcons.dashboard) {
+        iconElement = iconFromPath;
+      }
+    }
+
+    if (!iconElement && menu.icon) {
       // 首先尝试从预定义的 ManufacturingIcons 中获取
       const iconKey = menu.icon as keyof typeof ManufacturingIcons;
       const IconComponent = ManufacturingIcons[iconKey];
@@ -1103,6 +1129,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 接管 F1 控制，开启 AI 助手，阻止浏览器原生帮助打开
+      if (e.key === 'F1') {
+        e.preventDefault();
+        e.stopPropagation();
+        setAiAssistantOpen(true);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         focusSearchInput();
@@ -2954,9 +2987,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           gap: 8px !important;
           align-items: center !important;
         }
-        /* 上线助手按钮与搜索框等垂直对齐 */
-        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper),
-        .ant-pro-layout .ant-layout-header .ant-space-item:has(.go-live-assistant-btn-wrapper),
+        /* AI 助手 Lottie 按钮与搜索框等垂直对齐 */
+        .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.ai-assistant-lottie-btn-wrapper),
+        .ant-pro-layout .ant-layout-header .ant-space-item:has(.ai-assistant-lottie-btn-wrapper),
         .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.header-search-wrapper),
         .ant-pro-layout .ant-layout-header .ant-space-item:has(.header-search-wrapper) {
           display: flex !important;
@@ -3079,57 +3112,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 32px !important;
           line-height: 24px !important;
         }
-        /* 上线助手按钮 - 橙色系背景，hover 比普通状态更深，文字跟随系统 */
-        .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn,
-        .ant-pro-layout .ant-layout-header .go-live-assistant-btn {
-          display: flex !important;
-          align-items: center !important;
-          vertical-align: middle !important;
-          gap: 6px !important;
-          padding: 4px 12px !important;
-          border-radius: 16px !important;
-          background-color: ${isLightModeLightBg ? token.colorWarning : `color-mix(in srgb, ${token.colorWarning} 70%, transparent)`} !important;
-          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
-          font-size: 1em !important;
-          font-weight: 500 !important;
-          height: 32px !important;
-          line-height: 24px !important;
-          cursor: pointer !important;
-          align-self: center !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .go-live-assistant-btn:hover,
-        .ant-pro-layout .ant-layout-header .go-live-assistant-btn:hover {
-          background-color: ${isLightModeLightBg ? token.colorWarning : `color-mix(in srgb, ${token.colorWarning} 75%, transparent)`} !important;
-        }
-        /* 上线助手按钮流光效果 - 仅播放一遍 */
-        .go-live-assistant-btn-wrapper {
-          position: relative;
+        /* AI 助手 Lottie 按钮：仅图标 48x48，无背景、无动效 */
+        .ai-assistant-lottie-btn-wrapper {
           display: inline-flex;
           align-items: center;
           align-self: center;
-          overflow: hidden;
-          border-radius: 16px;
         }
-        .go-live-assistant-btn-wrapper::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(
-            105deg,
-            transparent 0%,
-            transparent 25%,
-            ${isLightModeLightBg ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.25)'} 50%,
-            transparent 75%,
-            transparent 100%
-          );
-          background-size: 300% 100%;
-          animation: go-live-assistant-shimmer 2.5s ease-out 0.8s 1 forwards;
-          pointer-events: none;
-          z-index: 1;
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn {
+          display: block !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          background: none !important;
+          border: none !important;
+          cursor: pointer !important;
+          line-height: 0 !important;
         }
-        @keyframes go-live-assistant-shimmer {
-          0% { background-position: 250% 0; }
-          100% { background-position: -100% 0; }
+        .ant-pro-layout .ant-pro-layout-header .ai-assistant-lottie-btn:hover,
+        .ant-pro-layout .ant-layout-header .ai-assistant-lottie-btn:hover {
+          background: none !important;
         }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
@@ -3333,7 +3334,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           outline: none !important;
         }
         .ant-layout-sider .riveredge-sidebar-search-wrapper .ant-input-prefix .anticon {
-          color: ${siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)'} !important;
+          color: ${isDarkMode ? 'rgba(255,255,255,0.65)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.45)')} !important;
+        }
+        /* 侧栏搜索框占位字符颜色：适配“明亮模式 + 深色背景” */
+        .riveredge-sidebar-search-wrapper input::placeholder,
+        .riveredge-sidebar-search-wrapper .ant-input::placeholder {
+          color: ${isDarkMode ? 'rgba(255, 255, 255, 0.45)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.58)' : 'rgba(0, 0, 0, 0.25)')} !important;
+        }
+        /* 侧栏搜索框快捷键颜色：适配“明亮模式 + 深色背景” */
+        .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
+          color: ${isDarkMode ? 'rgba(255, 255, 255, 0.85)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)')} !important;
+          background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
+          border: ${isDarkMode ? '1px solid rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? '1px solid rgba(255,255,255,0.28)' : ('1px solid ' + (token?.colorBorder ?? '#d9d9d9')))} !important;
+          box-shadow: 0 1px 0 ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
         }
         /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
@@ -3604,6 +3617,44 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ul {
           overflow: visible !important;
         }
+        /* 平板和手机模式下顶栏圆形按键/头像保持正圆，防止被 flex 拉伸变形 */
+        @media (max-width: 991.98px) {
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions,
+          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions {
+            align-items: center !important;
+          }
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-space-item,
+          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-space-item {
+            align-self: center !important;
+            flex-shrink: 0 !important;
+          }
+          .ant-pro-layout .ant-pro-layout-header .ant-btn,
+          .ant-pro-layout .ant-layout-header .ant-btn {
+            min-height: 32px !important;
+            max-height: 32px !important;
+            flex-shrink: 0 !important;
+            align-self: center !important;
+          }
+          .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn,
+          .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
+            min-width: 32px !important;
+            max-width: 32px !important;
+            min-height: 32px !important;
+            max-height: 32px !important;
+            flex-shrink: 0 !important;
+          }
+          .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar,
+          .ant-pro-layout .ant-layout-header .ant-btn .ant-avatar,
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar,
+          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-avatar {
+            flex-shrink: 0 !important;
+          }
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-dropdown-trigger,
+          .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions .ant-dropdown-trigger {
+            align-self: center !important;
+            height: auto !important;
+          }
+        }
         /* 平板和手机模式下隐藏面包屑 - 放在最后，确保最高优先级 */
         @media (max-width: 1024px) {
           .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
@@ -3708,6 +3759,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           >
             <TopBarSearch
               menuData={filteredMenuData}
+              hotMenuPaths={TOPBAR_SEARCH_HOT_MENU_PATHS}
               isLightModeLightBg={siderTextColor !== '#ffffff'}
               token={token}
               placeholder={t('common.searchPlaceholderShort')}
@@ -3739,7 +3791,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             // 退出全屏时：保持统一的padding设置
           }),
         }}
-        headerContentRender={() => (
+        headerContentRender={() => {
+          if (isMobileOrTablet) return null;
+          return (
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
             {/* 分割线 */}
             <Divider
@@ -3786,27 +3840,41 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               />
             </div>
           </div>
-        )}
+          );
+        }}
         actionsRender={() => {
           const actions = [];
 
-          // 上线助手按钮（与组织选择器统一样式，由顶栏胶囊型 CSS 控制，带流光效果）
+          if (!isMobileOrTablet) {
+          // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
           actions.push(
-            <span key="goLiveAssistant" className="go-live-assistant-btn-wrapper">
+            <span key="aiAssistant" className="ai-assistant-lottie-btn-wrapper">
               <span
                 role="button"
                 tabIndex={0}
-                onClick={() => setGoLiveAssistantOpen(true)}
-                onKeyDown={(e) => e.key === 'Enter' && setGoLiveAssistantOpen(true)}
-                className="go-live-assistant-btn"
+                onClick={() => setAiAssistantOpen(true)}
+                onKeyDown={(e) => e.key === 'Enter' && setAiAssistantOpen(true)}
+                className="ai-assistant-lottie-btn"
               >
-                <RocketOutlined />
-                {t('goLiveAssistant.title')}
+                <Lottie
+                  animationData={assistAnimation}
+                  loop
+                  autoplay
+                  style={{
+                    width: 52,
+                    height: 52,
+                    display: 'block',
+                    ...( !isLightModeLightBg ? {
+                      filter: 'brightness(2) contrast(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
+                    } : {})
+                  }}
+                />
               </span>
             </span>
           );
+          }
 
-          // 消息提醒（带数量徽标）
+          // 消息提醒（带数量徽标）- 平板/手机也显示
           actions.push(
             <Dropdown
               key="notifications"
@@ -3987,6 +4055,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Dropdown>
           );
 
+          if (!isMobileOrTablet) {
           // 手机端扫码按钮
           actions.push(<MobileQRCode key="mobile-qr" />);
 
@@ -4051,8 +4120,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </Tooltip>
           );
 
-          // 租户切换选择框 - 优化样式，不显示图标
-          if (currentUser) {
+          // 租户切换选择框 - 优化样式，不显示图标（仅桌面）
+          if (currentUser && !isMobileOrTablet) {
             actions.push(
               <div
                 key="tenant"
@@ -4067,8 +4136,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </div>
             );
           }
+          }
 
-          // 用户头像和下拉菜单
+          // 用户头像和下拉菜单 - 平板/手机也显示
           if (currentUser) {
             actions.push(
               <Dropdown
@@ -4324,6 +4394,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           return dom;
         }}
       >
+        {isMobileOrTablet ? (
+          <>{children}</>
+        ) : (
         <UniTabs
           menuConfig={filteredMenuData}
           isFullscreen={isFullscreen}
@@ -4333,6 +4406,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             {children}
           </>
         </UniTabs>
+        )}
       </ProLayout >
 
       {/* 技术栈信息弹窗 */}
@@ -4351,10 +4425,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       />
 
-      {/* 上线助手 */}
-      <GoLiveAssistant
-        open={goLiveAssistantOpen}
-        onClose={() => setGoLiveAssistantOpen(false)}
+      {/* AI 助手 */}
+      <AiAssistant
+        open={aiAssistantOpen}
+        onClose={() => setAiAssistantOpen(false)}
       />
 
       {/* 键盘快捷键帮助 */}

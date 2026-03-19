@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { Input, Dropdown } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,8 @@ import type { MenuProps } from 'antd';
 
 export interface TopBarSearchProps {
     menuData: MenuDataItem[];
+    /** 聚焦未输入时展示的固定常用菜单路径（按顺序）；不传则取菜单前 8 项 */
+    hotMenuPaths?: string[];
     isLightModeLightBg?: boolean;
     token?: any;
     placeholder?: string;
@@ -20,8 +22,12 @@ export interface TopBarSearchProps {
     transparentBg?: boolean;
 }
 
+const DEFAULT_HOT_LIMIT = 8;
+const DEFAULT_INPUT_WIDTH = 220;
+
 const TopBarSearch: React.FC<TopBarSearchProps> = ({
     menuData,
+    hotMenuPaths,
     isLightModeLightBg,
     token,
     placeholder,
@@ -34,10 +40,34 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
     const [searchValue, setSearchValue] = useState('');
     const [open, setOpen] = useState(false);
     const [pinyinMatch, setPinyinMatch] = useState<((text: string, pattern: string) => any) | null>(null);
+    const triggerRef = useRef<HTMLDivElement | null>(null);
+    const [triggerWidth, setTriggerWidth] = useState(DEFAULT_INPUT_WIDTH);
 
     // 动态加载 pinyin-pro，避免首屏同步引入
     useEffect(() => {
         import('pinyin-pro').then(m => { setPinyinMatch(() => m.match); }).catch(() => {});
+    }, []);
+
+    // 让下拉菜单宽度始终与输入框等宽
+    useLayoutEffect(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+
+        const update = () => {
+            const w = el.getBoundingClientRect().width;
+            if (w && Number.isFinite(w)) setTriggerWidth(Math.round(w));
+        };
+
+        update();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => update());
+            ro.observe(el);
+            return () => ro.disconnect();
+        }
+
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
     }, []);
 
     // Flatten the menu data into a searchable list
@@ -72,8 +102,48 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
         return flatten(menuData);
     }, [menuData]);
 
+    // 未输入时的固定常用菜单（按 hotMenuPaths 顺序，未传则取前 N 项）
+    const hotItems: MenuProps['items'] = useMemo(() => {
+        const pathSet = hotMenuPaths?.length
+            ? new Set(hotMenuPaths)
+            : null;
+        let list: { name: string; path: string; parentPath: string[] }[];
+        if (pathSet) {
+            const ordered = hotMenuPaths!
+                .map(p => flatMenuData.find(m => m.path === p))
+                .filter(Boolean) as { name: string; path: string; parentPath: string[] }[];
+            // 如果当前租户菜单里缺少这些固定路由，回退到扁平菜单前 N 项，避免只显示“常用”标题
+            list = ordered.length > 0 ? ordered : flatMenuData.slice(0, DEFAULT_HOT_LIMIT);
+        } else {
+            list = flatMenuData.slice(0, DEFAULT_HOT_LIMIT);
+        }
+        const renderLabel = (item: { name: string; path: string; parentPath: string[] }) => (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontWeight: 500 }}>{item.name}</span>
+                {item.parentPath.length > 0 && (
+                    <span style={{ fontSize: '12px', color: '#888' }}>
+                        {item.parentPath.join(' > ')}
+                    </span>
+                )}
+            </div>
+        );
+        const makeClick = (path: string) => () => {
+            navigate(path);
+            setOpen(false);
+            setSearchValue('');
+        };
+        return [
+            { key: '__hot_title__', label: <span style={{ fontSize: 12, color: '#888' }}>常用</span>, disabled: true },
+            ...list.map(item => ({
+                key: item.path,
+                label: renderLabel(item),
+                onClick: makeClick(item.path)
+            }))
+        ];
+    }, [flatMenuData, hotMenuPaths, navigate]);
+
     const items: MenuProps['items'] = useMemo(() => {
-        if (!searchValue) return [];
+        if (!searchValue.trim()) return hotItems;
         const lowerValue = searchValue.toLowerCase();
 
         return flatMenuData
@@ -101,17 +171,17 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                     setSearchValue('');
                 }
             }));
-    }, [searchValue, flatMenuData, navigate, pinyinMatch]);
+    }, [searchValue, flatMenuData, hotItems, navigate, pinyinMatch]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         setSearchValue(value);
-        setOpen(!!value.trim());
+        setOpen(true); // 有内容显示搜索结果，清空后显示常用列表
     };
 
     const resolvedRadius = borderRadius ?? (inputHeight >= 40 ? 8 : 16);
     const inputStyle: React.CSSProperties = {
-        width: 220,
+        width: '100%',
         height: inputHeight,
         borderRadius: resolvedRadius,
         backgroundColor: transparentBg ? 'transparent' : (isLightModeLightBg ? token?.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'),
@@ -129,8 +199,8 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                 justifyContent: 'center',
                 minWidth: 20,
                 height: 20,
-                padding: '0 5px',
-                marginRight: 4,
+                padding: '0',
+                marginRight: 0,
                 boxSizing: 'border-box',
                 borderRadius: 4,
                 background: token?.colorFillQuaternary ?? '#f5f5f5',
@@ -147,26 +217,38 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
 
     return (
         <Dropdown
-            menu={{ items }}
-            open={open && (items?.length || 0) > 0}
+            menu={{ items, style: { width: triggerWidth } }}
+            // 未输入时：避免仅渲染“常用”标题而无可点击项
+            open={
+                open && (searchValue.trim()
+                    ? (items?.length || 0) > 0
+                    : (hotItems?.length || 0) > 1)
+            }
             onOpenChange={(visible) => {
                 if (!visible) setOpen(false);
             }}
-            styles={{ root: { width: 220 } }}
+            styles={{ root: { width: triggerWidth } }}
             destroyOnHidden
         >
-            <Input
-                prefix={<SearchOutlined style={{ fontSize: 16 }} />}
-                placeholder={placeholder ?? "搜索菜单、功能..."}
-                suffix={shortcutKeySuffix}
-                allowClear={!shortcutKey}
-                style={inputStyle}
-                value={searchValue}
-                onChange={handleChange}
-                onFocus={() => {
-                    if (searchValue && items && items.length > 0) setOpen(true);
-                }}
-            />
+            <div ref={triggerRef} style={{ width: triggerWidth }}>
+                <Input
+                    prefix={
+                        <SearchOutlined
+                            style={{
+                                fontSize: 16,
+                                color: transparentBg && !isLightModeLightBg ? 'rgba(255,255,255,0.65)' : undefined,
+                            }}
+                        />
+                    }
+                    placeholder={placeholder ?? "搜索菜单、功能..."}
+                    suffix={shortcutKeySuffix}
+                    allowClear={!shortcutKey}
+                    style={inputStyle}
+                    value={searchValue}
+                    onChange={handleChange}
+                    onFocus={() => setOpen(true)}
+                />
+            </div>
         </Dropdown>
     );
 };

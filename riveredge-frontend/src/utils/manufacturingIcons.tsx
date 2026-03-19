@@ -309,6 +309,7 @@ export const ManufacturingIcons = {
   project: getLucideIcon('FolderKanban'), // PM 项目管理
   'safety-certificate': getLucideIcon('ShieldCheck'), // QMS 质量认证（使用已有的 ShieldCheck）
   apartment: getLucideIcon('Building2'), // SCM 供应链（使用已有的 Building2）
+  handshake: getLucideIcon('Handshake'), // 业务伙伴（客户+供应商/合作）
   shopping: getLucideIcon('ShoppingCart'), // SRM 供应商关系（使用已有的 ShoppingCart）
   car: getLucideIcon('Car'), // TMS 运输管理
   
