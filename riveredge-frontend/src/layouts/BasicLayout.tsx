@@ -1658,10 +1658,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
 
         // 翻译标题
+        // 判断是否为 APP 根节点（面包屑中的 APP 名称）：
+        // 1. key 以 breadcrumb-app- 开头（useUnifiedMenuData 注入的标识）
+        // 2. 或者带有 isAppRoot 标记（最可靠的识别方式）
+        // 3. 或者 item.path 为空或只有 /apps/{code} 两段（无子菜单路径）
+        // 这类节点的 name 已由 useUnifiedMenuData 通过 getAppDisplayName+locale 翻译，直接使用
         const isAppMenu = (actualPath || '')?.startsWith('/apps/');
-        const breadcrumbTitle = isAppMenu
-          ? translateAppMenuItemName(item.name as string, item.path, t)
-          : translateMenuName(item.name as string, t);
+        const nodeKey = typeof item.key === 'string' ? item.key : '';
+        const isAppRootNode = isAppMenu && (
+          (item as any).isAppRoot === true ||
+          nodeKey.startsWith('breadcrumb-app-') ||
+          (!item.path || (item.path as string).match(/^\/apps\/[^/]+$/) !== null)
+        );
+        const breadcrumbTitle = isAppRootNode
+          ? (item.name as string)  // APP 根节点直接用已翻译的 name，与菜单显示保持一致
+          : isAppMenu
+            ? translateAppMenuItemName(item.name as string, item.path, t)
+            : translateMenuName(item.name as string, t);
 
         breadcrumbItems.push({
           title: breadcrumbTitle,
@@ -3350,7 +3363,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
-          min-width: 180px !important;
+          min-width: 181px !important;
           display: flex !important;
           align-items: center !important;
           height: 100% !important;
@@ -3807,7 +3820,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }}
             />
             {/* 面包屑 */}
-            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 8 }}>
+            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 10 }}>
               <Breadcrumb
                 style={{
                   display: breadcrumbVisible ? 'flex' : 'none',
@@ -3819,8 +3832,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 items={generateBreadcrumb.map((item, index) => ({
                   title: (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
-                      {index === generateBreadcrumb.length - 1 ? (
-                        <span style={{ color: 'var(--ant-colorText)', fontWeight: 500, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                      {index === generateBreadcrumb.length - 1 || index === 0 ? (
+                        <span style={{ color: index === 0 ? 'var(--ant-colorTextSecondary)' : 'var(--ant-colorText)', fontWeight: index === generateBreadcrumb.length - 1 ? 500 : 400, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                       ) : (
                         <a
                           onClick={() => {

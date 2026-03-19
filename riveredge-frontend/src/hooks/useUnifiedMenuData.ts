@@ -216,6 +216,7 @@ export function useUnifiedMenuData(
           ...convertMenuTreeToMenuDataItem(appMenu, true),
           name: appName,
           key: `breadcrumb-app-${appMenu.uuid}`,
+          isAppRoot: true, // 标记为 APP 根节点，供面包屑直接使用已翻译名称
         } as MenuDataItem;
       });
       items.splice(1, 0, ...appItems);
