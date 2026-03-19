@@ -11,7 +11,7 @@
 
 import React, { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ActionType,
   ProColumns,
@@ -43,11 +43,12 @@ import {
   ArrowDownOutlined,
   DeleteOutlined,
   MoreOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
-import { ListPageTemplate, DetailDrawerSection, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
+import { MultiTabListPageTemplate, DetailDrawerSection, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates'
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel'
 import {
   listDemandComputations,
@@ -236,6 +237,7 @@ const DemandComputationPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp()
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const actionRef = useRef<ActionType>(null)
   const formRef = useRef<any>(null)
 
@@ -972,20 +974,9 @@ const DemandComputationPage: React.FC = () => {
       ]
     : []
 
-  const [mainTabKey, setMainTabKey] = useState<string>('list')
+  const [activeTabKey, setActiveTabKey] = useState<string>('list')
 
-  return (
-    <ListPageTemplate statCards={statCards}>
-      <Tabs
-        activeKey={mainTabKey}
-        onChange={setMainTabKey}
-        items={[
-          { key: 'list', label: '计算列表', children: null },
-          { key: 'history', label: '历史与对比', children: <ComputationHistoryTab /> },
-        ]}
-        style={{ marginBottom: 16 }}
-      />
-      {mainTabKey === 'list' && (
+  const listTabContent = (
       <>
       <UniTable<DemandComputation>
         actionRef={actionRef}
@@ -1074,6 +1065,16 @@ const DemandComputationPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="新建需求计算"
         onCreate={handleCreate}
+        toolBarActions={[
+          <Button
+            key="computation-config"
+            type="default"
+            icon={<SettingOutlined />}
+            onClick={() => navigate('/apps/kuaizhizao/plan-management/computation-config')}
+          >
+            计算配置
+          </Button>,
+        ]}
       />
 
       {/* 新建计算Modal */}
@@ -1707,8 +1708,20 @@ const DemandComputationPage: React.FC = () => {
         )}
       </Drawer>
       </>
-      )}
-    </ListPageTemplate>
+  )
+
+  const tabs = [
+    { key: 'list', label: '计算列表', children: listTabContent },
+    { key: 'history', label: '历史与对比', children: <ComputationHistoryTab /> },
+  ]
+
+  return (
+    <MultiTabListPageTemplate
+      statCards={statCards}
+      activeTabKey={activeTabKey}
+      onTabChange={setActiveTabKey}
+      tabs={tabs}
+    />
   )
 }
 

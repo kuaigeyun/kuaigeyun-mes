@@ -2066,22 +2066,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       borderRadius: token.borderRadius,
                       overflow: 'visible',
                     }}
-                    headerStyle={{ paddingLeft: 16, paddingRight: 16 }}
                     bodyStyle={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}
-                    title={buildHeaderActions() || headerTitle || undefined}
-                    extra={
-                      <Space size="small">
-                        {buildRightActions()}
-                        <Button
-                          key="reload"
-                          icon={<ReloadOutlined />}
-                          size={toolBarButtonSize}
-                          onClick={() => actionRef.current?.reload?.()}
-                        >
-                          {t('components.uniTable.reload')}
-                        </Button>
-                      </Space>
-                    }
                   >
                     <div style={{ minHeight: '200px' }}>{cv.render(tableData)}</div>
                   </ProCard>

@@ -4,11 +4,10 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Table, Card, Row, Col, Statistic, Divider, Tag } from 'antd';
+import { ActionType, ProColumns, ProTable } from '@ant-design/pro-components';
+import { App, Button, Modal, Table, Card, Row, Col, Statistic, Divider, Tag, Space } from 'antd';
 import { DiffOutlined, DownloadOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { MODAL_CONFIG } from '../../../../../components/layout-templates';
 import {
   listComputationHistory,
   getDemandComputation,
@@ -223,35 +222,37 @@ const ComputationHistoryTab: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
-        <UniTable<DemandComputation>
-          actionRef={actionRef}
-          columns={columns}
-          request={handleRequest}
-          rowKey="id"
-          showAdvancedSearch={true}
-          enableRowSelection={true}
-          onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
-          toolBarActions={[
+      <ProTable<DemandComputation>
+        actionRef={actionRef}
+        columns={columns}
+        request={handleRequest}
+        rowKey="id"
+        search={false}
+        rowSelection={{
+          type: 'checkbox',
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys as React.Key[]),
+        }}
+        headerTitle={
+          <Space>
             <Button
-              key="compare"
               icon={<DiffOutlined />}
               onClick={() => handleCompare(selectedRowKeys)}
               disabled={selectedRowKeys.length !== 2}
             >
               对比选中记录
-            </Button>,
+            </Button>
             <Button
-              key="export"
               icon={<DownloadOutlined />}
               onClick={() => handleExport(selectedRowKeys)}
               disabled={selectedRowKeys.length === 0}
             >
               导出选中记录
-            </Button>,
-          ]}
-        />
-      </ListPageTemplate>
+            </Button>
+          </Space>
+        }
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+      />
 
       <Modal
         open={compareModalVisible}

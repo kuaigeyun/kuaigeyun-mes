@@ -362,10 +362,10 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   },
   {
     pageCode: 'kuaizhizao-production-rework-order',
-    pageName: '返工单',
+    pageName: '返工工单',
     pagePath: '/apps/kuaizhizao/production-execution/rework-orders',
     codeField: 'code',
-    codeFieldLabel: '返工单编码',
+    codeFieldLabel: '返工工单编码',
     module: '快格轻制造',
     moduleIcon: 'tool',
     autoGenerate: true,

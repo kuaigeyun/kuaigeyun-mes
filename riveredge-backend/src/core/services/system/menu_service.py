@@ -695,7 +695,9 @@ class MenuService:
             menu_component = menu_item.get("component")
             # 兼容 permission 和 permission_code 字段（manifest.json 使用 permission）
             menu_permission_code = menu_item.get("permission_code") or menu_item.get("permission")
-            menu_sort_order = menu_item.get("sort_order", 0)
+            # 数据库为 IntField，仅支持整数；小数会被截断导致排序错乱，此处统一转为 int
+            _so = menu_item.get("sort_order", 0)
+            menu_sort_order = int(_so) if _so is not None else 0
             menu_is_external = menu_item.get("is_external", False)
             menu_external_url = menu_item.get("external_url")
             menu_meta = menu_item.get("meta")

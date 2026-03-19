@@ -256,19 +256,19 @@ const SchedulingPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
-            key="config"
-            icon={<SettingOutlined />}
-            onClick={() => setConfigDrawerOpen(true)}
-          >
-            排程配置
-          </Button>,
-          <Button
             key="auto-schedule"
             type="primary"
             icon={<ScheduleOutlined />}
             onClick={handleAutoSchedule}
           >
             智能排产
+          </Button>,
+          <Button
+            key="config"
+            icon={<SettingOutlined />}
+            onClick={() => setConfigDrawerOpen(true)}
+          >
+            排程配置
           </Button>,
         ]}
       />
