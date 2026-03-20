@@ -206,8 +206,9 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                 background: token?.colorFillQuaternary ?? '#f5f5f5',
                 border: `1px solid ${token?.colorBorder ?? '#d9d9d9'}`,
                 boxShadow: `0 1px 0 ${token?.colorBorder ?? '#d9d9d9'}`,
-                color: token?.colorTextSecondary ?? 'rgba(0,0,0,0.65)',
-                fontSize: 11,
+                color: '#8c8c8c', // 灰度色
+                fontSize: 12,
+                fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
                 fontWeight: 500,
             }}
         >

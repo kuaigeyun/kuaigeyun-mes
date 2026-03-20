@@ -3358,10 +3358,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 侧栏搜索框快捷键颜色：适配“明亮模式 + 深色背景” */
         .riveredge-sidebar-search-wrapper .topbar-search-shortcut-key {
-          color: ${isDarkMode ? 'rgba(255, 255, 255, 0.85)' : (siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)')} !important;
+          color: ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
           background: ${isDarkMode ? 'rgba(255,255,255,0.10)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.10)' : (token?.colorFillQuaternary ?? '#f5f5f5'))} !important;
           border: ${isDarkMode ? '1px solid rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? '1px solid rgba(255,255,255,0.28)' : ('1px solid ' + (token?.colorBorder ?? '#d9d9d9')))} !important;
           box-shadow: 0 1px 0 ${isDarkMode ? 'rgba(255,255,255,0.28)' : (siderTextColor === '#ffffff' ? 'rgba(255,255,255,0.28)' : (token?.colorBorder ?? '#d9d9d9'))} !important;
+          font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace !important;
+          font-size: 12px !important;
         }
         /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
