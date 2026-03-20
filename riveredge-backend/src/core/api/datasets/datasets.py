@@ -268,6 +268,42 @@ async def init_sales_order_metrics(
         )
 
 
+@router.post("/init-sales-forecast-metrics")
+async def init_sales_forecast_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    一键初始化销售预测指标：创建 sales_forecast_metrics 数据集并绑定到销售预测页面。
+    """
+    try:
+        result = await DatasetService().init_sales_forecast_metrics(tenant_id=tenant_id)
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.post("/sync-page-metrics")
+async def sync_page_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    同步/刷新所有预设的页面指标数据集。
+    """
+    try:
+        result = await DatasetService().sync_all_page_metrics(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步指标失败: {str(e)}"
+        )
+
+
 @router.get("/{dataset_uuid}", response_model=DatasetResponse)
 async def get_dataset(
     dataset_uuid: UUID,

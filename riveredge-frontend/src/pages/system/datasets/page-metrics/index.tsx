@@ -18,6 +18,8 @@ import {
   bindPageMetricConfig,
   unbindPageMetricConfig,
   initSalesOrderMetrics,
+  initSalesForecastMetrics,
+  syncPageMetrics,
   getDatasetList,
   type PageMetricConfigItem,
   type Dataset,
@@ -44,6 +46,38 @@ const PageMetricsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['pageMetrics'] });
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.pageMetrics.initFailed', '初始化失败'));
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
+  const handleInitSalesForecastMetrics = async () => {
+    try {
+      setInitLoading(true);
+      const res = await initSalesForecastMetrics();
+      messageApi.success(res.message);
+      actionRef.current?.reload();
+      queryClient.invalidateQueries({ queryKey: ['pageMetrics'] });
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.pageMetrics.initFailed', '初始化失败'));
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
+  const handleSyncMetrics = async () => {
+    try {
+      setInitLoading(true);
+      const res = await syncPageMetrics();
+      if (res.success) {
+        messageApi.success(res.message);
+        actionRef.current?.reload();
+        queryClient.invalidateQueries({ queryKey: ['pageMetrics'] });
+      } else {
+        messageApi.error(res.message);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.pageMetrics.syncFailed', '同步失败'));
     } finally {
       setInitLoading(false);
     }
@@ -170,12 +204,29 @@ const PageMetricsPage: React.FC = () => {
           createButtonText={t('pages.system.pageMetrics.createButton', '新增绑定')}
           toolBarRender={() => [
             <Button
+              key="sync-all"
+              icon={<ThunderboltOutlined />}
+              loading={initLoading}
+              onClick={handleSyncMetrics}
+              type="primary"
+            >
+              {t('pages.system.pageMetrics.syncAllMetrics', '同步指标值')}
+            </Button>,
+            <Button
               key="init-sales"
               icon={<ThunderboltOutlined />}
               loading={initLoading}
               onClick={handleInitSalesOrderMetrics}
             >
               {t('pages.system.pageMetrics.initSalesOrderMetrics', '一键初始化销售订单指标')}
+            </Button>,
+            <Button
+              key="init-forecast"
+              icon={<ThunderboltOutlined />}
+              loading={initLoading}
+              onClick={handleInitSalesForecastMetrics}
+            >
+              {t('pages.system.pageMetrics.initSalesForecastMetrics', '一键初始化销售预测指标')}
             </Button>,
           ]}
         />

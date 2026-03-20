@@ -128,6 +128,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/production-execution/quality-exceptions': 'exception',
   '/apps/kuaizhizao/purchase-management/purchase-orders': 'purchase_order',
   '/apps/kuaizhizao/sales-management/sales-orders': 'sales_order',
+  '/apps/kuaizhizao/sales-management/sales-forecasts': 'sales_forecast',
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
   '/apps/kuaizhizao/quality-management/incoming-inspection': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/process-inspection': 'quality_inspection',
@@ -143,6 +144,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
 const TOPBAR_SEARCH_HOT_MENU_PATHS: string[] = [
   '/apps/kuaizhizao/production-execution/work-orders', // 工单
   '/apps/kuaizhizao/purchase-management/purchase-orders', // 采购订单
+  '/apps/kuaizhizao/sales-management/sales-forecasts', // 销售预测
   '/apps/kuaizhizao/sales-management/sales-orders', // 销售订单
   '/apps/kuaizhizao/warehouse-management/inbound', // 入库单
   '/apps/kuaizhizao/plan-management/production-plans', // 生产计划

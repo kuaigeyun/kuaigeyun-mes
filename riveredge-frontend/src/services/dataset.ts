@@ -155,6 +155,28 @@ export async function initSalesOrderMetrics(): Promise<{
   });
 }
 
+/** 一键初始化销售预测指标 */
+export async function initSalesForecastMetrics(): Promise<{
+  created: boolean;
+  dataset_code: string;
+  message: string;
+}> {
+  return apiRequest('/core/datasets/init-sales-forecast-metrics', {
+    method: 'POST',
+  });
+}
+
+/** 同步/刷新所有预设的页面指标数据集 */
+export async function syncPageMetrics(): Promise<{
+  success: boolean;
+  message: string;
+  results?: Array<{ module: string; success: boolean; message: string }>;
+}> {
+  return apiRequest('/core/datasets/sync-page-metrics', {
+    method: 'POST',
+  });
+}
+
 /**
  * 获取数据集列表
  * 

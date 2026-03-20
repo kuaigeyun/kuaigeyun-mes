@@ -1384,6 +1384,118 @@ SELECT
             "message": "销售订单指标已初始化" if created else "销售订单指标已存在，已更新页面绑定",
         }
 
+    async def init_sales_forecast_metrics(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        一键初始化销售预测指标：创建 sales_forecast_metrics 数据集并绑定到销售预测页面。
+        """
+        PAGE_PATH = "/apps/kuaizhizao/sales-management/sales-forecasts"
+        DATASET_CODE = "sales_forecast_metrics"
+
+        # 优先使用系统默认数据源
+        integration_config = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code="system_default",
+            deleted_at__isnull=True,
+        ).first()
+        if not integration_config:
+            integration_config = await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                type="postgresql",
+                deleted_at__isnull=True,
+            ).first()
+        if not integration_config:
+            raise ValidationError("未找到 PostgreSQL 数据连接，请先在数据源管理中配置")
+
+        # 检查数据集是否已存在
+        existing_dataset = await Dataset.filter(
+            tenant_id=tenant_id,
+            code=DATASET_CODE,
+            deleted_at__isnull=True,
+        ).first()
+
+        if not existing_dataset:
+            query_config = {
+                "sql": """
+SELECT
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_forecasts
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND status IN ('已审核', '已下推')
+     AND end_date < CURRENT_DATE) AS overdue_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_forecasts
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL 
+     AND created_at >= CURRENT_DATE) AS today_new_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_forecasts
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND status = '待审核') AS pending_review_count,
+  (SELECT COUNT(*)::int FROM apps_kuaizhizao_sales_forecasts
+   WHERE tenant_id = :tenant_id AND deleted_at IS NULL
+     AND status IN ('已审核', '已下推')) AS in_progress_count
+"""
+            }
+            display_config = {
+                "columns": [
+                    {"key": "today_new_count", "label": "今日新增", "formatter": "number", "suffix": "单", "color": "#1890ff", "filter_key": "dateRange", "filter_value": "today"},
+                    {"key": "pending_review_count", "label": "待审核", "formatter": "number", "color": "#faad14", "filter_key": "status", "filter_value": "待审核"},
+                    {"key": "in_progress_count", "label": "执行中", "formatter": "number", "color": "#52c41a", "filter_key": "status", "filter_value": "已下推"},
+                    {"key": "overdue_count", "label": "逾期未交", "formatter": "number", "color": "#f5222d"},
+                ]
+            }
+            dataset_data = DatasetCreate(
+                name="销售预测指标",
+                code=DATASET_CODE,
+                description="销售预测列表页指标卡数据",
+                query_type="sql",
+                query_config=query_config,
+                output_type=OUTPUT_TYPE_MULTI_METRIC,
+                display_config=display_config,
+                is_active=True,
+                data_source_uuid=UUID(str(integration_config.uuid)),
+            )
+            await self.create_dataset(tenant_id=tenant_id, dataset_data=dataset_data)
+            created = True
+        else:
+            created = False
+
+        # 确保页面绑定存在
+        await self.bind_page_metric(
+            tenant_id=tenant_id,
+            page_path=PAGE_PATH,
+            dataset_code=DATASET_CODE,
+            sort_order=0,
+        )
+
+        return {
+            "created": created,
+            "dataset_code": DATASET_CODE,
+            "message": "销售预测指标已初始化" if created else "销售预测指标已存在，已更新页面绑定",
+        }
+
+    async def sync_all_page_metrics(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        同步/初始化所有内置模块的页面指标数据集。
+        """
+        results = []
+        
+        # 1. 销售订单
+        try:
+            res1 = await self.init_sales_order_metrics(tenant_id)
+            results.append({"module": "销售订单", "success": True, "message": res1["message"]})
+        except Exception as e:
+            results.append({"module": "销售订单", "success": False, "message": str(e)})
+
+        # 2. 销售预测
+        try:
+            res2 = await self.init_sales_forecast_metrics(tenant_id)
+            results.append({"module": "销售预测", "success": True, "message": res2["message"]})
+        except Exception as e:
+            results.append({"module": "销售预测", "success": False, "message": str(e)})
+
+        return {
+            "success": True,
+            "results": results,
+            "message": "已尝试同步所有内置模块指标"
+        }
+
     @staticmethod
     async def query_dataset_by_code(
         tenant_id: int,

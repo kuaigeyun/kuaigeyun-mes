@@ -192,6 +192,27 @@ export async function exportSalesForecasts(params?: SalesForecastListParams): Pr
   });
 }
 
+/** 销售预测统计（用于指标卡片） */
+export interface SalesForecastStatistics {
+  active_count: number;
+  pending_review_count: number;
+  in_progress_count: number;
+  overdue_count: number;
+  total_amount: number;
+  trend_today_new?: { date: string; value: number }[];
+  trend_today_amount?: { date: string; value: number }[];
+  trend_pending_review?: { date: string; value: number }[];
+  yesterday_today_new?: number;
+  yesterday_pending_review?: number;
+}
+
+/** 获取销售预测统计 */
+export async function getSalesForecastStatistics(): Promise<SalesForecastStatistics> {
+  return apiRequest<SalesForecastStatistics>('/apps/kuaizhizao/sales-forecasts/statistics', {
+    method: 'GET',
+  });
+}
+
 /**
  * 单据关联已统一至 document-relation 服务，请使用 getDocumentRelations(documentType, documentId)
  * @deprecated 使用 document-relation.getDocumentRelations
