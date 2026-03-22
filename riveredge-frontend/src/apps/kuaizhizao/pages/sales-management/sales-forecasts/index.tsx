@@ -942,7 +942,9 @@ export default function SalesForecastsPage() {
               rules={[{ required: true, message: t('app.kuaizhizao.salesForecast.enterForecastName') }]}
             />
           </Col>
-          <Col span={6}>
+        </Row>
+        <Row gutter={16}>
+          <Col span={8}>
             <ProFormSelect
               name="forecast_period"
               label={t('app.kuaizhizao.salesForecast.forecastPeriod')}
@@ -953,24 +955,23 @@ export default function SalesForecastsPage() {
                 { label: t('app.kuaizhizao.salesForecast.period.monthly'), value: 'MONTHLY' },
                 { label: t('app.kuaizhizao.salesForecast.period.quarterly'), value: 'QUARTERLY' },
               ]}
+              fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={6}>
+          <Col span={8}>
             <ProFormDatePicker
               name="start_date"
               label={t('app.kuaizhizao.salesForecast.startDate')}
               required
-              style={{ width: '100%' }}
+              fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-          <Col span={6}>
+          <Col span={8}>
             <ProFormDatePicker
               name="end_date"
               label={t('app.kuaizhizao.salesForecast.endDate')}
               required
-              style={{ width: '100%' }}
+              fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
         </Row>

@@ -4379,13 +4379,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
 
-            // 左侧菜单小徽标：仅业务单据显示未完成数量（报表中心、大屏中心不再显示徽章）
+            // 左侧菜单小徽标：仅业务单据显示未完成数量
             const path = item.path as string;
             const badgeKey = getMenuBadgeKey(path);
-            const businessCount = badgeKey ? (menuBadgeCounts[badgeKey] ?? 0) : 0;
-            const badgeEl = businessCount > 0 ? (
-              <Badge count={businessCount} size="small" className="menu-item-badge-count" />
-            ) : null;
+            const badgeData = (badgeKey ? menuBadgeCounts[badgeKey] : null) as any;
+
+            let badgeEl = null;
+            if (badgeData) {
+              if (typeof badgeData === 'number' && badgeData > 0) {
+                // 传统形式：仅数字，默认红色（antd Badge 默认）
+                badgeEl = <Badge count={badgeData} size="small" className="menu-item-badge-count" />;
+              } else if (typeof badgeData === 'object') {
+                // 拟物化分类徽标，优先级：逾期 (red) > 待审核 (orange) > 进行中 (green)
+                if (badgeData.overdue > 0) {
+                  badgeEl = <Badge count={badgeData.overdue} size="small" color="#f5222d" className="menu-item-badge-count" />;
+                } else if (badgeData.pending > 0) {
+                  badgeEl = <Badge count={badgeData.pending} size="small" color="#fa8c16" className="menu-item-badge-count" />;
+                } else if (badgeData.in_progress > 0) {
+                  badgeEl = <Badge count={badgeData.in_progress} size="small" color="#52c41a" className="menu-item-badge-count" />;
+                }
+              }
+            }
 
             return (
               <div

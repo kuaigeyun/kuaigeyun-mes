@@ -782,59 +782,124 @@ async def get_menu_badge_counts(
     用于左侧菜单业务类单据显示数量小徽标。
     """
     counts = {}
+    from datetime import datetime
+    now = datetime.now()
+    now_date = now.date()
     try:
-        # 工单：已下达 + 进行中
-        counts["work_order"] = await WorkOrder.filter(
-            tenant_id=tenant_id,
-            status__in=["released", "in_progress"],
-            deleted_at__isnull=True,
-        ).count()
+        # 工单：逾期 > 待审核 > 进行中
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        counts["work_order"] = {
+            "overdue": await WorkOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                planned_end_date__lt=now,
+            ).exclude(status__in=["completed", "已完成", "cancelled", "已取消"]).count(),
+            "pending": 0,
+            "in_progress": await WorkOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["released", "in_progress", "已下达", "进行中", "RELEASED", "IN_PROGRESS"],
+            ).count()
+        }
     except Exception as e:
         logger.warning(f"menu-badge-counts work_order: {e}")
         counts["work_order"] = 0
+
     try:
-        # 返工单：已下达 + 进行中
-        counts["rework_order"] = await ReworkOrder.filter(
-            tenant_id=tenant_id,
-            status__in=["released", "in_progress"],
-            deleted_at__isnull=True,
-        ).count()
+        # 返工单
+        from apps.kuaizhizao.models.rework_order import ReworkOrder
+        counts["rework_order"] = {
+            "overdue": await ReworkOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                planned_end_date__lt=now,
+            ).exclude(status__in=["completed", "已完成", "cancelled", "已取消"]).count(),
+            "pending": 0,
+            "in_progress": await ReworkOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["released", "in_progress", "已下达", "进行中", "RELEASED", "IN_PROGRESS"],
+            ).count()
+        }
     except Exception as e:
         logger.warning(f"menu-badge-counts rework_order: {e}")
         counts["rework_order"] = 0
+
     try:
-        # 异常（待处理）：缺料 + 延期 + 质量
+        # 异常
+        from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageException
+        from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
+        from apps.kuaizhizao.models.quality_exception import QualityException
         c1 = await MaterialShortageException.filter(tenant_id=tenant_id, status="open").count()
         c2 = await DeliveryDelayException.filter(tenant_id=tenant_id, status="open").count()
         c3 = await QualityException.filter(tenant_id=tenant_id, status="open").count()
-        counts["exception"] = c1 + c2 + c3
+        counts["exception"] = {
+            "overdue": 0,
+            "pending": c1 + c2 + c3,
+            "in_progress": 0
+        }
     except Exception as e:
         logger.warning(f"menu-badge-counts exception: {e}")
         counts["exception"] = 0
+
     try:
-        # 销售订单：活动状态（排除草稿、已完成、已取消、已驳回）
+        # 销售订单：逾期 > 待审核 > 进行中
         from apps.kuaizhizao.models.sales_order import SalesOrder
-        counts["sales_order"] = await SalesOrder.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).exclude(
-            status__in=["DRAFT", "草稿", "CANCELLED", "已取消"],
-        ).exclude(
-            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回"],
-        ).count()
+        counts["sales_order"] = {
+            "overdue": await SalesOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                delivery_date__lt=now_date,
+            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
+            "pending": await SalesOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
+            ).exclude(status__in=["DRAFT", "草稿", "CANCELLED", "已取消"]).count(),
+            "in_progress": await SalesOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED", "执行中"],
+            ).count()
+        }
     except Exception as e:
         logger.warning(f"menu-badge-counts sales_order: {e}")
         counts["sales_order"] = 0
+
     try:
-        # 采购订单：待审核（兼容 PENDING、PENDING_REVIEW、待审核 等存量数据）
+        # 采购订单
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-        counts["purchase_order"] = await PurchaseOrder.filter(
-            tenant_id=tenant_id,
-            review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-        ).count()
+        counts["purchase_order"] = {
+            "overdue": await PurchaseOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                delivery_date__lt=now_date,
+            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
+            "pending": await PurchaseOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
+            ).count(),
+            "in_progress": await PurchaseOrder.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED"],
+            ).count()
+        }
     except Exception as e:
         logger.warning(f"menu-badge-counts purchase_order: {e}")
         counts["purchase_order"] = 0
+
+    try:
+        # 销售预测
+        from apps.kuaizhizao.models.sales_forecast import SalesForecast
+        counts["sales_forecast"] = {
+            "overdue": await SalesForecast.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                end_date__lt=now_date,
+            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
+            "pending": await SalesForecast.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
+            ).exclude(status__in=["DRAFT", "草稿", "CANCELLED", "已取消"]).count(),
+            "in_progress": await SalesForecast.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True,
+                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED", "执行中"],
+            ).count()
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts sales_forecast: {e}")
+        counts["sales_forecast"] = 0
     try:
         # 采购入库：待入库
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt

@@ -24,10 +24,14 @@ def _select_alternatives(bom_items: List[BOM]) -> List[BOM]:
     按 alternative_group_id 分组；None 视为独立组（仅自身）。
     """
     by_group = defaultdict(list)
+    result = []
     for b in bom_items:
         gid = getattr(b, "alternative_group_id", None)
-        by_group[gid].append(b)
-    result = []
+        if gid is None:
+            result.append(b)
+        else:
+            by_group[gid].append(b)
+            
     for group in by_group.values():
         mains = [x for x in group if not getattr(x, "is_alternative", False)]
         if mains:
