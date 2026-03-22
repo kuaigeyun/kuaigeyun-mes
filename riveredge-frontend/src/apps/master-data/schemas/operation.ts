@@ -58,6 +58,14 @@ export const operationFormSchema: FieldConfig[] = [
     extraAsTooltip: true,
   },
   {
+    name: 'isNodeOperation',
+    type: 'switch',
+    labelKey: 'field.operation.isNodeOperation',
+    colSpan: 12,
+    extraKey: 'field.operation.isNodeOperationExtra',
+    extraAsTooltip: true,
+  },
+  {
     name: 'description',
     type: 'textarea',
     labelKey: 'field.operation.description',

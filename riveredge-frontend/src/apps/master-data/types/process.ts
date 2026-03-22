@@ -63,6 +63,8 @@ export interface Operation {
   description?: string;
   reportingType: 'quantity' | 'status';
   allowJump: boolean;
+  /** 节点工序：允许跳转时前序节点仍不可跳过 */
+  isNodeOperation?: boolean;
   isActive: boolean;
   /** 允许绑定的不良品项（API 可能返回 defect_types） */
   defectTypes?: DefectTypeMinimal[];
@@ -91,6 +93,7 @@ export interface OperationCreate {
   description?: string;
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
+  isNodeOperation?: boolean;
   isActive?: boolean;
   inspectionMode?: 'none' | 'simple' | 'plan';
   defaultInspectionPlanId?: number | null;
@@ -104,6 +107,7 @@ export interface OperationUpdate {
   description?: string;
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
+  isNodeOperation?: boolean;
   isActive?: boolean;
   inspectionMode?: 'none' | 'simple' | 'plan';
   defaultInspectionPlanId?: number | null;

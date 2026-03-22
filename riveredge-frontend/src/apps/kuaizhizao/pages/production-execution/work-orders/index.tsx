@@ -5096,6 +5096,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     { title: '工序代码/名称', key: 'operation' },
     { title: '报工类型', key: 'reportingType', width: 120 },
     { title: '允许跳转', key: 'allowJump', width: 100 },
+    { title: '节点工序', key: 'isNodeOperation', width: 90 },
     { title: '操作', key: 'action', width: 150 },
   ]
 
@@ -5279,6 +5280,21 @@ const CreateWorkOrderTableRow: React.FC<{
           {(getOpDetail(op.operation_id)?.allowJump ?? getOpDetail(op.operation_id)?.allow_jump)
             ? '允许'
             : '不允许'}
+        </Tag>
+      </td>
+      <td>
+        <Tag
+          color={
+            (getOpDetail(op.operation_id)?.isNodeOperation ??
+              getOpDetail(op.operation_id)?.is_node_operation)
+              ? 'processing'
+              : 'default'
+          }
+        >
+          {(getOpDetail(op.operation_id)?.isNodeOperation ??
+            getOpDetail(op.operation_id)?.is_node_operation)
+            ? '是'
+            : '否'}
         </Tag>
       </td>
       <td onClick={e => e.stopPropagation()}>

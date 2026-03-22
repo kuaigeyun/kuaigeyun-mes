@@ -85,6 +85,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       isActive: true,
       reportingType: 'quantity',
       allowJump: false,
+      isNodeOperation: false,
       inspectionMode: 'simple',
     });
     loadFormOptions();
@@ -92,7 +93,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     if (!editUuid) {
       let ruleCode: string | undefined;
       let autoGenerate = false;
-      const initValues = { isActive: true, reportingType: 'quantity', allowJump: false };
+      const initValues = { isActive: true, reportingType: 'quantity', allowJump: false, isNodeOperation: false };
       (async () => {
         try {
           const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
@@ -144,6 +145,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           description: detail.description,
           reportingType: detail.reportingType || 'quantity',
           allowJump: detail.allowJump ?? false,
+          isNodeOperation: detail.isNodeOperation ?? (detail as any).is_node_operation ?? false,
           isActive: detail.isActive ?? true,
           inspectionMode: detail.inspectionMode ?? detail.inspection_mode ?? 'simple',
           defaultInspectionPlanId: detail.defaultInspectionPlanId ?? detail.default_inspection_plan_id ?? undefined,
@@ -257,7 +259,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       loading={formLoading}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
-      initialValues={{ isActive: true, reportingType: 'quantity', allowJump: false, inspectionMode: 'simple' }}
+      initialValues={{ isActive: true, reportingType: 'quantity', allowJump: false, isNodeOperation: false, inspectionMode: 'simple' }}
       layout="vertical"
       grid
     >

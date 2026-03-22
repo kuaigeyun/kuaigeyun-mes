@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography } from 'antd';
+import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography, Switch } from 'antd';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
@@ -22,6 +22,8 @@ export interface OperationItem {
   description?: string;
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
+  /** 节点工序：允许跳转时仍不可跳过 */
+  isNodeOperation?: boolean;
 }
 
 export interface OperationSequenceEditorProps {
@@ -106,6 +108,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       description: op.description,
       reportingType: (op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
       allowJump: op.allowJump ?? (op as any).allow_jump ?? false,
+      isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
     }));
     const updated = [...operations, ...newItems];
     setOperations(updated);
@@ -117,6 +120,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const handleDeleteOperation = (uuid: string) => {
     const newOperations = operations.filter((op) => op.uuid !== uuid);
+    setOperations(newOperations);
+    onChange?.(newOperations);
+  };
+
+  const toggleNodeOperation = (uuid: string, checked: boolean) => {
+    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, isNodeOperation: checked } : op));
     setOperations(newOperations);
     onChange?.(newOperations);
   };
@@ -154,6 +163,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       description: replacement.description,
       reportingType: (replacement.reportingType ?? (replacement as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
       allowJump: replacement.allowJump ?? (replacement as any).allow_jump ?? false,
+      isNodeOperation: replacement.isNodeOperation ?? (replacement as any).is_node_operation ?? false,
     };
     setOperations(newOperations);
     onChange?.(newOperations);
@@ -219,6 +229,18 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       ),
     },
     {
+      title: t('app.master-data.operationSequence.nodeOperation'),
+      key: 'isNodeOperation',
+      width: 100,
+      render: (_: any, record: OperationItem) => (
+        <Switch
+          size="small"
+          checked={!!record.isNodeOperation}
+          onChange={(c) => toggleNodeOperation(record.uuid, c)}
+        />
+      ),
+    },
+    {
       title: t('app.master-data.operationSequence.action'),
       key: 'action',
       width: 150,
@@ -270,7 +292,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
               }),
             });
           }
-          if (idx === 4 && React.isValidElement(child)) {
+          if (idx === 5 && React.isValidElement(child)) {
             return React.cloneElement(child, { onClick: (e: React.MouseEvent) => e.stopPropagation() });
           }
           return child;
@@ -319,7 +341,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                               <React.Fragment key={op.uuid}>
                                 {isInsertBefore && (
                                   <tr>
-                                    <td colSpan={5} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={6} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -350,6 +372,13 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                     <Tag color={op.allowJump ? 'success' : 'default'}>{op.allowJump ? t('app.master-data.operationSequence.allowJumpYes') : t('app.master-data.operationSequence.allowJumpNo')}</Tag>
                                   </td>
                                   <td onClick={(e) => e.stopPropagation()}>
+                                    <Switch
+                                      size="small"
+                                      checked={!!op.isNodeOperation}
+                                      onChange={(c) => toggleNodeOperation(op.uuid, c)}
+                                    />
+                                  </td>
+                                  <td onClick={(e) => e.stopPropagation()}>
                                     <Space>
                                       <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
                                       <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
@@ -358,7 +387,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                 </DraggableRow>
                                 {isInsertAfter && (
                                   <tr>
-                                    <td colSpan={5} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={6} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -372,7 +401,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
-                scroll={{ x: 560 }}
+                scroll={{ x: 660 }}
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>

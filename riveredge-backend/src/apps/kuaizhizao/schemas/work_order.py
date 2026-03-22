@@ -347,6 +347,10 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     sop_id: Optional[int] = Field(None, description="关联SOP ID（法）")
     sop_uuid: Optional[str] = Field(None, description="关联SOP UUID（用于跳转查看）")
     sop_name: Optional[str] = Field(None, description="关联SOP 名称")
+
+    reporting_type: str = Field("quantity", description="报工类型（quantity/status）")
+    allow_jump: bool = Field(False, description="是否允许跳转工序")
+    is_node_operation: bool = Field(False, description="是否节点工序（允许跳转时前序节点仍不可跳过）")
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

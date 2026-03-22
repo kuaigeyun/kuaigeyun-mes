@@ -322,8 +322,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             setup_time = extra_data.get("setup_time")
             
             # 从额外数据中获取报工类型和跳转规则（如果工艺路线中配置了）
-            reporting_type = extra_data.get("reporting_type", "quantity")  # 默认按数量报工
-            allow_jump = extra_data.get("allow_jump", False)  # 默认不允许跳转
+            reporting_type = extra_data.get("reporting_type") or extra_data.get("reportingType") or "quantity"
+            allow_jump = extra_data.get("allow_jump")
+            if allow_jump is None:
+                allow_jump = extra_data.get("allowJump")
+            if allow_jump is None:
+                allow_jump = False
+            else:
+                allow_jump = bool(allow_jump)
+            is_node = extra_data.get("is_node_operation")
+            if is_node is None:
+                is_node = extra_data.get("isNodeOperation")
+            if is_node is None:
+                is_node = bool(getattr(operation, "is_node_operation", False))
+            else:
+                is_node = bool(is_node)
             
             # 计算计划时间
             # 准备时间
@@ -357,6 +370,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 setup_time=Decimal(str(setup_hours)) if setup_hours else None,
                 reporting_type=reporting_type,
                 allow_jump=allow_jump,
+                is_node_operation=is_node,
                 status='pending',
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -675,7 +689,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             from datetime import timedelta
                             planned_end_date = planned_start_date + timedelta(hours=1)
                         
-                        # 创建工序单
+                        # 创建工序单（报工类型、跳转、节点自工序档案）
                         work_order_op = await WorkOrderOperation.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
@@ -694,6 +708,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             standard_time=op_data.standard_time,
                             setup_time=op_data.setup_time,
                             remarks=op_data.remarks,
+                            reporting_type=operation.reporting_type or "quantity",
+                            allow_jump=bool(getattr(operation, "allow_jump", False)),
+                            is_node_operation=bool(getattr(operation, "is_node_operation", False)),
                             status='pending',
                             created_by=created_by,
                             created_by_name=user_info["name"],
@@ -1893,7 +1910,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     # 更新现有工序
                     if existing_op.id in reported_operation_ids:
                         raise BusinessLogicError(f"工序 {existing_op.operation_name} 已有报工记录，不能修改")
-                    
+
+                    op_id_changed = existing_op.operation_id != op_data.operation_id
                     # 更新工序信息
                     existing_op.operation_id = op_data.operation_id
                     existing_op.operation_code = op_data.operation_code
@@ -1908,12 +1926,34 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     existing_op.standard_time = op_data.standard_time
                     existing_op.setup_time = op_data.setup_time
                     existing_op.remarks = op_data.remarks
+                    if op_id_changed:
+                        master_op = await Operation.get_or_none(
+                            tenant_id=tenant_id,
+                            id=op_data.operation_id,
+                            deleted_at__isnull=True,
+                        )
+                        if master_op:
+                            existing_op.reporting_type = master_op.reporting_type or "quantity"
+                            existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
+                            existing_op.is_node_operation = bool(getattr(master_op, "is_node_operation", False))
                     existing_op.updated_by = updated_by
                     existing_op.updated_by_name = user_info["name"]
                     await existing_op.save()
                     updated_operation_ids.add(existing_op.id)
                 else:
-                    # 创建新工序
+                    # 创建新工序（报工类型、跳转、节点自工序档案继承）
+                    master_op = await Operation.get_or_none(
+                        tenant_id=tenant_id,
+                        id=op_data.operation_id,
+                        deleted_at__isnull=True,
+                    )
+                    reporting_type = "quantity"
+                    allow_jump_new = False
+                    is_node_new = False
+                    if master_op:
+                        reporting_type = master_op.reporting_type or "quantity"
+                        allow_jump_new = bool(getattr(master_op, "allow_jump", False))
+                        is_node_new = bool(getattr(master_op, "is_node_operation", False))
                     new_op = await WorkOrderOperation.create(
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),
@@ -1931,6 +1971,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         planned_end_date=op_data.planned_end_date,
                         standard_time=op_data.standard_time,
                         setup_time=op_data.setup_time,
+                        reporting_type=reporting_type,
+                        allow_jump=allow_jump_new,
+                        is_node_operation=is_node_new,
                         status='pending',
                         remarks=op_data.remarks,
                         created_by=updated_by,
@@ -2072,10 +2115,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if work_order_operation.status != 'pending':
                 raise BusinessLogicError(f"只能开始待开始状态的工序，当前状态：{work_order_operation.status}")
 
-            # 检查跳转规则（如果不允许跳转，检查前序工序是否完成）
-            # 优先使用工单级别的跳转控制，如果没有则使用工序级别的
-            allow_jump = work_order.allow_operation_jump if hasattr(work_order, 'allow_operation_jump') else work_order_operation.allow_jump
-            
+            # 检查跳转规则：工单或工序任一方允许跳转则放宽；节点工序在允许跳转时仍不可跳过
+            from apps.kuaizhizao.services.operation_jump_rules import (
+                effective_allow_jump,
+                validate_start_respects_node_operations,
+            )
+
+            allow_jump = effective_allow_jump(work_order, work_order_operation)
+
             if not allow_jump:
                 # 只检查上一道工序：只要有产出即可开始（报工数量由 reporting_service 校验不超过上一道完工数）
                 previous_operations = await WorkOrderOperation.filter(
@@ -2089,6 +2136,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     prev_op = previous_operations[0]
                     if (prev_op.completed_quantity or 0) <= 0:
                         raise BusinessLogicError(f"前序工序 {prev_op.operation_name} 尚无产出，不能开始当前工序")
+            else:
+                await validate_start_respects_node_operations(
+                    tenant_id, work_order_id, work_order_operation
+                )
 
             # 获取开始人信息
             user_info = await self.get_user_info(started_by)

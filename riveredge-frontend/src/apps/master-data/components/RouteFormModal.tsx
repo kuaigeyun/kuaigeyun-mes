@@ -152,6 +152,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                     description: op.description,
                     reportingType: op.reportingType ?? (op as any).reporting_type,
                     allowJump: op.allowJump ?? (op as any).allow_jump,
+                    isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation,
                   });
                 }
               }
@@ -163,17 +164,18 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             const ops: OperationItem[] = [];
             for (const item of sequenceData) {
               let opItem: OperationItem | null = null;
-              const toOpItem = (op: { uuid: string; code?: string; name?: string; description?: string; reportingType?: string; reporting_type?: string; allowJump?: boolean; allow_jump?: boolean }) => ({
+              const toOpItem = (op: { uuid: string; code?: string; name?: string; description?: string; reportingType?: string; reporting_type?: string; allowJump?: boolean; allow_jump?: boolean; isNodeOperation?: boolean; is_node_operation?: boolean }) => ({
                 uuid: op.uuid,
                 code: op.code || '',
                 name: op.name || '',
                 description: op.description,
                 reportingType: (op.reportingType ?? op.reporting_type ?? 'quantity') as 'quantity' | 'status',
                 allowJump: op.allowJump ?? op.allow_jump ?? false,
+                isNodeOperation: op.isNodeOperation ?? op.is_node_operation ?? false,
               });
               if (typeof item === 'string') {
                 const op = allOps.find((o) => o.uuid === item);
-                opItem = op ? toOpItem(op) : { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false };
+                opItem = op ? toOpItem(op) : { uuid: item, code: item.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false, isNodeOperation: false };
               } else if (item && typeof item === 'object') {
                 const uuid = item.uuid ?? item.operation_uuid;
                 const code = item.code ?? '';
@@ -185,6 +187,12 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                       ...toOpItem(op),
                       reportingType: (item.reportingType ?? item.reporting_type ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
                       allowJump: item.allowJump ?? item.allow_jump ?? op.allowJump ?? (op as any).allow_jump ?? false,
+                      isNodeOperation:
+                        item.isNodeOperation ??
+                        item.is_node_operation ??
+                        op.isNodeOperation ??
+                        (op as any).is_node_operation ??
+                        false,
                     };
                   } else if (code || name) {
                     opItem = {
@@ -194,9 +202,10 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                       description: item.description,
                       reportingType: (item.reportingType ?? item.reporting_type ?? 'quantity') as 'quantity' | 'status',
                       allowJump: item.allowJump ?? item.allow_jump ?? false,
+                      isNodeOperation: item.isNodeOperation ?? item.is_node_operation ?? false,
                     };
                   } else {
-                    opItem = { uuid, code: uuid.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false };
+                    opItem = { uuid, code: uuid.substring(0, 8), name: t('field.route.operationSequence'), reportingType: 'quantity' as const, allowJump: false, isNodeOperation: false };
                   }
                 } else if (item.operation_id && allOps.length > 0) {
                   const op = allOps.find((o) => o.id === item.operation_id);
@@ -238,6 +247,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           name: op.name,
           reportingType: op.reportingType ?? 'quantity',
           allowJump: op.allowJump ?? false,
+          isNodeOperation: op.isNodeOperation ?? false,
         })),
       };
 

@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Space, message, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider } from 'antd';
+import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { reportingApi, workOrderApi } from '../../../services/production';
@@ -29,6 +29,7 @@ interface WorkOrder {
   quantity?: number;
   completed_quantity?: number;
   status?: string;
+  allow_operation_jump?: boolean;
 }
 
 interface Operation {
@@ -41,7 +42,14 @@ interface Operation {
   standard_time?: number;
   completed_quantity?: number;
   allow_jump?: boolean;
+  is_node_operation?: boolean;
+  isNodeOperation?: boolean;
 }
+
+const effectiveAllowJump = (workOrder: WorkOrder | null, operation: Operation | null) => {
+  if (!operation) return false;
+  return !!(workOrder?.allow_operation_jump || operation.allow_jump);
+};
 
 /**
  * 报工管理 - 工位机触屏模式页面
@@ -122,7 +130,7 @@ const ReportingKioskPage: React.FC = () => {
       if (pendingOperation) {
         setCurrentOperation(pendingOperation);
         // 检查跳转规则
-        await checkJumpRule(pendingOperation, operations);
+        await checkJumpRule(pendingOperation, operations, workOrder);
         
         // 自动填充表单
         autoFillForm(workOrder, pendingOperation);
@@ -139,17 +147,30 @@ const ReportingKioskPage: React.FC = () => {
   /**
    * 检查工序跳转规则
    */
-  const checkJumpRule = async (operation: Operation, allOperations: Operation[]) => {
-    if (operation.allow_jump) {
+  const checkJumpRule = async (operation: Operation, allOperations: Operation[], workOrder: WorkOrder) => {
+    const allowJump = effectiveAllowJump(workOrder, operation);
+    const nodePreds = allOperations.filter(
+      (op: any) =>
+        op.sequence! < operation.sequence! &&
+        (op.is_node_operation || op.isNodeOperation)
+    );
+    const blockedNode = nodePreds.find(
+      (op: any) => Number(op.completed_quantity ?? 0) <= 0
+    );
+    if (allowJump && blockedNode) {
+      setJumpRuleError(
+        `节点工序不可跳过：请先完成前序节点工序「${blockedNode.operation_name}」（须有报工产出）`
+      );
+      return;
+    }
+    if (allowJump) {
       setJumpRuleError('');
       return;
     }
 
-    // 检查前序工序是否完成
     const previousOperations = allOperations.filter(
       (op: any) => op.sequence! < operation.sequence! && op.status !== 'completed'
     );
-
     if (previousOperations.length > 0) {
       const prevOpNames = previousOperations.map((op: any) => op.operation_name).join('、');
       setJumpRuleError(`工序跳转规则：必须先完成前序工序 "${prevOpNames}" 才能报工当前工序`);
@@ -193,7 +214,9 @@ const ReportingKioskPage: React.FC = () => {
    */
   const handleSelectOperation = async (operation: Operation) => {
     setCurrentOperation(operation);
-    await checkJumpRule(operation, workOrderOperations);
+    if (currentWorkOrder) {
+      await checkJumpRule(operation, workOrderOperations, currentWorkOrder);
+    }
     
     if (currentWorkOrder) {
       autoFillForm(currentWorkOrder, operation);
@@ -388,8 +411,11 @@ const ReportingKioskPage: React.FC = () => {
                       {operation.status === 'completed' && (
                         <Tag color="success">已完成</Tag>
                       )}
-                      {operation.allow_jump && (
+                      {currentWorkOrder && effectiveAllowJump(currentWorkOrder, operation) && (
                         <Tag color="warning">可跳转</Tag>
+                      )}
+                      {(operation.is_node_operation || operation.isNodeOperation) && (
+                        <Tag color="processing">节点</Tag>
                       )}
                     </Space>
                   </Button>

@@ -132,6 +132,10 @@ class WorkOrderOperation(BaseModel):
         default=False,
         description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）"
     )
+    is_node_operation = fields.BooleanField(
+        default=False,
+        description="是否节点工序（允许跳转时前序节点工序仍不可跳过）"
+    )
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")

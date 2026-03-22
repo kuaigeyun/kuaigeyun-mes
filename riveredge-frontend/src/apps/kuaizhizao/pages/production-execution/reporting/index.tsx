@@ -49,6 +49,16 @@ const getWorkerInfo = (operation?: any) => {
   };
 };
 
+/** 与后端一致：工单或工序任一方开启即视为允许跳转 */
+const effectiveAllowJump = (workOrder: any, operation: any) => {
+  if (!operation) return false;
+  return !!(
+    workOrder?.allow_operation_jump ||
+    operation.allow_jump ||
+    operation.allowJump
+  );
+};
+
 /**
  * 子工序报工表单组件（核心功能，新增）
  */
@@ -165,11 +175,23 @@ const SubOperationReportingForm: React.FC<{
       layout="vertical"
       onFinish={async (values) => {
         try {
-          // 检查跳转规则（如果不允许跳转，且上道子工序未完成，阻止提交）
+          // 子工序跳转：与主工序一致（允许跳转时仍须满足前序节点产出）
           const subOpIndex = subOperations.findIndex((op: any) => op.operation_id === subOperation.operation_id);
-          if (subOpIndex > 0) {
+          const subAllowJump = effectiveAllowJump(workOrder, subOperation);
+          if (subAllowJump) {
+            const prior = subOperations.slice(0, subOpIndex);
+            const blocked = prior.find(
+              (op: any) =>
+                (op.is_node_operation || op.isNodeOperation) &&
+                Number(op.completed_quantity ?? 0) <= 0
+            );
+            if (blocked) {
+              messageApi.error(`节点工序不可跳过：请先完成前序节点子工序「${blocked.operation_name}」`);
+              return;
+            }
+          } else if (subOpIndex > 0) {
             const prevSubOp = subOperations[subOpIndex - 1];
-            if (!subOperation.allow_jump && prevSubOp.status !== 'completed') {
+            if (prevSubOp.status !== 'completed') {
               messageApi.error(`无法报工：必须先完成前序子工序 "${prevSubOp.operation_name}"`);
               return;
             }
@@ -456,7 +478,7 @@ const ReportingPage: React.FC = () => {
       if (pendingOperation) {
         setCurrentOperation(pendingOperation);
         // 检查跳转规则
-        await checkJumpRule(pendingOperation, operations);
+        await checkJumpRule(pendingOperation, operations, workOrder);
         // 加载 SOP（传入 workOrder、operations 因 state 可能尚未更新）
         await handleSelectOperation(pendingOperation.operation_id, workOrder, operations);
       } else {
@@ -470,19 +492,31 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
-   * 检查工序跳转规则
+   * 检查工序跳转规则（与后端 effective_allow_jump + 节点工序一致）
    */
-  const checkJumpRule = async (operation: any, allOperations: any[]) => {
-    if (operation.allow_jump) {
+  const checkJumpRule = async (operation: any, allOperations: any[], workOrder: any) => {
+    const allowJump = effectiveAllowJump(workOrder, operation);
+    const nodePreds = allOperations.filter(
+      (op: any) =>
+        op.sequence < operation.sequence && (op.is_node_operation || op.isNodeOperation)
+    );
+    const blockedNode = nodePreds.find(
+      (op: any) => Number(op.completed_quantity ?? op.completedQuantity ?? 0) <= 0
+    );
+    if (allowJump && blockedNode) {
+      setJumpRuleError(
+        `节点工序不可跳过：请先完成前序节点工序「${blockedNode.operation_name}」（须有报工产出）`
+      );
+      return;
+    }
+    if (allowJump) {
       setJumpRuleError('');
       return;
     }
 
-    // 检查前序工序是否完成
     const previousOperations = allOperations.filter(
       (op: any) => op.sequence < operation.sequence && op.status !== 'completed'
     );
-
     if (previousOperations.length > 0) {
       const prevOpNames = previousOperations.map((op: any) => op.operation_name).join('、');
       setJumpRuleError(`工序跳转规则：必须先完成前序工序 "${prevOpNames}" 才能报工当前工序`);
@@ -554,7 +588,7 @@ const ReportingPage: React.FC = () => {
     const operation = ops.find((op: any) => op.operation_id === operationId);
     if (operation) {
       setCurrentOperation(operation);
-      await checkJumpRule(operation, ops);
+      await checkJumpRule(operation, ops, workOrderOverride ?? currentWorkOrder);
       
       // 检查是否有子工艺路线（核心功能，新增）
       const subOps = checkSubOperations(operation, ops);
@@ -1635,19 +1669,23 @@ const ReportingPage: React.FC = () => {
             {/* 跳转规则提示 */}
             {currentOperation && (
               <div style={{ marginBottom: 16 }}>
-                {currentOperation.allow_jump ? (
-                  <Alert
-                    title="此工序允许跳转，可随时报工"
-                    type="info"
-                    showIcon
-                    description="允许跳转的工序可以并行进行，不依赖上道工序完成"
-                  />
-                ) : jumpRuleError ? (
+                {jumpRuleError ? (
                   <Alert
                     title={jumpRuleError}
                     type="warning"
                     showIcon
-                    description="不允许跳转的工序，必须完成上道工序才能开始此工序"
+                    description={
+                      effectiveAllowJump(currentWorkOrder, currentOperation)
+                        ? '允许跳转时，前序节点工序仍须先有报工产出后才能报工当前工序'
+                        : '不允许跳转的工序，必须完成上道工序才能开始此工序'
+                    }
+                  />
+                ) : effectiveAllowJump(currentWorkOrder, currentOperation) ? (
+                  <Alert
+                    title="此工单或工序允许跳转"
+                    type="info"
+                    showIcon
+                    description="可不严格按顺序报工，但前序「节点工序」仍须先有产出或完成后才能继续。"
                   />
                 ) : (
                   <Alert
@@ -1860,7 +1898,7 @@ const ReportingPage: React.FC = () => {
                       if (remainingOperations.length > 0) {
                         const nextOperation = remainingOperations[0];
                         setCurrentOperation(nextOperation);
-                        await checkJumpRule(nextOperation, updatedOperations || workOrderOperations);
+                        await checkJumpRule(nextOperation, updatedOperations || workOrderOperations, currentWorkOrder);
                         // 自动加载下一工序的SOP（核心功能，优化）
                         await handleSelectOperation(nextOperation.operation_id);
                         scanFormRef.current?.resetFields();

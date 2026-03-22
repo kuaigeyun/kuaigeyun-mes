@@ -390,6 +390,18 @@ const OperationsPage: React.FC = () => {
       ),
     },
     {
+      title: '节点工序',
+      dataIndex: 'isNodeOperation',
+      width: 100,
+      hideInSearch: true,
+      render: (_, record: any) => {
+        const v = record.isNodeOperation ?? record.is_node_operation ?? false;
+        return (
+          <Tag color={v ? 'processing' : 'default'}>{v ? '是' : '否'}</Tag>
+        );
+      },
+    },
+    {
       title: '启用状态',
       dataIndex: 'isActive',
       width: 100,

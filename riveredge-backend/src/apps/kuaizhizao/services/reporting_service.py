@@ -102,10 +102,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order_operation:
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
 
-            # 工序跳转规则校验（核心功能，新增）
-            # 优先使用工单级别的跳转控制，如果没有则使用工序级别的
-            allow_jump = work_order.allow_operation_jump if hasattr(work_order, 'allow_operation_jump') else work_order_operation.allow_jump
-            
+            # 根据报工类型验证数据（核心功能，新增）
+            reporting_type = work_order_operation.reporting_type or "quantity"
+
+            # 工序跳转规则：工单或工序任一方允许跳转则放宽；节点工序在允许跳转时仍不可跳过
+            from apps.kuaizhizao.services.operation_jump_rules import (
+                effective_allow_jump,
+                validate_reporting_respects_node_operations,
+            )
+
+            allow_jump = effective_allow_jump(work_order, work_order_operation)
+            reported_quantity_dec = Decimal(str(reporting_data.reported_quantity))
+
             if not allow_jump:
                 # 不允许跳转：检查前序工序的报工数量
                 previous_operations = await WorkOrderOperation.filter(
@@ -122,17 +130,21 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     # 检查前序工序的报工数量
                     previous_completed = Decimal(str(previous_operation.completed_quantity or 0))
                     current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
-                    reported_quantity = Decimal(str(reporting_data.reported_quantity))
-                    new_total = current_completed + reported_quantity
+                    new_total = current_completed + reported_quantity_dec
                     
                     # 下一道工序的报工数量不可超过上一道工序
                     if new_total > previous_completed:
                         raise BusinessLogicError(
                             f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过前序工序 '{previous_operation.operation_name}' 的报工数量（{previous_completed}）"
                         )
-
-            # 根据报工类型验证数据（核心功能，新增）
-            reporting_type = work_order_operation.reporting_type or "quantity"
+            else:
+                await validate_reporting_respects_node_operations(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                    work_order_operation=work_order_operation,
+                    reporting_type=reporting_type,
+                    reported_quantity=reported_quantity_dec,
+                )
             
             if reporting_type == "status":
                 # 按状态报工：不需要数量，只需要状态

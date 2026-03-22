@@ -137,6 +137,7 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "description": getattr(op, "description", None),
         "reporting_type": getattr(op, "reporting_type", "quantity"),
         "allow_jump": getattr(op, "allow_jump", False),
+        "is_node_operation": getattr(op, "is_node_operation", False),
         "is_active": getattr(op, "is_active", True),
         "created_at": op.created_at,
         "updated_at": op.updated_at,
@@ -555,6 +556,7 @@ class ProcessService:
             reporting_type = getattr(data, "reporting_type", None) or getattr(data, "reportingType", None) or "quantity"
             existing_deleted.reporting_type = reporting_type
             existing_deleted.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
+            existing_deleted.is_node_operation = getattr(data, "is_node_operation", None) or getattr(data, "isNodeOperation", None) or False
             existing_deleted.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
             existing_deleted.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
             existing_deleted.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
@@ -578,6 +580,9 @@ class ProcessService:
         if "allow_jump" not in create_data or create_data.get("allow_jump") is None:
             allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None)
             create_data["allow_jump"] = allow_jump if allow_jump is not None else False
+        if "is_node_operation" not in create_data or create_data.get("is_node_operation") is None:
+            is_node = getattr(data, "is_node_operation", None) or getattr(data, "isNodeOperation", None)
+            create_data["is_node_operation"] = is_node if is_node is not None else False
         if "is_active" not in create_data or create_data.get("is_active") is None:
             is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None)
             create_data["is_active"] = is_active if is_active is not None else True
@@ -605,6 +610,7 @@ class ProcessService:
                     reporting_type = getattr(data, "reporting_type", None) or getattr(data, "reportingType", None) or "quantity"
                     retry.reporting_type = reporting_type
                     retry.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
+                    retry.is_node_operation = getattr(data, "is_node_operation", None) or getattr(data, "isNodeOperation", None) or False
                     retry.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
                     retry.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
                     retry.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
@@ -846,6 +852,7 @@ class ProcessService:
                         name=item["name"],
                         reporting_type="quantity",
                         allow_jump=False,
+                        is_node_operation=False,
                         is_active=True,
                     )
                     created += 1
