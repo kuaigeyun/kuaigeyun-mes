@@ -689,7 +689,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             from datetime import timedelta
                             planned_end_date = planned_start_date + timedelta(hours=1)
                         
-                        # 创建工序单（报工类型、跳转、节点自工序档案）
+                        # 创建工序单（开单传入则覆盖工序档案上的报工类型、跳转、节点）
+                        rt = getattr(op_data, "reporting_type", None)
+                        if rt is None:
+                            rt = operation.reporting_type or "quantity"
+                        aj = getattr(op_data, "allow_jump", None)
+                        if aj is None:
+                            aj = bool(getattr(operation, "allow_jump", False))
+                        else:
+                            aj = bool(aj)
+                        ino = getattr(op_data, "is_node_operation", None)
+                        if ino is None:
+                            ino = bool(getattr(operation, "is_node_operation", False))
+                        else:
+                            ino = bool(ino)
+
                         work_order_op = await WorkOrderOperation.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
@@ -708,9 +722,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             standard_time=op_data.standard_time,
                             setup_time=op_data.setup_time,
                             remarks=op_data.remarks,
-                            reporting_type=operation.reporting_type or "quantity",
-                            allow_jump=bool(getattr(operation, "allow_jump", False)),
-                            is_node_operation=bool(getattr(operation, "is_node_operation", False)),
+                            reporting_type=rt,
+                            allow_jump=aj,
+                            is_node_operation=ino,
                             status='pending',
                             created_by=created_by,
                             created_by_name=user_info["name"],
@@ -1926,16 +1940,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     existing_op.standard_time = op_data.standard_time
                     existing_op.setup_time = op_data.setup_time
                     existing_op.remarks = op_data.remarks
+                    master_op = None
                     if op_id_changed:
                         master_op = await Operation.get_or_none(
                             tenant_id=tenant_id,
                             id=op_data.operation_id,
                             deleted_at__isnull=True,
                         )
-                        if master_op:
-                            existing_op.reporting_type = master_op.reporting_type or "quantity"
-                            existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
-                            existing_op.is_node_operation = bool(getattr(master_op, "is_node_operation", False))
+                    if getattr(op_data, "reporting_type", None) is not None:
+                        existing_op.reporting_type = op_data.reporting_type or "quantity"
+                    elif op_id_changed and master_op:
+                        existing_op.reporting_type = master_op.reporting_type or "quantity"
+                    if getattr(op_data, "allow_jump", None) is not None:
+                        existing_op.allow_jump = bool(op_data.allow_jump)
+                    elif op_id_changed and master_op:
+                        existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
+                    if getattr(op_data, "is_node_operation", None) is not None:
+                        existing_op.is_node_operation = bool(op_data.is_node_operation)
+                    elif op_id_changed and master_op:
+                        existing_op.is_node_operation = bool(getattr(master_op, "is_node_operation", False))
                     existing_op.updated_by = updated_by
                     existing_op.updated_by_name = user_info["name"]
                     await existing_op.save()
@@ -1947,13 +1970,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         id=op_data.operation_id,
                         deleted_at__isnull=True,
                     )
-                    reporting_type = "quantity"
-                    allow_jump_new = False
-                    is_node_new = False
-                    if master_op:
-                        reporting_type = master_op.reporting_type or "quantity"
-                        allow_jump_new = bool(getattr(master_op, "allow_jump", False))
-                        is_node_new = bool(getattr(master_op, "is_node_operation", False))
+                    reporting_type = op_data.reporting_type if getattr(op_data, "reporting_type", None) is not None else None
+                    if reporting_type is None:
+                        reporting_type = (master_op.reporting_type or "quantity") if master_op else "quantity"
+                    allow_jump_new = op_data.allow_jump if getattr(op_data, "allow_jump", None) is not None else None
+                    if allow_jump_new is None:
+                        allow_jump_new = bool(getattr(master_op, "allow_jump", False)) if master_op else False
+                    else:
+                        allow_jump_new = bool(allow_jump_new)
+                    is_node_new = op_data.is_node_operation if getattr(op_data, "is_node_operation", None) is not None else None
+                    if is_node_new is None:
+                        is_node_new = bool(getattr(master_op, "is_node_operation", False)) if master_op else False
+                    else:
+                        is_node_new = bool(is_node_new)
                     new_op = await WorkOrderOperation.create(
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),

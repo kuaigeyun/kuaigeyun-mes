@@ -130,6 +130,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     onChange?.(newOperations);
   };
 
+  const toggleAllowJump = (uuid: string, checked: boolean) => {
+    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, allowJump: checked } : op));
+    setOperations(newOperations);
+    onChange?.(newOperations);
+  };
+
   const handleOpenReplaceModal = (uuid: string) => {
     setReplacingOperationUuid(uuid);
     setReplacementOperationUuid(undefined);
@@ -225,7 +231,11 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       key: 'allowJump',
       width: 100,
       render: (_: any, record: OperationItem) => (
-        <Tag color={record.allowJump ? 'success' : 'default'}>{record.allowJump ? t('app.master-data.operationSequence.allowJumpYes') : t('app.master-data.operationSequence.allowJumpNo')}</Tag>
+        <Switch
+          size="small"
+          checked={!!record.allowJump}
+          onChange={(c) => toggleAllowJump(record.uuid, c)}
+        />
       ),
     },
     {
@@ -368,8 +378,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                       {op.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : op.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
                                     </Tag>
                                   </td>
-                                  <td>
-                                    <Tag color={op.allowJump ? 'success' : 'default'}>{op.allowJump ? t('app.master-data.operationSequence.allowJumpYes') : t('app.master-data.operationSequence.allowJumpNo')}</Tag>
+                                  <td onClick={(e) => e.stopPropagation()}>
+                                    <Switch
+                                      size="small"
+                                      checked={!!op.allowJump}
+                                      onChange={(c) => toggleAllowJump(op.uuid, c)}
+                                    />
                                   </td>
                                   <td onClick={(e) => e.stopPropagation()}>
                                     <Switch

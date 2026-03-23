@@ -53,6 +53,7 @@ import {
   Empty,
   Dropdown,
   List,
+  Switch,
 } from 'antd'
 import {
   PlusOutlined,
@@ -516,6 +517,9 @@ const WorkOrdersPage: React.FC = () => {
     operation_code: string
     operation_name: string
     sequence: number
+    allow_jump: boolean
+    is_node_operation: boolean
+    reporting_type: string
   }[] => {
     if (!seq || opList.length === 0) return []
     let items: any[] = []
@@ -546,6 +550,9 @@ const WorkOrdersPage: React.FC = () => {
       operation_code: string
       operation_name: string
       sequence: number
+      allow_jump: boolean
+      is_node_operation: boolean
+      reporting_type: string
     }[] = []
     items.forEach((item: any, index: number) => {
       let op: any = null
@@ -561,11 +568,32 @@ const WorkOrdersPage: React.FC = () => {
         )
       }
       if (op) {
+        const allowJump =
+          item.allowJump ??
+          item.allow_jump ??
+          op.allowJump ??
+          (op as any).allow_jump ??
+          false
+        const isNode =
+          item.isNodeOperation ??
+          item.is_node_operation ??
+          op.isNodeOperation ??
+          (op as any).is_node_operation ??
+          false
+        const reportingType =
+          item.reportingType ??
+          item.reporting_type ??
+          op.reportingType ??
+          (op as any).reporting_type ??
+          'quantity'
         result.push({
           operation_id: op.id,
           operation_code: op.code ?? op.mainCode ?? '',
           operation_name: op.name ?? '',
           sequence: item.sequence ?? item._idx ?? index + 1,
+          allow_jump: Boolean(allowJump),
+          is_node_operation: Boolean(isNode),
+          reporting_type: reportingType === 'status' ? 'status' : 'quantity',
         })
       }
     })
@@ -630,6 +658,18 @@ const WorkOrdersPage: React.FC = () => {
           operation_code: op.operation_code || op.operationCode,
           operation_name: op.operation_name || op.operationName,
           sequence: op.sequence ?? 0,
+          allow_jump: op.allow_jump ?? op.allowJump ?? false,
+          is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
+          reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
+          workshop_id: op.workshop_id,
+          workshop_name: op.workshop_name,
+          work_center_id: op.work_center_id,
+          work_center_name: op.work_center_name,
+          planned_start_date: op.planned_start_date,
+          planned_end_date: op.planned_end_date,
+          standard_time: op.standard_time,
+          setup_time: op.setup_time,
+          remarks: op.remarks,
         }))
         setSelectedOperations(ops)
       } catch (e) {
@@ -1466,15 +1506,26 @@ const WorkOrdersPage: React.FC = () => {
             operation_code: operationDetail.code,
             operation_name: operationDetail.name,
             sequence: index + 1,
+            reporting_type:
+              operationDetail.reportingType ?? (operationDetail as any).reporting_type ?? 'quantity',
+            allow_jump:
+              operationDetail.allowJump ?? (operationDetail as any).allow_jump ?? false,
+            is_node_operation:
+              operationDetail.isNodeOperation ??
+              (operationDetail as any).is_node_operation ??
+              false,
           }
         })
       } else if (selectedOperations.length > 0) {
-        // 使用从工艺路线加载的工序
-        values.operations = selectedOperations.map((op: any) => ({
+        // 使用从工艺路线加载或用户在工单上调整后的工序（含允许跳转、节点）
+        values.operations = selectedOperations.map((op: any, i: number) => ({
           operation_id: op.operation_id,
           operation_code: op.operation_code,
           operation_name: op.operation_name,
-          sequence: op.sequence,
+          sequence: op.sequence ?? i + 1,
+          reporting_type: op.reporting_type ?? 'quantity',
+          allow_jump: op.allow_jump ?? false,
+          is_node_operation: op.is_node_operation ?? false,
         }))
       } else {
         // 没有选择工序，删除该字段，让后端自动匹配
@@ -1511,6 +1562,36 @@ const WorkOrdersPage: React.FC = () => {
 
       if (isEdit && currentWorkOrder?.id) {
         await workOrderApi.update(currentWorkOrder.id.toString(), values)
+        if (selectedOperations.length > 0) {
+          const opsPayload = selectedOperations.map((op: any, i: number) => ({
+            operation_id: op.operation_id,
+            operation_code: op.operation_code,
+            operation_name: op.operation_name,
+            sequence: i + 1,
+            workshop_id: op.workshop_id,
+            workshop_name: op.workshop_name,
+            work_center_id: op.work_center_id,
+            work_center_name: op.work_center_name,
+            planned_start_date: op.planned_start_date,
+            planned_end_date: op.planned_end_date,
+            standard_time: op.standard_time,
+            setup_time: op.setup_time,
+            remarks: op.remarks,
+            reporting_type: op.reporting_type ?? 'quantity',
+            allow_jump: op.allow_jump ?? false,
+            is_node_operation: op.is_node_operation ?? false,
+          }))
+          try {
+            await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
+              operations: opsPayload,
+            })
+          } catch (e: any) {
+            messageApi.warning(
+              e?.message ||
+                '工单主信息已保存，但工序清单同步失败（可能已有报工的工序不可改）'
+            )
+          }
+        }
         messageApi.success('工单更新成功')
       } else {
         await workOrderApi.create(values)
@@ -3678,7 +3759,10 @@ const WorkOrdersPage: React.FC = () => {
             setSelectedOperations={setSelectedOperations}
             operationList={operationList}
             formRef={formRef}
-            disabled={isEdit}
+            disabled={
+              isEdit &&
+              ['completed', 'cancelled'].includes(String(currentWorkOrder?.status || ''))
+            }
           />
           </div>
         </Form.Item>
@@ -4966,6 +5050,12 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     formRef.current?.setFieldsValue({ operations: ops.map((o: any) => o.operation_id) })
   }
 
+  const patchOperation = (index: number, patch: Record<string, any>) => {
+    const next = selectedOperations.map((o, i) => (i === index ? { ...o, ...patch } : o))
+    setSelectedOperations(next)
+    syncToForm(next)
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -4997,6 +5087,9 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
       operation_code: op.code,
       operation_name: op.name,
       sequence: index + 1,
+      allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
+      is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+      reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
     }
     setSelectedOperations(next)
     syncToForm(next)
@@ -5015,6 +5108,9 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         operation_code: op.code,
         operation_name: op.name,
         sequence: selectedOperations.length + 1,
+        allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
+        is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+        reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
       },
     ]
     setSelectedOperations(next)
@@ -5144,6 +5240,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
                         disabled={disabled}
                         onRemove={() => handleRemove(idx)}
                         onReplace={id => handleReplace(idx, id)}
+                        onPatch={patch => patchOperation(idx, patch)}
                         operationList={operationList}
                         getOpDetail={getOpDetail}
                       />
@@ -5188,9 +5285,10 @@ const CreateWorkOrderTableRow: React.FC<{
   disabled?: boolean
   onRemove: () => void
   onReplace: (newOpId: number) => void
+  onPatch: (patch: Record<string, any>) => void
   operationList: any[]
   getOpDetail: (id: number) => any
-}> = ({ op, index, disabled, onRemove, onReplace, operationList, getOpDetail }) => {
+}> = ({ op, index, disabled, onRemove, onReplace, onPatch, operationList, getOpDetail }) => {
   const id = `op-${index}`
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -5252,50 +5350,79 @@ const CreateWorkOrderTableRow: React.FC<{
         </div>
       </td>
       <td>
-        <Tag
-          color={
-            (getOpDetail(op.operation_id)?.reportingType ||
-              getOpDetail(op.operation_id)?.reporting_type) === 'quantity'
-              ? 'blue'
-              : 'green'
-          }
-        >
-          {(getOpDetail(op.operation_id)?.reportingType ||
-            getOpDetail(op.operation_id)?.reporting_type) === 'quantity'
-            ? '按数量报工'
-            : (getOpDetail(op.operation_id)?.reportingType ||
-                  getOpDetail(op.operation_id)?.reporting_type) === 'status'
-              ? '按状态报工'
-              : '-'}
-        </Tag>
+        {(() => {
+          const rt =
+            op.reporting_type ??
+            getOpDetail(op.operation_id)?.reportingType ??
+            getOpDetail(op.operation_id)?.reporting_type
+          return (
+            <Tag color={rt === 'quantity' ? 'blue' : 'green'}>
+              {rt === 'quantity' ? '按数量报工' : rt === 'status' ? '按状态报工' : '-'}
+            </Tag>
+          )
+        })()}
       </td>
-      <td>
-        <Tag
-          color={
-            (getOpDetail(op.operation_id)?.allowJump ?? getOpDetail(op.operation_id)?.allow_jump)
-              ? 'success'
-              : 'default'
-          }
-        >
-          {(getOpDetail(op.operation_id)?.allowJump ?? getOpDetail(op.operation_id)?.allow_jump)
-            ? '允许'
-            : '不允许'}
-        </Tag>
+      <td onClick={e => e.stopPropagation()}>
+        {!disabled ? (
+          <Switch
+            size="small"
+            checked={
+              !!(
+                op.allow_jump ??
+                getOpDetail(op.operation_id)?.allowJump ??
+                getOpDetail(op.operation_id)?.allow_jump
+              )
+            }
+            onChange={c => onPatch({ allow_jump: c })}
+          />
+        ) : (
+          <Tag
+            color={
+              (op.allow_jump ??
+                getOpDetail(op.operation_id)?.allowJump ??
+                getOpDetail(op.operation_id)?.allow_jump)
+                ? 'success'
+                : 'default'
+            }
+          >
+            {(op.allow_jump ??
+              getOpDetail(op.operation_id)?.allowJump ??
+              getOpDetail(op.operation_id)?.allow_jump)
+              ? '允许'
+              : '不允许'}
+          </Tag>
+        )}
       </td>
-      <td>
-        <Tag
-          color={
-            (getOpDetail(op.operation_id)?.isNodeOperation ??
+      <td onClick={e => e.stopPropagation()}>
+        {!disabled ? (
+          <Switch
+            size="small"
+            checked={
+              !!(
+                op.is_node_operation ??
+                getOpDetail(op.operation_id)?.isNodeOperation ??
+                getOpDetail(op.operation_id)?.is_node_operation
+              )
+            }
+            onChange={c => onPatch({ is_node_operation: c })}
+          />
+        ) : (
+          <Tag
+            color={
+              (op.is_node_operation ??
+                getOpDetail(op.operation_id)?.isNodeOperation ??
+                getOpDetail(op.operation_id)?.is_node_operation)
+                ? 'processing'
+                : 'default'
+            }
+          >
+            {(op.is_node_operation ??
+              getOpDetail(op.operation_id)?.isNodeOperation ??
               getOpDetail(op.operation_id)?.is_node_operation)
-              ? 'processing'
-              : 'default'
-          }
-        >
-          {(getOpDetail(op.operation_id)?.isNodeOperation ??
-            getOpDetail(op.operation_id)?.is_node_operation)
-            ? '是'
-            : '否'}
-        </Tag>
+              ? '是'
+              : '否'}
+          </Tag>
+        )}
       </td>
       <td onClick={e => e.stopPropagation()}>
         <Space>

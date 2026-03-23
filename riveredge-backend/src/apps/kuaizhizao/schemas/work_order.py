@@ -289,8 +289,13 @@ class WorkOrderOperationDispatch(BaseModel):
 
 
 class WorkOrderOperationCreate(WorkOrderOperationBase):
-    """创建工单工序Schema"""
-    pass
+    """创建工单工序Schema（开单时可覆盖主数据/工艺路线上的报工类型、允许跳转、节点工序）"""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    reporting_type: Optional[str] = Field(None, alias="reportingType", description="报工类型（未传则用工序档案）")
+    allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（未传则用工序档案）")
+    is_node_operation: Optional[bool] = Field(None, alias="isNodeOperation", description="是否节点工序（未传则用工序档案）")
 
 
 class WorkOrderOperationUpdate(BaseModel):
