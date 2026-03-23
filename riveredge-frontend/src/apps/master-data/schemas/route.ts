@@ -37,4 +37,24 @@ export const routeFormSchema: FieldConfig[] = [
     labelKey: 'field.route.isActive',
     colSpan: 12,
   },
+  {
+    name: 'overReportMode',
+    type: 'select',
+    labelKey: 'field.route.overReportMode',
+    colSpan: 12,
+    options: [
+      { labelKey: 'field.operation.overReportModeNone', value: 'none' },
+      { labelKey: 'field.operation.overReportModeFixed', value: 'fixed' },
+      { labelKey: 'field.operation.overReportModePercent', value: 'percent' },
+    ],
+  },
+  {
+    name: 'overReportValue',
+    type: 'number',
+    labelKey: 'field.route.overReportValue',
+    placeholderKey: 'field.operation.overReportValuePlaceholder',
+    colSpan: 12,
+    fieldProps: { min: 0, precision: 4, style: { width: '100%' } },
+    extraKey: 'field.route.overReportValueExtra',
+  },
 ];

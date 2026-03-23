@@ -180,6 +180,19 @@ class Material(BaseModel):
     # 默认值设置（JSON格式存储）
     defaults = fields.JSONField(null=True, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
+    # 超报（相对工单计划数量，允许多报）
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
+    )
+
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
     inspection_mode = fields.CharField(
         max_length=20,

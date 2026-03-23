@@ -66,6 +66,26 @@ export const operationFormSchema: FieldConfig[] = [
     extraAsTooltip: true,
   },
   {
+    name: 'overReportMode',
+    type: 'select',
+    labelKey: 'field.operation.overReportMode',
+    colSpan: 12,
+    options: [
+      { labelKey: 'field.operation.overReportModeNone', value: 'none' },
+      { labelKey: 'field.operation.overReportModeFixed', value: 'fixed' },
+      { labelKey: 'field.operation.overReportModePercent', value: 'percent' },
+    ],
+  },
+  {
+    name: 'overReportValue',
+    type: 'number',
+    labelKey: 'field.operation.overReportValue',
+    placeholderKey: 'field.operation.overReportValuePlaceholder',
+    colSpan: 12,
+    fieldProps: { min: 0, precision: 4, style: { width: '100%' } },
+    extraKey: 'field.operation.overReportValueExtra',
+  },
+  {
     name: 'description',
     type: 'textarea',
     labelKey: 'field.operation.description',

@@ -86,6 +86,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       reportingType: 'quantity',
       allowJump: false,
       isNodeOperation: false,
+      overReportMode: 'none',
+      overReportValue: 0,
       inspectionMode: 'simple',
     });
     loadFormOptions();
@@ -93,7 +95,14 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     if (!editUuid) {
       let ruleCode: string | undefined;
       let autoGenerate = false;
-      const initValues = { isActive: true, reportingType: 'quantity', allowJump: false, isNodeOperation: false };
+      const initValues = {
+        isActive: true,
+        reportingType: 'quantity',
+        allowJump: false,
+        isNodeOperation: false,
+        overReportMode: 'none',
+        overReportValue: 0,
+      };
       (async () => {
         try {
           const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
@@ -146,6 +155,8 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           reportingType: detail.reportingType || 'quantity',
           allowJump: detail.allowJump ?? false,
           isNodeOperation: detail.isNodeOperation ?? (detail as any).is_node_operation ?? false,
+          overReportMode: detail.overReportMode ?? (detail as any).over_report_mode ?? 'none',
+          overReportValue: Number(detail.overReportValue ?? (detail as any).over_report_value ?? 0) || 0,
           isActive: detail.isActive ?? true,
           inspectionMode: detail.inspectionMode ?? detail.inspection_mode ?? 'simple',
           defaultInspectionPlanId: detail.defaultInspectionPlanId ?? detail.default_inspection_plan_id ?? undefined,

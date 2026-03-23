@@ -19,7 +19,7 @@ class WorkOrderBase(BaseModel):
 
     包含所有工单的基本字段。
     """
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     code: Optional[str] = Field(None, description="工单编码（必填，可通过编码规则自动生成）")
     name: Optional[str] = Field(None, description="工单名称（可选）")
@@ -49,6 +49,10 @@ class WorkOrderBase(BaseModel):
     
     # 工序跳转控制
     allow_operation_jump: bool = Field(False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
+
+    # 超报（工单头默认，工序行可覆盖）
+    over_report_mode: str = Field("none", alias="overReportMode", description="超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值：fixed 为额外数量，percent 为百分数")
     
     # 冻结信息
     is_frozen: bool = Field(False, description="是否冻结")
@@ -145,6 +149,8 @@ class WorkOrderUpdate(BaseModel):
     unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
 
 
 class WorkOrderResponse(WorkOrderBase):
@@ -296,6 +302,8 @@ class WorkOrderOperationCreate(WorkOrderOperationBase):
     reporting_type: Optional[str] = Field(None, alias="reportingType", description="报工类型（未传则用工序档案）")
     allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（未传则用工序档案）")
     is_node_operation: Optional[bool] = Field(None, alias="isNodeOperation", description="是否节点工序（未传则用工序档案）")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式（未传则按继承链合并）")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
 
 
 class WorkOrderOperationUpdate(BaseModel):
@@ -324,6 +332,8 @@ class DefectTypeMinimal(BaseModel):
 
 class WorkOrderOperationResponse(WorkOrderOperationBase):
     """工单工序响应Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
     id: int = Field(..., description="工单工序ID")
     uuid: str = Field(..., description="业务UUID")
     tenant_id: int = Field(..., description="租户ID")
@@ -356,6 +366,13 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     reporting_type: str = Field("quantity", description="报工类型（quantity/status）")
     allow_jump: bool = Field(False, description="是否允许跳转工序")
     is_node_operation: bool = Field(False, description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    over_report_mode: str = Field("none", alias="overReportMode", description="超报模式（none/fixed/percent）")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值")
+    max_reportable_quantity: Decimal = Field(
+        ...,
+        alias="maxReportableQuantity",
+        description="本道工序允许的最大累计完成数量（含超报，相对当前工单计划数量计算）",
+    )
     
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography, Switch } from 'antd';
+import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography, Switch, InputNumber } from 'antd';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
@@ -24,6 +24,9 @@ export interface OperationItem {
   allowJump?: boolean;
   /** 节点工序：允许跳转时仍不可跳过 */
   isNodeOperation?: boolean;
+  /** 工序级超报（写入路线 JSON；none+0 可不提交键以继承路线默认） */
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
 }
 
 export interface OperationSequenceEditorProps {
@@ -109,6 +112,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       reportingType: (op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
       allowJump: op.allowJump ?? (op as any).allow_jump ?? false,
       isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+      overReportMode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
+      overReportValue: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
     }));
     const updated = [...operations, ...newItems];
     setOperations(updated);
@@ -132,6 +137,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const toggleAllowJump = (uuid: string, checked: boolean) => {
     const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, allowJump: checked } : op));
+    setOperations(newOperations);
+    onChange?.(newOperations);
+  };
+
+  const patchOverReport = (uuid: string, patch: Partial<Pick<OperationItem, 'overReportMode' | 'overReportValue'>>) => {
+    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op));
     setOperations(newOperations);
     onChange?.(newOperations);
   };
@@ -170,6 +181,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       reportingType: (replacement.reportingType ?? (replacement as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
       allowJump: replacement.allowJump ?? (replacement as any).allow_jump ?? false,
       isNodeOperation: replacement.isNodeOperation ?? (replacement as any).is_node_operation ?? false,
+      overReportMode: (replacement as any).overReportMode ?? (replacement as any).over_report_mode ?? 'none',
+      overReportValue: Number((replacement as any).overReportValue ?? (replacement as any).over_report_value ?? 0) || 0,
     };
     setOperations(newOperations);
     onChange?.(newOperations);
@@ -248,6 +261,33 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           checked={!!record.isNodeOperation}
           onChange={(c) => toggleNodeOperation(record.uuid, c)}
         />
+      ),
+    },
+    {
+      title: t('app.master-data.operationSequence.overReport'),
+      key: 'overReport',
+      width: 150,
+      render: (_: any, record: OperationItem) => (
+        <Space direction="vertical" size={2} onClick={(e) => e.stopPropagation()}>
+          <Select
+            size="small"
+            style={{ width: 108 }}
+            value={record.overReportMode ?? 'none'}
+            options={[
+              { label: t('field.operation.overReportModeNone'), value: 'none' },
+              { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+              { label: t('field.operation.overReportModePercent'), value: 'percent' },
+            ]}
+            onChange={(v) => patchOverReport(record.uuid, { overReportMode: v as OperationItem['overReportMode'] })}
+          />
+          <InputNumber
+            size="small"
+            min={0}
+            style={{ width: 108 }}
+            value={record.overReportValue ?? 0}
+            onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
+          />
+        </Space>
       ),
     },
     {
@@ -351,7 +391,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                               <React.Fragment key={op.uuid}>
                                 {isInsertBefore && (
                                   <tr>
-                                    <td colSpan={6} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={7} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -393,6 +433,28 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                     />
                                   </td>
                                   <td onClick={(e) => e.stopPropagation()}>
+                                    <Space direction="vertical" size={2}>
+                                      <Select
+                                        size="small"
+                                        style={{ width: 108 }}
+                                        value={op.overReportMode ?? 'none'}
+                                        options={[
+                                          { label: t('field.operation.overReportModeNone'), value: 'none' },
+                                          { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                                          { label: t('field.operation.overReportModePercent'), value: 'percent' },
+                                        ]}
+                                        onChange={(v) => patchOverReport(op.uuid, { overReportMode: v as OperationItem['overReportMode'] })}
+                                      />
+                                      <InputNumber
+                                        size="small"
+                                        min={0}
+                                        style={{ width: 108 }}
+                                        value={op.overReportValue ?? 0}
+                                        onChange={(v) => patchOverReport(op.uuid, { overReportValue: v ?? 0 })}
+                                      />
+                                    </Space>
+                                  </td>
+                                  <td onClick={(e) => e.stopPropagation()}>
                                     <Space>
                                       <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); handleOpenReplaceModal(op.uuid); }}>{t('app.master-data.operationSequence.replace')}</Button>
                                       <Button type="link" danger size="small" onClick={(e) => { e.stopPropagation(); handleDeleteOperation(op.uuid); }}>{t('app.master-data.operationSequence.delete')}</Button>
@@ -401,7 +463,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                 </DraggableRow>
                                 {isInsertAfter && (
                                   <tr>
-                                    <td colSpan={6} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                    <td colSpan={7} style={{ padding: 0, height: 0, lineHeight: 0 }}>
                                       <div style={{ height: 2, backgroundColor: '#1890ff', margin: 0, boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)' }} />
                                     </td>
                                   </tr>
@@ -415,7 +477,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   },
                 }}
                 style={{ width: '100%' }}
-                scroll={{ x: 660 }}
+                scroll={{ x: 900 }}
                 locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noData')} /> }}
               />
             </div>

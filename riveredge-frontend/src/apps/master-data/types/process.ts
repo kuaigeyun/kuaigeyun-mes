@@ -65,6 +65,10 @@ export interface Operation {
   allowJump: boolean;
   /** 节点工序：允许跳转时前序节点仍不可跳过 */
   isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
   isActive: boolean;
   /** 允许绑定的不良品项（API 可能返回 defect_types） */
   defectTypes?: DefectTypeMinimal[];
@@ -94,6 +98,8 @@ export interface OperationCreate {
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
   isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
   isActive?: boolean;
   inspectionMode?: 'none' | 'simple' | 'plan';
   defaultInspectionPlanId?: number | null;
@@ -108,6 +114,8 @@ export interface OperationUpdate {
   reportingType?: 'quantity' | 'status';
   allowJump?: boolean;
   isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
   isActive?: boolean;
   inspectionMode?: 'none' | 'simple' | 'plan';
   defaultInspectionPlanId?: number | null;
@@ -137,6 +145,10 @@ export interface ProcessRoute {
   parentOperationUuid?: string; // 父工序UUID（此子工艺路线所属的父工序）
   level: number; // 嵌套层级（0为主工艺路线，1-3为子工艺路线）
   is_active: boolean;
+  over_report_mode?: string;
+  overReportMode?: string;
+  over_report_value?: number;
+  overReportValue?: number;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -148,6 +160,10 @@ export interface ProcessRouteCreate {
   description?: string;
   operationSequence?: Record<string, any>;
   isActive?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
 }
 
 export interface ProcessRouteUpdate {
@@ -156,6 +172,10 @@ export interface ProcessRouteUpdate {
   description?: string;
   operationSequence?: Record<string, any>;
   isActive?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
 }
 
 export interface ProcessRouteListParams {

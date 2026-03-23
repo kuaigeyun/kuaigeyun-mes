@@ -880,6 +880,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 质检选项
         inspection_mode: values.inspectionMode || 'none',
         default_inspection_plan_id: values.inspectionMode === 'plan' ? (values.defaultInspectionPlanId || null) : null,
+        over_report_mode: values.overReportMode || 'none',
+        over_report_value: values.overReportValue ?? 0,
       };
       
       // 移除 undefined 值
@@ -1271,6 +1273,23 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
           ) : null
         }
       </ProFormDependency>
+      <ProFormSelect
+        name="overReportMode"
+        label={t('field.operation.overReportMode')}
+        options={[
+          { label: t('field.operation.overReportModeNone'), value: 'none' },
+          { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+          { label: t('field.operation.overReportModePercent'), value: 'percent' },
+        ]}
+        fieldProps={{ style: { width: 280 } }}
+      />
+      <ProFormDigit
+        name="overReportValue"
+        label={t('field.operation.overReportValue')}
+        min={0}
+        fieldProps={{ precision: 4, style: { width: 280 } }}
+        extra={t('field.operation.overReportValueExtra')}
+      />
     </div>
   );
 };

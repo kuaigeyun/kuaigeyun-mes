@@ -17,6 +17,7 @@ import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import dayjs from 'dayjs';
+import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 
 const { TextArea } = Input;
 
@@ -38,6 +39,12 @@ interface Operation {
   operation_name?: string;
   sequence?: number;
   status?: string;
+  max_reportable_quantity?: number;
+  maxReportableQuantity?: number;
+  over_report_mode?: string;
+  overReportMode?: string;
+  over_report_value?: number;
+  overReportValue?: number;
   reporting_type?: 'quantity' | 'status';
   standard_time?: number;
   completed_quantity?: number;
@@ -187,7 +194,7 @@ const ReportingKioskPage: React.FC = () => {
 
     // 按数量报工时，自动填充完成数量
     if (operation.reporting_type === 'quantity' && workOrder.quantity) {
-      const remainingQuantity = workOrder.quantity - (operation.completed_quantity || 0);
+      const remainingQuantity = getRemainingReportableQuantity(operation, Number(workOrder.quantity) || 0);
       if (remainingQuantity > 0) {
         formValues.reported_quantity = remainingQuantity;
         formValues.qualified_quantity = remainingQuantity;
@@ -467,6 +474,11 @@ const ReportingKioskPage: React.FC = () => {
                       <InputNumber
                         size="large"
                         min={0}
+                        max={
+                          currentWorkOrder && currentOperation
+                            ? getRemainingReportableQuantity(currentOperation, Number(currentWorkOrder.quantity) || 0)
+                            : undefined
+                        }
                         precision={2}
                         style={{ width: '100%', height: 60, fontSize: 24 }}
                         placeholder="请输入完成数量"

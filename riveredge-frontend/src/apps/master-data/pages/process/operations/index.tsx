@@ -402,6 +402,19 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
+      title: '超报',
+      dataIndex: 'overReportMode',
+      width: 120,
+      hideInSearch: true,
+      render: (_: any, record: any) => {
+        const m = record.overReportMode ?? record.over_report_mode ?? 'none';
+        const v = Number(record.overReportValue ?? record.over_report_value ?? 0) || 0;
+        if (!m || m === 'none') return <Tag>—</Tag>;
+        const label = m === 'fixed' ? `+${v}` : `${v}%`;
+        return <Tag color="blue">{label}</Tag>;
+      },
+    },
+    {
       title: '启用状态',
       dataIndex: 'isActive',
       width: 100,

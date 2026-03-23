@@ -65,6 +65,14 @@ from apps.kuaizhizao.utils.material_source_helper import (
 from loguru import logger
 
 
+def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperation) -> Decimal:
+    from apps.kuaizhizao.services.over_report_rules import max_completed_quantity_for_plan, tuple_from_model
+
+    plan_qty = work_order.quantity or Decimal("0")
+    om, ov = tuple_from_model(op)
+    return max_completed_quantity_for_plan(plan_qty, om, ov)
+
+
 class WorkOrderService(AppBaseService[WorkOrder]):
     """
     工单服务类
@@ -297,6 +305,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ).all()
         
         operation_map = {op.id: op for op in operations}
+
+        from apps.kuaizhizao.services.over_report_rules import (
+            OVER_REPORT_NONE,
+            merge_over_report_layers,
+            tuple_from_model,
+            parse_over_report_from_extra,
+            extra_has_over_report_keys,
+        )
+
+        material_row = await Material.get_or_none(
+            id=work_order.product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        mat_t = tuple_from_model(material_row)
+        route_def_t = tuple_from_model(process_route)
+        wo_head_t = tuple_from_model(work_order)
         
         # 计算计划时间
         planned_start = work_order.planned_start_date or datetime.now()
@@ -337,6 +362,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 is_node = bool(getattr(operation, "is_node_operation", False))
             else:
                 is_node = bool(is_node)
+
+            step_explicit = extra_has_over_report_keys(extra_data)
+            step_t = parse_over_report_from_extra(extra_data)
+            line_t = (OVER_REPORT_NONE, Decimal("0"))
+            orm, orv = merge_over_report_layers(
+                mat_t,
+                tuple_from_model(operation),
+                route_def_t,
+                step_t,
+                step_explicit,
+                wo_head_t,
+                line_t,
+                False,
+            )
             
             # 计算计划时间
             # 准备时间
@@ -371,6 +410,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 reporting_type=reporting_type,
                 allow_jump=allow_jump,
                 is_node_operation=is_node,
+                over_report_mode=orm,
+                over_report_value=orv,
                 status='pending',
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -620,6 +661,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 variant_attributes=getattr(work_order_data, "variant_attributes", None),
                 configurable_selections=getattr(work_order_data, "configurable_selections", None),
                 remarks=work_order_data.remarks,
+                allow_operation_jump=getattr(work_order_data, "allow_operation_jump", False),
+                over_report_mode=getattr(work_order_data, "over_report_mode", None) or "none",
+                over_report_value=getattr(work_order_data, "over_report_value", None) or Decimal("0"),
                 created_by=created_by,
                 created_by_name=user_info["name"],
             )
@@ -655,6 +699,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     planned_start = work_order.planned_start_date or datetime.now()
                     current_time = planned_start
                     
+                    from apps.kuaizhizao.services.over_report_rules import (
+                        OVER_REPORT_NONE,
+                        merge_over_report_layers,
+                        tuple_from_model,
+                        normalize_over_report_mode,
+                        to_decimal,
+                    )
+
+                    mat_t = tuple_from_model(material)
+                    route_empty = (OVER_REPORT_NONE, Decimal("0"))
+                    wo_head_t = tuple_from_model(work_order)
+
                     for idx, op_data in enumerate(operations, 1):
                         # 验证工序是否存在
                         operation = await Operation.get_or_none(
@@ -704,6 +760,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         else:
                             ino = bool(ino)
 
+                        fs = getattr(op_data, "model_fields_set", set()) or set()
+                        line_explicit = bool(fs & {"over_report_mode", "over_report_value"})
+                        if line_explicit:
+                            line_t = (
+                                normalize_over_report_mode(getattr(op_data, "over_report_mode", None)),
+                                to_decimal(getattr(op_data, "over_report_value", None)),
+                            )
+                        else:
+                            line_t = (OVER_REPORT_NONE, Decimal("0"))
+                        orm, orv = merge_over_report_layers(
+                            mat_t,
+                            tuple_from_model(operation),
+                            route_empty,
+                            route_empty,
+                            False,
+                            wo_head_t,
+                            line_t,
+                            line_explicit,
+                        )
+
                         work_order_op = await WorkOrderOperation.create(
                             tenant_id=tenant_id,
                             uuid=str(uuid.uuid4()),
@@ -725,6 +801,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             reporting_type=rt,
                             allow_jump=aj,
                             is_node_operation=ino,
+                            over_report_mode=orm,
+                            over_report_value=orv,
                             status='pending',
                             created_by=created_by,
                             created_by_name=user_info["name"],
@@ -1843,6 +1921,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["sop_uuid"] = getattr(sop, "uuid", None)
                 op_data["sop_name"] = sop.name
 
+            op_data["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, op)
+
             prev_qualified = qualified
             result.append(WorkOrderOperationResponse.model_validate(op_data))
         return result
@@ -1907,6 +1987,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 获取更新人信息
             user_info = await self.get_user_info(updated_by)
 
+            from apps.kuaizhizao.services.over_report_rules import (
+                OVER_REPORT_NONE,
+                merge_over_report_layers,
+                tuple_from_model,
+                normalize_over_report_mode,
+                to_decimal,
+            )
+
+            material_row = await Material.get_or_none(
+                id=work_order.product_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            mat_t = tuple_from_model(material_row)
+            route_empty = (OVER_REPORT_NONE, Decimal("0"))
+            wo_head_t = tuple_from_model(work_order)
+
             # 构建新工序ID集合（用于判断哪些工序需要删除）
             new_operation_ids = {op.id for op in existing_operations if op.id not in reported_operation_ids}
             updated_operation_ids = set()
@@ -1959,6 +2056,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         existing_op.is_node_operation = bool(op_data.is_node_operation)
                     elif op_id_changed and master_op:
                         existing_op.is_node_operation = bool(getattr(master_op, "is_node_operation", False))
+                    fs_or = getattr(op_data, "model_fields_set", set()) or set()
+                    if fs_or & {"over_report_mode", "over_report_value"}:
+                        existing_op.over_report_mode = normalize_over_report_mode(
+                            getattr(op_data, "over_report_mode", None)
+                        )
+                        existing_op.over_report_value = to_decimal(getattr(op_data, "over_report_value", None))
+                    elif op_id_changed and master_op:
+                        orm, orv = merge_over_report_layers(
+                            mat_t,
+                            tuple_from_model(master_op),
+                            route_empty,
+                            route_empty,
+                            False,
+                            wo_head_t,
+                            (OVER_REPORT_NONE, Decimal("0")),
+                            False,
+                        )
+                        existing_op.over_report_mode = orm
+                        existing_op.over_report_value = orv
                     existing_op.updated_by = updated_by
                     existing_op.updated_by_name = user_info["name"]
                     await existing_op.save()
@@ -1983,6 +2099,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         is_node_new = bool(getattr(master_op, "is_node_operation", False)) if master_op else False
                     else:
                         is_node_new = bool(is_node_new)
+                    fs_new = getattr(op_data, "model_fields_set", set()) or set()
+                    line_explicit = bool(fs_new & {"over_report_mode", "over_report_value"})
+                    if line_explicit:
+                        line_t = (
+                            normalize_over_report_mode(getattr(op_data, "over_report_mode", None)),
+                            to_decimal(getattr(op_data, "over_report_value", None)),
+                        )
+                    else:
+                        line_t = (OVER_REPORT_NONE, Decimal("0"))
+                    orm, orv = merge_over_report_layers(
+                        mat_t,
+                        tuple_from_model(master_op),
+                        route_empty,
+                        route_empty,
+                        False,
+                        wo_head_t,
+                        line_t,
+                        line_explicit,
+                    )
                     new_op = await WorkOrderOperation.create(
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),
@@ -2003,6 +2138,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         reporting_type=reporting_type,
                         allow_jump=allow_jump_new,
                         is_node_operation=is_node_new,
+                        over_report_mode=orm,
+                        over_report_value=orv,
                         status='pending',
                         remarks=op_data.remarks,
                         created_by=updated_by,
@@ -2094,7 +2231,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             logger.info(f"工单 {work_order_operation.work_order_code} 的工序 {work_order_operation.operation_name} 已派工")
 
-            return WorkOrderOperationResponse.model_validate(work_order_operation)
+            wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=work_order_operation.work_order_id,
+                deleted_at__isnull=True,
+            )
+            if not wo:
+                raise NotFoundError("工单不存在")
+            op_payload = {
+                f: getattr(work_order_operation, f, None)
+                for f in WorkOrderOperationResponse.model_fields
+                if hasattr(work_order_operation, f)
+            }
+            op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(wo, work_order_operation)
+            return WorkOrderOperationResponse.model_validate(op_payload)
 
     async def start_work_order_operation(
         self,
@@ -2188,7 +2338,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order.updated_by_name = user_info["name"]
                 await work_order.save()
 
-            return WorkOrderOperationResponse.model_validate(work_order_operation)
+            op_payload = {
+                f: getattr(work_order_operation, f, None)
+                for f in WorkOrderOperationResponse.model_fields
+                if hasattr(work_order_operation, f)
+            }
+            op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, work_order_operation)
+            return WorkOrderOperationResponse.model_validate(op_payload)
 
     async def freeze_work_order(
         self,

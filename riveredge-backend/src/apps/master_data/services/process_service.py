@@ -138,6 +138,8 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "reporting_type": getattr(op, "reporting_type", "quantity"),
         "allow_jump": getattr(op, "allow_jump", False),
         "is_node_operation": getattr(op, "is_node_operation", False),
+        "over_report_mode": getattr(op, "over_report_mode", None) or "none",
+        "over_report_value": getattr(op, "over_report_value", None) or 0,
         "is_active": getattr(op, "is_active", True),
         "created_at": op.created_at,
         "updated_at": op.updated_at,
@@ -194,6 +196,8 @@ class ProcessService:
             "parent_operation_uuid": process_route.parent_operation_uuid,
             "level": process_route.level or 0,
             "is_active": process_route.is_active,
+            "over_report_mode": getattr(process_route, "over_report_mode", None) or "none",
+            "over_report_value": getattr(process_route, "over_report_value", None) or 0,
             "created_at": process_route.created_at,
             "updated_at": process_route.updated_at,
             "deleted_at": process_route.deleted_at,
@@ -557,6 +561,13 @@ class ProcessService:
             existing_deleted.reporting_type = reporting_type
             existing_deleted.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
             existing_deleted.is_node_operation = getattr(data, "is_node_operation", None) or getattr(data, "isNodeOperation", None) or False
+            existing_deleted.over_report_mode = (
+                getattr(data, "over_report_mode", None) or getattr(data, "overReportMode", None) or "none"
+            )
+            _orv = getattr(data, "over_report_value", None)
+            if _orv is None:
+                _orv = getattr(data, "overReportValue", None)
+            existing_deleted.over_report_value = _orv if _orv is not None else 0
             existing_deleted.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
             existing_deleted.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
             existing_deleted.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
@@ -611,6 +622,13 @@ class ProcessService:
                     retry.reporting_type = reporting_type
                     retry.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
                     retry.is_node_operation = getattr(data, "is_node_operation", None) or getattr(data, "isNodeOperation", None) or False
+                    retry.over_report_mode = (
+                        getattr(data, "over_report_mode", None) or getattr(data, "overReportMode", None) or "none"
+                    )
+                    _orv2 = getattr(data, "over_report_value", None)
+                    if _orv2 is None:
+                        _orv2 = getattr(data, "overReportValue", None)
+                    retry.over_report_value = _orv2 if _orv2 is not None else 0
                     retry.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
                     retry.inspection_mode = getattr(data, "inspection_mode", None) or getattr(data, "inspectionMode", None) or "none"
                     retry.default_inspection_plan_id = getattr(data, "default_inspection_plan_id", None) or getattr(data, "defaultInspectionPlanId", None)
@@ -1734,6 +1752,8 @@ class ProcessService:
             effective_date=data.effective_date or datetime.now(),
             operation_sequence=current_route.operation_sequence,
             is_active=current_route.is_active,
+            over_report_mode=getattr(current_route, "over_report_mode", None) or "none",
+            over_report_value=getattr(current_route, "over_report_value", None) or 0,
         )
         
         return await ProcessService._to_process_route_response(new_route)
@@ -1963,6 +1983,8 @@ class ProcessService:
             effective_date=datetime.now(),
             operation_sequence=target_route.operation_sequence,
             is_active=target_route.is_active,
+            over_report_mode=getattr(target_route, "over_report_mode", None) or "none",
+            over_report_value=getattr(target_route, "over_report_value", None) or 0,
         )
         
         return await ProcessService._to_process_route_response(new_route)

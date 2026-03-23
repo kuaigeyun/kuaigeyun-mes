@@ -166,6 +166,8 @@ interface WorkOrder {
   frozen_by?: number
   frozen_by_name?: string
   allow_operation_jump?: boolean
+  over_report_mode?: string
+  over_report_value?: number
   manually_completed?: boolean
   remarks?: string
   created_at?: string
@@ -520,6 +522,8 @@ const WorkOrdersPage: React.FC = () => {
     allow_jump: boolean
     is_node_operation: boolean
     reporting_type: string
+    over_report_mode: string
+    over_report_value: number
   }[] => {
     if (!seq || opList.length === 0) return []
     let items: any[] = []
@@ -553,6 +557,8 @@ const WorkOrdersPage: React.FC = () => {
       allow_jump: boolean
       is_node_operation: boolean
       reporting_type: string
+      over_report_mode: string
+      over_report_value: number
     }[] = []
     items.forEach((item: any, index: number) => {
       let op: any = null
@@ -586,6 +592,15 @@ const WorkOrdersPage: React.FC = () => {
           op.reportingType ??
           (op as any).reporting_type ??
           'quantity'
+        const orm =
+          item.overReportMode ??
+          item.over_report_mode ??
+          (op as any).overReportMode ??
+          (op as any).over_report_mode ??
+          'none'
+        const orv = Number(
+          item.overReportValue ?? item.over_report_value ?? (op as any).overReportValue ?? (op as any).over_report_value ?? 0
+        ) || 0
         result.push({
           operation_id: op.id,
           operation_code: op.code ?? op.mainCode ?? '',
@@ -594,6 +609,8 @@ const WorkOrdersPage: React.FC = () => {
           allow_jump: Boolean(allowJump),
           is_node_operation: Boolean(isNode),
           reporting_type: reportingType === 'status' ? 'status' : 'quantity',
+          over_report_mode: String(orm || 'none'),
+          over_report_value: orv,
         })
       }
     })
@@ -661,6 +678,8 @@ const WorkOrdersPage: React.FC = () => {
           allow_jump: op.allow_jump ?? op.allowJump ?? false,
           is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
           reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
+          over_report_mode: op.over_report_mode ?? op.overReportMode ?? 'none',
+          over_report_value: Number(op.over_report_value ?? op.overReportValue ?? 0) || 0,
           workshop_id: op.workshop_id,
           workshop_name: op.workshop_name,
           work_center_id: op.work_center_id,
@@ -705,6 +724,8 @@ const WorkOrdersPage: React.FC = () => {
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           allow_operation_jump: detail.allow_operation_jump ?? false,
+          over_report_mode: (detail as any).over_report_mode ?? (detail as any).overReportMode ?? 'none',
+          over_report_value: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
           remarks: detail.remarks,
           attachments: (detail as any).attachments || [],
         })
@@ -1514,6 +1535,12 @@ const WorkOrdersPage: React.FC = () => {
               operationDetail.isNodeOperation ??
               (operationDetail as any).is_node_operation ??
               false,
+            over_report_mode:
+              (operationDetail as any).overReportMode ??
+              (operationDetail as any).over_report_mode ??
+              'none',
+            over_report_value:
+              Number((operationDetail as any).overReportValue ?? (operationDetail as any).over_report_value ?? 0) || 0,
           }
         })
       } else if (selectedOperations.length > 0) {
@@ -1526,6 +1553,8 @@ const WorkOrdersPage: React.FC = () => {
           reporting_type: op.reporting_type ?? 'quantity',
           allow_jump: op.allow_jump ?? false,
           is_node_operation: op.is_node_operation ?? false,
+          over_report_mode: op.over_report_mode ?? 'none',
+          over_report_value: Number(op.over_report_value ?? 0) || 0,
         }))
       } else {
         // 没有选择工序，删除该字段，让后端自动匹配
@@ -1580,6 +1609,8 @@ const WorkOrdersPage: React.FC = () => {
             reporting_type: op.reporting_type ?? 'quantity',
             allow_jump: op.allow_jump ?? false,
             is_node_operation: op.is_node_operation ?? false,
+            over_report_mode: op.over_report_mode ?? 'none',
+            over_report_value: Number(op.over_report_value ?? 0) || 0,
           }))
           try {
             await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
@@ -3774,6 +3805,25 @@ const WorkOrdersPage: React.FC = () => {
           initialValue={false}
           colProps={{ span: 24 }}
         />
+        <ProFormSelect
+          name="over_report_mode"
+          label="工单默认超报"
+          colProps={{ span: 12 }}
+          options={[
+            { label: '不允许超报', value: 'none' },
+            { label: '固定多报数量', value: 'fixed' },
+            { label: '按计划比例(%)', value: 'percent' },
+          ]}
+          initialValue="none"
+        />
+        <ProFormDigit
+          name="over_report_value"
+          label="超报数值"
+          colProps={{ span: 12 }}
+          min={0}
+          fieldProps={{ precision: 4 }}
+          extra="固定模式为额外件数；比例模式为百分数。工序行可单独覆盖。"
+        />
         <ProFormUploadButton
           name="attachments"
           label="附件"
@@ -5090,6 +5140,8 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
       allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
       is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
       reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+      over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
+      over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
     }
     setSelectedOperations(next)
     syncToForm(next)
@@ -5111,6 +5163,8 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
         is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
         reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+        over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
+        over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
       },
     ]
     setSelectedOperations(next)
@@ -5193,6 +5247,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     { title: '报工类型', key: 'reportingType', width: 120 },
     { title: '允许跳转', key: 'allowJump', width: 100 },
     { title: '节点工序', key: 'isNodeOperation', width: 90 },
+    { title: '超报', key: 'overReport', width: 160 },
     { title: '操作', key: 'action', width: 150 },
   ]
 
@@ -5422,6 +5477,36 @@ const CreateWorkOrderTableRow: React.FC<{
               ? '是'
               : '否'}
           </Tag>
+        )}
+      </td>
+      <td onClick={e => e.stopPropagation()}>
+        {!disabled ? (
+          <Space direction="vertical" size={4} style={{ minWidth: 140 }}>
+            <Select
+              size="small"
+              style={{ width: 130 }}
+              value={op.over_report_mode ?? 'none'}
+              options={[
+                { label: '不超报', value: 'none' },
+                { label: '固定', value: 'fixed' },
+                { label: '比例%', value: 'percent' },
+              ]}
+              onChange={v => onPatch({ over_report_mode: v })}
+            />
+            <InputNumber
+              size="small"
+              min={0}
+              style={{ width: 130 }}
+              value={op.over_report_value ?? 0}
+              onChange={v => onPatch({ over_report_value: v ?? 0 })}
+            />
+          </Space>
+        ) : (
+          <span style={{ fontSize: 12 }}>
+            {(op.over_report_mode ?? 'none') === 'none'
+              ? '—'
+              : `${op.over_report_mode} ${op.over_report_value ?? 0}`}
+          </span>
         )}
       </td>
       <td onClick={e => e.stopPropagation()}>

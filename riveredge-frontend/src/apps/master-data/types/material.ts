@@ -115,6 +115,10 @@ export interface Material {
   defaultInspectionPlanId?: number | null;
   default_inspection_plan_id?: number | null;
   defaultInspectionPlanName?: string;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;

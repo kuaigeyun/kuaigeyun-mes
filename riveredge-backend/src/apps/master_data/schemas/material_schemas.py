@@ -134,6 +134,10 @@ class MaterialBase(BaseModel):
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
     inspection_mode: Optional[str] = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
     default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（方案质检时使用）")
+
+    # 超报（相对工单计划数量）
+    over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值：fixed 为额外数量，percent 为百分数")
     
     model_config = ConfigDict(
         populate_by_name=True,  # 允许同时使用字段名和别名
@@ -201,6 +205,8 @@ class MaterialUpdate(BaseModel):
     # 质检选项
     inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式（none/simple/plan）")
     default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
 
     model_config = ConfigDict(populate_by_name=True)
     

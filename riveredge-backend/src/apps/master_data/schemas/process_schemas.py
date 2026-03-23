@@ -7,6 +7,7 @@
 from pydantic import BaseModel, Field, field_validator, validator, ConfigDict, AliasChoices
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from decimal import Decimal
 
 
 class DefectTypeBase(BaseModel):
@@ -105,6 +106,8 @@ class OperationBase(BaseModel):
     reporting_type: str = Field("quantity", alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
     allow_jump: bool = Field(False, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
     is_node_operation: bool = Field(False, alias="isNodeOperation", description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值：fixed 为额外数量，percent 为百分数")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     inspection_mode: str = Field("none", alias="inspectionMode", max_length=20, description="质检模式（none:无质检, simple:简易质检, plan:方案质检）")
     default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（方案质检时使用）")
@@ -119,6 +122,16 @@ class OperationBase(BaseModel):
         if v not in allowed_types:
             raise ValueError(f"报工类型必须是: {', '.join(allowed_types)}")
         return v
+
+    @field_validator("over_report_mode")
+    @classmethod
+    def validate_over_report_mode(cls, v: str) -> str:
+        if not v:
+            return "none"
+        m = str(v).lower().strip()
+        if m not in ("none", "fixed", "percent"):
+            raise ValueError("超报模式必须是: none, fixed, percent")
+        return m
     
     @field_validator("code")
     @classmethod
@@ -153,6 +166,8 @@ class OperationUpdate(BaseModel):
     reporting_type: Optional[str] = Field(None, alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
     allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
     is_node_operation: Optional[bool] = Field(None, alias="isNodeOperation", description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
     defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
     default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
@@ -167,6 +182,16 @@ class OperationUpdate(BaseModel):
         if v is not None and v not in ("quantity", "status"):
             raise ValueError("报工类型必须是: quantity, status")
         return v
+
+    @field_validator("over_report_mode")
+    @classmethod
+    def validate_over_report_mode_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        m = str(v).lower().strip()
+        if m not in ("none", "fixed", "percent"):
+            raise ValueError("超报模式必须是: none, fixed, percent")
+        return m
     
     @field_validator("code")
     @classmethod
@@ -220,6 +245,8 @@ class ProcessRouteBase(BaseModel):
     parent_operation_uuid: Optional[str] = Field(None, max_length=100, description="父工序UUID（此子工艺路线所属的父工序）")
     level: int = Field(0, ge=0, le=3, description="嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）")
     is_active: bool = Field(True, description="是否启用")
+    over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="路线默认超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="路线默认超报值")
 
     class Config:
         populate_by_name = True
@@ -256,6 +283,8 @@ class ProcessRouteUpdate(BaseModel):
     effective_date: Optional[datetime] = Field(None, description="生效日期")
     operation_sequence: Optional[Dict[str, Any]] = Field(None, description="工序序列（JSON格式）")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="路线默认超报模式")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="路线默认超报值")
     
     @validator("code")
     def validate_code(cls, v):

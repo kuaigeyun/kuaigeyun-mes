@@ -1375,6 +1375,16 @@ const MaterialsManagementPage: React.FC = () => {
                   (currentMaterial as any).defaultInspectionPlanId ??
                   (currentMaterial as any).default_inspection_plan_id ??
                   undefined,
+                overReportMode:
+                  (currentMaterial as any).overReportMode ??
+                  (currentMaterial as any).over_report_mode ??
+                  'none',
+                overReportValue:
+                  Number(
+                    (currentMaterial as any).overReportValue ??
+                      (currentMaterial as any).over_report_value ??
+                      0
+                  ) || 0,
               }
             : {
                 groupId: selectedGroupId || undefined,
@@ -1385,6 +1395,8 @@ const MaterialsManagementPage: React.FC = () => {
                 sourceType: undefined,
                 baseUnit: 'PC', // 默认值：件
                 inspectionMode: 'none',
+                overReportMode: 'none',
+                overReportValue: 0,
               }
         }
       />

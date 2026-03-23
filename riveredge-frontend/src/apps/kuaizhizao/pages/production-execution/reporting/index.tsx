@@ -21,6 +21,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import { sopApi } from '../../../../master-data/services/process';
 import { getUserInfo } from '../../../../../utils/auth';
 import { usePageMetrics } from '../../../../../hooks/usePageMetrics';
+import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 
 /** 报工记录（后端返回 snake_case） */
 interface ReportingRecord {
@@ -290,7 +291,7 @@ const SubOperationReportingForm: React.FC<{
             min={0}
             fieldProps={{
               precision: 2,
-              max: workOrder.quantity - (subOperation.completed_quantity || 0),
+              max: getRemainingReportableQuantity(subOperation, Number(workOrder.quantity) || 0),
             }}
             extra="完成数量必须大于0"
           />
@@ -636,7 +637,7 @@ const ReportingPage: React.FC = () => {
               }
               // 按数量报工时，自动填充完成数量（默认等于工单数量）
               if (operation.reporting_type === 'quantity' && wo) {
-                const remainingQuantity = parseFloat(wo.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
+                const remainingQuantity = getRemainingReportableQuantity(operation, parseFloat(wo.quantity.toString()) || 0);
                 if (remainingQuantity > 0) {
                   autoFillValues.reported_quantity = remainingQuantity;
                   // 默认合格数量等于完成数量
@@ -963,7 +964,7 @@ const ReportingPage: React.FC = () => {
       autoFillValues.work_hours = parseFloat(operation.standard_time.toString()) * parseFloat(workOrder.quantity?.toString() || '1');
     }
     if (operation.reporting_type === 'quantity') {
-      const remaining = parseFloat(workOrder.quantity?.toString() || '0') - parseFloat(operation.completed_quantity?.toString() || '0');
+      const remaining = getRemainingReportableQuantity(operation, parseFloat(workOrder.quantity?.toString() || '0') || 0);
       if (remaining > 0) {
         autoFillValues.reported_quantity = remaining;
         autoFillValues.qualified_quantity = remaining;
@@ -1971,7 +1972,7 @@ const ReportingPage: React.FC = () => {
                         min={0}
                         fieldProps={{
                           precision: 2,
-                          max: currentWorkOrder.quantity - (currentOperation.completed_quantity || 0),
+                          max: getRemainingReportableQuantity(currentOperation, Number(currentWorkOrder.quantity) || 0),
                         }}
                         extra="完成数量必须大于0"
                       />

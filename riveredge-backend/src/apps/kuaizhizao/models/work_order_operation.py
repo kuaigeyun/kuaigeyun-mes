@@ -136,6 +136,17 @@ class WorkOrderOperation(BaseModel):
         default=False,
         description="是否节点工序（允许跳转时前序节点工序仍不可跳过）"
     )
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
+    )
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")

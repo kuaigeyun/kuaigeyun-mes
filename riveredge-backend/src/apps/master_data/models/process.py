@@ -202,6 +202,17 @@ class Operation(BaseModel):
         default=False,
         description="是否节点工序（允许跳转时前序节点工序仍不可跳过）"
     )
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
+    )
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
@@ -390,6 +401,19 @@ class ProcessRoute(BaseModel):
     
     # 工序序列（JSON格式存储）
     operation_sequence = fields.JSONField(null=True, description="工序序列（JSON格式，存储工序ID及顺序，支持子工艺路线）")
+
+    # 路线级默认超报（序列项未单独配置时可继承）
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="路线默认超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="路线默认超报值",
+    )
     
     # 子工艺路线支持（核心功能，新增）
     parent_route = fields.ForeignKeyField(

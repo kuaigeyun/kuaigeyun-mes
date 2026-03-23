@@ -108,6 +108,19 @@ class WorkOrder(BaseModel):
     
     # 工序跳转控制
     allow_operation_jump = fields.BooleanField(default=False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
+
+    # 超报（工单头默认，工序行可覆盖）
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="超报值",
+    )
     
     # 冻结信息
     is_frozen = fields.BooleanField(default=False, description="是否冻结")

@@ -145,6 +145,24 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reporting_type=reporting_type,
                     reported_quantity=reported_quantity_dec,
                 )
+
+            # 数量报工：累计完成不可超过工单计划 + 超报上限（存于工单工序行）
+            if reporting_type == "quantity":
+                from apps.kuaizhizao.services.over_report_rules import (
+                    max_completed_quantity_for_plan,
+                    tuple_from_model,
+                )
+
+                plan_qty = work_order.quantity or Decimal("0")
+                om, ov = tuple_from_model(work_order_operation)
+                max_completed = max_completed_quantity_for_plan(plan_qty, om, ov)
+                current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
+                new_total = current_completed + reported_quantity_dec
+                if new_total > max_completed:
+                    raise BusinessLogicError(
+                        f"报工数量超限：本道工序累计完成上限为 {max_completed}（计划 {plan_qty}，超报规则 {om}），"
+                        f"当前已报 {current_completed}，本次报工后将为 {new_total}"
+                    )
             
             if reporting_type == "status":
                 # 按状态报工：不需要数量，只需要状态
