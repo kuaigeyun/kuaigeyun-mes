@@ -198,6 +198,7 @@ class ProcessService:
             "is_active": process_route.is_active,
             "over_report_mode": getattr(process_route, "over_report_mode", None) or "none",
             "over_report_value": getattr(process_route, "over_report_value", None) or 0,
+            "allow_operation_jump": bool(getattr(process_route, "allow_operation_jump", False)),
             "created_at": process_route.created_at,
             "updated_at": process_route.updated_at,
             "deleted_at": process_route.deleted_at,
@@ -1070,7 +1071,11 @@ class ProcessService:
                 raise ValidationError(f"工艺路线编码 {data.code} 已存在")
         
         # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = (
+            data.model_dump(exclude_unset=True, by_alias=False)
+            if hasattr(data, "model_dump")
+            else data.dict(exclude_unset=True)
+        )
         for key, value in update_data.items():
             setattr(process_route, key, value)
         
@@ -1754,6 +1759,7 @@ class ProcessService:
             is_active=current_route.is_active,
             over_report_mode=getattr(current_route, "over_report_mode", None) or "none",
             over_report_value=getattr(current_route, "over_report_value", None) or 0,
+            allow_operation_jump=bool(getattr(current_route, "allow_operation_jump", False)),
         )
         
         return await ProcessService._to_process_route_response(new_route)
@@ -1985,6 +1991,7 @@ class ProcessService:
             is_active=target_route.is_active,
             over_report_mode=getattr(target_route, "over_report_mode", None) or "none",
             over_report_value=getattr(target_route, "over_report_value", None) or 0,
+            allow_operation_jump=bool(getattr(target_route, "allow_operation_jump", False)),
         )
         
         return await ProcessService._to_process_route_response(new_route)
@@ -2612,6 +2619,7 @@ class ProcessService:
             is_active=route_data.is_active,
             operation_sequence=template_config.get("operation_sequence"),
             version="1.0",
+            allow_operation_jump=bool(template_config.get("allow_operation_jump", template_config.get("allowOperationJump", False))),
         )
         
         # 创建工艺路线

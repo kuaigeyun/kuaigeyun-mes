@@ -346,22 +346,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             standard_time = extra_data.get("standard_time")
             setup_time = extra_data.get("setup_time")
             
-            # 从额外数据中获取报工类型和跳转规则（如果工艺路线中配置了）
+            # 从额外数据中获取报工类型；跳转由工单/路线级控制；节点工序仅来自路线序列项
             reporting_type = extra_data.get("reporting_type") or extra_data.get("reportingType") or "quantity"
-            allow_jump = extra_data.get("allow_jump")
-            if allow_jump is None:
-                allow_jump = extra_data.get("allowJump")
-            if allow_jump is None:
-                allow_jump = False
-            else:
-                allow_jump = bool(allow_jump)
+            allow_jump = False
             is_node = extra_data.get("is_node_operation")
             if is_node is None:
                 is_node = extra_data.get("isNodeOperation")
-            if is_node is None:
-                is_node = bool(getattr(operation, "is_node_operation", False))
-            else:
-                is_node = bool(is_node)
+            is_node = bool(is_node) if is_node is not None else False
 
             step_explicit = extra_has_over_report_keys(extra_data)
             step_t = parse_over_report_from_extra(extra_data)
@@ -631,6 +622,39 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 如果没有物料来源类型，默认按自制件处理（向后兼容）
                 logger.warning(f"物料 {product_code} 未配置物料来源类型，默认按自制件处理")
 
+            # 来源工艺路线与工序跳转（路线级默认 + 工单快照）
+            operations_input = getattr(work_order_data, "operations", None) or []
+            has_manual_ops = bool(operations_input and len(operations_input) > 0)
+            explicit_pr_id = getattr(work_order_data, "process_route_id", None)
+
+            process_route_resolved: Optional[ProcessRoute] = None
+            if explicit_pr_id is not None:
+                process_route_resolved = await ProcessRoute.get_or_none(
+                    id=explicit_pr_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if not process_route_resolved:
+                    raise ValidationError(f"工艺路线不存在或未启用: id={explicit_pr_id}")
+
+            if not process_route_resolved and not has_manual_ops:
+                process_route_resolved = await self._match_process_route_for_material(
+                    tenant_id=tenant_id,
+                    material_id=product_id,
+                )
+
+            wo_jump_req = getattr(work_order_data, "allow_operation_jump", None)
+            if wo_jump_req is None:
+                wo_allow_jump = bool(
+                    getattr(process_route_resolved, "allow_operation_jump", False)
+                ) if process_route_resolved else False
+            else:
+                wo_allow_jump = bool(wo_jump_req)
+
+            stored_pr_id: Optional[int] = explicit_pr_id
+            if stored_pr_id is None and process_route_resolved and not has_manual_ops:
+                stored_pr_id = process_route_resolved.id
+
             # 创建工单
             work_order = await WorkOrder.create(
                 tenant_id=tenant_id,
@@ -661,7 +685,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 variant_attributes=getattr(work_order_data, "variant_attributes", None),
                 configurable_selections=getattr(work_order_data, "configurable_selections", None),
                 remarks=work_order_data.remarks,
-                allow_operation_jump=getattr(work_order_data, "allow_operation_jump", False),
+                allow_operation_jump=wo_allow_jump,
+                process_route_id=stored_pr_id,
                 over_report_mode=getattr(work_order_data, "over_report_mode", None) or "none",
                 over_report_value=getattr(work_order_data, "over_report_value", None) or Decimal("0"),
                 created_by=created_by,
@@ -745,20 +770,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             from datetime import timedelta
                             planned_end_date = planned_start_date + timedelta(hours=1)
                         
-                        # 创建工序单（开单传入则覆盖工序档案上的报工类型、跳转、节点）
+                        # 创建工序单：报工类型可覆盖；跳转由工单级控制；节点仅来自开单传入
                         rt = getattr(op_data, "reporting_type", None)
                         if rt is None:
                             rt = operation.reporting_type or "quantity"
-                        aj = getattr(op_data, "allow_jump", None)
-                        if aj is None:
-                            aj = bool(getattr(operation, "allow_jump", False))
-                        else:
-                            aj = bool(aj)
+                        aj = False
                         ino = getattr(op_data, "is_node_operation", None)
-                        if ino is None:
-                            ino = bool(getattr(operation, "is_node_operation", False))
-                        else:
+                        if ino is not None:
                             ino = bool(ino)
+                        else:
+                            ino = False
 
                         fs = getattr(op_data, "model_fields_set", set()) or set()
                         line_explicit = bool(fs & {"over_report_mode", "over_report_value"})
@@ -822,22 +843,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     logger.error(f"为工单 {work_order.code} 创建工序单失败: {e}", exc_info=True)
                     raise ValidationError(f"创建工序单失败: {str(e)}")
             else:
-                # 自动匹配工艺路线并生成工序单（核心功能，参考黑湖小工单）
+                # 自动按已解析工艺路线生成工序单
                 try:
-                    process_route = await self._match_process_route_for_material(
-                        tenant_id=tenant_id,
-                        material_id=work_order.product_id
-                    )
-                    
-                    if process_route:
-                        # 根据工艺路线自动生成工单工序单
+                    if process_route_resolved:
                         await self._generate_work_order_operations_from_route(
                             tenant_id=tenant_id,
                             work_order=work_order,
-                            process_route=process_route,
+                            process_route=process_route_resolved,
                             created_by=created_by
                         )
-                        logger.info(f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route.code}）")
+                        logger.info(
+                            f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route_resolved.code}）"
+                        )
                     else:
                         logger.warning(f"工单 {work_order.code} 未找到匹配的工艺路线，未自动生成工序单")
                 except Exception as e:
@@ -1145,9 +1162,53 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            # 更新字段
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             update_data = work_order_data.model_dump(exclude_unset=True)
-            
+
+            if "process_route_id" in update_data:
+                new_pr_id = update_data.pop("process_route_id")
+                old_pr_id = getattr(work_order, "process_route_id", None)
+                if new_pr_id != old_pr_id:
+                    if work_order.status != "draft":
+                        raise BusinessLogicError("仅草稿状态的工单可修改来源工艺路线")
+                    rc = await ReportingRecord.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                    ).count()
+                    if rc > 0:
+                        raise BusinessLogicError("已有报工记录，不能更换来源工艺路线")
+                    existing_ops = await WorkOrderOperation.filter(
+                        tenant_id=tenant_id,
+                        work_order_id=work_order_id,
+                        deleted_at__isnull=True,
+                    ).all()
+                    if any(getattr(o, "status", None) != "pending" for o in existing_ops):
+                        raise BusinessLogicError("存在非待开始工序，不能更换来源工艺路线")
+                    if new_pr_id is None:
+                        if existing_ops:
+                            raise BusinessLogicError("存在工序时不能清空来源工艺路线")
+                    else:
+                        pr = await ProcessRoute.get_or_none(
+                            id=new_pr_id,
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True,
+                        )
+                        if not pr:
+                            raise NotFoundError(f"工艺路线不存在: id={new_pr_id}")
+                        now = now_utc()
+                        for op in existing_ops:
+                            op.deleted_at = now
+                            await op.save()
+                        await self._generate_work_order_operations_from_route(
+                            tenant_id=tenant_id,
+                            work_order=work_order,
+                            process_route=pr,
+                            created_by=updated_by,
+                        )
+                    update_data["process_route_id"] = new_pr_id
+                else:
+                    update_data["process_route_id"] = new_pr_id
+
             work_order = await self.update_with_user(
                 tenant_id=tenant_id,
                 record_id=work_order_id,
@@ -2048,14 +2109,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         existing_op.reporting_type = op_data.reporting_type or "quantity"
                     elif op_id_changed and master_op:
                         existing_op.reporting_type = master_op.reporting_type or "quantity"
-                    if getattr(op_data, "allow_jump", None) is not None:
-                        existing_op.allow_jump = bool(op_data.allow_jump)
-                    elif op_id_changed and master_op:
-                        existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
+                    existing_op.allow_jump = False
                     if getattr(op_data, "is_node_operation", None) is not None:
                         existing_op.is_node_operation = bool(op_data.is_node_operation)
-                    elif op_id_changed and master_op:
-                        existing_op.is_node_operation = bool(getattr(master_op, "is_node_operation", False))
+                    elif op_id_changed:
+                        existing_op.is_node_operation = False
                     fs_or = getattr(op_data, "model_fields_set", set()) or set()
                     if fs_or & {"over_report_mode", "over_report_value"}:
                         existing_op.over_report_mode = normalize_over_report_mode(
@@ -2089,16 +2147,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     reporting_type = op_data.reporting_type if getattr(op_data, "reporting_type", None) is not None else None
                     if reporting_type is None:
                         reporting_type = (master_op.reporting_type or "quantity") if master_op else "quantity"
-                    allow_jump_new = op_data.allow_jump if getattr(op_data, "allow_jump", None) is not None else None
-                    if allow_jump_new is None:
-                        allow_jump_new = bool(getattr(master_op, "allow_jump", False)) if master_op else False
-                    else:
-                        allow_jump_new = bool(allow_jump_new)
-                    is_node_new = op_data.is_node_operation if getattr(op_data, "is_node_operation", None) is not None else None
-                    if is_node_new is None:
-                        is_node_new = bool(getattr(master_op, "is_node_operation", False)) if master_op else False
-                    else:
-                        is_node_new = bool(is_node_new)
+                    allow_jump_new = False
+                    is_node_new = (
+                        bool(op_data.is_node_operation)
+                        if getattr(op_data, "is_node_operation", None) is not None
+                        else False
+                    )
                     fs_new = getattr(op_data, "model_fields_set", set()) or set()
                     line_explicit = bool(fs_new & {"over_report_mode", "over_report_value"})
                     if line_explicit:

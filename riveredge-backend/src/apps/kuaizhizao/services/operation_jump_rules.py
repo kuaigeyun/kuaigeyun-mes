@@ -3,17 +3,15 @@
 """
 
 from decimal import Decimal
-from typing import Any, List
+from typing import Any, List, Optional
 
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from infra.exceptions.exceptions import BusinessLogicError
 
 
-def effective_allow_jump(work_order: Any, work_order_operation: WorkOrderOperation) -> bool:
-    """工单级或工序级任一为真则视为允许跳转。"""
-    wo = bool(getattr(work_order, "allow_operation_jump", False))
-    op = bool(getattr(work_order_operation, "allow_jump", False))
-    return wo or op
+def effective_allow_jump(work_order: Any, work_order_operation: Optional[WorkOrderOperation] = None) -> bool:
+    """仅工单快照 allow_operation_jump 决定；工序行 allow_jump 已废弃不参与计算。"""
+    return bool(getattr(work_order, "allow_operation_jump", False))
 
 
 async def list_node_predecessors(

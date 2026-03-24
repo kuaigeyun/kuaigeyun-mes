@@ -53,10 +53,8 @@ interface Operation {
   isNodeOperation?: boolean;
 }
 
-const effectiveAllowJump = (workOrder: WorkOrder | null, operation: Operation | null) => {
-  if (!operation) return false;
-  return !!(workOrder?.allow_operation_jump || operation.allow_jump);
-};
+const effectiveAllowJump = (workOrder: WorkOrder | null, _operation?: Operation | null) =>
+  !!workOrder?.allow_operation_jump;
 
 /**
  * 报工管理 - 工位机触屏模式页面
@@ -175,15 +173,20 @@ const ReportingKioskPage: React.FC = () => {
       return;
     }
 
-    const previousOperations = allOperations.filter(
-      (op: any) => op.sequence! < operation.sequence! && op.status !== 'completed'
-    );
-    if (previousOperations.length > 0) {
-      const prevOpNames = previousOperations.map((op: any) => op.operation_name).join('、');
-      setJumpRuleError(`工序跳转规则：必须先完成前序工序 "${prevOpNames}" 才能报工当前工序`);
-    } else {
+    const sorted = [...allOperations].sort((a: any, b: any) => a.sequence! - b.sequence!);
+    const prev = sorted.filter((op: any) => op.sequence! < operation.sequence!).pop();
+    if (!prev) {
       setJumpRuleError('');
+      return;
     }
+    const prevQty = Number(prev.completed_quantity ?? 0);
+    if (prevQty <= 0) {
+      setJumpRuleError(
+        `工序跳转规则：前序工序「${prev.operation_name}」须有报工产出后，当前工序才能报工`
+      );
+      return;
+    }
+    setJumpRuleError('');
   };
 
   /**

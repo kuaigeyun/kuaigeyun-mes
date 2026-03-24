@@ -375,33 +375,6 @@ const OperationsPage: React.FC = () => {
       ),
     },
     {
-      title: '允许跳转',
-      dataIndex: 'allowJump',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '允许', status: 'Success' },
-        false: { text: '不允许', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.allowJump ? 'success' : 'default'}>
-          {record.allowJump ? '允许' : '不允许'}
-        </Tag>
-      ),
-    },
-    {
-      title: '节点工序',
-      dataIndex: 'isNodeOperation',
-      width: 100,
-      hideInSearch: true,
-      render: (_, record: any) => {
-        const v = record.isNodeOperation ?? record.is_node_operation ?? false;
-        return (
-          <Tag color={v ? 'processing' : 'default'}>{v ? '是' : '否'}</Tag>
-        );
-      },
-    },
-    {
       title: '超报',
       dataIndex: 'overReportMode',
       width: 120,

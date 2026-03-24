@@ -126,6 +126,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 if previous_operations:
                     # 获取前一道工序（sequence最大的前序工序）
                     previous_operation = previous_operations[-1]
+
+                    # 按状态报工且报「完成」：紧邻上道须已 completed
+                    if reporting_type == "status" and reported_quantity_dec == 1:
+                        if previous_operation.status != "completed":
+                            raise BusinessLogicError(
+                                f"工序跳转规则：请先完成前序工序「{previous_operation.operation_name}」后，再将当前工序报为完成"
+                            )
                     
                     # 检查前序工序的报工数量
                     previous_completed = Decimal(str(previous_operation.completed_quantity or 0))
@@ -133,7 +140,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     new_total = current_completed + reported_quantity_dec
                     
                     # 下一道工序的报工数量不可超过上一道工序
-                    if new_total > previous_completed:
+                    if reporting_type == "quantity" and new_total > previous_completed:
                         raise BusinessLogicError(
                             f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过前序工序 '{previous_operation.operation_name}' 的报工数量（{previous_completed}）"
                         )

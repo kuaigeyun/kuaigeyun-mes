@@ -149,6 +149,9 @@ export interface ProcessRoute {
   overReportMode?: string;
   over_report_value?: number;
   overReportValue?: number;
+  /** 路线级是否允许工序跳转 */
+  allow_operation_jump?: boolean;
+  allowOperationJump?: boolean;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -164,6 +167,8 @@ export interface ProcessRouteCreate {
   over_report_mode?: string;
   overReportValue?: number;
   over_report_value?: number;
+  allowOperationJump?: boolean;
+  allow_operation_jump?: boolean;
 }
 
 export interface ProcessRouteUpdate {
@@ -176,6 +181,8 @@ export interface ProcessRouteUpdate {
   over_report_mode?: string;
   overReportValue?: number;
   over_report_value?: number;
+  allowOperationJump?: boolean;
+  allow_operation_jump?: boolean;
 }
 
 export interface ProcessRouteListParams {

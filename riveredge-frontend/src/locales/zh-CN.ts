@@ -3384,6 +3384,9 @@ export default {
   'field.route.overReportMode': '路线默认超报',
   'field.route.overReportValue': '路线默认超报数值',
   'field.route.overReportValueExtra': '工序行未单独配置时继承；序列中可逐行覆盖。',
+  'field.route.allowOperationJump': '允许工序跳转',
+  'field.route.allowOperationJumpExtra':
+    '整条路线统一为「允许」或「不允许」。允许时可在工序序列中标记节点工序；不允许时工单须按序报工。',
   'field.operation.isActive': '启用',
   'field.operation.inspectionMode': '质检模式',
   'field.operation.inspectionModePlaceholder': '请选择质检模式',

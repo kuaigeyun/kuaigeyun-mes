@@ -247,6 +247,11 @@ class ProcessRouteBase(BaseModel):
     is_active: bool = Field(True, description="是否启用")
     over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="路线默认超报模式：none/fixed/percent")
     over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="路线默认超报值")
+    allow_operation_jump: bool = Field(
+        False,
+        alias="allowOperationJump",
+        description="路线级是否允许工序跳转（为真时启用节点工序控制）",
+    )
 
     class Config:
         populate_by_name = True
@@ -285,6 +290,7 @@ class ProcessRouteUpdate(BaseModel):
     is_active: Optional[bool] = Field(None, description="是否启用")
     over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="路线默认超报模式")
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="路线默认超报值")
+    allow_operation_jump: Optional[bool] = Field(None, alias="allowOperationJump", description="路线级是否允许工序跳转")
     
     @validator("code")
     def validate_code(cls, v):

@@ -21,8 +21,7 @@ export interface OperationItem {
   name: string;
   description?: string;
   reportingType?: 'quantity' | 'status';
-  allowJump?: boolean;
-  /** 节点工序：允许跳转时仍不可跳过 */
+  /** 节点工序：仅在路线允许工序跳转时生效 */
   isNodeOperation?: boolean;
   /** 工序级超报（写入路线 JSON；none+0 可不提交键以继承路线默认） */
   overReportMode?: 'none' | 'fixed' | 'percent';
@@ -110,8 +109,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       name: op.name,
       description: op.description,
       reportingType: (op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
-      allowJump: op.allowJump ?? (op as any).allow_jump ?? false,
-      isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+      isNodeOperation: false,
       overReportMode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
       overReportValue: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
     }));
@@ -131,12 +129,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const toggleNodeOperation = (uuid: string, checked: boolean) => {
     const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, isNodeOperation: checked } : op));
-    setOperations(newOperations);
-    onChange?.(newOperations);
-  };
-
-  const toggleAllowJump = (uuid: string, checked: boolean) => {
-    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, allowJump: checked } : op));
     setOperations(newOperations);
     onChange?.(newOperations);
   };
@@ -179,8 +171,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       name: replacement.name,
       description: replacement.description,
       reportingType: (replacement.reportingType ?? (replacement as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
-      allowJump: replacement.allowJump ?? (replacement as any).allow_jump ?? false,
-      isNodeOperation: replacement.isNodeOperation ?? (replacement as any).is_node_operation ?? false,
+      isNodeOperation: false,
       overReportMode: (replacement as any).overReportMode ?? (replacement as any).over_report_mode ?? 'none',
       overReportValue: Number((replacement as any).overReportValue ?? (replacement as any).over_report_value ?? 0) || 0,
     };
@@ -237,18 +228,6 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
           {record.reportingType === 'quantity' ? t('app.master-data.operationSequence.reportingByQuantity') : record.reportingType === 'status' ? t('app.master-data.operationSequence.reportingByStatus') : '-'}
         </Tag>
-      ),
-    },
-    {
-      title: t('app.master-data.operationSequence.allowJump'),
-      key: 'allowJump',
-      width: 100,
-      render: (_: any, record: OperationItem) => (
-        <Switch
-          size="small"
-          checked={!!record.allowJump}
-          onChange={(c) => toggleAllowJump(record.uuid, c)}
-        />
       ),
     },
     {
@@ -342,7 +321,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
               }),
             });
           }
-          if (idx === 5 && React.isValidElement(child)) {
+          if (idx >= 4 && React.isValidElement(child)) {
             return React.cloneElement(child, { onClick: (e: React.MouseEvent) => e.stopPropagation() });
           }
           return child;

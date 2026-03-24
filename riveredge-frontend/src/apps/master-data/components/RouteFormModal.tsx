@@ -60,7 +60,12 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true, overReportMode: 'none', overReportValue: 0 });
+    formRef.current?.setFieldsValue({
+      isActive: true,
+      allowOperationJump: false,
+      overReportMode: 'none',
+      overReportValue: 0,
+    });
     setOperationSequence([]);
 
     if (!editUuid) {
@@ -76,6 +81,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                 formRef.current?.setFieldsValue({
                   ...(previewCodeValue ? { code: previewCodeValue } : {}),
                   isActive: true,
+                  allowOperationJump: false,
                   overReportMode: 'none',
                   overReportValue: 0,
                 });
@@ -85,12 +91,22 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
               })
               .catch(() => {
                 setPreviewCode(null);
-                formRef.current?.setFieldsValue({ isActive: true, overReportMode: 'none', overReportValue: 0 });
+                formRef.current?.setFieldsValue({
+                  isActive: true,
+                  allowOperationJump: false,
+                  overReportMode: 'none',
+                  overReportValue: 0,
+                });
                 messageApi.info(t('app.master-data.codeRuleAutoFailed'));
               });
           } else {
             setPreviewCode(null);
-            formRef.current?.setFieldsValue({ isActive: true, overReportMode: 'none', overReportValue: 0 });
+            formRef.current?.setFieldsValue({
+              isActive: true,
+              allowOperationJump: false,
+              overReportMode: 'none',
+              overReportValue: 0,
+            });
           }
         })
         .catch(() => {
@@ -104,6 +120,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                 formRef.current?.setFieldsValue({
                   ...(previewCodeValue ? { code: previewCodeValue } : {}),
                   isActive: true,
+                  allowOperationJump: false,
                   overReportMode: 'none',
                   overReportValue: 0,
                 });
@@ -113,12 +130,22 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
               })
               .catch(() => {
                 setPreviewCode(null);
-                formRef.current?.setFieldsValue({ isActive: true, overReportMode: 'none', overReportValue: 0 });
+                formRef.current?.setFieldsValue({
+                  isActive: true,
+                  allowOperationJump: false,
+                  overReportMode: 'none',
+                  overReportValue: 0,
+                });
                 messageApi.info(t('app.master-data.codeRuleAutoFailed'));
               });
           } else {
             setPreviewCode(null);
-            formRef.current?.setFieldsValue({ isActive: true, overReportMode: 'none', overReportValue: 0 });
+            formRef.current?.setFieldsValue({
+              isActive: true,
+              allowOperationJump: false,
+              overReportMode: 'none',
+              overReportValue: 0,
+            });
           }
         });
       return;
@@ -133,6 +160,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           name: detail.name,
           description: detail.description,
           isActive: detail.is_active ?? (detail as any).isActive ?? true,
+          allowOperationJump:
+            (detail as any).allow_operation_jump ?? (detail as any).allowOperationJump ?? false,
           overReportMode: (detail as any).over_report_mode ?? (detail as any).overReportMode ?? 'none',
           overReportValue: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
         });
@@ -157,7 +186,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                     name: op.name,
                     description: op.description,
                     reportingType: op.reportingType ?? (op as any).reporting_type,
-                    allowJump: op.allowJump ?? (op as any).allow_jump,
                     isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation,
                     overReportMode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
                     overReportValue: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
@@ -179,8 +207,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                 description?: string;
                 reportingType?: string;
                 reporting_type?: string;
-                allowJump?: boolean;
-                allow_jump?: boolean;
                 isNodeOperation?: boolean;
                 is_node_operation?: boolean;
                 overReportMode?: string;
@@ -193,7 +219,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                 name: op.name || '',
                 description: op.description,
                 reportingType: (op.reportingType ?? op.reporting_type ?? 'quantity') as 'quantity' | 'status',
-                allowJump: op.allowJump ?? op.allow_jump ?? false,
                 isNodeOperation: op.isNodeOperation ?? op.is_node_operation ?? false,
                 overReportMode: (op.overReportMode ?? op.over_report_mode ?? 'none') as OperationItem['overReportMode'],
                 overReportValue: Number(op.overReportValue ?? op.over_report_value ?? 0) || 0,
@@ -207,7 +232,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                       code: item.substring(0, 8),
                       name: t('field.route.operationSequence'),
                       reportingType: 'quantity' as const,
-                      allowJump: false,
                       isNodeOperation: false,
                       overReportMode: 'none',
                       overReportValue: 0,
@@ -222,7 +246,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                     opItem = {
                       ...toOpItem(op),
                       reportingType: (item.reportingType ?? item.reporting_type ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
-                      allowJump: item.allowJump ?? item.allow_jump ?? op.allowJump ?? (op as any).allow_jump ?? false,
                       isNodeOperation:
                         item.isNodeOperation ??
                         item.is_node_operation ??
@@ -244,7 +267,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                       name: name || t('field.route.operationSequence'),
                       description: item.description,
                       reportingType: (item.reportingType ?? item.reporting_type ?? 'quantity') as 'quantity' | 'status',
-                      allowJump: item.allowJump ?? item.allow_jump ?? false,
                       isNodeOperation: item.isNodeOperation ?? item.is_node_operation ?? false,
                       overReportMode: (item.overReportMode ?? item.over_report_mode ?? 'none') as OperationItem['overReportMode'],
                       overReportValue: Number(item.overReportValue ?? item.over_report_value ?? 0) || 0,
@@ -255,7 +277,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
                       code: uuid.substring(0, 8),
                       name: t('field.route.operationSequence'),
                       reportingType: 'quantity' as const,
-                      allowJump: false,
                       isNodeOperation: false,
                       overReportMode: 'none',
                       overReportValue: 0,
@@ -301,7 +322,6 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
             code: op.code,
             name: op.name,
             reportingType: op.reportingType ?? 'quantity',
-            allowJump: op.allowJump ?? false,
             isNodeOperation: op.isNodeOperation ?? false,
           };
           const om = op.overReportMode ?? 'none';
@@ -343,6 +363,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         name: values.name.trim(),
         description: values.description?.trim() || null,
         is_active: values.isActive ?? true,
+        allow_operation_jump: !!values.allowOperationJump,
         over_report_mode: values.overReportMode ?? 'none',
         over_report_value: Number(values.overReportValue) || 0,
         operation_sequence: operationSequenceData,
@@ -424,7 +445,9 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         </div>
       </ProForm.Item>
       <SchemaFormRenderer
-        schema={routeFormSchema.filter((f) => ['description', 'isActive'].includes(f.name))}
+        schema={routeFormSchema.filter((f) =>
+          ['description', 'isActive', 'allowOperationJump', 'overReportMode', 'overReportValue'].includes(f.name)
+        )}
         isEdit={isEdit}
       />
     </FormModalTemplate>

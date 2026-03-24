@@ -38,6 +38,13 @@ export const routeFormSchema: FieldConfig[] = [
     colSpan: 12,
   },
   {
+    name: 'allowOperationJump',
+    type: 'switch',
+    labelKey: 'field.route.allowOperationJump',
+    extraKey: 'field.route.allowOperationJumpExtra',
+    colSpan: 24,
+  },
+  {
     name: 'overReportMode',
     type: 'select',
     labelKey: 'field.route.overReportMode',

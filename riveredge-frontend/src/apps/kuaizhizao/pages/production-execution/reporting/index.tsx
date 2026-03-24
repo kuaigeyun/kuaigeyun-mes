@@ -50,14 +50,9 @@ const getWorkerInfo = (operation?: any) => {
   };
 };
 
-/** 与后端一致：工单或工序任一方开启即视为允许跳转 */
-const effectiveAllowJump = (workOrder: any, operation: any) => {
-  if (!operation) return false;
-  return !!(
-    workOrder?.allow_operation_jump ||
-    operation.allow_jump ||
-    operation.allowJump
-  );
+/** 与后端一致：仅工单快照 allow_operation_jump */
+const effectiveAllowJump = (workOrder: any, _operation?: any) => {
+  return !!workOrder?.allow_operation_jump;
 };
 
 /**
@@ -515,15 +510,20 @@ const ReportingPage: React.FC = () => {
       return;
     }
 
-    const previousOperations = allOperations.filter(
-      (op: any) => op.sequence < operation.sequence && op.status !== 'completed'
-    );
-    if (previousOperations.length > 0) {
-      const prevOpNames = previousOperations.map((op: any) => op.operation_name).join('、');
-      setJumpRuleError(`工序跳转规则：必须先完成前序工序 "${prevOpNames}" 才能报工当前工序`);
-    } else {
+    const sorted = [...allOperations].sort((a: any, b: any) => a.sequence - b.sequence);
+    const prev = sorted.filter((op: any) => op.sequence < operation.sequence).pop();
+    if (!prev) {
       setJumpRuleError('');
+      return;
     }
+    const prevQty = Number(prev.completed_quantity ?? prev.completedQuantity ?? 0);
+    if (prevQty <= 0) {
+      setJumpRuleError(
+        `工序跳转规则：前序工序「${prev.operation_name}」须有报工产出后，当前工序才能报工`
+      );
+      return;
+    }
+    setJumpRuleError('');
   };
 
   /**

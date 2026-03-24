@@ -414,6 +414,12 @@ class ProcessRoute(BaseModel):
         default=0,
         description="路线默认超报值",
     )
+
+    # 路线级工序跳转（为真时启用节点工序等跳转控制；为假时仅允许按序报工）
+    allow_operation_jump = fields.BooleanField(
+        default=False,
+        description="路线级是否允许工序跳转",
+    )
     
     # 子工艺路线支持（核心功能，新增）
     parent_route = fields.ForeignKeyField(

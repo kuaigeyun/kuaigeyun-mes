@@ -3369,6 +3369,9 @@ export default {
   'field.route.overReportMode': 'Route default over-report',
   'field.route.overReportValue': 'Route default value',
   'field.route.overReportValueExtra': 'Inherited when a step has no own setting; steps can override.',
+  'field.route.allowOperationJump': 'Allow operation jump',
+  'field.route.allowOperationJumpExtra':
+    'Applies to the whole route. When allowed, mark node operations in the sequence; when not, work orders must report in sequence.',
   'field.operation.isActive': 'Active',
   'field.operation.inspectionMode': 'Inspection Mode',
   'field.operation.inspectionModePlaceholder': 'Select inspection mode',

@@ -519,7 +519,6 @@ const WorkOrdersPage: React.FC = () => {
     operation_code: string
     operation_name: string
     sequence: number
-    allow_jump: boolean
     is_node_operation: boolean
     reporting_type: string
     over_report_mode: string
@@ -554,7 +553,6 @@ const WorkOrdersPage: React.FC = () => {
       operation_code: string
       operation_name: string
       sequence: number
-      allow_jump: boolean
       is_node_operation: boolean
       reporting_type: string
       over_report_mode: string
@@ -574,18 +572,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       }
       if (op) {
-        const allowJump =
-          item.allowJump ??
-          item.allow_jump ??
-          op.allowJump ??
-          (op as any).allow_jump ??
-          false
-        const isNode =
-          item.isNodeOperation ??
-          item.is_node_operation ??
-          op.isNodeOperation ??
-          (op as any).is_node_operation ??
-          false
+        const isNode = item.isNodeOperation ?? item.is_node_operation ?? false
         const reportingType =
           item.reportingType ??
           item.reporting_type ??
@@ -606,7 +593,6 @@ const WorkOrdersPage: React.FC = () => {
           operation_code: op.code ?? op.mainCode ?? '',
           operation_name: op.name ?? '',
           sequence: item.sequence ?? item._idx ?? index + 1,
-          allow_jump: Boolean(allowJump),
           is_node_operation: Boolean(isNode),
           reporting_type: reportingType === 'status' ? 'status' : 'quantity',
           over_report_mode: String(orm || 'none'),
@@ -628,12 +614,19 @@ const WorkOrdersPage: React.FC = () => {
         formRef.current?.setFieldsValue({ operations: undefined })
         return
       }
-      formRef.current?.setFieldsValue({ process_route_id: route.id })
       const routeDetail = await processRouteApi.get(route.uuid)
+      const routeJump =
+        (routeDetail as any)?.allow_operation_jump ?? (routeDetail as any)?.allowOperationJump ?? false
+      formRef.current?.setFieldsValue({
+        process_route_id: route.id,
+        allow_operation_jump: routeJump,
+      })
       const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList)
       if (operations.length > 0) {
         setSelectedOperations(operations)
-        formRef.current?.setFieldsValue({ operations: operations.map((o: any) => o.operation_id) })
+        formRef.current?.setFieldsValue({
+          operations: operations.map((o: any) => o.operation_id),
+        })
         messageApi.success(`已加载工艺路线及 ${operations.length} 个工序`)
       } else {
         setSelectedOperations([])
@@ -675,7 +668,6 @@ const WorkOrdersPage: React.FC = () => {
           operation_code: op.operation_code || op.operationCode,
           operation_name: op.operation_name || op.operationName,
           sequence: op.sequence ?? 0,
-          allow_jump: op.allow_jump ?? op.allowJump ?? false,
           is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
           reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
           over_report_mode: op.over_report_mode ?? op.overReportMode ?? 'none',
@@ -724,6 +716,7 @@ const WorkOrdersPage: React.FC = () => {
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           allow_operation_jump: detail.allow_operation_jump ?? false,
+          process_route_id: (detail as any).process_route_id ?? (detail as any).processRouteId,
           over_report_mode: (detail as any).over_report_mode ?? (detail as any).overReportMode ?? 'none',
           over_report_value: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
           remarks: detail.remarks,
@@ -1522,25 +1515,31 @@ const WorkOrdersPage: React.FC = () => {
           if (!operationDetail) {
             throw new Error(`工序ID ${opId} 不存在`)
           }
+          const so = selectedOperations.find((o: any) => o.operation_id === opId)
           return {
             operation_id: opId,
             operation_code: operationDetail.code,
             operation_name: operationDetail.name,
             sequence: index + 1,
             reporting_type:
-              operationDetail.reportingType ?? (operationDetail as any).reporting_type ?? 'quantity',
-            allow_jump:
-              operationDetail.allowJump ?? (operationDetail as any).allow_jump ?? false,
-            is_node_operation:
-              operationDetail.isNodeOperation ??
-              (operationDetail as any).is_node_operation ??
-              false,
+              so?.reporting_type ??
+              operationDetail.reportingType ??
+              (operationDetail as any).reporting_type ??
+              'quantity',
+            allow_jump: false,
+            is_node_operation: so?.is_node_operation ?? false,
             over_report_mode:
+              so?.over_report_mode ??
               (operationDetail as any).overReportMode ??
               (operationDetail as any).over_report_mode ??
               'none',
             over_report_value:
-              Number((operationDetail as any).overReportValue ?? (operationDetail as any).over_report_value ?? 0) || 0,
+              Number(
+                so?.over_report_value ??
+                  (operationDetail as any).overReportValue ??
+                  (operationDetail as any).over_report_value ??
+                  0
+              ) || 0,
           }
         })
       } else if (selectedOperations.length > 0) {
@@ -1551,7 +1550,7 @@ const WorkOrdersPage: React.FC = () => {
           operation_name: op.operation_name,
           sequence: op.sequence ?? i + 1,
           reporting_type: op.reporting_type ?? 'quantity',
-          allow_jump: op.allow_jump ?? false,
+          allow_jump: false,
           is_node_operation: op.is_node_operation ?? false,
           over_report_mode: op.over_report_mode ?? 'none',
           over_report_value: Number(op.over_report_value ?? 0) || 0,
@@ -1607,7 +1606,7 @@ const WorkOrdersPage: React.FC = () => {
             setup_time: op.setup_time,
             remarks: op.remarks,
             reporting_type: op.reporting_type ?? 'quantity',
-            allow_jump: op.allow_jump ?? false,
+            allow_jump: false,
             is_node_operation: op.is_node_operation ?? false,
             over_report_mode: op.over_report_mode ?? 'none',
             over_report_value: Number(op.over_report_value ?? 0) || 0,
@@ -3724,7 +3723,7 @@ const WorkOrdersPage: React.FC = () => {
             label: `${route.code} - ${route.name}`,
             value: route.id,
           }))}
-          disabled={isEdit}
+          disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
           colProps={{ span: 24 }}
           fieldProps={{
             showSearch: true,
@@ -3739,6 +3738,11 @@ const WorkOrdersPage: React.FC = () => {
                     return
                   }
                   const routeDetail = await processRouteApi.get(route.uuid)
+                  const routeJump =
+                    (routeDetail as any)?.allow_operation_jump ??
+                    (routeDetail as any)?.allowOperationJump ??
+                    false
+                  formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
                   const operations = parseOperationSequence(
                     routeDetail?.operation_sequence,
                     operationList
@@ -3766,7 +3770,10 @@ const WorkOrdersPage: React.FC = () => {
                 }
               } else {
                 setSelectedOperations([])
-                formRef.current?.setFieldsValue({ operations: undefined })
+                formRef.current?.setFieldsValue({
+                  operations: undefined,
+                  allow_operation_jump: false,
+                })
               }
             },
           }}
@@ -3801,7 +3808,7 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormSwitch
           name="allow_operation_jump"
           label="允许跳转工序"
-          extra="开启后允许自由报工；关闭后下一道工序报工数量不可超过上一道"
+          extra="默认随所选工艺路线；可再修改。关闭时须按序报工且下道数量不超过上道；开启时路线中的节点工序仍不可跳过。"
           initialValue={false}
           colProps={{ span: 24 }}
         />
@@ -5137,8 +5144,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
       operation_code: op.code,
       operation_name: op.name,
       sequence: index + 1,
-      allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
-      is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+      is_node_operation: false,
       reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
       over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
       over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
@@ -5160,8 +5166,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
         operation_code: op.code,
         operation_name: op.name,
         sequence: selectedOperations.length + 1,
-        allow_jump: op.allowJump ?? (op as any).allow_jump ?? false,
-        is_node_operation: op.isNodeOperation ?? (op as any).is_node_operation ?? false,
+        is_node_operation: false,
         reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
         over_report_mode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
         over_report_value: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
@@ -5245,7 +5250,6 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
     { title: '序号', key: 'index', width: 100 },
     { title: '工序代码/名称', key: 'operation' },
     { title: '报工类型', key: 'reportingType', width: 120 },
-    { title: '允许跳转', key: 'allowJump', width: 100 },
     { title: '节点工序', key: 'isNodeOperation', width: 90 },
     { title: '超报', key: 'overReport', width: 160 },
     { title: '操作', key: 'action', width: 150 },
@@ -5421,61 +5425,12 @@ const CreateWorkOrderTableRow: React.FC<{
         {!disabled ? (
           <Switch
             size="small"
-            checked={
-              !!(
-                op.allow_jump ??
-                getOpDetail(op.operation_id)?.allowJump ??
-                getOpDetail(op.operation_id)?.allow_jump
-              )
-            }
-            onChange={c => onPatch({ allow_jump: c })}
-          />
-        ) : (
-          <Tag
-            color={
-              (op.allow_jump ??
-                getOpDetail(op.operation_id)?.allowJump ??
-                getOpDetail(op.operation_id)?.allow_jump)
-                ? 'success'
-                : 'default'
-            }
-          >
-            {(op.allow_jump ??
-              getOpDetail(op.operation_id)?.allowJump ??
-              getOpDetail(op.operation_id)?.allow_jump)
-              ? '允许'
-              : '不允许'}
-          </Tag>
-        )}
-      </td>
-      <td onClick={e => e.stopPropagation()}>
-        {!disabled ? (
-          <Switch
-            size="small"
-            checked={
-              !!(
-                op.is_node_operation ??
-                getOpDetail(op.operation_id)?.isNodeOperation ??
-                getOpDetail(op.operation_id)?.is_node_operation
-              )
-            }
+            checked={!!op.is_node_operation}
             onChange={c => onPatch({ is_node_operation: c })}
           />
         ) : (
-          <Tag
-            color={
-              (op.is_node_operation ??
-                getOpDetail(op.operation_id)?.isNodeOperation ??
-                getOpDetail(op.operation_id)?.is_node_operation)
-                ? 'processing'
-                : 'default'
-            }
-          >
-            {(op.is_node_operation ??
-              getOpDetail(op.operation_id)?.isNodeOperation ??
-              getOpDetail(op.operation_id)?.is_node_operation)
-              ? '是'
-              : '否'}
+          <Tag color={op.is_node_operation ? 'processing' : 'default'}>
+            {op.is_node_operation ? '是' : '否'}
           </Tag>
         )}
       </td>

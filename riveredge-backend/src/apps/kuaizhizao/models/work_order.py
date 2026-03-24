@@ -69,6 +69,7 @@ class WorkOrder(BaseModel):
             ("planned_start_date",),
             ("planned_end_date",),
             ("created_at",),
+            ("process_route_id",),
         ]
         unique_together = [("tenant_id", "code")]
 
@@ -106,8 +107,16 @@ class WorkOrder(BaseModel):
     # 指定结束标记
     manually_completed = fields.BooleanField(default=False, description="是否指定结束（true:手动指定结束, false:正常完成）")
     
-    # 工序跳转控制
+    # 工序跳转控制（快照：创建时默认来自来源工艺路线，开工单时可再改）
     allow_operation_jump = fields.BooleanField(default=False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
+
+    # 来源工艺路线（开工单选择，草稿下可修改）
+    process_route = fields.ForeignKeyField(
+        "models.ProcessRoute",
+        related_name="+",
+        null=True,
+        description="来源工艺路线",
+    )
 
     # 超报（工单头默认，工序行可覆盖）
     over_report_mode = fields.CharField(

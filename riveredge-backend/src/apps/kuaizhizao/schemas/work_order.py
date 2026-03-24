@@ -47,8 +47,11 @@ class WorkOrderBase(BaseModel):
     # 指定结束标记
     manually_completed: bool = Field(False, description="是否指定结束（true:手动指定结束, false:正常完成）")
     
-    # 工序跳转控制
+    # 工序跳转控制（快照；创建时默认来自来源工艺路线）
     allow_operation_jump: bool = Field(False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
+
+    # 来源工艺路线（可选，持久化）
+    process_route_id: Optional[int] = Field(None, alias="processRouteId", description="来源工艺路线ID")
 
     # 超报（工单头默认，工序行可覆盖）
     over_report_mode: str = Field("none", alias="overReportMode", description="超报模式：none/fixed/percent")
@@ -93,7 +96,12 @@ class WorkOrderCreate(WorkOrderBase):
     - 如果只提供 product_code，product_id 将被自动查找
     - code 和 code_rule 至少提供一个：如果提供 code 则手工填写，如果提供 code_rule 则使用编码规则生成
     - operations: 可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成工序
+    - allow_operation_jump 为 None 时，默认采用来源工艺路线的路线级设置（无路线则为 False）
     """
+    allow_operation_jump: Optional[bool] = Field(
+        None,
+        description="是否允许跳转工序；不传则采用工艺路线默认值",
+    )
     code: Optional[str] = Field(None, description="工单编码（可选，如果未提供 code_rule 则为必填）")
     code_rule: Optional[str] = Field(None, description="编码规则代码（可选，如果未提供 code 则为必填）")
     product_id: Optional[int] = Field(None, description="产品ID（可选，如果未提供则根据 product_code 自动查找）")
@@ -151,6 +159,8 @@ class WorkOrderUpdate(BaseModel):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
+    allow_operation_jump: Optional[bool] = Field(None, description="是否允许跳转工序")
+    process_route_id: Optional[int] = Field(None, alias="processRouteId", description="来源工艺路线ID")
 
 
 class WorkOrderResponse(WorkOrderBase):
@@ -295,13 +305,21 @@ class WorkOrderOperationDispatch(BaseModel):
 
 
 class WorkOrderOperationCreate(WorkOrderOperationBase):
-    """创建工单工序Schema（开单时可覆盖主数据/工艺路线上的报工类型、允许跳转、节点工序）"""
+    """创建工单工序Schema（开单时可覆盖报工类型、节点工序等；跳转由工单级控制）"""
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     reporting_type: Optional[str] = Field(None, alias="reportingType", description="报工类型（未传则用工序档案）")
-    allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（未传则用工序档案）")
-    is_node_operation: Optional[bool] = Field(None, alias="isNodeOperation", description="是否节点工序（未传则用工序档案）")
+    allow_jump: Optional[bool] = Field(
+        None,
+        alias="allowJump",
+        description="已废弃：不参与校验，服务端恒按 False 落库",
+    )
+    is_node_operation: Optional[bool] = Field(
+        None,
+        alias="isNodeOperation",
+        description="是否节点工序（仅开单/路线序列传入；未传则为 False）",
+    )
     over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式（未传则按继承链合并）")
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
 
@@ -364,7 +382,7 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     sop_name: Optional[str] = Field(None, description="关联SOP 名称")
 
     reporting_type: str = Field("quantity", description="报工类型（quantity/status）")
-    allow_jump: bool = Field(False, description="是否允许跳转工序")
+    allow_jump: bool = Field(False, description="已废弃：不参与跳转判断，恒为 False（新数据）")
     is_node_operation: bool = Field(False, description="是否节点工序（允许跳转时前序节点仍不可跳过）")
     over_report_mode: str = Field("none", alias="overReportMode", description="超报模式（none/fixed/percent）")
     over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值")
