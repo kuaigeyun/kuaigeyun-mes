@@ -415,11 +415,15 @@ async def push_purchase_order_to_receipt_notice(
     from fastapi.responses import JSONResponse
 
     normalized = None
-    if notice_quantities:
-        try:
-            normalized = {int(k): float(v) for k, v in notice_quantities.items()}
-        except (ValueError, TypeError):
-            normalized = notice_quantities
+    if notice_quantities and isinstance(notice_quantities, dict):
+        tmp: dict = {}
+        for k, v in notice_quantities.items():
+            try:
+                ik = int(k)
+                tmp[ik] = float(v)
+            except (ValueError, TypeError):
+                continue
+        normalized = tmp if tmp else None
 
     service = PurchaseService()
     result = await service.push_to_receipt_notice(

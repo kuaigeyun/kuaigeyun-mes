@@ -261,7 +261,16 @@ class BusinessConfigService:
             if node_config is not None:
                 return bool(node_config.get("auditRequired", False))
             return False
-        
+
+        # 采购订单：1) parameters.purchase.auto_approval=True 表示提交后自动通过；2) 蓝图 nodes.purchase_order.auditRequired
+        if node_key == "purchase_order":
+            purchase_params = config.get("parameters", {}).get("purchase", {})
+            if purchase_params.get("auto_approval", False) is True:
+                return False
+            if node_config is not None:
+                return bool(node_config.get("auditRequired", False))
+            return False
+
         # 如果节点配置不存在，默认需要审核（向后兼容，或者根据模式决定，这里简便起见默认True或根据simple模式? 
         # 为了安全起见，如果不配置，默认False可能更符合"极简"体验，但默认True符合"严谨"体验。
         # 参考 get_business_config 中的默认值补全逻辑，如果拿到 config，应该已经补全了默认值。
@@ -394,6 +403,11 @@ class BusinessConfigService:
             },
             "sales": {
                 "audit_enabled": True,
+            },
+            "purchase": {
+                "auto_approval": False,  # 全流程默认走人工审核；与 nodes.purchase_order.auditRequired 配合
+                "price_control": False,
+                "supplier_evaluation": False,
             },
             "procurement": {
                 "require_purchase_requisition": False,

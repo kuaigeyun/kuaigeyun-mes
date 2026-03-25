@@ -682,7 +682,12 @@ def get_purchase_receipt_lifecycle(receipt: Any) -> Dict[str, Any]:
     """采购入库单生命周期计算"""
     status = _norm(getattr(receipt, "status", None))
     key = "completed" if status in ("已入库", "completed", "已完成") else "pending"
-    stage_name = "已入库" if key == "completed" else "待入库"
+    if key == "completed":
+        stage_name = "已入库"
+    elif status in ("草稿", "draft", "DRAFT"):
+        stage_name = "草稿"
+    else:
+        stage_name = "待入库"
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,

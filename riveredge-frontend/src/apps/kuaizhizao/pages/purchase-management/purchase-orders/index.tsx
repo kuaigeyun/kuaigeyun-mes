@@ -31,11 +31,46 @@ import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../servic
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import {
+  DocumentStatus,
+  ReviewStatusEnum,
   getStatusDisplay,
   getReviewStatusDisplay,
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
+
+/** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
+const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
+/** 仅匹配主状态「待审核」，勿包含 review 的 PENDING：新建草稿默认 review_status=PENDING，否则会误显「审核」按钮 */
+const PO_WORKFLOW_PENDING_STATUSES = [
+  '待审核',
+  'pending_review',
+  'PENDING_REVIEW',
+  DocumentStatus.PENDING_REVIEW,
+];
+const PO_WORKFLOW_APPROVED_STATUSES = [
+  '已审核',
+  'audited',
+  '审核通过',
+  '已确认',
+  DocumentStatus.AUDITED,
+  DocumentStatus.CONFIRMED,
+  ReviewStatusEnum.APPROVED,
+];
+const PO_WORKFLOW_REJECTED_STATUSES = [
+  '已驳回',
+  'rejected',
+  'REJECTED',
+  DocumentStatus.REJECTED,
+  ReviewStatusEnum.REJECTED,
+];
+
+/** 指标卡迷你图默认序列：模块级稳定引用，避免每次 render 新数组触发图表无限 update（G2 interval 报错） */
+const PO_STAT_SPARKLINE_ARRIVAL = Object.freeze([60, 75, 80, 78, 85, 90, 88]);
+const PO_STAT_SPARKLINE_ANNUAL = Object.freeze([1000, 2000, 1500, 3000, 2500, 4000, 3500]);
+const PO_STAT_SPARKLINE_SUPPLIER = Object.freeze([92, 95, 88, 96, 94, 98, 95]);
+const PO_STAT_SPARKLINE_OVERDUE = Object.freeze([5, 8, 3, 12, 7, 15, 10]);
+
 import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { SupplierFormModal } from '../../../../master-data/components/SupplierFormModal';
@@ -263,7 +298,7 @@ const PurchaseOrdersPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 200,
+      width: 240,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -278,10 +313,11 @@ const PurchaseOrdersPage: React.FC = () => {
             entityName="采购订单"
             statusField="status"
             reviewStatusField="review_status"
-            draftStatuses={['草稿', 'draft']}
-            pendingStatuses={['待审核', 'pending_review']}
-            approvedStatuses={['已审核', 'audited', '审核通过']}
-            rejectedStatuses={['已驳回', 'rejected']}
+            draftStatuses={PO_WORKFLOW_DRAFT_STATUSES}
+            pendingStatuses={PO_WORKFLOW_PENDING_STATUSES}
+            approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
+            rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
+            submitActionLabel="提交审核"
             theme="link"
             size="small"
             actions={{
@@ -857,10 +893,15 @@ const PurchaseOrdersPage: React.FC = () => {
 
       if (submitAfterSaveRef.current && orderId) {
         try {
-          await submitPurchaseOrder(orderId);
-          messageApi.success(isEdit ? '采购订单已保存并提交，状态已转为待审核' : '采购订单已创建并提交，状态已转为待审核');
+          const afterSubmit = await submitPurchaseOrder(orderId);
+          const st = (afterSubmit as PurchaseOrder | undefined)?.status;
+          if (isAuditedStatus(st)) {
+            messageApi.success(isEdit ? '采购订单已保存并提交，已自动审核通过' : '采购订单已创建并提交，已自动审核通过');
+          } else {
+            messageApi.success(isEdit ? '采购订单已保存并提交审核' : '采购订单已创建并提交审核');
+          }
         } catch (submitErr: any) {
-          messageApi.warning(`保存成功，但提交失败：${submitErr?.message || '未知错误'}。您可在列表中点击「提交」重试。`);
+          messageApi.warning(`保存成功，但提交失败：${submitErr?.message || '未知错误'}。您可在列表中点击「提交审核」重试。`);
         }
         submitAfterSaveRef.current = false;
       }
@@ -956,21 +997,24 @@ const PurchaseOrdersPage: React.FC = () => {
           valueStyle: { color: token.colorPrimary },
           description: (
             <div style={{ color: '#52c41a' }}>
-              较昨日 +0.5%
+              {t('app.kuaizhizao.purchase.statDeltaVsYesterday')}
             </div>
           ),
           backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.arrival_rate || [60, 75, 80, 78, 85, 90, 88]} 
-              color={token.colorPrimary} 
+            <SimpleSparkline
+              data={statistics.trends?.arrival_rate ?? PO_STAT_SPARKLINE_ARRIVAL}
+              color={token.colorPrimary}
             />
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
+          title: t('app.kuaizhizao.purchase.statPendingReview'),
           value: statistics.pending_review_count ?? 0,
           valueStyle: (statistics.pending_review_count ?? 0) > 0 ? { color: '#faad14' } : undefined,
-          description: (statistics.pending_review_count ?? 0) > 0 ? '需即时审核' : '无待处理',
+          description:
+            (statistics.pending_review_count ?? 0) > 0
+              ? t('app.kuaizhizao.purchase.statNeedImmediateReview')
+              : t('app.kuaizhizao.purchase.statNothingPending'),
           onClick:
             (statistics.pending_review_count ?? 0) > 0
               ? () => {
@@ -987,13 +1031,17 @@ const PurchaseOrdersPage: React.FC = () => {
           valueStyle: { color: '#2f54eb' },
           description: (
             <div style={{ color: (statistics as any).annual_total_yoy >= 0 ? '#52c41a' : '#ff4d4f' }}>
-              较去年同期 {(statistics as any).annual_total_yoy ? `${(statistics as any).annual_total_yoy > 0 ? '+' : ''}${(statistics as any).annual_total_yoy}%` : '+0%'}
+              {t('app.kuaizhizao.purchase.statVsLastYear', {
+                value: (statistics as any).annual_total_yoy
+                  ? `${(statistics as any).annual_total_yoy > 0 ? '+' : ''}${(statistics as any).annual_total_yoy}%`
+                  : '+0%',
+              })}
             </div>
           ),
           backgroundChart: (
-            <SimpleSparkline 
-              data={statistics.trends?.annual_total || [1000, 2000, 1500, 3000, 2500, 4000, 3500]} 
-              color="#2f54eb" 
+            <SimpleSparkline
+              data={statistics.trends?.annual_total ?? PO_STAT_SPARKLINE_ANNUAL}
+              color="#2f54eb"
             />
           ),
         },
@@ -1003,26 +1051,28 @@ const PurchaseOrdersPage: React.FC = () => {
           suffix: '%',
           valueStyle: { color: '#52c41a' },
           backgroundChart: (
-            <SimpleSparkline 
-              data={[92, 95, 88, 96, 94, 98, 95]} 
+            <SimpleSparkline
+              data={PO_STAT_SPARKLINE_SUPPLIER}
               type="column"
-              color="#52c41a" 
+              color="#52c41a"
             />
           ),
         },
         {
-          title: t('app.kuaizhizao.salesOrder.statOverdue'),
+          title: t('app.kuaizhizao.purchase.statOverdue'),
           value: statistics.overdue_count ?? 0,
           valueStyle: (statistics.overdue_count ?? 0) > 0 ? { color: token.colorError } : undefined,
           description: (statistics.overdue_count ?? 0) > 0 ? (
             <div style={{ color: token.colorError }}>
-              超期金额 ¥{((statistics.overdue_count ?? 0) * 1200).toLocaleString()}
+              {t('app.kuaizhizao.purchase.statOverdueAmount', {
+                amount: ((statistics.overdue_count ?? 0) * 1200).toLocaleString(),
+              })}
             </div>
           ) : null,
           backgroundChart: (
-            <SimpleSparkline 
-              data={[5, 8, 3, 12, 7, 15, 10]} 
-              color={token.colorError} 
+            <SimpleSparkline
+              data={PO_STAT_SPARKLINE_OVERDUE}
+              color={token.colorError}
             />
           ),
         },
@@ -1597,10 +1647,11 @@ const PurchaseOrdersPage: React.FC = () => {
                       entityName="采购订单"
                       statusField="status"
                       reviewStatusField="review_status"
-                      draftStatuses={['草稿', 'draft']}
-                      pendingStatuses={['待审核', 'pending_review']}
-                      approvedStatuses={['已审核', 'audited', '审核通过']}
-                      rejectedStatuses={['已驳回', 'rejected']}
+                      draftStatuses={PO_WORKFLOW_DRAFT_STATUSES}
+                      pendingStatuses={PO_WORKFLOW_PENDING_STATUSES}
+                      approvedStatuses={PO_WORKFLOW_APPROVED_STATUSES}
+                      rejectedStatuses={PO_WORKFLOW_REJECTED_STATUSES}
+                      submitActionLabel="提交审核"
                       theme="link"
                       size="small"
                       actions={{

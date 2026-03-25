@@ -168,11 +168,15 @@ const ReceiptNoticesPage: React.FC = () => {
   const handleNotify = (record: ReceiptNotice) => {
     Modal.confirm({
       title: '通知仓库',
-      content: `确定要通知仓库收货 "${record.notice_code}" 吗？`,
+      content: `确定要通知仓库收货「${record.notice_code}」吗？将同步生成一张「草稿」状态的采购入库单，仓库可在采购入库中核对后确认入库。`,
       onOk: async () => {
         try {
-          await receiptNoticeApi.notify(record.id!.toString());
-          messageApi.success('已通知仓库');
+          const res = (await receiptNoticeApi.notify(record.id!.toString())) as ReceiptNotice;
+          messageApi.success(
+            res?.purchase_receipt_code
+              ? `已通知仓库，已生成采购入库草稿：${res.purchase_receipt_code}`
+              : '已通知仓库',
+          );
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '通知失败');

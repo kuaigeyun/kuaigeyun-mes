@@ -358,6 +358,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         await order.update_from_dict({
             'status': status,
+            'review_status': ReviewStatus.PENDING.value,
             'updated_by': submitted_by
         }).save()
 
@@ -889,9 +890,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         warehouse_id = default_warehouse.id if default_warehouse else None
         warehouse_name = default_warehouse.name if default_warehouse else None
 
+        def _resolve_notice_qty(po_item: PurchaseOrderItem) -> float:
+            base = float(po_item.outstanding_quantity or 0)
+            if not notice_quantities or not isinstance(notice_quantities, dict):
+                return base
+            raw = notice_quantities.get(po_item.id)
+            if raw is None:
+                raw = notice_quantities.get(str(po_item.id))
+            if raw is None:
+                return base
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return base
+
         items = []
         for item in order_items:
-            qty = float(notice_quantities.get(item.id, item.outstanding_quantity)) if notice_quantities else float(item.outstanding_quantity)
+            qty = _resolve_notice_qty(item)
             if qty <= 0:
                 continue
             if qty > float(item.outstanding_quantity):

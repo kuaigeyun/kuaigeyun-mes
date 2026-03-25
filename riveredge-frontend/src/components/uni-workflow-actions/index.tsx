@@ -44,6 +44,9 @@ export interface UniWorkflowActionsProps {
   /** 当系统设置为提交后自动审核通过时，是否隐藏“提交”内部逻辑，改为直接调用 approve */
   autoApproveWhenSubmit?: boolean;
 
+  /** 提交按钮与确认弹窗中的动作名称，默认「提交」（如采购订单可用「提交审核」） */
+  submitActionLabel?: string;
+
   /** 成功操作后的回调（通常用于刷新表格或详情） */
   onSuccess?: () => void;
   /** 是否以 Button.Group (紧凑模式) 或 Button type="link" (表格行模式) 渲染 */
@@ -78,6 +81,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   approvedStatuses = ['approved', 'audited', '已审核', '审核通过'],
   rejectedStatuses = ['rejected', '已驳回'],
   autoApproveWhenSubmit = false,
+  submitActionLabel = '提交',
   onSuccess,
   theme = 'default',
   size = 'middle',
@@ -111,7 +115,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
     let actualActionName = actionName;
 
     if (action === 'submit' && autoApproveWhenSubmit) {
-       actualActionName = `${actionName} (将自动审批通过)`;
+       actualActionName = `${actionName}（将自动审批通过）`;
     }
 
     const content = confirmMessages[action] || `确定要 ${actualActionName} 这个${entityName}吗？`;
@@ -191,9 +195,9 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         <Button
           {...getBtnProps('submit')}
           icon={<SendOutlined />}
-          onClick={() => handleAction('submit', '提交')}
+          onClick={() => handleAction('submit', submitActionLabel)}
         >
-          提交
+          {submitActionLabel}
         </Button>
       ) : null}
 

@@ -24,7 +24,7 @@ from apps.kuaizhizao.schemas.receipt_notice import (
     ReceiptNoticeItemCreate,
     ReceiptNoticeItemResponse,
 )
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -65,14 +65,29 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             total_amount = Decimal(0)
             for item_data in items:
                 qty = Decimal(str(item_data.notice_quantity))
-                amt = item_data.total_amount if item_data.total_amount is not None else qty * Decimal(str(item_data.unit_price or 0))
+                unit_p = Decimal(str(item_data.unit_price or 0))
+                amt = (
+                    Decimal(str(item_data.total_amount))
+                    if item_data.total_amount is not None
+                    else qty * unit_p
+                )
+                # 显式字段落库，避免 model_dump **展开带入 Tortoise 未定义字段导致 TypeError（500）
+                spec = item_data.material_spec
+                if spec is not None and str(spec).strip() == "":
+                    spec = None
                 await ReceiptNoticeItem.create(
                     tenant_id=tenant_id,
                     notice_id=notice.id,
+                    material_id=int(item_data.material_id),
+                    material_code=str(item_data.material_code or ""),
+                    material_name=str(item_data.material_name or ""),
+                    material_spec=spec,
+                    material_unit=str(item_data.material_unit or "件"),
                     notice_quantity=qty,
-                    unit_price=Decimal(str(item_data.unit_price or 0)),
+                    unit_price=unit_p,
                     total_amount=amt,
-                    **item_data.model_dump(exclude_unset=True, exclude={"notice_quantity", "unit_price", "total_amount"})
+                    purchase_order_item_id=item_data.purchase_order_item_id,
+                    notes=item_data.notes,
                 )
                 total_quantity += qty
                 total_amount += amt
@@ -155,17 +170,106 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         notice_id: int,
         notified_by: int
     ) -> ReceiptNoticeResponse:
-        """通知仓库（标记为已通知）"""
+        """通知仓库：标记已通知，并同步生成采购入库单（草稿），供仓库核对后确认入库。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
+        from apps.master_data.models.warehouse import Warehouse
+
         notice = await ReceiptNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"收货通知单不存在: {notice_id}")
         if notice.status != "待收货":
             raise BusinessLogicError("只有待收货状态的通知单才能通知仓库")
+        if notice.purchase_receipt_id:
+            raise BusinessLogicError("该收货通知单已关联采购入库单，请勿重复通知仓库")
+
+        notice_items = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        if not notice_items:
+            raise BusinessLogicError("收货通知单无明细，无法生成采购入库单")
+
+        wh_id = notice.warehouse_id
+        wh_name = notice.warehouse_name
+        if not wh_id:
+            default_wh = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
+            if not default_wh:
+                raise BusinessLogicError("收货通知单未指定仓库，且未找到可用仓库，无法生成采购入库草稿")
+            wh_id = default_wh.id
+            wh_name = default_wh.name
+
+        receipt_items: List[PurchaseReceiptItemCreate] = []
+        for ni in notice_items:
+            qty = Decimal(str(ni.notice_quantity or 0))
+            if qty <= 0:
+                continue
+
+            po_item = None
+            if ni.purchase_order_item_id:
+                po_item = await PurchaseOrderItem.get_or_none(
+                    tenant_id=tenant_id, id=ni.purchase_order_item_id
+                )
+            if po_item is not None and qty > po_item.outstanding_quantity:
+                raise ValidationError(
+                    f"物料 {ni.material_code} 的通知数量 {qty} 超过采购订单未入库数量 {po_item.outstanding_quantity}"
+                )
+
+            unit_p = Decimal(str(ni.unit_price or 0))
+            if unit_p <= 0 and po_item is not None:
+                unit_p = po_item.unit_price
+            total_amt = qty * unit_p
+            po_line_id = int(ni.purchase_order_item_id) if ni.purchase_order_item_id else 0
+            material_spec = (getattr(po_item, "material_spec", None) or None) or ni.material_spec
+
+            receipt_items.append(
+                PurchaseReceiptItemCreate(
+                    purchase_order_item_id=po_line_id,
+                    material_id=int(ni.material_id),
+                    material_code=str(ni.material_code or ""),
+                    material_name=str(ni.material_name or ""),
+                    material_spec=material_spec,
+                    material_unit=str(ni.material_unit or "件"),
+                    receipt_quantity=float(qty),
+                    unit_price=float(unit_p),
+                    total_amount=float(total_amt),
+                    qualified_quantity=float(qty),
+                    unqualified_quantity=0.0,
+                    status="草稿",
+                )
+            )
+
+        if not receipt_items:
+            raise BusinessLogicError("没有有效的通知数量，无法生成采购入库单")
+
+        prev_notes = (notice.notes or "").strip()
+        trail_note = f"由收货通知单 {notice.notice_code} 通知仓库生成（草稿）"
+        merged_notes = f"{prev_notes}；{trail_note}" if prev_notes else trail_note
+
+        receipt_data = PurchaseReceiptCreate(
+            purchase_order_id=int(notice.purchase_order_id),
+            purchase_order_code=str(notice.purchase_order_code or ""),
+            supplier_id=int(notice.supplier_id),
+            supplier_name=str(notice.supplier_name or ""),
+            warehouse_id=int(wh_id),
+            warehouse_name=str(wh_name or ""),
+            status="草稿",
+            review_status="待审核",
+            notes=merged_notes,
+            items=receipt_items,
+        )
+
+        receipt_svc = PurchaseReceiptService()
+        receipt = await receipt_svc.create_purchase_receipt(
+            tenant_id=tenant_id,
+            receipt_data=receipt_data,
+            created_by=notified_by,
+        )
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已通知",
             notified_at=datetime.now(),
-            updated_by=notified_by
+            updated_by=notified_by,
+            purchase_receipt_id=receipt.id,
+            purchase_receipt_code=receipt.receipt_code,
         )
         return ReceiptNoticeResponse.model_validate(
             await ReceiptNotice.get(tenant_id=tenant_id, id=notice_id)

@@ -1787,8 +1787,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         async with in_transaction():
             receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
 
-            if receipt.status != '待入库':
-                raise BusinessLogicError("只有待入库状态的采购入库单才能确认入库")
+            if receipt.status not in ('待入库', '草稿'):
+                raise BusinessLogicError("只有草稿或待入库状态的采购入库单才能确认入库")
 
             # 质检合格才入库：若配置了 require_incoming_inspection_for_receipt，需先完成来料检验且合格
             config = await self.business_config_service.get_business_config(tenant_id)
@@ -1817,12 +1817,17 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
 
+            now = datetime.now()
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
                 receiver_id=confirmed_by,
                 receiver_name=confirmer_name,
-                receipt_time=datetime.now(),
+                receipt_time=now,
                 updated_by=confirmed_by
+            )
+            await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
+                status='已入库',
+                receipt_time=now,
             )
 
             # 更新库存（增加）
